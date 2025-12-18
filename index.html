@@ -1,0 +1,61 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Dallas World Cup AI Demo Bot</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 720px; margin: 30px auto; }
+    #chat { border: 1px solid #ccc; padding: 12px; height: 420px; overflow-y: auto; border-radius: 8px; }
+    .msg { margin: 10px 0; }
+    .you { font-weight: bold; }
+    .bot { font-weight: bold; }
+    #row { display: flex; gap: 8px; margin-top: 10px; }
+    #input { flex: 1; padding: 10px; font-size: 16px; }
+    button { padding: 10px 16px; font-size: 16px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h2>Dallas World Cup AI Demo Bot</h2>
+  <div id="chat"></div>
+
+  <div id="row">
+    <input id="input" placeholder="Type a message..." />
+    <button onclick="send()">Send</button>
+  </div>
+
+  <script>
+    const chat = document.getElementById("chat");
+    const input = document.getElementById("input");
+
+    function addLine(who, text) {
+      const div = document.createElement("div");
+      div.className = "msg";
+      div.innerHTML = `<span class="${who}">${who}:</span> ${text}`;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    async function send() {
+      const msg = input.value.trim();
+      if (!msg) return;
+      addLine("you", msg);
+      input.value = "";
+
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({message: msg})
+      });
+
+      const data = await res.json();
+      addLine("bot", data.reply);
+    }
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") send();
+    });
+
+    addLine("bot", "Hi! Want to book a table for a match day? Ask me anything.");
+  </script>
+</body>
+</html>
