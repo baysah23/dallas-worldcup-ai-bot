@@ -4,9 +4,10 @@ load_dotenv()
 import os
 import json
 import re
+import uuid
 from datetime import datetime
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, make_response
 from openai import OpenAI
 from pydantic import BaseModel, ValidationError
 
@@ -17,18 +18,36 @@ app = Flask(__name__)
 client = OpenAI()
 
 # -----------------------------
-# Render / browser cache-busting
+# Cache-busting for Render/browser
 # -----------------------------
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
 @app.after_request
 def add_no_cache_headers(response):
-    # Helps ensure Render/browser doesn't cache index.html so you see updates immediately
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
     return response
 
+# -----------------------------
+# Simple server-side session memory
+# -----------------------------
+SESSIONS = {}  # session_id -> list of {"role": "user"|"assistant", "content": "..."}
+MAX_TURNS = 24 # keep last 24 messages (12 user+assistant pairs)
+
+def get_session_id():
+    sid = request.cookies.get("sid")
+    if not sid:
+        sid = str(uuid.uuid4())
+    if sid not in SESSIONS:
+        SESSIONS[sid] = []
+    return sid
+
+def add_to_session(sid, role, content):
+    SESSIONS[sid].append({"role": role, "content": content})
+    # Trim to last MAX_TURNS messages
+    if len(SESSIONS[sid]) > MAX_TURNS:
+        SESSIONS[sid] = SESSIONS[sid][-MAX_TURNS:]
 
 # -----------------------------
 # Load business profile once
@@ -40,24 +59,16 @@ if not os.path.exists(BUSINESS_PROFILE_PATH):
 with open(BUSINESS_PROFILE_PATH, "r", encoding="utf-8") as f:
     business_profile = f.read()
 
-
 # -----------------------------
-# Google Sheets config (fixed scopes)
+# Google Sheets config
 # -----------------------------
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 ]
-
 SHEET_NAME = os.environ.get("GOOGLE_SHEET_NAME", "World Cup AI Reservations")
 
-
 def get_gspread_client():
-    """
-    Render-safe credentials loading:
-      - Preferred (Render): GOOGLE_CREDS_JSON env var (paste full JSON content)
-      - Local fallback: google_creds.json in project folder
-    """
     if os.environ.get("GOOGLE_CREDS_JSON"):
         creds_info = json.loads(os.environ["GOOGLE_CREDS_JSON"])
         creds = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
@@ -68,10 +79,7 @@ def get_gspread_client():
         creds = Credentials.from_service_account_file(creds_file, scopes=SCOPES)
         return gspread.authorize(creds)
 
-    raise RuntimeError(
-        "Google credentials not found. Set GOOGLE_CREDS_JSON (Render) or provide google_creds.json locally."
-    )
-
+    raise RuntimeError("Google credentials not found. Set GOOGLE_CREDS_JSON (Render) or provide google_creds.json locally.")
 
 def append_lead_to_sheet(name, phone, date, time, party_size):
     gc = get_gspread_client()
@@ -85,7 +93,6 @@ def append_lead_to_sheet(name, phone, date, time, party_size):
         int(party_size),
     ])
 
-
 # -----------------------------
 # Lead schema
 # -----------------------------
@@ -96,59 +103,45 @@ class ReservationLead(BaseModel):
     time: str
     party_size: int
 
-
 # -----------------------------
 # Routes
 # -----------------------------
 @app.route("/")
 def home():
-    # Serves index.html from the project root
     return send_from_directory(".", "index.html")
-
 
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"})
 
-
 @app.route("/version")
 def version():
-    """
-    Proof endpoint: shows index.html last modified timestamp on the server.
-    Use this to confirm Render deployed your latest index.html.
-    """
-    try:
-        mtime = os.path.getmtime("index.html")
-        return jsonify({
-            "index_html_last_modified_epoch": mtime,
-            "index_html_last_modified": datetime.fromtimestamp(mtime).isoformat(timespec="seconds"),
-        })
-    except Exception as e:
-        return jsonify({"error": repr(e)}), 500
-
+    mtime = os.path.getmtime("index.html")
+    return jsonify({
+        "index_html_last_modified_epoch": mtime,
+        "index_html_last_modified": datetime.fromtimestamp(mtime).isoformat(timespec="seconds"),
+    })
 
 @app.route("/test-sheet")
 def test_sheet():
-    """
-    Quick diagnostic: writes a test row to the target sheet.
-    Visit: /test-sheet
-    """
     try:
         append_lead_to_sheet("TEST_NAME", "2145551212", "12/20/2025", "7pm", 4)
         return jsonify({"ok": True, "sheet": SHEET_NAME, "message": "✅ Test row appended."})
     except Exception as e:
         return jsonify({"ok": False, "sheet": SHEET_NAME, "error": repr(e)}), 500
 
-
 @app.route("/chat", methods=["POST"])
 def chat():
+    sid = get_session_id()
     data = request.get_json(force=True)
 
     user_message = (data.get("message") or "").strip()
-    history = data.get("history") or []  # list of {"role":"user|assistant","content":"..."}
+    client_history = data.get("history") or []  # optional
 
     if not user_message:
-        return jsonify({"reply": "Please type a message."})
+        resp = make_response(jsonify({"reply": "Please type a message."}))
+        resp.set_cookie("sid", sid, max_age=60*60*24*30)  # 30 days
+        return resp
 
     system_msg = f"""
 You are a World Cup 2026 AI Concierge for a Dallas-area business.
@@ -156,82 +149,67 @@ You are a World Cup 2026 AI Concierge for a Dallas-area business.
 Use the following business profile as your source of truth:
 {business_profile}
 
-Rules for reservations:
+Reservation rules:
 - If the user wants a reservation, collect ONLY: date, time, party size, name, phone number.
-- Once you have all 5, output ONE line exactly like:
+- You MUST remember details already provided in this chat and never ask for the same field twice.
+- If the user asks "recall my reservation so far", summarize what you have and ask only for missing fields.
+- Once you have all 5, output ONE line:
   RESERVATION_JSON={{"name":"...","phone":"...","date":"...","time":"...","party_size":4}}
-- Do not put extra characters inside the braces.
 - Be friendly, fast, and concise.
 - Auto-detect language and respond in it (English, Spanish, Portuguese, French).
-- Never mention being an AI unless the user asks directly.
+- Never mention being an AI unless asked directly.
 """
 
-    # Build messages with history so the bot stops forgetting
-    messages = [{"role": "system", "content": system_msg}]
-    for m in history:
-        if isinstance(m, dict) and m.get("role") in ("user", "assistant") and isinstance(m.get("content"), str):
-            messages.append({"role": m["role"], "content": m["content"]})
-    messages.append({"role": "user", "content": user_message})
+    # Prefer server-side history. If client sends history, merge lightly (optional).
+    history = SESSIONS.get(sid, []).copy()
 
-    resp = client.responses.create(
+    # If client_history exists and server history is empty (first visit), use it.
+    if client_history and not history:
+        for m in client_history:
+            if isinstance(m, dict) and m.get("role") in ("user", "assistant") and isinstance(m.get("content"), str):
+                history.append({"role": m["role"], "content": m["content"]})
+
+    messages = [{"role": "system", "content": system_msg}] + history + [{"role": "user", "content": user_message}]
+
+    resp_ai = client.responses.create(
         model="gpt-4o-mini",
         input=messages,
     )
 
-    reply = (resp.output_text or "").strip()
+    reply = (resp_ai.output_text or "").strip()
 
-    # -----------------------------
-    # Extract reservation JSON robustly and save to Sheets
-    # -----------------------------
+    # Save both sides to server session
+    add_to_session(sid, "user", user_message)
+    add_to_session(sid, "assistant", reply)
+
+    # If JSON present, save to Google Sheets
     if "RESERVATION_JSON" in reply:
         try:
             match = re.search(r"RESERVATION_JSON\s*=\s*(\{.*?\})", reply, re.DOTALL)
-            if not match:
-                return jsonify({"reply": reply})
+            if match:
+                lead_dict = json.loads(match.group(1).strip())
+                lead = ReservationLead(**lead_dict)
 
-            json_text = match.group(1).strip()
-            lead_dict = json.loads(json_text)
-            lead = ReservationLead(**lead_dict)
+                append_lead_to_sheet(lead.name, lead.phone, lead.date, lead.time, lead.party_size)
 
-            append_lead_to_sheet(
-                lead.name,
-                lead.phone,
-                lead.date,
-                lead.time,
-                lead.party_size
-            )
-
-            # Clean visible reply (remove JSON)
-            visible_reply = re.sub(
-                r"\s*RESERVATION_JSON\s*=\s*\{.*?\}\s*",
-                "\n",
-                reply,
-                flags=re.DOTALL
-            ).strip()
-
-            confirmation = (
-                f"✅ Saved to Google Sheet: {SHEET_NAME}\n"
-                f"Name: {lead.name}\n"
-                f"Phone: {lead.phone}\n"
-                f"Date: {lead.date}\n"
-                f"Time: {lead.time}\n"
-                f"Party size: {lead.party_size}"
-            )
-
-            if visible_reply:
-                return jsonify({"reply": (visible_reply + "\n\n" + confirmation).strip()})
-            return jsonify({"reply": confirmation})
-
+                cleaned = re.sub(r"\s*RESERVATION_JSON\s*=\s*\{.*?\}\s*", "\n", reply, flags=re.DOTALL).strip()
+                confirmation = (
+                    f"✅ Saved to Google Sheet: {SHEET_NAME}\n"
+                    f"Name: {lead.name}\nPhone: {lead.phone}\nDate: {lead.date}\nTime: {lead.time}\nParty size: {lead.party_size}"
+                )
+                reply_out = (cleaned + "\n\n" + confirmation).strip()
+            else:
+                reply_out = reply
         except (json.JSONDecodeError, ValidationError) as e:
-            return jsonify({"reply": reply + f"\n\n⚠️ JSON/validation error: {repr(e)}"})
-
+            reply_out = reply + f"\n\n⚠️ JSON/validation error: {repr(e)}"
         except Exception as e:
-            return jsonify({
-                "reply": reply + f"\n\n⚠️ Google Sheets save error: {repr(e)}\nSheet: {SHEET_NAME}"
-            }), 500
+            reply_out = reply + f"\n\n⚠️ Google Sheets save error: {repr(e)}"
+    else:
+        reply_out = reply
 
-    return jsonify({"reply": reply})
-
+    resp = make_response(jsonify({"reply": reply_out}))
+    resp.set_cookie("sid", sid, max_age=60*60*24*30)  # 30 days
+    return resp
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
