@@ -2,243 +2,273 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>World Cup 2026 • Dallas AI Concierge</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>World Cup 2026 Dallas Concierge</title>
   <style>
     :root{
-      --bg:#070a12;
-      --panel:#0d1326;
-      --panel2:#0b1020;
-      --text:#eaf0ff;
-      --muted:#a8b3d6;
-      --line:rgba(255,255,255,0.10);
-      --accent:#22c55e;      /* pitch green */
-      --accent2:#60a5fa;     /* blue glow */
-      --accent3:#f59e0b;     /* gold */
-      --danger:#ef4444;
-      --bubbleUser:#2563eb;
-      --bubbleBot:#0f1a33;
-      --shadow: 0 16px 40px rgba(0,0,0,0.45);
-      --radius: 18px;
+      --bg:#070A12;
+      --panel:#0F1530;
+      --panel2:#0B1026;
+      --border:rgba(255,255,255,0.10);
+      --text:#EAF0FF;
+      --muted:#B8C3E6;
+      --accent:#2EA043;
+      --blue:#1F6FEB;
+      --gold:#F6C453;
+      --danger:#FF5C5C;
     }
-
-    *{ box-sizing:border-box; }
-    html,body{ height:100%; }
+    *{box-sizing:border-box;}
     body{
       margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      color:var(--text);
-      background:
-        radial-gradient(1000px 600px at 20% 0%, rgba(96,165,250,0.25), transparent 60%),
-        radial-gradient(900px 500px at 80% 10%, rgba(34,197,94,0.20), transparent 55%),
-        radial-gradient(700px 500px at 50% 100%, rgba(245,158,11,0.12), transparent 55%),
-        linear-gradient(180deg, #050710, var(--bg));
-      overflow:hidden;
-    }
-
-    /* Subtle stadium lights */
-    .lights::before, .lights::after{
-      content:"";
-      position:fixed;
-      top:-120px;
-      width:420px;
-      height:420px;
-      filter: blur(18px);
-      opacity:0.16;
-      pointer-events:none;
-      background: radial-gradient(circle at 50% 50%, #ffffff, transparent 60%);
-      border-radius:999px;
-    }
-    .lights::before{ left:40px; transform: rotate(-6deg); }
-    .lights::after{ right:40px; transform: rotate(6deg); }
-
-    .wrap{
-      height:100%;
+      font-family: Arial, sans-serif;
+      background: radial-gradient(1200px 600px at 20% 0%, rgba(31,111,235,0.25), transparent 55%),
+                  radial-gradient(900px 500px at 80% 20%, rgba(246,196,83,0.20), transparent 60%),
+                  radial-gradient(900px 500px at 50% 90%, rgba(46,160,67,0.18), transparent 60%),
+                  var(--bg);
+      color: var(--text);
+      height:100vh;
       display:flex;
       justify-content:center;
-      padding:18px;
     }
-
-    .app{
-      width: min(980px, 100%);
-      height: 100%;
+    .container{
+      width:100%;
+      max-width:980px;
       display:flex;
       flex-direction:column;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: linear-gradient(180deg, rgba(13,19,38,0.92), rgba(11,16,32,0.88));
-      box-shadow: var(--shadow);
-      overflow:hidden;
-      position:relative;
-    }
-
-    /* Dallas skyline silhouette */
-    .skyline{
-      position:absolute;
-      left:0;
-      right:0;
-      top:0;
-      height:140px;
-      background:
-        linear-gradient(180deg, rgba(0,0,0,0.0), rgba(0,0,0,0.12)),
-        radial-gradient(1200px 160px at 50% 0%, rgba(96,165,250,0.25), transparent 70%);
-      pointer-events:none;
-    }
-    .skyline svg{
-      position:absolute;
-      left:0;
-      right:0;
-      bottom:-1px;
-      width:100%;
-      height:88px;
-      opacity:0.35;
+      height:100vh;
     }
 
     header{
-      padding:16px 18px 12px;
-      border-bottom:1px solid var(--line);
-      position:relative;
-      z-index:2;
+      padding:18px 18px 12px;
+      border-bottom:1px solid var(--border);
+      background: linear-gradient(180deg, rgba(15,21,48,0.92), rgba(15,21,48,0.75));
+      backdrop-filter: blur(8px);
     }
-
     .topRow{
       display:flex;
+      gap:14px;
       align-items:flex-start;
       justify-content:space-between;
-      gap:14px;
       flex-wrap:wrap;
     }
-
     .brand{
       display:flex;
-      gap:12px;
-      align-items:center;
-      min-width: 260px;
-    }
-
-    .badge{
-      width:44px;
-      height:44px;
-      border-radius:14px;
-      background:
-        radial-gradient(circle at 30% 30%, rgba(255,255,255,0.35), transparent 55%),
-        linear-gradient(135deg, rgba(34,197,94,0.95), rgba(96,165,250,0.95));
-      border:1px solid rgba(255,255,255,0.18);
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      flex:0 0 auto;
-    }
-    .badge span{
-      font-weight:900;
-      letter-spacing:0.5px;
-      color:#081021;
-      font-size:14px;
-    }
-
-    h1{
-      margin:0;
-      font-size:16px;
-      line-height:1.1;
-      letter-spacing:0.2px;
-    }
-    .sub{
-      margin:4px 0 0;
-      font-size:12px;
-      color:var(--muted);
-    }
-
-    .langPanel{
-      display:flex;
       flex-direction:column;
-      align-items:flex-end;
       gap:6px;
-      margin-left:auto;
+      min-width:260px;
     }
-    .langTitle{
-      font-size:11px;
-      color:var(--muted);
-    }
-    .langs{
+    .brandTitle{
+      font-weight:800;
+      letter-spacing:0.2px;
+      font-size:18px;
       display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .badge{
+      display:inline-flex;
+      align-items:center;
       gap:8px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,0.04);
+      color: var(--muted);
+      font-size:12px;
+      font-weight:700;
+    }
+    .brandSub{
+      color: var(--muted);
+      font-size:13px;
+      line-height:1.3;
+    }
+
+    .widgets{
+      display:flex;
+      gap:10px;
       flex-wrap:wrap;
       justify-content:flex-end;
+      align-items:stretch;
+    }
+    .card{
+      border:1px solid var(--border);
+      background: rgba(11,16,38,0.6);
+      border-radius:14px;
+      padding:10px 12px;
+      min-width:220px;
+    }
+    .cardTitle{
+      font-size:12px;
+      color: var(--muted);
+      font-weight:800;
+      margin-bottom:6px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .countdown{
+      font-size:14px;
+      font-weight:800;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
     }
     .pill{
-      font-size:11px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,0.04);
       padding:6px 10px;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,0.14);
-      background: rgba(255,255,255,0.06);
+      border-radius:12px;
+      font-size:12px;
+      font-weight:800;
       color: var(--text);
-      white-space:nowrap;
     }
-    .pill strong{ font-weight:800; }
+    .mutedSmall{
+      color: var(--muted);
+      font-size:12px;
+      margin-top:6px;
+    }
 
-    .promptRow{
-      margin-top:12px;
+    .bannerRow{
+      margin-top:10px;
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .banner{
+      flex:1;
+      border:1px solid var(--border);
+      background: linear-gradient(90deg, rgba(31,111,235,0.18), rgba(246,196,83,0.12));
+      border-radius:14px;
+      padding:10px 12px;
+      font-weight:800;
+      color: var(--text);
+      min-width:260px;
+    }
+
+    .langArea{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:flex-end;
+    }
+    .langList{
+      color: var(--muted);
+      font-size:12px;
+      font-weight:700;
+    }
+    .langBtns{
       display:flex;
       gap:8px;
       flex-wrap:wrap;
-      align-items:center;
     }
-    .chip{
-      border:1px solid rgba(255,255,255,0.14);
+    .btn{
+      border:1px solid var(--border);
       background: rgba(255,255,255,0.05);
       color: var(--text);
       padding:8px 10px;
-      border-radius:999px;
-      font-size:12px;
+      border-radius:12px;
       cursor:pointer;
-      transition: transform 120ms ease, background 120ms ease;
-      user-select:none;
+      font-size:12px;
+      font-weight:800;
     }
-    .chip:hover{ background: rgba(255,255,255,0.08); transform: translateY(-1px); }
-    .chip:active{ transform: translateY(0px); }
+    .btn.primary{
+      background: rgba(46,160,67,0.20);
+      border-color: rgba(46,160,67,0.35);
+    }
+    .btn:disabled{
+      opacity:0.6;
+      cursor:not-allowed;
+    }
 
     .main{
+      display:flex;
+      flex:1;
+      overflow:hidden;
+    }
+
+    /* Left: schedule */
+    .sidebar{
+      width:340px;
+      border-right:1px solid var(--border);
+      background: rgba(15,21,48,0.35);
+      padding:14px;
+      overflow:auto;
+    }
+    .sideTitle{
+      font-weight:900;
+      font-size:13px;
+      margin-bottom:10px;
+      color: var(--text);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+    }
+    .scheduleList{
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .match{
+      border:1px solid var(--border);
+      background: rgba(255,255,255,0.03);
+      border-radius:12px;
+      padding:10px;
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      align-items:center;
+    }
+    .matchLeft{
+      display:flex;
+      flex-direction:column;
+      gap:3px;
+    }
+    .matchDate{
+      font-weight:900;
+      font-size:13px;
+    }
+    .matchStage{
+      font-size:12px;
+      color: var(--muted);
+      font-weight:700;
+    }
+    .tag{
+      font-size:11px;
+      font-weight:900;
+      border:1px solid var(--border);
+      padding:4px 8px;
+      border-radius:999px;
+      color: var(--gold);
+      background: rgba(246,196,83,0.10);
+      white-space:nowrap;
+    }
+    .sideHint{
+      margin-top:10px;
+      font-size:12px;
+      color: var(--muted);
+      line-height:1.35;
+    }
+
+    /* Right: chat */
+    .chatPane{
       flex:1;
       display:flex;
       flex-direction:column;
-      position:relative;
+      overflow:hidden;
     }
-
-    /* Pitch strip at bottom */
-    .pitch{
-      position:absolute;
-      left:0;
-      right:0;
-      bottom:0;
-      height:140px;
-      background:
-        linear-gradient(180deg, rgba(0,0,0,0), rgba(0,0,0,0.10)),
-        linear-gradient(135deg, rgba(34,197,94,0.18), rgba(34,197,94,0.06));
-      pointer-events:none;
-    }
-    .pitch::after{
-      content:"";
-      position:absolute;
-      left:8%;
-      right:8%;
-      bottom:18px;
-      height:88px;
-      border:1px solid rgba(255,255,255,0.10);
-      border-radius:14px;
-      opacity:0.55;
-    }
-
     #chat{
       flex:1;
       overflow-y:auto;
-      padding:18px;
+      padding:16px;
       display:flex;
       flex-direction:column;
       gap:10px;
-      position:relative;
-      z-index:2;
     }
-
     .bubble{
       max-width:78%;
       padding:10px 12px;
@@ -247,197 +277,204 @@
       white-space:pre-wrap;
       word-wrap:break-word;
       border:1px solid rgba(255,255,255,0.10);
-      box-shadow: 0 6px 18px rgba(0,0,0,0.25);
     }
     .user{
       align-self:flex-end;
-      background: linear-gradient(180deg, rgba(37,99,235,0.96), rgba(37,99,235,0.82));
-      border-bottom-right-radius:6px;
+      background: rgba(31,111,235,0.85);
       color:#fff;
+      border-bottom-right-radius:6px;
     }
     .bot{
       align-self:flex-start;
-      background: linear-gradient(180deg, rgba(15,26,51,0.96), rgba(15,26,51,0.80));
-      border-bottom-left-radius:6px;
+      background: rgba(11,16,38,0.80);
       color: var(--text);
+      border-bottom-left-radius:6px;
     }
-
     .composer{
-      border-top:1px solid var(--line);
-      background: rgba(12,17,34,0.9);
-      padding:14px 18px;
+      padding:14px;
+      border-top:1px solid var(--border);
+      background: rgba(15,21,48,0.55);
       display:flex;
       gap:10px;
-      align-items:flex-end;
-      position:relative;
-      z-index:3;
+      align-items:center;
     }
-
     textarea{
       flex:1;
       resize:none;
       height:46px;
       max-height:140px;
-      padding:12px 12px;
-      border-radius:14px;
-      border:1px solid rgba(255,255,255,0.12);
-      background: rgba(5,7,16,0.85);
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,0.14);
+      background: rgba(7,10,18,0.8);
       color: var(--text);
+      padding:10px 12px;
+      font-size:14px;
       outline:none;
-      font-size:14px;
     }
 
-    .btn{
+    .sendBtn{
+      background: rgba(46,160,67,0.95);
       border:none;
-      cursor:pointer;
-      border-radius:14px;
-      padding:12px 14px;
-      font-weight:800;
+      padding:10px 14px;
+      border-radius:12px;
       font-size:14px;
-      color:#071018;
-      background: linear-gradient(135deg, var(--accent), var(--accent2));
-      min-width:100px;
-      transition: transform 120ms ease, opacity 120ms ease;
+      font-weight:900;
+      color:#fff;
+      cursor:pointer;
+      min-width:92px;
     }
-    .btn:disabled{ opacity:0.65; cursor:not-allowed; }
-    .btn:active{ transform: translateY(1px); }
+    .sendBtn:disabled{opacity:0.6; cursor:not-allowed;}
 
-    .tiny{
-      font-size:11px;
-      color: var(--muted);
-      padding:0 18px 14px;
-      background: rgba(12,17,34,0.9);
-      border-top: 0;
-    }
-    .tiny span{
-      display:inline-block;
-      margin-right:10px;
-    }
-    .kbd{
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      font-size:10px;
-      padding:2px 6px;
-      border-radius:8px;
-      border:1px solid rgba(255,255,255,0.12);
-      background: rgba(255,255,255,0.06);
-      color: var(--text);
-    }
-
-    @media (max-width: 620px){
-      .bubble{ max-width: 92%; }
-      .langPanel{ align-items:flex-start; width:100%; margin-top:10px; }
-      .langs{ justify-content:flex-start; }
-      .btn{ min-width: 88px; }
+    @media (max-width: 900px){
+      .sidebar{display:none;}
     }
   </style>
 </head>
-
-<body class="lights">
-  <div class="wrap">
-    <div class="app">
-      <div class="skyline" aria-hidden="true">
-        <!-- Simple stylized skyline silhouette -->
-        <svg viewBox="0 0 1200 160" preserveAspectRatio="none">
-          <path fill="rgba(0,0,0,0.55)" d="M0,140 L0,120 L40,120 L40,90 L70,90 L70,110 L105,110 L105,60 L140,60 L140,110 L160,110 L160,80 L190,80 L190,115 L220,115 L220,70 L260,70 L260,120 L290,120 L290,55 L330,55 L330,120 L360,120 L360,95 L395,95 L395,120 L420,120 L420,85 L455,85 L455,120 L500,120 L500,40 L540,40 L540,120 L580,120 L580,80 L610,80 L610,120 L650,120 L650,65 L690,65 L690,120 L720,120 L720,88 L750,88 L750,120 L790,120 L790,52 L830,52 L830,120 L860,120 L860,95 L895,95 L895,120 L930,120 L930,75 L965,75 L965,120 L1000,120 L1000,90 L1030,90 L1030,120 L1060,120 L1060,60 L1095,60 L1095,120 L1125,120 L1125,98 L1160,98 L1160,120 L1200,120 L1200,140 Z"/>
-        </svg>
-      </div>
-
-      <header>
-        <div class="topRow">
-          <div class="brand">
-            <div class="badge" title="Dallas • 2026">
-              <span>DAL</span>
-            </div>
-            <div>
-              <h1>World Cup 2026 • Dallas AI Concierge</h1>
-              <p class="sub">Reservations • Hours • Specials • Game-day questions — 24/7</p>
-            </div>
+<body>
+  <div class="container">
+    <header>
+      <div class="topRow">
+        <div class="brand">
+          <div class="brandTitle">
+            🏟️ World Cup 2026 Dallas Concierge
+            <span class="badge">Dallas / Arlington • Match Day Ready</span>
           </div>
-
-          <div class="langPanel">
-            <div class="langTitle">Multilingual support:</div>
-            <div class="langs" aria-label="Supported languages">
-              <div class="pill"><strong>EN</strong> English</div>
-              <div class="pill"><strong>ES</strong> Español</div>
-              <div class="pill"><strong>PT</strong> Português</div>
-              <div class="pill"><strong>FR</strong> Français</div>
-            </div>
+          <div class="brandSub">
+            Ask about hours, address, specials — or book a reservation in seconds.
           </div>
         </div>
 
-        <div class="promptRow" aria-label="Quick prompts">
-          <div class="chip" onclick="quickSend('What are your hours today?')">Hours</div>
-          <div class="chip" onclick="quickSend('Where are you located?')">Address</div>
-          <div class="chip" onclick="quickSend('Any specials for match day?')">Specials</div>
-          <div class="chip" onclick="quickSend('Reservation for Cliff, 2145551212, 12/20/2025 at 7pm, party of 4')">Book demo reservation</div>
-          <div class="chip" onclick="quickSend('¿Puedo hacer una reserva para 4 personas mañana a las 7?')">Español</div>
+        <div class="widgets">
+          <div class="card">
+            <div class="cardTitle">
+              ⏳ Countdown to World Cup Kickoff
+              <span class="pill" id="wcDates">—</span>
+            </div>
+            <div class="countdown" id="countdown">Loading…</div>
+            <div class="mutedSmall" id="localClock">Local time: —</div>
+          </div>
         </div>
-      </header>
-
-      <div class="main">
-        <div id="chat" role="log" aria-live="polite"></div>
-        <div class="pitch" aria-hidden="true"></div>
       </div>
 
-      <div class="composer">
-        <textarea id="msg" placeholder="Type your message… (Enter to send • Shift+Enter for a new line)"></textarea>
-        <button id="sendBtn" class="btn" onclick="sendMessage()">Send</button>
-      </div>
+      <div class="bannerRow">
+        <div class="banner" id="matchBanner">🏟️ Match-day banner loading…</div>
 
-      <div class="tiny">
-        <span>Tip: Use <span class="kbd">Enter</span> to send and <span class="kbd">Shift</span> + <span class="kbd">Enter</span> for a new line.</span>
-        <span>For best results, include date/time/party size/name/phone for reservations.</span>
+        <div class="langArea">
+          <div class="langList" id="langList">Languages: —</div>
+          <div class="langBtns">
+            <button class="btn" onclick="setLanguage('en')">English</button>
+            <button class="btn" onclick="setLanguage('es')">Español</button>
+            <button class="btn" onclick="setLanguage('pt')">Português</button>
+            <button class="btn" onclick="setLanguage('fr')">Français</button>
+            <button class="btn primary" onclick="clearLanguage()">Auto</button>
+          </div>
+        </div>
       </div>
+    </header>
+
+    <div class="main">
+      <aside class="sidebar">
+        <div class="sideTitle">
+          📅 Dallas Match Schedule
+          <button class="btn" id="refreshBtn" onclick="loadSchedule()">Refresh</button>
+        </div>
+
+        <div class="scheduleList" id="scheduleList">
+          <div class="sideHint">Loading schedule…</div>
+        </div>
+
+        <div class="sideHint">
+          Tip: On match days, customers will ask the same questions nonstop. This concierge answers fast and captures reservations so your staff can focus on service.
+        </div>
+      </aside>
+
+      <section class="chatPane">
+        <div id="chat"></div>
+
+        <div class="composer">
+          <textarea id="msg" placeholder="Type your message… (Enter to send, Shift+Enter for new line)"></textarea>
+          <button class="sendBtn" id="sendBtn" onclick="sendMessage()">Send</button>
+        </div>
+      </section>
     </div>
   </div>
 
   <script>
-    // Conversation memory: keeps a running history and sends it to /chat
+    // Conversation memory: sends history to /chat
     const history = []; // {role:'user'|'assistant', content:'...'}
 
     const chatEl = document.getElementById("chat");
     const msgEl = document.getElementById("msg");
     const sendBtn = document.getElementById("sendBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+
+    let scheduleData = null;
+    let preferredLang = null; // 'en'|'es'|'pt'|'fr'|null
 
     function addBubble(role, text) {
-      const div = document.createElement("div");
-      div.className = "bubble " + (role === "user" ? "user" : "bot");
-      div.textContent = text;
-      chatEl.appendChild(div);
+      const bubble = document.createElement("div");
+      bubble.className = "bubble " + (role === "user" ? "user" : "bot");
+      bubble.textContent = text;
+      chatEl.appendChild(bubble);
       chatEl.scrollTop = chatEl.scrollHeight;
     }
 
-    function setSending(isSending) {
+    function setSending(isSending){
       sendBtn.disabled = isSending;
       msgEl.disabled = isSending;
       sendBtn.textContent = isSending ? "..." : "Send";
     }
 
-    async function sendMessage() {
+    function formatDatePretty(isoDate){
+      // isoDate: YYYY-MM-DD
+      const d = new Date(isoDate + "T12:00:00");
+      return d.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric", year:"numeric" });
+    }
+
+    // Language toggles: push instruction into conversation history
+    function setLanguage(code){
+      preferredLang = code;
+      const map = {en:"English", es:"Spanish", pt:"Portuguese", fr:"French"};
+      const label = map[code] || "English";
+
+      // show a small user-visible note
+      addBubble("user", `🌐 Language set: ${label}`);
+
+      // push an instruction message into history (so the model obeys)
+      const instruction = `From now on, respond in ${label}. Keep answers concise.`;
+      history.push({ role: "user", content: instruction });
+    }
+
+    function clearLanguage(){
+      preferredLang = null;
+      addBubble("user", "🌐 Language set: Auto (detect my language)");
+      history.push({ role: "user", content: "From now on, auto-detect my language and respond in it." });
+    }
+
+    async function sendMessage(){
       const text = msgEl.value.trim();
       if (!text) return;
 
       addBubble("user", text);
-      history.push({ role: "user", content: text });
+      history.push({ role:"user", content:text });
+
       msgEl.value = "";
       msgEl.style.height = "46px";
-
       setSending(true);
 
-      try {
+      try{
         const res = await fetch("/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text, history })
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ message:text, history })
         });
 
         const data = await res.json();
         const reply = data.reply || "Sorry — no reply received.";
-
         addBubble("assistant", reply);
-        history.push({ role: "assistant", content: reply });
+        history.push({ role:"assistant", content: reply });
 
-      } catch (e) {
+      } catch (e){
         addBubble("assistant", "⚠️ Network error. Please try again.");
       } finally {
         setSending(false);
@@ -445,29 +482,123 @@
       }
     }
 
-    function quickSend(text){
-      msgEl.value = text;
-      sendMessage();
-    }
-
-    // Enter to send, Shift+Enter for newline
     msgEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
+      if (e.key === "Enter" && !e.shiftKey){
         e.preventDefault();
         sendMessage();
       }
     });
 
-    // Auto-grow textarea
     msgEl.addEventListener("input", () => {
       msgEl.style.height = "46px";
       msgEl.style.height = Math.min(msgEl.scrollHeight, 140) + "px";
     });
 
-    // Welcome message + store in history
-    const welcome = "🏟️ Welcome to the World Cup 2026 Dallas concierge! Ask about hours, specials, or book a reservation. You can speak English, Español, Português, or Français.";
-    addBubble("assistant", welcome);
-    history.push({ role: "assistant", content: welcome });
+    function setCountdown(startISO){
+      const countdownEl = document.getElementById("countdown");
+      const localClockEl = document.getElementById("localClock");
+      const datesEl = document.getElementById("wcDates");
+
+      const target = new Date(startISO + "T00:00:00");
+
+      function tick(){
+        const now = new Date();
+        localClockEl.textContent = "Local time: " + now.toLocaleString();
+
+        const diff = target - now;
+        if (diff <= 0){
+          countdownEl.textContent = "It’s kickoff time! ⚽";
+          return;
+        }
+        const totalSeconds = Math.floor(diff / 1000);
+        const days = Math.floor(totalSeconds / 86400);
+        const hours = Math.floor((totalSeconds % 86400) / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        countdownEl.innerHTML = `
+          <span class="pill">${days}d</span>
+          <span class="pill">${hours}h</span>
+          <span class="pill">${minutes}m</span>
+          <span class="pill">${seconds}s</span>
+        `;
+      }
+
+      datesEl.textContent = startISO;
+      tick();
+      setInterval(tick, 1000);
+    }
+
+    function renderSchedule(matches){
+      const list = document.getElementById("scheduleList");
+      list.innerHTML = "";
+
+      matches.forEach(m => {
+        const row = document.createElement("div");
+        row.className = "match";
+
+        const left = document.createElement("div");
+        left.className = "matchLeft";
+
+        const date = document.createElement("div");
+        date.className = "matchDate";
+        date.textContent = formatDatePretty(m.date);
+
+        const stage = document.createElement("div");
+        stage.className = "matchStage";
+        stage.textContent = m.stage;
+
+        left.appendChild(date);
+        left.appendChild(stage);
+
+        const tag = document.createElement("div");
+        tag.className = "tag";
+        tag.textContent = "Dallas";
+
+        row.appendChild(left);
+        row.appendChild(tag);
+        list.appendChild(row);
+      });
+    }
+
+    async function loadSchedule(){
+      refreshBtn.disabled = true;
+      refreshBtn.textContent = "…";
+
+      try{
+        const res = await fetch("/schedule", { cache: "no-store" });
+        scheduleData = await res.json();
+
+        // Banner + languages
+        document.getElementById("matchBanner").textContent = "🎉 " + (scheduleData.match_day_banner || "Match day info coming soon");
+        const langs = (scheduleData.supported_languages || []).map(l => l.label).join(" • ");
+        document.getElementById("langList").textContent = "Languages: " + (langs || "English");
+
+        // Countdown
+        const startDate = scheduleData.world_cup?.start_date || "2026-06-11";
+        const endDate = scheduleData.world_cup?.end_date || "2026-07-19";
+        document.getElementById("wcDates").textContent = `${startDate} → ${endDate}`;
+        setCountdown(startDate);
+
+        // Schedule list
+        renderSchedule(scheduleData.dallas_matches || []);
+
+      } catch (e){
+        const list = document.getElementById("scheduleList");
+        list.innerHTML = `<div class="sideHint">⚠️ Could not load schedule from server.</div>`;
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = "Refresh";
+      }
+    }
+
+    // Initial greeting
+    const greeting = "Hi! Want to book a table for a match day? Ask me anything.";
+    addBubble("assistant", greeting);
+    history.push({ role:"assistant", content: greeting });
+
+    // Load server-driven schedule + widgets
+    loadSchedule();
   </script>
 </body>
 </html>
