@@ -17,6 +17,20 @@ app = Flask(__name__)
 client = OpenAI()
 
 # -----------------------------
+# Render / browser cache-busting
+# -----------------------------
+app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+
+@app.after_request
+def add_no_cache_headers(response):
+    # Helps ensure Render/browser doesn't cache index.html so you see updates immediately
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
+# -----------------------------
 # Load business profile once
 # -----------------------------
 BUSINESS_PROFILE_PATH = "business_profile.txt"
@@ -26,8 +40,9 @@ if not os.path.exists(BUSINESS_PROFILE_PATH):
 with open(BUSINESS_PROFILE_PATH, "r", encoding="utf-8") as f:
     business_profile = f.read()
 
+
 # -----------------------------
-# Google Sheets config (FIXED SCOPES)
+# Google Sheets config (fixed scopes)
 # -----------------------------
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -87,12 +102,29 @@ class ReservationLead(BaseModel):
 # -----------------------------
 @app.route("/")
 def home():
+    # Serves index.html from the project root
     return send_from_directory(".", "index.html")
 
 
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"})
+
+
+@app.route("/version")
+def version():
+    """
+    Proof endpoint: shows index.html last modified timestamp on the server.
+    Use this to confirm Render deployed your latest index.html.
+    """
+    try:
+        mtime = os.path.getmtime("index.html")
+        return jsonify({
+            "index_html_last_modified_epoch": mtime,
+            "index_html_last_modified": datetime.fromtimestamp(mtime).isoformat(timespec="seconds"),
+        })
+    except Exception as e:
+        return jsonify({"error": repr(e)}), 500
 
 
 @app.route("/test-sheet")
@@ -112,9 +144,8 @@ def test_sheet():
 def chat():
     data = request.get_json(force=True)
 
-    # Support both single message and optional history
     user_message = (data.get("message") or "").strip()
-    history = data.get("history") or []  # list of {"role": "user|assistant", "content": "..."}
+    history = data.get("history") or []  # list of {"role":"user|assistant","content":"..."}
 
     if not user_message:
         return jsonify({"reply": "Please type a message."})
@@ -130,6 +161,9 @@ Rules for reservations:
 - Once you have all 5, output ONE line exactly like:
   RESERVATION_JSON={{"name":"...","phone":"...","date":"...","time":"...","party_size":4}}
 - Do not put extra characters inside the braces.
+- Be friendly, fast, and concise.
+- Auto-detect language and respond in it (English, Spanish, Portuguese, French).
+- Never mention being an AI unless the user asks directly.
 """
 
     # Build messages with history so the bot stops forgetting
@@ -147,11 +181,10 @@ Rules for reservations:
     reply = (resp.output_text or "").strip()
 
     # -----------------------------
-    # Extract reservation JSON robustly
+    # Extract reservation JSON robustly and save to Sheets
     # -----------------------------
     if "RESERVATION_JSON" in reply:
         try:
-            # Capture only the {...} JSON object after RESERVATION_JSON=
             match = re.search(r"RESERVATION_JSON\s*=\s*(\{.*?\})", reply, re.DOTALL)
             if not match:
                 return jsonify({"reply": reply})
@@ -160,10 +193,15 @@ Rules for reservations:
             lead_dict = json.loads(json_text)
             lead = ReservationLead(**lead_dict)
 
-            # Save to Google Sheets
-            append_lead_to_sheet(lead.name, lead.phone, lead.date, lead.time, lead.party_size)
+            append_lead_to_sheet(
+                lead.name,
+                lead.phone,
+                lead.date,
+                lead.time,
+                lead.party_size
+            )
 
-            # Remove JSON from visible reply
+            # Clean visible reply (remove JSON)
             visible_reply = re.sub(
                 r"\s*RESERVATION_JSON\s*=\s*\{.*?\}\s*",
                 "\n",
