@@ -65,7 +65,7 @@
 
     .leftcol{
       display:grid;
-      grid-template-columns: 320px 1fr; /* Menu | Chat */
+      grid-template-columns: 240px 1fr; /* Menu | Chat (chat gets more space) */
       gap:14px;
       min-height:0;
       height:100%;
@@ -74,7 +74,7 @@
     .chatcard{display:flex; flex-direction:column; min-height:0;}
     .menucard{display:flex; flex-direction:column; min-height:0;}
     #chat{padding:14px; height:100%; overflow:auto; display:flex; flex-direction:column; gap:10px;}
-    .menu{border-top:1px solid rgba(255,255,255,.10); padding:10px 12px; font-size:12px; display:flex; flex-direction:column; gap:10px; overflow:auto;}
+    .menu{padding:10px 10px 12px; font-size:11px; display:flex; flex-direction:column; gap:10px; overflow:auto;}
     @media (max-width: 950px){
       .leftcol{grid-template-columns: 1fr;}
     }
@@ -243,16 +243,23 @@
     .matchday.show{display:block;}
 
     .menuitem{
-      padding:10px 12px;
+      padding:10px 10px;
       border:1px solid rgba(255,255,255,.12);
       border-radius:14px;
-      background: radial-gradient(800px 120px at 10% 0%, rgba(31,111,235,.18) 0%, rgba(0,0,0,.18) 55%);
+      background: linear-gradient(135deg, rgba(31,111,235,.16) 0%, rgba(0,0,0,.18) 55%, rgba(46,160,67,.10) 100%);
       position:relative;
       overflow:hidden;
     }
-    .menuitem .name{font-weight:800;}
-    .menuitem .desc{color:var(--muted); margin-top:3px;}
-    .menuitem .price{margin-top:6px; font-weight:800; color:#f5d76e;}
+    .menuitem:before{
+      content:"";
+      position:absolute;
+      inset:-1px;
+      background: radial-gradient(220px 90px at 15% 10%, rgba(245,215,110,.18) 0%, rgba(0,0,0,0) 60%);
+      pointer-events:none;
+    }
+    .menuitem .name{font-weight:900; letter-spacing:.2px;}
+    .menuitem .desc{color:var(--muted); margin-top:3px; line-height:1.25;}
+    .menuitem .price{margin-top:6px; font-weight:900; color:#f5d76e;}
     .menuTop{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
     .menuBadge{
       border:1px solid rgba(245,215,110,.35);
@@ -310,22 +317,10 @@
       <div class="leftcol">
 
         <!-- Menu -->
-        <div class="card menucard" style="display:flex;flex-direction:column;min-height:0;">
+        <div class="card menucard" style="display:flex;flex-direction:column;min-height:0; max-width:260px;">
           <div class="cardhead">
             <div class="title" id="menuTitle">Menu</div>
             <div class="pill" id="menuPill">4 languages</div>
-          </div>
-
-          <div class="sidepad" id="menuControls" style="padding-top:10px; padding-bottom:10px;">
-            <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
-              <div class="pill" style="padding:6px 10px;">Menu</div>
-              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <button class="secondary" id="menuPrevBtn" style="min-width:74px;">Prev</button>
-                <div class="pill" id="menuPageIndicator">Page 1 of 1</div>
-                <button class="secondary" id="menuNextBtn" style="min-width:74px;">Next</button>
-                <div class="langbtn" id="menuToggleAll" title="Toggle full menu">Show all</div>
-              </div>
-            </div>
           </div>
 
           <div class="menu" id="menu"></div>
@@ -436,10 +431,6 @@ let scheduleQuery = "";
 const PAGE_SIZE = 5;
 let currentPage = 1;
 
-// Menu pagination
-const MENU_PAGE_SIZE = 5;
-let menuPage = 1;
-let menuShowAll = false;
 
 let menuData = null;
 
@@ -467,10 +458,6 @@ const pageIndicatorEl = document.getElementById("pageIndicator");
 
 
 
-const menuPrevBtn = document.getElementById("menuPrevBtn");
-const menuNextBtn = document.getElementById("menuNextBtn");
-const menuPageIndicatorEl = document.getElementById("menuPageIndicator");
-const menuToggleAllBtn = document.getElementById("menuToggleAll");
 const STRINGS = {
   en: {
     welcome: "Hi! Want to book a table for a match day? Ask me anything.",
@@ -901,55 +888,32 @@ function renderMenu(items){
     d.innerHTML = `
       <div class="menuTop">
         <div>
-          <div class="name">—</div>
+          <div class="name">⚽ —</div>
           <div class="desc">Menu not available.</div>
         </div>
         <div class="menuBadge">—</div>
       </div>
     `;
     el.appendChild(d);
-    if (menuPageIndicatorEl) menuPageIndicatorEl.textContent = "Page 0 of 0";
-    if (menuPrevBtn) menuPrevBtn.disabled = true;
-    if (menuNextBtn) menuNextBtn.disabled = true;
     return;
   }
 
-  const totalPages = Math.max(1, Math.ceil(items.length / MENU_PAGE_SIZE));
-  if (menuPage > totalPages) menuPage = 1;
-
-  let visible = items;
-  if (!menuShowAll){
-    const start = (menuPage - 1) * MENU_PAGE_SIZE;
-    visible = items.slice(start, start + MENU_PAGE_SIZE);
-  }
-
-  if (menuToggleAllBtn){
-    menuToggleAllBtn.textContent = menuShowAll ? "Paginate" : "Show all";
-    menuToggleAllBtn.classList.toggle("active", menuShowAll);
-  }
-  if (menuPageIndicatorEl){
-    menuPageIndicatorEl.textContent = menuShowAll ? `Showing all (${items.length})` : `Page ${menuPage} of ${totalPages}`;
-  }
-  if (menuPrevBtn) menuPrevBtn.disabled = menuShowAll ? true : (menuPage <= 1);
-  if (menuNextBtn) menuNextBtn.disabled = menuShowAll ? true : (menuPage >= totalPages);
-
-  const icons = ["⚽", "🏟️", "🌮", "🍗", "🥤", "🔥", "🌎", "🥇"];
-
-  visible.forEach((it, idx) => {
+  const icons = ["⚽","🌮","🍗","🥤","🔥","🏟️","🌎","🥇"];
+  items.forEach((it, idx) => {
     const d = document.createElement("div");
     d.className = "menuitem";
 
-    const icon = icons[(idx + (menuPage-1)*MENU_PAGE_SIZE) % icons.length];
+    const icon = icons[idx % icons.length];
     const name = escapeHtml(it.name || "");
     const desc = escapeHtml(it.desc || "");
     const price = escapeHtml(it.price || "");
 
+    // Lightweight tags (cosmetic)
     const tags = [];
-    const lower = ((it.name || "") + " " + (it.desc || "")).toLowerCase();
-    if (lower.includes("spicy") || lower.includes("picante") || lower.includes("épicé")) tags.push("Spicy");
-    if (lower.includes("wings") || lower.includes("alitas") || lower.includes("asinhas") || lower.includes("ailes")) tags.push("Shareable");
-    if (lower.includes("burger") || lower.includes("hamb")) tags.push("Fan favorite");
-    if (lower.includes("nacho")) tags.push("Game snack");
+    const lower = ((it.name||"") + " " + (it.desc||"")).toLowerCase();
+    if (lower.includes("spicy") || lower.includes("picante")) tags.push("Spicy");
+    if (lower.includes("wings") || lower.includes("alitas") || lower.includes("asinhas")) tags.push("Share");
+    if (lower.includes("nacho")) tags.push("Snack");
 
     d.innerHTML = `
       <div class="menuTop">
@@ -1061,16 +1025,16 @@ if (nextPageBtn) nextPageBtn.addEventListener("click", () => {
 // -----------------------
 // Menu pagination controls
 // -----------------------
-if (menuPrevBtn){
-  menuPrevBtn.addEventListener("click", () => {
+if (null){
+  null.addEventListener("click", () => {
     if (!menuShowAll && menuPage > 1){
       menuPage--;
       renderMenu(window.menuDataList || []);
     }
   });
 }
-if (menuNextBtn){
-  menuNextBtn.addEventListener("click", () => {
+if (null){
+  null.addEventListener("click", () => {
     if (!menuShowAll){
       const items = window.menuDataList || [];
       const totalPages = Math.max(1, Math.ceil((items.length || 0) / MENU_PAGE_SIZE));
@@ -1081,8 +1045,8 @@ if (menuNextBtn){
     }
   });
 }
-if (menuToggleAllBtn){
-  menuToggleAllBtn.addEventListener("click", () => {
+if (null){
+  null.addEventListener("click", () => {
     menuShowAll = !menuShowAll;
     menuPage = 1;
     renderMenu(window.menuDataList || []);
