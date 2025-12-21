@@ -827,8 +827,7 @@ if (compactToggleBtn){
     compactMode = !compactMode;
     localStorage.setItem("compact_mode", compactMode ? "1" : "0");
     applyCompactMode();
-startHeroRotation();
-  });
+});
 }
 
 const STRINGS = {
@@ -937,7 +936,9 @@ async function setLanguage(newLang){
   applyLanguageToUI();
 applyCompactMode();
 
-  // reload menu in the chosen language
+  
+  startHeroRotation();
+// reload menu in the chosen language
   await loadMenu();
 
   // show a bot notice (feature preserved)
@@ -1226,7 +1227,8 @@ if (totalPages <= 1){
 
     row.innerHTML = `
       <div class="left">
-        <div><b>${escapeHtml(m.stage || "Match")}</b> • ${escapeHtml(teamsTxt)}</div>
+        <div><b>${escapeHtml(m.stage || \"Match\")}</b></div>
+        ${formatTeamsLine(m.home || (teamsTxt.split(\" vs \")[0]||\"\"), m.away || (teamsTxt.split(\" vs \")[1]||\"\"))}
         <div class="when">${escapeHtml(m.date || "")} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div>
       </div>
       <div class="pill">${escapeHtml(m.id || "")}</div>
