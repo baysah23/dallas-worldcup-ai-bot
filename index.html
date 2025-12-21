@@ -339,6 +339,14 @@
 
         <div class="schedule" id="schedule"></div>
 
+        <div class="sidepad" id="pager" style="display:none; padding-top:10px;">
+          <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
+            <button id="prevPage" class="secondary" style="min-width:88px;">Prev</button>
+            <div class="pill" id="pageIndicator">Page 1 of 1</div>
+            <button id="nextPage" class="secondary" style="min-width:88px;">Next</button>
+          </div>
+        </div>
+
         <div class="cardhead" style="border-top:1px solid var(--line); border-bottom:none;">
           <div class="title" id="menuTitle">Menu</div>
           <div class="pill" id="menuPill">4 languages</div>
@@ -371,8 +379,12 @@ const sessionId = (localStorage.getItem("session_id") || (() => {
 
 let lang = localStorage.getItem("lang") || "en";
 let scheduleData = null;
-      let scope = localStorage.getItem("schedule_scope") || "dallas";
-      let scheduleQuery = "";
+let scope = localStorage.getItem("schedule_scope") || "dallas";
+let scheduleQuery = "";
+
+// Pagination (All Matches only)
+const PAGE_SIZE = 10;
+let currentPage = 1;
 
 let menuData = null;
 
@@ -393,6 +405,10 @@ const scopeDallasBtn = document.getElementById("scopeDallas");
 const scopeAllBtn = document.getElementById("scopeAll");
 const teamSearchEl = document.getElementById("teamSearch");
 const matchCountEl = document.getElementById("matchCount");
+const pagerEl = document.getElementById("pager");
+const prevPageBtn = document.getElementById("prevPage");
+const nextPageBtn = document.getElementById("nextPage");
+const pageIndicatorEl = document.getElementById("pageIndicator");
 
 
 const STRINGS = {
@@ -538,18 +554,48 @@ async function loadMenu(){
 }
 
 function safeParseTimestamp(dateIso, timeStr){
-  // app.py schedule items may have "time": "17:00" or missing/""/"TBD"
+  // Supports:
+  // - "19:00"
+  // - "7:00 PM" / "7:00PM" / "7 PM"
+  // - empty / "TBD" (falls back to end-of-day)
   if (!dateIso) return null;
-  if (timeStr && typeof timeStr === "string" && timeStr.trim() && timeStr.trim().toUpperCase() !== "TBD"){
-    // expect "HH:MM"
-    const t = timeStr.trim();
-    // Basic guard
-    if (/^\d{1,2}:\d{2}$/.test(t)){
-      return Date.parse(dateIso + "T" + t + ":00");
+
+  const raw = (timeStr || "").toString().trim();
+  if (raw && raw.toUpperCase() !== "TBD"){
+    // 24-hour "HH:MM"
+    const m24 = raw.match(/^(\d{1,2}):(\d{2})$/);
+    if (m24){
+      const hh = m24[1].padStart(2,"0");
+      const mm = m24[2];
+      return Date.parse(`${dateIso}T${hh}:${mm}:00`);
+    }
+
+    // 12-hour "H(:MM)? AM/PM"
+    const m12 = raw.match(/^(\d{1,2})(?::(\d{2}))?\s*([AaPp][Mm])$/);
+    if (m12){
+      let hh = parseInt(m12[1],10);
+      const mm = (m12[2] || "00");
+      const ap = m12[3].toUpperCase();
+      if (ap === "PM" && hh !== 12) hh += 12;
+      if (ap === "AM" && hh === 12) hh = 0;
+      const hh2 = String(hh).padStart(2,"0");
+      return Date.parse(`${dateIso}T${hh2}:${mm}:00`);
+    }
+
+    // 12-hour with no minutes: "7 PM"
+    const m12b = raw.match(/^(\d{1,2})\s*([AaPp][Mm])$/);
+    if (m12b){
+      let hh = parseInt(m12b[1],10);
+      const ap = m12b[2].toUpperCase();
+      if (ap === "PM" && hh !== 12) hh += 12;
+      if (ap === "AM" && hh === 12) hh = 0;
+      const hh2 = String(hh).padStart(2,"0");
+      return Date.parse(`${dateIso}T${hh2}:00:00`);
     }
   }
-  // end-of-day fallback
-  return Date.parse(dateIso + "T23:59:59");
+
+  // end-of-day fallback (still keeps countdown alive even if time missing)
+  return Date.parse(`${dateIso}T23:59:59`);
 }
 
 // -----------------------
@@ -625,21 +671,25 @@ function formatKickoffTime(t){
 }
 
 function renderSchedule(){
-        const el = document.getElementById("schedule");
-        el.innerHTML = "";
-        const countEl = document.getElementById("matchCount");
-        if (countEl) countEl.textContent = (scheduleData && scheduleData.matches) ? scheduleData.matches.length : 0;
-        if (scheduleData && scheduleData.notice){
-          const row = document.createElement("div");
-          row.className = "match";
-          row.innerHTML = `<div class="left"><div><b>Notice</b></div><div class="when">${scheduleData.notice}</div></div><div class="pill">i</div>`;
-          el.appendChild(row);
-          return;
-        }
+  const el = document.getElementById("schedule");
+  el.innerHTML = "";
 
-  const matches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches.slice() : [];
+  // Match count pill always reflects the server-filtered list size (search happens server-side)
+  const countEl = document.getElementById("matchCount");
+  const allMatches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches.slice() : [];
+  if (countEl) countEl.textContent = allMatches.length;
 
-  if (!matches.length){
+  // Notice handling (feed down, etc.)
+  if (scheduleData && scheduleData.notice){
+    const row = document.createElement("div");
+    row.className = "match";
+    row.innerHTML = `<div class="left"><div><b>Notice</b></div><div class="when">${escapeHtml(scheduleData.notice)}</div></div><div class="pill">i</div>`;
+    el.appendChild(row);
+    if (pagerEl) pagerEl.style.display = "none";
+    return;
+  }
+
+  if (!allMatches.length){
     const empty = document.createElement("div");
     empty.className = "match";
     empty.innerHTML = `
@@ -650,10 +700,12 @@ function renderSchedule(){
       <div class="pill">—</div>
     `;
     el.appendChild(empty);
+    if (pagerEl) pagerEl.style.display = "none";
     return;
   }
 
-  const enriched = matches.map(m => {
+  // Enrich with a timestamp for sorting/highlighting.
+  const enriched = allMatches.map(m => {
     const ts = safeParseTimestamp(m.date, m.time);
     return {...m, ts};
   }).filter(m => m.ts !== null);
@@ -662,12 +714,34 @@ function renderSchedule(){
   const upcoming = enriched.filter(m => m.ts >= now).sort((a,b)=>a.ts-b.ts);
   const nextId = upcoming.length ? upcoming[0].id : null;
 
-  enriched.sort((a,b)=>a.ts-b.ts).forEach(m => {
+  // Pagination ONLY for scope=all
+  let visible = enriched.sort((a,b)=>a.ts-b.ts);
+  let totalPages = 1;
+
+  if (scope === "all"){
+    totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+    if (currentPage > totalPages) currentPage = totalPages;
+
+    const startIdx = (currentPage - 1) * PAGE_SIZE;
+    const endIdx = startIdx + PAGE_SIZE;
+    visible = visible.slice(startIdx, endIdx);
+
+    // Show pager UI
+    if (pagerEl) pagerEl.style.display = "block";
+    if (pageIndicatorEl) pageIndicatorEl.textContent = `Page ${currentPage} of ${totalPages}`;
+    if (prevPageBtn) prevPageBtn.disabled = (currentPage <= 1);
+    if (nextPageBtn) nextPageBtn.disabled = (currentPage >= totalPages);
+  } else {
+    // Dallas scope: show all, hide pager
+    if (pagerEl) pagerEl.style.display = "none";
+  }
+
+  visible.forEach(m => {
     const row = document.createElement("div");
     row.className = "match" + (m.id === nextId ? " next" : "");
 
     const timeTxt = formatKickoffTime(m.time);
-    const teamsTxt = m.teams || (m.home && m.away ? `${m.home} vs ${m.away}` : "TBD vs TBD");
+    const teamsTxt = (m.home && m.away) ? `${m.home} vs ${m.away}` : (m.teams || "TBD vs TBD");
     const venueTxt = m.venue ? ` • ${m.venue}` : "";
 
     row.innerHTML = `
@@ -803,6 +877,8 @@ msgEl.addEventListener("input", () => {
 function setScope(newScope){
   scope = (newScope === "all") ? "all" : "dallas";
   localStorage.setItem("schedule_scope", scope);
+  // Reset pagination when switching scope
+  currentPage = 1;
   if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
   if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
   loadSchedule();
@@ -810,10 +886,21 @@ function setScope(newScope){
 if (scopeDallasBtn) scopeDallasBtn.addEventListener("click", () => setScope("dallas"));
 if (scopeAllBtn) scopeAllBtn.addEventListener("click", () => setScope("all"));
 
+// Pagination controls (All Matches only)
+if (prevPageBtn) prevPageBtn.addEventListener("click", () => { if (currentPage > 1){ currentPage--; renderSchedule(); } });
+if (nextPageBtn) nextPageBtn.addEventListener("click", () => {
+  if (!scheduleData || !Array.isArray(scheduleData.matches)) return;
+  const totalPages = Math.max(1, Math.ceil(scheduleData.matches.length / PAGE_SIZE));
+  if (currentPage < totalPages){ currentPage++; renderSchedule(); }
+});
+
+
 // Team search (simple text input)
 let _searchTimer = null;
 function setScheduleQuery(q){
   scheduleQuery = (q || "").trim();
+  // Reset pagination when searching
+  currentPage = 1;
   if (_searchTimer) clearTimeout(_searchTimer);
   _searchTimer = setTimeout(() => loadSchedule(), 250);
 }

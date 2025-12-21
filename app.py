@@ -148,9 +148,16 @@ def _fetch_fixture_feed() -> List[Dict[str, Any]]:
 
 
 def _fmt_time_12h(dt_utc: datetime) -> str:
-    # Use the server's local timezone for display unless you change it.
-    local_dt = dt_utc.astimezone()  # local tz on Render (UTC) unless you set TZ
-    return local_dt.strftime("%-I:%M %p") if hasattr(local_dt, "strftime") else ""
+    """Return a friendly 12-hour local-time string like '7:00 PM'.
+
+    Notes:
+    - dt_utc is assumed to be timezone-aware (UTC).
+    - We display in the server's local timezone (Render is typically UTC unless TZ is set).
+    - Uses a cross-platform formatter (Windows doesn't support %-I).
+    """
+    local_dt = dt_utc.astimezone()  # local tz on host
+    # %I gives zero-padded hour; strip leading 0 for '7:00 PM'
+    return local_dt.strftime("%I:%M %p").lstrip("0")
 
 
 def _parse_dateutc(date_utc_str: str) -> Optional[datetime]:
