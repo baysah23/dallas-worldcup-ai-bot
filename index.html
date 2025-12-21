@@ -190,7 +190,9 @@
     }
     .chatcard{display:flex; flex-direction:column; min-height:0;}
     .menucard{display:flex; flex-direction:column; min-height:0;}
-    #chat{padding:14px; height:100%; overflow:auto; display:flex; flex-direction:column; gap:10px;}
+    #chat{padding:14px; height:100%; overflow:auto; display:flex;
+      flex:1; flex-direction:column; gap:10px;
+      min-height:320px;}
     .menu{padding:8px 8px 10px; font-size:9px; line-height:1.25; display:flex; flex-direction:column; gap:8px; overflow:auto; max-height:390px;}
     @media (max-width: 950px){
       .leftcol{grid-template-columns: 1fr;}
@@ -247,6 +249,7 @@
       white-space:pre-wrap;
       word-wrap:break-word;
       border:1px solid rgba(255,255,255,.10);
+          font-size:12.5px;
     }
     .user{
       align-self:flex-end;
@@ -332,7 +335,7 @@
     .nums span{color:var(--text);}
     .nums b{color:#f5d76e;}
 
-    .schedule{flex:1; min-height:160px; overflow:auto;}
+    .schedule{flex:1; min-height:260px; overflow:auto;}
     .match{
       display:flex;
       justify-content:space-between;
@@ -502,7 +505,7 @@
       <div class="wc-hero-inner">
         <div class="wc-hero-top">
           <div class="wc-title">
-            <h2>🏟️ World Cup 2026 • Dallas Venue Concierge</h2>
+            <h2>🏟️ World Cup 2026 • Dallas Concierge</h2>
             <div class="meta">Flags, match-day energy, and a stadium-ready vibe — without changing any of your app features.</div>
           </div>
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
