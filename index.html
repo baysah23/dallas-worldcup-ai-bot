@@ -360,6 +360,128 @@
     .compact .cardhead{padding:10px 12px;}
     .compact .menu{font-size:8.5px;}
 
+
+    /* --- HERO banner (Session 1) --- */
+    .hero{
+      position:relative;
+      margin:14px 14px 0;
+      border-radius:18px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.18);
+      min-height:140px;
+      box-shadow: 0 18px 55px rgba(0,0,0,.28);
+      isolation:isolate;
+    }
+    .heroMedia{
+      position:absolute;
+      inset:0;
+      background:#000;
+    }
+    .heroImg{
+      position:absolute;
+      inset:0;
+      background-size:cover;
+      background-position:center 18%;
+      opacity:0;
+      transform:scale(1.03);
+      transition: opacity 900ms ease, transform 1200ms ease;
+      filter: saturate(1.05) contrast(1.05);
+    }
+    .heroImg.on{
+      opacity:1;
+      transform:scale(1.00);
+    }
+    .heroScrim{
+      position:absolute;
+      inset:0;
+      background:
+        radial-gradient(900px 240px at 20% 20%, rgba(245,215,110,.22) 0%, rgba(0,0,0,0) 60%),
+        linear-gradient(90deg, rgba(7,16,34,.78) 0%, rgba(7,16,34,.55) 45%, rgba(7,16,34,.86) 100%);
+      pointer-events:none;
+      z-index:2;
+    }
+    .hero:before{
+      content:"";
+      position:absolute;
+      inset:-40% -30%;
+      background: linear-gradient(110deg, rgba(255,255,255,0) 30%, rgba(255,255,255,.10) 50%, rgba(255,255,255,0) 70%);
+      transform: translateX(-55%) rotate(8deg);
+      animation: heroSweep 6.2s ease-in-out infinite;
+      pointer-events:none;
+      z-index:3;
+      mix-blend-mode: overlay;
+    }
+    @keyframes heroSweep{
+      0%{transform: translateX(-55%) rotate(8deg);}
+      50%{transform: translateX(25%) rotate(8deg);}
+      100%{transform: translateX(55%) rotate(8deg);}
+    }
+    .heroContent{
+      position:relative;
+      z-index:4;
+      padding:16px 18px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .heroKicker{
+      font-weight:900;
+      letter-spacing:.9px;
+      text-transform:uppercase;
+      font-size:13px;
+      color:#f5d76e;
+      text-shadow: 0 2px 18px rgba(0,0,0,.45);
+    }
+    .heroSub{
+      color:var(--text);
+      font-size:12px;
+      max-width:680px;
+      line-height:1.25;
+      opacity:.95;
+    }
+    .heroChips{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:2px;}
+    .heroChip{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.18);
+      font-size:12px;
+      color:var(--text);
+      backdrop-filter: blur(6px);
+    }
+    .heroDot{
+      width:8px; height:8px; border-radius:999px;
+      background: rgba(46,160,67,.8);
+      box-shadow: 0 0 0 6px rgba(46,160,67,.12);
+    }
+    .hero:hover:before{animation-play-state:paused;}
+    .hero:hover .heroImg{transition-duration: 1300ms;}
+
+    /* --- Flag badges in match listings (Session 1) --- */
+    .flagchip{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:22px;
+      height:18px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.18);
+      margin-right:6px;
+      font-size:14px;
+      line-height:1;
+      transform: translateY(1px);
+    }
+    .vs{
+      opacity:.8;
+      margin:0 6px;
+      font-weight:800;
+    }
+
 </style>
 </head>
 
@@ -537,6 +659,137 @@ const nextPageBtn = document.getElementById("nextPage");
 const pageIndicatorEl = document.getElementById("pageIndicator");
 
 
+// -----------------------
+// HERO banner (Session 1)
+// -----------------------
+const HERO_SLIDES = [
+  { name: "Lionel Messi", country: "Argentina", flag: "🇦🇷", img: "https://upload.wikimedia.org/wikipedia/commons/6/6c/Lionel_Messi_in_2018.jpg" },
+  { name: "Kylian Mbappé", country: "France", flag: "🇫🇷", img: "https://upload.wikimedia.org/wikipedia/commons/7/72/Kylian_Mbappe_2017.jpg" },
+  { name: "Cristiano Ronaldo", country: "Portugal", flag: "🇵🇹", img: "https://upload.wikimedia.org/wikipedia/commons/6/6d/Cristiano_Ronaldo%2C_2012_2.JPG" },
+  { name: "Vinícius Júnior", country: "Brazil", flag: "🇧🇷", img: "https://upload.wikimedia.org/wikipedia/commons/7/77/Vin%C3%ADcius_J%C3%BAnior.jpg" }
+];
+
+let heroIdx = 0;
+let heroTimer = null;
+let heroUseA = true;
+let heroPaused = false;
+
+const heroBannerEl = document.getElementById("heroBanner");
+const heroImgA = document.getElementById("heroImgA");
+const heroImgB = document.getElementById("heroImgB");
+const heroChips = document.getElementById("heroChips");
+
+function setHeroSlide(idx){
+  const s = HERO_SLIDES[idx % HERO_SLIDES.length];
+  const nextLayer = heroUseA ? heroImgA : heroImgB;
+  const prevLayer = heroUseA ? heroImgB : heroImgA;
+
+  if (nextLayer){
+    nextLayer.style.backgroundImage = `url('${s.img}')`;
+    nextLayer.classList.add("on");
+  }
+  if (prevLayer){
+    prevLayer.classList.remove("on");
+  }
+
+  if (heroChips){
+    heroChips.innerHTML = `
+      <span class="heroChip"><span class="heroDot"></span> Live • Dallas</span>
+      <span class="heroChip">${s.flag} <b>${escapeHtml(s.name)}</b> • ${escapeHtml(s.country)}</span>
+      <span class="heroChip">AT&amp;T Stadium • Arlington</span>
+    `;
+  }
+
+  heroUseA = !heroUseA;
+}
+
+function startHeroRotation(){
+  if (!heroBannerEl || !heroImgA || !heroImgB) return;
+
+  // initial
+  setHeroSlide(heroIdx);
+
+  // rotate
+  if (heroTimer) clearInterval(heroTimer);
+  heroTimer = setInterval(() => {
+    if (heroPaused) return;
+    heroIdx = (heroIdx + 1) % HERO_SLIDES.length;
+    setHeroSlide(heroIdx);
+  }, 5200);
+
+  heroBannerEl.addEventListener("mouseenter", () => { heroPaused = true; });
+  heroBannerEl.addEventListener("mouseleave", () => { heroPaused = false; });
+}
+
+// -----------------------
+// Flags (Session 1)
+// -----------------------
+const FLAG_MAP = {
+  "argentina":"🇦🇷",
+  "france":"🇫🇷",
+  "portugal":"🇵🇹",
+  "brazil":"🇧🇷",
+  "united states":"🇺🇸","usa":"🇺🇸","us":"🇺🇸",
+  "mexico":"🇲🇽",
+  "canada":"🇨🇦",
+  "england":"🏴","scotland":"🏴","wales":"🏴",
+  "spain":"🇪🇸",
+  "germany":"🇩🇪",
+  "italy":"🇮🇹",
+  "netherlands":"🇳🇱","holland":"🇳🇱",
+  "belgium":"🇧🇪",
+  "croatia":"🇭🇷",
+  "switzerland":"🇨🇭",
+  "denmark":"🇩🇰",
+  "sweden":"🇸🇪",
+  "norway":"🇳🇴",
+  "poland":"🇵🇱",
+  "ukraine":"🇺🇦",
+  "serbia":"🇷🇸",
+  "turkey":"🇹🇷",
+  "morocco":"🇲🇦",
+  "senegal":"🇸🇳",
+  "ghana":"🇬🇭",
+  "nigeria":"🇳🇬",
+  "cameroon":"🇨🇲",
+  "egypt":"🇪🇬",
+  "tunisia":"🇹🇳",
+  "algeria":"🇩🇿",
+  "south africa":"🇿🇦",
+  "japan":"🇯🇵",
+  "korea republic":"🇰🇷","south korea":"🇰🇷","korea":"🇰🇷",
+  "china":"🇨🇳",
+  "australia":"🇦🇺",
+  "new zealand":"🇳🇿",
+  "iran":"🇮🇷",
+  "saudi arabia":"🇸🇦",
+  "qatar":"🇶🇦",
+  "united arab emirates":"🇦🇪","uae":"🇦🇪",
+  "uruguay":"🇺🇾",
+  "chile":"🇨🇱",
+  "colombia":"🇨🇴",
+  "peru":"🇵🇪",
+  "ecuador":"🇪🇨",
+  "paraguay":"🇵🇾"
+};
+
+function normalizeTeamKey(name){
+  return (name || "")
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\./g,"")
+    .replace(/\s+/g," ")
+    .replace(/\(.*?\)/g,"")
+    .trim();
+}
+function flagForTeam(name){
+  const key = normalizeTeamKey(name);
+  if (!key) return "🏳️";
+  return FLAG_MAP[key] || FLAG_MAP[key.replace(/^the\s+/,"")] || "🏳️";
+}
+
+
 
 
 
@@ -666,6 +919,7 @@ async function setLanguage(newLang){
   lang = newLang;
   localStorage.setItem("lang", lang);
   applyLanguageToUI();
+  startHeroRotation();
 applyCompactMode();
 
   // reload menu in the chosen language
@@ -949,15 +1203,34 @@ if (totalPages <= 1){
     row.className = "match" + (m.id === nextId ? " next" : "");
 
     const timeTxt = formatKickoffTime(m.time);
-    const teamsTxt = (m.teams && String(m.teams).trim())
-      ? m.teams
-      : ((m.home || m.away) ? `${m.home || "TBD"} vs ${m.away || "TBD"}` : "TBD vs TBD");
+
+    // Build team names (prefer explicit home/away; otherwise parse the "teams" string)
+    let homeName = m.home || "";
+    let awayName = m.away || "";
+
+    if ((!homeName || !awayName) && (m.teams && String(m.teams).trim())){
+      const rawTeams = String(m.teams).trim();
+      const parts = rawTeams.split(/\s+vs\s+|\s+v\.?\s+/i);
+      if (parts.length >= 2){
+        homeName = homeName || parts[0].trim();
+        awayName = awayName || parts[1].trim();
+      }
+    }
+
+    homeName = homeName || "TBD";
+    awayName = awayName || "TBD";
+
+    const homeFlag = flagForTeam(homeName);
+    const awayFlag = flagForTeam(awayName);
+
+    // Badge-style flags, but keep team names safely escaped
+    const teamsHtml = `<span class="flagchip" title="${escapeHtml(homeName)}">${homeFlag}</span>${escapeHtml(homeName)}<span class="vs">vs</span><span class="flagchip" title="${escapeHtml(awayName)}">${awayFlag}</span>${escapeHtml(awayName)}`;
 
     const venueTxt = m.venue ? ` • ${m.venue}` : "";
 
     row.innerHTML = `
       <div class="left">
-        <div><b>${escapeHtml(m.stage || "Match")}</b> • ${escapeHtml(teamsTxt)}</div>
+        <div><b>${escapeHtml(m.stage || "Match")}</b> • ${teamsHtml}</div>
         <div class="when">${escapeHtml(m.date || "")} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div>
       </div>
       <div class="pill">${escapeHtml(m.id || "")}</div>
