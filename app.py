@@ -434,7 +434,25 @@ def extract_party_size(text: str) -> Optional[int]:
 
 
 def extract_phone(text: str) -> Optional[str]:
-    digits = re.sub(r"\D+", "", text)
+    """Extract a US phone number from free text.
+
+    Important: do NOT just strip all non-digits from the whole message because
+    that accidentally pulls in digits from times/dates (e.g., '5pm June 18').
+    Instead, look for phone-like patterns and return the last 10 digits.
+    """
+    if not text:
+        return None
+
+    # Common patterns:
+    #  - 2157779999
+    #  - (215) 777-9999
+    #  - 215-777-9999
+    #  - +1 215 777 9999
+    m = re.search(r"(?:\+?1[\s\-\.]*)?(\(?\d{3}\)?[\s\-\.]?\d{3}[\s\-\.]?\d{4})", text)
+    if not m:
+        return None
+
+    digits = re.sub(r"\D+", "", m.group(0))
     if len(digits) == 11 and digits.startswith("1"):
         digits = digits[1:]
     if len(digits) == 10:
@@ -577,6 +595,22 @@ def home():
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"})
+
+
+
+@app.route("/api/reset_session", methods=["POST"])
+def api_reset_session():
+    """Reset server-side reservation memory for the provided session_id.
+
+    Frontend should call this when user clicks 'Clear' so both UI + server state reset.
+    """
+    data = request.get_json(silent=True) or {}
+    sid = (data.get("session_id") or "").strip()
+    if not sid:
+        # best-effort fallback (same as get_session_id)
+        sid = f"{client_ip()}::{request.headers.get('User-Agent','')[:40]}"
+    _sessions.pop(sid, None)
+    return jsonify({"ok": True})
 
 
 @app.route("/version")

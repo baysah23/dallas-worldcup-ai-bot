@@ -233,7 +233,16 @@
       border-top:1px dashed rgba(255,255,255,.14);
     }
     code{background:rgba(255,255,255,.10); padding:2px 6px; border-radius:8px;}
-  </style>
+  
+button.secondary{
+  background: rgba(255,255,255,.10);
+  border:1px solid rgba(255,255,255,.16);
+  color: var(--text);
+  font-weight:800;
+}
+button.secondary:hover{filter:brightness(1.1);}
+
+</style>
 </head>
 
 <body>
@@ -271,6 +280,7 @@
         <div class="composer">
           <textarea id="msg" placeholder="Type your message... (Enter to send, Shift+Enter for new line)"></textarea>
           <button id="sendBtn">Send</button>
+          <button id="clearBtn" class="secondary" type="button">Clear</button>
         </div>
 
         <div class="hint" id="helperHint"></div>
@@ -328,11 +338,12 @@
 // -----------------------
 // Session + state
 // -----------------------
-const sessionId = (localStorage.getItem("session_id") || (() => {
+function newSessionId(){
   const id = "sess_" + Math.random().toString(16).slice(2) + "_" + Date.now();
   localStorage.setItem("session_id", id);
   return id;
-})());
+}
+let sessionId = (localStorage.getItem("session_id") || newSessionId());
 
 let lang = localStorage.getItem("lang") || "en";
 let scheduleData = null;
@@ -344,6 +355,7 @@ const history = [];
 const chatEl = document.getElementById("chat");
 const msgEl = document.getElementById("msg");
 const sendBtn = document.getElementById("sendBtn");
+const clearBtn = document.getElementById("clearBtn");
 const helperHint = document.getElementById("helperHint");
 const pillLang = document.getElementById("pillLang");
 const pillMode = document.getElementById("pillMode");
@@ -474,68 +486,19 @@ function stripHtml(html){
 // Fetchers (match app.py)
 // -----------------------
 async function loadSchedule(){
-  // Try the new endpoint first, then fall back to older endpoint if needed
-  const endpoints = ["/schedule.json", "/api/schedule"];
-  let lastErr = null;
-
-  for (const url of endpoints){
-    try{
-      const res = await fetch(url, {cache:"no-store"});
-      if (!res.ok) throw new Error(url + " HTTP " + res.status);
-      scheduleData = await res.json();
-      renderSchedule();
-      updateMatchDayMode();
-      restartCountdown(); // uses schedule info when available
-      return;
-    } catch(e){
-      lastErr = e;
-    }
-  }
-
-  // If both failed, show a friendly notice but keep UI alive
-  scheduleData = {matches: [], is_match_day:false, match_day_banner:""};
+  const res = await fetch("/schedule.json", {cache:"no-store"});
+  scheduleData = await res.json();
   renderSchedule();
   updateMatchDayMode();
-  restartCountdown();
-  console.warn("Schedule load failed:", lastErr);
+  restartCountdown(); // uses schedule info when available
 }
 
 async function loadMenu(){
-  // Try new endpoint first, then older endpoint
-  const endpoints = [
-    "/menu.json?lang=" + encodeURIComponent(lang),
-    "/api/menu?lang=" + encodeURIComponent(lang)
-  ];
-  let lastErr = null;
-
-  for (const url of endpoints){
-    try{
-      const res = await fetch(url, {cache:"no-store"});
-      if (!res.ok) throw new Error(url + " HTTP " + res.status);
-      const data = await res.json();
-
-      // Normalize shapes:
-      // - /menu.json => { lang, menu: {title, items:[] } }
-      // - /api/menu  => { lang, items:[] }
-      if (data && data.menu){
-        menuData = data.menu;
-        renderMenu((menuData.items || []));
-      } else if (data && Array.isArray(data.items)){
-        menuData = {title: "Menu", items: data.items};
-        renderMenu(data.items);
-      } else {
-        menuData = {title: "Menu", items: []};
-        renderMenu([]);
-      }
-      return;
-    } catch(e){
-      lastErr = e;
-    }
-  }
-
-  menuData = {title: "Menu", items: []};
-  renderMenu([]);
-  console.warn("Menu load failed:", lastErr);
+  const res = await fetch("/menu.json?lang=" + encodeURIComponent(lang), {cache:"no-store"});
+  const data = await res.json();
+  // app.py returns { lang, menu: {title, items:[]}}
+  menuData = data.menu;
+  renderMenu(menuData.items || []);
 }
 
 function safeParseTimestamp(dateIso, timeStr){
@@ -751,6 +714,30 @@ async function sendMessage(){
 }
 
 sendBtn.addEventListener("click", sendMessage);
+
+clearBtn.addEventListener("click", async () => {
+  // Clear UI
+  chatEl.innerHTML = "";
+  history.length = 0;
+
+  // Reset server session (best-effort)
+  try{
+    await fetch("/api/reset_session", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ session_id: sessionId })
+    });
+  }catch(e){ /* ignore */ }
+
+  // Start a fresh session id so old server memory can't bleed into a new conversation
+  sessionId = newSessionId();
+
+  // Re-add welcome message
+  addBubble("assistant", ui && ui.strings && ui.strings.welcome ? ui.strings.welcome : "Hi! Want to book a table for a match day? Ask me anything.");
+  history.push({role:"assistant", content: ui && ui.strings && ui.strings.welcome ? ui.strings.welcome : "Hi! Want to book a table for a match day? Ask me anything."});
+  msgEl.focus();
+});
+
 
 // Enter to send, Shift+Enter newline
 msgEl.addEventListener("keydown", (e) => {
