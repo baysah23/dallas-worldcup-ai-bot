@@ -200,7 +200,7 @@
     .nums span{color:var(--text);}
     .nums b{color:#f5d76e;}
 
-    .schedule{max-height:260px; overflow:auto;}
+    .schedule{flex:1; min-height:160px; overflow:auto;}
     .match{
       display:flex;
       justify-content:space-between;
@@ -227,23 +227,37 @@
     }
     .matchday.show{display:block;}
 
-    .menu{
-      border-top:1px solid rgba(255,255,255,.10);
-      padding:10px 12px;
-      font-size:12px;
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-    }
+    .menu{border-top:1px solid rgba(255,255,255,.10); padding:10px 12px; font-size:12px; display:flex; flex-direction:column; gap:10px; max-height:280px; overflow:auto;}
     .menuitem{
-      padding:8px 10px;
-      border:1px solid rgba(255,255,255,.10);
-      border-radius:12px;
-      background: rgba(0,0,0,.14);
+      padding:10px 12px;
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:14px;
+      background: radial-gradient(800px 120px at 10% 0%, rgba(31,111,235,.18) 0%, rgba(0,0,0,.18) 55%);
+      position:relative;
+      overflow:hidden;
     }
     .menuitem .name{font-weight:800;}
     .menuitem .desc{color:var(--muted); margin-top:3px;}
     .menuitem .price{margin-top:6px; font-weight:800; color:#f5d76e;}
+    .menuTop{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
+    .menuBadge{
+      border:1px solid rgba(245,215,110,.35);
+      background: rgba(245,215,110,.10);
+      padding:4px 8px;
+      border-radius:999px;
+      font-size:11px;
+      color:#f5d76e;
+      white-space:nowrap;
+    }
+    .menuMeta{margin-top:6px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+    .menuTag{
+      font-size:11px;
+      color:var(--muted);
+      border:1px solid rgba(255,255,255,.12);
+      padding:3px 8px;
+      border-radius:999px;
+      background:rgba(0,0,0,.10);
+    }
 
     .hint{
       padding:10px 14px;
@@ -327,7 +341,7 @@
             </div>
           </div>
           <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
-            <input id="teamSearch" placeholder="Search team / venue..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;" />
+            <input id="teamSearch" placeholder="Search team / venue / date (e.g., June 13 or 2026-06-13)..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;" />
             <div class="pill" id="matchCount">0</div>
           </div>
         </div>
@@ -351,6 +365,19 @@
           <div class="title" id="menuTitle">Menu</div>
           <div class="pill" id="menuPill">4 languages</div>
         </div>
+
+        <div class="sidepad" id="menuControls" style="padding-top:10px; padding-bottom:10px;">
+          <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+            <div class="pill" style="padding:6px 10px;">Menu</div>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <button class="secondary" id="menuPrevBtn" style="min-width:74px;">Prev</button>
+              <div class="pill" id="menuPageIndicator">Page 1 of 1</div>
+              <button class="secondary" id="menuNextBtn" style="min-width:74px;">Next</button>
+              <div class="langbtn" id="menuToggleAll" title="Toggle full menu">Show all</div>
+            </div>
+          </div>
+        </div>
+
 
         <div class="menu" id="menu"></div>
       </div>
@@ -383,8 +410,13 @@ let scope = localStorage.getItem("schedule_scope") || "dallas";
 let scheduleQuery = "";
 
 // Pagination (All Matches only)
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 5;
 let currentPage = 1;
+
+// Menu pagination
+const MENU_PAGE_SIZE = 5;
+let menuPage = 1;
+let menuShowAll = false;
 
 let menuData = null;
 
@@ -411,11 +443,16 @@ const nextPageBtn = document.getElementById("nextPage");
 const pageIndicatorEl = document.getElementById("pageIndicator");
 
 
+
+const menuPrevBtn = document.getElementById("menuPrevBtn");
+const menuNextBtn = document.getElementById("menuNextBtn");
+const menuPageIndicatorEl = document.getElementById("menuPageIndicator");
+const menuToggleAllBtn = document.getElementById("menuToggleAll");
 const STRINGS = {
   en: {
     welcome: "Hi! Want to book a table for a match day? Ask me anything.",
     lang_set: "Language set to English.",
-    helper: 'Try: <code>reservation</code> to book • <code>Recall reservation so far</code> • Ask about the menu • Ask about Dallas match days.',
+    helper: 'Try: <code>reservation</code> to book • <code>Recall reservation so far</code> • Ask about the menu • Ask about Dallas match days. Search by team, venue, or date (e.g., "June 13").',
     send: "Send",
     typing: "...",
     chat_title: "Chat",
@@ -550,7 +587,9 @@ async function loadMenu(){
   const data = await res.json();
   // app.py returns { lang, menu: {title, items:[]}}
   menuData = data.menu;
-  renderMenu(menuData.items || []);
+  window.menuDataList = (menuData && Array.isArray(menuData.items)) ? menuData.items : [];
+  menuPage = 1;
+  renderMenu(window.menuDataList);
 }
 
 function safeParseTimestamp(dateIso, timeStr){
@@ -670,6 +709,56 @@ function formatKickoffTime(t){
   return s;
 }
 
+// Normalize schedule search so users can type a specific day like "June 13" and still match backend dates ("YYYY-MM-DD").
+// Backend filters against m.date (ISO), so we convert common date inputs to ISO when possible.
+function normalizeScheduleSearch(raw){
+  const s = (raw || "").toString().trim();
+  if (!s) return "";
+  if (/^20\d{2}-\d{2}-\d{2}$/.test(s)) return s;
+
+  const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slash){
+    let mm = parseInt(slash[1],10);
+    let dd = parseInt(slash[2],10);
+    let yy = parseInt(slash[3],10);
+    if (yy < 100) yy += 2000;
+    const m2 = String(mm).padStart(2,"0");
+    const d2 = String(dd).padStart(2,"0");
+    return `${yy}-${m2}-${d2}`;
+  }
+
+  const lower = s.toLowerCase();
+  const monthMap = {
+    january:1, jan:1, february:2, feb:2, march:3, mar:3, april:4, apr:4, may:5,
+    june:6, jun:6, july:7, jul:7, august:8, aug:8, september:9, sep:9, sept:9,
+    october:10, oct:10, november:11, nov:11, december:12, dec:12,
+    // Spanish
+    enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6, julio:7, agosto:8, septiembre:9, octubre:10, noviembre:11, diciembre:12,
+    // Portuguese
+    janeiro:1, fevereiro:2, março:3, marco:3, abril:4, maio:5, junho:6, julho:7, agosto:8, setembro:9, outubro:10, novembro:11, dezembro:12,
+    // French
+    janvier:1, février:2, fevrier:2, mars:3, avril:4, mai:5, juin:6, juillet:7, août:8, aout:8, septembre:9, octobre:10, novembre:11, décembre:12, decembre:12
+  };
+  const words = lower.split(/[\s,\-]+/).filter(Boolean);
+  let mon = null;
+  for (const w of words){
+    if (monthMap[w] != null){ mon = monthMap[w]; break; }
+  }
+  if (mon != null){
+    const dayMatch = lower.match(/\b(\d{1,2})\b/);
+    if (dayMatch){
+      const dd = parseInt(dayMatch[1],10);
+      const yMatch = lower.match(/\b(20\d{2})\b/);
+      const yy = yMatch ? parseInt(yMatch[1],10) : 2026;
+      const m2 = String(mon).padStart(2,"0");
+      const d2 = String(dd).padStart(2,"0");
+      return `${yy}-${m2}-${d2}`;
+    }
+  }
+  return s;
+}
+
+
 function renderSchedule(){
   const el = document.getElementById("schedule");
   el.innerHTML = "";
@@ -778,6 +867,7 @@ function updateMatchDayMode(){
 // -----------------------
 // Menu rendering
 // -----------------------
+
 function renderMenu(items){
   const el = document.getElementById("menu");
   el.innerHTML = "";
@@ -786,25 +876,75 @@ function renderMenu(items){
     const d = document.createElement("div");
     d.className = "menuitem";
     d.innerHTML = `
-      <div class="name">—</div>
-      <div class="desc">Menu not available.</div>
-      <div class="price"></div>
+      <div class="menuTop">
+        <div>
+          <div class="name">—</div>
+          <div class="desc">Menu not available.</div>
+        </div>
+        <div class="menuBadge">—</div>
+      </div>
     `;
     el.appendChild(d);
+    if (menuPageIndicatorEl) menuPageIndicatorEl.textContent = "Page 0 of 0";
+    if (menuPrevBtn) menuPrevBtn.disabled = true;
+    if (menuNextBtn) menuNextBtn.disabled = true;
     return;
   }
 
-  items.forEach(it => {
+  const totalPages = Math.max(1, Math.ceil(items.length / MENU_PAGE_SIZE));
+  if (menuPage > totalPages) menuPage = 1;
+
+  let visible = items;
+  if (!menuShowAll){
+    const start = (menuPage - 1) * MENU_PAGE_SIZE;
+    visible = items.slice(start, start + MENU_PAGE_SIZE);
+  }
+
+  if (menuToggleAllBtn){
+    menuToggleAllBtn.textContent = menuShowAll ? "Paginate" : "Show all";
+    menuToggleAllBtn.classList.toggle("active", menuShowAll);
+  }
+  if (menuPageIndicatorEl){
+    menuPageIndicatorEl.textContent = menuShowAll ? `Showing all (${items.length})` : `Page ${menuPage} of ${totalPages}`;
+  }
+  if (menuPrevBtn) menuPrevBtn.disabled = menuShowAll ? true : (menuPage <= 1);
+  if (menuNextBtn) menuNextBtn.disabled = menuShowAll ? true : (menuPage >= totalPages);
+
+  const icons = ["⚽", "🏟️", "🌮", "🍗", "🥤", "🔥", "🌎", "🥇"];
+
+  visible.forEach((it, idx) => {
     const d = document.createElement("div");
     d.className = "menuitem";
+
+    const icon = icons[(idx + (menuPage-1)*MENU_PAGE_SIZE) % icons.length];
+    const name = escapeHtml(it.name || "");
+    const desc = escapeHtml(it.desc || "");
+    const price = escapeHtml(it.price || "");
+
+    const tags = [];
+    const lower = ((it.name || "") + " " + (it.desc || "")).toLowerCase();
+    if (lower.includes("spicy") || lower.includes("picante") || lower.includes("épicé")) tags.push("Spicy");
+    if (lower.includes("wings") || lower.includes("alitas") || lower.includes("asinhas") || lower.includes("ailes")) tags.push("Shareable");
+    if (lower.includes("burger") || lower.includes("hamb")) tags.push("Fan favorite");
+    if (lower.includes("nacho")) tags.push("Game snack");
+
     d.innerHTML = `
-      <div class="name">${escapeHtml(it.name || "")}</div>
-      <div class="desc">${escapeHtml(it.desc || "")}</div>
-      <div class="price">${escapeHtml(it.price || "")}</div>
+      <div class="menuTop">
+        <div>
+          <div class="name">${icon} ${name}</div>
+          <div class="desc">${desc}</div>
+          <div class="menuMeta">
+            ${tags.map(t => `<span class="menuTag">${escapeHtml(t)}</span>`).join("")}
+          </div>
+        </div>
+        <div class="menuBadge">${price || "—"}</div>
+      </div>
     `;
     el.appendChild(d);
   });
 }
+
+
 
 // simple HTML escaping (prevents broken DOM if text contains "<")
 function escapeHtml(s){
@@ -893,14 +1033,46 @@ if (prevPageBtn) prevPageBtn.addEventListener("click", () => { if (currentPage >
 if (nextPageBtn) nextPageBtn.addEventListener("click", () => {
   if (!scheduleData || !Array.isArray(scheduleData.matches)) return;
   const totalPages = Math.max(1, Math.ceil(scheduleData.matches.length / PAGE_SIZE));
-  if (currentPage < totalPages){ currentPage++; renderSchedule(); }
+  
+
+// -----------------------
+// Menu pagination controls
+// -----------------------
+if (menuPrevBtn){
+  menuPrevBtn.addEventListener("click", () => {
+    if (!menuShowAll && menuPage > 1){
+      menuPage--;
+      renderMenu(window.menuDataList || []);
+    }
+  });
+}
+if (menuNextBtn){
+  menuNextBtn.addEventListener("click", () => {
+    if (!menuShowAll){
+      const items = window.menuDataList || [];
+      const totalPages = Math.max(1, Math.ceil((items.length || 0) / MENU_PAGE_SIZE));
+      if (menuPage < totalPages){
+        menuPage++;
+        renderMenu(items);
+      }
+    }
+  });
+}
+if (menuToggleAllBtn){
+  menuToggleAllBtn.addEventListener("click", () => {
+    menuShowAll = !menuShowAll;
+    menuPage = 1;
+    renderMenu(window.menuDataList || []);
+  });
+}
+if (currentPage < totalPages){ currentPage++; renderSchedule(); }
 });
 
 
 // Team search (simple text input)
 let _searchTimer = null;
 function setScheduleQuery(q){
-  scheduleQuery = (q || "").trim();
+  scheduleQuery = normalizeScheduleSearch((q || "").trim());
   // Reset pagination when searching
   currentPage = 1;
   if (_searchTimer) clearTimeout(_searchTimer);
