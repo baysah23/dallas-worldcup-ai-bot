@@ -360,6 +360,123 @@
     .compact .cardhead{padding:10px 12px;}
     .compact .menu{font-size:8.5px;}
 
+
+    /* -----------------------
+       Session 1: HERO + Flags
+       ----------------------- */
+    .hero{
+      position:relative;
+      margin:12px 14px 0;
+      border-radius:16px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.18);
+      min-height:138px;
+    }
+    .hero::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background: radial-gradient(900px 240px at 10% 10%, rgba(245,215,110,.20) 0%, rgba(0,0,0,0) 55%),
+                  linear-gradient(180deg, rgba(0,0,0,.10) 0%, rgba(0,0,0,.55) 100%);
+      pointer-events:none;
+      z-index:2;
+    }
+    .heroMedia{
+      position:absolute;
+      inset:0;
+      background-size:cover;
+      background-position:center;
+      filter:saturate(1.05) contrast(1.05);
+      transform:scale(1.03);
+      transition:opacity .55s ease, transform .9s ease;
+      opacity:1;
+      z-index:1;
+    }
+    .heroMedia.fade{opacity:.0; transform:scale(1.07);}
+    .heroContent{
+      position:relative;
+      z-index:3;
+      padding:14px 14px 12px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .heroKicker{
+      font-size:11px;
+      letter-spacing:.9px;
+      font-weight:900;
+      color:rgba(245,215,110,.95);
+      text-transform:uppercase;
+      text-shadow:0 8px 22px rgba(0,0,0,.45);
+    }
+    .heroTitle{
+      font-weight:900;
+      font-size:16px;
+      line-height:1.12;
+      text-shadow:0 10px 28px rgba(0,0,0,.55);
+    }
+    .heroCopy{
+      color:rgba(234,240,255,.92);
+      font-size:12px;
+      max-width:92%;
+      text-shadow:0 10px 22px rgba(0,0,0,.55);
+    }
+    .heroMeta{
+      margin-top:6px;
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .heroChip{
+      font-size:11px;
+      border:1px solid rgba(255,255,255,.16);
+      padding:5px 9px;
+      border-radius:999px;
+      background:rgba(0,0,0,.18);
+      color:rgba(234,240,255,.90);
+      backdrop-filter: blur(6px);
+      white-space:nowrap;
+    }
+    .heroDots{
+      position:absolute;
+      right:10px;
+      bottom:10px;
+      display:flex;
+      gap:6px;
+      z-index:4;
+    }
+    .heroDot{
+      width:7px; height:7px;
+      border-radius:999px;
+      background:rgba(255,255,255,.28);
+      border:1px solid rgba(0,0,0,.15);
+    }
+    .heroDot.active{background:rgba(245,215,110,.95);}
+    @media (max-width: 950px){
+      .hero{min-height:150px;}
+      .heroTitle{font-size:15px;}
+      .heroCopy{max-width:100%;}
+    }
+
+    /* Flag chips inside match listings */
+    .flagChip{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:22px;
+      height:16px;
+      border-radius:5px;
+      border:1px solid rgba(255,255,255,.18);
+      background:rgba(0,0,0,.18);
+      box-shadow: 0 10px 26px rgba(0,0,0,.25);
+      margin-right:6px;
+      transform: translateY(-1px);
+      font-size:13px;
+      line-height:1;
+    }
+
 </style>
 </head>
 
@@ -409,6 +526,23 @@
               <button id="compactToggle" class="secondary" style="min-width:auto; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:800;">Compact</button>
             </div>
 
+          </div>
+
+          
+          <!-- HERO (Session 1): Rotating cinematic banner -->
+          <div class="hero" id="heroBanner" aria-label="Match day hero banner">
+            <div class="heroMedia" id="heroMedia" aria-hidden="true"></div>
+            <div class="heroContent">
+              <div class="heroKicker">WORLD CUP 2026 • DALLAS MATCH DAY HQ</div>
+              <div class="heroTitle" id="heroTitle">Matchday vibes start here.</div>
+              <div class="heroCopy" id="heroCopy">Explore Dallas match days, browse the menu, and type <b>reservation</b> to lock your table.</div>
+              <div class="heroMeta">
+                <span class="heroChip">Live schedule</span>
+                <span class="heroChip">4 languages</span>
+                <span class="heroChip" id="heroChip3">Fan-first concierge</span>
+              </div>
+            </div>
+            <div class="heroDots" id="heroDots" aria-hidden="true"></div>
           </div>
 
           <div class="banner" id="matchBanner"></div>
@@ -525,6 +659,106 @@ const pillLang = document.getElementById("pillLang");
 const pillMode = document.getElementById("pillMode");
 const matchBanner = document.getElementById("matchBanner");
 const matchdayBox = document.getElementById("matchdayBox");
+
+// -----------------------
+// Session 1: HERO banner rotation (UI-only)
+// -----------------------
+const HERO_SLIDES = [
+  {
+    img: "https://upload.wikimedia.org/wikipedia/commons/1/1e/Picture_with_Mbapp%C3%A9_%28cropped%29.jpg",
+    title: "Tonight’s energy. Tomorrow’s legends.",
+    copy: "Dallas Match Day HQ is your one-stop: schedule, menu, and instant table reservations.",
+    chip: "Big-game ready"
+  },
+  {
+    img: "https://upload.wikimedia.org/wikipedia/commons/c/cd/Messi_Neymar_Mbapp%C3%A9_PSG_2022.jpg",
+    title: "A global stage — right here in Dallas.",
+    copy: "Switch Dallas / All Matches, search any team, and keep your plans tight with fast paging.",
+    chip: "104-match universe"
+  },
+  {
+    img: "https://upload.wikimedia.org/wikipedia/commons/c/c1/Barcelona_femen%C3%AD_2023_Champions_League_Pla%C3%A7a_Sant_Jaume_08_%28Alexia_Putellas%29.jpg",
+    title: "Fans first. Always.",
+    copy: "Ask the concierge anything: match times, venues, and what to order before kickoff.",
+    chip: "Concierge mode"
+  },
+  {
+    img: "https://upload.wikimedia.org/wikipedia/commons/7/77/Vin%C3%ADcius_J%C3%BAnior.jpg",
+    title: "Bring the noise. We’ll handle the rest.",
+    copy: "Type “reservation” and lock in your table before the crowd hits.",
+    chip: "Reserve fast"
+  }
+];
+
+let heroIndex = 0;
+let heroTimer = null;
+let heroPaused = false;
+
+function initHero(){
+  const hero = document.getElementById("heroBanner");
+  const media = document.getElementById("heroMedia");
+  const title = document.getElementById("heroTitle");
+  const copy = document.getElementById("heroCopy");
+  const chip3 = document.getElementById("heroChip3");
+  const dots = document.getElementById("heroDots");
+  if (!hero || !media || !title || !copy || !dots) return;
+
+  // Build dots
+  dots.innerHTML = "";
+  HERO_SLIDES.forEach((_, i) => {
+    const d = document.createElement("div");
+    d.className = "heroDot" + (i === 0 ? " active" : "");
+    d.addEventListener("click", () => {
+      heroIndex = i;
+      renderHero(true);
+      restartHeroTimer();
+    });
+    dots.appendChild(d);
+  });
+
+  // Hover pause
+  hero.addEventListener("mouseenter", () => { heroPaused = true; });
+  hero.addEventListener("mouseleave", () => { heroPaused = false; });
+
+  // Preload images (safe)
+  HERO_SLIDES.forEach(s => { const im = new Image(); im.src = s.img; });
+
+  renderHero(false);
+  restartHeroTimer();
+
+  function restartHeroTimer(){
+    if (heroTimer) clearInterval(heroTimer);
+    heroTimer = setInterval(() => {
+      if (heroPaused) return;
+      heroIndex = (heroIndex + 1) % HERO_SLIDES.length;
+      renderHero(true);
+    }, 6500);
+  }
+
+  function renderHero(animate){
+    const s = HERO_SLIDES[heroIndex] || HERO_SLIDES[0];
+
+    // fade
+    if (animate){
+      media.classList.add("fade");
+      setTimeout(() => {
+        media.style.backgroundImage = `url('${s.img}')`;
+        title.textContent = s.title;
+        copy.textContent = s.copy;
+        if (chip3 && s.chip) chip3.textContent = s.chip;
+        media.classList.remove("fade");
+      }, 260);
+    } else {
+      media.style.backgroundImage = `url('${s.img}')`;
+      title.textContent = s.title;
+      copy.textContent = s.copy;
+      if (chip3 && s.chip) chip3.textContent = s.chip;
+    }
+
+    [...dots.children].forEach((node, i) => node.classList.toggle("active", i === heroIndex));
+  }
+}
+
 
 const clearBtn = document.getElementById("clearBtn");
 const scopeDallasBtn = document.getElementById("scopeDallas");
@@ -666,7 +900,11 @@ async function setLanguage(newLang){
   lang = newLang;
   localStorage.setItem("lang", lang);
   applyLanguageToUI();
-applyCompactMode();
+
+  // Session 1 UI: HERO banner
+  initHero();
+
+  applyCompactMode();
 
   // reload menu in the chosen language
   await loadMenu();
@@ -825,6 +1063,141 @@ function formatKickoffTime(t){
   return s;
 }
 
+
+// -----------------------
+// Session 1: Country flags (UI-only)
+// -----------------------
+const COUNTRY_CODE_MAP = {
+  "united states": "US",
+  "usa": "US",
+  "u.s.a.": "US",
+  "us": "US",
+  "mexico": "MX",
+  "canada": "CA",
+  "england": "GB",
+  "scotland": "GB",
+  "wales": "GB",
+  "northern ireland": "GB",
+  "united kingdom": "GB",
+  "great britain": "GB",
+  "france": "FR",
+  "spain": "ES",
+  "portugal": "PT",
+  "brazil": "BR",
+  "argentina": "AR",
+  "uruguay": "UY",
+  "colombia": "CO",
+  "chile": "CL",
+  "peru": "PE",
+  "ecuador": "EC",
+  "paraguay": "PY",
+  "bolivia": "BO",
+  "venezuela": "VE",
+  "germany": "DE",
+  "italy": "IT",
+  "netherlands": "NL",
+  "holland": "NL",
+  "belgium": "BE",
+  "croatia": "HR",
+  "serbia": "RS",
+  "switzerland": "CH",
+  "austria": "AT",
+  "poland": "PL",
+  "czechia": "CZ",
+  "czech republic": "CZ",
+  "denmark": "DK",
+  "sweden": "SE",
+  "norway": "NO",
+  "finland": "FI",
+  "ireland": "IE",
+  "iceland": "IS",
+  "ukraine": "UA",
+  "turkey": "TR",
+  "greece": "GR",
+  "romania": "RO",
+  "bulgaria": "BG",
+  "slovenia": "SI",
+  "slovakia": "SK",
+  "hungary": "HU",
+  "russia": "RU",
+  "japan": "JP",
+  "south korea": "KR",
+  "korea republic": "KR",
+  "china": "CN",
+  "australia": "AU",
+  "new zealand": "NZ",
+  "iran": "IR",
+  "iraq": "IQ",
+  "saudi arabia": "SA",
+  "qatar": "QA",
+  "united arab emirates": "AE",
+  "uae": "AE",
+  "morocco": "MA",
+  "tunisia": "TN",
+  "algeria": "DZ",
+  "egypt": "EG",
+  "senegal": "SN",
+  "ghana": "GH",
+  "nigeria": "NG",
+  "cameroon": "CM",
+  "ivory coast": "CI",
+  "côte d’ivoire": "CI",
+  "cote d'ivoire": "CI",
+  "mali": "ML",
+  "south africa": "ZA"
+};
+
+function normalizeTeamName(name){
+  return (name || "")
+    .toString()
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/[’']/g, "'")
+    .toLowerCase();
+}
+
+function isoFromTeam(name){
+  const key = normalizeTeamName(name);
+  if (!key) return null;
+  return COUNTRY_CODE_MAP[key] || null;
+}
+
+function flagEmojiFromIso(iso){
+  if (!iso || typeof iso !== "string" || iso.length !== 2) return "";
+  const code = iso.toUpperCase();
+  // Convert "US" -> 🇺🇸
+  const A = 0x1F1E6;
+  const first = code.charCodeAt(0) - 65 + A;
+  const second = code.charCodeAt(1) - 65 + A;
+  return String.fromCodePoint(first, second);
+}
+
+function flagChipHtml(teamName){
+  const iso = isoFromTeam(teamName);
+  const flag = flagEmojiFromIso(iso);
+  if (!flag) return "";
+  return `<span class="flagChip" title="${escapeHtml(teamName)}">${flag}</span>`;
+}
+
+function decorateTeamsLine(home, away){
+  const h = (home || "").toString().trim();
+  const a = (away || "").toString().trim();
+  if (!h && !a) return "TBD vs TBD";
+  const hTxt = h || "TBD";
+  const aTxt = a || "TBD";
+  return `${flagChipHtml(hTxt)}${escapeHtml(hTxt)} vs ${flagChipHtml(aTxt)}${escapeHtml(aTxt)}`;
+}
+
+function decorateTeamsFromString(teams){
+  const raw = (teams || "").toString().trim();
+  // Try to parse "X vs Y"
+  const parts = raw.split(/\s+vs\.?\s+/i);
+  if (parts.length === 2){
+    return decorateTeamsLine(parts[0], parts[1]);
+  }
+  return escapeHtml(raw);
+}
+
 // Normalize schedule search so users can type a specific day like "June 13" and still match backend dates ("YYYY-MM-DD").
 // Backend filters against m.date (ISO), so we convert common date inputs to ISO when possible.
 function normalizeScheduleSearch(raw){
@@ -955,9 +1328,13 @@ if (totalPages <= 1){
 
     const venueTxt = m.venue ? ` • ${m.venue}` : "";
 
+    const teamsHtml = (m.teams && String(m.teams).trim())
+      ? decorateTeamsFromString(m.teams)
+      : decorateTeamsLine(m.home, m.away);
+
     row.innerHTML = `
       <div class="left">
-        <div><b>${escapeHtml(m.stage || "Match")}</b> • ${escapeHtml(teamsTxt)}</div>
+        <div><b>${escapeHtml(m.stage || "Match")}</b> • <span class="teams">${teamsHtml}</span></div>
         <div class="when">${escapeHtml(m.date || "")} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div>
       </div>
       <div class="pill">${escapeHtml(m.id || "")}</div>
