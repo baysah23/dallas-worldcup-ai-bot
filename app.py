@@ -5,11 +5,10 @@ import os
 import json
 import re
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
-from flask import Flask, request, jsonify, send_from_directory, make_response
+from flask import Flask, request, jsonify, send_from_directory
 from openai import OpenAI
-from pydantic import BaseModel, ValidationError
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -20,7 +19,7 @@ from google.oauth2.service_account import Credentials
 app = Flask(__name__)
 client = OpenAI()
 
-# Cache-busting so Render updates show immediately
+# Disable caching so Render updates show immediately
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
 @app.after_request
@@ -41,17 +40,16 @@ with open(BUSINESS_PROFILE_PATH, "r", encoding="utf-8") as f:
     business_profile = f.read()
 
 # -----------------------------
-# Google Sheets config
+# Google Sheets
 # -----------------------------
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
 ]
+
 SHEET_NAME = os.environ.get("GOOGLE_SHEET_NAME", "World Cup AI Reservations")
 
-
 def get_gspread_client():
-    # Render: GOOGLE_CREDS_JSON env var
     if os.environ.get("GOOGLE_CREDS_JSON"):
         creds_info = json.loads(os.environ["GOOGLE_CREDS_JSON"])
         creds = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
@@ -63,269 +61,207 @@ def get_gspread_client():
         creds = Credentials.from_service_account_file(creds_file, scopes=SCOPES)
         return gspread.authorize(creds)
 
-    raise RuntimeError(
-        "Google credentials not found. Set GOOGLE_CREDS_JSON (Render) or provide google_creds.json locally."
-    )
+    raise RuntimeError("Google credentials not found. Set GOOGLE_CREDS_JSON (Render) or provide google_creds.json locally.")
 
-
-def append_lead_to_sheet(name, phone, date, time, party_size):
+def append_lead_to_sheet(lead: dict):
     gc = get_gspread_client()
     ws = gc.open(SHEET_NAME).sheet1
     ws.append_row([
         datetime.now().isoformat(timespec="seconds"),
-        name,
-        phone,
-        date,
-        time,
-        int(party_size),
+        lead.get("name", ""),
+        lead.get("phone", ""),
+        lead.get("date", ""),
+        lead.get("time", ""),
+        int(lead.get("party_size", 0)),
+        lead.get("source", "web"),
+        lead.get("language", "auto"),
     ])
 
 # -----------------------------
 # Dallas match schedule (server-driven)
-# Sources: Dallas/FWC26 host site + Arlington/VisitDallas press releases + FIFA host city info.
-# (Knockout opponents are TBD until bracket is known)
+# You can update this list anytime without changing index.html.
+# Times are CT; keeping them as strings for display.
 # -----------------------------
 DALLAS_MATCHES = [
-    {"date": "2026-06-14", "time_ct": "15:00", "stage": "Group Stage", "match": "Netherlands vs Japan", "venue": "Dallas Stadium (Arlington)"},
-    {"date": "2026-06-17", "time_ct": "15:00", "stage": "Group Stage", "match": "England vs Croatia", "venue": "Dallas Stadium (Arlington)"},
-    {"date": "2026-06-22", "time_ct": "12:00", "stage": "Group Stage", "match": "Argentina vs Austria", "venue": "Dallas Stadium (Arlington)"},
-    {"date": "2026-06-25", "time_ct": "18:00", "stage": "Group Stage", "match": "Japan vs UEFA Playoff Winner (TBD)", "venue": "Dallas Stadium (Arlington)"},
-    {"date": "2026-06-27", "time_ct": "21:00", "stage": "Group Stage", "match": "Jordan vs Argentina", "venue": "Dallas Stadium (Arlington)"},
-    {"date": "2026-06-30", "time_ct": "TBD", "stage": "Round of 32", "match": "TBD vs TBD", "venue": "Dallas Stadium (Arlington)"},
-    {"date": "2026-07-03", "time_ct": "TBD", "stage": "Round of 32", "match": "TBD vs TBD", "venue": "Dallas Stadium (Arlington)"},
-    {"date": "2026-07-06", "time_ct": "TBD", "stage": "Round of 16", "match": "TBD vs TBD", "venue": "Dallas Stadium (Arlington)"},
-    {"date": "2026-07-14", "time_ct": "TBD", "stage": "Semi-final", "match": "TBD vs TBD", "venue": "Dallas Stadium (Arlington)"},
+    {"date": "2026-06-14", "time_ct": "3:00 PM", "stage": "Group Stage", "match": "Netherlands vs Japan"},
+    {"date": "2026-06-17", "time_ct": "3:00 PM", "stage": "Group Stage", "match": "England vs Croatia"},
+    {"date": "2026-06-22", "time_ct": "12:00 PM", "stage": "Group Stage", "match": "Argentina vs Austria"},
+    {"date": "2026-06-25", "time_ct": "6:00 PM", "stage": "Group Stage", "match": "Japan vs TBD"},
+    {"date": "2026-06-27", "time_ct": "9:00 PM", "stage": "Group Stage", "match": "Jordan vs Argentina"},
+    {"date": "2026-06-30", "time_ct": "TBD", "stage": "Round of 32", "match": "TBD"},
+    {"date": "2026-07-03", "time_ct": "TBD", "stage": "Round of 32", "match": "TBD"},
+    {"date": "2026-07-06", "time_ct": "TBD", "stage": "Round of 16", "match": "TBD"},
+    {"date": "2026-07-14", "time_ct": "TBD", "stage": "Semifinal", "match": "Semifinal (Dallas)"},
 ]
 
+def schedule_as_text():
+    lines = []
+    for m in DALLAS_MATCHES:
+        lines.append(f"- {m['date']} {m['time_ct']} CT — {m['stage']}: {m['match']}")
+    return "\n".join(lines)
+
 # -----------------------------
-# Session + reservation state machine
+# Reservation state machine (server-side)
 # -----------------------------
-# In-memory sessions (fine for now). For true scaling later: Redis/DB.
-sessions = {}
+# In-memory sessions (good for MVP; later can move to Redis)
+SESSIONS = {}
 
-REQUIRED_FIELDS = ["date", "time", "party_size", "name", "phone"]
+RE_PHONE = re.compile(r"(\+?1?\s*)?(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})")
+RE_PARTY = re.compile(r"(party|table)\s*(of|for)?\s*(\d{1,2})", re.IGNORECASE)
+RE_TIME = re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b", re.IGNORECASE)
 
-class ReservationLead(BaseModel):
-    name: str
-    phone: str
-    date: str
-    time: str
-    party_size: int
+def normalize_phone(raw: str) -> str:
+    digits = re.sub(r"\D", "", raw or "")
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    if len(digits) == 10:
+        return f"+1{digits}"
+    # fallback to original
+    return raw.strip()
 
-def get_session_id():
-    sid = request.cookies.get("sid")
-    if not sid:
-        sid = str(uuid.uuid4())
-    return sid
+def parse_date_to_iso(user_text: str) -> str | None:
+    """
+    Minimal, safe parser for:
+    - YYYY-MM-DD
+    - MM/DD/YYYY or M/D/YYYY
+    - 'June 23' -> assumes 2026 (World Cup year) for this project
+    """
+    t = (user_text or "").strip()
 
-def get_session():
-    sid = get_session_id()
-    if sid not in sessions:
-        sessions[sid] = {
-            "lang": "en",  # en, es, pt, fr
-            "draft": {k: None for k in REQUIRED_FIELDS},
-            "updated_at": datetime.now().isoformat(timespec="seconds"),
-        }
-    return sid, sessions[sid]
-
-def normalize_lang(lang: str):
-    lang = (lang or "").lower().strip()
-    if lang in ["en", "english"]:
-        return "en"
-    if lang in ["es", "spanish", "español", "espanol"]:
-        return "es"
-    if lang in ["pt", "portuguese", "português", "portugues"]:
-        return "pt"
-    if lang in ["fr", "french", "français", "francais"]:
-        return "fr"
-    return "en"
-
-LANG_PROMPTS = {
-    "en": "Respond in English.",
-    "es": "Responde en español.",
-    "pt": "Responda em português.",
-    "fr": "Répondez en français.",
-}
-
-def draft_summary(draft: dict):
-    def fmt(v):
-        return v if v else "—"
-    return (
-        f"Reservation so far:\n"
-        f"- Date: {fmt(draft.get('date'))}\n"
-        f"- Time: {fmt(draft.get('time'))}\n"
-        f"- Party size: {fmt(draft.get('party_size'))}\n"
-        f"- Name: {fmt(draft.get('name'))}\n"
-        f"- Phone: {fmt(draft.get('phone'))}"
-    )
-
-def missing_fields(draft: dict):
-    return [k for k in REQUIRED_FIELDS if not draft.get(k)]
-
-def is_phone(s: str):
-    digits = re.sub(r"\D", "", s or "")
-    return len(digits) >= 10
-
-def extract_phone(text: str):
-    digits = re.sub(r"\D", "", text or "")
-    if len(digits) >= 10:
-        return digits[-10:]
-    return None
-
-def extract_party_size(text: str):
-    # matches "party of 4", "table for 5", "5 people"
-    m = re.search(r"\b(party of|table for|for)\s*(\d{1,2})\b", text, re.I)
-    if m:
-        return int(m.group(2))
-    m2 = re.search(r"\b(\d{1,2})\s*(people|persons|guests)\b", text, re.I)
-    if m2:
-        return int(m2.group(1))
-    # standalone number could be party size, but risky. Only accept if user says "party" somewhere.
-    if re.search(r"\bparty\b|\btable\b|\bguests\b", text, re.I):
-        m3 = re.search(r"\b(\d{1,2})\b", text)
-        if m3:
-            return int(m3.group(1))
-    return None
-
-def extract_time(text: str):
-    # examples: 7pm, 7:30 pm, 19:00
-    m = re.search(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b", text, re.I)
-    if m:
-        h = int(m.group(1))
-        minute = m.group(2) or "00"
-        ampm = m.group(3).lower()
-        return f"{h}:{minute} {ampm}"
-    m2 = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)\b", text)
-    if m2:
-        return f"{m2.group(1)}:{m2.group(2)}"
-    return None
-
-def extract_date(text: str):
-    # Accept YYYY-MM-DD
-    m = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", text)
+    # YYYY-MM-DD
+    m = re.search(r"\b(20\d{2})-(\d{2})-(\d{2})\b", t)
     if m:
         return f"{m.group(1)}-{m.group(2)}-{m.group(3)}"
-    # Accept MM/DD/YYYY or M/D/YYYY
-    m2 = re.search(r"\b(\d{1,2})/(\d{1,2})/(20\d{2})\b", text)
-    if m2:
-        mm = int(m2.group(1))
-        dd = int(m2.group(2))
-        yyyy = int(m2.group(3))
-        return f"{yyyy:04d}-{mm:02d}-{dd:02d}"
-    # Accept "June 23" or "Jun 23"
-    months = {
-        "jan": 1, "january": 1,
-        "feb": 2, "february": 2,
-        "mar": 3, "march": 3,
-        "apr": 4, "april": 4,
-        "may": 5,
-        "jun": 6, "june": 6,
-        "jul": 7, "july": 7,
-        "aug": 8, "august": 8,
-        "sep": 9, "sept": 9, "september": 9,
-        "oct": 10, "october": 10,
-        "nov": 11, "november": 11,
-        "dec": 12, "december": 12,
+
+    # MM/DD/YYYY
+    m = re.search(r"\b(\d{1,2})/(\d{1,2})/(20\d{2})\b", t)
+    if m:
+        mm = int(m.group(1))
+        dd = int(m.group(2))
+        yyyy = int(m.group(3))
+        if 1 <= mm <= 12 and 1 <= dd <= 31:
+            return f"{yyyy:04d}-{mm:02d}-{dd:02d}"
+
+    # Month name + day (assume 2026)
+    m = re.search(r"\b(jan|feb|mar|apr|may|jun|june|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+(\d{1,2})\b", t, re.IGNORECASE)
+    if m:
+        mon = m.group(1).lower()
+        day = int(m.group(2))
+        month_map = {
+            "jan":1,"feb":2,"mar":3,"apr":4,"may":5,"jun":6,"june":6,"jul":7,"aug":8,"sep":9,"sept":9,"oct":10,"nov":11,"dec":12
+        }
+        mm = month_map.get(mon[:4], month_map.get(mon[:3]))
+        if mm and 1 <= day <= 31:
+            return f"2026-{mm:02d}-{day:02d}"
+
+    return None
+
+def parse_time_display(user_text: str) -> str | None:
+    """
+    Returns something like '7pm' or '7:30pm' (for display).
+    """
+    m = RE_TIME.search(user_text or "")
+    if not m:
+        return None
+    hh = int(m.group(1))
+    mm = m.group(2)
+    ap = (m.group(3) or "").lower()
+    if not (1 <= hh <= 12) or ap not in ("am", "pm"):
+        return None
+    if mm:
+        return f"{hh}:{mm}{ap}"
+    return f"{hh}{ap}"
+
+def is_match_day(date_iso: str) -> bool:
+    return any(m["date"] == date_iso for m in DALLAS_MATCHES)
+
+def extract_fields_from_message(msg: str) -> dict:
+    """
+    Extracts any of: phone, party_size, time, date_iso, name
+    Name is only extracted if message looks like a name-only input.
+    """
+    out = {}
+
+    # phone
+    pm = RE_PHONE.search(msg or "")
+    if pm:
+        out["phone"] = normalize_phone(pm.group(0))
+
+    # party
+    m = RE_PARTY.search(msg or "")
+    if m:
+        out["party_size"] = int(m.group(3))
+
+    # time
+    t = parse_time_display(msg or "")
+    if t:
+        out["time"] = t
+
+    # date
+    d = parse_date_to_iso(msg or "")
+    if d:
+        out["date"] = d
+
+    # name heuristic: short text, mostly letters, not just "reservation"
+    cleaned = (msg or "").strip()
+    if cleaned and len(cleaned) <= 40:
+        if re.fullmatch(r"[A-Za-z][A-Za-z\s'.-]{0,39}", cleaned) and cleaned.lower() not in ("reservation", "book", "book a table"):
+            out["name"] = cleaned.strip()
+
+    return out
+
+def missing_fields(state: dict) -> list[str]:
+    req = ["date", "time", "party_size", "name", "phone"]
+    return [k for k in req if not state.get(k)]
+
+def next_prompt_for_missing(missing: list[str], lang: str) -> str:
+    # Minimal localized prompts (English + Spanish; auto -> English)
+    is_es = (lang or "").lower().startswith("es")
+    if not missing:
+        return ""
+
+    field = missing[0]
+    prompts_en = {
+        "date": "What date would you like to reserve? (Example: 2026-06-23)",
+        "time": "What time? (Example: 7pm)",
+        "party_size": "How many people? (Example: party of 4)",
+        "name": "What name should I put the reservation under?",
+        "phone": "What phone number should we use for the reservation?"
     }
-    m3 = re.search(r"\b([A-Za-z]{3,9})\s+(\d{1,2})\b", text)
-    if m3:
-        mon = months.get(m3.group(1).lower())
-        if mon:
-            day = int(m3.group(2))
-            # World Cup year default if not provided:
-            return f"2026-{mon:02d}-{day:02d}"
-    return None
+    prompts_es = {
+        "date": "¿Para qué fecha quieres la reserva? (Ej: 2026-06-23)",
+        "time": "¿A qué hora? (Ej: 7pm)",
+        "party_size": "¿Para cuántas personas? (Ej: mesa para 4)",
+        "name": "¿A nombre de quién es la reserva?",
+        "phone": "¿Qué número de teléfono usamos para la reserva?"
+    }
+    return (prompts_es if is_es else prompts_en)[field]
 
-def extract_name(text: str):
-    t = (text or "").strip()
-    # If it looks like a phone/date/time/party, skip
-    if is_phone(t):
-        return None
-    if extract_date(t) or extract_time(t) or extract_party_size(t) is not None:
-        return None
-    # single letter name should be accepted (user typed "J")
-    if 1 <= len(t) <= 40:
-        return t
-    return None
-
-def update_draft_from_text(draft: dict, text: str):
-    # fill only missing
-    if not draft.get("date"):
-        d = extract_date(text)
-        if d:
-            draft["date"] = d
-
-    if not draft.get("time"):
-        tm = extract_time(text)
-        if tm:
-            draft["time"] = tm
-
-    if not draft.get("party_size"):
-        ps = extract_party_size(text)
-        if ps is not None:
-            draft["party_size"] = ps
-
-    if not draft.get("phone"):
-        ph = extract_phone(text)
-        if ph:
-            draft["phone"] = ph
-
-    if not draft.get("name"):
-        nm = extract_name(text)
-        if nm:
-            draft["name"] = nm
-
-def next_question_for_missing(missing: list, lang: str):
-    # Keep it simple, friendly, and in chosen language
-    if lang == "es":
-        prompts = {
-            "date": "¿Para qué fecha te gustaría la reserva? (Ej: 2026-06-23)",
-            "time": "¿A qué hora? (Ej: 7pm)",
-            "party_size": "¿Para cuántas personas?",
-            "name": "¿A nombre de quién?",
-            "phone": "¿Cuál es tu número de teléfono (10 dígitos)?",
-        }
-    elif lang == "pt":
-        prompts = {
-            "date": "Para qual data você quer a reserva? (Ex: 2026-06-23)",
-            "time": "Qual horário? (Ex: 7pm)",
-            "party_size": "Para quantas pessoas?",
-            "name": "Em nome de quem?",
-            "phone": "Qual é o seu telefone (10 dígitos)?",
-        }
-    elif lang == "fr":
-        prompts = {
-            "date": "Pour quelle date souhaitez-vous la réservation ? (Ex : 2026-06-23)",
-            "time": "À quelle heure ? (Ex : 19h ou 7pm)",
-            "party_size": "Pour combien de personnes ?",
-            "name": "Au nom de qui ?",
-            "phone": "Quel est votre numéro de téléphone (10 chiffres) ?",
-        }
+def recall_text(state: dict, lang: str) -> str:
+    is_es = (lang or "").lower().startswith("es")
+    lines = []
+    if is_es:
+        lines.append("📌 **Tu reserva hasta ahora:**")
+        labels = {"date":"Fecha","time":"Hora","party_size":"Personas","name":"Nombre","phone":"Teléfono"}
     else:
-        prompts = {
-            "date": "What date would you like? (e.g., 2026-06-23)",
-            "time": "What time? (e.g., 7pm)",
-            "party_size": "Party size?",
-            "name": "Name for the reservation?",
-            "phone": "Phone number (10 digits)?",
-        }
+        lines.append("📌 **Your reservation so far:**")
+        labels = {"date":"Date","time":"Time","party_size":"Party size","name":"Name","phone":"Phone"}
 
-    return prompts.get(missing[0], "What details can you share?")
-
-def reset_draft(session: dict):
-    session["draft"] = {k: None for k in REQUIRED_FIELDS}
+    for k in ["date","time","party_size","name","phone"]:
+        v = state.get(k)
+        lines.append(f"- {labels[k]}: {v if v else '—'}")
+    missing = missing_fields(state)
+    if missing:
+        lines.append("")
+        lines.append(("Missing:" if not is_es else "Falta:") + " " + ", ".join(missing))
+    return "\n".join(lines)
 
 # -----------------------------
 # Routes
 # -----------------------------
 @app.route("/")
 def home():
-    resp = make_response(send_from_directory(".", "index.html"))
-    # ensure session cookie exists
-    sid = request.cookies.get("sid")
-    if not sid:
-        resp.set_cookie("sid", str(uuid.uuid4()), httponly=True, samesite="Lax")
-    return resp
+    return send_from_directory(".", "index.html")
 
 @app.route("/health")
 def health():
@@ -342,139 +278,151 @@ def version():
     except Exception as e:
         return jsonify({"error": repr(e)}), 500
 
-@app.route("/schedule")
-def schedule():
+@app.route("/api/schedule")
+def api_schedule():
     return jsonify({
-        "host_city": "Dallas / Arlington",
-        "venue": "Dallas Stadium (Arlington)",
-        "matches": DALLAS_MATCHES,
-        "note": "Knockout matchups may remain TBD until bracket is finalized."
+        "timezone": "America/Chicago",
+        "matches": DALLAS_MATCHES
     })
 
-@app.route("/reservation/status")
-def reservation_status():
-    _, session = get_session()
-    return jsonify({
-        "draft": session["draft"],
-        "missing": missing_fields(session["draft"]),
-        "lang": session["lang"],
-        "summary": draft_summary(session["draft"])
-    })
-
-@app.route("/reservation/reset", methods=["POST"])
-def reservation_reset():
-    _, session = get_session()
-    reset_draft(session)
-    return jsonify({"ok": True})
-
-@app.route("/reserve", methods=["POST"])
-def reserve():
-    """
-    Direct reservation submit from the form (bypasses the model).
-    """
-    _, session = get_session()
-    data = request.get_json(force=True) or {}
-
-    try:
-        lead = ReservationLead(
-            name=str(data.get("name") or "").strip(),
-            phone=str(data.get("phone") or "").strip(),
-            date=str(data.get("date") or "").strip(),
-            time=str(data.get("time") or "").strip(),
-            party_size=int(data.get("party_size")),
-        )
-        append_lead_to_sheet(lead.name, lead.phone, lead.date, lead.time, lead.party_size)
-        reset_draft(session)
-
-        return jsonify({
-            "ok": True,
-            "message": "✅ Reservation saved!",
-            "lead": lead.model_dump(),
-        })
-    except Exception as e:
-        return jsonify({"ok": False, "error": repr(e)}), 400
+@app.route("/api/recall")
+def api_recall():
+    session_id = request.args.get("session_id") or ""
+    state = SESSIONS.get(session_id, {}).get("reservation", {})
+    lang = SESSIONS.get(session_id, {}).get("language", "auto")
+    return jsonify({"session_id": session_id, "state": state, "text": recall_text(state, lang)})
 
 @app.route("/test-sheet")
 def test_sheet():
     try:
-        append_lead_to_sheet("TEST_NAME", "2145551212", "2026-06-23", "7pm", 4)
+        append_lead_to_sheet({
+            "name": "TEST_NAME",
+            "phone": "+12145551212",
+            "date": "2026-06-23",
+            "time": "7pm",
+            "party_size": 4,
+            "source": "test",
+            "language": "auto"
+        })
         return jsonify({"ok": True, "sheet": SHEET_NAME, "message": "✅ Test row appended."})
     except Exception as e:
         return jsonify({"ok": False, "sheet": SHEET_NAME, "error": repr(e)}), 500
 
-
 @app.route("/chat", methods=["POST"])
 def chat():
-    sid, session = get_session()
-    data = request.get_json(force=True) or {}
+    data = request.get_json(force=True)
 
     user_message = (data.get("message") or "").strip()
-    history = data.get("history") or []
-    preferred_lang = normalize_lang(data.get("lang") or "")
-
-    if preferred_lang:
-        session["lang"] = preferred_lang
-
-    lang = session["lang"]
+    history = data.get("history") or []  # [{role,content}]
+    session_id = (data.get("session_id") or "").strip() or str(uuid.uuid4())
+    preferred_lang = (data.get("preferred_language") or "auto").strip().lower()
 
     if not user_message:
-        return jsonify({"reply": "Please type a message."})
+        return jsonify({"reply": "Please type a message.", "session_id": session_id})
 
-    # Commands for recall/reset
-    lowered = user_message.lower().strip()
-    if lowered in ["recall reservation", "recall reservation so far", "reservation status", "what do you have so far", "recall"]:
-        return jsonify({"reply": draft_summary(session["draft"])})
+    # Init session
+    if session_id not in SESSIONS:
+        SESSIONS[session_id] = {"reservation": {}, "language": "auto"}
 
-    if lowered in ["reset reservation", "start over", "clear reservation", "reset"]:
-        reset_draft(session)
-        if lang == "es":
-            return jsonify({"reply": "✅ Listo. Empecemos de nuevo. ¿Para qué fecha te gustaría la reserva?"})
-        if lang == "pt":
-            return jsonify({"reply": "✅ Pronto. Vamos recomeçar. Para qual data você quer a reserva?"})
-        if lang == "fr":
-            return jsonify({"reply": "✅ D’accord. Recommençons. Pour quelle date souhaitez-vous la réservation ?"})
-        return jsonify({"reply": "✅ Done. Let’s start over. What date would you like?"})
+    # Update preferred language if user toggled it
+    if preferred_lang in ("auto", "en", "es", "pt", "fr"):
+        SESSIONS[session_id]["language"] = preferred_lang
 
-    # If message looks like reservation intent, use state machine first
-    intent_reservation = bool(re.search(r"\breservation\b|\bbook\b|\btable\b|\breserve\b", lowered))
+    lang = SESSIONS[session_id]["language"]
+    state = SESSIONS[session_id]["reservation"]
 
-    # Always try to update draft from any message
-    update_draft_from_text(session["draft"], user_message)
-    miss = missing_fields(session["draft"])
+    # User asked to recall
+    if re.search(r"\b(recall|show)\b.*\b(reservation)\b", user_message, re.IGNORECASE) or user_message.strip().lower() in ("recall reservation", "recall reservation so far"):
+        return jsonify({"reply": recall_text(state, lang), "session_id": session_id})
 
-    # If we're mid-reservation or user said reservation, drive the state machine
-    if intent_reservation or any(session["draft"].get(k) for k in REQUIRED_FIELDS):
+    # Detect reservation intent
+    wants_res = bool(re.search(r"\b(reservation|reserve|book a table|book table|table)\b", user_message, re.IGNORECASE))
+
+    # Always attempt to extract fields (even across turns)
+    extracted = extract_fields_from_message(user_message)
+    for k, v in extracted.items():
+        state[k] = v
+
+    # If user is in reservation flow (intent OR already started collecting)
+    in_flow = wants_res or any(state.get(k) for k in ("date","time","party_size","name","phone"))
+
+    if in_flow:
+        # Validate impossible dates like June 31 (basic)
+        if "date" in extracted and extracted["date"]:
+            # quick sanity: reject June 31 (or any YYYY-MM-DD where day=31 and month in 04,06,09,11)
+            try:
+                yyyy, mm, dd = map(int, extracted["date"].split("-"))
+                if mm in (4, 6, 9, 11) and dd == 31:
+                    state["date"] = None
+                    msg = "June only has 30 days. Please provide a valid date (example: 2026-06-23)."
+                    return jsonify({"reply": msg, "session_id": session_id})
+            except Exception:
+                pass
+
+        miss = missing_fields(state)
         if miss:
-            return jsonify({"reply": next_question_for_missing(miss, lang)})
+            prompt = next_prompt_for_missing(miss, lang)
+            # Include a small status line so users feel progress
+            status = recall_text(state, lang)
+            return jsonify({"reply": f"{status}\n\n{prompt}", "session_id": session_id})
 
-        # All fields collected -> save
-        try:
-            lead = ReservationLead(**session["draft"])
-            append_lead_to_sheet(lead.name, lead.phone, lead.date, lead.time, lead.party_size)
-            reset_draft(session)
+        # Completed -> save lead
+        lead = {
+            "name": state["name"],
+            "phone": state["phone"],
+            "date": state["date"],
+            "time": state["time"],
+            "party_size": int(state["party_size"]),
+            "source": "web",
+            "language": lang,
+        }
+        append_lead_to_sheet(lead)
 
-            if lang == "es":
-                return jsonify({"reply": f"✅ ¡Reserva guardada!\nNombre: {lead.name}\nTel: {lead.phone}\nFecha: {lead.date}\nHora: {lead.time}\nPersonas: {lead.party_size}"})
-            if lang == "pt":
-                return jsonify({"reply": f"✅ Reserva salva!\nNome: {lead.name}\nTel: {lead.phone}\nData: {lead.date}\nHora: {lead.time}\nPessoas: {lead.party_size}"})
-            if lang == "fr":
-                return jsonify({"reply": f"✅ Réservation enregistrée !\nNom : {lead.name}\nTél : {lead.phone}\nDate : {lead.date}\nHeure : {lead.time}\nPersonnes : {lead.party_size}"})
-            return jsonify({"reply": f"✅ Reservation saved!\nName: {lead.name}\nPhone: {lead.phone}\nDate: {lead.date}\nTime: {lead.time}\nParty size: {lead.party_size}"})
-        except Exception as e:
-            return jsonify({"reply": f"⚠️ Could not save reservation: {repr(e)}"}), 500
+        # Match-day banner if date is a Dallas match day
+        md = is_match_day(state["date"])
+        # Clear reservation state after save (so new reservations start clean)
+        SESSIONS[session_id]["reservation"] = {}
 
-    # Otherwise, use the model for general Q&A (hours, address, specials)
+        if lang == "es":
+            base = (
+                f"✅ ¡Reserva guardada!\n"
+                f"- Nombre: {lead['name']}\n- Tel: {lead['phone']}\n- Fecha: {lead['date']}\n- Hora: {lead['time']}\n- Personas: {lead['party_size']}\n"
+            )
+            if md:
+                base += "\n🏟️ ¡Ese día hay partido en Dallas! Te recomendamos llegar temprano."
+        else:
+            base = (
+                f"✅ Reservation saved!\n"
+                f"- Name: {lead['name']}\n- Phone: {lead['phone']}\n- Date: {lead['date']}\n- Time: {lead['time']}\n- Party size: {lead['party_size']}\n"
+            )
+            if md:
+                base += "\n🏟️ That date is a Dallas match day — we recommend arriving early."
+
+        return jsonify({"reply": base, "session_id": session_id})
+
+    # Otherwise: normal Q&A through model, with schedule context
+    lang_instruction = {
+        "auto": "Auto-detect the user's language and respond in it (English/Spanish/Portuguese/French).",
+        "en": "Respond in English.",
+        "es": "Responde en Español.",
+        "pt": "Responda em Português.",
+        "fr": "Réponds en Français."
+    }.get(lang, "Auto-detect the user's language and respond in it.")
+
     system_msg = f"""
-You are a World Cup 2026 Concierge for a Dallas-area business.
+You are a World Cup 2026 Dallas AI Concierge for a local business.
 
-Use this business profile as the source of truth:
+Business profile (source of truth):
 {business_profile}
 
-{LANG_PROMPTS.get(lang, LANG_PROMPTS["en"])}
+Dallas World Cup match dates at AT&T Stadium (for match-day planning):
+{schedule_as_text()}
 
-Be friendly, fast, and concise.
-If something is unknown, say you're not sure and offer a callback to the business phone.
-Never mention being an AI unless the user asks directly.
+Rules:
+- Be friendly, fast, and concise.
+- If the user asks for reservations, tell them to type "reservation" and you'll guide them step-by-step.
+- {lang_instruction}
+- Never mention being an AI unless asked directly.
 """
 
     messages = [{"role": "system", "content": system_msg}]
@@ -488,9 +436,8 @@ Never mention being an AI unless the user asks directly.
         input=messages,
     )
 
-    reply = (resp.output_text or "").strip()
-    return jsonify({"reply": reply})
-
+    reply = (resp.output_text or "").strip() or "Sorry — I couldn’t generate a response."
+    return jsonify({"reply": reply, "session_id": session_id})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
