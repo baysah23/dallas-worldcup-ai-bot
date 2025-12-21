@@ -453,20 +453,14 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
     ])
 
 
-
-
 def read_leads(limit: int = 300) -> List[List[str]]:
     """
     Read reservation leads from Google Sheet and return [header] + body.
 
-    Fixes common sheet issues:
-      - Header row accidentally appended at bottom (e.g. 'timestamp,name,...' appears as last row)
-      - No header row at all
-      - Rows with missing/extra columns
-
-    Always returns a clean header with:
-      timestamp, name, phone, date, time, party_size, language
-    and aligns each data row to that width.
+    - Keeps the header row at the top
+    - Ignores a header row accidentally appended at the bottom
+    - Falls back to standard column names if the sheet header is missing or junk (A,B,C,...)
+    - Pads/truncates rows so the admin table always aligns
     """
     gc = get_gspread_client()
     ws = gc.open(SHEET_NAME).sheet1
@@ -482,6 +476,7 @@ def read_leads(limit: int = 300) -> List[List[str]]:
             "date" in joined and "time" in joined and "party" in joined
         )
 
+    # Find a header row anywhere (sometimes it gets appended at bottom)
     header_idx = None
     for i, r in enumerate(rows):
         if looks_like_header(r):
@@ -492,17 +487,27 @@ def read_leads(limit: int = 300) -> List[List[str]]:
         header = std_header
         body = rows
     else:
-        header_raw = [ (c or "").strip() for c in rows[header_idx] if (c or "").strip() ]
-        header = header_raw if len(header_raw) >= 4 else std_header
+        header = [ (c or "").strip() for c in rows[header_idx] ]
         body = rows[:header_idx] + rows[header_idx+1:]
 
-    if not any(h.lower() == "language" for h in header):
+    # Clean header values
+    header = [h for h in header if h]  # drop empty columns
+
+    # If header looks like A/B/C... or is too short, fall back to standard header
+    simple_letters = set(list("ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
+    if (len(header) < 4) or all((h.strip().upper() in simple_letters) for h in header if h.strip()):
+        header = std_header
+
+    # Ensure language column exists
+    if not any(h.strip().lower() == "language" for h in header):
         header = header + ["language"]
 
+    # Ensure expected columns exist (fallback safety)
     joined_header = " ".join([h.lower() for h in header])
     if ("name" not in joined_header) or ("phone" not in joined_header) or ("date" not in joined_header):
         header = std_header
 
+    # Keep last N leads
     body = body[-limit:]
 
     width = len(header)
@@ -516,6 +521,12 @@ def read_leads(limit: int = 300) -> List[List[str]]:
         fixed.append(r)
 
     return [header] + fixed
+
+# ============================================================
+# Reservation state machine (in-memory sessions)
+# ============================================================
+_sessions: Dict[str, Dict[str, Any]] = {}
+
 
 def get_session_id() -> str:
     """
@@ -980,7 +991,7 @@ def admin():
     # Simple HTML table
     html = []
     html.append("<html><head><meta charset='utf-8'><title>Leads Admin</title>")
-    html.append("<style>body{font-family:Arial,Helvetica,sans-serif;padding:16px;background:#0b152c;color:#eaf0ff}h2{margin:0;position:sticky;top:0;background:#0b152c;padding:10px 0;z-index:10}.meta{position:sticky;top:44px;background:#0b152c;padding:8px 0;z-index:9;color:#b9c7ee;font-size:12px}table{border-collapse:collapse;width:100%;background:#0f1b33;border:1px solid rgba(255,255,255,.14)}th,td{border:1px solid rgba(255,255,255,.14);padding:8px;font-size:12px;vertical-align:top;white-space:nowrap}td{white-space:normal}th{position:sticky;top:88px;background:#102246;z-index:8;text-transform:capitalize}tr:nth-child(even) td{background:rgba(255,255,255,.03)}</style>")
+    html.append("<style>body{font-family:Arial,Helvetica,sans-serif;padding:16px;background:#0b152c;color:#eaf0ff}h2{margin:0;position:sticky;top:0;background:#0b152c;padding:10px 0;z-index:10}.meta{position:sticky;top:44px;background:#0b152c;padding:8px 0;z-index:9;color:#b9c7ee;font-size:12px}table{border-collapse:collapse;width:100%;background:#0f1b33;border:1px solid rgba(255,255,255,.14)}th,td{border:1px solid rgba(255,255,255,.14);padding:8px;font-size:12px;vertical-align:top}th{position:sticky;top:88px;background:#102246;z-index:8;text-transform:capitalize}tr:nth-child(even) td{background:rgba(255,255,255,.03)}</style>")
     html.append("</head><body>")
     html.append(f"<h2>Leads Admin — {SHEET_NAME}</h2>")
     html.append(f"<div class='meta'>Rows shown: {len(body)}</div>")
