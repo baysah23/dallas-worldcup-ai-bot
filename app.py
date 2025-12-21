@@ -1078,30 +1078,33 @@ Rules:
 """
 
     # If OpenAI is not configured or temporarily unavailable, fall back gracefully
-if client is None:
-    return jsonify({
-        "reply": "⚠️ The AI assistant is temporarily unavailable, but reservations and schedules still work. Type “reservation” to book a table, or use the schedule panel.",
-        "rate_limit_remaining": remaining
-    })
+    # (Reservations + schedules must still work even if AI is down.)
+    if not os.environ.get("OPENAI_API_KEY"):
+        return jsonify({
+            "reply": "⚠️ The AI assistant is temporarily unavailable, but reservations and schedules still work. Type “reservation” to book a table, or use the schedule panel.",
+            "rate_limit_remaining": remaining,
+        }), 200
 
-try:
-    resp = client.responses.create(
-        model="gpt-4o-mini",
-        input=[
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": msg},
-        ],
-    )
-    reply = (getattr(resp, "output_text", "") or "").strip()
-    if not reply:
-        reply = "Sorry — no reply received."
-    return jsonify({"reply": reply, "rate_limit_remaining": remaining})
-except Exception as e:
-    return jsonify({
-        "reply": "⚠️ The AI assistant is temporarily unavailable right now. You can still make a reservation by typing “reservation”.",
-        "rate_limit_remaining": remaining,
-        "notice": repr(e),
-    }), 200
+    try:
+        # Using Responses API (OpenAI python >= 1.0). Keep this isolated so any AI errors
+        # never break reservations/schedule.
+        resp = client.responses.create(
+            model=os.environ.get("OPENAI_MODEL", "gpt-4o-mini"),
+            input=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": msg},
+            ],
+        )
+        reply = (getattr(resp, "output_text", "") or "").strip()
+        if not reply:
+            reply = "Sorry — no reply received."
+        return jsonify({"reply": reply, "rate_limit_remaining": remaining}), 200
+    except Exception as e:
+        return jsonify({
+            "reply": "⚠️ The AI assistant is temporarily unavailable right now. You can still make a reservation by typing “reservation”.",
+            "rate_limit_remaining": remaining,
+            "notice": repr(e),
+        }), 200
 
 
 # ============================================================
