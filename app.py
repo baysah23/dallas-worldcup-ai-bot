@@ -513,19 +513,52 @@ def want_reservation(text: str) -> bool:
 
 
 def extract_party_size(text: str) -> Optional[int]:
-    t = text.lower()
+    """Extract party size from free text.
+
+    IMPORTANT: avoid mis-reading dates like 'June 13' as a party size.
+    We only accept a standalone number when the message does NOT look like a date/time.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return None
+    t = raw.lower()
+
+    # Strong patterns
     m = re.search(r"party\s*of\s*(\d+)", t)
     if m:
         return int(m.group(1))
     m = re.search(r"table\s*of\s*(\d+)", t)
     if m:
         return int(m.group(1))
+    m = re.search(r"for\s*(\d+)\s*(people|persons|guests|pax)\b", t)
+    if m:
+        return int(m.group(1))
+
+    # If the text looks like a date or time, do not treat numbers as party size.
+    months = [
+        "january","jan","february","feb","march","mar","april","apr","may","june","jun","july","jul",
+        "august","aug","september","sep","sept","october","oct","november","nov","december","dec",
+        "enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre",
+        "janeiro","fevereiro","março","marco","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro",
+        "janvier","février","fevrier","mars","avril","mai","juin","juillet","août","aout","septembre","octobre","novembre","décembre","decembre",
+    ]
+    if any(mo in t for mo in months):
+        return None
+    if re.search(r"\b\d{4}-\d{1,2}-\d{1,2}\b", t):
+        return None
+    if re.search(r"\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b", t):
+        return None
+    if re.search(r"\b\d{1,2}(:\d{2})\s*(am|pm)?\b", t):
+        return None
+
+    # Fallback: a plain number, but keep it reasonable
     m = re.search(r"\b(\d+)\b", t)
     if m:
         n = int(m.group(1))
         if 1 <= n <= 200:
             return n
     return None
+
 
 
 def extract_phone(text: str) -> Optional[str]:
@@ -823,12 +856,15 @@ def schedule_json():
 
     try:
         matches = filter_matches(scope=scope, q=q)
-        today = datetime.now().date()
-        is_match = any(m.get("date") == today.isoformat() for m in matches) if scope != "all" else any(
-            m.get("date") == today.isoformat() and is_dallas_match(m) for m in load_all_matches()
-        )
 
-        # next match (by datetime_utc string sort already)
+        today = datetime.now().date()
+        if scope == "all":
+            # "match day" for Dallas means: any Dallas match today
+            is_match = any(m.get("date") == today.isoformat() and is_dallas_match(m) for m in load_all_matches())
+        else:
+            is_match = any(m.get("date") == today.isoformat() for m in matches)
+
+        # next match (by datetime_utc already sorted in load_all_matches/filter_matches)
         nxt = None
         now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         for m in matches:
@@ -846,7 +882,6 @@ def schedule_json():
             "matches": matches,
         })
     except Exception as e:
-        # If the feed is unavailable, don't break the whole page.
         return jsonify({
             "scope": scope,
             "query": q,
@@ -857,6 +892,7 @@ def schedule_json():
             "matches": [],
             "notice": f"Schedule temporarily unavailable: {repr(e)}",
         })
+
 
 
 @app.route("/test-sheet")

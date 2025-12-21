@@ -674,22 +674,28 @@ function renderSchedule(){
   const el = document.getElementById("schedule");
   el.innerHTML = "";
 
-  // Match count pill always reflects the server-filtered list size (search happens server-side)
-  const countEl = document.getElementById("matchCount");
-  const allMatches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches.slice() : [];
-  if (countEl) countEl.textContent = allMatches.length;
-
-  // Notice handling (feed down, etc.)
+  // Guard: show notice if backend returned one
   if (scheduleData && scheduleData.notice){
     const row = document.createElement("div");
     row.className = "match";
     row.innerHTML = `<div class="left"><div><b>Notice</b></div><div class="when">${escapeHtml(scheduleData.notice)}</div></div><div class="pill">i</div>`;
     el.appendChild(row);
+    if (matchCountEl) matchCountEl.textContent = "0";
     if (pagerEl) pagerEl.style.display = "none";
     return;
   }
 
-  if (!allMatches.length){
+  const rawMatches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches.slice() : [];
+
+  // Build timestamps for sorting + next-match highlight
+  const enriched = rawMatches.map(m => {
+    const ts = safeParseTimestamp(m.date, m.time);
+    return {...m, ts};
+  }).filter(m => m.ts !== null);
+
+  if (matchCountEl) matchCountEl.textContent = String(enriched.length);
+
+  if (!enriched.length){
     const empty = document.createElement("div");
     empty.className = "match";
     empty.innerHTML = `
@@ -704,56 +710,52 @@ function renderSchedule(){
     return;
   }
 
-  // Enrich with a timestamp for sorting/highlighting.
-  const enriched = allMatches.map(m => {
-    const ts = safeParseTimestamp(m.date, m.time);
-    return {...m, ts};
-  }).filter(m => m.ts !== null);
+  enriched.sort((a,b)=>a.ts-b.ts);
 
   const now = Date.now();
-  const upcoming = enriched.filter(m => m.ts >= now).sort((a,b)=>a.ts-b.ts);
+  const upcoming = enriched.filter(m => m.ts >= now);
   const nextId = upcoming.length ? upcoming[0].id : null;
 
-  // Pagination ONLY for scope=all
-  let visible = enriched.sort((a,b)=>a.ts-b.ts);
-  let totalPages = 1;
-
+  // Pagination (All Matches only)
+  let pageMatches = enriched;
   if (scope === "all"){
-    totalPages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
-    if (currentPage > totalPages) currentPage = totalPages;
+    const totalPages = Math.max(1, Math.ceil(enriched.length / PAGE_SIZE));
+    if (currentPage > totalPages) currentPage = 1;
 
-    const startIdx = (currentPage - 1) * PAGE_SIZE;
-    const endIdx = startIdx + PAGE_SIZE;
-    visible = visible.slice(startIdx, endIdx);
+    const start = (currentPage - 1) * PAGE_SIZE;
+    pageMatches = enriched.slice(start, start + PAGE_SIZE);
 
-    // Show pager UI
-    if (pagerEl) pagerEl.style.display = "block";
+    if (pagerEl) pagerEl.style.display = "flex";
     if (pageIndicatorEl) pageIndicatorEl.textContent = `Page ${currentPage} of ${totalPages}`;
     if (prevPageBtn) prevPageBtn.disabled = (currentPage <= 1);
     if (nextPageBtn) nextPageBtn.disabled = (currentPage >= totalPages);
   } else {
-    // Dallas scope: show all, hide pager
     if (pagerEl) pagerEl.style.display = "none";
+    if (pageIndicatorEl) pageIndicatorEl.textContent = "";
   }
 
-  visible.forEach(m => {
+  pageMatches.forEach(m => {
     const row = document.createElement("div");
     row.className = "match" + (m.id === nextId ? " next" : "");
 
     const timeTxt = formatKickoffTime(m.time);
-    const teamsTxt = (m.home && m.away) ? `${m.home} vs ${m.away}` : (m.teams || "TBD vs TBD");
+    const teamsTxt = (m.teams && String(m.teams).trim())
+      ? m.teams
+      : ((m.home || m.away) ? `${m.home || "TBD"} vs ${m.away || "TBD"}` : "TBD vs TBD");
+
     const venueTxt = m.venue ? ` • ${m.venue}` : "";
 
     row.innerHTML = `
       <div class="left">
-        <div><b>Match</b> • ${escapeHtml(teamsTxt)}</div>
-        <div class="when">${escapeHtml(m.date)} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div>
+        <div><b>${escapeHtml(m.stage || "Match")}</b> • ${escapeHtml(teamsTxt)}</div>
+        <div class="when">${escapeHtml(m.date || "")} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div>
       </div>
       <div class="pill">${escapeHtml(m.id || "")}</div>
     `;
     el.appendChild(row);
   });
 }
+
 
 function updateMatchDayMode(){
   const isMatchDay = !!(scheduleData && scheduleData.is_match_day);
