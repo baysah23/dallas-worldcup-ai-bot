@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>World Cup 2026 Dallas Concierge</title>
+
   <style>
     :root{
       --bg:#071022;
@@ -18,7 +19,8 @@
     }
     body{
       margin:0; height:100vh; display:flex; flex-direction:column;
-      font-family: Arial, sans-serif; background: radial-gradient(1200px 600px at 20% 10%, #132a5b 0%, var(--bg) 55%);
+      font-family: Arial, sans-serif;
+      background: radial-gradient(1200px 600px at 20% 10%, #132a5b 0%, var(--bg) 55%);
       color:var(--text);
     }
     .wrap{max-width:1050px; width:100%; margin:0 auto; display:flex; flex-direction:column; height:100%;}
@@ -28,7 +30,7 @@
       border-bottom:1px solid var(--line);
     }
     .toprow{display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;}
-    .brand{ display:flex; gap:12px; align-items:center; }
+    .brand{display:flex; gap:12px; align-items:center;}
     .badge{
       width:44px; height:44px; border-radius:12px;
       background: linear-gradient(135deg, #f5d76e 0%, #2ea043 45%, #1f6feb 100%);
@@ -48,6 +50,7 @@
       user-select:none;
     }
     .langbtn.active{background:rgba(46,160,67,.18); border-color:rgba(46,160,67,.45);}
+
     .grid{
       display:grid;
       grid-template-columns: 1.2fr .8fr;
@@ -57,8 +60,9 @@
       min-height:0;
     }
     @media (max-width: 950px){
-      .grid{grid-template-columns:1fr; }
+      .grid{grid-template-columns:1fr;}
     }
+
     .card{
       background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.03) 100%);
       border:1px solid var(--line);
@@ -85,6 +89,7 @@
       background:rgba(0,0,0,.12);
       white-space:nowrap;
     }
+
     .banner{
       padding:10px 14px;
       border-bottom:1px dashed rgba(255,255,255,.16);
@@ -93,6 +98,7 @@
       display:none;
     }
     .banner.show{display:block;}
+
     #chat{
       padding:14px;
       height:100%;
@@ -119,6 +125,7 @@
       align-self:flex-start;
       background: rgba(0,0,0,.18);
     }
+
     .composer{
       display:flex;
       gap:10px;
@@ -152,6 +159,7 @@
       min-width:92px;
     }
     button:disabled{opacity:.6; cursor:not-allowed;}
+
     .sidepad{padding:12px 14px;}
     .countdown{
       display:flex;
@@ -172,7 +180,8 @@
     }
     .nums span{color:var(--text);}
     .nums b{color:#f5d76e;}
-    .schedule{ max-height:260px; overflow:auto; }
+
+    .schedule{max-height:260px; overflow:auto;}
     .match{
       display:flex;
       justify-content:space-between;
@@ -187,6 +196,7 @@
       background: rgba(46,160,67,.18);
       border-top:1px solid rgba(46,160,67,.35);
     }
+
     .matchday{
       margin:12px 14px 0;
       padding:10px 12px;
@@ -197,6 +207,7 @@
       display:none;
     }
     .matchday.show{display:block;}
+
     .menu{
       border-top:1px solid rgba(255,255,255,.10);
       padding:10px 12px;
@@ -214,6 +225,7 @@
     .menuitem .name{font-weight:800;}
     .menuitem .desc{color:var(--muted); margin-top:3px;}
     .menuitem .price{margin-top:6px; font-weight:800; color:#f5d76e;}
+
     .hint{
       padding:10px 14px;
       font-size:12px;
@@ -235,6 +247,7 @@
             <div class="sub">Reserve tables, see Dallas match schedule, and chat in English • Español • Português • Français</div>
           </div>
         </div>
+
         <div class="langbar" aria-label="Language toggle">
           <div class="langbtn active" data-lang="en">English</div>
           <div class="langbtn" data-lang="es">Español</div>
@@ -248,12 +261,11 @@
       <!-- Chat -->
       <div class="card" style="display:flex;flex-direction:column;min-height:0;">
         <div class="cardhead">
-          <div class="title">Chat</div>
+          <div class="title" id="chatTitle">Chat</div>
           <div class="pill" id="pillMode">Mode: Standard</div>
         </div>
 
         <div class="banner" id="matchBanner"></div>
-
         <div id="chat"></div>
 
         <div class="composer">
@@ -267,7 +279,7 @@
       <!-- Sidebar -->
       <div class="card" style="display:flex;flex-direction:column;min-height:0;">
         <div class="cardhead">
-          <div class="title">Dallas Schedule + Menu</div>
+          <div class="title" id="sideTitle">Dallas Schedule + Menu</div>
           <div class="pill" id="pillLang">EN</div>
         </div>
 
@@ -294,7 +306,7 @@
 
         <div class="cardhead" style="border-top:1px solid var(--line); border-bottom:none;">
           <div class="title" id="menuTitle">Menu</div>
-          <div class="pill">4 languages</div>
+          <div class="pill" id="menuPill">4 languages</div>
         </div>
 
         <div class="menu" id="menu"></div>
@@ -302,361 +314,427 @@
     </div>
   </div>
 
-  <script>
-    // ============================================================
-    // Session + State
-    // ============================================================
-    const sessionId = (localStorage.getItem("session_id") || (() => {
-      const id = "sess_" + Math.random().toString(16).slice(2) + "_" + Date.now();
-      localStorage.setItem("session_id", id);
-      return id;
-    })());
+<script>
+/**
+ * This frontend matches your current app.py endpoints:
+ *  - GET /schedule.json
+ *  - GET /menu.json?lang=en|es|pt|fr
+ *  - POST /chat { message, session_id, language }
+ *
+ * Keeps all original features: language toggle, chat, helper hint,
+ * countdown, schedule highlight, match-day banner.
+ */
 
-    let lang = localStorage.getItem("lang") || "en";
-    let scheduleData = null;
+// -----------------------
+// Session + state
+// -----------------------
+const sessionId = (localStorage.getItem("session_id") || (() => {
+  const id = "sess_" + Math.random().toString(16).slice(2) + "_" + Date.now();
+  localStorage.setItem("session_id", id);
+  return id;
+})());
 
-    // local conversation memory (kept as your existing feature)
-    const history = [];
+let lang = localStorage.getItem("lang") || "en";
+let scheduleData = null;
+let menuData = null;
 
-    const chatEl = document.getElementById("chat");
-    const msgEl = document.getElementById("msg");
-    const sendBtn = document.getElementById("sendBtn");
-    const helperHint = document.getElementById("helperHint");
-    const pillLang = document.getElementById("pillLang");
-    const pillMode = document.getElementById("pillMode");
-    const matchBanner = document.getElementById("matchBanner");
-    const matchdayBox = document.getElementById("matchdayBox");
-    const scheduleEl = document.getElementById("schedule");
-    const menuEl = document.getElementById("menu");
+// Conversation memory (client-side history) — kept as a feature
+const history = [];
 
-    // ============================================================
-    // UI Strings (matching your app.py LANG intent, kept client-side)
-    // ============================================================
-    const UI = {
-      en: {
-        welcome: "Hi! Want to book a table for a match day? Ask me anything.",
-        helper: "Try: “reservation” to book • “Recall reservation so far” • Ask about the menu • Ask about Dallas match days.",
-        lang_set: "Language set to English.",
-        countdown_label: "World Cup countdown",
-        countdown_sub: "Dallas / Arlington match days",
-        next_hint: "Next upcoming match is highlighted",
-        schedule_empty: "No Dallas/Arlington matches listed yet. (Add them in app.py → DALLAS_MATCHES)",
-        schedule_title: (n)=>`${n} match(es) loaded`,
-      },
-      es: {
-        welcome: "¡Hola! ¿Quieres reservar una mesa para un día de partido? Pregúntame lo que sea.",
-        helper: "Prueba: “reserva” • “Recordar reserva” • Pregunta por el menú • Pregunta por los días de partido en Dallas.",
-        lang_set: "Idioma cambiado a Español.",
-        countdown_label: "Cuenta regresiva del Mundial",
-        countdown_sub: "Días de partido Dallas / Arlington",
-        next_hint: "Se resalta el próximo partido",
-        schedule_empty: "Aún no hay partidos listados. (Agrégalos en app.py → DALLAS_MATCHES)",
-        schedule_title: (n)=>`${n} partido(s) cargado(s)`,
-      },
-      pt: {
-        welcome: "Olá! Quer reservar uma mesa para dia de jogo? Pergunte qualquer coisa.",
-        helper: "Tente: “reserva” • “Relembrar reserva” • Pergunte o cardápio • Pergunte sobre dias de jogo em Dallas.",
-        lang_set: "Idioma alterado para Português.",
-        countdown_label: "Contagem regressiva da Copa",
-        countdown_sub: "Dias de jogo Dallas / Arlington",
-        next_hint: "Próximo jogo destacado",
-        schedule_empty: "Nenhum jogo listado ainda. (Adicione em app.py → DALLAS_MATCHES)",
-        schedule_title: (n)=>`${n} jogo(s) carregado(s)`,
-      },
-      fr: {
-        welcome: "Bonjour ! Vous voulez réserver une table pour un jour de match ? Demandez-moi !",
-        helper: "Essayez : « réservation » • « Rappeler la réservation » • Demandez le menu • Demandez les jours de match à Dallas.",
-        lang_set: "Langue réglée sur Français.",
-        countdown_label: "Compte à rebours Coupe du Monde",
-        countdown_sub: "Jours de match Dallas / Arlington",
-        next_hint: "Prochain match mis en évidence",
-        schedule_empty: "Aucun match listé pour l’instant. (Ajoutez-les dans app.py → DALLAS_MATCHES)",
-        schedule_title: (n)=>`${n} match(s) chargé(s)`,
-      },
-    };
+const chatEl = document.getElementById("chat");
+const msgEl = document.getElementById("msg");
+const sendBtn = document.getElementById("sendBtn");
+const helperHint = document.getElementById("helperHint");
+const pillLang = document.getElementById("pillLang");
+const pillMode = document.getElementById("pillMode");
+const matchBanner = document.getElementById("matchBanner");
+const matchdayBox = document.getElementById("matchdayBox");
 
-    function ui() {
-      return UI[lang] || UI.en;
+const STRINGS = {
+  en: {
+    welcome: "Hi! Want to book a table for a match day? Ask me anything.",
+    lang_set: "Language set to English.",
+    helper: 'Try: <code>reservation</code> to book • <code>Recall reservation so far</code> • Ask about the menu • Ask about Dallas match days.',
+    send: "Send",
+    typing: "...",
+    chat_title: "Chat",
+    side_title: "Dallas Schedule + Menu",
+    countdown: "World Cup countdown",
+    countdown_sub: "Dallas / Arlington match days",
+    next_hint: "Next upcoming match is highlighted",
+    schedule_empty: "Schedule coming soon — update the match list in <code>app.py</code> (DALLAS_MATCHES).",
+    menu_title: "Menu"
+  },
+  es: {
+    welcome: "¡Hola! ¿Quieres reservar una mesa para un día de partido? Pregúntame lo que sea.",
+    lang_set: "Idioma cambiado a Español.",
+    helper: 'Prueba: <code>reserva</code> para reservar • <code>Recordar reserva</code> • Pregunta por el menú • Pregunta por los partidos en Dallas.',
+    send: "Enviar",
+    typing: "...",
+    chat_title: "Chat",
+    side_title: "Horario Dallas + Menú",
+    countdown: "Cuenta regresiva",
+    countdown_sub: "Días de partido Dallas / Arlington",
+    next_hint: "El próximo partido está resaltado",
+    schedule_empty: "El calendario estará disponible pronto — actualiza <code>DALLAS_MATCHES</code> en <code>app.py</code>.",
+    menu_title: "Menú"
+  },
+  pt: {
+    welcome: "Olá! Quer reservar uma mesa para dia de jogo? Pergunte qualquer coisa.",
+    lang_set: "Idioma definido para Português.",
+    helper: 'Tente: <code>reserva</code> para reservar • <code>Relembrar reserva</code> • Pergunte sobre o cardápio • Pergunte sobre jogos em Dallas.',
+    send: "Enviar",
+    typing: "...",
+    chat_title: "Chat",
+    side_title: "Agenda Dallas + Cardápio",
+    countdown: "Contagem regressiva",
+    countdown_sub: "Dias de jogo Dallas / Arlington",
+    next_hint: "O próximo jogo está destacado",
+    schedule_empty: "Agenda em breve — atualize <code>DALLAS_MATCHES</code> no <code>app.py</code>.",
+    menu_title: "Cardápio"
+  },
+  fr: {
+    welcome: "Bonjour ! Vous voulez réserver une table pour un jour de match ? Demandez-moi !",
+    lang_set: "Langue définie sur Français.",
+    helper: 'Essayez : <code>réservation</code> pour réserver • <code>Rappeler la réservation</code> • Demandez le menu • Demandez les matchs à Dallas.',
+    send: "Envoyer",
+    typing: "...",
+    chat_title: "Chat",
+    side_title: "Programme Dallas + Menu",
+    countdown: "Compte à rebours",
+    countdown_sub: "Jours de match Dallas / Arlington",
+    next_hint: "Le prochain match est surligné",
+    schedule_empty: "Programme bientôt disponible — mettez à jour <code>DALLAS_MATCHES</code> dans <code>app.py</code>.",
+    menu_title: "Menu"
+  }
+};
+
+function L(){ return STRINGS[lang] || STRINGS.en; }
+
+function addBubble(role, text){
+  const b = document.createElement("div");
+  b.className = "bubble " + (role === "user" ? "user" : "bot");
+  b.textContent = text;
+  chatEl.appendChild(b);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function setSending(isSending){
+  sendBtn.disabled = isSending;
+  msgEl.disabled = isSending;
+  sendBtn.textContent = isSending ? L().typing : L().send;
+}
+
+// -----------------------
+// Language toggle
+// -----------------------
+function applyLanguageToUI(){
+  pillLang.textContent = lang.toUpperCase();
+  document.querySelectorAll(".langbtn").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.lang === lang);
+  });
+
+  // Titles + helper
+  document.getElementById("chatTitle").textContent = L().chat_title;
+  document.getElementById("sideTitle").textContent = L().side_title;
+  document.getElementById("countLabel").textContent = L().countdown;
+  document.getElementById("countSub").textContent = L().countdown_sub;
+  document.getElementById("nextHint").textContent = L().next_hint;
+  document.getElementById("menuTitle").textContent = L().menu_title;
+
+  helperHint.innerHTML = L().helper;
+  sendBtn.textContent = L().send;
+}
+
+async function setLanguage(newLang){
+  lang = newLang;
+  localStorage.setItem("lang", lang);
+  applyLanguageToUI();
+
+  // reload menu in the chosen language
+  await loadMenu();
+
+  // show a bot notice (feature preserved)
+  addBubble("assistant", L().lang_set + "\n\n" + stripHtml(L().helper));
+  history.push({role:"assistant", content: L().lang_set});
+}
+
+document.querySelectorAll(".langbtn").forEach(btn => {
+  btn.addEventListener("click", () => setLanguage(btn.dataset.lang));
+});
+
+// helper: render helper text in bubble without html tags
+function stripHtml(html){
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || "";
+}
+
+// -----------------------
+// Fetchers (match app.py)
+// -----------------------
+async function loadSchedule(){
+  const res = await fetch("/schedule.json", {cache:"no-store"});
+  scheduleData = await res.json();
+  renderSchedule();
+  updateMatchDayMode();
+  restartCountdown(); // uses schedule info when available
+}
+
+async function loadMenu(){
+  const res = await fetch("/menu.json?lang=" + encodeURIComponent(lang), {cache:"no-store"});
+  const data = await res.json();
+  // app.py returns { lang, menu: {title, items:[]}}
+  menuData = data.menu;
+  renderMenu(menuData.items || []);
+}
+
+function safeParseTimestamp(dateIso, timeStr){
+  // app.py schedule items may have "time": "17:00" or missing/""/"TBD"
+  if (!dateIso) return null;
+  if (timeStr && typeof timeStr === "string" && timeStr.trim() && timeStr.trim().toUpperCase() !== "TBD"){
+    // expect "HH:MM"
+    const t = timeStr.trim();
+    // Basic guard
+    if (/^\d{1,2}:\d{2}$/.test(t)){
+      return Date.parse(dateIso + "T" + t + ":00");
     }
+  }
+  // end-of-day fallback
+  return Date.parse(dateIso + "T23:59:59");
+}
 
-    function addBubble(role, text){
-      const b = document.createElement("div");
-      b.className = "bubble " + (role === "user" ? "user" : "bot");
-      b.textContent = text;
-      chatEl.appendChild(b);
-      chatEl.scrollTop = chatEl.scrollHeight;
-    }
+// -----------------------
+// Countdown
+// -----------------------
+let countdownTimer = null;
 
-    function setSending(isSending){
-      sendBtn.disabled = isSending;
-      msgEl.disabled = isSending;
-      sendBtn.textContent = isSending ? "..." : "Send";
-    }
+function chooseCountdownTarget(){
+  // Prefer next match datetime if present; otherwise fixed World Cup-ish date.
+  // If DALLAS_MATCHES is empty, still show a countdown.
+  if (scheduleData && scheduleData.next_match && scheduleData.next_match.date){
+    const nm = scheduleData.next_match;
+    const ts = safeParseTimestamp(nm.date, nm.time);
+    if (ts) return new Date(ts);
+  }
+  // fallback: World Cup June 2026 (safe constant, preserves feature)
+  return new Date("2026-06-11T00:00:00");
+}
 
-    // ============================================================
-    // Language toggle (keeps your feature)
-    // ============================================================
-    function applyLanguageToUI(){
-      pillLang.textContent = lang.toUpperCase();
-      helperHint.textContent = ui().helper;
+function restartCountdown(){
+  if (countdownTimer) clearInterval(countdownTimer);
 
-      document.getElementById("countLabel").textContent = ui().countdown_label;
-      document.getElementById("countSub").textContent = ui().countdown_sub;
-      document.getElementById("nextHint").textContent = ui().next_hint;
-    }
+  const target = chooseCountdownTarget();
+  const dEl = document.getElementById("d");
+  const hEl = document.getElementById("h");
+  const mEl = document.getElementById("m");
+  const sEl = document.getElementById("s");
 
-    async function setLanguage(newLang){
-      lang = newLang;
-      localStorage.setItem("lang", lang);
+  function tick(){
+    const now = new Date();
+    let diff = Math.max(0, target - now);
 
-      document.querySelectorAll(".langbtn").forEach(btn => {
-        btn.classList.toggle("active", btn.dataset.lang === lang);
-      });
+    const days = Math.floor(diff / (1000*60*60*24));
+    diff -= days*(1000*60*60*24);
+    const hrs = Math.floor(diff / (1000*60*60));
+    diff -= hrs*(1000*60*60);
+    const mins = Math.floor(diff / (1000*60));
+    diff -= mins*(1000*60);
+    const secs = Math.floor(diff / 1000);
 
-      applyLanguageToUI();
+    dEl.textContent = days;
+    hEl.textContent = hrs;
+    mEl.textContent = mins;
+    sEl.textContent = secs;
+  }
 
-      // Bot notice + refresh menu (your feature)
-      addBubble("assistant", ui().lang_set + "\n\n" + ui().helper);
-      history.push({role:"assistant", content: ui().lang_set + "\n\n" + ui().helper});
+  tick();
+  countdownTimer = setInterval(tick, 1000);
+}
 
-      await loadMenu(lang);
-    }
+// -----------------------
+// Schedule rendering + next match highlight
+// -----------------------
+function renderSchedule(){
+  const el = document.getElementById("schedule");
+  el.innerHTML = "";
 
-    document.querySelectorAll(".langbtn").forEach(btn => {
-      btn.addEventListener("click", () => setLanguage(btn.dataset.lang));
+  const matches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches.slice() : [];
+
+  if (!matches.length){
+    const empty = document.createElement("div");
+    empty.className = "match";
+    empty.innerHTML = `
+      <div class="left">
+        <div><b>Notice</b></div>
+        <div class="when">${L().schedule_empty}</div>
+      </div>
+      <div class="pill">—</div>
+    `;
+    el.appendChild(empty);
+    return;
+  }
+
+  const enriched = matches.map(m => {
+    const ts = safeParseTimestamp(m.date, m.time);
+    return {...m, ts};
+  }).filter(m => m.ts !== null);
+
+  const now = Date.now();
+  const upcoming = enriched.filter(m => m.ts >= now).sort((a,b)=>a.ts-b.ts);
+  const nextId = upcoming.length ? upcoming[0].id : null;
+
+  enriched.sort((a,b)=>a.ts-b.ts).forEach(m => {
+    const row = document.createElement("div");
+    row.className = "match" + (m.id === nextId ? " next" : "");
+
+    const timeTxt = (m.time && String(m.time).trim()) ? String(m.time).trim() : "TBD";
+    const teamsTxt = m.teams || (m.home && m.away ? `${m.home} vs ${m.away}` : "TBD vs TBD");
+    const venueTxt = m.venue ? ` • ${m.venue}` : "";
+
+    row.innerHTML = `
+      <div class="left">
+        <div><b>Match</b> • ${escapeHtml(teamsTxt)}</div>
+        <div class="when">${escapeHtml(m.date)} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div>
+      </div>
+      <div class="pill">${escapeHtml(m.id || "")}</div>
+    `;
+    el.appendChild(row);
+  });
+}
+
+function updateMatchDayMode(){
+  const isMatchDay = !!(scheduleData && scheduleData.is_match_day);
+
+  if (isMatchDay){
+    pillMode.textContent = "Mode: Match-day";
+    const banner = (scheduleData && scheduleData.match_day_banner) ? scheduleData.match_day_banner : "Match-day hours";
+    matchBanner.textContent = banner;
+    matchBanner.classList.add("show");
+
+    matchdayBox.textContent = "🏟️ Match-day mode is ON today. Expect higher traffic — reserve early!";
+    matchdayBox.classList.add("show");
+  } else {
+    pillMode.textContent = "Mode: Standard";
+    matchBanner.classList.remove("show");
+    matchdayBox.classList.remove("show");
+  }
+}
+
+// -----------------------
+// Menu rendering
+// -----------------------
+function renderMenu(items){
+  const el = document.getElementById("menu");
+  el.innerHTML = "";
+
+  if (!items || !items.length){
+    const d = document.createElement("div");
+    d.className = "menuitem";
+    d.innerHTML = `
+      <div class="name">—</div>
+      <div class="desc">Menu not available.</div>
+      <div class="price"></div>
+    `;
+    el.appendChild(d);
+    return;
+  }
+
+  items.forEach(it => {
+    const d = document.createElement("div");
+    d.className = "menuitem";
+    d.innerHTML = `
+      <div class="name">${escapeHtml(it.name || "")}</div>
+      <div class="desc">${escapeHtml(it.desc || "")}</div>
+      <div class="price">${escapeHtml(it.price || "")}</div>
+    `;
+    el.appendChild(d);
+  });
+}
+
+// simple HTML escaping (prevents broken DOM if text contains "<")
+function escapeHtml(s){
+  return String(s ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+// -----------------------
+// Chat send
+// -----------------------
+async function sendMessage(){
+  const text = msgEl.value.trim();
+  if (!text) return;
+
+  addBubble("user", text);
+  history.push({role:"user", content:text});
+
+  msgEl.value = "";
+  msgEl.style.height = "44px";
+  setSending(true);
+
+  try{
+    const res = await fetch("/chat", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        message: text,
+        session_id: sessionId,
+        language: lang,
+        history // kept as a feature; server will safely ignore
+      })
     });
 
-    // ============================================================
-    // Fetchers (MATCH your app.py routes)
-    // ============================================================
-    async function loadSchedule(){
-      const res = await fetch("/schedule.json", { cache: "no-store" });
-      scheduleData = await res.json();
-      renderSchedule();
-      updateMatchDayMode();
-      startCountdown(); // uses schedule info
-    }
+    const data = await res.json().catch(() => ({}));
+    const reply = (data && data.reply) ? data.reply : "Sorry — no reply received.";
 
-    async function loadMenu(lang){
-      const res = await fetch("/menu.json?lang=" + encodeURIComponent(lang), { cache: "no-store" });
-      const data = await res.json();
-      const menu = data.menu || {};
-      document.getElementById("menuTitle").textContent = menu.title || "Menu";
-      renderMenu((menu.items || []));
-    }
+    addBubble("assistant", reply);
+    history.push({role:"assistant", content: reply});
+  } catch(e){
+    addBubble("assistant", "⚠️ Network error. Please try again.");
+  } finally{
+    setSending(false);
+    msgEl.focus();
+  }
+}
 
-    // ============================================================
-    // Countdown (keeps feature; derives from next_match/date or defaults)
-    // ============================================================
-    let countdownTimer = null;
+sendBtn.addEventListener("click", sendMessage);
 
-    function getCountdownTarget(){
-      // Prefer next_match date (from /schedule.json)
-      if (scheduleData && scheduleData.next_match && scheduleData.next_match.date) {
-        // Set to start of that day local time
-        return new Date(scheduleData.next_match.date + "T00:00:00");
-      }
-      // Otherwise, default to World Cup 2026 kickoff day (keeps countdown feature alive)
-      return new Date("2026-06-11T00:00:00");
-    }
+// Enter to send, Shift+Enter newline
+msgEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
 
-    function startCountdown(){
-      const target = getCountdownTarget();
+// Auto-grow textarea
+msgEl.addEventListener("input", () => {
+  msgEl.style.height = "44px";
+  msgEl.style.height = Math.min(msgEl.scrollHeight, 130) + "px";
+});
 
-      const dEl = document.getElementById("d");
-      const hEl = document.getElementById("h");
-      const mEl = document.getElementById("m");
-      const sEl = document.getElementById("s");
+// -----------------------
+// Init
+// -----------------------
+(async function init(){
+  applyLanguageToUI();
 
-      function tick(){
-        const now = new Date();
-        let diff = Math.max(0, target - now);
-        const days = Math.floor(diff / (1000*60*60*24));
-        diff -= days*(1000*60*60*24);
-        const hrs = Math.floor(diff / (1000*60*60));
-        diff -= hrs*(1000*60*60);
-        const mins = Math.floor(diff / (1000*60));
-        diff -= mins*(1000*60);
-        const secs = Math.floor(diff / 1000);
+  // Load sidebar data
+  await loadSchedule();
+  await loadMenu();
 
-        dEl.textContent = days;
-        hEl.textContent = hrs;
-        mEl.textContent = mins;
-        sEl.textContent = secs;
-      }
+  // Welcome message (feature preserved)
+  addBubble("assistant", L().welcome);
+  history.push({role:"assistant", content: L().welcome});
 
-      tick();
-      if (countdownTimer) clearInterval(countdownTimer);
-      countdownTimer = setInterval(tick, 1000);
-    }
+  // Ensure focus
+  msgEl.focus();
+})();
+</script>
 
-    // ============================================================
-    // Schedule rendering + next match highlight (keeps feature)
-    // Matches app.py fields: id, date, time, venue, teams
-    // ============================================================
-    function renderSchedule(){
-      scheduleEl.innerHTML = "";
-
-      const matches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches : [];
-
-      if (!matches.length) {
-        const row = document.createElement("div");
-        row.className = "match";
-        row.innerHTML = `
-          <div class="left">
-            <div><b>${ui().schedule_empty}</b></div>
-            <div class="when">Tip: Add objects like { "id":"dal-001", "date":"2026-06-14", "time":"17:00", "venue":"AT&T Stadium", "teams":"TBD vs TBD" }</div>
-          </div>
-          <div class="pill">—</div>
-        `;
-        scheduleEl.appendChild(row);
-        return;
-      }
-
-      // Compute timestamps for sorting/highlighting
-      const withTs = matches.map(m => {
-        const dateStr = (m.date || "");
-        const timeStr = (m.time && m.time !== "TBD") ? m.time : "23:59:59";
-        const ts = Date.parse(dateStr + "T" + (timeStr.length === 5 ? (timeStr + ":00") : timeStr));
-        return { ...m, ts: isNaN(ts) ? Number.MAX_SAFE_INTEGER : ts };
-      }).sort((a,b)=>a.ts-b.ts);
-
-      const now = Date.now();
-      const upcoming = withTs.filter(m => m.ts >= now);
-      const nextId = upcoming.length ? upcoming[0].id : null;
-
-      withTs.forEach(m => {
-        const row = document.createElement("div");
-        row.className = "match" + (m.id === nextId ? " next" : "");
-
-        const timeTxt = (m.time && m.time !== "TBD") ? m.time : "TBD";
-        const teamsTxt = m.teams || "TBD vs TBD";
-        const venueTxt = m.venue || "Venue TBD";
-
-        row.innerHTML = `
-          <div class="left">
-            <div><b>${teamsTxt}</b></div>
-            <div class="when">${m.date || "—"} • ${timeTxt} • ${venueTxt}</div>
-          </div>
-          <div class="pill">${m.id || "—"}</div>
-        `;
-        scheduleEl.appendChild(row);
-      });
-    }
-
-    // ============================================================
-    // Match-day mode (MATCH app.py /schedule.json payload)
-    // ============================================================
-    function updateMatchDayMode(){
-      const isMatch = !!(scheduleData && scheduleData.is_match_day);
-
-      if (isMatch){
-        pillMode.textContent = "Mode: Match-day";
-        const banner = scheduleData.match_day_banner || "🏟️ Match-day hours";
-        matchBanner.textContent = banner;
-        matchBanner.classList.add("show");
-
-        matchdayBox.textContent = "🏟️ Match-day mode is ON today. Expect higher traffic — reserve early!";
-        matchdayBox.classList.add("show");
-      } else {
-        pillMode.textContent = "Mode: Standard";
-        matchBanner.classList.remove("show");
-        matchdayBox.classList.remove("show");
-      }
-    }
-
-    // ============================================================
-    // Menu rendering (uses /menu.json)
-    // ============================================================
-    function renderMenu(items){
-      menuEl.innerHTML = "";
-      (items || []).forEach(it => {
-        const d = document.createElement("div");
-        d.className = "menuitem";
-        d.innerHTML = `
-          <div class="name">${it.name || ""}</div>
-          <div class="desc">${it.desc || ""}</div>
-          <div class="price">${it.price || ""}</div>
-        `;
-        menuEl.appendChild(d);
-      });
-    }
-
-    // ============================================================
-    // Chat send (MATCH app.py: /chat expects language, session_id)
-    // ============================================================
-    async function sendMessage(){
-      const text = msgEl.value.trim();
-      if (!text) return;
-
-      addBubble("user", text);
-      history.push({role:"user", content:text});
-
-      msgEl.value = "";
-      msgEl.style.height = "44px";
-      setSending(true);
-
-      try{
-        const res = await fetch("/chat", {
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body: JSON.stringify({
-            message: text,
-            session_id: sessionId,
-            language: lang
-            // NOTE: app.py ignores history; we keep it client-side as your existing feature
-          })
-        });
-
-        const data = await res.json().catch(() => ({}));
-        const reply = (data && data.reply) ? data.reply : "Sorry — no reply received.";
-
-        addBubble("assistant", reply);
-        history.push({role:"assistant", content: reply});
-      } catch(e){
-        addBubble("assistant", "⚠️ Network error. Please try again.");
-      } finally{
-        setSending(false);
-        msgEl.focus();
-      }
-    }
-
-    document.getElementById("sendBtn").addEventListener("click", sendMessage);
-
-    // Enter to send, Shift+Enter newline
-    msgEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-
-    // Auto-grow textarea (keeps feature)
-    msgEl.addEventListener("input", () => {
-      msgEl.style.height = "44px";
-      msgEl.style.height = Math.min(msgEl.scrollHeight, 130) + "px";
-    });
-
-    // ============================================================
-    // Init
-    // ============================================================
-    (async function init(){
-      // activate correct button for stored lang
-      document.querySelectorAll(".langbtn").forEach(btn => {
-        btn.classList.toggle("active", btn.dataset.lang === lang);
-      });
-
-      applyLanguageToUI();
-
-      // load server data
-      await loadSchedule();
-      await loadMenu(lang);
-
-      // welcome message (keeps feature)
-      addBubble("assistant", ui().welcome);
-      history.push({role:"assistant", content: ui().welcome});
-      helperHint.textContent = ui().helper;
-    })();
-  </script>
 </body>
 </html>
