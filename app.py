@@ -5,7 +5,8 @@ import os
 import json
 import re
 import time
-from datetime import datetime, date, timezone
+import requests
+from datetime import datetime, date
 from typing import Dict, Any, Optional, List, Tuple
 
 from flask import Flask, request, jsonify, send_from_directory
@@ -13,6 +14,9 @@ from openai import OpenAI
 
 import gspread
 from google.oauth2.service_account import Credentials
+
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ============================================================
 # App + cache-busting (helps Render show latest index.html)
@@ -44,10 +48,11 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
+
 # ============================================================
 # Business Profile
 # ============================================================
-BUSINESS_PROFILE_PATH = "business_profile.txt"
+BUSINESS_PROFILE_PATH = os.path.join(BASE_DIR, "business_profile.txt")
 if not os.path.exists(BUSINESS_PROFILE_PATH):
     raise FileNotFoundError("business_profile.txt not found in the same folder as app.py.")
 
@@ -77,189 +82,24 @@ BUSINESS_RULES = {
     "match_day_banner": "🏟️ Match-day mode: Opening at 11am on match days!",
 }
 
+
 # ============================================================
-# World Cup 2026 schedule data
-# - We load ALL matches from a public JSON feed (no API key).
-# - Dallas-only schedule is filtered from the full list.
+# Dallas Match Schedule (dynamic from server)
+# - You can replace this list anytime.
+# - Format: ISO date/time in local venue time (for display)
 # ============================================================
-FIXTURE_FEED_URL = os.environ.get(
-    "FIXTURE_FEED_URL",
-    "https://fixturedownload.com/feed/json/fifa-world-cup-2026",
-)
+DALLAS_MATCHES = [
+    {'id': 'dal-011', 'date': '2026-06-14', 'time': '15:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'Netherlands vs Japan (Group F)'},
+    {'id': 'dal-022', 'date': '2026-06-17', 'time': '15:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'England vs Croatia (Group L)'},
+    {'id': 'dal-043', 'date': '2026-06-22', 'time': '12:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'Argentina vs Austria (Group J)'},
+    {'id': 'dal-057', 'date': '2026-06-25', 'time': '18:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'Japan vs UEFA Play-off Final B winner (Group F, TBD)'},
+    {'id': 'dal-070', 'date': '2026-06-27', 'time': '21:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'Jordan vs Argentina (Group J)'},
+    {'id': 'dal-r32-1', 'date': '2026-06-30', 'time': '12:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'Round of 32: Group E runner-up vs Group I runner-up'},
+    {'id': 'dal-r32-2', 'date': '2026-07-03', 'time': '13:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'Round of 32: Group D runner-up vs Group G runner-up'},
+    {'id': 'dal-r16', 'date': '2026-07-06', 'time': '14:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'Round of 16 (TBD vs TBD)'},
+    {'id': 'dal-sf', 'date': '2026-07-14', 'time': '14:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'Semifinal (TBD vs TBD)'},
+]
 
-# Location label used by the feed for Dallas/Arlington matches.
-# (Verified in the fixture feed as "Dallas Stadium".)
-DALLAS_LOCATION_KEYWORDS = ["dallas stadium", "arlington", "at&t"]
-
-# In-memory cache (plus optional disk cache) so we don't hit the feed too often.
-_fixtures_cache: Dict[str, Any] = {"loaded_at": 0, "matches": []}
-FIXTURE_CACHE_SECONDS = int(os.environ.get("FIXTURE_CACHE_SECONDS", str(6 * 60 * 60)))  # 6h
-FIXTURE_CACHE_FILE = os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_fixtures.json")
-
-
-def _safe_read_json_file(path: str) -> Optional[Any]:
-    try:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        return None
-    return None
-
-
-def _safe_write_json_file(path: str, payload: Any) -> None:
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False)
-    except Exception:
-        # best effort; don't fail the app if disk isn't writable
-        pass
-
-
-def _fetch_fixture_feed() -> List[Dict[str, Any]]:
-    """
-    Fetch fixture feed and return raw list of matches.
-    Expected schema example:
-      {
-        "MatchNumber": 1,
-        "RoundNumber": 1,
-        "DateUtc": "2026-06-11 19:00:00Z",
-        "Location": "Mexico City Stadium",
-        "HomeTeam": "Mexico",
-        "AwayTeam": "South Africa",
-        "Group": "Group A",
-        ...
-      }
-    """
-    import urllib.request
-
-    req = urllib.request.Request(
-        FIXTURE_FEED_URL,
-        headers={"User-Agent": "worldcup-concierge/1.0"},
-        method="GET",
-    )
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        raw = resp.read().decode("utf-8", errors="replace")
-    payload = json.loads(raw)
-    if not isinstance(payload, list):
-        raise ValueError("Fixture feed response was not a list")
-    return payload
-
-
-def _fmt_time_12h(dt_utc: datetime) -> str:
-    # Use the server's local timezone for display unless you change it.
-    local_dt = dt_utc.astimezone()  # local tz on Render (UTC) unless you set TZ
-    return local_dt.strftime("%-I:%M %p") if hasattr(local_dt, "strftime") else ""
-
-
-def _parse_dateutc(date_utc_str: str) -> Optional[datetime]:
-    """
-    Example: '2026-06-11 19:00:00Z'
-    """
-    try:
-        s = (date_utc_str or "").strip()
-        if not s:
-            return None
-        # Normalize to ISO-ish for fromisoformat by removing Z
-        if s.endswith("Z"):
-            s2 = s[:-1].replace(" ", "T")
-            dt = datetime.fromisoformat(s2)
-            return dt.replace(tzinfo=timezone.utc)
-        # fallback
-        s2 = s.replace(" ", "T")
-        dt = datetime.fromisoformat(s2)
-        return dt.replace(tzinfo=timezone.utc)
-    except Exception:
-        return None
-
-
-def load_all_matches(force: bool = False) -> List[Dict[str, Any]]:
-    """
-    Returns a normalized list of matches.
-
-    Each match:
-      {
-        "id": "wc-001",
-        "match_number": 1,
-        "stage": "Group A" / "Round of 32" / ...
-        "date": "2026-06-11",
-        "time": "7:00 PM",        # server-local formatted
-        "datetime_utc": "2026-06-11T19:00:00Z",
-        "venue": "Mexico City Stadium",
-        "home": "Mexico",
-        "away": "South Africa",
-      }
-    """
-    now = int(time.time())
-    if not force and _fixtures_cache["matches"] and (now - int(_fixtures_cache["loaded_at"] or 0) < FIXTURE_CACHE_SECONDS):
-        return _fixtures_cache["matches"]
-
-    # Try disk cache first (fast + survives restarts)
-    disk = _safe_read_json_file(FIXTURE_CACHE_FILE)
-    if disk and isinstance(disk, dict) and isinstance(disk.get("matches"), list):
-        loaded_at = int(disk.get("loaded_at") or 0)
-        if not force and loaded_at and (now - loaded_at < FIXTURE_CACHE_SECONDS):
-            _fixtures_cache["loaded_at"] = loaded_at
-            _fixtures_cache["matches"] = disk["matches"]
-            return _fixtures_cache["matches"]
-
-    # Fetch fresh
-    raw_matches = _fetch_fixture_feed()
-
-    norm: List[Dict[str, Any]] = []
-    for m in raw_matches:
-        dt = _parse_dateutc(m.get("DateUtc") or "")
-        if not dt:
-            continue
-
-        match_num = int(m.get("MatchNumber") or 0) or None
-        match_id = f"wc-{match_num:03d}" if match_num else f"wc-{len(norm)+1:03d}"
-
-        norm.append({
-            "id": match_id,
-            "match_number": match_num,
-            "stage": (m.get("Group") or "").strip() or "Match",
-            "date": dt.date().isoformat(),
-            "time": _fmt_time_12h(dt),
-            "datetime_utc": dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "venue": (m.get("Location") or "").strip(),
-            "home": (m.get("HomeTeam") or "").strip(),
-            "away": (m.get("AwayTeam") or "").strip(),
-        })
-
-    # Sort by kickoff UTC
-    norm.sort(key=lambda x: x.get("datetime_utc") or "")
-    _fixtures_cache["loaded_at"] = now
-    _fixtures_cache["matches"] = norm
-    _safe_write_json_file(FIXTURE_CACHE_FILE, {"loaded_at": now, "matches": norm})
-
-    return norm
-
-
-def is_dallas_match(m: Dict[str, Any]) -> bool:
-    v = (m.get("venue") or "").lower()
-    return any(k in v for k in DALLAS_LOCATION_KEYWORDS)
-
-
-def filter_matches(scope: str, q: str = "") -> List[Dict[str, Any]]:
-    scope = (scope or "dallas").lower().strip()
-    q = (q or "").strip().lower()
-
-    matches = load_all_matches()
-    if scope != "all":
-        matches = [m for m in matches if is_dallas_match(m)]
-
-    if q:
-        def hit(m):
-            return (q in (m.get("home","").lower())
-                    or q in (m.get("away","").lower())
-                    or q in (m.get("venue","").lower())
-                    or q in (m.get("stage","").lower())
-                    or q in (m.get("date","").lower()))
-        matches = [m for m in matches if hit(m)]
-
-    return matches
 
 
 # ============================================================
@@ -304,6 +144,7 @@ MENU = {
     },
 }
 
+
 # ============================================================
 # Language strings (prompts + “recall”)
 # ============================================================
@@ -315,7 +156,7 @@ LANG = {
         "ask_party": "How many people are in your party?",
         "ask_name": "What name should we put the reservation under?",
         "ask_phone": "What phone number should we use?",
-        "recall_title": "📌 Reservation so far:",
+        "recall_title": "Reservation so far:",
         "recall_empty": "No reservation details yet. Say “reservation” to start.",
         "saved": "✅ Reservation saved!",
         "rule_party": "⚠️ That party size is above our limit. Please call the business to confirm a larger group.",
@@ -328,7 +169,7 @@ LANG = {
         "ask_party": "¿Cuántas personas serán?",
         "ask_name": "¿A nombre de quién será la reserva?",
         "ask_phone": "¿Qué número de teléfono debemos usar?",
-        "recall_title": "📌 Reserva hasta ahora:",
+        "recall_title": "Reserva hasta ahora:",
         "recall_empty": "Aún no hay detalles. Escribe “reserva” para comenzar.",
         "saved": "✅ ¡Reserva guardada!",
         "rule_party": "⚠️ Ese tamaño de grupo supera nuestro límite. Llama al negocio para confirmar un grupo grande.",
@@ -341,7 +182,7 @@ LANG = {
         "ask_party": "Quantas pessoas?",
         "ask_name": "Em qual nome devemos colocar a reserva?",
         "ask_phone": "Qual número de telefone devemos usar?",
-        "recall_title": "📌 Reserva até agora:",
+        "recall_title": "Reserva até agora:",
         "recall_empty": "Ainda não há detalhes. Digite “reserva” para começar.",
         "saved": "✅ Reserva salva!",
         "rule_party": "⚠️ Esse tamanho de grupo excede o limite. Ligue para confirmar um grupo maior.",
@@ -354,7 +195,7 @@ LANG = {
         "ask_party": "Pour combien de personnes ?",
         "ask_name": "Au nom de qui ?",
         "ask_phone": "Quel numéro de téléphone devons-nous utiliser ?",
-        "recall_title": "📌 Réservation jusqu’ici :",
+        "recall_title": "Réservation jusqu’ici :",
         "recall_empty": "Aucun détail pour l’instant. Dites « réservation » pour commencer.",
         "saved": "✅ Réservation enregistrée !",
         "rule_party": "⚠️ Ce nombre dépasse notre limite. Veuillez appeler pour un grand groupe.",
@@ -459,6 +300,193 @@ def read_leads(limit: int = 200) -> List[List[str]]:
 
 
 # ============================================================
+# Schedule helpers
+# ============================================================
+
+# ============================================================
+# World Cup 2026 All-Matches (dynamic via FIFA API) + cache
+# ============================================================
+_ALL_MATCHES_CACHE: Dict[str, Any] = {"ts": 0.0, "matches": []}
+
+def _iso_to_date_time(dt_str: str) -> Tuple[Optional[str], Optional[str]]:
+    """Return (YYYY-MM-DD, HH:MM) from an ISO datetime string."""
+    if not dt_str:
+        return None, None
+    s = dt_str.strip()
+    # normalize 'Z'
+    s = s.replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(s)
+        return dt.date().isoformat(), dt.strftime("%H:%M")
+    except Exception:
+        return None, None
+
+def fetch_worldcup_2026_matches() -> List[Dict[str, Any]]:
+    """Fetch the 2026 World Cup match list (104 fixtures) from FIFA's public API.
+    This is used for the 'All matches' scope. If the API is unreachable, returns [].
+    """
+    # Tournament window (official match schedule is in June/July 2026)
+    from_ = os.environ.get("WC2026_FROM", "2026-06-01T00:00:00Z")
+    to_   = os.environ.get("WC2026_TO",   "2026-07-31T23:59:59Z")
+
+    url = (
+        "https://api.fifa.com/api/v3/calendar/matches"
+        f"?language=en&count=500&from={from_}&to={to_}"
+    )
+    r = requests.get(url, timeout=15)
+    r.raise_for_status()
+    payload = r.json()
+
+    # FIFA uses different keys over time; try common variants
+    items = (
+        payload.get("Results")
+        or payload.get("results")
+        or payload.get("Matches")
+        or payload.get("matches")
+        or []
+    )
+
+    out: List[Dict[str, Any]] = []
+    for it in items:
+        # Filter to World Cup 2026-ish entries (best effort)
+        comp = (
+            str(it.get("CompetitionName") or it.get("Competition", {}).get("Name") or "")
+            + " "
+            + str(it.get("SeasonName") or it.get("Season", {}).get("Name") or "")
+        ).lower()
+        if "world cup" not in comp:
+            continue
+
+        # id
+        mid = it.get("IdMatch") or it.get("Id") or it.get("MatchId") or it.get("matchId") or ""
+        mid = str(mid) if mid is not None else ""
+
+        # date/time (prefer local if present)
+        d_iso, t_24 = _iso_to_date_time(
+            it.get("LocalDate") or it.get("localDate") or it.get("Date") or it.get("date") or ""
+        )
+
+        # venue / city
+        stadium = it.get("Stadium") or it.get("stadium") or {}
+        venue = (
+            stadium.get("Name")
+            or stadium.get("name")
+            or it.get("StadiumName")
+            or it.get("stadiumName")
+            or ""
+        )
+        city = (
+            it.get("CityName")
+            or it.get("cityName")
+            or stadium.get("CityName")
+            or stadium.get("cityName")
+            or ""
+        )
+        venue_txt = venue
+        if city and city.lower() not in str(venue_txt).lower():
+            venue_txt = f"{venue_txt} ({city})" if venue_txt else city
+
+        # teams
+        home = it.get("Home") or it.get("home") or it.get("HomeTeam") or it.get("homeTeam") or {}
+        away = it.get("Away") or it.get("away") or it.get("AwayTeam") or it.get("awayTeam") or {}
+
+        def _team_name(obj: Any) -> str:
+            if not isinstance(obj, dict):
+                return ""
+            # common
+            for k in ["TeamName", "teamName", "Name", "name", "ShortName", "shortName"]:
+                v = obj.get(k)
+                if isinstance(v, str) and v.strip():
+                    return v.strip()
+                # sometimes list of localized names
+                if isinstance(v, list) and v:
+                    if isinstance(v[0], dict):
+                        desc = v[0].get("Description") or v[0].get("description")
+                        if desc:
+                            return str(desc).strip()
+            # nested team
+            team = obj.get("Team") or obj.get("team") or {}
+            if isinstance(team, dict):
+                nm = team.get("Name") or team.get("name") or team.get("ShortName") or team.get("shortName") or ""
+                if nm:
+                    return str(nm).strip()
+            return ""
+
+        hname = _team_name(home) or "TBD"
+        aname = _team_name(away) or "TBD"
+        teams = f"{hname} vs {aname}"
+
+        out.append({
+            "id": mid or f"wc-2026-{len(out)+1:03d}",
+            "date": d_iso or "",
+            "time": t_24 or "TBD",
+            "venue": venue_txt or "",
+            "teams": teams,
+        })
+
+    # Deduplicate by id
+    seen=set()
+    uniq=[]
+    for m in out:
+        if m["id"] in seen:
+            continue
+        seen.add(m["id"])
+        uniq.append(m)
+
+    return uniq
+
+def get_all_matches_cached(max_age_seconds: int = 6 * 60 * 60) -> List[Dict[str, Any]]:
+    now = time.time()
+    if _ALL_MATCHES_CACHE["matches"] and (now - float(_ALL_MATCHES_CACHE["ts"])) < max_age_seconds:
+        return _ALL_MATCHES_CACHE["matches"]
+    try:
+        matches = fetch_worldcup_2026_matches()
+    except Exception:
+        matches = []
+    _ALL_MATCHES_CACHE["ts"] = now
+    _ALL_MATCHES_CACHE["matches"] = matches
+    return matches
+
+def get_dallas_matches_from_all(all_matches: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if DALLAS_MATCHES:
+        return DALLAS_MATCHES
+    # Best-effort filter by known DFW venues/cities
+    keys = ["arlington", "dallas", "at&t", "att stadium", "at&t stadium", "dfw"]
+    out=[]
+    for m in all_matches:
+        hay = f"{m.get('venue','')} {m.get('city','')}".lower()
+        if any(k in hay for k in keys):
+            out.append(m)
+    return out
+
+def parse_iso_date(d: str) -> Optional[date]:
+    try:
+        return datetime.strptime(d, "%Y-%m-%d").date()
+    except Exception:
+        return None
+
+
+def get_next_match(now_date: date) -> Optional[Dict[str, Any]]:
+    future = []
+    for m in DALLAS_MATCHES:
+        md = parse_iso_date(m.get("date", ""))
+        if not md:
+            continue
+        if md >= now_date:
+            future.append((md, m))
+    future.sort(key=lambda x: x[0])
+    return future[0][1] if future else None
+
+
+def is_match_day(now_date: date) -> bool:
+    for m in DALLAS_MATCHES:
+        md = parse_iso_date(m.get("date", ""))
+        if md == now_date:
+            return True
+    return False
+
+
+# ============================================================
 # Reservation state machine (in-memory sessions)
 # ============================================================
 _sessions: Dict[str, Dict[str, Any]] = {}
@@ -505,6 +533,48 @@ def want_reservation(text: str) -> bool:
     return any(k in t for k in ["reservation", "reserve", "book a table", "table for", "reserva", "réservation"])
 
 
+
+def extract_name_candidate(text: str) -> Optional[str]:
+    """Best-effort name extraction from a mixed reservation sentence.
+    Example: 'Jeff party of 6 5pm June 18 2157779999' -> 'Jeff'
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return None
+
+    lowered = raw.lower().strip()
+    # Don't treat control intents as names
+    if lowered in {"reservation", "reserve", "reserva", "réservation", "book", "booking"}:
+        return None
+    if want_reservation(raw) or want_recall(raw, "en") or "recall" in lowered:
+        return None
+
+    # Take everything before the first keyword that likely starts non-name info
+    lower = raw.lower()
+    cut_keywords = [" party", "party", " table", "table", " at ", " on ", " for ", " pm", " am", "/", "-", ":", "phone"]
+    cut_at = len(raw)
+    for kw in cut_keywords:
+        idx = lower.find(kw)
+        if idx != -1:
+            cut_at = min(cut_at, idx)
+    head = raw[:cut_at].strip()
+
+    # Remove digits and symbols; keep letters/spaces/apostrophes
+    head = re.sub(r"[^A-Za-zÀ-ÿ' ]+", " ", head)
+    head = re.sub(r"\s+", " ", head).strip()
+
+    # Must contain at least 2 letters total
+    if len(re.sub(r"[^A-Za-zÀ-ÿ]+", "", head)) < 2:
+        return None
+
+    # Limit to a few words
+    parts = head.split()
+    head = " ".join(parts[:4]).strip()
+    if 2 <= len(head) <= 40:
+        return head
+    return None
+
+
 def extract_party_size(text: str) -> Optional[int]:
     t = text.lower()
     m = re.search(r"party\s*of\s*(\d+)", t)
@@ -522,65 +592,11 @@ def extract_party_size(text: str) -> Optional[int]:
 
 
 def extract_phone(text: str) -> Optional[str]:
-    """Extract a US phone number from free text.
-    Looks for a 10-digit sequence (optionally preceded by country code 1),
-    and ignores other digits (party size, dates, times).
-    """
-    s = (text or "").strip()
-    if not s:
-        return None
-
-    # Prefer explicit 10-digit runs anywhere in the string
-    digits_only = re.sub(r"\D+", "", s)
-
-    # Try to find a 10-digit chunk inside the full digit stream (e.g., '...2157779999')
-    m = re.search(r"(\d{10})", digits_only)
-    if m:
-        return m.group(1)
-
-    # Try common separated formats: (215) 777-9999, 215-777-9999, 1 215 777 9999
-    m = re.search(r"(?:\b1\D*)?(\d{3})\D*(\d{3})\D*(\d{4})\b", s)
-    if m:
-        return f"{m.group(1)}{m.group(2)}{m.group(3)}"
-
-    return None
-
-
-def extract_name(text: str) -> Optional[str]:
-    """Best-effort name extraction from a mixed reservation message."""
-    raw = (text or "").strip()
-    if not raw:
-        return None
-    lower = raw.lower().strip()
-
-    # Don't treat reservation trigger words as a person's name
-    trigger_words = {
-        "reservation", "reserve", "reserving", "book", "booking", "book a table",
-        "reserva", "reservar", "réservation", "réservation"
-    }
-    if lower in trigger_words:
-        return None
-
-    # If message contains 'party', take words before 'party'
-    if "party" in lower:
-        pre = raw[:lower.find("party")].strip()
-        pre = re.sub(r"[^A-Za-z\s\-\'\.]", "", pre).strip()
-        pre = re.sub(r"\s+", " ", pre)
-        if 1 <= len(pre) <= 40:
-            return pre
-
-    # Otherwise, take leading letters until the first digit
-    name_part = ""
-    for ch in raw:
-        if ch.isdigit():
-            break
-        name_part += ch
-    name_part = name_part.strip()
-    name_part = re.sub(r"\s+", " ", name_part)
-    name_part = re.sub(r"[^A-Za-z\s\-\'\.]", "", name_part).strip()
-    if 1 <= len(name_part) <= 40:
-        return name_part
-
+    digits = re.sub(r"\D+", "", text)
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    if len(digits) == 10:
+        return digits
     return None
 
 
@@ -652,70 +668,6 @@ def extract_date(text: str) -> Optional[str]:
     return None
 
 
-def extract_name_candidate(text: str) -> Optional[str]:
-    """Best-effort name extraction from a mixed reservation message.
-
-    Example:
-      'jeff party of 6 5pm june 18 2157779999' -> 'jeff'
-    """
-    s = (text or "").strip()
-    if not s:
-        return None
-
-    lower = s.lower().strip()
-    # Don't treat trigger words as names
-    if lower in ["reservation", "reserva", "réservation", "reserve", "book", "book a table"]:
-        return None
-
-    # Remove phone numbers (many formats)
-    s = re.sub(r"\b(?:\+?1\s*)?\(?\d{3}\)?[-.\s]*\d{3}[-.\s]*\d{4}\b", " ", s)
-
-    # Remove explicit party/table patterns
-    s = re.sub(r"\bparty\s*of\s*\d+\b", " ", s, flags=re.I)
-    s = re.sub(r"\btable\s*(?:for|of)\s*\d+\b", " ", s, flags=re.I)
-
-    # Remove time patterns (5pm, 5:30 pm, 17:00)
-    s = re.sub(r"\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b", " ", s, flags=re.I)
-    s = re.sub(r"\b\d{1,2}:\d{2}\b", " ", s)
-
-    # Remove ISO / slash dates
-    s = re.sub(r"\b20\d{2}-\d{2}-\d{2}\b", " ", s)
-    s = re.sub(r"\b\d{1,2}/\d{1,2}/\d{2,4}\b", " ", s)
-
-    # Remove month-name dates (English/Spanish/Portuguese/French month words)
-    month_words = [
-        "january","jan","february","feb","march","mar","april","apr","may","june","jun","july","jul",
-        "august","aug","september","sep","sept","october","oct","november","nov","december","dec",
-        "enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre",
-        "janeiro","fevereiro","março","marco","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro",
-        "janvier","février","fevrier","mars","avril","mai","juin","juillet","août","aout","septembre","octobre","novembre","décembre","decembre",
-    ]
-    s = re.sub(r"\b(?:" + "|".join(re.escape(w) for w in month_words) + r")\b", " ", s, flags=re.I)
-
-    # Remove standalone small numbers (party size, day)
-    s = re.sub(r"\b\d{1,3}\b", " ", s)
-
-    # Remove reservation keywords
-    s = re.sub(r"\b(reservation|reserve|book|booking|table|party|for|of)\b", " ", s, flags=re.I)
-
-    # Keep letters/apostrophes/spaces only
-    s = re.sub(r"[^A-Za-z'\s]", " ", s)
-    s = re.sub(r"\s+", " ", s).strip()
-
-    if not s:
-        return None
-
-    # Take up to first 3 words as name (e.g., 'Jeff Smith')
-    parts = s.split()
-    name = " ".join(parts[:3]).strip()
-    if 1 <= len(name) <= 40:
-        return name
-    return None
-
-
-
-
-
 def validate_date_iso(d_iso: str) -> bool:
     try:
         datetime.strptime(d_iso, "%Y-%m-%d")
@@ -742,15 +694,14 @@ def recall_text(sess: Dict[str, Any]) -> str:
     lang = sess.get("lang", "en")
     L = LANG[lang]
     lead = sess["lead"]
+    parts = []
     if any([lead.get("date"), lead.get("time"), lead.get("party_size"), lead.get("name"), lead.get("phone")]):
-        parts = [
-            L["recall_title"],
-            f"Date: {lead.get('date') or '—'}",
-            f"Time: {lead.get('time') or '—'}",
-            f"Party size: {lead.get('party_size') or '—'}",
-            f"Name: {lead.get('name') or '—'}",
-            f"Phone: {lead.get('phone') or '—'}",
-        ]
+        parts.append(L["recall_title"])
+        parts.append(f"- Date: {lead.get('date') or '—'}")
+        parts.append(f"- Time: {lead.get('time') or '—'}")
+        parts.append(f"- Party size: {lead.get('party_size') or '—'}")
+        parts.append(f"- Name: {lead.get('name') or '—'}")
+        parts.append(f"- Phone: {lead.get('phone') or '—'}")
         return "\n".join(parts)
     return L["recall_empty"]
 
@@ -778,7 +729,7 @@ def next_question(sess: Dict[str, Any]) -> str:
 # ============================================================
 @app.route("/")
 def home():
-    return send_from_directory(".", "index.html")
+    return send_from_directory(BASE_DIR, "index.html")
 
 
 @app.route("/health")
@@ -798,6 +749,56 @@ def version():
         return jsonify({"error": repr(e)}), 500
 
 
+# ============================================================
+# Backward-compatible API routes for older index.html builds
+# ============================================================
+DEFAULT_COUNTDOWN_TARGET = os.environ.get("COUNTDOWN_TARGET", "2026-06-11T00:00:00")
+
+UI_HELPER = {
+    "en": 'Try: "reservation" to book • "Recall reservation so far" • Ask about the menu • Ask about Dallas match days.',
+    "es": 'Prueba: "reserva" para reservar • "Recordar reserva" • Pregunta por el menú • Pregunta por los partidos en Dallas.',
+    "pt": 'Tente: "reserva" para reservar • "Relembrar reserva" • Pergunte sobre o cardápio • Pergunte sobre jogos em Dallas.',
+    "fr": 'Essayez : "réservation" pour réserver • "Rappeler la réservation" • Demandez le menu • Demandez les matchs à Dallas.',
+}
+
+UI_LANG_SET = {
+    "en": "Language set to English.",
+    "es": "Idioma cambiado a Español.",
+    "pt": "Idioma definido para Português.",
+    "fr": "Langue définie sur Français.",
+}
+
+
+@app.route("/api/config")
+def api_config():
+    return jsonify({
+        "countdown_target": DEFAULT_COUNTDOWN_TARGET,
+        "business_rules": BUSINESS_RULES,
+    })
+
+
+@app.route("/api/ui")
+def api_ui():
+    lang = norm_lang(request.args.get("lang", "en"))
+    strings = dict(LANG[lang])
+    # extra strings expected by older frontends
+    strings["helper"] = UI_HELPER.get(lang, UI_HELPER["en"])
+    strings["lang_set"] = UI_LANG_SET.get(lang, UI_LANG_SET["en"])
+    return jsonify({"lang": lang, "strings": strings})
+
+
+@app.route("/api/schedule")
+def api_schedule():
+    # same payload as /schedule.json, but kept for older frontends
+    return schedule_json()
+
+
+@app.route("/api/menu")
+def api_menu():
+    # older frontend expects {items:[...]} (no wrapper)
+    lang = norm_lang(request.args.get("lang", "en"))
+    return jsonify({"lang": lang, "items": MENU[lang]["items"]})
+
 @app.route("/menu.json")
 def menu_json():
     lang = norm_lang(request.args.get("lang", "en"))
@@ -806,50 +807,55 @@ def menu_json():
 
 @app.route("/schedule.json")
 def schedule_json():
-    """
-    Query params:
-      scope= dallas | all   (default: dallas)
-      q= search text (team, venue, group, date)
-    """
     scope = (request.args.get("scope") or "dallas").lower().strip()
-    q = request.args.get("q") or ""
+    q = (request.args.get("q") or "").strip().lower()
 
-    try:
-        matches = filter_matches(scope=scope, q=q)
-        today = datetime.now().date()
-        is_match = any(m.get("date") == today.isoformat() for m in matches) if scope != "all" else any(
-            m.get("date") == today.isoformat() and is_dallas_match(m) for m in load_all_matches()
-        )
+    today = datetime.now().date()
 
-        # next match (by datetime_utc string sort already)
-        nxt = None
-        now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    all_matches = get_all_matches_cached()
+    dallas_matches = get_dallas_matches_from_all(all_matches)
+
+    matches = dallas_matches if scope != "all" else all_matches
+
+    # Server-side filter (before pagination on client)
+    if q:
+        def hit(m: Dict[str, Any]) -> bool:
+            return q in (m.get("teams","").lower() + " " + m.get("venue","").lower() + " " + m.get("date","").lower())
+        matches = [m for m in matches if hit(m)]
+
+    # Match-day mode should be based on Dallas matches
+    is_md = any(parse_iso_date(m.get("date","")) == today for m in dallas_matches)
+    # next match for current scope (best-effort)
+    def _next_from(list_matches: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        future=[]
+        for m in list_matches:
+            md = parse_iso_date(m.get("date",""))
+            if md and md >= today:
+                future.append((md, m))
+        future.sort(key=lambda x: x[0])
+        return future[0][1] if future else None
+
+    nxt = _next_from(matches)
+
+    if scope == "all":
+        future=[]
         for m in matches:
-            if (m.get("datetime_utc") or "") >= now_utc:
-                nxt = m
-                break
+            md = parse_iso_date(m.get("date",""))
+            if md and md >= today:
+                future.append((md, m))
+        future.sort(key=lambda x: x[0])
+        nxt = future[0][1] if future else None
 
-        return jsonify({
-            "scope": scope,
-            "query": q,
-            "today": today.isoformat(),
-            "is_match_day": bool(is_match),
-            "match_day_banner": BUSINESS_RULES.get("match_day_banner", ""),
-            "next_match": nxt,
-            "matches": matches,
-        })
-    except Exception as e:
-        # If the feed is unavailable, don't break the whole page.
-        return jsonify({
-            "scope": scope,
-            "query": q,
-            "today": datetime.now().date().isoformat(),
-            "is_match_day": False,
-            "match_day_banner": BUSINESS_RULES.get("match_day_banner", ""),
-            "next_match": None,
-            "matches": [],
-            "notice": f"Schedule temporarily unavailable: {repr(e)}",
-        })
+    return jsonify({
+        "scope": scope,
+        "query": q,
+        "today": today.isoformat(),
+        "is_match_day": is_md,
+        "match_day_banner": BUSINESS_RULES.get("match_day_banner", ""),
+        "next_match": nxt,
+        "count": len(matches),
+        "matches": matches,
+    })
 
 
 @app.route("/test-sheet")
@@ -925,7 +931,7 @@ def chat():
 
     data = request.get_json(force=True) or {}
     msg = (data.get("message") or "").strip()
-    lang = norm_lang(data.get("language") or data.get("lang"))
+    lang = norm_lang(data.get("language"))
     sid = get_session_id()
     sess = get_session(sid)
 
@@ -943,23 +949,37 @@ def chat():
     # start reservation flow if user indicates intent
     if sess["mode"] == "idle" and want_reservation(msg):
         sess["mode"] = "reserving"
+        # attempt to extract any info from this first message
+        d_iso = extract_date(msg)
+        if d_iso and validate_date_iso(d_iso):
+            sess["lead"]["date"] = d_iso
+        t = extract_time(msg)
+        if t:
+            sess["lead"]["time"] = t
+        ps = extract_party_size(msg)
+        if ps:
+            sess["lead"]["party_size"] = ps
+        ph = extract_phone(msg)
+        if ph:
+            sess["lead"]["phone"] = ph
 
-        # IMPORTANT: do NOT treat the word "reservation" as the name.
-        # Clear any accidental name just in case.
-        if msg.lower().strip() in ["reservation", "reserva", "réservation"]:
-            sess["lead"]["name"] = ""
+        nm = extract_name_candidate(msg)
+        if nm:
+            sess["lead"]["name"] = nm
 
         q = next_question(sess)
         return jsonify({"reply": q, "rate_limit_remaining": remaining})
 
     # If reserving, keep collecting fields deterministically
     if sess["mode"] == "reserving":
-        # Extract fields from message (order doesn't matter)
+        # Try extract fields from the new message
         d_iso = extract_date(msg)
         if d_iso:
             if validate_date_iso(d_iso):
                 sess["lead"]["date"] = d_iso
             else:
+                # invalid date like June 31
+                # ask for date again
                 return jsonify({"reply": LANG[lang]["ask_date"], "rate_limit_remaining": remaining})
 
         t = extract_time(msg)
@@ -974,11 +994,12 @@ def chat():
         if ph:
             sess["lead"]["phone"] = ph
 
-        # NAME extraction
+        # name (best-effort): support mixed messages like:
+        #   Jeff party of 6 5pm June 18 2157779999
         if not sess["lead"]["name"]:
-            cand = extract_name_candidate(msg)
-            if cand:
-                sess["lead"]["name"] = cand
+            nm = extract_name_candidate(msg)
+            if nm:
+                sess["lead"]["name"] = nm
 
         # apply business rules if we have enough to check
         rule = apply_business_rules(sess["lead"])
@@ -994,6 +1015,7 @@ def chat():
         if lead.get("date") and lead.get("time") and lead.get("party_size") and lead.get("name") and lead.get("phone"):
             try:
                 append_lead_to_sheet(lead)
+                # reset session mode but keep language
                 sess["mode"] = "idle"
                 saved_msg = LANG[lang]["saved"]
                 confirm = (
@@ -1004,16 +1026,18 @@ def chat():
                     f"Time: {lead['time']}\n"
                     f"Party size: {lead['party_size']}"
                 )
+                # clear lead for next reservation
                 sess["lead"] = {"name": "", "phone": "", "date": "", "time": "", "party_size": 0, "language": lang}
                 return jsonify({"reply": confirm, "rate_limit_remaining": remaining})
             except Exception as e:
                 return jsonify({"reply": f"⚠️ Could not save reservation: {repr(e)}", "rate_limit_remaining": remaining}), 500
 
-        # Otherwise ask next missing field
+        # Otherwise ask next missing field (in selected language)
         q = next_question(sess)
         return jsonify({"reply": q, "rate_limit_remaining": remaining})
 
     # Otherwise: normal Q&A using OpenAI (with language + business profile + menu)
+    # (We keep this for general questions, not reservations.)
     system_msg = f"""
 You are a World Cup 2026 Dallas business concierge.
 
@@ -1026,7 +1050,7 @@ Menu (source of truth, language={lang}):
 Rules:
 - Be friendly, fast, and concise.
 - Always respond in the user's chosen language: {lang}.
-- If user asks about the World Cup match schedule, tell them to use the schedule panel on the page.
+- If user asks about the Dallas World Cup match schedule, tell them you can show the on-page schedule.
 - If user asks to make a reservation, instruct them to type "reservation" (or equivalent) to start.
 """
 
