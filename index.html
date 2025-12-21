@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>World Cup 2026 Dallas Concierge</title>
-
   <style>
     :root{
       --bg:#071022;
@@ -19,18 +18,16 @@
     }
     body{
       margin:0; height:100vh; display:flex; flex-direction:column;
-      font-family: Arial, sans-serif;
-      background: radial-gradient(1200px 600px at 20% 10%, #132a5b 0%, var(--bg) 55%);
+      font-family: Arial, sans-serif; background: radial-gradient(1200px 600px at 20% 10%, #132a5b 0%, var(--bg) 55%);
       color:var(--text);
     }
     .wrap{max-width:1050px; width:100%; margin:0 auto; display:flex; flex-direction:column; height:100%;}
     header{
-      padding:16px 18px;
-      background: linear-gradient(90deg, #0b1733 0%, #0f1b33 55%, #102246 100%);
+      padding:16px 18px; background: linear-gradient(90deg, #0b1733 0%, #0f1b33 55%, #102246 100%);
       border-bottom:1px solid var(--line);
     }
     .toprow{display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;}
-    .brand{display:flex; gap:12px; align-items:center;}
+    .brand{ display:flex; gap:12px; align-items:center; }
     .badge{
       width:44px; height:44px; border-radius:12px;
       background: linear-gradient(135deg, #f5d76e 0%, #2ea043 45%, #1f6feb 100%);
@@ -50,7 +47,6 @@
       user-select:none;
     }
     .langbtn.active{background:rgba(46,160,67,.18); border-color:rgba(46,160,67,.45);}
-
     .grid{
       display:grid;
       grid-template-columns: 1.2fr .8fr;
@@ -59,8 +55,9 @@
       flex:1;
       min-height:0;
     }
-    @media (max-width: 950px){ .grid{grid-template-columns:1fr;} }
-
+    @media (max-width: 950px){
+      .grid{grid-template-columns:1fr;}
+    }
     .card{
       background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.03) 100%);
       border:1px solid var(--line);
@@ -95,7 +92,6 @@
       display:none;
     }
     .banner.show{display:block;}
-
     #chat{
       padding:14px;
       height:100%;
@@ -122,7 +118,6 @@
       align-self:flex-start;
       background: rgba(0,0,0,.18);
     }
-
     .composer{
       display:flex;
       gap:10px;
@@ -156,9 +151,7 @@
       min-width:92px;
     }
     button:disabled{opacity:.6; cursor:not-allowed;}
-
     .sidepad{padding:12px 14px;}
-
     .countdown{
       display:flex;
       align-items:center;
@@ -178,7 +171,6 @@
     }
     .nums span{color:var(--text);}
     .nums b{color:#f5d76e;}
-
     .schedule{max-height:260px; overflow:auto;}
     .match{
       display:flex;
@@ -194,7 +186,6 @@
       background: rgba(46,160,67,.18);
       border-top:1px solid rgba(46,160,67,.35);
     }
-
     .matchday{
       margin:12px 14px 0;
       padding:10px 12px;
@@ -205,7 +196,6 @@
       display:none;
     }
     .matchday.show{display:block;}
-
     .menu{
       border-top:1px solid rgba(255,255,255,.10);
       padding:10px 12px;
@@ -223,7 +213,6 @@
     .menuitem .name{font-weight:800;}
     .menuitem .desc{color:var(--muted); margin-top:3px;}
     .menuitem .price{margin-top:6px; font-weight:800; color:#f5d76e;}
-
     .hint{
       padding:10px 14px;
       font-size:12px;
@@ -245,7 +234,6 @@
             <div class="sub">Reserve tables, see Dallas match schedule, and chat in English • Español • Português • Français</div>
           </div>
         </div>
-
         <div class="langbar" aria-label="Language toggle">
           <div class="langbtn active" data-lang="en">English</div>
           <div class="langbtn" data-lang="es">Español</div>
@@ -304,10 +292,9 @@
         <div class="schedule" id="schedule"></div>
 
         <div class="cardhead" style="border-top:1px solid var(--line); border-bottom:none;">
-          <div class="title">Menu</div>
+          <div class="title" id="menuTitle">Menu</div>
           <div class="pill">4 languages</div>
         </div>
-
         <div class="menu" id="menu"></div>
       </div>
     </div>
@@ -315,22 +302,8 @@
 
   <script>
     // =========================================================
-    // IMPORTANT: This rewrite keeps every feature you already had:
-    // - multi-language toggle (EN/ES/PT/FR)
-    // - chat w/ client-side history + session_id
-    // - schedule rendering + next match highlight
-    // - match-day mode banner/box
-    // - countdown timer
-    // - menu localized
-    //
-    // AND it is "app.py update friendly":
-    // - it auto-detects / falls back across common endpoint changes
-    // - it tolerates config shape changes (countdown_target names, etc.)
-    // =========================================================
-
-    // -----------------------
     // Session + state
-    // -----------------------
+    // =========================================================
     const sessionId = (localStorage.getItem("session_id") || (() => {
       const id = "sess_" + Math.random().toString(16).slice(2) + "_" + Date.now();
       localStorage.setItem("session_id", id);
@@ -339,16 +312,38 @@
 
     let lang = localStorage.getItem("lang") || "en";
 
-    // server-provided payloads
-    let ui = null;
-    let config = null;
-    let scheduleData = null;
+    // Mirrors app.py LANG strings (client-side UI only)
+    const UI = {
+      en: {
+        welcome: "Hi! Want to book a table for a match day? Ask me anything.",
+        helper: "Tips:\n• Type “reservation” to start a booking.\n• Type “Recall reservation so far” to see what I’ve captured.\n• You can also ask about the menu or match schedule.",
+        lang_set: "Language set to English."
+      },
+      es: {
+        welcome: "¡Hola! ¿Quieres reservar una mesa para un día de partido? Pregúntame lo que sea.",
+        helper: "Consejos:\n• Escribe “reserva” para comenzar.\n• Escribe “Recordar reserva” para ver lo guardado.\n• También puedes preguntar por el menú o el calendario.",
+        lang_set: "Idioma cambiado a Español."
+      },
+      pt: {
+        welcome: "Olá! Quer reservar uma mesa para dia de jogo? Pergunte qualquer coisa.",
+        helper: "Dicas:\n• Digite “reserva” para começar.\n• Digite “Relembrar reserva” para ver o que foi salvo.\n• Você também pode perguntar sobre o cardápio ou a agenda.",
+        lang_set: "Idioma definido para Português."
+      },
+      fr: {
+        welcome: "Bonjour ! Vous voulez réserver une table pour un jour de match ? Demandez-moi !",
+        helper: "Astuces :\n• Écrivez “réservation” pour commencer.\n• Écrivez “Rappeler la réservation” pour revoir les détails.\n• Vous pouvez aussi demander le menu ou le calendrier.",
+        lang_set: "Langue définie sur Français."
+      }
+    };
 
     // Conversation memory (client-side history)
-    // NOTE: we keep this EXACT feature; we only sanitize outgoing shape to match server variants.
     const history = [];
 
-    // DOM
+    // Server data
+    let scheduleData = null;   // from /schedule.json
+    let menuData = null;       // from /menu.json
+
+    // Elements
     const chatEl = document.getElementById("chat");
     const msgEl = document.getElementById("msg");
     const sendBtn = document.getElementById("sendBtn");
@@ -357,19 +352,12 @@
     const pillMode = document.getElementById("pillMode");
     const matchBanner = document.getElementById("matchBanner");
     const matchdayBox = document.getElementById("matchdayBox");
-
-    // -----------------------
-    // Utilities
-    // -----------------------
-    function safeText(v){
-      // Never inject server text via innerHTML by default (prevents XSS)
-      return (v === null || v === undefined) ? "" : String(v);
-    }
+    const menuTitle = document.getElementById("menuTitle");
 
     function addBubble(role, text){
       const b = document.createElement("div");
       b.className = "bubble " + (role === "user" ? "user" : "bot");
-      b.textContent = safeText(text);
+      b.textContent = text;
       chatEl.appendChild(b);
       chatEl.scrollTop = chatEl.scrollHeight;
     }
@@ -380,103 +368,9 @@
       sendBtn.textContent = isSending ? "..." : "Send";
     }
 
-    async function fetchFirstOk(urls, options){
-      // tries URLs in order, returns { url, res, json } for first that works
-      let lastErr = null;
-      for (const url of urls){
-        try{
-          const res = await fetch(url, options);
-          if (!res.ok) {
-            lastErr = new Error("HTTP " + res.status + " for " + url);
-            continue;
-          }
-          const ct = (res.headers.get("content-type") || "").toLowerCase();
-          const json = ct.includes("application/json") ? await res.json() : null;
-          return { url, res, json };
-        }catch(e){
-          lastErr = e;
-        }
-      }
-      throw lastErr || new Error("No endpoint succeeded.");
-    }
-
-    function normalizeUI(payload){
-      // supports multiple possible server shapes
-      // expected by your UI logic: ui.strings.welcome, ui.strings.helper, ui.strings.lang_set
-      if (!payload) return { strings: { welcome: "Welcome!", helper: "", lang_set: "" } };
-
-      if (payload.strings) return payload;
-
-      // common alternative shape
-      if (payload.ui && payload.ui.strings) return payload.ui;
-
-      // if server returns flat keys
-      const strings = payload.strings || payload;
-      return {
-        strings: {
-          welcome: strings.welcome || strings.WELCOME || "Welcome!",
-          helper: strings.helper || strings.HELPER || "",
-          lang_set: strings.lang_set || strings.LANG_SET || ""
-        }
-      };
-    }
-
-    function normalizeConfig(payload){
-      // supports config variations
-      const p = payload || {};
-      const countdown_target =
-        p.countdown_target ||
-        p.countdownTarget ||
-        p.COUNTDOWN_TARGET ||
-        p.target ||
-        null;
-
-      const business_rules = p.business_rules || p.businessRules || p.rules || {};
-      return {
-        ...p,
-        countdown_target,
-        business_rules
-      };
-    }
-
-    function normalizeSchedule(payload){
-      // expected scheduleData.matches: array
-      // each match: {id, date(YYYY-MM-DD), time(HH:MM or TBD), stage, home, away}
-      if (!payload) return { matches: [] };
-      if (Array.isArray(payload.matches)) return payload;
-      if (payload.schedule && Array.isArray(payload.schedule.matches)) return payload.schedule;
-      if (Array.isArray(payload)) return { matches: payload };
-      return { matches: [] };
-    }
-
-    function normalizeMenu(payload){
-      // expected: { items: [...] } where each item: {name, desc, price}
-      if (!payload) return { items: [] };
-      if (Array.isArray(payload.items)) return payload;
-      if (Array.isArray(payload.menu)) return { items: payload.menu };
-      if (Array.isArray(payload)) return { items: payload };
-      return { items: [] };
-    }
-
-    function normalizeChatResponse(payload){
-      // common variants: {reply}, {message}, {assistant}, {output_text}, {data:{reply}}
-      if (!payload) return { reply: "" };
-      if (typeof payload === "string") return { reply: payload };
-
-      const reply =
-        payload.reply ||
-        payload.message ||
-        payload.assistant ||
-        payload.output_text ||
-        (payload.data && (payload.data.reply || payload.data.message)) ||
-        "";
-
-      return { reply: safeText(reply) };
-    }
-
-    // -----------------------
+    // =========================================================
     // Language toggle
-    // -----------------------
+    // =========================================================
     function setLanguage(newLang){
       lang = newLang;
       localStorage.setItem("lang", lang);
@@ -487,102 +381,82 @@
 
       pillLang.textContent = lang.toUpperCase();
 
-      // refresh UI strings + menu
-      loadUI(lang).then(() => {
-        const msg = safeText(ui.strings.lang_set) + (ui.strings.helper ? ("\n\n" + safeText(ui.strings.helper)) : "");
-        addBubble("assistant", msg.trim() || "Language updated.");
-        history.push({ role: "assistant", content: msg.trim() || "Language updated." });
-        helperHint.textContent = safeText(ui.strings.helper);
-      }).catch(() => {
-        // keep current features even if UI endpoint changed
-        addBubble("assistant", "Language updated.");
-        history.push({ role: "assistant", content: "Language updated." });
-      });
+      // Update helper/welcome UI (client-side)
+      const ui = UI[lang] || UI.en;
+      helperHint.textContent = ui.helper;
 
-      loadMenu(lang).catch(() => {});
+      // Keep the feature: show a bot notice after switching
+      addBubble("assistant", ui.lang_set + "\n\n" + ui.helper);
+      history.push({role:"assistant", content: ui.lang_set + "\n\n" + ui.helper});
+
+      // Reload menu in the selected language (server source of truth)
+      loadMenu(lang);
+
+      // Optional: if schedule uses localized labels later, re-render
+      if (scheduleData) renderSchedule();
     }
 
     document.querySelectorAll(".langbtn").forEach(btn => {
       btn.addEventListener("click", () => setLanguage(btn.dataset.lang));
     });
 
-    // -----------------------
-    // Fetchers (update-friendly)
-    // -----------------------
-    async function loadConfig(){
-      const { json } = await fetchFirstOk(
-        [
-          "/api/config",
-          "/config",
-          "/api/settings",
-          "/settings"
-        ],
-        { method: "GET" }
-      );
-      config = normalizeConfig(json);
-    }
-
-    async function loadUI(lang){
-      const { json } = await fetchFirstOk(
-        [
-          "/api/ui?lang=" + encodeURIComponent(lang),
-          "/ui?lang=" + encodeURIComponent(lang),
-          "/api/i18n?lang=" + encodeURIComponent(lang),
-          "/i18n?lang=" + encodeURIComponent(lang)
-        ],
-        { method: "GET" }
-      );
-      ui = normalizeUI(json);
-      helperHint.textContent = safeText(ui.strings.helper);
-    }
-
+    // =========================================================
+    // Fetchers (MATCH app.py routes)
+    //   - /schedule.json
+    //   - /menu.json?lang=en
+    // =========================================================
     async function loadSchedule(){
-      const { json } = await fetchFirstOk(
-        [
-          "/api/schedule",
-          "/schedule",
-          "/api/matches",
-          "/matches"
-        ],
-        { method: "GET" }
-      );
-      scheduleData = normalizeSchedule(json);
+      const res = await fetch("/schedule.json", { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to load schedule.json");
+      scheduleData = await res.json();
       renderSchedule();
       updateMatchDayMode();
+      startCountdown(); // uses next_match (or a fallback)
     }
 
     async function loadMenu(lang){
-      const { json } = await fetchFirstOk(
-        [
-          "/api/menu?lang=" + encodeURIComponent(lang),
-          "/menu?lang=" + encodeURIComponent(lang),
-          "/api/menu/" + encodeURIComponent(lang),
-          "/menu/" + encodeURIComponent(lang)
-        ],
-        { method: "GET" }
-      );
-      const data = normalizeMenu(json);
-      renderMenu(data.items);
+      const res = await fetch("/menu.json?lang=" + encodeURIComponent(lang), { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to load menu.json");
+      const data = await res.json();
+      menuData = data;
+      // menuData.menu = {title, items}
+      menuTitle.textContent = (menuData && menuData.menu && menuData.menu.title) ? menuData.menu.title : "Menu";
+      renderMenu((menuData && menuData.menu && menuData.menu.items) ? menuData.menu.items : []);
     }
 
-    // -----------------------
-    // Countdown (safe local clock)
-    // -----------------------
+    // =========================================================
+    // Countdown
+    // - app.py does not have /api/config; we derive a target from schedule.json.
+    // - Prefer next_match.date/time if present; otherwise fall back to June 11, 2026.
+    // =========================================================
+    function getCountdownTarget(){
+      // If next match exists, count down to that (more relevant for your sidebar)
+      if (scheduleData && scheduleData.next_match && scheduleData.next_match.date) {
+        const nm = scheduleData.next_match;
+        // next_match in app.py is one of DALLAS_MATCHES items; may be missing time
+        if (nm.time) {
+          // date: YYYY-MM-DD, time: "17:00" or "7:00 pm" depending on how you store matches
+          // Handle "HH:MM" (24h) best; if "7:00 pm" we still parse reasonably in most browsers
+          const maybeISO = nm.time.match(/^\d{1,2}:\d{2}$/) ? (nm.date + "T" + nm.time + ":00") : (nm.date + " " + nm.time);
+          const dt = new Date(maybeISO);
+          if (!isNaN(dt.getTime())) return dt;
+        }
+        // date only
+        const dt2 = new Date(nm.date + "T12:00:00");
+        if (!isNaN(dt2.getTime())) return dt2;
+      }
+      // fallback: World Cup 2026 opening day (approx). Keeps your countdown feature alive.
+      return new Date("2026-06-11T12:00:00");
+    }
+
     function startCountdown(){
+      const target = getCountdownTarget();
       const dEl = document.getElementById("d");
       const hEl = document.getElementById("h");
       const mEl = document.getElementById("m");
       const sEl = document.getElementById("s");
 
-      // tolerate missing/renamed countdown target
-      const targetISO = config && config.countdown_target ? config.countdown_target : null;
-      const target = targetISO ? new Date(targetISO) : null;
-
       function tick(){
-        if (!target || isNaN(target.getTime())){
-          dEl.textContent = "0"; hEl.textContent = "0"; mEl.textContent = "0"; sEl.textContent = "0";
-          return;
-        }
         const now = new Date();
         let diff = Math.max(0, target - now);
         const days = Math.floor(diff / (1000*60*60*24));
@@ -592,46 +466,69 @@
         const mins = Math.floor(diff / (1000*60));
         diff -= mins*(1000*60);
         const secs = Math.floor(diff / 1000);
-
-        dEl.textContent = String(days);
-        hEl.textContent = String(hrs);
-        mEl.textContent = String(mins);
-        sEl.textContent = String(secs);
+        dEl.textContent = days;
+        hEl.textContent = hrs;
+        mEl.textContent = mins;
+        sEl.textContent = secs;
       }
 
       tick();
-      setInterval(tick, 1000);
+      // Avoid multiple intervals if user reloads schedule (simple guard)
+      if (window.__countdownTimer) clearInterval(window.__countdownTimer);
+      window.__countdownTimer = setInterval(tick, 1000);
     }
 
-    // -----------------------
+    // =========================================================
     // Schedule rendering + next match highlight
-    // -----------------------
+    // app.py schedule_json returns:
+    //   { today, is_match_day, match_day_banner, next_match, matches }
+    // matches items are your DALLAS_MATCHES list
+    // =========================================================
     function renderSchedule(){
       const el = document.getElementById("schedule");
       el.innerHTML = "";
 
-      const matchesIn = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches : [];
-      const matches = matchesIn.slice().map(m => {
-        const date = safeText(m.date);
-        const time = safeText(m.time || "TBD");
+      const matchesRaw = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches : [];
+      if (!matchesRaw.length) {
+        const row = document.createElement("div");
+        row.className = "match";
+        row.innerHTML = `
+          <div class="left">
+            <div><b>No Dallas matches loaded yet</b></div>
+            <div class="when">Update <code>DALLAS_MATCHES</code> in app.py when official dates are finalized.</div>
+          </div>
+          <div class="pill">TBD</div>
+        `;
+        el.appendChild(row);
+        return;
+      }
+
+      const matches = matchesRaw.slice().map((m, idx) => {
+        const id = m.id || ("dal-" + String(idx+1).padStart(3,"0"));
+        const dateStr = m.date || "";
+        const timeStr = m.time || "TBD";
 
         let ts = null;
-        if (time && time !== "TBD"){
-          // try Date.parse on ISO-ish
-          ts = Date.parse(date + "T" + time + ":00");
+        if (dateStr) {
+          if (timeStr && timeStr !== "TBD") {
+            // Prefer ISO-ish time like 17:00
+            const maybeISO = timeStr.match(/^\d{1,2}:\d{2}$/) ? (dateStr + "T" + timeStr + ":00") : (dateStr + " " + timeStr);
+            const d = new Date(maybeISO);
+            ts = isNaN(d.getTime()) ? Date.parse(dateStr + "T23:59:59") : d.getTime();
+          } else {
+            ts = Date.parse(dateStr + "T23:59:59");
+          }
         } else {
-          ts = Date.parse(date + "T23:59:59");
+          ts = Date.now() + 999999999; // push unknown to bottom
         }
 
-        return {
-          id: safeText(m.id || ""),
-          date,
-          time,
-          stage: safeText(m.stage || "Match"),
-          home: safeText(m.home || "TBD"),
-          away: safeText(m.away || "TBD"),
-          ts: isNaN(ts) ? 0 : ts
-        };
+        // Keep your existing layout fields, but map from app.py list
+        // Your app.py placeholder suggested "teams" string; venue optional
+        const teams = m.teams || (m.home && m.away ? `${m.home} vs ${m.away}` : "TBD vs TBD");
+        const stage = m.stage || m.round || (m.venue ? "Match" : "Dallas Match");
+        const venue = m.venue || "AT&T Stadium";
+
+        return { ...m, id, date: dateStr, time: timeStr, teams, stage, venue, ts };
       });
 
       const now = Date.now();
@@ -640,52 +537,25 @@
 
       matches.sort((a,b)=>a.ts-b.ts).forEach(m => {
         const row = document.createElement("div");
-        row.className = "match" + (m.id && m.id === nextId ? " next" : "");
-
-        const left = document.createElement("div");
-        left.className = "left";
-
-        const line1 = document.createElement("div");
-        line1.innerHTML = "<b></b> • ";
-        line1.querySelector("b").textContent = m.stage;
-        // append "home vs away" safely
-        line1.appendChild(document.createTextNode(m.home + " vs " + m.away));
-
-        const line2 = document.createElement("div");
-        line2.className = "when";
-        const timeTxt = (m.time && m.time !== "TBD") ? m.time : "TBD";
-        line2.textContent = m.date + " • " + timeTxt;
-
-        left.appendChild(line1);
-        left.appendChild(line2);
-
-        const idPill = document.createElement("div");
-        idPill.className = "pill";
-        idPill.textContent = m.id || "";
-
-        row.appendChild(left);
-        row.appendChild(idPill);
-
+        row.className = "match" + (m.id === nextId ? " next" : "");
+        row.innerHTML = `
+          <div class="left">
+            <div><b>${escapeHtml(m.stage)}</b> • ${escapeHtml(m.teams)}</div>
+            <div class="when">${escapeHtml(m.date || "TBD")} • ${escapeHtml(m.time || "TBD")} • ${escapeHtml(m.venue || "")}</div>
+          </div>
+          <div class="pill">${escapeHtml(m.id)}</div>
+        `;
         el.appendChild(row);
       });
     }
 
     function updateMatchDayMode(){
-      const todayISO = new Date().toISOString().slice(0,10);
-      const matchesIn = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches : [];
-      const isMatch = matchesIn.some(m => safeText(m.date) === todayISO);
-
+      const isMatch = !!(scheduleData && scheduleData.is_match_day);
       if (isMatch){
         pillMode.textContent = "Mode: Match-day";
-
-        const bannerText =
-          (config && config.business_rules && config.business_rules.match_day_banner) ?
-            safeText(config.business_rules.match_day_banner) :
-            "Match-day hours";
-
-        matchBanner.textContent = bannerText;
+        const banner = (scheduleData && scheduleData.match_day_banner) ? scheduleData.match_day_banner : "Match-day hours";
+        matchBanner.textContent = banner;
         matchBanner.classList.add("show");
-
         matchdayBox.textContent = "🏟️ Match-day mode is ON today. Expect higher traffic — reserve early!";
         matchdayBox.classList.add("show");
       } else {
@@ -695,92 +565,79 @@
       }
     }
 
-    // -----------------------
-    // Menu rendering
-    // -----------------------
+    // =========================================================
+    // Menu rendering (server source of truth: /menu.json)
+    // =========================================================
     function renderMenu(items){
       const el = document.getElementById("menu");
       el.innerHTML = "";
 
-      (items || []).forEach(it => {
+      if (!items || !items.length){
         const d = document.createElement("div");
         d.className = "menuitem";
+        d.innerHTML = `
+          <div class="name">No menu items</div>
+          <div class="desc">Update <code>MENU</code> in app.py.</div>
+          <div class="price">—</div>
+        `;
+        el.appendChild(d);
+        return;
+      }
 
-        const name = document.createElement("div");
-        name.className = "name";
-        name.textContent = safeText(it.name);
-
-        const desc = document.createElement("div");
-        desc.className = "desc";
-        desc.textContent = safeText(it.desc);
-
-        const price = document.createElement("div");
-        price.className = "price";
-        price.textContent = safeText(it.price);
-
-        d.appendChild(name);
-        d.appendChild(desc);
-        d.appendChild(price);
-
+      items.forEach(it => {
+        const d = document.createElement("div");
+        d.className = "menuitem";
+        d.innerHTML = `
+          <div class="name">${escapeHtml(it.name || "")}</div>
+          <div class="desc">${escapeHtml(it.desc || "")}</div>
+          <div class="price">${escapeHtml(it.price || "")}</div>
+        `;
         el.appendChild(d);
       });
     }
 
-    // -----------------------
-    // Chat send (supports app.py endpoint changes)
-    // -----------------------
-    function buildChatPayload(message){
-      // keep your original feature: send message + full history + session + lang
-      // but also add alternate keys some backends might now expect.
-      return {
-        message,
-        lang,
-        session_id: sessionId,
-        history: history.slice(), // preserve feature
-        // compatibility extras (harmless if ignored)
-        sessionId,
-        messages: history.slice(),
-        input: message
-      };
-    }
-
+    // =========================================================
+    // Chat send (MATCH app.py /chat contract)
+    // app.py expects:
+    //   { message, language, session_id }
+    // It returns:
+    //   { reply, rate_limit_remaining }
+    //
+    // NOTE: your old HTML sent {history, lang}; app.py ignores history and uses "language" key.
+    // We keep history on the client (feature retained), but only send what server expects.
+    // =========================================================
     async function sendMessage(){
       const text = msgEl.value.trim();
       if (!text) return;
 
       addBubble("user", text);
-      history.push({ role:"user", content: text });
+      history.push({role:"user", content:text});
 
       msgEl.value = "";
       msgEl.style.height = "44px";
       setSending(true);
 
       try{
-        const payload = buildChatPayload(text);
+        const res = await fetch("/chat", {
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({
+            message: text,
+            language: lang,      // IMPORTANT: matches app.py
+            session_id: sessionId
+          })
+        });
 
-        const { json } = await fetchFirstOk(
-          [
-            "/chat",            // your original
-            "/api/chat",        // common update
-            "/api/message",     // alt
-            "/message"          // alt
-          ],
-          {
-            method:"POST",
-            headers: { "Content-Type":"application/json" },
-            body: JSON.stringify(payload)
-          }
-        );
-
-        const out = normalizeChatResponse(json);
-        const reply = out.reply || "Sorry — no reply received.";
-
+        const data = await res.json().catch(() => ({}));
+        const reply = (data && data.reply) ? data.reply : "Sorry — no reply received.";
         addBubble("assistant", reply);
-        history.push({ role:"assistant", content: reply });
+        history.push({role:"assistant", content: reply});
+
+        // Optional: if user asked about schedule/menu, we already show sidebar.
+        // (No changes needed — feature retained via sidebar.)
 
       } catch(e){
         addBubble("assistant", "⚠️ Network error. Please try again.");
-        history.push({ role:"assistant", content: "⚠️ Network error. Please try again." });
       } finally{
         setSending(false);
         msgEl.focus();
@@ -803,30 +660,49 @@
       msgEl.style.height = Math.min(msgEl.scrollHeight, 130) + "px";
     });
 
-    // -----------------------
+    // =========================================================
+    // Small helper
+    // =========================================================
+    function escapeHtml(str){
+      return String(str)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    // =========================================================
     // Init
-    // -----------------------
+    // =========================================================
     (async function init(){
-      // restore language selection UI
+      // Apply saved language to UI
       pillLang.textContent = lang.toUpperCase();
       document.querySelectorAll(".langbtn").forEach(btn => {
         btn.classList.toggle("active", btn.dataset.lang === lang);
       });
 
-      // Load server resources (update-friendly fallbacks)
-      try { await loadConfig(); } catch (_) { config = normalizeConfig({}); }
-      try { await loadUI(lang); } catch (_) { ui = normalizeUI({ strings: { welcome: "Welcome!", helper: "" , lang_set: "" } }); }
-      try { await loadSchedule(); } catch (_) { scheduleData = normalizeSchedule({ matches: [] }); renderSchedule(); updateMatchDayMode(); }
-      try { await loadMenu(lang); } catch (_) { renderMenu([]); }
+      // Set helper text for current lang (client-side)
+      helperHint.textContent = (UI[lang] || UI.en).helper;
 
-      startCountdown();
+      // Load server data
+      try{
+        await loadSchedule();
+      } catch (e) {
+        // keep app usable even if schedule fails
+        console.error(e);
+      }
 
-      // Welcome bubble (keeps your existing feature)
-      const welcome = ui && ui.strings && ui.strings.welcome ? safeText(ui.strings.welcome) : "Welcome!";
-      addBubble("assistant", welcome);
-      history.push({ role:"assistant", content: welcome });
+      try{
+        await loadMenu(lang);
+      } catch (e) {
+        console.error(e);
+      }
 
-      helperHint.textContent = safeText(ui.strings.helper || "");
+      // Welcome message
+      const ui = UI[lang] || UI.en;
+      addBubble("assistant", ui.welcome);
+      history.push({role:"assistant", content: ui.welcome});
     })();
   </script>
 </body>
