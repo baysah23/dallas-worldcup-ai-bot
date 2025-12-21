@@ -1142,9 +1142,6 @@ function renderSchedule(){
   pageMatches.forEach(m => {
     const row = document.createElement("div");
     row.className = "match" + (m.id === nextId ? " next" : "");
-
-    const timeTxt = formatKickoffTime(m.time);
-    
     const timeTxt = formatKickoffTime(m.time);
     const venueTxt = m.venue ? ` • ${m.venue}` : "";
     const teamsHtml = buildTeamsHtml(m);
