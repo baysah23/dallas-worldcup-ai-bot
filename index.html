@@ -65,7 +65,7 @@
 
     .leftcol{
       display:grid;
-      grid-template-columns: 320px 1fr; /* menu | chat */
+      grid-template-columns: 320px 1fr; /* Menu | Chat */
       gap:14px;
       min-height:0;
       height:100%;
@@ -73,10 +73,10 @@
     }
     .chatcard{display:flex; flex-direction:column; min-height:0;}
     .menucard{display:flex; flex-direction:column; min-height:0;}
-    /* menu list should always be readable & scroll within the card */
+    #chat{padding:14px; height:100%; overflow:auto; display:flex; flex-direction:column; gap:10px;}
     .menu{border-top:1px solid rgba(255,255,255,.10); padding:10px 12px; font-size:12px; display:flex; flex-direction:column; gap:10px; overflow:auto;}
     @media (max-width: 950px){
-      .leftcol{grid-template-columns: 1fr; }
+      .leftcol{grid-template-columns: 1fr;}
     }
 .card{
       background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.03) 100%);
@@ -242,7 +242,6 @@
     }
     .matchday.show{display:block;}
 
-    .menu{border-top:1px solid rgba(255,255,255,.10); padding:10px 12px; font-size:12px; display:flex; flex-direction:column; gap:10px; max-height:280px; overflow:auto;}
     .menuitem{
       padding:10px 12px;
       border:1px solid rgba(255,255,255,.12);
@@ -305,42 +304,56 @@
       </div>
     </header>
 
+    
     <div class="grid">
-      <!-- Left column -->
+      <!-- Left column: Menu (left) + Chat/Reservations (right) -->
       <div class="leftcol">
 
-      <!-- Menu (moved to left column) -->
-      <div class="card menucard" style="display:flex;flex-direction:column;min-height:0;">
-        <div class="cardhead">
-          <div class="title" id="menuTitle">Menu</div>
-          
+        <!-- Menu -->
+        <div class="card menucard" style="display:flex;flex-direction:column;min-height:0;">
+          <div class="cardhead">
+            <div class="title" id="menuTitle">Menu</div>
+            <div class="pill" id="menuPill">4 languages</div>
+          </div>
 
-<!-- Chat -->
-      <div class="card chatcard" style="display:flex;flex-direction:column;min-height:0;">
-        <div class="cardhead">
-          <div class="title" id="chatTitle">Chat</div>
-          <div class="pill" id="menuPill">4 languages</div>
-        </div>
-<div class="sidepad" id="menuControls" style="padding-top:10px; padding-bottom:10px;">
-          <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
-            <div class="pill" style="padding:6px 10px;">Menu</div>
-            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <button class="secondary" id="menuPrevBtn" style="min-width:74px;">Prev</button>
-              <div class="pill" id="menuPageIndicator">Page 1 of 1</div>
-              <button class="secondary" id="menuNextBtn" style="min-width:74px;">Next</button>
-              <div class="langbtn" id="menuToggleAll" title="Toggle full menu">Show all</div>
+          <div class="sidepad" id="menuControls" style="padding-top:10px; padding-bottom:10px;">
+            <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+              <div class="pill" style="padding:6px 10px;">Menu</div>
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <button class="secondary" id="menuPrevBtn" style="min-width:74px;">Prev</button>
+                <div class="pill" id="menuPageIndicator">Page 1 of 1</div>
+                <button class="secondary" id="menuNextBtn" style="min-width:74px;">Next</button>
+                <div class="langbtn" id="menuToggleAll" title="Toggle full menu">Show all</div>
+              </div>
             </div>
           </div>
+
+          <div class="menu" id="menu"></div>
         </div>
 
+        <!-- Chat / Reservations -->
+        <div class="card chatcard" style="display:flex;flex-direction:column;min-height:0;">
+          <div class="cardhead">
+            <div class="title" id="chatTitle">Chat</div>
+            <div class="pill" id="pillMode">Live</div>
+          </div>
 
-        <div class="menu" id="menu"></div>
+          <div class="banner" id="matchBanner"></div>
+
+          <div id="chat"></div>
+
+          <div class="composer">
+            <textarea id="msg" placeholder="Type here..."></textarea>
+            <button id="sendBtn">Send</button>
+            <button id="clearBtn" class="secondary">Clear</button>
+          </div>
+
+          <div class="hint" id="helperHint"></div>
+        </div>
+
       </div>
 
-
-      </div>
-
-      <!-- Sidebar -->
+<!-- Sidebar -->
       <div class="card" style="display:flex;flex-direction:column;min-height:0;">
         <div class="cardhead">
           <div class="title" id="sideTitle">Dallas Schedule</div>
@@ -466,7 +479,7 @@ const STRINGS = {
     send: "Send",
     typing: "...",
     chat_title: "Chat",
-    side_title: "Dallas Schedule + Menu",
+    side_title: "Dallas Schedule",
     countdown: "World Cup countdown",
     countdown_sub: "Dallas / Arlington match days",
     next_hint: "Next upcoming match is highlighted",
