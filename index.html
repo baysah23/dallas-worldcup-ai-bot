@@ -63,6 +63,11 @@
       .grid{grid-template-columns:1fr;}
     }
 
+    .leftcol{display:flex; flex-direction:column; gap:14px; min-height:0;}
+    .chatcard{flex:1; display:flex; flex-direction:column; min-height:0;}
+    .menucard{display:flex; flex-direction:column; min-height:0;}
+    .menu{flex:1; overflow:auto; }
+
     .card{
       background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.03) 100%);
       border:1px solid var(--line);
@@ -291,8 +296,11 @@
     </header>
 
     <div class="grid">
+      <!-- Left column -->
+      <div class="leftcol">
+
       <!-- Chat -->
-      <div class="card" style="display:flex;flex-direction:column;min-height:0;">
+      <div class="card chatcard" style="display:flex;flex-direction:column;min-height:0;">
         <div class="cardhead">
           <div class="title" id="chatTitle">Chat</div>
           <div class="pill" id="pillMode">Mode: Standard</div>
@@ -310,10 +318,36 @@
         <div class="hint" id="helperHint"></div>
       </div>
 
+
+      <!-- Menu (moved to left column) -->
+      <div class="card menucard" style="display:flex;flex-direction:column;min-height:0;">
+        <div class="cardhead">
+          <div class="title" id="menuTitle">Menu</div>
+          <div class="pill" id="menuPill">4 languages</div>
+        </div>
+<div class="sidepad" id="menuControls" style="padding-top:10px; padding-bottom:10px;">
+          <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+            <div class="pill" style="padding:6px 10px;">Menu</div>
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <button class="secondary" id="menuPrevBtn" style="min-width:74px;">Prev</button>
+              <div class="pill" id="menuPageIndicator">Page 1 of 1</div>
+              <button class="secondary" id="menuNextBtn" style="min-width:74px;">Next</button>
+              <div class="langbtn" id="menuToggleAll" title="Toggle full menu">Show all</div>
+            </div>
+          </div>
+        </div>
+
+
+        <div class="menu" id="menu"></div>
+      </div>
+
+
+      </div>
+
       <!-- Sidebar -->
       <div class="card" style="display:flex;flex-direction:column;min-height:0;">
         <div class="cardhead">
-          <div class="title" id="sideTitle">Dallas Schedule + Menu</div>
+          <div class="title" id="sideTitle">Dallas Schedule</div>
           <div class="pill" id="pillLang">EN</div>
         </div>
 
@@ -360,27 +394,7 @@
             <button id="nextPage" class="secondary" style="min-width:88px;">Next</button>
           </div>
         </div>
-
-        <div class="cardhead" style="border-top:1px solid var(--line); border-bottom:none;">
-          <div class="title" id="menuTitle">Menu</div>
-          <div class="pill" id="menuPill">4 languages</div>
-        </div>
-
-        <div class="sidepad" id="menuControls" style="padding-top:10px; padding-bottom:10px;">
-          <div style="display:flex; gap:8px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
-            <div class="pill" style="padding:6px 10px;">Menu</div>
-            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-              <button class="secondary" id="menuPrevBtn" style="min-width:74px;">Prev</button>
-              <div class="pill" id="menuPageIndicator">Page 1 of 1</div>
-              <button class="secondary" id="menuNextBtn" style="min-width:74px;">Next</button>
-              <div class="langbtn" id="menuToggleAll" title="Toggle full menu">Show all</div>
-            </div>
-          </div>
-        </div>
-
-
-        <div class="menu" id="menu"></div>
-      </div>
+</div>
     </div>
   </div>
 
