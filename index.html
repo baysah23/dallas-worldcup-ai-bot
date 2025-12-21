@@ -50,123 +50,6 @@
       user-select:none;
     }
     .langbtn.active{background:rgba(46,160,67,.18); border-color:rgba(46,160,67,.45);}
-    /* -----------------------
-       Phase 1 UI: World Cup 2026 Venue Vibes (UI-only, no logic changes)
-       ----------------------- */
-    .wc-hero{
-      margin: 12px 14px 0;
-      border-radius: 18px;
-      overflow:hidden;
-      border:1px solid rgba(255,255,255,.14);
-      background:
-        radial-gradient(900px 420px at 15% 20%, rgba(31,111,235,.35) 0%, rgba(7,16,34,0) 55%),
-        radial-gradient(700px 320px at 85% 15%, rgba(46,160,67,.28) 0%, rgba(7,16,34,0) 60%),
-        linear-gradient(135deg, rgba(255,255,255,.08) 0%, rgba(255,255,255,.04) 45%, rgba(0,0,0,.10) 100%);
-      box-shadow: 0 30px 70px rgba(0,0,0,.35);
-      position:relative;
-    }
-    .wc-hero:before{
-      content:"";
-      position:absolute; inset:0;
-      background:
-        repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 1px, rgba(255,255,255,0) 1px 14px);
-      opacity:.18; pointer-events:none;
-    }
-    .wc-hero-inner{position:relative; padding:14px 14px 12px;}
-    .wc-hero-top{display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;}
-    .wc-title{display:flex; flex-direction:column; gap:4px;}
-    .wc-title h2{margin:0; font-size:14px; letter-spacing:.3px;}
-    .wc-title .meta{color:var(--muted); font-size:12px;}
-    .flagstrip{
-      margin-top:10px;
-      border-top:1px solid rgba(255,255,255,.12);
-      border-bottom:1px solid rgba(255,255,255,.12);
-      padding:8px 0;
-      overflow:hidden;
-      position:relative;
-    }
-    .flagstrip .track{
-      display:flex;
-      gap:10px;
-      width:max-content;
-      animation: flagmarquee 26s linear infinite;
-      padding-left:10px;
-    }
-    .flagchip{
-      display:inline-flex; align-items:center; gap:8px;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.18);
-      font-size:12px;
-      white-space:nowrap;
-    }
-    .flagchip .f{font-size:16px;}
-    @keyframes flagmarquee{
-      0%{transform:translateX(0);}
-      100%{transform:translateX(-50%);}
-    }
-
-    .legend-row{
-      margin-top:10px;
-      display:grid;
-      grid-template-columns: 1fr 1fr 1fr;
-      gap:10px;
-    }
-    @media (max-width: 950px){
-      .legend-row{grid-template-columns:1fr;}
-    }
-    .legend{
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.18);
-      border-radius:16px;
-      padding:10px 10px 10px;
-      display:flex;
-      gap:10px;
-      align-items:center;
-      min-height:54px;
-    }
-    .jersey{
-      width:40px; height:40px; border-radius:12px;
-      border:1px solid rgba(255,255,255,.16);
-      background: linear-gradient(135deg, rgba(245,215,110,.22) 0%, rgba(46,160,67,.18) 50%, rgba(31,111,235,.22) 100%);
-      display:flex; align-items:center; justify-content:center;
-      box-shadow: 0 10px 26px rgba(0,0,0,.28);
-      flex:0 0 auto;
-    }
-    .legend b{display:block; font-size:12px; margin-bottom:2px;}
-    .legend .small{color:var(--muted); font-size:11px; line-height:1.2;}
-    .legend .small .f{font-size:14px; margin-right:6px;}
-    .legend .tag{
-      margin-left:auto;
-      font-size:11px;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.16);
-      color:var(--muted);
-      white-space:nowrap;
-    }
-
-    /* schedule row enrichment */
-    .teamsline{display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
-    .teamsline .stage{font-weight:800;}
-    .teamsline .teams{display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
-    .teamsline .flag{font-size:14px; filter:saturate(1.1);}
-    .teamsline .vs{
-      font-size:11px;
-      color:var(--muted);
-      border:1px solid rgba(255,255,255,.14);
-      padding:2px 8px;
-      border-radius:999px;
-      background: rgba(0,0,0,.18);
-      letter-spacing:.3px;
-    }
-    .match.next{
-      outline:2px solid rgba(245,215,110,.35);
-      box-shadow: 0 18px 40px rgba(0,0,0,.30);
-    }
-
 
     .grid{
       display:grid;
@@ -182,7 +65,7 @@
 
     .leftcol{
       display:grid;
-      grid-template-columns: 170px 1fr; /* Menu | Chat */
+      O0px 1fr; /* Menu | Chat (chat gets more space) */
       gap:14px;
       min-height:0;
       height:100%;
@@ -190,9 +73,7 @@
     }
     .chatcard{display:flex; flex-direction:column; min-height:0;}
     .menucard{display:flex; flex-direction:column; min-height:0;}
-    #chat{padding:14px; height:100%; overflow:auto; display:flex;
-      flex:1; flex-direction:column; gap:10px;
-      min-height:320px;}
+    #chat{padding:14px; height:100%; overflow:auto; display:flex; flex-direction:column; gap:10px;}
     .menu{padding:8px 8px 10px; font-size:9px; line-height:1.25; display:flex; flex-direction:column; gap:8px; overflow:auto; max-height:390px;}
     @media (max-width: 950px){
       .leftcol{grid-template-columns: 1fr;}
@@ -249,7 +130,6 @@
       white-space:pre-wrap;
       word-wrap:break-word;
       border:1px solid rgba(255,255,255,.10);
-          font-size:12.5px;
     }
     .user{
       align-self:flex-end;
@@ -335,7 +215,7 @@
     .nums span{color:var(--text);}
     .nums b{color:#f5d76e;}
 
-    .schedule{flex:1; min-height:260px; overflow:auto;}
+    .schedule{flex:1; min-height:420px; overflow:auto;}
     .match{
       display:flex;
       justify-content:space-between;
@@ -422,44 +302,20 @@
     .match{padding:9px 10px;}
 
 
-    .menucard{max-width:none; max-height:none;}
+    /* Layout override: compact menu + wide chat (desktop) */
+    .leftcol{
+      display:grid;
+      grid-template-columns: 170px 1fr; /* Menu | Chat */
+      gap:14px;
+      min-height:0;
+      height:100%;
+      align-items:stretch;
     }
-
-
-    /* Phase 1 UI: World Cup venue hero (pure CSS/emoji — no external assets) */
-    .wc-hero{margin-top:12px; border-top:1px solid var(--line); padding-top:12px;}
-    .wc-hero-inner{
-      display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
-      background: linear-gradient(90deg, rgba(245,215,110,.10) 0%, rgba(31,111,235,.12) 45%, rgba(46,160,67,.10) 100%);
-      border:1px solid rgba(255,255,255,.10);
-      border-radius:16px;
-      padding:10px 12px;
-      overflow:hidden;
-      position:relative;
-    }
-    .wc-hero-inner:before{
-      content:"";
-      position:absolute; inset:-1px;
-      background: radial-gradient(600px 140px at 15% 30%, rgba(245,215,110,.18) 0%, rgba(0,0,0,0) 60%);
-      pointer-events:none;
-    }
-    .wc-marquee{
-      font-size:18px;
-      white-space:nowrap;
-      opacity:.95;
-      animation: wcScroll 18s linear infinite;
-      will-change: transform;
-      max-width:100%;
-    }
-    @keyframes wcScroll{
-      0%{transform: translateX(0);}
-      100%{transform: translateX(-45%);}
-    }
-    .wc-hero-text{display:flex; flex-direction:column; gap:2px; z-index:1;}
-    .wc-title{font-weight:900; letter-spacing:.3px;}
-    .wc-sub{color:var(--muted); font-size:12px;}
-    @media (prefers-reduced-motion: reduce){
-      .wc-marquee{animation:none;}
+    .chatcard{display:flex; flex-direction:column; min-height:0;}
+    .menucard{display:flex; flex-direction:column; min-height:0; max-width:190px; max-height:460px;}
+    @media (max-width: 950px){
+      .leftcol{grid-template-columns: 1fr;}
+      .menucard{max-width:none; max-height:none;}
     }
 
 </style>
@@ -472,7 +328,7 @@
         <div class="brand">
           <div class="badge" aria-hidden="true"></div>
           <div>
-            <h1>World Cup 2026 • Dallas Match-Day Concierge</h1>
+            <h1>WC26 • Dallas Concierge</h1>
             <div class="sub">Reserve tables, see Dallas match schedule, and chat in English • Español • Português • Français</div>
           </div>
         </div>
@@ -484,95 +340,9 @@
           <div class="langbtn" data-lang="fr">Français</div>
         </div>
       </div>
-    
-      <div class="wc-hero" aria-label="World Cup 2026 venue banner">
-        <div class="wc-hero-inner">
-          <div class="wc-marquee" aria-hidden="true">
-            🇺🇸 🇲🇽 🇨🇦 🇧🇷 🇦🇷 🇫🇷 🇩🇪 🇪🇸 🇵🇹 🇳🇬 🇬🇭 🇸🇳 🇲🇦 🇯🇵 🇰🇷 🇦🇺 🇨🇴 🇺🇾 🇳🇱 🇮🇹 🏆
-          </div>
-          <div class="wc-hero-text">
-            <span class="wc-title">🏟️ Venue Mode</span>
-            <span class="wc-sub">World Cup 2026 • Dallas/Arlington • Match-day Concierge</span>
-          </div>
-        </div>
-      </div>
-
     </header>
 
-
-    <!-- Phase 1 UI (non-breaking): World Cup hero banner -->
-    <section class="wc-hero" aria-label="World Cup 2026 venue banner">
-      <div class="wc-hero-inner">
-        <div class="wc-hero-top">
-          <div class="wc-title">
-            <h2>🏟️ World Cup 2026 • Dallas Concierge</h2>
-            <div class="meta">Flags, match-day energy, and a stadium-ready vibe — without changing any of your app features.</div>
-          </div>
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <div class="pill">🎟️ Reserve a table in chat</div>
-            <div class="pill">⚽ See match days on the right</div>
-          </div>
-        </div>
-
-        <div class="flagstrip" role="presentation">
-          <div class="track" id="flagTrack">
-            <!-- duplicated for smooth loop; safe static fallback -->
-            <div class="flagchip"><span class="f">🇺🇸</span><span>USA</span></div>
-            <div class="flagchip"><span class="f">🇲🇽</span><span>Mexico</span></div>
-            <div class="flagchip"><span class="f">🇨🇦</span><span>Canada</span></div>
-            <div class="flagchip"><span class="f">🇧🇷</span><span>Brazil</span></div>
-            <div class="flagchip"><span class="f">🇦🇷</span><span>Argentina</span></div>
-            <div class="flagchip"><span class="f">🇫🇷</span><span>France</span></div>
-            <div class="flagchip"><span class="f">🇩🇪</span><span>Germany</span></div>
-            <div class="flagchip"><span class="f">🇪🇸</span><span>Spain</span></div>
-            <div class="flagchip"><span class="f">🇵🇹</span><span>Portugal</span></div>
-            <div class="flagchip"><span class="f">🇳🇬</span><span>Nigeria</span></div>
-
-            <div class="flagchip"><span class="f">🇺🇸</span><span>USA</span></div>
-            <div class="flagchip"><span class="f">🇲🇽</span><span>Mexico</span></div>
-            <div class="flagchip"><span class="f">🇨🇦</span><span>Canada</span></div>
-            <div class="flagchip"><span class="f">🇧🇷</span><span>Brazil</span></div>
-            <div class="flagchip"><span class="f">🇦🇷</span><span>Argentina</span></div>
-            <div class="flagchip"><span class="f">🇫🇷</span><span>France</span></div>
-            <div class="flagchip"><span class="f">🇩🇪</span><span>Germany</span></div>
-            <div class="flagchip"><span class="f">🇪🇸</span><span>Spain</span></div>
-            <div class="flagchip"><span class="f">🇵🇹</span><span>Portugal</span></div>
-            <div class="flagchip"><span class="f">🇳🇬</span><span>Nigeria</span></div>
-          </div>
-        </div>
-
-        <div class="legend-row">
-          <div class="legend">
-            <div class="jersey">⭐</div>
-            <div>
-              <b>Featured Stars</b>
-              <div class="small"><span class="f">🌍</span>Rotating “player cards” (Phase 2 can swap these for real photos.)</div>
-            </div>
-            <div class="tag">Banner mode</div>
-          </div>
-
-          <div class="legend">
-            <div class="jersey">🏆</div>
-            <div>
-              <b>Match-day Concepts</b>
-              <div class="small"><span class="f">🎉</span>Stadium energy, specials, and crowd moments — all inside the same app.</div>
-            </div>
-            <div class="tag">Venue ready</div>
-          </div>
-
-          <div class="legend">
-            <div class="jersey">📍</div>
-            <div>
-              <b>Dallas / Arlington Focus</b>
-              <div class="small"><span class="f">🏟️</span>Right rail highlights match days (and All Matches can paginate.)</div>
-            </div>
-            <div class="tag">Scope toggle</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-
+    
     <div class="grid">
       <!-- Left column: Menu (left) + Chat/Reservations (right) -->
       <div class="leftcol">
@@ -1032,52 +802,6 @@ function normalizeScheduleSearch(raw){
 }
 
 
-
-// -----------------------
-// Phase 1 UI helper: country flags (UI-only)
-// -----------------------
-function normalizeCountryKey(name){
-  return (name || "").toString().trim().toLowerCase()
-    .replace(/\s+/g," \ ")
-    .replace(/[\u2019']/g,"'")
-    .replace(/\./g,"");
-}
-
-function getFlagEmoji(country){
-  const k = normalizeCountryKey(country);
-  const map = {
-    "usa":"🇺🇸","united states":"🇺🇸","united states of america":"🇺🇸","u s a":"🇺🇸","us":"🇺🇸",
-    "mexico":"🇲🇽","canada":"🇨🇦",
-    "argentina":"🇦🇷","brazil":"🇧🇷","uruguay":"🇺🇾","chile":"🇨🇱","colombia":"🇨🇴","peru":"🇵🇪","ecuador":"🇪🇨",
-    "england":"🏴","scotland":"🏴","wales":"🏴","ireland":"🇮🇪","northern ireland":"🇬🇧",
-    "france":"🇫🇷","germany":"🇩🇪","spain":"🇪🇸","portugal":"🇵🇹","italy":"🇮🇹","netherlands":"🇳🇱","belgium":"🇧🇪",
-    "croatia":"🇭🇷","switzerland":"🇨🇭","austria":"🇦🇹","poland":"🇵🇱","sweden":"🇸🇪","norway":"🇳🇴","denmark":"🇩🇰",
-    "serbia":"🇷🇸","slovenia":"🇸🇮","slovakia":"🇸🇰","czech republic":"🇨🇿","czechia":"🇨🇿","ukraine":"🇺🇦",
-    "morocco":"🇲🇦","tunisia":"🇹🇳","algeria":"🇩🇿","egypt":"🇪🇬","senegal":"🇸🇳","nigeria":"🇳🇬","ghana":"🇬🇭",
-    "cameroon":"🇨🇲","ivory coast":"🇨🇮","cote d'ivoire":"🇨🇮","south africa":"🇿🇦",
-    "japan":"🇯🇵","korea republic":"🇰🇷","south korea":"🇰🇷","korea":"🇰🇷","china":"🇨🇳","australia":"🇦🇺",
-    "iran":"🇮🇷","ir iran":"🇮🇷","saudi arabia":"🇸🇦","qatar":"🇶🇦","united arab emirates":"🇦🇪",
-    "new zealand":"🇳🇿"
-  };
-  return map[k] || "🌐";
-}
-
-function buildTeamsHtml(m){
-  const hasHomeAway = (m && (m.home || m.away));
-  const hasTeams = (m && m.teams && String(m.teams).trim());
-  if (hasTeams){
-    return `<span class="teams">${escapeHtml(m.teams)}</span>`;
-  }
-  if (!hasHomeAway){
-    return `<span class="teams"><span class="flag">🌐</span> ${escapeHtml("TBD")} <span class="vs">VS</span> <span class="flag">🌐</span> ${escapeHtml("TBD")}</span>`;
-  }
-  const home = m.home || "TBD";
-  const away = m.away || "TBD";
-  const hf = getFlagEmoji(home);
-  const af = getFlagEmoji(away);
-  return `<span class="teams"><span class="flag" title="${escapeHtml(home)}">${hf}</span> ${escapeHtml(home)} <span class="vs">VS</span> <span class="flag" title="${escapeHtml(away)}">${af}</span> ${escapeHtml(away)}</span>`;
-}
-
 function renderSchedule(){
   const el = document.getElementById("schedule");
   el.innerHTML = "";
@@ -1145,22 +869,21 @@ function renderSchedule(){
   pageMatches.forEach(m => {
     const row = document.createElement("div");
     row.className = "match" + (m.id === nextId ? " next" : "");
+
     const timeTxt = formatKickoffTime(m.time);
+    const teamsTxt = (m.teams && String(m.teams).trim())
+      ? m.teams
+      : ((m.home || m.away) ? `${m.home || "TBD"} vs ${m.away || "TBD"}` : "TBD vs TBD");
+
     const venueTxt = m.venue ? ` • ${m.venue}` : "";
-    const teamsHtml = buildTeamsHtml(m);
 
     row.innerHTML = `
       <div class="left">
-        <div class="teamsline">
-          <span class="stage">${escapeHtml(m.stage || "Match")}</span>
-          <span style="opacity:.55;">•</span>
-          ${teamsHtml}
-        </div>
+        <div><b>${escapeHtml(m.stage || "Match")}</b> • ${escapeHtml(teamsTxt)}</div>
         <div class="when">${escapeHtml(m.date || "")} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div>
       </div>
       <div class="pill">${escapeHtml(m.id || "")}</div>
     `;
-
     el.appendChild(row);
   });
 }
@@ -1326,26 +1049,15 @@ if (scopeDallasBtn) scopeDallasBtn.addEventListener("click", () => setScope("dal
 if (scopeAllBtn) scopeAllBtn.addEventListener("click", () => setScope("all"));
 
 // Pagination controls (All Matches only)
-if (prevPageBtn) prevPageBtn.addEventListener("click", () => {
-  if (scope !== "all") return;
-  if (currentPage > 1){
-    currentPage--;
-    renderSchedule();
-  }
-});
-
+if (prevPageBtn) prevPageBtn.addEventListener("click", () => { if (currentPage > 1){ currentPage--; renderSchedule(); } });
 if (nextPageBtn) nextPageBtn.addEventListener("click", () => {
-  if (scope !== "all") return;
   if (!scheduleData || !Array.isArray(scheduleData.matches)) return;
   const totalPages = Math.max(1, Math.ceil(scheduleData.matches.length / PAGE_SIZE));
-  if (currentPage < totalPages){
-    currentPage++;
-    renderSchedule();
-  }
+  if (currentPage < totalPages){ currentPage++; renderSchedule(); }
 });
 
-// Team search (simple text input)
 
+// Team search (simple text input)
 let _searchTimer = null;
 function setScheduleQuery(q){
   scheduleQuery = normalizeScheduleSearch((q || "").trim());

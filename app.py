@@ -18,7 +18,11 @@ from google.oauth2.service_account import Credentials
 # App + cache-busting (helps Render show latest index.html)
 # ============================================================
 app = Flask(__name__)
-client = OpenAI()
+try:
+    client = OpenAI()
+except Exception:
+    client = None  # OpenAI unavailable; app will still run (reservations/menu/schedule)
+
 
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
@@ -1073,6 +1077,14 @@ Rules:
 - If user asks to make a reservation, instruct them to type "reservation" (or equivalent) to start.
 """
 
+    # If OpenAI is not configured or temporarily unavailable, fall back gracefully
+if client is None:
+    return jsonify({
+        "reply": "⚠️ The AI assistant is temporarily unavailable, but reservations and schedules still work. Type “reservation” to book a table, or use the schedule panel.",
+        "rate_limit_remaining": remaining
+    })
+
+try:
     resp = client.responses.create(
         model="gpt-4o-mini",
         input=[
@@ -1080,9 +1092,16 @@ Rules:
             {"role": "user", "content": msg},
         ],
     )
-
-    reply = (resp.output_text or "").strip()
+    reply = (getattr(resp, "output_text", "") or "").strip()
+    if not reply:
+        reply = "Sorry — no reply received."
     return jsonify({"reply": reply, "rate_limit_remaining": remaining})
+except Exception as e:
+    return jsonify({
+        "reply": "⚠️ The AI assistant is temporarily unavailable right now. You can still make a reservation by typing “reservation”.",
+        "rate_limit_remaining": remaining,
+        "notice": repr(e),
+    }), 200
 
 
 # ============================================================
