@@ -53,7 +53,7 @@
 
     .grid{
       display:grid;
-      grid-template-columns: 1.2fr .8fr;
+      grid-template-columns: 1.45fr .55fr;
       gap:14px;
       padding:14px;
       flex:1;
@@ -65,7 +65,7 @@
 
     .leftcol{
       display:grid;
-      grid-template-columns: 240px 1fr; /* Menu | Chat (chat gets more space) */
+      O0px 1fr; /* Menu | Chat (chat gets more space) */
       gap:14px;
       min-height:0;
       height:100%;
@@ -74,7 +74,7 @@
     .chatcard{display:flex; flex-direction:column; min-height:0;}
     .menucard{display:flex; flex-direction:column; min-height:0;}
     #chat{padding:14px; height:100%; overflow:auto; display:flex; flex-direction:column; gap:10px;}
-    .menu{padding:10px 10px 12px; font-size:11px; display:flex; flex-direction:column; gap:10px; overflow:auto;}
+    .menu{padding:8px 8px 10px; font-size:9px; line-height:1.25; display:flex; flex-direction:column; gap:8px; overflow:auto; max-height:390px;}
     @media (max-width: 950px){
       .leftcol{grid-template-columns: 1fr;}
     }
@@ -243,7 +243,7 @@
     .matchday.show{display:block;}
 
     .menuitem{
-      padding:10px 10px;
+      padding:7px 7px;
       border:1px solid rgba(255,255,255,.12);
       border-radius:14px;
       background: linear-gradient(135deg, rgba(31,111,235,.16) 0%, rgba(0,0,0,.18) 55%, rgba(46,160,67,.10) 100%);
@@ -257,9 +257,9 @@
       background: radial-gradient(220px 90px at 15% 10%, rgba(245,215,110,.18) 0%, rgba(0,0,0,0) 60%);
       pointer-events:none;
     }
-    .menuitem .name{font-weight:900; letter-spacing:.2px;}
-    .menuitem .desc{color:var(--muted); margin-top:3px; line-height:1.25;}
-    .menuitem .price{margin-top:6px; font-weight:900; color:#f5d76e;}
+    .menuitem .name{font-weight:900; font-size:11px; letter-spacing:.15px;}
+    .menuitem .desc{color:var(--muted); margin-top:3px; font-size:9px; line-height:1.25;}
+    .menuitem .price{margin-top:6px; font-weight:900; color:#f5d76e; font-size:10px;}
     .menuTop{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
     .menuBadge{
       border:1px solid rgba(245,215,110,.35);
@@ -287,7 +287,38 @@
       border-top:1px dashed rgba(255,255,255,.14);
     }
     code{background:rgba(255,255,255,.10); padding:2px 6px; border-radius:8px;}
-  </style>
+  
+    /* Compact WC menu (small + sleek) */
+    .menucard{max-height:460px;}
+    .menu{max-height:390px;}
+    @media (max-width: 950px){
+      .menucard{max-height:none;}
+      .menu{max-height:none;}
+    }
+
+
+    /* Slightly tighter sidebar so it stays compact */
+    .countdown{padding:10px 12px;}
+    .match{padding:9px 10px;}
+
+
+    /* Layout override: compact menu + wide chat (desktop) */
+    .leftcol{
+      display:grid;
+      grid-template-columns: 170px 1fr; /* Menu | Chat */
+      gap:14px;
+      min-height:0;
+      height:100%;
+      align-items:stretch;
+    }
+    .chatcard{display:flex; flex-direction:column; min-height:0;}
+    .menucard{display:flex; flex-direction:column; min-height:0; max-width:190px; max-height:460px;}
+    @media (max-width: 950px){
+      .leftcol{grid-template-columns: 1fr;}
+      .menucard{max-width:none; max-height:none;}
+    }
+
+</style>
 </head>
 
 <body>
@@ -317,7 +348,7 @@
       <div class="leftcol">
 
         <!-- Menu -->
-        <div class="card menucard" style="display:flex;flex-direction:column;min-height:0; max-width:260px;">
+        <div class="card menucard" style="display:flex;flex-direction:column;min-height:0; max-width:190px;">
           <div class="cardhead">
             <div class="title" id="menuTitle">Menu</div>
             <div class="pill" id="menuPill">4 languages</div>
@@ -428,11 +459,13 @@ let scope = localStorage.getItem("schedule_scope") || "dallas";
 let scheduleQuery = "";
 
 // Pagination (All Matches only)
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 10;
 let currentPage = 1;
 
 
 let menuData = null;
+let menuPage = 1; // safe default (menu is non-paginated)
+
 
 // Conversation memory (client-side history) — kept as a feature
 const history = [];
