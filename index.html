@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>WC26 Dallas Concierge</title>
+  <title>World Cup 2026 Dallas Concierge</title>
 
   <style>
     :root{
@@ -36,7 +36,7 @@
       background: linear-gradient(135deg, #f5d76e 0%, #2ea043 45%, #1f6feb 100%);
       box-shadow: 0 10px 35px rgba(0,0,0,.25);
     }
-    h1{margin:0; font-size:15px; font-weight:800; letter-spacing:.2px;}
+    h1{margin:0; font-size:16px; font-weight:800; letter-spacing:.2px;}
     .sub{margin:6px 0 0; color:var(--muted); font-size:12px;}
     .langbar{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
     .langbtn{
@@ -116,8 +116,7 @@
 
     #chat{
       padding:14px;
-      flex:1;
-      height:auto;
+      height:100%;
       overflow:auto;
       display:flex;
       flex-direction:column;
@@ -131,7 +130,6 @@
       white-space:pre-wrap;
       word-wrap:break-word;
       border:1px solid rgba(255,255,255,.10);
-      font-size:13px;
     }
     .user{
       align-self:flex-end;
@@ -320,6 +318,93 @@
       .menucard{max-width:none; max-height:none;}
     }
 
+
+    /* PHASE1_VENUE_VIBES */
+    /* Phase 1 UI polish: World Cup venue banner (UI-only; no JS changes) */
+    .venue-hero{
+      margin: 12px 14px 0;
+      border-radius: 18px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.14);
+      background:
+        radial-gradient(900px 420px at 15% 20%, rgba(31,111,235,.35) 0%, rgba(7,16,34,0) 55%),
+        radial-gradient(700px 320px at 85% 15%, rgba(46,160,67,.28) 0%, rgba(7,16,34,0) 60%),
+        linear-gradient(135deg, rgba(255,255,255,.08) 0%, rgba(255,255,255,.04) 45%, rgba(0,0,0,.10) 100%);
+      box-shadow: 0 30px 70px rgba(0,0,0,.35);
+      position:relative;
+    }
+    .venue-hero:before{
+      content:"";
+      position:absolute; inset:0;
+      background: repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 1px, rgba(255,255,255,0) 1px 14px);
+      opacity:.18; pointer-events:none;
+    }
+    .venue-hero .inner{position:relative; padding:12px 14px; display:flex; gap:14px; align-items:center; justify-content:space-between; flex-wrap:wrap;}
+    .venue-hero .headline{display:flex; flex-direction:column; gap:4px;}
+    .venue-hero .headline .t{font-weight:900; letter-spacing:.25px; font-size:13px;}
+    .venue-hero .headline .s{color:var(--muted); font-size:12px;}
+    .hero-flags{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+    .flag-pill{
+      display:inline-flex; align-items:center; gap:8px;
+      padding:6px 10px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.16);
+      font-size:12px; white-space:nowrap;
+    }
+    .flag-pill .f{font-size:16px}
+    .player-ribbon{
+      display:flex; gap:10px; align-items:center;
+      overflow:auto; padding:2px 0;
+      max-width:min(600px, 100%);
+      scrollbar-width:thin;
+    }
+    .player-card{
+      flex:0 0 auto;
+      display:flex; align-items:center; gap:10px;
+      padding:8px 10px;
+      border-radius:16px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.18);
+      min-width: 190px;
+      position:relative;
+      overflow:hidden;
+    }
+    .player-card:before{
+      content:"";
+      position:absolute; inset:-1px;
+      background: radial-gradient(220px 90px at 18% 18%, rgba(245,215,110,.16) 0%, rgba(0,0,0,0) 60%);
+      pointer-events:none;
+    }
+    .jersey{
+      width:42px; height:42px; border-radius:14px;
+      border:1px solid rgba(255,255,255,.16);
+      background: linear-gradient(135deg, rgba(245,215,110,.22) 0%, rgba(46,160,67,.14) 55%, rgba(31,111,235,.18) 100%);
+      display:flex; align-items:center; justify-content:center;
+      box-shadow: 0 10px 26px rgba(0,0,0,.28);
+      flex:0 0 auto;
+      font-size:18px;
+    }
+    .pmeta{position:relative; display:flex; flex-direction:column; gap:2px; min-width:0;}
+    .pmeta .name{font-weight:900; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .pmeta .cty{color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+    .shine{
+      position:absolute; top:-40px; right:-60px;
+      width:160px; height:160px; border-radius:999px;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.16) 0%, rgba(255,255,255,0) 60%);
+      transform: rotate(18deg);
+      pointer-events:none;
+      opacity:.7;
+    }
+
+    /* subtle UI polish requested */
+    .bubble{font-size:12px;}
+    .schedule{min-height:260px;}
+    #chat{min-height:320px;}
+    @media (min-height: 880px){
+      .schedule{min-height:360px;}
+      #chat{min-height:420px;}
+    }
+    
 </style>
 </head>
 
@@ -343,6 +428,60 @@
         </div>
       </div>
     </header>
+
+    <!-- PHASE1_VENUE_HERO -->
+    <section class="venue-hero" aria-label="World Cup 2026 venue vibes">
+      <div class="inner">
+        <div class="headline">
+          <div class="t">🏆 World Cup 2026 • Venue Vibes</div>
+          <div class="s">Flags, stars, and match-day energy — UI polish only (all features unchanged).</div>
+          <div class="hero-flags" aria-hidden="true" style="margin-top:6px;">
+            <span class="flag-pill"><span class="f">🇺🇸</span>USA</span>
+            <span class="flag-pill"><span class="f">🇲🇽</span>Mexico</span>
+            <span class="flag-pill"><span class="f">🇨🇦</span>Canada</span>
+            <span class="flag-pill"><span class="f">🇧🇷</span>Brazil</span>
+            <span class="flag-pill"><span class="f">🇦🇷</span>Argentina</span>
+            <span class="flag-pill"><span class="f">🇫🇷</span>France</span>
+            <span class="flag-pill"><span class="f">🇩🇪</span>Germany</span>
+            <span class="flag-pill"><span class="f">🇪🇸</span>Spain</span>
+          </div>
+        </div>
+
+        <div class="player-ribbon" aria-label="Featured players">
+          <div class="player-card" title="Lionel Messi — Argentina">
+            <div class="shine"></div>
+            <div class="jersey">⭐</div>
+            <div class="pmeta"><div class="name">Lionel Messi</div><div class="cty">🇦🇷 Argentina</div></div>
+          </div>
+          <div class="player-card" title="Kylian Mbappé — France">
+            <div class="shine"></div>
+            <div class="jersey">⚡</div>
+            <div class="pmeta"><div class="name">Kylian Mbappé</div><div class="cty">🇫🇷 France</div></div>
+          </div>
+          <div class="player-card" title="Erling Haaland — Norway">
+            <div class="shine"></div>
+            <div class="jersey">🎯</div>
+            <div class="pmeta"><div class="name">Erling Haaland</div><div class="cty">🇳🇴 Norway</div></div>
+          </div>
+          <div class="player-card" title="Vinícius Jr — Brazil">
+            <div class="shine"></div>
+            <div class="jersey">🔥</div>
+            <div class="pmeta"><div class="name">Vinícius Jr</div><div class="cty">🇧🇷 Brazil</div></div>
+          </div>
+          <div class="player-card" title="Jude Bellingham — England">
+            <div class="shine"></div>
+            <div class="jersey">🏃</div>
+            <div class="pmeta"><div class="name">Jude Bellingham</div><div class="cty">🏴 England</div></div>
+          </div>
+          <div class="player-card" title="Mohamed Salah — Egypt">
+            <div class="shine"></div>
+            <div class="jersey">👑</div>
+            <div class="pmeta"><div class="name">Mohamed Salah</div><div class="cty">🇪🇬 Egypt</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    
 
     
     <div class="grid">
