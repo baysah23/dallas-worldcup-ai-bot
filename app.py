@@ -15,6 +15,8 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # ============================================================
 # App + cache-busting (helps Render show latest index.html)
 # ============================================================
@@ -49,7 +51,7 @@ SCOPES = [
 # ============================================================
 # Business Profile
 # ============================================================
-BUSINESS_PROFILE_PATH = "business_profile.txt"
+BUSINESS_PROFILE_PATH = os.path.join(BASE_DIR, "business_profile.txt")
 if not os.path.exists(BUSINESS_PROFILE_PATH):
     raise FileNotFoundError("business_profile.txt not found in the same folder as app.py.")
 
@@ -373,6 +375,48 @@ def want_reservation(text: str) -> bool:
     return any(k in t for k in ["reservation", "reserve", "book a table", "table for", "reserva", "réservation"])
 
 
+
+def extract_name_candidate(text: str) -> Optional[str]:
+    """Best-effort name extraction from a mixed reservation sentence.
+    Example: 'Jeff party of 6 5pm June 18 2157779999' -> 'Jeff'
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return None
+
+    lowered = raw.lower().strip()
+    # Don't treat control intents as names
+    if lowered in {"reservation", "reserve", "reserva", "réservation", "book", "booking"}:
+        return None
+    if want_reservation(raw) or want_recall(raw, "en") or "recall" in lowered:
+        return None
+
+    # Take everything before the first keyword that likely starts non-name info
+    lower = raw.lower()
+    cut_keywords = [" party", "party", " table", "table", " at ", " on ", " for ", " pm", " am", "/", "-", ":", "phone"]
+    cut_at = len(raw)
+    for kw in cut_keywords:
+        idx = lower.find(kw)
+        if idx != -1:
+            cut_at = min(cut_at, idx)
+    head = raw[:cut_at].strip()
+
+    # Remove digits and symbols; keep letters/spaces/apostrophes
+    head = re.sub(r"[^A-Za-zÀ-ÿ' ]+", " ", head)
+    head = re.sub(r"\s+", " ", head).strip()
+
+    # Must contain at least 2 letters total
+    if len(re.sub(r"[^A-Za-zÀ-ÿ]+", "", head)) < 2:
+        return None
+
+    # Limit to a few words
+    parts = head.split()
+    head = " ".join(parts[:4]).strip()
+    if 2 <= len(head) <= 40:
+        return head
+    return None
+
+
 def extract_party_size(text: str) -> Optional[int]:
     t = text.lower()
     m = re.search(r"party\s*of\s*(\d+)", t)
@@ -527,7 +571,7 @@ def next_question(sess: Dict[str, Any]) -> str:
 # ============================================================
 @app.route("/")
 def home():
-    return send_from_directory(".", "index.html")
+    return send_from_directory(BASE_DIR, "index.html")
 
 
 @app.route("/health")
@@ -546,6 +590,56 @@ def version():
     except Exception as e:
         return jsonify({"error": repr(e)}), 500
 
+
+# ============================================================
+# Backward-compatible API routes for older index.html builds
+# ============================================================
+DEFAULT_COUNTDOWN_TARGET = os.environ.get("COUNTDOWN_TARGET", "2026-06-11T00:00:00")
+
+UI_HELPER = {
+    "en": 'Try: "reservation" to book • "Recall reservation so far" • Ask about the menu • Ask about Dallas match days.',
+    "es": 'Prueba: "reserva" para reservar • "Recordar reserva" • Pregunta por el menú • Pregunta por los partidos en Dallas.',
+    "pt": 'Tente: "reserva" para reservar • "Relembrar reserva" • Pergunte sobre o cardápio • Pergunte sobre jogos em Dallas.',
+    "fr": 'Essayez : "réservation" pour réserver • "Rappeler la réservation" • Demandez le menu • Demandez les matchs à Dallas.',
+}
+
+UI_LANG_SET = {
+    "en": "Language set to English.",
+    "es": "Idioma cambiado a Español.",
+    "pt": "Idioma definido para Português.",
+    "fr": "Langue définie sur Français.",
+}
+
+
+@app.route("/api/config")
+def api_config():
+    return jsonify({
+        "countdown_target": DEFAULT_COUNTDOWN_TARGET,
+        "business_rules": BUSINESS_RULES,
+    })
+
+
+@app.route("/api/ui")
+def api_ui():
+    lang = norm_lang(request.args.get("lang", "en"))
+    strings = dict(LANG[lang])
+    # extra strings expected by older frontends
+    strings["helper"] = UI_HELPER.get(lang, UI_HELPER["en"])
+    strings["lang_set"] = UI_LANG_SET.get(lang, UI_LANG_SET["en"])
+    return jsonify({"lang": lang, "strings": strings})
+
+
+@app.route("/api/schedule")
+def api_schedule():
+    # same payload as /schedule.json, but kept for older frontends
+    return schedule_json()
+
+
+@app.route("/api/menu")
+def api_menu():
+    # older frontend expects {items:[...]} (no wrapper)
+    lang = norm_lang(request.args.get("lang", "en"))
+    return jsonify({"lang": lang, "items": MENU[lang]["items"]})
 
 @app.route("/menu.json")
 def menu_json():
@@ -671,6 +765,10 @@ def chat():
         if ph:
             sess["lead"]["phone"] = ph
 
+        nm = extract_name_candidate(msg)
+        if nm:
+            sess["lead"]["name"] = nm
+
         q = next_question(sess)
         return jsonify({"reply": q, "rate_limit_remaining": remaining})
 
@@ -698,13 +796,12 @@ def chat():
         if ph:
             sess["lead"]["phone"] = ph
 
-        # name: if message is short and not just a digit/phone
+        # name (best-effort): support mixed messages like:
+        #   Jeff party of 6 5pm June 18 2157779999
         if not sess["lead"]["name"]:
-            if not extract_phone(msg) and len(msg.strip()) <= 40:
-                # avoid obvious non-names
-                if not any(k in msg.lower() for k in ["party", "table", "pm", "am", "/", "-"]):
-                    # accept simple "J", "Cliff", etc.
-                    sess["lead"]["name"] = msg.strip()
+            nm = extract_name_candidate(msg)
+            if nm:
+                sess["lead"]["name"] = nm
 
         # apply business rules if we have enough to check
         rule = apply_business_rules(sess["lead"])
