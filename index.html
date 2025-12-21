@@ -23,7 +23,8 @@
     }
     .wrap{max-width:1050px; width:100%; margin:0 auto; display:flex; flex-direction:column; height:100%;}
     header{
-      padding:16px 18px; background: linear-gradient(90deg, #0b1733 0%, #0f1b33 55%, #102246 100%);
+      padding:16px 18px;
+      background: linear-gradient(90deg, #0b1733 0%, #0f1b33 55%, #102246 100%);
       border-bottom:1px solid var(--line);
     }
     .toprow{display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;}
@@ -56,7 +57,7 @@
       min-height:0;
     }
     @media (max-width: 950px){
-      .grid{grid-template-columns:1fr;}
+      .grid{grid-template-columns:1fr; }
     }
     .card{
       background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.03) 100%);
@@ -171,7 +172,7 @@
     }
     .nums span{color:var(--text);}
     .nums b{color:#f5d76e;}
-    .schedule{max-height:260px; overflow:auto;}
+    .schedule{ max-height:260px; overflow:auto; }
     .match{
       display:flex;
       justify-content:space-between;
@@ -272,8 +273,8 @@
 
         <div class="countdown">
           <div>
-            <div class="label">World Cup countdown</div>
-            <div class="sub" style="margin:4px 0 0;">Dallas / Arlington match days</div>
+            <div class="label" id="countLabel">World Cup countdown</div>
+            <div class="sub" style="margin:4px 0 0;" id="countSub">Dallas / Arlington match days</div>
           </div>
           <div class="nums" id="countNums">
             <span><b id="d">0</b>d</span>
@@ -286,7 +287,7 @@
         <div class="matchday" id="matchdayBox"></div>
 
         <div class="sidepad" style="padding-bottom:0;">
-          <div class="pill" style="display:inline-block;">Next upcoming match is highlighted</div>
+          <div class="pill" style="display:inline-block;" id="nextHint">Next upcoming match is highlighted</div>
         </div>
 
         <div class="schedule" id="schedule"></div>
@@ -295,15 +296,16 @@
           <div class="title" id="menuTitle">Menu</div>
           <div class="pill">4 languages</div>
         </div>
+
         <div class="menu" id="menu"></div>
       </div>
     </div>
   </div>
 
   <script>
-    // =========================================================
-    // Session + state
-    // =========================================================
+    // ============================================================
+    // Session + State
+    // ============================================================
     const sessionId = (localStorage.getItem("session_id") || (() => {
       const id = "sess_" + Math.random().toString(16).slice(2) + "_" + Date.now();
       localStorage.setItem("session_id", id);
@@ -311,39 +313,11 @@
     })());
 
     let lang = localStorage.getItem("lang") || "en";
+    let scheduleData = null;
 
-    // Mirrors app.py LANG strings (client-side UI only)
-    const UI = {
-      en: {
-        welcome: "Hi! Want to book a table for a match day? Ask me anything.",
-        helper: "Tips:\n• Type “reservation” to start a booking.\n• Type “Recall reservation so far” to see what I’ve captured.\n• You can also ask about the menu or match schedule.",
-        lang_set: "Language set to English."
-      },
-      es: {
-        welcome: "¡Hola! ¿Quieres reservar una mesa para un día de partido? Pregúntame lo que sea.",
-        helper: "Consejos:\n• Escribe “reserva” para comenzar.\n• Escribe “Recordar reserva” para ver lo guardado.\n• También puedes preguntar por el menú o el calendario.",
-        lang_set: "Idioma cambiado a Español."
-      },
-      pt: {
-        welcome: "Olá! Quer reservar uma mesa para dia de jogo? Pergunte qualquer coisa.",
-        helper: "Dicas:\n• Digite “reserva” para começar.\n• Digite “Relembrar reserva” para ver o que foi salvo.\n• Você também pode perguntar sobre o cardápio ou a agenda.",
-        lang_set: "Idioma definido para Português."
-      },
-      fr: {
-        welcome: "Bonjour ! Vous voulez réserver une table pour un jour de match ? Demandez-moi !",
-        helper: "Astuces :\n• Écrivez “réservation” pour commencer.\n• Écrivez “Rappeler la réservation” pour revoir les détails.\n• Vous pouvez aussi demander le menu ou le calendrier.",
-        lang_set: "Langue définie sur Français."
-      }
-    };
-
-    // Conversation memory (client-side history)
+    // local conversation memory (kept as your existing feature)
     const history = [];
 
-    // Server data
-    let scheduleData = null;   // from /schedule.json
-    let menuData = null;       // from /menu.json
-
-    // Elements
     const chatEl = document.getElementById("chat");
     const msgEl = document.getElementById("msg");
     const sendBtn = document.getElementById("sendBtn");
@@ -352,7 +326,58 @@
     const pillMode = document.getElementById("pillMode");
     const matchBanner = document.getElementById("matchBanner");
     const matchdayBox = document.getElementById("matchdayBox");
-    const menuTitle = document.getElementById("menuTitle");
+    const scheduleEl = document.getElementById("schedule");
+    const menuEl = document.getElementById("menu");
+
+    // ============================================================
+    // UI Strings (matching your app.py LANG intent, kept client-side)
+    // ============================================================
+    const UI = {
+      en: {
+        welcome: "Hi! Want to book a table for a match day? Ask me anything.",
+        helper: "Try: “reservation” to book • “Recall reservation so far” • Ask about the menu • Ask about Dallas match days.",
+        lang_set: "Language set to English.",
+        countdown_label: "World Cup countdown",
+        countdown_sub: "Dallas / Arlington match days",
+        next_hint: "Next upcoming match is highlighted",
+        schedule_empty: "No Dallas/Arlington matches listed yet. (Add them in app.py → DALLAS_MATCHES)",
+        schedule_title: (n)=>`${n} match(es) loaded`,
+      },
+      es: {
+        welcome: "¡Hola! ¿Quieres reservar una mesa para un día de partido? Pregúntame lo que sea.",
+        helper: "Prueba: “reserva” • “Recordar reserva” • Pregunta por el menú • Pregunta por los días de partido en Dallas.",
+        lang_set: "Idioma cambiado a Español.",
+        countdown_label: "Cuenta regresiva del Mundial",
+        countdown_sub: "Días de partido Dallas / Arlington",
+        next_hint: "Se resalta el próximo partido",
+        schedule_empty: "Aún no hay partidos listados. (Agrégalos en app.py → DALLAS_MATCHES)",
+        schedule_title: (n)=>`${n} partido(s) cargado(s)`,
+      },
+      pt: {
+        welcome: "Olá! Quer reservar uma mesa para dia de jogo? Pergunte qualquer coisa.",
+        helper: "Tente: “reserva” • “Relembrar reserva” • Pergunte o cardápio • Pergunte sobre dias de jogo em Dallas.",
+        lang_set: "Idioma alterado para Português.",
+        countdown_label: "Contagem regressiva da Copa",
+        countdown_sub: "Dias de jogo Dallas / Arlington",
+        next_hint: "Próximo jogo destacado",
+        schedule_empty: "Nenhum jogo listado ainda. (Adicione em app.py → DALLAS_MATCHES)",
+        schedule_title: (n)=>`${n} jogo(s) carregado(s)`,
+      },
+      fr: {
+        welcome: "Bonjour ! Vous voulez réserver une table pour un jour de match ? Demandez-moi !",
+        helper: "Essayez : « réservation » • « Rappeler la réservation » • Demandez le menu • Demandez les jours de match à Dallas.",
+        lang_set: "Langue réglée sur Français.",
+        countdown_label: "Compte à rebours Coupe du Monde",
+        countdown_sub: "Jours de match Dallas / Arlington",
+        next_hint: "Prochain match mis en évidence",
+        schedule_empty: "Aucun match listé pour l’instant. (Ajoutez-les dans app.py → DALLAS_MATCHES)",
+        schedule_title: (n)=>`${n} match(s) chargé(s)`,
+      },
+    };
+
+    function ui() {
+      return UI[lang] || UI.en;
+    }
 
     function addBubble(role, text){
       const b = document.createElement("div");
@@ -368,10 +393,19 @@
       sendBtn.textContent = isSending ? "..." : "Send";
     }
 
-    // =========================================================
-    // Language toggle
-    // =========================================================
-    function setLanguage(newLang){
+    // ============================================================
+    // Language toggle (keeps your feature)
+    // ============================================================
+    function applyLanguageToUI(){
+      pillLang.textContent = lang.toUpperCase();
+      helperHint.textContent = ui().helper;
+
+      document.getElementById("countLabel").textContent = ui().countdown_label;
+      document.getElementById("countSub").textContent = ui().countdown_sub;
+      document.getElementById("nextHint").textContent = ui().next_hint;
+    }
+
+    async function setLanguage(newLang){
       lang = newLang;
       localStorage.setItem("lang", lang);
 
@@ -379,78 +413,56 @@
         btn.classList.toggle("active", btn.dataset.lang === lang);
       });
 
-      pillLang.textContent = lang.toUpperCase();
+      applyLanguageToUI();
 
-      // Update helper/welcome UI (client-side)
-      const ui = UI[lang] || UI.en;
-      helperHint.textContent = ui.helper;
+      // Bot notice + refresh menu (your feature)
+      addBubble("assistant", ui().lang_set + "\n\n" + ui().helper);
+      history.push({role:"assistant", content: ui().lang_set + "\n\n" + ui().helper});
 
-      // Keep the feature: show a bot notice after switching
-      addBubble("assistant", ui.lang_set + "\n\n" + ui.helper);
-      history.push({role:"assistant", content: ui.lang_set + "\n\n" + ui.helper});
-
-      // Reload menu in the selected language (server source of truth)
-      loadMenu(lang);
-
-      // Optional: if schedule uses localized labels later, re-render
-      if (scheduleData) renderSchedule();
+      await loadMenu(lang);
     }
 
     document.querySelectorAll(".langbtn").forEach(btn => {
       btn.addEventListener("click", () => setLanguage(btn.dataset.lang));
     });
 
-    // =========================================================
-    // Fetchers (MATCH app.py routes)
-    //   - /schedule.json
-    //   - /menu.json?lang=en
-    // =========================================================
+    // ============================================================
+    // Fetchers (MATCH your app.py routes)
+    // ============================================================
     async function loadSchedule(){
       const res = await fetch("/schedule.json", { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to load schedule.json");
       scheduleData = await res.json();
       renderSchedule();
       updateMatchDayMode();
-      startCountdown(); // uses next_match (or a fallback)
+      startCountdown(); // uses schedule info
     }
 
     async function loadMenu(lang){
       const res = await fetch("/menu.json?lang=" + encodeURIComponent(lang), { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to load menu.json");
       const data = await res.json();
-      menuData = data;
-      // menuData.menu = {title, items}
-      menuTitle.textContent = (menuData && menuData.menu && menuData.menu.title) ? menuData.menu.title : "Menu";
-      renderMenu((menuData && menuData.menu && menuData.menu.items) ? menuData.menu.items : []);
+      const menu = data.menu || {};
+      document.getElementById("menuTitle").textContent = menu.title || "Menu";
+      renderMenu((menu.items || []));
     }
 
-    // =========================================================
-    // Countdown
-    // - app.py does not have /api/config; we derive a target from schedule.json.
-    // - Prefer next_match.date/time if present; otherwise fall back to June 11, 2026.
-    // =========================================================
+    // ============================================================
+    // Countdown (keeps feature; derives from next_match/date or defaults)
+    // ============================================================
+    let countdownTimer = null;
+
     function getCountdownTarget(){
-      // If next match exists, count down to that (more relevant for your sidebar)
+      // Prefer next_match date (from /schedule.json)
       if (scheduleData && scheduleData.next_match && scheduleData.next_match.date) {
-        const nm = scheduleData.next_match;
-        // next_match in app.py is one of DALLAS_MATCHES items; may be missing time
-        if (nm.time) {
-          // date: YYYY-MM-DD, time: "17:00" or "7:00 pm" depending on how you store matches
-          // Handle "HH:MM" (24h) best; if "7:00 pm" we still parse reasonably in most browsers
-          const maybeISO = nm.time.match(/^\d{1,2}:\d{2}$/) ? (nm.date + "T" + nm.time + ":00") : (nm.date + " " + nm.time);
-          const dt = new Date(maybeISO);
-          if (!isNaN(dt.getTime())) return dt;
-        }
-        // date only
-        const dt2 = new Date(nm.date + "T12:00:00");
-        if (!isNaN(dt2.getTime())) return dt2;
+        // Set to start of that day local time
+        return new Date(scheduleData.next_match.date + "T00:00:00");
       }
-      // fallback: World Cup 2026 opening day (approx). Keeps your countdown feature alive.
-      return new Date("2026-06-11T12:00:00");
+      // Otherwise, default to World Cup 2026 kickoff day (keeps countdown feature alive)
+      return new Date("2026-06-11T00:00:00");
     }
 
     function startCountdown(){
       const target = getCountdownTarget();
+
       const dEl = document.getElementById("d");
       const hEl = document.getElementById("h");
       const mEl = document.getElementById("m");
@@ -466,6 +478,7 @@
         const mins = Math.floor(diff / (1000*60));
         diff -= mins*(1000*60);
         const secs = Math.floor(diff / 1000);
+
         dEl.textContent = days;
         hEl.textContent = hrs;
         mEl.textContent = mins;
@@ -473,89 +486,76 @@
       }
 
       tick();
-      // Avoid multiple intervals if user reloads schedule (simple guard)
-      if (window.__countdownTimer) clearInterval(window.__countdownTimer);
-      window.__countdownTimer = setInterval(tick, 1000);
+      if (countdownTimer) clearInterval(countdownTimer);
+      countdownTimer = setInterval(tick, 1000);
     }
 
-    // =========================================================
-    // Schedule rendering + next match highlight
-    // app.py schedule_json returns:
-    //   { today, is_match_day, match_day_banner, next_match, matches }
-    // matches items are your DALLAS_MATCHES list
-    // =========================================================
+    // ============================================================
+    // Schedule rendering + next match highlight (keeps feature)
+    // Matches app.py fields: id, date, time, venue, teams
+    // ============================================================
     function renderSchedule(){
-      const el = document.getElementById("schedule");
-      el.innerHTML = "";
+      scheduleEl.innerHTML = "";
 
-      const matchesRaw = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches : [];
-      if (!matchesRaw.length) {
+      const matches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches : [];
+
+      if (!matches.length) {
         const row = document.createElement("div");
         row.className = "match";
         row.innerHTML = `
           <div class="left">
-            <div><b>No Dallas matches loaded yet</b></div>
-            <div class="when">Update <code>DALLAS_MATCHES</code> in app.py when official dates are finalized.</div>
+            <div><b>${ui().schedule_empty}</b></div>
+            <div class="when">Tip: Add objects like { "id":"dal-001", "date":"2026-06-14", "time":"17:00", "venue":"AT&T Stadium", "teams":"TBD vs TBD" }</div>
           </div>
-          <div class="pill">TBD</div>
+          <div class="pill">—</div>
         `;
-        el.appendChild(row);
+        scheduleEl.appendChild(row);
         return;
       }
 
-      const matches = matchesRaw.slice().map((m, idx) => {
-        const id = m.id || ("dal-" + String(idx+1).padStart(3,"0"));
-        const dateStr = m.date || "";
-        const timeStr = m.time || "TBD";
-
-        let ts = null;
-        if (dateStr) {
-          if (timeStr && timeStr !== "TBD") {
-            // Prefer ISO-ish time like 17:00
-            const maybeISO = timeStr.match(/^\d{1,2}:\d{2}$/) ? (dateStr + "T" + timeStr + ":00") : (dateStr + " " + timeStr);
-            const d = new Date(maybeISO);
-            ts = isNaN(d.getTime()) ? Date.parse(dateStr + "T23:59:59") : d.getTime();
-          } else {
-            ts = Date.parse(dateStr + "T23:59:59");
-          }
-        } else {
-          ts = Date.now() + 999999999; // push unknown to bottom
-        }
-
-        // Keep your existing layout fields, but map from app.py list
-        // Your app.py placeholder suggested "teams" string; venue optional
-        const teams = m.teams || (m.home && m.away ? `${m.home} vs ${m.away}` : "TBD vs TBD");
-        const stage = m.stage || m.round || (m.venue ? "Match" : "Dallas Match");
-        const venue = m.venue || "AT&T Stadium";
-
-        return { ...m, id, date: dateStr, time: timeStr, teams, stage, venue, ts };
-      });
+      // Compute timestamps for sorting/highlighting
+      const withTs = matches.map(m => {
+        const dateStr = (m.date || "");
+        const timeStr = (m.time && m.time !== "TBD") ? m.time : "23:59:59";
+        const ts = Date.parse(dateStr + "T" + (timeStr.length === 5 ? (timeStr + ":00") : timeStr));
+        return { ...m, ts: isNaN(ts) ? Number.MAX_SAFE_INTEGER : ts };
+      }).sort((a,b)=>a.ts-b.ts);
 
       const now = Date.now();
-      const upcoming = matches.filter(m => m.ts >= now).sort((a,b)=>a.ts-b.ts);
+      const upcoming = withTs.filter(m => m.ts >= now);
       const nextId = upcoming.length ? upcoming[0].id : null;
 
-      matches.sort((a,b)=>a.ts-b.ts).forEach(m => {
+      withTs.forEach(m => {
         const row = document.createElement("div");
         row.className = "match" + (m.id === nextId ? " next" : "");
+
+        const timeTxt = (m.time && m.time !== "TBD") ? m.time : "TBD";
+        const teamsTxt = m.teams || "TBD vs TBD";
+        const venueTxt = m.venue || "Venue TBD";
+
         row.innerHTML = `
           <div class="left">
-            <div><b>${escapeHtml(m.stage)}</b> • ${escapeHtml(m.teams)}</div>
-            <div class="when">${escapeHtml(m.date || "TBD")} • ${escapeHtml(m.time || "TBD")} • ${escapeHtml(m.venue || "")}</div>
+            <div><b>${teamsTxt}</b></div>
+            <div class="when">${m.date || "—"} • ${timeTxt} • ${venueTxt}</div>
           </div>
-          <div class="pill">${escapeHtml(m.id)}</div>
+          <div class="pill">${m.id || "—"}</div>
         `;
-        el.appendChild(row);
+        scheduleEl.appendChild(row);
       });
     }
 
+    // ============================================================
+    // Match-day mode (MATCH app.py /schedule.json payload)
+    // ============================================================
     function updateMatchDayMode(){
       const isMatch = !!(scheduleData && scheduleData.is_match_day);
+
       if (isMatch){
         pillMode.textContent = "Mode: Match-day";
-        const banner = (scheduleData && scheduleData.match_day_banner) ? scheduleData.match_day_banner : "Match-day hours";
+        const banner = scheduleData.match_day_banner || "🏟️ Match-day hours";
         matchBanner.textContent = banner;
         matchBanner.classList.add("show");
+
         matchdayBox.textContent = "🏟️ Match-day mode is ON today. Expect higher traffic — reserve early!";
         matchdayBox.classList.add("show");
       } else {
@@ -565,47 +565,26 @@
       }
     }
 
-    // =========================================================
-    // Menu rendering (server source of truth: /menu.json)
-    // =========================================================
+    // ============================================================
+    // Menu rendering (uses /menu.json)
+    // ============================================================
     function renderMenu(items){
-      const el = document.getElementById("menu");
-      el.innerHTML = "";
-
-      if (!items || !items.length){
+      menuEl.innerHTML = "";
+      (items || []).forEach(it => {
         const d = document.createElement("div");
         d.className = "menuitem";
         d.innerHTML = `
-          <div class="name">No menu items</div>
-          <div class="desc">Update <code>MENU</code> in app.py.</div>
-          <div class="price">—</div>
+          <div class="name">${it.name || ""}</div>
+          <div class="desc">${it.desc || ""}</div>
+          <div class="price">${it.price || ""}</div>
         `;
-        el.appendChild(d);
-        return;
-      }
-
-      items.forEach(it => {
-        const d = document.createElement("div");
-        d.className = "menuitem";
-        d.innerHTML = `
-          <div class="name">${escapeHtml(it.name || "")}</div>
-          <div class="desc">${escapeHtml(it.desc || "")}</div>
-          <div class="price">${escapeHtml(it.price || "")}</div>
-        `;
-        el.appendChild(d);
+        menuEl.appendChild(d);
       });
     }
 
-    // =========================================================
-    // Chat send (MATCH app.py /chat contract)
-    // app.py expects:
-    //   { message, language, session_id }
-    // It returns:
-    //   { reply, rate_limit_remaining }
-    //
-    // NOTE: your old HTML sent {history, lang}; app.py ignores history and uses "language" key.
-    // We keep history on the client (feature retained), but only send what server expects.
-    // =========================================================
+    // ============================================================
+    // Chat send (MATCH app.py: /chat expects language, session_id)
+    // ============================================================
     async function sendMessage(){
       const text = msgEl.value.trim();
       if (!text) return;
@@ -623,19 +602,17 @@
           headers:{"Content-Type":"application/json"},
           body: JSON.stringify({
             message: text,
-            language: lang,      // IMPORTANT: matches app.py
-            session_id: sessionId
+            session_id: sessionId,
+            language: lang
+            // NOTE: app.py ignores history; we keep it client-side as your existing feature
           })
         });
 
         const data = await res.json().catch(() => ({}));
         const reply = (data && data.reply) ? data.reply : "Sorry — no reply received.";
+
         addBubble("assistant", reply);
         history.push({role:"assistant", content: reply});
-
-        // Optional: if user asked about schedule/menu, we already show sidebar.
-        // (No changes needed — feature retained via sidebar.)
-
       } catch(e){
         addBubble("assistant", "⚠️ Network error. Please try again.");
       } finally{
@@ -644,7 +621,7 @@
       }
     }
 
-    sendBtn.addEventListener("click", sendMessage);
+    document.getElementById("sendBtn").addEventListener("click", sendMessage);
 
     // Enter to send, Shift+Enter newline
     msgEl.addEventListener("keydown", (e) => {
@@ -654,55 +631,31 @@
       }
     });
 
-    // Auto-grow textarea
+    // Auto-grow textarea (keeps feature)
     msgEl.addEventListener("input", () => {
       msgEl.style.height = "44px";
       msgEl.style.height = Math.min(msgEl.scrollHeight, 130) + "px";
     });
 
-    // =========================================================
-    // Small helper
-    // =========================================================
-    function escapeHtml(str){
-      return String(str)
-        .replaceAll("&","&amp;")
-        .replaceAll("<","&lt;")
-        .replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;")
-        .replaceAll("'","&#039;");
-    }
-
-    // =========================================================
+    // ============================================================
     // Init
-    // =========================================================
+    // ============================================================
     (async function init(){
-      // Apply saved language to UI
-      pillLang.textContent = lang.toUpperCase();
+      // activate correct button for stored lang
       document.querySelectorAll(".langbtn").forEach(btn => {
         btn.classList.toggle("active", btn.dataset.lang === lang);
       });
 
-      // Set helper text for current lang (client-side)
-      helperHint.textContent = (UI[lang] || UI.en).helper;
+      applyLanguageToUI();
 
-      // Load server data
-      try{
-        await loadSchedule();
-      } catch (e) {
-        // keep app usable even if schedule fails
-        console.error(e);
-      }
+      // load server data
+      await loadSchedule();
+      await loadMenu(lang);
 
-      try{
-        await loadMenu(lang);
-      } catch (e) {
-        console.error(e);
-      }
-
-      // Welcome message
-      const ui = UI[lang] || UI.en;
-      addBubble("assistant", ui.welcome);
-      history.push({role:"assistant", content: ui.welcome});
+      // welcome message (keeps feature)
+      addBubble("assistant", ui().welcome);
+      history.push({role:"assistant", content: ui().welcome});
+      helperHint.textContent = ui().helper;
     })();
   </script>
 </body>
