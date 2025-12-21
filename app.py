@@ -453,17 +453,20 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
     ])
 
 
-def read_leads(limit: int = 200) -> List[List[str]]:
+
+
+def read_leads(limit: int = 300) -> List[List[str]]:
     """
-    Read rows from Google Sheet and return [header] + body.
+    Read reservation leads from Google Sheet and return [header] + body.
 
-    Handles common situations:
-      - Header row accidentally appended at the bottom
+    Fixes common sheet issues:
+      - Header row accidentally appended at bottom (e.g. 'timestamp,name,...' appears as last row)
       - No header row at all
-      - Rows with missing / extra columns
+      - Rows with missing/extra columns
 
-    Ensures the admin table always shows a real header (timestamp, name, phone, date, time, party_size, language)
-    and that data rows are aligned to that header.
+    Always returns a clean header with:
+      timestamp, name, phone, date, time, party_size, language
+    and aligns each data row to that width.
     """
     gc = get_gspread_client()
     ws = gc.open(SHEET_NAME).sheet1
@@ -471,58 +474,48 @@ def read_leads(limit: int = 200) -> List[List[str]]:
     if not rows:
         return []
 
-    def is_header_row(r: List[str]) -> bool:
+    std_header = ["timestamp", "name", "phone", "date", "time", "party_size", "language"]
+
+    def looks_like_header(r: List[str]) -> bool:
         joined = " ".join([(c or "").strip().lower() for c in (r or [])])
-        # A good header typically contains these column names
         return ("timestamp" in joined and "name" in joined and "phone" in joined) or (
             "date" in joined and "time" in joined and "party" in joined
         )
 
     header_idx = None
     for i, r in enumerate(rows):
-        if is_header_row(r):
+        if looks_like_header(r):
             header_idx = i
             break
 
     if header_idx is None:
-        header = ["timestamp", "name", "phone", "date", "time", "party_size", "language"]
+        header = std_header
         body = rows
     else:
-        header = rows[header_idx]
-        # keep everything except the header row
-        body = rows[:header_idx] + rows[header_idx + 1 :]
+        header_raw = [ (c or "").strip() for c in rows[header_idx] if (c or "").strip() ]
+        header = header_raw if len(header_raw) >= 4 else std_header
+        body = rows[:header_idx] + rows[header_idx+1:]
 
-    # Normalize header (trim, ensure language exists)
-    header_norm = [ (h or "").strip() for h in header if (h or "").strip() ]
-    # If the sheet header row is partial, fall back to standard names
-    std = ["timestamp", "name", "phone", "date", "time", "party_size", "language"]
-    if len(header_norm) < 4:
-        header_norm = std.copy()
-    if not any(h.lower() == "language" for h in header_norm):
-        header_norm.append("language")
-    header = header_norm
+    if not any(h.lower() == "language" for h in header):
+        header = header + ["language"]
 
-    # Keep last N rows (most recent at bottom in sheet)
+    joined_header = " ".join([h.lower() for h in header])
+    if ("name" not in joined_header) or ("phone" not in joined_header) or ("date" not in joined_header):
+        header = std_header
+
     body = body[-limit:]
 
-    # Align rows to header width
     width = len(header)
-    fixed_body: List[List[str]] = []
+    fixed = []
     for r in body:
         r = list(r or [])
         if len(r) < width:
             r = r + [""] * (width - len(r))
         elif len(r) > width:
             r = r[:width]
-        fixed_body.append(r)
+        fixed.append(r)
 
-    return [header] + fixed_body
-
-# ============================================================
-# Reservation state machine (in-memory sessions)
-# ============================================================
-_sessions: Dict[str, Dict[str, Any]] = {}
-
+    return [header] + fixed
 
 def get_session_id() -> str:
     """
@@ -987,7 +980,7 @@ def admin():
     # Simple HTML table
     html = []
     html.append("<html><head><meta charset='utf-8'><title>Leads Admin</title>")
-    html.append("<style>body{font-family:Arial,Helvetica,sans-serif;padding:16px;background:#0b152c;color:#eaf0ff}h2{margin:0;position:sticky;top:0;background:#0b152c;padding:10px 0;z-index:5}.meta{position:sticky;top:46px;background:#0b152c;padding:8px 0;z-index:4;color:#b9c7ee;font-size:12px}table{border-collapse:collapse;width:100%;background:#0f1b33;border:1px solid rgba(255,255,255,.14)}th,td{border:1px solid rgba(255,255,255,.14);padding:8px;font-size:12px;vertical-align:top}th{position:sticky;top:92px;background:#102246;z-index:3;text-transform:capitalize}tr:nth-child(even) td{background:rgba(255,255,255,.03)}</style>")
+    html.append("<style>body{font-family:Arial,Helvetica,sans-serif;padding:16px;background:#0b152c;color:#eaf0ff}h2{margin:0;position:sticky;top:0;background:#0b152c;padding:10px 0;z-index:10}.meta{position:sticky;top:44px;background:#0b152c;padding:8px 0;z-index:9;color:#b9c7ee;font-size:12px}table{border-collapse:collapse;width:100%;background:#0f1b33;border:1px solid rgba(255,255,255,.14)}th,td{border:1px solid rgba(255,255,255,.14);padding:8px;font-size:12px;vertical-align:top;white-space:nowrap}td{white-space:normal}th{position:sticky;top:88px;background:#102246;z-index:8;text-transform:capitalize}tr:nth-child(even) td{background:rgba(255,255,255,.03)}</style>")
     html.append("</head><body>")
     html.append(f"<h2>Leads Admin — {SHEET_NAME}</h2>")
     html.append(f"<div class='meta'>Rows shown: {len(body)}</div>")
