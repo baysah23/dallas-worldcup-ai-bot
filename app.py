@@ -85,11 +85,18 @@ BUSINESS_RULES = {
 # - You can replace this list anytime.
 # - Format: ISO date/time in local venue time (for display)
 # ============================================================
-DALLAS_MATCHES: List[Dict[str, Any]] = [
-    # NOTE: These are placeholders. Replace with official Dallas match dates when finalized.
-    # {"id":"dal-001","date":"2026-06-14","time":"17:00","venue":"AT&T Stadium","teams":"TBD vs TBD"},
-    # {"id":"dal-002","date":"2026-06-20","time":"20:00","venue":"AT&T Stadium","teams":"TBD vs TBD"},
+DALLAS_MATCHES = [
+    {'id': 'dal-011', 'date': '2026-06-14', 'time': '15:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'Netherlands vs Japan (Group F)'},
+    {'id': 'dal-022', 'date': '2026-06-17', 'time': '15:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'England vs Croatia (Group L)'},
+    {'id': 'dal-043', 'date': '2026-06-22', 'time': '12:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'Argentina vs Austria (Group J)'},
+    {'id': 'dal-057', 'date': '2026-06-25', 'time': '18:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'Japan vs UEFA Play-off Final B winner (Group F, TBD)'},
+    {'id': 'dal-070', 'date': '2026-06-27', 'time': '21:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'Jordan vs Argentina (Group J)'},
+    {'id': 'dal-r32-1', 'date': '2026-06-30', 'time': '12:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'Round of 32: Group E runner-up vs Group I runner-up'},
+    {'id': 'dal-r32-2', 'date': '2026-07-03', 'time': '13:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'Round of 32: Group D runner-up vs Group G runner-up'},
+    {'id': 'dal-r16', 'date': '2026-07-06', 'time': '14:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'Round of 16 (TBD vs TBD)'},
+    {'id': 'dal-sf', 'date': '2026-07-14', 'time': '14:00', 'venue': 'Dallas Stadium (Arlington)', 'teams': 'Semifinal (TBD vs TBD)'},
 ]
+
 
 
 # ============================================================
@@ -146,7 +153,7 @@ LANG = {
         "ask_party": "How many people are in your party?",
         "ask_name": "What name should we put the reservation under?",
         "ask_phone": "What phone number should we use?",
-        "recall_title": "📌 Reservation so far:",
+        "recall_title": "Reservation so far:",
         "recall_empty": "No reservation details yet. Say “reservation” to start.",
         "saved": "✅ Reservation saved!",
         "rule_party": "⚠️ That party size is above our limit. Please call the business to confirm a larger group.",
@@ -159,7 +166,7 @@ LANG = {
         "ask_party": "¿Cuántas personas serán?",
         "ask_name": "¿A nombre de quién será la reserva?",
         "ask_phone": "¿Qué número de teléfono debemos usar?",
-        "recall_title": "📌 Reserva hasta ahora:",
+        "recall_title": "Reserva hasta ahora:",
         "recall_empty": "Aún no hay detalles. Escribe “reserva” para comenzar.",
         "saved": "✅ ¡Reserva guardada!",
         "rule_party": "⚠️ Ese tamaño de grupo supera nuestro límite. Llama al negocio para confirmar un grupo grande.",
@@ -172,7 +179,7 @@ LANG = {
         "ask_party": "Quantas pessoas?",
         "ask_name": "Em qual nome devemos colocar a reserva?",
         "ask_phone": "Qual número de telefone devemos usar?",
-        "recall_title": "📌 Reserva até agora:",
+        "recall_title": "Reserva até agora:",
         "recall_empty": "Ainda não há detalhes. Digite “reserva” para começar.",
         "saved": "✅ Reserva salva!",
         "rule_party": "⚠️ Esse tamanho de grupo excede o limite. Ligue para confirmar um grupo maior.",
@@ -185,7 +192,7 @@ LANG = {
         "ask_party": "Pour combien de personnes ?",
         "ask_name": "Au nom de qui ?",
         "ask_phone": "Quel numéro de téléphone devons-nous utiliser ?",
-        "recall_title": "📌 Réservation jusqu’ici :",
+        "recall_title": "Réservation jusqu’ici :",
         "recall_empty": "Aucun détail pour l’instant. Dites « réservation » pour commencer.",
         "saved": "✅ Réservation enregistrée !",
         "rule_party": "⚠️ Ce nombre dépasse notre limite. Veuillez appeler pour un grand groupe.",
@@ -227,7 +234,10 @@ def client_ip() -> str:
 
 
 def check_rate_limit(ip: str) -> Tuple[bool, int]:
-    """Returns (allowed, remaining_in_window). Fixed window: per-minute."""
+    """
+    Returns (allowed, remaining_in_window).
+    Fixed window: per-minute.
+    """
     now = int(time.time())
     window = now // 60
     b = _rate_buckets.get(ip)
@@ -297,7 +307,7 @@ def parse_iso_date(d: str) -> Optional[date]:
 
 
 def get_next_match(now_date: date) -> Optional[Dict[str, Any]]:
-    future: List[Tuple[date, Dict[str, Any]]] = []
+    future = []
     for m in DALLAS_MATCHES:
         md = parse_iso_date(m.get("date", ""))
         if not md:
@@ -323,7 +333,10 @@ _sessions: Dict[str, Dict[str, Any]] = {}
 
 
 def get_session_id() -> str:
-    """Front-end should send session_id for stable memory. Fallback: IP + UA."""
+    """
+    Front-end should send session_id for stable memory.
+    Fallback: IP + UA.
+    """
     data = request.get_json(silent=True) or {}
     sid = (data.get("session_id") or "").strip()
     if sid:
@@ -347,21 +360,17 @@ def get_session(sid: str) -> Dict[str, Any]:
 def want_recall(text: str, lang: str) -> bool:
     t = text.lower().strip()
     triggers = [
-        "recall reservation", "reservation so far",
-        "recordar reserva", "reserva hasta ahora",
-        "relembrar reserva", "reserva até agora",
+        "recall reservation", "recall", "reservation so far",
+        "recordar reserva", "recordar", "reserva hasta ahora",
+        "relembrar reserva", "relembrar", "reserva até agora",
         "rappeler", "réservation", "reservation jusqu",
     ]
     return any(x in t for x in triggers)
 
 
 def want_reservation(text: str) -> bool:
-    t = text.lower().strip()
-    # Avoid catching "recall reservation so far"
-    if "recall" in t or "recordar" in t or "relembrar" in t or "rappeler" in t:
-        return False
-    # Whole-word-ish matches
-    return bool(re.search(r"\b(reservation|reserve|reserva|réservation)\b", t)) or ("book a table" in t) or ("table for" in t)
+    t = text.lower()
+    return any(k in t for k in ["reservation", "reserve", "book a table", "table for", "reserva", "réservation"])
 
 
 def extract_party_size(text: str) -> Optional[int]:
@@ -381,21 +390,11 @@ def extract_party_size(text: str) -> Optional[int]:
 
 
 def extract_phone(text: str) -> Optional[str]:
-    """Extract a US phone number from a mixed sentence.
-    Accepts formats like: 2157779999, (215) 777-9999, 215-777-9999, 1 215 777 9999.
-    Critically: does NOT get confused by other numbers (party size, dates).
-    """
-    t = (text or "").strip()
-    if not t:
-        return None
-
-    # Find candidate 10-digit numbers allowing separators.
-    # Use boundaries so we don't glue unrelated digits together.
-    candidates = re.findall(r"(?<!\d)(?:1\D*)?(\d{3})\D*(\d{3})\D*(\d{4})(?!\d)", t)
-    if candidates:
-        a, b, c = candidates[-1]  # take the last one if multiple
-        return f"{a}{b}{c}"
-
+    digits = re.sub(r"\D+", "", text)
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    if len(digits) == 10:
+        return digits
     return None
 
 
@@ -411,51 +410,6 @@ def extract_time(text: str) -> Optional[str]:
     m = re.search(r"\b(\d{1,2}):(\d{2})\b", t)
     if m:
         return f"{m.group(1)}:{m.group(2)}"
-    return None
-
-
-def extract_name(text: str) -> Optional[str]:
-    """Best-effort name extraction from a mixed reservation sentence.
-    Examples:
-      - "Jeff party of 6 5pm June 18 2157779999" -> "Jeff"
-      - "Jeff" -> "Jeff"
-    """
-    raw = (text or "").strip()
-    if not raw:
-        return None
-
-    low = raw.lower().strip()
-
-    # Don't treat control messages as names
-    if low in {"reservation", "reserve", "reserva", "réservation"}:
-        return None
-    if want_recall(raw, "en") or "reservation so far" in low:
-        return None
-
-    # Take the "front" of the sentence until likely non-name markers
-    # (party/table/date/time/phone punctuation)
-    cut_keywords = ["party", "table", "for ", "on ", "at ", "pm", "am", "/", "-", ":", "phone"]
-    cut_at = len(raw)
-    for kw in cut_keywords:
-        idx = low.find(kw)
-        if idx != -1:
-            cut_at = min(cut_at, idx)
-
-    head = raw[:cut_at].strip()
-
-    # Remove digits and symbols, keep letters/spaces/apostrophes
-    head = re.sub(r"[^A-Za-zÀ-ÿ' ]+", " ", head)
-    head = re.sub(r"\s+", " ", head).strip()
-
-    # Must contain at least 2 letters total
-    if len(re.sub(r"[^A-Za-zÀ-ÿ]+", "", head)) < 2:
-        return None
-
-    # Keep at most 4 words
-    parts = head.split(" ")
-    head = " ".join(parts[:4]).strip()
-    if 2 <= len(head) <= 40:
-        return head
     return None
 
 
@@ -497,6 +451,7 @@ def extract_date(text: str) -> Optional[str]:
         "novembre": 11, "décembre": 12, "decembre": 12,
     }
 
+    # Find month word, then day number
     for word, mon in month_map.items():
         if re.search(rf"\b{re.escape(word)}\b", lower):
             m = re.search(rf"\b{re.escape(word)}\b\D*(\d{{1,2}})", lower)
@@ -520,10 +475,12 @@ def validate_date_iso(d_iso: str) -> bool:
 
 
 def apply_business_rules(lead: Dict[str, Any]) -> Optional[str]:
+    # closed date check
     d_iso = lead.get("date", "")
     if d_iso and d_iso in set(BUSINESS_RULES.get("closed_dates", [])):
         return "closed"
 
+    # party size check
     ps = int(lead.get("party_size") or 0)
     if ps and ps > int(BUSINESS_RULES.get("max_party_size", 999)):
         return "party"
@@ -535,17 +492,15 @@ def recall_text(sess: Dict[str, Any]) -> str:
     lang = sess.get("lang", "en")
     L = LANG[lang]
     lead = sess["lead"]
-
+    parts = []
     if any([lead.get("date"), lead.get("time"), lead.get("party_size"), lead.get("name"), lead.get("phone")]):
-        return "\n".join([
-            L["recall_title"],
-            f"Date: {lead.get('date') or '—'}",
-            f"Time: {lead.get('time') or '—'}",
-            f"Party size: {lead.get('party_size') or '—'}",
-            f"Name: {lead.get('name') or '—'}",
-            f"Phone: {lead.get('phone') or '—'}",
-        ])
-
+        parts.append(L["recall_title"])
+        parts.append(f"- Date: {lead.get('date') or '—'}")
+        parts.append(f"- Time: {lead.get('time') or '—'}")
+        parts.append(f"- Party size: {lead.get('party_size') or '—'}")
+        parts.append(f"- Name: {lead.get('name') or '—'}")
+        parts.append(f"- Phone: {lead.get('phone') or '—'}")
+        return "\n".join(parts)
     return L["recall_empty"]
 
 
@@ -565,32 +520,6 @@ def next_question(sess: Dict[str, Any]) -> str:
     if not lead.get("phone"):
         return L["ask_phone"]
     return ""
-
-
-def hydrate_lead_from_text(sess: Dict[str, Any], msg: str):
-    """Extract any reservation fields present in msg and update sess['lead']."""
-    lead = sess["lead"]
-
-    d_iso = extract_date(msg)
-    if d_iso and validate_date_iso(d_iso):
-        lead["date"] = d_iso
-
-    t = extract_time(msg)
-    if t:
-        lead["time"] = t
-
-    ps = extract_party_size(msg)
-    if ps:
-        lead["party_size"] = ps
-
-    ph = extract_phone(msg)
-    if ph:
-        lead["phone"] = ph
-
-    if not lead.get("name"):
-        nm = extract_name(msg)
-        if nm:
-            lead["name"] = nm
 
 
 # ============================================================
@@ -673,6 +602,7 @@ def admin():
     header = rows[0]
     body = rows[1:]
 
+    # Simple HTML table
     html = []
     html.append("<html><head><meta charset='utf-8'><title>Leads Admin</title>")
     html.append("<style>body{font-family:Arial;padding:16px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ddd;padding:8px;font-size:12px} th{background:#f4f4f4}</style>")
@@ -710,36 +640,73 @@ def chat():
     data = request.get_json(force=True) or {}
     msg = (data.get("message") or "").strip()
     lang = norm_lang(data.get("language"))
-
     sid = get_session_id()
     sess = get_session(sid)
 
+    # update session language if user toggled
     sess["lang"] = lang
     sess["lead"]["language"] = lang
 
     if not msg:
         return jsonify({"reply": "Please type a message.", "rate_limit_remaining": remaining})
 
-    # Recall support
+    # recall support (all languages)
     if want_recall(msg, lang):
         return jsonify({"reply": recall_text(sess), "rate_limit_remaining": remaining})
 
-    # Start reservation
+    # start reservation flow if user indicates intent
     if sess["mode"] == "idle" and want_reservation(msg):
         sess["mode"] = "reserving"
-        sess["lead"] = {"name": "", "phone": "", "date": "", "time": "", "party_size": 0, "language": lang}
-
-        # If user included details in the same message, extract them
-        hydrate_lead_from_text(sess, msg)
+        # attempt to extract any info from this first message
+        d_iso = extract_date(msg)
+        if d_iso and validate_date_iso(d_iso):
+            sess["lead"]["date"] = d_iso
+        t = extract_time(msg)
+        if t:
+            sess["lead"]["time"] = t
+        ps = extract_party_size(msg)
+        if ps:
+            sess["lead"]["party_size"] = ps
+        ph = extract_phone(msg)
+        if ph:
+            sess["lead"]["phone"] = ph
 
         q = next_question(sess)
         return jsonify({"reply": q, "rate_limit_remaining": remaining})
 
-    # Reservation flow continues
+    # If reserving, keep collecting fields deterministically
     if sess["mode"] == "reserving":
-        hydrate_lead_from_text(sess, msg)
+        # Try extract fields from the new message
+        d_iso = extract_date(msg)
+        if d_iso:
+            if validate_date_iso(d_iso):
+                sess["lead"]["date"] = d_iso
+            else:
+                # invalid date like June 31
+                # ask for date again
+                return jsonify({"reply": LANG[lang]["ask_date"], "rate_limit_remaining": remaining})
 
-        # Business rules (party size / closed dates)
+        t = extract_time(msg)
+        if t:
+            sess["lead"]["time"] = t
+
+        ps = extract_party_size(msg)
+        if ps:
+            sess["lead"]["party_size"] = ps
+
+        ph = extract_phone(msg)
+        if ph:
+            sess["lead"]["phone"] = ph
+
+        # name: if message is short and not just a digit/phone
+        if not sess["lead"]["name"]:
+            if not extract_phone(msg) and len(msg.strip()) <= 40:
+                # avoid obvious non-names
+                if not any(k in msg.lower() for k in ["party", "table", "pm", "am", "/", "-"]):
+                    # accept simple "J", "Cliff", etc.
+                    sess["lead"]["name"] = msg.strip()
+
+        # apply business rules if we have enough to check
         rule = apply_business_rules(sess["lead"])
         if rule == "party":
             sess["mode"] = "idle"
@@ -748,12 +715,13 @@ def chat():
             sess["mode"] = "idle"
             return jsonify({"reply": LANG[lang]["rule_closed"], "rate_limit_remaining": remaining})
 
+        # If complete, save + confirm
         lead = sess["lead"]
         if lead.get("date") and lead.get("time") and lead.get("party_size") and lead.get("name") and lead.get("phone"):
             try:
                 append_lead_to_sheet(lead)
+                # reset session mode but keep language
                 sess["mode"] = "idle"
-
                 saved_msg = LANG[lang]["saved"]
                 confirm = (
                     f"{saved_msg}\n"
@@ -763,16 +731,18 @@ def chat():
                     f"Time: {lead['time']}\n"
                     f"Party size: {lead['party_size']}"
                 )
-
+                # clear lead for next reservation
                 sess["lead"] = {"name": "", "phone": "", "date": "", "time": "", "party_size": 0, "language": lang}
                 return jsonify({"reply": confirm, "rate_limit_remaining": remaining})
             except Exception as e:
                 return jsonify({"reply": f"⚠️ Could not save reservation: {repr(e)}", "rate_limit_remaining": remaining}), 500
 
+        # Otherwise ask next missing field (in selected language)
         q = next_question(sess)
         return jsonify({"reply": q, "rate_limit_remaining": remaining})
 
-    # Normal Q&A using OpenAI
+    # Otherwise: normal Q&A using OpenAI (with language + business profile + menu)
+    # (We keep this for general questions, not reservations.)
     system_msg = f"""
 You are a World Cup 2026 Dallas business concierge.
 
@@ -801,6 +771,9 @@ Rules:
     return jsonify({"reply": reply, "rate_limit_remaining": remaining})
 
 
+# ============================================================
+# Run
+# ============================================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
     app.run(host="0.0.0.0", port=port, debug=False)
