@@ -215,7 +215,7 @@
     .nums span{color:var(--text);}
     .nums b{color:#f5d76e;}
 
-    .schedule{flex:1; min-height:420px; overflow:auto;}
+    .schedule{flex:1; min-height:160px; overflow:auto;}
     .match{
       display:flex;
       justify-content:space-between;
@@ -318,183 +318,6 @@
       .menucard{max-width:none; max-height:none;}
     }
 
-
-    /* PHASE1_VENUE_VIBES */
-    /* Phase 1 UI polish: World Cup venue banner (UI-only; no JS changes) */
-    .venue-hero{
-      margin: 12px 14px 0;
-      border-radius: 18px;
-      overflow:hidden;
-      border:1px solid rgba(255,255,255,.14);
-      background:
-        radial-gradient(900px 420px at 15% 20%, rgba(31,111,235,.35) 0%, rgba(7,16,34,0) 55%),
-        radial-gradient(700px 320px at 85% 15%, rgba(46,160,67,.28) 0%, rgba(7,16,34,0) 60%),
-        linear-gradient(135deg, rgba(255,255,255,.08) 0%, rgba(255,255,255,.04) 45%, rgba(0,0,0,.10) 100%);
-      box-shadow: 0 30px 70px rgba(0,0,0,.35);
-      position:relative;
-    }
-    .venue-hero:before{
-      content:"";
-      position:absolute; inset:0;
-      background: repeating-linear-gradient(90deg, rgba(255,255,255,.06) 0 1px, rgba(255,255,255,0) 1px 14px);
-      opacity:.18; pointer-events:none;
-    }
-    .venue-hero .inner{position:relative; padding:12px 14px; display:flex; gap:14px; align-items:center; justify-content:space-between; flex-wrap:wrap;}
-    .venue-hero .headline{display:flex; flex-direction:column; gap:4px;}
-    .venue-hero .headline .t{font-weight:900; letter-spacing:.25px; font-size:13px;}
-    .venue-hero .headline .s{color:var(--muted); font-size:12px;}
-    .hero-flags{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
-    .flag-pill{
-      display:inline-flex; align-items:center; gap:8px;
-      padding:6px 10px; border-radius:999px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.16);
-      font-size:12px; white-space:nowrap;
-    }
-    .flag-pill .f{font-size:16px}
-    .player-ribbon{
-      display:flex; gap:10px; align-items:center;
-      overflow:auto; padding:2px 0;
-      max-width:min(600px, 100%);
-      scrollbar-width:thin;
-    }
-    .player-card{
-      flex:0 0 auto;
-      display:flex; align-items:center; gap:10px;
-      padding:8px 10px;
-      border-radius:16px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.18);
-      min-width: 190px;
-      position:relative;
-      overflow:hidden;
-    }
-    .player-card:before{
-      content:"";
-      position:absolute; inset:-1px;
-      background: radial-gradient(220px 90px at 18% 18%, rgba(245,215,110,.16) 0%, rgba(0,0,0,0) 60%);
-      pointer-events:none;
-    }
-    .jersey{
-      width:42px; height:42px; border-radius:14px;
-      border:1px solid rgba(255,255,255,.16);
-      background: linear-gradient(135deg, rgba(245,215,110,.22) 0%, rgba(46,160,67,.14) 55%, rgba(31,111,235,.18) 100%);
-      display:flex; align-items:center; justify-content:center;
-      box-shadow: 0 10px 26px rgba(0,0,0,.28);
-      flex:0 0 auto;
-      font-size:18px;
-    }
-    .pmeta{position:relative; display:flex; flex-direction:column; gap:2px; min-width:0;}
-    .pmeta .name{font-weight:900; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-    .pmeta .cty{color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-    .shine{
-      position:absolute; top:-40px; right:-60px;
-      width:160px; height:160px; border-radius:999px;
-      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.16) 0%, rgba(255,255,255,0) 60%);
-      transform: rotate(18deg);
-      pointer-events:none;
-      opacity:.7;
-    }
-
-    /* subtle UI polish requested */
-    .bubble{font-size:12px;}
-    .schedule{min-height:260px;}
-    #chat{min-height:320px;}
-    @media (min-height: 880px){
-      .schedule{min-height:360px;}
-      #chat{min-height:420px;}
-    }
-    
-    /* Phase 1 Step 3: Spotlight + auto-rotate ribbon (UI-only) */
-    .spotlight{
-      margin: 12px 14px 0;
-      border-radius: 18px;
-      border: 1px solid rgba(245,215,110,.30);
-      background:
-        radial-gradient(520px 180px at 10% 20%, rgba(245,215,110,.20) 0%, rgba(0,0,0,0) 65%),
-        linear-gradient(135deg, rgba(245,215,110,.10) 0%, rgba(31,111,235,.10) 55%, rgba(0,0,0,.12) 100%);
-      padding: 12px 14px;
-      position:relative;
-      overflow:hidden;
-      box-shadow: 0 18px 45px rgba(0,0,0,.25);
-    }
-    .spotlight:before{
-      content:"";
-      position:absolute; inset:-1px;
-      background: repeating-linear-gradient(90deg, rgba(255,255,255,.07) 0 1px, rgba(255,255,255,0) 1px 16px);
-      opacity:.12; pointer-events:none;
-    }
-    .spotlight .kicker{position:relative; font-size:11px; color:var(--warn); font-weight:900; letter-spacing:.25px;}
-    .spotlight .main{position:relative; margin-top:6px; font-weight:900; font-size:13px;}
-    .spotlight .meta{position:relative; margin-top:4px; color:var(--muted); font-size:12px; display:flex; flex-wrap:wrap; gap:10px;}
-    .spotlight .meta span{display:inline-flex; gap:6px; align-items:center;}
-    .spotlight .cta{position:relative; margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;}
-    .spotlight .cta .mini{
-      font-size:11px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.16);
-      color: var(--text);
-      padding:6px 10px;
-      border-radius:999px;
-      white-space:nowrap;
-    }
-
-    /* Player ribbon auto-rotate helpers */
-    .player-ribbon{scroll-behavior:smooth;}
-    .player-ribbon.paused{scroll-behavior:auto;}
-
-
-    /* Phase 1 polish: player ribbon */
-    .player-ribbon{
-      margin-top:10px;
-      border-top:1px solid rgba(255,255,255,.12);
-      padding-top:10px;
-    }
-    .ribbon-head{display:flex; gap:8px; align-items:center; justify-content:space-between; flex-wrap:wrap;}
-    .ribbon-track{
-      margin-top:10px;
-      display:flex;
-      gap:10px;
-      overflow:auto;
-      scroll-behavior:smooth;
-      padding-bottom:4px;
-    }
-    .ribbon-track::-webkit-scrollbar{height:10px;}
-    .ribbon-track::-webkit-scrollbar-thumb{background: rgba(255,255,255,.12); border-radius:999px;}
-    .playercard{
-      flex:0 0 auto;
-      width:150px;
-      border-radius:16px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.18);
-      padding:10px 10px 9px;
-      box-shadow: 0 14px 30px rgba(0,0,0,.25);
-    }
-    .playercard .avatar{
-      width:42px; height:42px; border-radius:14px;
-      display:flex; align-items:center; justify-content:center;
-      border:1px solid rgba(255,255,255,.16);
-      background: linear-gradient(135deg, rgba(245,215,110,.18) 0%, rgba(31,111,235,.18) 55%, rgba(46,160,67,.14) 100%);
-      font-size:20px;
-      margin-bottom:8px;
-    }
-    .playercard .pname{font-weight:900; font-size:12px;}
-    .playercard .pmeta{color:var(--muted); font-size:11px; margin-top:3px;}
-
-    /* Phase 1 polish: spotlight card */
-    .spotlight{
-      margin:12px 14px 0;
-      padding:12px 12px;
-      border-radius:16px;
-      border:1px solid rgba(31,111,235,.28);
-      background: radial-gradient(500px 220px at 15% 30%, rgba(31,111,235,.22) 0%, rgba(0,0,0,.16) 60%);
-    }
-    .spot-top{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;}
-    .spot-title{font-weight:900; font-size:12px; letter-spacing:.2px;}
-    .spot-body{margin-top:8px;}
-    .spot-teams{font-weight:900; font-size:12px;}
-    .spot-meta{margin-top:4px; color:var(--muted); font-size:11px; line-height:1.25;}
-
 </style>
 </head>
 
@@ -505,7 +328,7 @@
         <div class="brand">
           <div class="badge" aria-hidden="true"></div>
           <div>
-            <h1>WC26 • Dallas Concierge</h1>
+            <h1>World Cup 2026 • Dallas Match-Day Concierge</h1>
             <div class="sub">Reserve tables, see Dallas match schedule, and chat in English • Español • Português • Français</div>
           </div>
         </div>
@@ -518,85 +341,6 @@
         </div>
       </div>
     </header>
-
-    <!-- PHASE1_VENUE_HERO -->
-    <section class="venue-hero" aria-label="World Cup 2026 venue vibes">
-      <div class="inner">
-        <div class="headline">
-          <div class="t">🏆 World Cup 2026 • Venue Vibes</div>
-          <div class="s">Flags, stars, and match-day energy — UI polish only (all features unchanged).</div>
-          <div class="hero-flags" aria-hidden="true" style="margin-top:6px;">
-            <span class="flag-pill"><span class="f">🇺🇸</span>USA</span>
-            <span class="flag-pill"><span class="f">🇲🇽</span>Mexico</span>
-            <span class="flag-pill"><span class="f">🇨🇦</span>Canada</span>
-            <span class="flag-pill"><span class="f">🇧🇷</span>Brazil</span>
-            <span class="flag-pill"><span class="f">🇦🇷</span>Argentina</span>
-            <span class="flag-pill"><span class="f">🇫🇷</span>France</span>
-            <span class="flag-pill"><span class="f">🇩🇪</span>Germany</span>
-            <span class="flag-pill"><span class="f">🇪🇸</span>Spain</span>
-          </div>
-        </div>
-
-        <div class="player-ribbon" aria-label="Featured players">
-          <div class="player-card" title="Lionel Messi — Argentina">
-            <div class="shine"></div>
-            <div class="jersey">⭐</div>
-            <div class="pmeta"><div class="name">Lionel Messi</div><div class="cty">🇦🇷 Argentina</div></div>
-          </div>
-          <div class="player-card" title="Kylian Mbappé — France">
-            <div class="shine"></div>
-            <div class="jersey">⚡</div>
-            <div class="pmeta"><div class="name">Kylian Mbappé</div><div class="cty">🇫🇷 France</div></div>
-          </div>
-          <div class="player-card" title="Erling Haaland — Norway">
-            <div class="shine"></div>
-            <div class="jersey">🎯</div>
-            <div class="pmeta"><div class="name">Erling Haaland</div><div class="cty">🇳🇴 Norway</div></div>
-          </div>
-          <div class="player-card" title="Vinícius Jr — Brazil">
-            <div class="shine"></div>
-            <div class="jersey">🔥</div>
-            <div class="pmeta"><div class="name">Vinícius Jr</div><div class="cty">🇧🇷 Brazil</div></div>
-          </div>
-          <div class="player-card" title="Jude Bellingham — England">
-            <div class="shine"></div>
-            <div class="jersey">🏃</div>
-            <div class="pmeta"><div class="name">Jude Bellingham</div><div class="cty">🏴 England</div></div>
-          </div>
-          <div class="player-card" title="Mohamed Salah — Egypt">
-            <div class="shine"></div>
-            <div class="jersey">👑</div>
-            <div class="pmeta"><div class="name">Mohamed Salah</div><div class="cty">🇪🇬 Egypt</div></div>
-          </div>
-        </div>
-
-        <!-- Phase 1 polish: Player ribbon (UI-only) -->
-        <div class="player-ribbon" aria-label="World Cup player ribbon">
-          <div class="ribbon-head">
-            <div class="pill">🌟 Stars of the tournament</div>
-            <div class="pill">Auto-rotates • pauses on hover</div>
-          </div>
-          <div class="ribbon-track" id="playerRibbonTrack">
-            <div class="playercard"><div class="avatar">🇦🇷</div><div class="pname">Messi</div><div class="pmeta">Argentina</div></div>
-            <div class="playercard"><div class="avatar">🇫🇷</div><div class="pname">Mbappé</div><div class="pmeta">France</div></div>
-            <div class="playercard"><div class="avatar">🇧🇷</div><div class="pname">Vinícius Jr.</div><div class="pmeta">Brazil</div></div>
-            <div class="playercard"><div class="avatar">🇳🇴</div><div class="pname">Haaland</div><div class="pmeta">Norway</div></div>
-            <div class="playercard"><div class="avatar">🇬🇧</div><div class="pname">Bellingham</div><div class="pmeta">England</div></div>
-            <div class="playercard"><div class="avatar">🇺🇸</div><div class="pname">Pulisic</div><div class="pmeta">USA</div></div>
-
-            <!-- duplicate set for smooth loop -->
-            <div class="playercard"><div class="avatar">🇦🇷</div><div class="pname">Messi</div><div class="pmeta">Argentina</div></div>
-            <div class="playercard"><div class="avatar">🇫🇷</div><div class="pname">Mbappé</div><div class="pmeta">France</div></div>
-            <div class="playercard"><div class="avatar">🇧🇷</div><div class="pname">Vinícius Jr.</div><div class="pmeta">Brazil</div></div>
-            <div class="playercard"><div class="avatar">🇳🇴</div><div class="pname">Haaland</div><div class="pmeta">Norway</div></div>
-            <div class="playercard"><div class="avatar">🇬🇧</div><div class="pname">Bellingham</div><div class="pmeta">England</div></div>
-            <div class="playercard"><div class="avatar">🇺🇸</div><div class="pname">Pulisic</div><div class="pmeta">USA</div></div>
-          </div>
-        </div>
-
-      </div>
-    </section>
-    
 
     
     <div class="grid">
@@ -652,19 +396,6 @@
             <span><b id="h">0</b>h</span>
             <span><b id="m">0</b>m</span>
             <span><b id="s">0</b>s</span>
-          </div>
-        </div>
-
-        
-        <!-- Phase 1 polish: Matchday Tonight spotlight (UI-only) -->
-        <div class="spotlight" id="spotlightCard" aria-live="polite">
-          <div class="spot-top">
-            <div class="spot-title">🔥 Matchday Tonight</div>
-            <div class="pill" id="spotScope">Next Dallas match</div>
-          </div>
-          <div class="spot-body">
-            <div class="spot-teams" id="spotTeams">Loading…</div>
-            <div class="spot-meta" id="spotMeta"></div>
           </div>
         </div>
 
@@ -728,176 +459,8 @@ let scope = localStorage.getItem("schedule_scope") || "dallas";
 let scheduleQuery = "";
 
 // Pagination (All Matches only)
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 10;
 let currentPage = 1;
-
-// -----------------------
-// Phase 1 polish helpers (UI-only)
-// -----------------------
-const FLAG_MAP = {
-  "USA":"🇺🇸","United States":"🇺🇸","U.S.A.":"🇺🇸","US":"🇺🇸",
-  "Mexico":"🇲🇽","Canada":"🇨🇦",
-  "Brazil":"🇧🇷","Argentina":"🇦🇷","France":"🇫🇷","Germany":"🇩🇪","Spain":"🇪🇸","Portugal":"🇵🇹",
-  "England":"🏴","Scotland":"🏴","Wales":"🏴","Ireland":"🇮🇪",
-  "Nigeria":"🇳🇬","Ghana":"🇬🇭","Senegal":"🇸🇳","Cameroon":"🇨🇲","Morocco":"🇲🇦","Egypt":"🇪🇬",
-  "Japan":"🇯🇵","South Korea":"🇰🇷","Korea Republic":"🇰🇷","Australia":"🇦🇺",
-  "Netherlands":"🇳🇱","Belgium":"🇧🇪","Italy":"🇮🇹","Croatia":"🇭🇷","Uruguay":"🇺🇾","Colombia":"🇨🇴",
-};
-
-function flagForTeamName(name){
-  if(!name) return "⚽";
-  const clean = String(name).trim();
-  return FLAG_MAP[clean] || "🏳️";
-}
-
-function extractTeams(match){
-  // supports multiple possible shapes without breaking anything
-  const t1 = match?.team1 || match?.home || match?.home_team || match?.Home || match?.Team1 || match?.a || match?.A;
-  const t2 = match?.team2 || match?.away || match?.away_team || match?.Away || match?.Team2 || match?.b || match?.B;
-  const teams = [];
-  if (typeof t1 === "string" && t1.trim()) teams.push(t1.trim());
-  if (typeof t2 === "string" && t2.trim()) teams.push(t2.trim());
-  // if app.py uses a single 'teams' string like "A vs B"
-  if (teams.length === 0 && typeof match?.teams === "string"){
-    const parts = match.teams.split(/vs|v\.|\-|—/i).map(s => s.trim()).filter(Boolean);
-    if (parts[0]) teams.push(parts[0]);
-    if (parts[1]) teams.push(parts[1]);
-  }
-  return teams;
-}
-
-function setFlagStripFromMatches(matches){
-  const track = document.getElementById("flagTrack");
-  if(!track || !Array.isArray(matches) || matches.length === 0) return;
-
-  const uniq = [];
-  const seen = new Set();
-  for (const m of matches){
-    for (const t of extractTeams(m)){
-      if (!t || /tbd/i.test(t)) continue;
-      const key = t.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      uniq.push(t);
-      if (uniq.length >= 12) break;
-    }
-    if (uniq.length >= 12) break;
-  }
-  if (uniq.length === 0) return;
-
-  // Build chips and duplicate for smooth marquee
-  const chips = uniq.map(t => `<div class="flagchip"><span class="f">${flagForTeamName(t)}</span><span>${escapeHtml(t)}</span></div>`).join("");
-  track.innerHTML = chips + chips;
-}
-
-// Escape helper for safe innerHTML usage (UI only)
-function escapeHtml(str){
-  return String(str)
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
-}
-
-// Player ribbon auto-rotate (pauses on hover)
-let _ribbonTimer = null;
-function startPlayerRibbonAutoRotate(){
-  const el = document.getElementById("playerRibbonTrack");
-  if(!el) return;
-  const step = 1; // px per tick
-  const intervalMs = 16;
-  let hovering = false;
-
-  el.addEventListener("mouseenter", () => { hovering = true; });
-  el.addEventListener("mouseleave", () => { hovering = false; });
-
-  if (_ribbonTimer) clearInterval(_ribbonTimer);
-  _ribbonTimer = setInterval(() => {
-    if (hovering) return;
-    el.scrollLeft += step;
-    // loop back smoothly
-    if (el.scrollLeft >= (el.scrollWidth - el.clientWidth - 5)){
-      el.scrollLeft = 0;
-    }
-  }, intervalMs);
-}
-
-// Matchday Tonight spotlight (always tracks next Dallas match)
-let _dallasCache = null;
-async function loadDallasForSpotlight(){
-  try{
-    const res = await fetch(`/schedule.json?scope=dallas&q=`, {cache:"no-store"});
-    if(!res.ok) return;
-    _dallasCache = await res.json();
-  }catch(e){
-    console.warn("spotlight loadDallas failed", e);
-  }
-}
-
-function parseMatchDate(m){
-  // Attempt multiple shapes; returns Date or null
-  const raw = m?.datetime || m?.dateTime || m?.kickoff || m?.start || m?.date || m?.day;
-  if (!raw) return null;
-  const d = new Date(raw);
-  if (!isNaN(d)) return d;
-  return null;
-}
-
-function formatSpotWhen(m){
-  // prefer already-formatted fields if backend provides them
-  const when = m?.when || m?.time || m?.friendly_time;
-  if (typeof when === "string" && when.trim()) return when.trim();
-
-  const d = parseMatchDate(m);
-  if (!d) return "";
-  // local-friendly
-  try{
-    return d.toLocaleString(undefined, {weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit"});
-  }catch(_){
-    return d.toString();
-  }
-}
-
-function getNextMatch(matches){
-  if(!Array.isArray(matches)) return null;
-  const now = new Date();
-  let best = null;
-  for (const m of matches){
-    const d = parseMatchDate(m);
-    if (!d) continue;
-    if (d < now) continue;
-    if (!best || d < parseMatchDate(best)) best = m;
-  }
-  return best;
-}
-
-function updateSpotlightCard(){
-  const card = document.getElementById("spotlightCard");
-  const teamsEl = document.getElementById("spotTeams");
-  const metaEl = document.getElementById("spotMeta");
-  if(!card || !teamsEl || !metaEl) return;
-
-  const matches = _dallasCache?.matches || _dallasCache?.items || _dallasCache || [];
-  const next = getNextMatch(matches);
-
-  if (!next){
-    teamsEl.textContent = "No upcoming Dallas match yet";
-    metaEl.textContent = "Once matches are loaded, this will spotlight the next Dallas game automatically.";
-    return;
-  }
-
-  const teams = extractTeams(next);
-  const t1 = teams[0] || "TBD";
-  const t2 = teams[1] || "TBD";
-  const when = formatSpotWhen(next);
-  const venue = next?.venue || next?.stadium || next?.location || "";
-
-  teamsEl.textContent = `${flagForTeamName(t1)} ${t1}  vs  ${flagForTeamName(t2)} ${t2}`;
-  metaEl.textContent = `${when}${venue ? " • " + venue : ""}`;
-}
-
-
 
 
 let menuData = null;
@@ -930,7 +493,7 @@ const pageIndicatorEl = document.getElementById("pageIndicator");
 
 const STRINGS = {
   en: {
-    welcome: "🏆 Welcome to WC26 Dallas! Ready to reserve a table for match day? Type “reservation” or ask me anything.",
+    welcome: "Hi! Want to book a table for a match day? Ask me anything.",
     lang_set: "Language set to English.",
     helper: 'Try: <code>reservation</code> to book • <code>Recall reservation so far</code> • Ask about the menu • Ask about Dallas match days. Search by team, venue, or date (e.g., "June 13").',
     send: "Send",
@@ -944,7 +507,7 @@ const STRINGS = {
     menu_title: "Menu"
   },
   es: {
-    welcome: "🏆 ¡Bienvenido a WC26 Dallas! ¿Listo para reservar una mesa para el día del partido? Escribe “reserva” o pregúntame lo que sea.",
+    welcome: "¡Hola! ¿Quieres reservar una mesa para un día de partido? Pregúntame lo que sea.",
     lang_set: "Idioma cambiado a Español.",
     helper: 'Prueba: <code>reserva</code> para reservar • <code>Recordar reserva</code> • Pregunta por el menú • Pregunta por los partidos en Dallas.',
     send: "Enviar",
@@ -958,7 +521,7 @@ const STRINGS = {
     menu_title: "Menú"
   },
   pt: {
-    welcome: "👋 Bem-vindo ao local da Copa do Mundo 2026 em Dallas! 🎉\n\nQuer reservar uma mesa? Digite: reserva / reservation\n(ou informe: nome, telefone, data do jogo, pessoas e horário).\n\nVocê também pode perguntar sobre o cardápio ou buscar jogos à direita. ⚽",
+    welcome: "Olá! Quer reservar uma mesa para dia de jogo? Pergunte qualquer coisa.",
     lang_set: "Idioma definido para Português.",
     helper: 'Tente: <code>reserva</code> para reservar • <code>Relembrar reserva</code> • Pergunte sobre o cardápio • Pergunte sobre jogos em Dallas.',
     send: "Enviar",
@@ -972,7 +535,7 @@ const STRINGS = {
     menu_title: "Cardápio"
   },
   fr: {
-    welcome: "👋 Bienvenue au lieu Coupe du Monde 2026 à Dallas ! 🎉\n\nVous voulez réserver une table ? Tapez : réservation / reservation\n(ou donnez : nom, téléphone, date du match, nombre de personnes et heure).\n\nVous pouvez aussi demander le menu ou chercher les matchs à droite. ⚽",
+    welcome: "Bonjour ! Vous voulez réserver une table pour un jour de match ? Demandez-moi !",
     lang_set: "Langue définie sur Français.",
     helper: 'Essayez : <code>réservation</code> pour réserver • <code>Rappeler la réservation</code> • Demandez le menu • Demandez les matchs à Dallas.',
     send: "Envoyer",
@@ -1001,117 +564,6 @@ function setSending(isSending){
   sendBtn.disabled = isSending;
   msgEl.disabled = isSending;
   sendBtn.textContent = isSending ? L().typing : L().send;
-}
-
-
-function updateSpotlight(){
-  const el = document.getElementById("spotlightCard");
-  if (!el) return;
-
-  // scheduleData shape: { matches: [...], total: N, scope: "dallas"|"all", page, per_page }
-  // We'll spotlight the next Dallas match from the full Dallas dataset we already have in memory when scope is dallas,
-  // and also keep a cached copy when scope is all.
-  const matches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches : [];
-  const scopeNow = (scheduleData && scheduleData.scope) ? scheduleData.scope : scope;
-
-  // Prefer Dallas scope; if viewing "all", try to locate the next Dallas match inside current result set,
-  // otherwise fall back to the next match in view.
-  let next = null;
-
-  // "next" is the match with the soonest start_ts >= now (if present), else first future match by parsed time
-  const now = Date.now();
-  const withTs = matches
-    .map(m => {
-      const ts = (typeof m.start_ts === "number") ? m.start_ts : parseMatchStartTs(m.date, m.time);
-      return {...m, _ts: ts};
-    })
-    .filter(m => Number.isFinite(m._ts))
-    .sort((a,b)=>a._ts-b._ts);
-
-  next = withTs.find(m => m._ts >= now) || withTs[0] || null;
-
-  if (!next){
-    el.innerHTML = `
-      <div class="kicker">🌟 Matchday Tonight</div>
-      <div class="main">No upcoming match found yet</div>
-      <div class="meta"><span>Update <code>DALLAS_MATCHES</code> in <code>app.py</code> to power this card.</span></div>
-    `;
-    return;
-  }
-
-  const d = new Date(next._ts);
-  const dateStr = d.toLocaleDateString(undefined, {weekday:"short", month:"short", day:"numeric"});
-  const timeStr = d.toLocaleTimeString(undefined, {hour:"numeric", minute:"2-digit"});
-  const isToday = (new Date().toDateString() === d.toDateString());
-
-  const teams = (next.teams || next.match || "").trim() || "Match";
-  const venue = (next.venue || "").trim();
-  const headline = isToday ? "Tonight in Dallas" : "Next Dallas Match";
-
-  el.innerHTML = `
-    <div class="kicker">🔥 ${headline}</div>
-    <div class="main">${escapeHtml(teams)}</div>
-    <div class="meta">
-      <span>📅 ${escapeHtml(dateStr)}</span>
-      <span>⏰ ${escapeHtml(timeStr)}</span>
-      ${venue ? `<span>📍 ${escapeHtml(venue)}</span>` : ``}
-    </div>
-    <div class="cta">
-      <span class="mini">Type <b>reservation</b> to book</span>
-      <span class="mini">Use search to find teams</span>
-    </div>
-  `;
-}
-
-// Simple HTML escaper (UI-only)
-function escapeHtml(s){
-  return String(s || "")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#39;");
-}
-
-function startPlayerRibbonAutoRotate(){
-  const ribbon = document.querySelector(".player-ribbon");
-  if (!ribbon) return;
-
-  // Respect reduced motion
-  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  if (reduce) return;
-
-  let timer = null;
-  let paused = false;
-
-  const step = () => {
-    if (paused) return;
-    const max = ribbon.scrollWidth - ribbon.clientWidth;
-    if (max <= 0) return;
-
-    // Move by ~one card width
-    const delta = Math.max(180, Math.floor(ribbon.clientWidth * 0.45));
-    let nextLeft = ribbon.scrollLeft + delta;
-    if (nextLeft >= max - 5) nextLeft = 0;
-    ribbon.scrollTo({left: nextLeft, behavior: "smooth"});
-  };
-
-  const start = () => {
-    if (timer) clearInterval(timer);
-    timer = setInterval(step, 3500);
-  };
-
-  const pause = () => { paused = true; ribbon.classList.add("paused"); };
-  const resume = () => { paused = false; ribbon.classList.remove("paused"); };
-
-  ribbon.addEventListener("mouseenter", pause);
-  ribbon.addEventListener("mouseleave", resume);
-  ribbon.addEventListener("focusin", pause);
-  ribbon.addEventListener("focusout", resume);
-  ribbon.addEventListener("touchstart", pause, {passive:true});
-  ribbon.addEventListener("touchend", resume);
-
-  start();
 }
 
 // -----------------------
@@ -1170,8 +622,7 @@ async function loadSchedule(){
   scheduleData = await res.json();
   renderSchedule();
   updateMatchDayMode();
-  restartCountdown();
-  updateSpotlight(); // uses schedule info when available
+  restartCountdown(); // uses schedule info when available
 }
 
 async function loadMenu(){
@@ -1397,34 +848,246 @@ function renderSchedule(){
   const upcoming = enriched.filter(m => m.ts >= now);
   const nextId = upcoming.length ? upcoming[0].id : null;
 
-  // Pagination (Dallas + All Matches)
-  const totalPages = Math.max(1, Math.ceil(enriched.length / PAGE_SIZE));
-  if (currentPage > totalPages) currentPage = 1;
+  // Pagination (All Matches only)
+  let pageMatches = enriched;
+  if (scope === "all"){
+    const totalPages = Math.max(1, Math.ceil(enriched.length / PAGE_SIZE));
+    if (currentPage > totalPages) currentPage = 1;
 
-  const start = (currentPage - 1) * PAGE_SIZE;
-  let pageMatches = enriched.slice(start, start + PAGE_SIZE);
+    const start = (currentPage - 1) * PAGE_SIZE;
+    pageMatches = enriched.slice(start, start + PAGE_SIZE);
 
-  // If the next upcoming match exists and we're on the first render, keep it visible by jumping to its page.
-  if (nextId && currentPage === 1){
-    const idx = enriched.findIndex(x => x.id === nextId);
-    if (idx >= 0){
-      const neededPage = Math.floor(idx / PAGE_SIZE) + 1;
-      if (neededPage !== currentPage){
-        currentPage = neededPage;
-        const s2 = (currentPage - 1) * PAGE_SIZE;
-        pageMatches = enriched.slice(s2, s2 + PAGE_SIZE);
+    if (pagerEl) pagerEl.style.display = "flex";
+    if (pageIndicatorEl) pageIndicatorEl.textContent = `Page ${currentPage} of ${totalPages}`;
+    if (prevPageBtn) prevPageBtn.disabled = (currentPage <= 1);
+    if (nextPageBtn) nextPageBtn.disabled = (currentPage >= totalPages);
+  } else {
+    if (pagerEl) pagerEl.style.display = "none";
+    if (pageIndicatorEl) pageIndicatorEl.textContent = "";
+  }
+
+  pageMatches.forEach(m => {
+    const row = document.createElement("div");
+    row.className = "match" + (m.id === nextId ? " next" : "");
+
+    const timeTxt = formatKickoffTime(m.time);
+    const teamsTxt = (m.teams && String(m.teams).trim())
+      ? m.teams
+      : ((m.home || m.away) ? `${m.home || "TBD"} vs ${m.away || "TBD"}` : "TBD vs TBD");
+
+    const venueTxt = m.venue ? ` • ${m.venue}` : "";
+
+    row.innerHTML = `
+      <div class="left">
+        <div><b>${escapeHtml(m.stage || "Match")}</b> • ${escapeHtml(teamsTxt)}</div>
+        <div class="when">${escapeHtml(m.date || "")} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div>
+      </div>
+      <div class="pill">${escapeHtml(m.id || "")}</div>
+    `;
+    el.appendChild(row);
+  });
+}
+
+
+function updateMatchDayMode(){
+  const isMatchDay = !!(scheduleData && scheduleData.is_match_day);
+
+  if (isMatchDay){
+    pillMode.textContent = "Mode: Match-day";
+    const banner = (scheduleData && scheduleData.match_day_banner) ? scheduleData.match_day_banner : "Match-day hours";
+    matchBanner.textContent = banner;
+    matchBanner.classList.add("show");
+
+    matchdayBox.textContent = "🏟️ Match-day mode is ON today. Expect higher traffic — reserve early!";
+    matchdayBox.classList.add("show");
+  } else {
+    pillMode.textContent = "Mode: Standard";
+    matchBanner.classList.remove("show");
+    matchdayBox.classList.remove("show");
+  }
+}
+
+// -----------------------
+// Menu rendering
+// -----------------------
+
+function renderMenu(items){
+  const el = document.getElementById("menu");
+  el.innerHTML = "";
+
+  if (!items || !items.length){
+    const d = document.createElement("div");
+    d.className = "menuitem";
+    d.innerHTML = `
+      <div class="menuTop">
+        <div>
+          <div class="name">⚽ —</div>
+          <div class="desc">Menu not available.</div>
+        </div>
+        <div class="menuBadge">—</div>
+      </div>
+    `;
+    el.appendChild(d);
+    return;
+  }
+
+  const icons = ["⚽","🌮","🍗","🥤","🔥","🏟️","🌎","🥇"];
+  items.forEach((it, idx) => {
+    const d = document.createElement("div");
+    d.className = "menuitem";
+
+    const icon = icons[idx % icons.length];
+    const name = escapeHtml(it.name || "");
+    const desc = escapeHtml(it.desc || "");
+    const price = escapeHtml(it.price || "");
+
+    // Lightweight tags (cosmetic)
+    const tags = [];
+    const lower = ((it.name||"") + " " + (it.desc||"")).toLowerCase();
+    if (lower.includes("spicy") || lower.includes("picante")) tags.push("Spicy");
+    if (lower.includes("wings") || lower.includes("alitas") || lower.includes("asinhas")) tags.push("Share");
+    if (lower.includes("nacho")) tags.push("Snack");
+
+    d.innerHTML = `
+      <div class="menuTop">
+        <div>
+          <div class="name">${icon} ${name}</div>
+          <div class="desc">${desc}</div>
+          <div class="menuMeta">
+            ${tags.map(t => `<span class="menuTag">${escapeHtml(t)}</span>`).join("")}
+          </div>
+        </div>
+        <div class="menuBadge">${price || "—"}</div>
+      </div>
+    `;
+    el.appendChild(d);
+  });
+}
+
+
+
+// simple HTML escaping (prevents broken DOM if text contains "<")
+function escapeHtml(s){
+  return String(s ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
+}
+
+// -----------------------
+// Chat send
+// -----------------------
+async function sendMessage(){
+  const text = msgEl.value.trim();
+  if (!text) return;
+
+  addBubble("user", text);
+  history.push({role:"user", content:text});
+
+  msgEl.value = "";
+  msgEl.style.height = "44px";
+  setSending(true);
+
+  try{
+    const res = await fetch("/chat", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({
+        message: text,
+        session_id: sessionId,
+        language: lang,
+        history // kept as a feature; server will safely ignore
+      })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    const reply = (data && data.reply) ? data.reply : "Sorry — no reply received.";
+
+    addBubble("assistant", reply);
+    history.push({role:"assistant", content: reply});
+  } catch(e){
+    addBubble("assistant", "⚠️ Network error. Please try again.");
+  } finally{
+    setSending(false);
+    msgEl.focus();
+  }
+}
+
+sendBtn.addEventListener("click", sendMessage);
+
+// Enter to send, Shift+Enter newline
+msgEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+// Auto-grow textarea
+msgEl.addEventListener("input", () => {
+  msgEl.style.height = "44px";
+  msgEl.style.height = Math.min(msgEl.scrollHeight, 130) + "px";
+});
+
+// -----------------------
+
+// -----------------------
+// Schedule scope toggle + search (Dallas ↔ All Matches)
+// -----------------------
+function setScope(newScope){
+  scope = (newScope === "all") ? "all" : "dallas";
+  localStorage.setItem("schedule_scope", scope);
+  // Reset pagination when switching scope
+  currentPage = 1;
+  if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
+  if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
+  loadSchedule();
+}
+if (scopeDallasBtn) scopeDallasBtn.addEventListener("click", () => setScope("dallas"));
+if (scopeAllBtn) scopeAllBtn.addEventListener("click", () => setScope("all"));
+
+// Pagination controls (All Matches only)
+if (prevPageBtn) prevPageBtn.addEventListener("click", () => { if (currentPage > 1){ currentPage--; renderSchedule(); } });
+if (nextPageBtn) nextPageBtn.addEventListener("click", () => {
+  if (!scheduleData || !Array.isArray(scheduleData.matches)) return;
+  const totalPages = Math.max(1, Math.ceil(scheduleData.matches.length / PAGE_SIZE));
+  
+
+// -----------------------
+// Menu pagination controls
+// -----------------------
+if (null){
+  null.addEventListener("click", () => {
+    if (!menuShowAll && menuPage > 1){
+      menuPage--;
+      renderMenu(window.menuDataList || []);
+    }
+  });
+}
+if (null){
+  null.addEventListener("click", () => {
+    if (!menuShowAll){
+      const items = window.menuDataList || [];
+      const totalPages = Math.max(1, Math.ceil((items.length || 0) / MENU_PAGE_SIZE));
+      if (menuPage < totalPages){
+        menuPage++;
+        renderMenu(items);
       }
     }
-  }
+  });
+}
+if (null){
+  null.addEventListener("click", () => {
+    menuShowAll = !menuShowAll;
+    menuPage = 1;
+    renderMenu(window.menuDataList || []);
+  });
+}
+if (currentPage < totalPages){ currentPage++; renderSchedule(); }
+});
 
-  if (pagerEl){
-    pagerEl.style.display = (totalPages > 1) ? "flex" : "none";
-  }
-  if (pageIndicatorEl){
-    pageIndicatorEl.textContent = (totalPages > 1) ? `Page ${currentPage} of ${totalPages}` : "";
-  }
-  if (prevPageBtn) prevPageBtn.disabled = (currentPage <= 1);
-  if (nextPageBtn) nextPageBtn.addEventListener("click", () => { currentPage++; renderSchedule(); });
 
 // Team search (simple text input)
 let _searchTimer = null;
@@ -1461,24 +1124,14 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
   // Restore schedule scope UI
   if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
   if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
-  // Welcome message (always show, even if schedule/menu temporarily fail)
+
+  // Load sidebar data
+  await loadSchedule();
+  await loadMenu();
+
+  // Welcome message (feature preserved)
   addBubble("assistant", L().welcome);
   history.push({role:"assistant", content: L().welcome});
-
-  // Load sidebar data (wrap in try/catch so UI doesn't stall)
-  try { await loadSchedule(); } catch (e){ console.warn("loadSchedule failed:", e); }
-  try { await loadMenu(); } catch (e){ console.warn("loadMenu failed:", e); }
-  // Phase 1 polish (UI-only)
-  try { await loadDallasForSpotlight(); } catch (e){}
-  try { updateSpotlightCard(); } catch (e){}
-  try { startPlayerRibbonAutoRotate(); } catch (e){}
-  // Flags derived from actual match teams (uses current view if available; falls back to Dallas cache)
-  try {
-    const viewMatches = scheduleData?.matches || scheduleData?.items || scheduleData;
-    const base = Array.isArray(viewMatches) ? viewMatches : (_dallasCache?.matches || _dallasCache || []);
-    setFlagStripFromMatches(base);
-  } catch (e){}
-
 
   // Ensure focus
   msgEl.focus();
