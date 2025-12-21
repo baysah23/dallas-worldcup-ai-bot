@@ -405,6 +405,44 @@
       #chat{min-height:420px;}
     }
     
+    /* Phase 1 Step 3: Spotlight + auto-rotate ribbon (UI-only) */
+    .spotlight{
+      margin: 12px 14px 0;
+      border-radius: 18px;
+      border: 1px solid rgba(245,215,110,.30);
+      background:
+        radial-gradient(520px 180px at 10% 20%, rgba(245,215,110,.20) 0%, rgba(0,0,0,0) 65%),
+        linear-gradient(135deg, rgba(245,215,110,.10) 0%, rgba(31,111,235,.10) 55%, rgba(0,0,0,.12) 100%);
+      padding: 12px 14px;
+      position:relative;
+      overflow:hidden;
+      box-shadow: 0 18px 45px rgba(0,0,0,.25);
+    }
+    .spotlight:before{
+      content:"";
+      position:absolute; inset:-1px;
+      background: repeating-linear-gradient(90deg, rgba(255,255,255,.07) 0 1px, rgba(255,255,255,0) 1px 16px);
+      opacity:.12; pointer-events:none;
+    }
+    .spotlight .kicker{position:relative; font-size:11px; color:var(--warn); font-weight:900; letter-spacing:.25px;}
+    .spotlight .main{position:relative; margin-top:6px; font-weight:900; font-size:13px;}
+    .spotlight .meta{position:relative; margin-top:4px; color:var(--muted); font-size:12px; display:flex; flex-wrap:wrap; gap:10px;}
+    .spotlight .meta span{display:inline-flex; gap:6px; align-items:center;}
+    .spotlight .cta{position:relative; margin-top:10px; display:flex; gap:10px; flex-wrap:wrap;}
+    .spotlight .cta .mini{
+      font-size:11px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.16);
+      color: var(--text);
+      padding:6px 10px;
+      border-radius:999px;
+      white-space:nowrap;
+    }
+
+    /* Player ribbon auto-rotate helpers */
+    .player-ribbon{scroll-behavior:smooth;}
+    .player-ribbon.paused{scroll-behavior:auto;}
+
 </style>
 </head>
 
@@ -600,7 +638,7 @@ let scope = localStorage.getItem("schedule_scope") || "dallas";
 let scheduleQuery = "";
 
 // Pagination (All Matches only)
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 5;
 let currentPage = 1;
 
 
@@ -634,7 +672,7 @@ const pageIndicatorEl = document.getElementById("pageIndicator");
 
 const STRINGS = {
   en: {
-    welcome: "Hi! Want to book a table for a match day? Ask me anything.",
+    welcome: "🏆 Welcome to WC26 Dallas! Ready to reserve a table for match day? Type “reservation” or ask me anything.",
     lang_set: "Language set to English.",
     helper: 'Try: <code>reservation</code> to book • <code>Recall reservation so far</code> • Ask about the menu • Ask about Dallas match days. Search by team, venue, or date (e.g., "June 13").',
     send: "Send",
@@ -648,7 +686,7 @@ const STRINGS = {
     menu_title: "Menu"
   },
   es: {
-    welcome: "¡Hola! ¿Quieres reservar una mesa para un día de partido? Pregúntame lo que sea.",
+    welcome: "🏆 ¡Bienvenido a WC26 Dallas! ¿Listo para reservar una mesa para el día del partido? Escribe “reserva” o pregúntame lo que sea.",
     lang_set: "Idioma cambiado a Español.",
     helper: 'Prueba: <code>reserva</code> para reservar • <code>Recordar reserva</code> • Pregunta por el menú • Pregunta por los partidos en Dallas.',
     send: "Enviar",
@@ -707,6 +745,117 @@ function setSending(isSending){
   sendBtn.textContent = isSending ? L().typing : L().send;
 }
 
+
+function updateSpotlight(){
+  const el = document.getElementById("spotlightCard");
+  if (!el) return;
+
+  // scheduleData shape: { matches: [...], total: N, scope: "dallas"|"all", page, per_page }
+  // We'll spotlight the next Dallas match from the full Dallas dataset we already have in memory when scope is dallas,
+  // and also keep a cached copy when scope is all.
+  const matches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches : [];
+  const scopeNow = (scheduleData && scheduleData.scope) ? scheduleData.scope : scope;
+
+  // Prefer Dallas scope; if viewing "all", try to locate the next Dallas match inside current result set,
+  // otherwise fall back to the next match in view.
+  let next = null;
+
+  // "next" is the match with the soonest start_ts >= now (if present), else first future match by parsed time
+  const now = Date.now();
+  const withTs = matches
+    .map(m => {
+      const ts = (typeof m.start_ts === "number") ? m.start_ts : parseMatchStartTs(m.date, m.time);
+      return {...m, _ts: ts};
+    })
+    .filter(m => Number.isFinite(m._ts))
+    .sort((a,b)=>a._ts-b._ts);
+
+  next = withTs.find(m => m._ts >= now) || withTs[0] || null;
+
+  if (!next){
+    el.innerHTML = `
+      <div class="kicker">🌟 Matchday Tonight</div>
+      <div class="main">No upcoming match found yet</div>
+      <div class="meta"><span>Update <code>DALLAS_MATCHES</code> in <code>app.py</code> to power this card.</span></div>
+    `;
+    return;
+  }
+
+  const d = new Date(next._ts);
+  const dateStr = d.toLocaleDateString(undefined, {weekday:"short", month:"short", day:"numeric"});
+  const timeStr = d.toLocaleTimeString(undefined, {hour:"numeric", minute:"2-digit"});
+  const isToday = (new Date().toDateString() === d.toDateString());
+
+  const teams = (next.teams || next.match || "").trim() || "Match";
+  const venue = (next.venue || "").trim();
+  const headline = isToday ? "Tonight in Dallas" : "Next Dallas Match";
+
+  el.innerHTML = `
+    <div class="kicker">🔥 ${headline}</div>
+    <div class="main">${escapeHtml(teams)}</div>
+    <div class="meta">
+      <span>📅 ${escapeHtml(dateStr)}</span>
+      <span>⏰ ${escapeHtml(timeStr)}</span>
+      ${venue ? `<span>📍 ${escapeHtml(venue)}</span>` : ``}
+    </div>
+    <div class="cta">
+      <span class="mini">Type <b>reservation</b> to book</span>
+      <span class="mini">Use search to find teams</span>
+    </div>
+  `;
+}
+
+// Simple HTML escaper (UI-only)
+function escapeHtml(s){
+  return String(s || "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#39;");
+}
+
+function startPlayerRibbonAutoRotate(){
+  const ribbon = document.querySelector(".player-ribbon");
+  if (!ribbon) return;
+
+  // Respect reduced motion
+  const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduce) return;
+
+  let timer = null;
+  let paused = false;
+
+  const step = () => {
+    if (paused) return;
+    const max = ribbon.scrollWidth - ribbon.clientWidth;
+    if (max <= 0) return;
+
+    // Move by ~one card width
+    const delta = Math.max(180, Math.floor(ribbon.clientWidth * 0.45));
+    let nextLeft = ribbon.scrollLeft + delta;
+    if (nextLeft >= max - 5) nextLeft = 0;
+    ribbon.scrollTo({left: nextLeft, behavior: "smooth"});
+  };
+
+  const start = () => {
+    if (timer) clearInterval(timer);
+    timer = setInterval(step, 3500);
+  };
+
+  const pause = () => { paused = true; ribbon.classList.add("paused"); };
+  const resume = () => { paused = false; ribbon.classList.remove("paused"); };
+
+  ribbon.addEventListener("mouseenter", pause);
+  ribbon.addEventListener("mouseleave", resume);
+  ribbon.addEventListener("focusin", pause);
+  ribbon.addEventListener("focusout", resume);
+  ribbon.addEventListener("touchstart", pause, {passive:true});
+  ribbon.addEventListener("touchend", resume);
+
+  start();
+}
+
 // -----------------------
 // Language toggle
 // -----------------------
@@ -763,7 +912,8 @@ async function loadSchedule(){
   scheduleData = await res.json();
   renderSchedule();
   updateMatchDayMode();
-  restartCountdown(); // uses schedule info when available
+  restartCountdown();
+  updateSpotlight(); // uses schedule info when available
 }
 
 async function loadMenu(){
@@ -1152,7 +1302,10 @@ async function sendMessage(){
     addBubble("assistant", "⚠️ Network error. Please try again.");
   } finally{
     setSending(false);
-    msgEl.focus();
+    updateSpotlight();
+  startPlayerRibbonAutoRotate();
+
+  msgEl.focus();
   }
 }
 
@@ -1233,14 +1386,13 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
   // Restore schedule scope UI
   if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
   if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
-
-  // Load sidebar data
-  await loadSchedule();
-  await loadMenu();
-
-  // Welcome message (feature preserved)
+  // Welcome message (always show, even if schedule/menu temporarily fail)
   addBubble("assistant", L().welcome);
   history.push({role:"assistant", content: L().welcome});
+
+  // Load sidebar data (wrap in try/catch so UI doesn't stall)
+  try { await loadSchedule(); } catch (e){ console.warn("loadSchedule failed:", e); }
+  try { await loadMenu(); } catch (e){ console.warn("loadMenu failed:", e); }
 
   // Ensure focus
   msgEl.focus();
