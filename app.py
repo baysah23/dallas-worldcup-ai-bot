@@ -83,6 +83,170 @@ BUSINESS_RULES = {
 
 
 # ============================================================
+# World Cup 2026 Full Schedule (optional)
+# - If you set FIXTURE_FEED_URL to a JSON fixtures feed, the app can
+#   serve "All Matches" in addition to the curated Dallas list.
+# - If the feed is unavailable or empty, the app gracefully falls back.
+# ============================================================
+FIXTURE_FEED_URL = os.environ.get(
+    "FIXTURE_FEED_URL",
+    "https://fixturedownload.com/feed/json/fifa-world-cup-2026",
+)
+
+# Location label(s) used by the feed for Dallas/Arlington matches.
+DALLAS_LOCATION_KEYWORDS = ["dallas stadium", "arlington", "at&t"]
+
+# In-memory cache (plus optional disk cache) so we don't hit the feed too often.
+_fixtures_cache: Dict[str, Any] = {"loaded_at": 0, "matches": []}
+FIXTURE_CACHE_SECONDS = int(os.environ.get("FIXTURE_CACHE_SECONDS", str(6 * 60 * 60)))  # 6h
+FIXTURE_CACHE_FILE = os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_fixtures.json")
+
+
+def _safe_read_json(path: str) -> Optional[Any]:
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception:
+        return None
+    return None
+
+
+def _safe_write_json(path: str, obj: Any) -> None:
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(obj, f)
+    except Exception:
+        pass
+
+
+def _fetch_json(url: str, timeout_seconds: int = 15) -> Optional[Any]:
+    """Fetch JSON with stdlib only (no extra deps)."""
+    try:
+        import urllib.request
+        req = urllib.request.Request(url, headers={"User-Agent": "wc26-dallas-bot/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout_seconds) as resp:
+            raw = resp.read().decode("utf-8", errors="ignore")
+            return json.loads(raw)
+    except Exception:
+        return None
+
+
+def _normalize_fixture_match(m: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Normalize a match object from common public feeds to our internal schema."""
+    if not isinstance(m, dict):
+        return None
+
+    # Common keys across feeds
+    d = (m.get("date") or m.get("Date") or m.get("fixtureDate") or m.get("matchDate") or "").strip()
+    t = (m.get("time") or m.get("Time") or m.get("kickoff") or m.get("Kickoff") or "").strip()
+    loc = (m.get("location") or m.get("Location") or m.get("venue") or m.get("Venue") or "").strip()
+
+    home = (m.get("home") or m.get("Home") or m.get("Home Team") or m.get("homeTeam") or "").strip()
+    away = (m.get("away") or m.get("Away") or m.get("Away Team") or m.get("awayTeam") or "").strip()
+
+    teams = (m.get("teams") or m.get("Teams") or "").strip()
+    if not teams and (home or away):
+        teams = f"{home} vs {away}".strip()
+
+    if not d:
+        return None
+
+    # Ensure ISO date only
+    d = d.split("T")[0]
+
+    # Normalize time to HH:MM if possible; otherwise keep "TBD"
+    if t:
+        mt = re.match(r"^(\d{1,2}):(\d{2})", t)
+        if mt:
+            t = f"{int(mt.group(1)):02d}:{mt.group(2)}"
+        else:
+            t = t.strip()
+    else:
+        t = "TBD"
+
+    # Stable-ish id
+    mid = m.get("id") or m.get("match_id") or m.get("MatchID") or None
+    if not mid:
+        slug = re.sub(r"\W+", "-", (teams or "tbd").lower()).strip("-")
+        mid = f"wc-{d}-{t}-{slug}"[:80]
+
+    return {
+        "id": str(mid),
+        "date": d,
+        "time": t,
+        "venue": loc or "",
+        "teams": teams or "TBD vs TBD",
+    }
+
+def load_fixtures_all() -> List[Dict[str, Any]]:
+    """Load full World Cup fixtures from the configured feed (cached)."""
+    now = time.time()
+    # cache hit
+    if _fixtures_cache.get("matches") and (now - float(_fixtures_cache.get("loaded_at", 0)) < FIXTURE_CACHE_SECONDS):
+        return list(_fixtures_cache["matches"])
+
+    # disk cache
+    disk = _safe_read_json(FIXTURE_CACHE_FILE)
+    if isinstance(disk, dict) and isinstance(disk.get("matches"), list):
+        loaded_at = float(disk.get("loaded_at", 0))
+        if (now - loaded_at) < FIXTURE_CACHE_SECONDS:
+            _fixtures_cache["loaded_at"] = loaded_at
+            _fixtures_cache["matches"] = disk["matches"]
+            return list(_fixtures_cache["matches"])
+
+    # fetch
+    data = _fetch_json(FIXTURE_FEED_URL)
+    matches: List[Dict[str, Any]] = []
+    if isinstance(data, list):
+        for item in data:
+            nm = _normalize_fixture_match(item)
+            if nm:
+                matches.append(nm)
+    elif isinstance(data, dict):
+        # Some feeds wrap matches under a key
+        for key in ["matches", "fixtures", "data"]:
+            if isinstance(data.get(key), list):
+                for item in data[key]:
+                    nm = _normalize_fixture_match(item)
+                    if nm:
+                        matches.append(nm)
+                break
+
+    _fixtures_cache["loaded_at"] = now
+    _fixtures_cache["matches"] = matches
+    _safe_write_json(FIXTURE_CACHE_FILE, {"loaded_at": now, "matches": matches})
+    return list(matches)
+
+
+def get_dallas_from_all(all_matches: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Filter Dallas/Arlington matches from the full fixture list."""
+    out: List[Dict[str, Any]] = []
+    for m in all_matches:
+        loc = (m.get("venue") or "").lower()
+        if any(k in loc for k in DALLAS_LOCATION_KEYWORDS):
+            out.append(m)
+    return out
+
+
+def get_next_match_from(matches: List[Dict[str, Any]], today: date) -> Optional[Dict[str, Any]]:
+    """Compute the next match on/after today from an arbitrary match list."""
+    # Reuse existing parser logic by mapping to timestamps
+    upcoming: List[Tuple[float, Dict[str, Any]]] = []
+    for m in matches:
+        d = m.get("date")
+        t = m.get("time", "TBD")
+        ts = safe_parse_datetime(d, t)  # defined below in app.py
+        if ts is None:
+            continue
+        if ts.date() >= today:
+            upcoming.append((ts.timestamp(), m))
+    if not upcoming:
+        return None
+    upcoming.sort(key=lambda x: x[0])
+    return upcoming[0][1]
+
+# ============================================================
 # Dallas Match Schedule (dynamic from server)
 # - You can replace this list anytime.
 # - Format: ISO date/time in local venue time (for display)
@@ -683,15 +847,58 @@ def menu_json():
 
 @app.route("/schedule.json")
 def schedule_json():
+    """
+    Returns schedule JSON used by the frontend.
+
+    Supports:
+      - scope=dallas|all   (default dallas)
+      - q=<text>           (optional search filter applied to teams/venue/date)
+    """
     today = datetime.now().date()
-    nxt = get_next_match(today)
-    return jsonify({
+    scope = (request.args.get("scope") or "dallas").strip().lower()
+    q = (request.args.get("q") or "").strip().lower()
+
+    notice = None
+    matches: List[Dict[str, Any]] = []
+
+    if scope == "all":
+        all_matches = load_fixtures_all()
+        if not all_matches:
+            # Graceful fallback when the public feed is empty/outdated
+            notice = "Full World Cup schedule feed is currently unavailable/outdated. Showing Dallas matches only."
+            matches = list(DALLAS_MATCHES)
+            scope = "dallas"
+        else:
+            matches = all_matches
+    else:
+        matches = list(DALLAS_MATCHES)
+
+    # Optional filter/search
+    if q:
+        def _hit(m: Dict[str, Any]) -> bool:
+            blob = " ".join([
+                str(m.get("teams","")),
+                str(m.get("venue","")),
+                str(m.get("date","")),
+                str(m.get("time","")),
+            ]).lower()
+            return q in blob
+        matches = [m for m in matches if _hit(m)]
+
+    nxt = get_next_match_from(matches, today) if matches else None
+
+    payload = {
         "today": today.isoformat(),
         "is_match_day": is_match_day(today),
         "match_day_banner": BUSINESS_RULES.get("match_day_banner", ""),
         "next_match": nxt,
-        "matches": DALLAS_MATCHES,
-    })
+        "matches": matches,
+        "scope": scope,
+        "query": q,
+    }
+    if notice:
+        payload["notice"] = notice
+    return jsonify(payload)
 
 
 @app.route("/test-sheet")

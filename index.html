@@ -148,6 +148,25 @@
       outline:none;
     }
     button{
+    background: var(--accent);
+    border:none;
+    padding:10px 14px;
+    border-radius:12px;
+    font-size:14px;
+    font-weight:800;
+    color:#fff;
+    cursor:pointer;
+    min-width:92px;
+  }
+  button.secondary{
+    background: rgba(255,255,255,.10);
+    border:1px solid rgba(255,255,255,.18);
+    color: var(--text);
+    min-width:88px;
+  }
+  button.secondary:hover{background: rgba(255,255,255,.14);} 
+
+  button{
       background: var(--accent);
       border:none;
       padding:10px 14px;
@@ -159,14 +178,6 @@
       min-width:92px;
     }
     button:disabled{opacity:.6; cursor:not-allowed;}
-
-    button.secondary{
-      background: rgba(255,255,255,.10);
-      border:1px solid rgba(255,255,255,.18);
-      color: var(--text);
-      min-width:92px;
-    }
-    button.secondary:hover{background: rgba(255,255,255,.16);}
 
     .sidepad{padding:12px 14px;}
     .countdown{
@@ -279,7 +290,7 @@
         <div class="composer">
           <textarea id="msg" placeholder="Type your message... (Enter to send, Shift+Enter for new line)"></textarea>
           <button id="sendBtn">Send</button>
-          <button id="clearBtn" class="secondary" title="Clear chat">Clear</button>
+        <button id="clearBtn" class="secondary">Clear</button>
         </div>
 
         <div class="hint" id="helperHint"></div>
@@ -306,6 +317,21 @@
         </div>
 
         <div class="matchday" id="matchdayBox"></div>
+
+        <div class="sidepad" style="padding-top:10px; padding-bottom:0;">
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <div class="pill" style="padding:6px 10px;">Schedule</div>
+            <div class="langbar" style="gap:6px;">
+              <div class="langbtn active" id="scopeDallas">Dallas</div>
+              <div class="langbtn" id="scopeAll">All Matches</div>
+            </div>
+          </div>
+          <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
+            <input id="teamSearch" placeholder="Search team / venue..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;" />
+            <div class="pill" id="matchCount">0</div>
+          </div>
+        </div>
+    
 
         <div class="sidepad" style="padding-bottom:0;">
           <div class="pill" style="display:inline-block;" id="nextHint">Next upcoming match is highlighted</div>
@@ -337,7 +363,7 @@
 // -----------------------
 // Session + state
 // -----------------------
-let sessionId = (localStorage.getItem("session_id") || (() => {
+const sessionId = (localStorage.getItem("session_id") || (() => {
   const id = "sess_" + Math.random().toString(16).slice(2) + "_" + Date.now();
   localStorage.setItem("session_id", id);
   return id;
@@ -345,6 +371,9 @@ let sessionId = (localStorage.getItem("session_id") || (() => {
 
 let lang = localStorage.getItem("lang") || "en";
 let scheduleData = null;
+      let scope = localStorage.getItem("schedule_scope") || "dallas";
+      let scheduleQuery = "";
+
 let menuData = null;
 
 // Conversation memory (client-side history) — kept as a feature
@@ -353,12 +382,18 @@ const history = [];
 const chatEl = document.getElementById("chat");
 const msgEl = document.getElementById("msg");
 const sendBtn = document.getElementById("sendBtn");
-const clearBtn = document.getElementById("clearBtn");
 const helperHint = document.getElementById("helperHint");
 const pillLang = document.getElementById("pillLang");
 const pillMode = document.getElementById("pillMode");
 const matchBanner = document.getElementById("matchBanner");
 const matchdayBox = document.getElementById("matchdayBox");
+
+const clearBtn = document.getElementById("clearBtn");
+const scopeDallasBtn = document.getElementById("scopeDallas");
+const scopeAllBtn = document.getElementById("scopeAll");
+const teamSearchEl = document.getElementById("teamSearch");
+const matchCountEl = document.getElementById("matchCount");
+
 
 const STRINGS = {
   en: {
@@ -440,7 +475,10 @@ function setSending(isSending){
 // -----------------------
 function applyLanguageToUI(){
   pillLang.textContent = lang.toUpperCase();
-  document.querySelectorAll(".langbtn").forEach(btn => {
+        // apply schedule scope UI
+        document.getElementById("scopeDallas")?.classList.toggle("active", scope === "dallas");
+        document.getElementById("scopeAll")?.classList.toggle("active", scope === "all");
+  document.querySelectorAll(".langbtn[data-lang]").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.lang === lang);
   });
 
@@ -469,7 +507,7 @@ async function setLanguage(newLang){
   history.push({role:"assistant", content: L().lang_set});
 }
 
-document.querySelectorAll(".langbtn").forEach(btn => {
+document.querySelectorAll(".langbtn[data-lang]").forEach(btn => {
   btn.addEventListener("click", () => setLanguage(btn.dataset.lang));
 });
 
@@ -484,7 +522,7 @@ function stripHtml(html){
 // Fetchers (match app.py)
 // -----------------------
 async function loadSchedule(){
-  const res = await fetch("/schedule.json", {cache:"no-store"});
+  const res = await fetch(`/schedule.json?scope=${encodeURIComponent(scope)}&q=${encodeURIComponent(scheduleQuery)}`, {cache:"no-store"});
   scheduleData = await res.json();
   renderSchedule();
   updateMatchDayMode();
@@ -512,37 +550,6 @@ function safeParseTimestamp(dateIso, timeStr){
   }
   // end-of-day fallback
   return Date.parse(dateIso + "T23:59:59");
-}
-
-// -----------------------
-// Time formatting (display only)
-// - Converts "17:00" -> "5:00 PM"
-// - Keeps "7:00 pm" but normalizes to "7:00 PM"
-// -----------------------
-function formatTime12(timeStr){
-  if (!timeStr) return "TBD";
-  const raw = String(timeStr).trim();
-  if (!raw || raw.toUpperCase() === "TBD") return "TBD";
-
-  // Already has AM/PM? Normalize casing and spacing.
-  const ampmMatch = raw.match(/\b(am|pm)\b/i);
-  if (ampmMatch){
-    // Normalize like "7:00 pm" -> "7:00 PM"
-    return raw.replace(/\b(am|pm)\b/ig, (m)=>m.toUpperCase()).replace(/\s+/g," ").trim();
-  }
-
-  // 24h format "HH:MM"
-  const m = raw.match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return raw; // unknown format, leave as-is
-
-  let hh = parseInt(m[1], 10);
-  const mm = m[2];
-  if (Number.isNaN(hh) || hh < 0 || hh > 23) return raw;
-
-  const ap = (hh >= 12) ? "PM" : "AM";
-  hh = hh % 12;
-  if (hh === 0) hh = 12;
-  return `${hh}:${mm} ${ap}`;
 }
 
 // -----------------------
@@ -596,9 +603,39 @@ function restartCountdown(){
 // -----------------------
 // Schedule rendering + next match highlight
 // -----------------------
+
+function formatKickoffTime(t){
+  const s = (t || "").toString().trim();
+  if (!s || s.toUpperCase() === "TBD") return "TBD";
+  // Already 12-hour?
+  if (/[AP]M/i.test(s)) {
+    // normalize spacing: "7:00 pm" -> "7:00 PM"
+    return s.replace(/\s+/g," ").replace(/am/i,"AM").replace(/pm/i,"PM");
+  }
+  // "19:00" -> "7:00 PM"
+  const m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (m){
+    let hh = parseInt(m[1],10);
+    const mm = m[2];
+    const ap = hh >= 12 ? "PM" : "AM";
+    hh = hh % 12; if (hh === 0) hh = 12;
+    return `${hh}:${mm} ${ap}`;
+  }
+  return s;
+}
+
 function renderSchedule(){
-  const el = document.getElementById("schedule");
-  el.innerHTML = "";
+        const el = document.getElementById("schedule");
+        el.innerHTML = "";
+        const countEl = document.getElementById("matchCount");
+        if (countEl) countEl.textContent = (scheduleData && scheduleData.matches) ? scheduleData.matches.length : 0;
+        if (scheduleData && scheduleData.notice){
+          const row = document.createElement("div");
+          row.className = "match";
+          row.innerHTML = `<div class="left"><div><b>Notice</b></div><div class="when">${scheduleData.notice}</div></div><div class="pill">i</div>`;
+          el.appendChild(row);
+          return;
+        }
 
   const matches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches.slice() : [];
 
@@ -629,8 +666,7 @@ function renderSchedule(){
     const row = document.createElement("div");
     row.className = "match" + (m.id === nextId ? " next" : "");
 
-    const timeTxtRaw = (m.time && String(m.time).trim()) ? String(m.time).trim() : "TBD";
-    const timeTxt = formatTime12(timeTxtRaw);
+    const timeTxt = formatKickoffTime(m.time);
     const teamsTxt = m.teams || (m.home && m.away ? `${m.home} vs ${m.away}` : "TBD vs TBD");
     const venueTxt = m.venue ? ` • ${m.venue}` : "";
 
@@ -743,35 +779,6 @@ async function sendMessage(){
   }
 }
 
-
-// -----------------------
-// Clear chat (client-side reset)
-// - Clears bubbles + local history
-// - Generates a new session_id so the server reservation flow resets too
-// -----------------------
-function clearChat(){
-  chatEl.innerHTML = "";
-  history.length = 0;
-
-  const newId = "sess_" + Math.random().toString(16).slice(2) + "_" + Date.now();
-  localStorage.setItem("session_id", newId);
-  sessionId = newId;
-
-  // Show welcome again after clearing
-  addBubble("assistant", L().welcome);
-  history.push({role:"assistant", content: L().welcome});
-
-  msgEl.value = "";
-  msgEl.style.height = "44px";
-  msgEl.focus();
-
-  // Also refresh match-day banner/schedule/menu in case language changed
-  applyLanguageToUI();
-}
-
-// Wire button
-clearBtn && clearBtn.addEventListener("click", clearChat);
-
 sendBtn.addEventListener("click", sendMessage);
 
 // Enter to send, Shift+Enter newline
@@ -789,10 +796,53 @@ msgEl.addEventListener("input", () => {
 });
 
 // -----------------------
+
+// -----------------------
+// Schedule scope toggle + search (Dallas ↔ All Matches)
+// -----------------------
+function setScope(newScope){
+  scope = (newScope === "all") ? "all" : "dallas";
+  localStorage.setItem("schedule_scope", scope);
+  if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
+  if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
+  loadSchedule();
+}
+if (scopeDallasBtn) scopeDallasBtn.addEventListener("click", () => setScope("dallas"));
+if (scopeAllBtn) scopeAllBtn.addEventListener("click", () => setScope("all"));
+
+// Team search (simple text input)
+let _searchTimer = null;
+function setScheduleQuery(q){
+  scheduleQuery = (q || "").trim();
+  if (_searchTimer) clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(() => loadSchedule(), 250);
+}
+if (teamSearchEl){
+  teamSearchEl.addEventListener("input", (e) => setScheduleQuery(e.target.value));
+}
+
+// -----------------------
+// Clear conversation (UI-only reset, keeps session id)
+// -----------------------
+function clearConversation(){
+  history.length = 0;
+  chatEl.innerHTML = "";
+  addBubble("assistant", L().welcome);
+  history.push({role:"assistant", content: L().welcome});
+  msgEl.value = "";
+  msgEl.style.height = "44px";
+  msgEl.focus();
+}
+if (clearBtn) clearBtn.addEventListener("click", clearConversation);
+
 // Init
 // -----------------------
 (async function init(){
   applyLanguageToUI();
+
+  // Restore schedule scope UI
+  if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
+  if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
 
   // Load sidebar data
   await loadSchedule();
