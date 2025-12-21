@@ -360,168 +360,6 @@
     .compact .cardhead{padding:10px 12px;}
     .compact .menu{font-size:8.5px;}
 
-
-    /* =========================
-       Session 1 — HERO + FLAGS
-       ========================= */
-
-    /* HERO banner */
-    .hero {
-      position: relative;
-      border: 1px solid rgba(255,255,255,.12);
-      border-radius: 18px;
-      overflow: hidden;
-      background: radial-gradient(1200px 400px at 20% 0%, rgba(31,111,235,.22) 0%, rgba(0,0,0,.12) 55%, rgba(0,0,0,.35) 100%),
-                  linear-gradient(135deg, rgba(245,215,110,.10) 0%, rgba(46,160,67,.10) 55%, rgba(31,111,235,.10) 100%);
-      box-shadow: 0 16px 30px rgba(0,0,0,.25);
-      min-height: 168px;
-      margin: 14px 0 14px;
-    }
-    .hero::before{
-      content:"";
-      position:absolute; inset:-40%;
-      background: conic-gradient(from 180deg at 50% 50%, rgba(245,215,110,.20), rgba(31,111,235,.18), rgba(46,160,67,.16), rgba(245,215,110,.20));
-      filter: blur(38px);
-      opacity: .65;
-      animation: heroHue 14s linear infinite;
-    }
-    @keyframes heroHue{ 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
-
-    .heroInner{
-      position:relative;
-      display:flex;
-      gap:14px;
-      align-items:stretch;
-      padding: 14px 14px 14px;
-    }
-
-    .heroMedia{
-      position: relative;
-      width: 170px;
-      min-width: 170px;
-      border-radius: 14px;
-      overflow:hidden;
-      border: 1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.18);
-    }
-    .heroMedia img{
-      width:100%;
-      height:100%;
-      object-fit: cover;
-      display:block;
-      filter: saturate(1.05) contrast(1.05);
-      transform: scale(1.02);
-    }
-    .heroMedia::after{
-      content:"";
-      position:absolute; inset:0;
-      background: linear-gradient(180deg, rgba(0,0,0,.08) 0%, rgba(0,0,0,.42) 100%);
-    }
-
-    .heroText{
-      flex:1;
-      display:flex;
-      flex-direction:column;
-      justify-content:space-between;
-      gap:10px;
-      padding: 6px 4px 6px;
-    }
-    .heroKicker{
-      display:flex;
-      gap:10px;
-      align-items:center;
-      font-weight:900;
-      letter-spacing:.8px;
-      text-transform:uppercase;
-      font-size: 12px;
-      opacity:.95;
-      text-shadow: 0 2px 18px rgba(0,0,0,.35);
-    }
-    .heroHeadline{
-      font-size: 18px;
-      font-weight: 1000;
-      letter-spacing:.4px;
-      line-height: 1.08;
-      text-transform:uppercase;
-      text-shadow: 0 10px 25px rgba(0,0,0,.30);
-    }
-    .heroSub{
-      color: var(--muted);
-      font-size: 12px;
-      line-height: 1.3;
-    }
-    .heroBadges{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:center;
-      padding-top: 2px;
-    }
-    .heroBadge{
-      display:inline-flex;
-      gap:8px;
-      align-items:center;
-      padding:6px 10px;
-      border-radius:999px;
-      border: 1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.16);
-      font-size: 12px;
-      font-weight: 900;
-      letter-spacing:.2px;
-      text-transform:uppercase;
-    }
-    .heroBadge .dot{
-      width:8px;height:8px;border-radius:999px;
-      background: rgba(245,215,110,.85);
-      box-shadow: 0 0 16px rgba(245,215,110,.35);
-    }
-    .heroGlow{
-      position:absolute; inset:0;
-      pointer-events:none;
-      background:
-        radial-gradient(700px 220px at 15% 15%, rgba(245,215,110,.18) 0%, rgba(0,0,0,0) 60%),
-        radial-gradient(700px 220px at 85% 40%, rgba(31,111,235,.18) 0%, rgba(0,0,0,0) 60%);
-      mix-blend-mode: screen;
-      opacity:.95;
-    }
-    .heroSweep{
-      position:absolute; inset:-20%;
-      pointer-events:none;
-      background: linear-gradient(120deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.10) 50%, rgba(255,255,255,0) 100%);
-      transform: translateX(-60%) rotate(8deg);
-      animation: heroSweep 6.5s ease-in-out infinite;
-      opacity:.55;
-    }
-    @keyframes heroSweep{
-      0%{transform: translateX(-70%) rotate(8deg)}
-      55%{transform: translateX(15%) rotate(8deg)}
-      100%{transform: translateX(60%) rotate(8deg)}
-    }
-
-    /* Flag badge (small circular, subtle glow) */
-    .flagBadge{
-      width: 18px; height: 18px;
-      border-radius: 999px;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      font-size: 13px;
-      border: 1px solid rgba(255,255,255,.16);
-      background: rgba(0,0,0,.14);
-      box-shadow: 0 0 0 rgba(0,0,0,0);
-      transition: transform .12s ease, box-shadow .12s ease;
-    }
-    .flagBadge:hover{
-      transform: translateY(-1px);
-      box-shadow: 0 10px 18px rgba(0,0,0,.22);
-    }
-    .teamLine{
-      display:flex; gap:8px; align-items:center; flex-wrap:wrap;
-      font-weight: 900;
-      letter-spacing:.2px;
-    }
-    .teamVs{opacity:.75; font-weight: 1000; padding:0 2px;}
-
 </style>
 </head>
 
@@ -547,29 +385,7 @@
     </header>
 
     
-    
-    <!-- HERO BANNER (Session 1) -->
-    <section class="hero" id="hero">
-      <div class="heroGlow"></div>
-      <div class="heroSweep"></div>
-      <div class="heroInner">
-        <div class="heroMedia"><img id="heroImg" alt="World Cup star"/></div>
-        <div class="heroText">
-          <div>
-            <div class="heroKicker" id="heroKicker">⚽ WORLD CUP 2026 • DALLAS MATCH DAY HQ</div>
-            <div class="heroHeadline" id="heroHeadline">FAN ZONE • RESERVE • CHAT • HYPE</div>
-            <div class="heroSub" id="heroSub">Ask for reservations, match times, venues, and tonight’s Dallas vibe. This banner rotates star players (open-licensed images) to keep the energy high.</div>
-          </div>
-          <div class="heroBadges">
-            <div class="heroBadge"><span class="dot"></span><span id="heroBadge1">Match of the Day</span></div>
-            <div class="heroBadge"><span class="dot" style="background:rgba(31,111,235,.85)"></span><span id="heroBadge2">Dallas Schedule</span></div>
-            <div class="heroBadge"><span class="dot" style="background:rgba(46,160,67,.85)"></span><span id="heroBadge3">Book the best table</span></div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-<div class="grid">
+    <div class="grid">
       <!-- Left column: Menu (left) + Chat/Reservations (right) -->
       <div class="leftcol">
 
@@ -665,90 +481,6 @@
   </div>
 
 <script>
-
-// =========================
-// Session 1 — HERO + FLAGS
-// =========================
-
-// Open-licensed (Wikimedia) star images (you can swap these URLs anytime)
-const HERO_SLIDES = [
-  {
-    name: "Kylian Mbappé",
-    country: "France",
-    flag: "🇫🇷",
-    img: "https://upload.wikimedia.org/wikipedia/commons/a/a3/Kylian_Mbapp%C3%A9_France.jpg",
-    headline: "WORLD CUP 2026 • DALLAS MATCH DAY HQ",
-    sub: "Need the best seat near the big screen? Say: “reserve a table for France match day”."
-  },
-  {
-    name: "Jude Bellingham",
-    country: "England",
-    flag: "🏴",
-    img: "https://upload.wikimedia.org/wikipedia/commons/2/26/Jude_Bellingham_2022-11-21_1.jpg",
-    headline: "FAN ZONE • RESERVE • CHAT • HYPE",
-    sub: "Ask: “Dallas matches” or “All matches” — then pick your game and reserve in seconds."
-  },
-  {
-    name: "Vinícius Jr",
-    country: "Brazil",
-    flag: "🇧🇷",
-    img: "https://upload.wikimedia.org/wikipedia/commons/0/03/Vinicius_Jr_2018.png",
-    headline: "TONIGHT’S STARS • BIG MOMENTS",
-    sub: "Want party energy? Tell me your country and group size — I’ll guide you to the best time & table."
-  }
-];
-
-let heroIdx = 0;
-const heroImg = document.getElementById("heroImg");
-const heroKicker = document.getElementById("heroKicker");
-const heroHeadline = document.getElementById("heroHeadline");
-const heroSub = document.getElementById("heroSub");
-const heroBadge1 = document.getElementById("heroBadge1");
-
-function setHeroSlide(i){
-  const s = HERO_SLIDES[i % HERO_SLIDES.length];
-  if (heroImg) heroImg.src = s.img;
-  if (heroKicker) heroKicker.textContent = `⚽ ${s.headline}`;
-  if (heroHeadline) heroHeadline.textContent = `${s.flag} ${s.name} • ${s.country}`;
-  if (heroSub) heroSub.textContent = s.sub;
-}
-
-function startHeroRotation(){
-  if (!heroImg) return;
-  setHeroSlide(heroIdx);
-  setInterval(() => {
-    heroIdx = (heroIdx + 1) % HERO_SLIDES.length;
-    // quick fade (no layout shift)
-    heroImg.style.opacity = "0";
-    setTimeout(() => {
-      setHeroSlide(heroIdx);
-      heroImg.style.opacity = "1";
-    }, 140);
-  }, 6500);
-}
-
-/** Minimal country->flag mapping (expand anytime) */
-const COUNTRY_FLAG = {
-  "Argentina":"🇦🇷","Australia":"🇦🇺","Belgium":"🇧🇪","Brazil":"🇧🇷","Canada":"🇨🇦","Cameroon":"🇨🇲",
-  "Chile":"🇨🇱","Colombia":"🇨🇴","Costa Rica":"🇨🇷","Croatia":"🇭🇷","Denmark":"🇩🇰","Ecuador":"🇪🇨",
-  "England":"🏴","France":"🇫🇷","Germany":"🇩🇪","Ghana":"🇬🇭","Iran":"🇮🇷","Italy":"🇮🇹","Japan":"🇯🇵",
-  "Korea Republic":"🇰🇷","Mexico":"🇲🇽","Morocco":"🇲🇦","Netherlands":"🇳🇱","Nigeria":"🇳🇬","Poland":"🇵🇱",
-  "Portugal":"🇵🇹","Qatar":"🇶🇦","Saudi Arabia":"🇸🇦","Senegal":"🇸🇳","Serbia":"🇷🇸","Spain":"🇪🇸",
-  "Switzerland":"🇨🇭","Tunisia":"🇹🇳","Turkey":"🇹🇷","Ukraine":"🇺🇦","United States":"🇺🇸","Uruguay":"🇺🇾",
-  "Wales":"🏴","Scotland":"🏴","Republic of Ireland":"🇮🇪"
-};
-
-function flagFor(team){
-  if (!team) return "🏳️";
-  // Normalize common patterns
-  const t = String(team).trim();
-  return COUNTRY_FLAG[t] || COUNTRY_FLAG[t.replace(/^USA$/i,"United States")] || "🏳️";
-}
-
-function flagBadge(flag){
-  return `<span class="flagBadge" title="Country flag">${flag}</span>`;
-}
-
 /**
  * This frontend matches your current app.py endpoints:
  *  - GET /schedule.json
@@ -827,7 +559,7 @@ if (compactToggleBtn){
     compactMode = !compactMode;
     localStorage.setItem("compact_mode", compactMode ? "1" : "0");
     applyCompactMode();
-});
+  });
 }
 
 const STRINGS = {
@@ -936,9 +668,7 @@ async function setLanguage(newLang){
   applyLanguageToUI();
 applyCompactMode();
 
-  
-  startHeroRotation();
-// reload menu in the chosen language
+  // reload menu in the chosen language
   await loadMenu();
 
   // show a bot notice (feature preserved)
@@ -1227,8 +957,7 @@ if (totalPages <= 1){
 
     row.innerHTML = `
       <div class="left">
-        <div><b>${escapeHtml(m.stage || \"Match\")}</b></div>
-        ${formatTeamsLine(m.home || (teamsTxt.split(\" vs \")[0]||\"\"), m.away || (teamsTxt.split(\" vs \")[1]||\"\"))}
+        <div><b>${escapeHtml(m.stage || "Match")}</b> • ${escapeHtml(teamsTxt)}</div>
         <div class="when">${escapeHtml(m.date || "")} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div>
       </div>
       <div class="pill">${escapeHtml(m.id || "")}</div>
@@ -1323,14 +1052,6 @@ function escapeHtml(s){
     .replaceAll(">","&gt;")
     .replaceAll('"',"&quot;")
     .replaceAll("'","&#039;");
-}
-
-
-
-function formatTeamsLine(home, away){
-  const fh = flagFor(home);
-  const fa = flagFor(away);
-  return `<div class="teamLine">${flagBadge(fh)}<span>${escapeHtml(home)}</span><span class="teamVs">vs</span>${flagBadge(fa)}<span>${escapeHtml(away)}</span></div>`;
 }
 
 // -----------------------
