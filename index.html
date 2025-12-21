@@ -63,12 +63,22 @@
       .grid{grid-template-columns:1fr;}
     }
 
-    .leftcol{display:flex; flex-direction:column; gap:14px; min-height:0;}
-    .chatcard{flex:1; display:flex; flex-direction:column; min-height:0;}
+    .leftcol{
+      display:grid;
+      grid-template-columns: 320px 1fr; /* menu | chat */
+      gap:14px;
+      min-height:0;
+      height:100%;
+      align-items:stretch;
+    }
+    .chatcard{display:flex; flex-direction:column; min-height:0;}
     .menucard{display:flex; flex-direction:column; min-height:0;}
-    .menu{flex:1; overflow:auto; }
-
-    .card{
+    /* menu list should always be readable & scroll within the card */
+    .menu{border-top:1px solid rgba(255,255,255,.10); padding:10px 12px; font-size:12px; display:flex; flex-direction:column; gap:10px; overflow:auto;}
+    @media (max-width: 950px){
+      .leftcol{grid-template-columns: 1fr; }
+    }
+.card{
       background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.03) 100%);
       border:1px solid var(--line);
       border-radius:16px;
@@ -299,30 +309,16 @@
       <!-- Left column -->
       <div class="leftcol">
 
-      <!-- Chat -->
-      <div class="card chatcard" style="display:flex;flex-direction:column;min-height:0;">
-        <div class="cardhead">
-          <div class="title" id="chatTitle">Chat</div>
-          <div class="pill" id="pillMode">Mode: Standard</div>
-        </div>
-
-        <div class="banner" id="matchBanner"></div>
-        <div id="chat"></div>
-
-        <div class="composer">
-          <textarea id="msg" placeholder="Type your message... (Enter to send, Shift+Enter for new line)"></textarea>
-          <button id="sendBtn">Send</button>
-        <button id="clearBtn" class="secondary">Clear</button>
-        </div>
-
-        <div class="hint" id="helperHint"></div>
-      </div>
-
-
       <!-- Menu (moved to left column) -->
       <div class="card menucard" style="display:flex;flex-direction:column;min-height:0;">
         <div class="cardhead">
           <div class="title" id="menuTitle">Menu</div>
+          
+
+<!-- Chat -->
+      <div class="card chatcard" style="display:flex;flex-direction:column;min-height:0;">
+        <div class="cardhead">
+          <div class="title" id="chatTitle">Chat</div>
           <div class="pill" id="menuPill">4 languages</div>
         </div>
 <div class="sidepad" id="menuControls" style="padding-top:10px; padding-bottom:10px;">
