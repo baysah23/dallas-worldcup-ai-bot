@@ -3,242 +3,308 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Dallas World Cup 2026 Concierge</title>
+  <title>World Cup 2026 Dallas Concierge</title>
   <style>
-    body { margin:0; font-family: Arial, sans-serif; background:#070a12; color:#e8e8e8; height:100vh; }
-    .wrap { max-width: 1050px; margin: 0 auto; height:100vh; display:flex; flex-direction:column; }
-
-    header {
-      background: radial-gradient(1200px 450px at 20% 10%, rgba(46,160,67,0.25), transparent 60%),
-                  radial-gradient(900px 450px at 85% 0%, rgba(31,111,235,0.25), transparent 55%),
-                  #0c1020;
-      border-bottom: 1px solid rgba(255,255,255,0.09);
-      padding: 18px 18px 14px;
+    :root{
+      --bg:#071022;
+      --panel:#0f1b33;
+      --panel2:#0b152c;
+      --line:rgba(255,255,255,.12);
+      --text:#eaf0ff;
+      --muted:#b9c7ee;
+      --accent:#2ea043;
+      --accent2:#1f6feb;
+      --warn:#ffcc66;
     }
-    .toprow { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
-    .brand h1 { margin:0; font-size:18px; letter-spacing:0.4px; }
-    .brand p { margin:6px 0 0; font-size:12px; color:#b9c0d4; line-height:1.35; }
-
-    .badges { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
-    .badge {
-      font-size:12px; padding:6px 10px; border-radius:999px;
-      border:1px solid rgba(255,255,255,0.12);
-      background: rgba(255,255,255,0.04);
-      color:#d7def4;
+    body{
+      margin:0; height:100vh; display:flex; flex-direction:column;
+      font-family: Arial, sans-serif; background: radial-gradient(1200px 600px at 20% 10%, #132a5b 0%, var(--bg) 55%);
+      color:var(--text);
     }
-    .badge strong { color:#fff; }
-
-    .toolbar {
-      margin-top: 12px;
-      display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+    .wrap{max-width:1050px; width:100%; margin:0 auto; display:flex; flex-direction:column; height:100%;}
+    header{
+      padding:16px 18px;
+      background: linear-gradient(90deg, #0b1733 0%, #0f1b33 55%, #102246 100%);
+      border-bottom:1px solid var(--line);
     }
-    .btn {
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.14);
-      color:#fff;
-      padding: 8px 10px;
-      border-radius: 10px;
-      font-size: 13px;
+    .toprow{display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;}
+    .brand{
+      display:flex; gap:12px; align-items:center;
+    }
+    .badge{
+      width:44px; height:44px; border-radius:12px;
+      background: linear-gradient(135deg, #f5d76e 0%, #2ea043 45%, #1f6feb 100%);
+      box-shadow: 0 10px 35px rgba(0,0,0,.25);
+    }
+    h1{margin:0; font-size:16px; font-weight:800; letter-spacing:.2px;}
+    .sub{margin:6px 0 0; color:var(--muted); font-size:12px;}
+    .langbar{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+    .langbtn{
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.06);
+      color:var(--text);
+      padding:8px 10px;
+      border-radius:10px;
+      font-size:12px;
       cursor:pointer;
+      user-select:none;
     }
-    .btn.primary { background:#1f6feb; border-color:#1f6feb; }
-    .btn.green { background:#2ea043; border-color:#2ea043; }
-    .btn:disabled { opacity:0.6; cursor:not-allowed; }
-
-    .grid {
-      display:grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      gap: 14px;
-      padding: 14px 18px;
-      flex:1;
+    .langbtn.active{background:rgba(46,160,67,.18); border-color:rgba(46,160,67,.45);}
+    .grid{
+      display:grid; grid-template-columns: 1.2fr .8fr; gap:14px;
+      padding:14px; flex:1; min-height:0;
+    }
+    @media (max-width: 950px){
+      .grid{grid-template-columns:1fr; }
+    }
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.03) 100%);
+      border:1px solid var(--line);
+      border-radius:16px;
       overflow:hidden;
+      min-height:0;
     }
-
-    /* Chat area */
-    .card {
-      border:1px solid rgba(255,255,255,0.09);
-      background: rgba(255,255,255,0.03);
-      border-radius: 16px;
-      overflow:hidden;
-      display:flex; flex-direction:column;
-      min-height: 0;
+    .cardhead{
+      padding:12px 14px;
+      border-bottom:1px solid var(--line);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      background: rgba(0,0,0,.12);
     }
-    .cardHead {
-      padding: 12px 12px;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      display:flex; justify-content:space-between; align-items:center;
-      gap:10px;
+    .cardhead .title{font-weight:800; font-size:13px;}
+    .pill{
+      font-size:11px; color:var(--muted);
+      border:1px solid var(--line);
+      padding:6px 10px; border-radius:999px;
+      background:rgba(0,0,0,.12);
+      white-space:nowrap;
     }
-    .cardHead .title { font-weight: 800; font-size: 13px; color:#fff; }
-    .cardHead .sub { font-size:12px; color:#b9c0d4; }
-
-    #chat { padding: 14px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:10px; }
-    .bubble { max-width: 78%; padding: 10px 12px; border-radius: 12px; white-space:pre-wrap; word-wrap:break-word; border:1px solid rgba(255,255,255,0.08); }
-    .user { align-self:flex-end; background:#1f6feb; color:#fff; border-bottom-right-radius:4px; }
-    .bot { align-self:flex-start; background:#121a33; color:#e8e8e8; border-bottom-left-radius:4px; }
-
-    .composer { display:flex; gap:10px; padding: 12px; border-top: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.12); }
-    textarea {
-      flex:1; height:44px; max-height:140px; resize:none;
-      border-radius: 12px;
-      border:1px solid rgba(255,255,255,0.12);
-      background:#070a12;
-      color:#fff;
-      padding: 10px 12px;
-      font-size: 14px;
-      outline:none;
-    }
-
-    /* Right panel */
-    .panel { display:flex; flex-direction:column; gap:14px; min-height:0; }
-    .mini { padding: 12px; }
-    .mini h3 { margin:0 0 8px; font-size: 13px; }
-    .muted { color:#b9c0d4; font-size: 12px; line-height:1.35; }
-    .divider { height:1px; background: rgba(255,255,255,0.08); margin: 10px 0; }
-
-    .matchBanner {
+    .banner{
+      padding:10px 14px;
+      border-bottom:1px dashed rgba(255,255,255,.16);
+      color:var(--warn);
+      font-size:12px;
       display:none;
-      padding: 10px 12px;
-      background: rgba(46,160,67,0.16);
-      border: 1px solid rgba(46,160,67,0.35);
-      border-radius: 12px;
-      color:#eaffef;
-      font-size: 13px;
-      font-weight:700;
     }
-
-    .countdown {
-      display:flex; gap:10px; flex-wrap:wrap;
-      margin-top: 6px;
+    .banner.show{display:block;}
+    #chat{
+      padding:14px; height:100%; overflow:auto;
+      display:flex; flex-direction:column; gap:10px;
     }
-    .tile {
-      min-width: 78px;
-      padding: 10px 10px;
-      border-radius: 12px;
-      border:1px solid rgba(255,255,255,0.10);
-      background: rgba(255,255,255,0.04);
-      text-align:center;
+    .bubble{
+      max-width:78%;
+      padding:10px 12px;
+      border-radius:14px;
+      line-height:1.35;
+      white-space:pre-wrap;
+      word-wrap:break-word;
+      border:1px solid rgba(255,255,255,.10);
     }
-    .tile .num { font-size: 18px; font-weight: 900; }
-    .tile .lbl { font-size: 11px; color:#b9c0d4; margin-top: 2px; }
-
-    .matches { overflow:auto; max-height: 320px; border-radius: 12px; border:1px solid rgba(255,255,255,0.10); }
-    .matchRow {
-      display:flex; gap:10px; justify-content:space-between;
-      padding: 10px 10px;
-      border-bottom: 1px solid rgba(255,255,255,0.07);
-      font-size: 12px;
+    .user{
+      align-self:flex-end;
+      background: rgba(31,111,235,.22);
+      border-color: rgba(31,111,235,.35);
     }
-    .matchRow:last-child { border-bottom:none; }
-    .matchRow .left { display:flex; flex-direction:column; gap:2px; }
-    .matchRow .right { text-align:right; color:#b9c0d4; min-width: 110px; }
-    .tag {
-      display:inline-block;
-      font-size: 11px;
-      padding: 2px 8px;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,0.12);
-      color:#d7def4;
-      background: rgba(255,255,255,0.04);
-      width: fit-content;
+    .bot{
+      align-self:flex-start;
+      background: rgba(0,0,0,.18);
     }
-    .next {
-      background: rgba(255,215,0,0.14);
-      border-color: rgba(255,215,0,0.35);
+    .composer{
+      display:flex; gap:10px; padding:12px 14px;
+      border-top:1px solid var(--line);
+      background: rgba(0,0,0,.12);
+      align-items:center;
     }
-
-    @media (max-width: 980px) {
-      .grid { grid-template-columns: 1fr; }
+    textarea{
+      flex:1; resize:none; height:44px; max-height:130px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.22);
+      color:var(--text);
+      padding:10px 12px; font-size:14px; outline:none;
     }
+    button{
+      background: var(--accent);
+      border:none;
+      padding:10px 14px;
+      border-radius:12px;
+      font-size:14px;
+      font-weight:800;
+      color:#fff;
+      cursor:pointer;
+      min-width:92px;
+    }
+    button:disabled{opacity:.6; cursor:not-allowed;}
+    .sidepad{padding:12px 14px;}
+    .countdown{
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding:12px 14px;
+      border-bottom:1px solid var(--line);
+    }
+    .countdown .label{font-size:12px; color:var(--muted); font-weight:700;}
+    .countdown .nums{
+      display:flex; gap:10px; align-items:baseline;
+      font-weight:900;
+      font-size:13px; /* fits on one line */
+      white-space:nowrap;
+    }
+    .nums span{color:var(--text);}
+    .nums b{color:#f5d76e;}
+    .schedule{
+      max-height:260px; overflow:auto;
+    }
+    .match{
+      display:flex; justify-content:space-between; gap:10px;
+      padding:10px 12px;
+      border-top:1px solid rgba(255,255,255,.10);
+      font-size:12px;
+    }
+    .match .left{display:flex; flex-direction:column; gap:2px;}
+    .match .when{color:var(--muted);}
+    .match.next{
+      background: rgba(46,160,67,.18);
+      border-top:1px solid rgba(46,160,67,.35);
+    }
+    .matchday{
+      margin:12px 14px 0;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid rgba(245,215,110,.35);
+      background: rgba(245,215,110,.10);
+      font-size:12px;
+      display:none;
+    }
+    .matchday.show{display:block;}
+    .menu{
+      border-top:1px solid rgba(255,255,255,.10);
+      padding:10px 12px;
+      font-size:12px;
+      display:flex; flex-direction:column; gap:8px;
+    }
+    .menuitem{
+      padding:8px 10px;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:12px;
+      background: rgba(0,0,0,.14);
+    }
+    .menuitem .name{font-weight:800;}
+    .menuitem .desc{color:var(--muted); margin-top:3px;}
+    .menuitem .price{margin-top:6px; font-weight:800; color:#f5d76e;}
+    .hint{
+      padding:10px 14px;
+      font-size:12px;
+      color:var(--muted);
+      border-top:1px dashed rgba(255,255,255,.14);
+    }
+    code{background:rgba(255,255,255,.10); padding:2px 6px; border-radius:8px;}
   </style>
 </head>
-
 <body>
   <div class="wrap">
     <header>
       <div class="toprow">
         <div class="brand">
-          <h1>⚽ Dallas World Cup 2026 Concierge</h1>
-          <p>World Cup–style match-day booking + questions, built for Dallas-area fans and venues. <br/>
-            Speak in multiple languages — use the buttons below or just type normally.
-          </p>
+          <div class="badge" aria-hidden="true"></div>
+          <div>
+            <h1>World Cup 2026 • Dallas Match-Day Concierge</h1>
+            <div class="sub">Reserve tables, see Dallas match schedule, and chat in English • Español • Português • Français</div>
+          </div>
         </div>
 
-        <div class="badges">
-          <div class="badge"><strong>Languages:</strong> English • Español • Português • Français</div>
-          <div class="badge"><strong>Dallas:</strong> AT&amp;T Stadium (Arlington)</div>
+        <div class="langbar" aria-label="Language toggle">
+          <div class="langbtn active" data-lang="en">English</div>
+          <div class="langbtn" data-lang="es">Español</div>
+          <div class="langbtn" data-lang="pt">Português</div>
+          <div class="langbtn" data-lang="fr">Français</div>
         </div>
-      </div>
-
-      <div class="toolbar">
-        <button class="btn primary" onclick="setLanguage('en')">English</button>
-        <button class="btn primary" onclick="setLanguage('es')">Español</button>
-        <button class="btn primary" onclick="setLanguage('pt')">Português</button>
-        <button class="btn primary" onclick="setLanguage('fr')">Français</button>
-
-        <button class="btn green" onclick="recallReservation()">Recall reservation so far</button>
-        <span class="muted" id="langStatus">Language: auto</span>
       </div>
     </header>
 
     <div class="grid">
-      <!-- Left: Chat -->
-      <div class="card">
-        <div class="cardHead">
-          <div>
-            <div class="title">Chat</div>
-            <div class="sub">Ask about hours, address, specials — or book a reservation.</div>
-          </div>
-          <div class="muted" id="rateHint"></div>
+      <!-- Chat -->
+      <div class="card" style="display:flex;flex-direction:column;min-height:0;">
+        <div class="cardhead">
+          <div class="title">Chat</div>
+          <div class="pill" id="pillMode">Mode: Standard</div>
         </div>
+
+        <div class="banner" id="matchBanner"></div>
 
         <div id="chat"></div>
 
         <div class="composer">
           <textarea id="msg" placeholder="Type your message... (Enter to send, Shift+Enter for new line)"></textarea>
-          <button class="btn green" id="sendBtn" onclick="sendMessage()">Send</button>
+          <button id="sendBtn">Send</button>
         </div>
+
+        <div class="hint" id="helperHint"></div>
       </div>
 
-      <!-- Right: Widgets -->
-      <div class="panel">
-
-        <div class="matchBanner" id="matchBanner">
-          🎉 Match-day mode: Opening at <span id="matchOpenTime">11:00</span> on match days.
+      <!-- Sidebar -->
+      <div class="card" style="display:flex;flex-direction:column;min-height:0;">
+        <div class="cardhead">
+          <div class="title">Dallas Schedule + Menu</div>
+          <div class="pill" id="pillLang">EN</div>
         </div>
 
-        <div class="card mini">
-          <h3>World Cup Countdown</h3>
-          <div class="muted">Countdown uses your device’s local time (safe).</div>
-          <div class="countdown" id="countdown"></div>
-          <div class="divider"></div>
-          <div class="muted">Tournament dates: Jun 11 – Jul 19, 2026. (Official FIFA schedule)</div>
+        <div class="countdown">
+          <div>
+            <div class="label">World Cup countdown</div>
+            <div class="sub" style="margin:4px 0 0;">Dallas / Arlington match days</div>
+          </div>
+          <div class="nums" id="countNums">
+            <span><b id="d">0</b>d</span>
+            <span><b id="h">0</b>h</span>
+            <span><b id="m">0</b>m</span>
+            <span><b id="s">0</b>s</span>
+          </div>
         </div>
 
-        <div class="card mini" style="min-height:0;">
-          <h3>Dallas Match Schedule</h3>
-          <div class="muted">Auto-highlights the next upcoming match. “Match-day mode” turns on automatically.</div>
-          <div class="divider"></div>
-          <div class="matches" id="matches"></div>
+        <div class="matchday" id="matchdayBox"></div>
+
+        <div class="sidepad" style="padding-bottom:0;">
+          <div class="pill" style="display:inline-block;">Next upcoming match is highlighted</div>
         </div>
 
+        <div class="schedule" id="schedule"></div>
+
+        <div class="cardhead" style="border-top:1px solid var(--line); border-bottom:none;">
+          <div class="title">Menu</div>
+          <div class="pill">4 languages</div>
+        </div>
+        <div class="menu" id="menu"></div>
       </div>
     </div>
   </div>
 
 <script>
-  // ================================
-  // Client-side memory + language
-  // ================================
+  // -----------------------
+  // Session + state
+  // -----------------------
+  const sessionId = (localStorage.getItem("session_id") || (() => {
+    const id = "sess_" + Math.random().toString(16).slice(2) + "_" + Date.now();
+    localStorage.setItem("session_id", id);
+    return id;
+  })());
+
+  let lang = localStorage.getItem("lang") || "en";
+  let ui = null;
+  let config = null;
+  let scheduleData = null;
+
+  // Conversation memory (client-side history)
   const history = [];
-  let currentLang = "auto";
 
   const chatEl = document.getElementById("chat");
   const msgEl = document.getElementById("msg");
   const sendBtn = document.getElementById("sendBtn");
-  const langStatus = document.getElementById("langStatus");
+  const helperHint = document.getElementById("helperHint");
 
-  function addBubble(role, text) {
+  const pillLang = document.getElementById("pillLang");
+  const pillMode = document.getElementById("pillMode");
+  const matchBanner = document.getElementById("matchBanner");
+  const matchdayBox = document.getElementById("matchdayBox");
+
+  function addBubble(role, text){
     const b = document.createElement("div");
     b.className = "bubble " + (role === "user" ? "user" : "bot");
     b.textContent = text;
@@ -246,67 +312,208 @@
     chatEl.scrollTop = chatEl.scrollHeight;
   }
 
-  function setSending(sending) {
-    sendBtn.disabled = sending;
-    msgEl.disabled = sending;
-    sendBtn.textContent = sending ? "..." : "Send";
+  function setSending(isSending){
+    sendBtn.disabled = isSending;
+    msgEl.disabled = isSending;
+    sendBtn.textContent = isSending ? "..." : "Send";
   }
 
-  async function setLanguage(lang) {
-    currentLang = lang;
-    langStatus.textContent = "Language: " + (lang === "en" ? "English" :
-      lang === "es" ? "Español" :
-      lang === "pt" ? "Português" :
-      lang === "fr" ? "Français" : "auto");
+  // -----------------------
+  // Language toggle
+  // -----------------------
+  function setLanguage(newLang){
+    lang = newLang;
+    localStorage.setItem("lang", lang);
 
-    // Also send a “respond in X” instruction (your requested behavior)
-    const instruction = lang === "en" ? "Respond in English." :
-                        lang === "es" ? "Respond in Spanish." :
-                        lang === "pt" ? "Respond in Portuguese." :
-                        "Respond in French.";
-    await sendRaw(instruction, true);
+    document.querySelectorAll(".langbtn").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.lang === lang);
+    });
+
+    pillLang.textContent = lang.toUpperCase();
+
+    // refresh UI strings + menu
+    loadUI(lang).then(() => {
+      // bot notice + localized helper
+      addBubble("assistant", ui.strings.lang_set + "\n\n" + ui.strings.helper);
+      history.push({role:"assistant", content: ui.strings.lang_set + "\n\n" + ui.strings.helper});
+      helperHint.textContent = ui.strings.helper;
+    });
+
+    loadMenu(lang);
   }
 
-  async function recallReservation() {
-    await sendRaw("Recall reservation so far", false);
+  document.querySelectorAll(".langbtn").forEach(btn => {
+    btn.addEventListener("click", () => setLanguage(btn.dataset.lang));
+  });
+
+  // -----------------------
+  // Fetchers
+  // -----------------------
+  async function loadConfig(){
+    const res = await fetch("/api/config");
+    config = await res.json();
   }
 
-  async function sendRaw(text, hideUserBubble) {
-    const trimmed = (text || "").trim();
-    if (!trimmed) return;
+  async function loadUI(lang){
+    const res = await fetch("/api/ui?lang=" + encodeURIComponent(lang));
+    ui = await res.json();
+    helperHint.textContent = ui.strings.helper;
+  }
 
-    if (!hideUserBubble) {
-      addBubble("user", trimmed);
+  async function loadSchedule(){
+    const res = await fetch("/api/schedule");
+    scheduleData = await res.json();
+    renderSchedule();
+    updateMatchDayMode();
+  }
+
+  async function loadMenu(lang){
+    const res = await fetch("/api/menu?lang=" + encodeURIComponent(lang));
+    const data = await res.json();
+    renderMenu(data.items);
+  }
+
+  // -----------------------
+  // Countdown (safe local clock)
+  // -----------------------
+  function startCountdown(){
+    const target = new Date(config.countdown_target); // ISO
+    const dEl = document.getElementById("d");
+    const hEl = document.getElementById("h");
+    const mEl = document.getElementById("m");
+    const sEl = document.getElementById("s");
+
+    function tick(){
+      const now = new Date();
+      let diff = Math.max(0, target - now);
+
+      const days = Math.floor(diff / (1000*60*60*24)); diff -= days*(1000*60*60*24);
+      const hrs  = Math.floor(diff / (1000*60*60)); diff -= hrs*(1000*60*60);
+      const mins = Math.floor(diff / (1000*60)); diff -= mins*(1000*60);
+      const secs = Math.floor(diff / 1000);
+
+      dEl.textContent = days;
+      hEl.textContent = hrs;
+      mEl.textContent = mins;
+      sEl.textContent = secs;
     }
-    history.push({ role: "user", content: trimmed });
 
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  // -----------------------
+  // Schedule rendering + next match highlight
+  // -----------------------
+  function renderSchedule(){
+    const el = document.getElementById("schedule");
+    el.innerHTML = "";
+
+    const matches = scheduleData.matches.slice().map(m => {
+      // convert date/time to a comparable timestamp where possible
+      let ts = null;
+      if (m.time && m.time !== "TBD") {
+        ts = Date.parse(m.date + "T" + m.time + ":00");
+      } else {
+        ts = Date.parse(m.date + "T23:59:59"); // end of day fallback
+      }
+      return {...m, ts};
+    });
+
+    const now = Date.now();
+    const upcoming = matches.filter(m => m.ts >= now).sort((a,b)=>a.ts-b.ts);
+    const nextId = upcoming.length ? upcoming[0].id : null;
+
+    matches.sort((a,b)=>a.ts-b.ts).forEach(m => {
+      const row = document.createElement("div");
+      row.className = "match" + (m.id === nextId ? " next" : "");
+      const timeTxt = (m.time && m.time !== "TBD") ? m.time : "TBD";
+      row.innerHTML = `
+        <div class="left">
+          <div><b>${m.stage}</b> • ${m.home} vs ${m.away}</div>
+          <div class="when">${m.date} • ${timeTxt}</div>
+        </div>
+        <div class="pill">${m.id}</div>
+      `;
+      el.appendChild(row);
+    });
+  }
+
+  function updateMatchDayMode(){
+    const todayISO = new Date().toISOString().slice(0,10);
+    const isMatch = scheduleData.matches.some(m => m.date === todayISO);
+
+    if (isMatch){
+      pillMode.textContent = "Mode: Match-day";
+      matchBanner.textContent = config.business_rules.match_day_banner || "Match-day hours";
+      matchBanner.classList.add("show");
+
+      matchdayBox.textContent = "🏟️ Match-day mode is ON today. Expect higher traffic — reserve early!";
+      matchdayBox.classList.add("show");
+    } else {
+      pillMode.textContent = "Mode: Standard";
+      matchBanner.classList.remove("show");
+      matchdayBox.classList.remove("show");
+    }
+  }
+
+  // -----------------------
+  // Menu rendering
+  // -----------------------
+  function renderMenu(items){
+    const el = document.getElementById("menu");
+    el.innerHTML = "";
+    items.forEach(it => {
+      const d = document.createElement("div");
+      d.className = "menuitem";
+      d.innerHTML = `
+        <div class="name">${it.name}</div>
+        <div class="desc">${it.desc}</div>
+        <div class="price">${it.price}</div>
+      `;
+      el.appendChild(d);
+    });
+  }
+
+  // -----------------------
+  // Chat send
+  // -----------------------
+  async function sendMessage(){
+    const text = msgEl.value.trim();
+    if (!text) return;
+
+    addBubble("user", text);
+    history.push({role:"user", content:text});
+    msgEl.value = "";
+    msgEl.style.height = "44px";
     setSending(true);
-    try {
+
+    try{
       const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed, history: history, lang: currentLang === "auto" ? "" : currentLang })
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({
+          message: text,
+          history,
+          session_id: sessionId,
+          lang
+        })
       });
       const data = await res.json();
       const reply = data.reply || "Sorry — no reply received.";
       addBubble("assistant", reply);
-      history.push({ role: "assistant", content: reply });
-    } catch (e) {
+      history.push({role:"assistant", content: reply});
+    } catch(e){
       addBubble("assistant", "⚠️ Network error. Please try again.");
-    } finally {
+    } finally{
       setSending(false);
       msgEl.focus();
     }
   }
 
-  async function sendMessage() {
-    const text = msgEl.value.trim();
-    if (!text) return;
-    msgEl.value = "";
-    msgEl.style.height = "44px";
-    await sendRaw(text, false);
-  }
+  sendBtn.addEventListener("click", sendMessage);
 
+  // Enter to send, Shift+Enter newline
   msgEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -314,118 +521,34 @@
     }
   });
 
+  // Auto-grow textarea
   msgEl.addEventListener("input", () => {
     msgEl.style.height = "44px";
-    msgEl.style.height = Math.min(msgEl.scrollHeight, 140) + "px";
+    msgEl.style.height = Math.min(msgEl.scrollHeight, 130) + "px";
   });
 
-  // Initial greeting
-  addBubble("assistant", "Hi! Want to book a table for a match day? Ask me anything.");
-  history.push({ role: "assistant", content: "Hi! Want to book a table for a match day? Ask me anything." });
+  // -----------------------
+  // Init
+  // -----------------------
+  (async function init(){
+    await loadConfig();
+    await loadUI(lang);
+    await loadSchedule();
+    await loadMenu(lang);
+    startCountdown();
 
-  // ================================
-  // Countdown widget (safe/local)
-  // ================================
-  // Tournament start: June 11, 2026 (local time)
-  const tournamentStart = new Date(2026, 5, 11, 0, 0, 0); // month is 0-based: 5 = June
+    pillLang.textContent = lang.toUpperCase();
+    document.querySelectorAll(".langbtn").forEach(btn => {
+      btn.classList.toggle("active", btn.dataset.lang === lang);
+    });
 
-  function renderCountdown() {
-    const now = new Date();
-    let diff = tournamentStart - now;
-    if (diff < 0) diff = 0;
+    addBubble("assistant", ui.strings.welcome);
+    history.push({role:"assistant", content: ui.strings.welcome});
 
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
-    const mins = Math.floor((diff / (1000 * 60)) % 60);
-    const secs = Math.floor((diff / 1000) % 60);
-
-    const el = document.getElementById("countdown");
-    el.innerHTML = `
-      <div class="tile"><div class="num">${days}</div><div class="lbl">Days</div></div>
-      <div class="tile"><div class="num">${hours}</div><div class="lbl">Hours</div></div>
-      <div class="tile"><div class="num">${mins}</div><div class="lbl">Minutes</div></div>
-      <div class="tile"><div class="num">${secs}</div><div class="lbl">Seconds</div></div>
-    `;
-  }
-  setInterval(renderCountdown, 1000);
-  renderCountdown();
-
-  // ================================
-  // Schedule (dynamic from server)
-  // ================================
-  let rules = null;
-  let schedule = [];
-
-  function isoTodayLocal() {
-    const d = new Date();
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, "0");
-    const dd = String(d.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  }
-
-  function findNextMatch(matches) {
-    const today = isoTodayLocal();
-    const upcoming = matches
-      .map(m => ({...m}))
-      .sort((a,b) => a.date.localeCompare(b.date))
-      .filter(m => m.date >= today);
-    return upcoming.length ? upcoming[0] : null;
-  }
-
-  function renderMatches() {
-    const el = document.getElementById("matches");
-    el.innerHTML = "";
-
-    const today = isoTodayLocal();
-    const next = findNextMatch(schedule);
-
-    schedule
-      .slice()
-      .sort((a,b) => a.date.localeCompare(b.date))
-      .forEach(m => {
-        const row = document.createElement("div");
-        row.className = "matchRow";
-        if (next && m.date === next.date && m.home === next.home && m.away === next.away) {
-          row.classList.add("next");
-        }
-        const vs = `${m.home} vs ${m.away}`;
-        row.innerHTML = `
-          <div class="left">
-            <div><strong>${m.date}</strong> • ${vs}</div>
-            <div class="tag">${m.stage}</div>
-          </div>
-          <div class="right">
-            <div>${m.time || "TBD"}</div>
-          </div>
-        `;
-        el.appendChild(row);
-      });
-
-    // Match-day banner: on if today is a match date
-    const isMatchDay = schedule.some(m => m.date === today);
-    const banner = document.getElementById("matchBanner");
-    const matchOpen = document.getElementById("matchOpenTime");
-
-    if (rules && isMatchDay) {
-      matchOpen.textContent = rules.open_time_matchday || "11:00";
-      banner.style.display = "block";
-    } else {
-      banner.style.display = "none";
-    }
-  }
-
-  async function loadRulesAndSchedule() {
-    const r = await fetch("/rules").then(x => x.json());
-    rules = r;
-
-    const s = await fetch("/schedule").then(x => x.json());
-    schedule = s.matches || [];
-
-    renderMatches();
-  }
-
-  loadRulesAndSchedule();
+    // Show localized helper immediately
+    helperHint.textContent = ui.strings.helper;
+  })();
 </script>
+
 </body>
 </html>
