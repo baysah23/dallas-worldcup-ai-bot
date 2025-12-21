@@ -148,6 +148,25 @@
       outline:none;
     }
     button{
+    background: var(--accent);
+    border:none;
+    padding:10px 14px;
+    border-radius:12px;
+    font-size:14px;
+    font-weight:800;
+    color:#fff;
+    cursor:pointer;
+    min-width:92px;
+  }
+  button.secondary{
+    background: rgba(255,255,255,.10);
+    border:1px solid rgba(255,255,255,.18);
+    color: var(--text);
+    min-width:88px;
+  }
+  button.secondary:hover{background: rgba(255,255,255,.14);} 
+
+  button{
       background: var(--accent);
       border:none;
       padding:10px 14px;
@@ -271,7 +290,7 @@
         <div class="composer">
           <textarea id="msg" placeholder="Type your message... (Enter to send, Shift+Enter for new line)"></textarea>
           <button id="sendBtn">Send</button>
-            <button id="clearBtn" style="background: rgba(255,255,255,.08); border:1px solid var(--line); color:var(--text);">Clear</button>
+        <button id="clearBtn" class="secondary">Clear</button>
         </div>
 
         <div class="hint" id="helperHint"></div>
@@ -299,25 +318,23 @@
 
         <div class="matchday" id="matchdayBox"></div>
 
+        <div class="sidepad" style="padding-top:10px; padding-bottom:0;">
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <div class="pill" style="padding:6px 10px;">Schedule</div>
+            <div class="langbar" style="gap:6px;">
+              <div class="langbtn active" id="scopeDallas">Dallas</div>
+              <div class="langbtn" id="scopeAll">All Matches</div>
+            </div>
+          </div>
+          <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
+            <input id="teamSearch" placeholder="Search team / venue..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;" />
+            <div class="pill" id="matchCount">0</div>
+          </div>
+        </div>
+    
+
         <div class="sidepad" style="padding-bottom:0;">
           <div class="pill" style="display:inline-block;" id="nextHint">Next upcoming match is highlighted</div>
-        </div>
-
-        
-        <div class="sidepad" style="padding-top:10px; padding-bottom:6px;">
-          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-            <div class="langbtn active" id="scopeDallasBtn" data-scope="dallas">Dallas</div>
-            <div class="langbtn" id="scopeAllBtn" data-scope="all">All matches</div>
-            <div class="pill" id="scopeCount" style="margin-left:auto;">—</div>
-          </div>
-          <div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
-            <input id="teamSearch" placeholder="Search team..." style="flex:1; height:36px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:8px 10px; font-size:13px; outline:none;" />
-            <div class="pill" id="pageIndicator" style="display:none;">Page 1 of 1</div>
-          </div>
-          <div style="margin-top:8px; display:flex; gap:8px; align-items:center; justify-content:flex-end;">
-            <button id="prevPageBtn" style="min-width:84px; padding:8px 10px; font-size:13px; border-radius:12px; background: rgba(255,255,255,.08); border:1px solid var(--line); color:var(--text); font-weight:800; cursor:pointer; display:none;">Prev</button>
-            <button id="nextPageBtn" style="min-width:84px; padding:8px 10px; font-size:13px; border-radius:12px; background: rgba(255,255,255,.08); border:1px solid var(--line); color:var(--text); font-weight:800; cursor:pointer; display:none;">Next</button>
-          </div>
         </div>
 
         <div class="schedule" id="schedule"></div>
@@ -354,9 +371,8 @@ const sessionId = (localStorage.getItem("session_id") || (() => {
 
 let lang = localStorage.getItem("lang") || "en";
 let scheduleData = null;
-let scheduleScope = localStorage.getItem('schedule_scope') || 'dallas';
-let pageIndex = 1;
-const PAGE_SIZE = 10;
+      let scope = localStorage.getItem("schedule_scope") || "dallas";
+      let scheduleQuery = "";
 
 let menuData = null;
 
@@ -371,6 +387,13 @@ const pillLang = document.getElementById("pillLang");
 const pillMode = document.getElementById("pillMode");
 const matchBanner = document.getElementById("matchBanner");
 const matchdayBox = document.getElementById("matchdayBox");
+
+const clearBtn = document.getElementById("clearBtn");
+const scopeDallasBtn = document.getElementById("scopeDallas");
+const scopeAllBtn = document.getElementById("scopeAll");
+const teamSearchEl = document.getElementById("teamSearch");
+const matchCountEl = document.getElementById("matchCount");
+
 
 const STRINGS = {
   en: {
@@ -452,7 +475,10 @@ function setSending(isSending){
 // -----------------------
 function applyLanguageToUI(){
   pillLang.textContent = lang.toUpperCase();
-  document.querySelectorAll(".langbtn").forEach(btn => {
+        // apply schedule scope UI
+        document.getElementById("scopeDallas")?.classList.toggle("active", scope === "dallas");
+        document.getElementById("scopeAll")?.classList.toggle("active", scope === "all");
+  document.querySelectorAll(".langbtn[data-lang]").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.lang === lang);
   });
 
@@ -481,7 +507,7 @@ async function setLanguage(newLang){
   history.push({role:"assistant", content: L().lang_set});
 }
 
-document.querySelectorAll(".langbtn").forEach(btn => {
+document.querySelectorAll(".langbtn[data-lang]").forEach(btn => {
   btn.addEventListener("click", () => setLanguage(btn.dataset.lang));
 });
 
@@ -496,19 +522,12 @@ function stripHtml(html){
 // Fetchers (match app.py)
 // -----------------------
 async function loadSchedule(){
-  const q = (document.getElementById("teamSearch")?.value || "").trim();
-  const url = `/schedule.json?scope=${encodeURIComponent(scheduleScope)}&q=${encodeURIComponent(q)}`;
-  const res = await fetch(url, {cache:"no-store"});
+  const res = await fetch(`/schedule.json?scope=${encodeURIComponent(scope)}&q=${encodeURIComponent(scheduleQuery)}`, {cache:"no-store"});
   scheduleData = await res.json();
-  // count label
-  updateScopeCount();
-  // reset pagination if needed
-  clampPage();
   renderSchedule();
   updateMatchDayMode();
   restartCountdown(); // uses schedule info when available
 }
-
 
 async function loadMenu(){
   const res = await fetch("/menu.json?lang=" + encodeURIComponent(lang), {cache:"no-store"});
@@ -531,37 +550,6 @@ function safeParseTimestamp(dateIso, timeStr){
   }
   // end-of-day fallback
   return Date.parse(dateIso + "T23:59:59");
-}
-
-// -----------------------
-// Time formatting (display only)
-// - Converts "17:00" -> "5:00 PM"
-// - Keeps "7:00 pm" but normalizes to "7:00 PM"
-// -----------------------
-function formatTime12(timeStr){
-  if (!timeStr) return "TBD";
-  const raw = String(timeStr).trim();
-  if (!raw || raw.toUpperCase() === "TBD") return "TBD";
-
-  // Already has AM/PM? Normalize casing and spacing.
-  const ampmMatch = raw.match(/\b(am|pm)\b/i);
-  if (ampmMatch){
-    // Normalize like "7:00 pm" -> "7:00 PM"
-    return raw.replace(/\b(am|pm)\b/ig, (m)=>m.toUpperCase()).replace(/\s+/g," ").trim();
-  }
-
-  // 24h format "HH:MM"
-  const m = raw.match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return raw; // unknown format, leave as-is
-
-  let hh = parseInt(m[1], 10);
-  const mm = m[2];
-  if (Number.isNaN(hh) || hh < 0 || hh > 23) return raw;
-
-  const ap = (hh >= 12) ? "PM" : "AM";
-  hh = hh % 12;
-  if (hh === 0) hh = 12;
-  return `${hh}:${mm} ${ap}`;
 }
 
 // -----------------------
@@ -615,18 +603,41 @@ function restartCountdown(){
 // -----------------------
 // Schedule rendering + next match highlight
 // -----------------------
-function renderSchedule(){
-  const el = document.getElementById("schedule");
-  el.innerHTML = "";
 
-  const matchesAll = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches.slice() : [];
-
-  // Filter happens server-side (q), but keep safe client-side filtering too for robustness
-  const q = (document.getElementById("teamSearch")?.value || "").trim().toLowerCase();
-  let matches = matchesAll;
-  if (q){
-    matches = matchesAll.filter(m => JSON.stringify(m).toLowerCase().includes(q));
+function formatKickoffTime(t){
+  const s = (t || "").toString().trim();
+  if (!s || s.toUpperCase() === "TBD") return "TBD";
+  // Already 12-hour?
+  if (/[AP]M/i.test(s)) {
+    // normalize spacing: "7:00 pm" -> "7:00 PM"
+    return s.replace(/\s+/g," ").replace(/am/i,"AM").replace(/pm/i,"PM");
   }
+  // "19:00" -> "7:00 PM"
+  const m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (m){
+    let hh = parseInt(m[1],10);
+    const mm = m[2];
+    const ap = hh >= 12 ? "PM" : "AM";
+    hh = hh % 12; if (hh === 0) hh = 12;
+    return `${hh}:${mm} ${ap}`;
+  }
+  return s;
+}
+
+function renderSchedule(){
+        const el = document.getElementById("schedule");
+        el.innerHTML = "";
+        const countEl = document.getElementById("matchCount");
+        if (countEl) countEl.textContent = (scheduleData && scheduleData.matches) ? scheduleData.matches.length : 0;
+        if (scheduleData && scheduleData.notice){
+          const row = document.createElement("div");
+          row.className = "match";
+          row.innerHTML = `<div class="left"><div><b>Notice</b></div><div class="when">${scheduleData.notice}</div></div><div class="pill">i</div>`;
+          el.appendChild(row);
+          return;
+        }
+
+  const matches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches.slice() : [];
 
   if (!matches.length){
     const empty = document.createElement("div");
@@ -639,117 +650,36 @@ function renderSchedule(){
       <div class="pill">—</div>
     `;
     el.appendChild(empty);
-    updatePagerUI(0);
     return;
   }
 
-  // Pagination: only for scope=all
-  const total = matches.length;
-  let view = matches;
-  if (scheduleScope === "all"){
-    const start = (pageIndex - 1) * PAGE_SIZE;
-    view = matches.slice(start, start + PAGE_SIZE);
-  }
-
-  const enriched = view.map(m => {
-    const ts = safeParseTimestamp(m.date, m.time);
-    return {...m, ts};
-  });
-
-  // Next match highlight should be based on the full filtered list, not just the page
-  const enrichedAll = matches.map(m => {
+  const enriched = matches.map(m => {
     const ts = safeParseTimestamp(m.date, m.time);
     return {...m, ts};
   }).filter(m => m.ts !== null);
 
   const now = Date.now();
-  const upcoming = enrichedAll.filter(m => m.ts >= now).sort((a,b)=>a.ts-b.ts);
+  const upcoming = enriched.filter(m => m.ts >= now).sort((a,b)=>a.ts-b.ts);
   const nextId = upcoming.length ? upcoming[0].id : null;
 
-  // Sort current view by time for display consistency
-  enriched.sort((a,b)=>{
-    const aa = (a.ts === null) ? 0 : a.ts;
-    const bb = (b.ts === null) ? 0 : b.ts;
-    return aa - bb;
-  }).forEach(m => {
+  enriched.sort((a,b)=>a.ts-b.ts).forEach(m => {
     const row = document.createElement("div");
     row.className = "match" + (m.id === nextId ? " next" : "");
 
-    const timeTxtRaw = (m.time && String(m.time).trim()) ? String(m.time).trim() : "TBD";
-    const timeTxt = formatTime12(timeTxtRaw);
+    const timeTxt = formatKickoffTime(m.time);
     const teamsTxt = m.teams || (m.home && m.away ? `${m.home} vs ${m.away}` : "TBD vs TBD");
     const venueTxt = m.venue ? ` • ${m.venue}` : "";
 
     row.innerHTML = `
       <div class="left">
-        <div><b>${escapeHtml(teamsTxt)}</b></div>
+        <div><b>Match</b> • ${escapeHtml(teamsTxt)}</div>
         <div class="when">${escapeHtml(m.date)} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div>
       </div>
       <div class="pill">${escapeHtml(m.id || "")}</div>
     `;
     el.appendChild(row);
   });
-
-  updatePagerUI(total);
 }
-
-
-function setScheduleScope(scope){
-  scheduleScope = scope;
-  localStorage.setItem('schedule_scope', scheduleScope);
-  pageIndex = 1; // reset page when switching scope
-  document.getElementById("scopeDallasBtn")?.classList.toggle("active", scheduleScope === "dallas");
-  document.getElementById("scopeAllBtn")?.classList.toggle("active", scheduleScope === "all");
-  loadSchedule();
-}
-
-function clampPage(){
-  if (!scheduleData || !Array.isArray(scheduleData.matches)) return;
-  if (scheduleScope !== "all"){ pageIndex = 1; return; }
-  const q = (document.getElementById("teamSearch")?.value || "").trim().toLowerCase();
-  let matches = scheduleData.matches;
-  if (q){ matches = matches.filter(m => JSON.stringify(m).toLowerCase().includes(q)); }
-  const total = matches.length;
-  const maxPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  if (pageIndex > maxPage) pageIndex = maxPage;
-  if (pageIndex < 1) pageIndex = 1;
-}
-
-function updatePagerUI(total){
-  const prev = document.getElementById("prevPageBtn");
-  const next = document.getElementById("nextPageBtn");
-  const ind  = document.getElementById("pageIndicator");
-
-  if (scheduleScope !== "all"){
-    if (prev) prev.style.display = "none";
-    if (next) next.style.display = "none";
-    if (ind)  ind.style.display  = "none";
-    return;
-  }
-
-  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  if (ind){
-    ind.style.display = "inline-block";
-    ind.textContent = `Page ${pageIndex} of ${pages}`;
-  }
-  if (prev){
-    prev.style.display = "inline-block";
-    prev.disabled = pageIndex <= 1;
-  }
-  if (next){
-    next.style.display = "inline-block";
-    next.disabled = pageIndex >= pages;
-  }
-}
-
-function updateScopeCount(){
-  const pill = document.getElementById("scopeCount");
-  if (!pill || !scheduleData) return;
-  const c = scheduleData.count ?? (Array.isArray(scheduleData.matches) ? scheduleData.matches.length : 0);
-  pill.textContent = (scheduleScope === "dallas" ? "Dallas" : "All") + ` • ${c}`;
-}
-
-
 
 function updateMatchDayMode(){
   const isMatchDay = !!(scheduleData && scheduleData.is_match_day);
@@ -851,22 +781,6 @@ async function sendMessage(){
 
 sendBtn.addEventListener("click", sendMessage);
 
-const clearBtn = document.getElementById("clearBtn");
-function clearChat(){
-  chatEl.innerHTML = "";
-  history.length = 0;
-  // re-show welcome + helper
-  if (ui && ui.strings && ui.strings.welcome){
-    addBubble("assistant", ui.strings.welcome);
-    history.push({role:"assistant", content: ui.strings.welcome});
-  }
-  if (ui && ui.strings && ui.strings.helper){
-    helperHint.textContent = ui.strings.helper;
-  }
-}
-clearBtn && clearBtn.addEventListener("click", clearChat);
-
-
 // Enter to send, Shift+Enter newline
 msgEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
@@ -882,25 +796,56 @@ msgEl.addEventListener("input", () => {
 });
 
 // -----------------------
+
+// -----------------------
+// Schedule scope toggle + search (Dallas ↔ All Matches)
+// -----------------------
+function setScope(newScope){
+  scope = (newScope === "all") ? "all" : "dallas";
+  localStorage.setItem("schedule_scope", scope);
+  if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
+  if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
+  loadSchedule();
+}
+if (scopeDallasBtn) scopeDallasBtn.addEventListener("click", () => setScope("dallas"));
+if (scopeAllBtn) scopeAllBtn.addEventListener("click", () => setScope("all"));
+
+// Team search (simple text input)
+let _searchTimer = null;
+function setScheduleQuery(q){
+  scheduleQuery = (q || "").trim();
+  if (_searchTimer) clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(() => loadSchedule(), 250);
+}
+if (teamSearchEl){
+  teamSearchEl.addEventListener("input", (e) => setScheduleQuery(e.target.value));
+}
+
+// -----------------------
+// Clear conversation (UI-only reset, keeps session id)
+// -----------------------
+function clearConversation(){
+  history.length = 0;
+  chatEl.innerHTML = "";
+  addBubble("assistant", L().welcome);
+  history.push({role:"assistant", content: L().welcome});
+  msgEl.value = "";
+  msgEl.style.height = "44px";
+  msgEl.focus();
+}
+if (clearBtn) clearBtn.addEventListener("click", clearConversation);
+
 // Init
 // -----------------------
 (async function init(){
   applyLanguageToUI();
 
+  // Restore schedule scope UI
+  if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
+  if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
+
   // Load sidebar data
   await loadSchedule();
-  // Schedule scope + search + paging
-  document.getElementById('scopeDallasBtn')?.addEventListener('click', ()=>setScheduleScope('dallas'));
-  document.getElementById('scopeAllBtn')?.addEventListener('click', ()=>setScheduleScope('all'));
-  document.getElementById('prevPageBtn')?.addEventListener('click', ()=>{ pageIndex--; clampPage(); renderSchedule(); });
-  document.getElementById('nextPageBtn')?.addEventListener('click', ()=>{ pageIndex++; clampPage(); renderSchedule(); });
-  document.getElementById('teamSearch')?.addEventListener('input', ()=>{ pageIndex = 1; loadSchedule(); });
-  // restore saved scope buttons (no extra fetch)
-  document.getElementById('scopeDallasBtn')?.classList.toggle('active', scheduleScope === 'dallas');
-  document.getElementById('scopeAllBtn')?.classList.toggle('active', scheduleScope === 'all');
-  updateScopeCount();
-  updatePagerUI((scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches.length : 0);
-
   await loadMenu();
 
   // Welcome message (feature preserved)
