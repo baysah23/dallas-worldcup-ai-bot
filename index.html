@@ -53,7 +53,7 @@
 
     .grid{
       display:grid;
-      grid-template-columns: 1.2fr .8fr;
+      grid-template-columns: 1.45fr .55fr;
       gap:14px;
       padding:14px;
       flex:1;
@@ -63,7 +63,22 @@
       .grid{grid-template-columns:1fr;}
     }
 
-    .card{
+    .leftcol{
+      display:grid;
+      O0px 1fr; /* Menu | Chat (chat gets more space) */
+      gap:14px;
+      min-height:0;
+      height:100%;
+      align-items:stretch;
+    }
+    .chatcard{display:flex; flex-direction:column; min-height:0;}
+    .menucard{display:flex; flex-direction:column; min-height:0;}
+    #chat{padding:14px; height:100%; overflow:auto; display:flex; flex-direction:column; gap:10px;}
+    .menu{padding:8px 8px 10px; font-size:9px; line-height:1.25; display:flex; flex-direction:column; gap:8px; overflow:auto; max-height:390px;}
+    @media (max-width: 950px){
+      .leftcol{grid-template-columns: 1fr;}
+    }
+.card{
       background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.03) 100%);
       border:1px solid var(--line);
       border-radius:16px;
@@ -200,7 +215,7 @@
     .nums span{color:var(--text);}
     .nums b{color:#f5d76e;}
 
-    .schedule{max-height:260px; overflow:auto;}
+    .schedule{flex:1; min-height:160px; overflow:auto;}
     .match{
       display:flex;
       justify-content:space-between;
@@ -227,23 +242,43 @@
     }
     .matchday.show{display:block;}
 
-    .menu{
-      border-top:1px solid rgba(255,255,255,.10);
-      padding:10px 12px;
-      font-size:12px;
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-    }
     .menuitem{
-      padding:8px 10px;
-      border:1px solid rgba(255,255,255,.10);
-      border-radius:12px;
-      background: rgba(0,0,0,.14);
+      padding:7px 7px;
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:14px;
+      background: linear-gradient(135deg, rgba(31,111,235,.16) 0%, rgba(0,0,0,.18) 55%, rgba(46,160,67,.10) 100%);
+      position:relative;
+      overflow:hidden;
     }
-    .menuitem .name{font-weight:800;}
-    .menuitem .desc{color:var(--muted); margin-top:3px;}
-    .menuitem .price{margin-top:6px; font-weight:800; color:#f5d76e;}
+    .menuitem:before{
+      content:"";
+      position:absolute;
+      inset:-1px;
+      background: radial-gradient(220px 90px at 15% 10%, rgba(245,215,110,.18) 0%, rgba(0,0,0,0) 60%);
+      pointer-events:none;
+    }
+    .menuitem .name{font-weight:900; font-size:11px; letter-spacing:.15px;}
+    .menuitem .desc{color:var(--muted); margin-top:3px; font-size:9px; line-height:1.25;}
+    .menuitem .price{margin-top:6px; font-weight:900; color:#f5d76e; font-size:10px;}
+    .menuTop{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
+    .menuBadge{
+      border:1px solid rgba(245,215,110,.35);
+      background: rgba(245,215,110,.10);
+      padding:4px 8px;
+      border-radius:999px;
+      font-size:11px;
+      color:#f5d76e;
+      white-space:nowrap;
+    }
+    .menuMeta{margin-top:6px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+    .menuTag{
+      font-size:11px;
+      color:var(--muted);
+      border:1px solid rgba(255,255,255,.12);
+      padding:3px 8px;
+      border-radius:999px;
+      background:rgba(0,0,0,.10);
+    }
 
     .hint{
       padding:10px 14px;
@@ -252,7 +287,38 @@
       border-top:1px dashed rgba(255,255,255,.14);
     }
     code{background:rgba(255,255,255,.10); padding:2px 6px; border-radius:8px;}
-  </style>
+  
+    /* Compact WC menu (small + sleek) */
+    .menucard{max-height:460px;}
+    .menu{max-height:390px;}
+    @media (max-width: 950px){
+      .menucard{max-height:none;}
+      .menu{max-height:none;}
+    }
+
+
+    /* Slightly tighter sidebar so it stays compact */
+    .countdown{padding:10px 12px;}
+    .match{padding:9px 10px;}
+
+
+    /* Layout override: compact menu + wide chat (desktop) */
+    .leftcol{
+      display:grid;
+      grid-template-columns: 170px 1fr; /* Menu | Chat */
+      gap:14px;
+      min-height:0;
+      height:100%;
+      align-items:stretch;
+    }
+    .chatcard{display:flex; flex-direction:column; min-height:0;}
+    .menucard{display:flex; flex-direction:column; min-height:0; max-width:190px; max-height:460px;}
+    @media (max-width: 950px){
+      .leftcol{grid-template-columns: 1fr;}
+      .menucard{max-width:none; max-height:none;}
+    }
+
+</style>
 </head>
 
 <body>
@@ -276,30 +342,47 @@
       </div>
     </header>
 
+    
     <div class="grid">
-      <!-- Chat -->
-      <div class="card" style="display:flex;flex-direction:column;min-height:0;">
-        <div class="cardhead">
-          <div class="title" id="chatTitle">Chat</div>
-          <div class="pill" id="pillMode">Mode: Standard</div>
+      <!-- Left column: Menu (left) + Chat/Reservations (right) -->
+      <div class="leftcol">
+
+        <!-- Menu -->
+        <div class="card menucard" style="display:flex;flex-direction:column;min-height:0; max-width:190px;">
+          <div class="cardhead">
+            <div class="title" id="menuTitle">Menu</div>
+            <div class="pill" id="menuPill">4 languages</div>
+          </div>
+
+          <div class="menu" id="menu"></div>
         </div>
 
-        <div class="banner" id="matchBanner"></div>
-        <div id="chat"></div>
+        <!-- Chat / Reservations -->
+        <div class="card chatcard" style="display:flex;flex-direction:column;min-height:0;">
+          <div class="cardhead">
+            <div class="title" id="chatTitle">Chat</div>
+            <div class="pill" id="pillMode">Live</div>
+          </div>
 
-        <div class="composer">
-          <textarea id="msg" placeholder="Type your message... (Enter to send, Shift+Enter for new line)"></textarea>
-          <button id="sendBtn">Send</button>
-        <button id="clearBtn" class="secondary">Clear</button>
+          <div class="banner" id="matchBanner"></div>
+
+          <div id="chat"></div>
+
+          <div class="composer">
+            <textarea id="msg" placeholder="Type here..."></textarea>
+            <button id="sendBtn">Send</button>
+            <button id="clearBtn" class="secondary">Clear</button>
+          </div>
+
+          <div class="hint" id="helperHint"></div>
         </div>
 
-        <div class="hint" id="helperHint"></div>
       </div>
 
-      <!-- Sidebar -->
+<!-- Sidebar -->
       <div class="card" style="display:flex;flex-direction:column;min-height:0;">
         <div class="cardhead">
-          <div class="title" id="sideTitle">Dallas Schedule + Menu</div>
+          <div class="title" id="sideTitle">Dallas Schedule</div>
           <div class="pill" id="pillLang">EN</div>
         </div>
 
@@ -327,7 +410,7 @@
             </div>
           </div>
           <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
-            <input id="teamSearch" placeholder="Search team / venue..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;" />
+            <input id="teamSearch" placeholder="Search team / venue / date (e.g., June 13 or 2026-06-13)..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;" />
             <div class="pill" id="matchCount">0</div>
           </div>
         </div>
@@ -339,13 +422,14 @@
 
         <div class="schedule" id="schedule"></div>
 
-        <div class="cardhead" style="border-top:1px solid var(--line); border-bottom:none;">
-          <div class="title" id="menuTitle">Menu</div>
-          <div class="pill" id="menuPill">4 languages</div>
+        <div class="sidepad" id="pager" style="display:none; padding-top:10px;">
+          <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
+            <button id="prevPage" class="secondary" style="min-width:88px;">Prev</button>
+            <div class="pill" id="pageIndicator">Page 1 of 1</div>
+            <button id="nextPage" class="secondary" style="min-width:88px;">Next</button>
+          </div>
         </div>
-
-        <div class="menu" id="menu"></div>
-      </div>
+</div>
     </div>
   </div>
 
@@ -371,10 +455,17 @@ const sessionId = (localStorage.getItem("session_id") || (() => {
 
 let lang = localStorage.getItem("lang") || "en";
 let scheduleData = null;
-      let scope = localStorage.getItem("schedule_scope") || "dallas";
-      let scheduleQuery = "";
+let scope = localStorage.getItem("schedule_scope") || "dallas";
+let scheduleQuery = "";
+
+// Pagination (All Matches only)
+const PAGE_SIZE = 10;
+let currentPage = 1;
+
 
 let menuData = null;
+let menuPage = 1; // safe default (menu is non-paginated)
+
 
 // Conversation memory (client-side history) — kept as a feature
 const history = [];
@@ -393,17 +484,22 @@ const scopeDallasBtn = document.getElementById("scopeDallas");
 const scopeAllBtn = document.getElementById("scopeAll");
 const teamSearchEl = document.getElementById("teamSearch");
 const matchCountEl = document.getElementById("matchCount");
+const pagerEl = document.getElementById("pager");
+const prevPageBtn = document.getElementById("prevPage");
+const nextPageBtn = document.getElementById("nextPage");
+const pageIndicatorEl = document.getElementById("pageIndicator");
+
 
 
 const STRINGS = {
   en: {
     welcome: "Hi! Want to book a table for a match day? Ask me anything.",
     lang_set: "Language set to English.",
-    helper: 'Try: <code>reservation</code> to book • <code>Recall reservation so far</code> • Ask about the menu • Ask about Dallas match days.',
+    helper: 'Try: <code>reservation</code> to book • <code>Recall reservation so far</code> • Ask about the menu • Ask about Dallas match days. Search by team, venue, or date (e.g., "June 13").',
     send: "Send",
     typing: "...",
     chat_title: "Chat",
-    side_title: "Dallas Schedule + Menu",
+    side_title: "Dallas Schedule",
     countdown: "World Cup countdown",
     countdown_sub: "Dallas / Arlington match days",
     next_hint: "Next upcoming match is highlighted",
@@ -534,22 +630,54 @@ async function loadMenu(){
   const data = await res.json();
   // app.py returns { lang, menu: {title, items:[]}}
   menuData = data.menu;
-  renderMenu(menuData.items || []);
+  window.menuDataList = (menuData && Array.isArray(menuData.items)) ? menuData.items : [];
+  menuPage = 1;
+  renderMenu(window.menuDataList);
 }
 
 function safeParseTimestamp(dateIso, timeStr){
-  // app.py schedule items may have "time": "17:00" or missing/""/"TBD"
+  // Supports:
+  // - "19:00"
+  // - "7:00 PM" / "7:00PM" / "7 PM"
+  // - empty / "TBD" (falls back to end-of-day)
   if (!dateIso) return null;
-  if (timeStr && typeof timeStr === "string" && timeStr.trim() && timeStr.trim().toUpperCase() !== "TBD"){
-    // expect "HH:MM"
-    const t = timeStr.trim();
-    // Basic guard
-    if (/^\d{1,2}:\d{2}$/.test(t)){
-      return Date.parse(dateIso + "T" + t + ":00");
+
+  const raw = (timeStr || "").toString().trim();
+  if (raw && raw.toUpperCase() !== "TBD"){
+    // 24-hour "HH:MM"
+    const m24 = raw.match(/^(\d{1,2}):(\d{2})$/);
+    if (m24){
+      const hh = m24[1].padStart(2,"0");
+      const mm = m24[2];
+      return Date.parse(`${dateIso}T${hh}:${mm}:00`);
+    }
+
+    // 12-hour "H(:MM)? AM/PM"
+    const m12 = raw.match(/^(\d{1,2})(?::(\d{2}))?\s*([AaPp][Mm])$/);
+    if (m12){
+      let hh = parseInt(m12[1],10);
+      const mm = (m12[2] || "00");
+      const ap = m12[3].toUpperCase();
+      if (ap === "PM" && hh !== 12) hh += 12;
+      if (ap === "AM" && hh === 12) hh = 0;
+      const hh2 = String(hh).padStart(2,"0");
+      return Date.parse(`${dateIso}T${hh2}:${mm}:00`);
+    }
+
+    // 12-hour with no minutes: "7 PM"
+    const m12b = raw.match(/^(\d{1,2})\s*([AaPp][Mm])$/);
+    if (m12b){
+      let hh = parseInt(m12b[1],10);
+      const ap = m12b[2].toUpperCase();
+      if (ap === "PM" && hh !== 12) hh += 12;
+      if (ap === "AM" && hh === 12) hh = 0;
+      const hh2 = String(hh).padStart(2,"0");
+      return Date.parse(`${dateIso}T${hh2}:00:00`);
     }
   }
-  // end-of-day fallback
-  return Date.parse(dateIso + "T23:59:59");
+
+  // end-of-day fallback (still keeps countdown alive even if time missing)
+  return Date.parse(`${dateIso}T23:59:59`);
 }
 
 // -----------------------
@@ -624,22 +752,82 @@ function formatKickoffTime(t){
   return s;
 }
 
+// Normalize schedule search so users can type a specific day like "June 13" and still match backend dates ("YYYY-MM-DD").
+// Backend filters against m.date (ISO), so we convert common date inputs to ISO when possible.
+function normalizeScheduleSearch(raw){
+  const s = (raw || "").toString().trim();
+  if (!s) return "";
+  if (/^20\d{2}-\d{2}-\d{2}$/.test(s)) return s;
+
+  const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slash){
+    let mm = parseInt(slash[1],10);
+    let dd = parseInt(slash[2],10);
+    let yy = parseInt(slash[3],10);
+    if (yy < 100) yy += 2000;
+    const m2 = String(mm).padStart(2,"0");
+    const d2 = String(dd).padStart(2,"0");
+    return `${yy}-${m2}-${d2}`;
+  }
+
+  const lower = s.toLowerCase();
+  const monthMap = {
+    january:1, jan:1, february:2, feb:2, march:3, mar:3, april:4, apr:4, may:5,
+    june:6, jun:6, july:7, jul:7, august:8, aug:8, september:9, sep:9, sept:9,
+    october:10, oct:10, november:11, nov:11, december:12, dec:12,
+    // Spanish
+    enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6, julio:7, agosto:8, septiembre:9, octubre:10, noviembre:11, diciembre:12,
+    // Portuguese
+    janeiro:1, fevereiro:2, março:3, marco:3, abril:4, maio:5, junho:6, julho:7, agosto:8, setembro:9, outubro:10, novembro:11, dezembro:12,
+    // French
+    janvier:1, février:2, fevrier:2, mars:3, avril:4, mai:5, juin:6, juillet:7, août:8, aout:8, septembre:9, octobre:10, novembre:11, décembre:12, decembre:12
+  };
+  const words = lower.split(/[\s,\-]+/).filter(Boolean);
+  let mon = null;
+  for (const w of words){
+    if (monthMap[w] != null){ mon = monthMap[w]; break; }
+  }
+  if (mon != null){
+    const dayMatch = lower.match(/\b(\d{1,2})\b/);
+    if (dayMatch){
+      const dd = parseInt(dayMatch[1],10);
+      const yMatch = lower.match(/\b(20\d{2})\b/);
+      const yy = yMatch ? parseInt(yMatch[1],10) : 2026;
+      const m2 = String(mon).padStart(2,"0");
+      const d2 = String(dd).padStart(2,"0");
+      return `${yy}-${m2}-${d2}`;
+    }
+  }
+  return s;
+}
+
+
 function renderSchedule(){
-        const el = document.getElementById("schedule");
-        el.innerHTML = "";
-        const countEl = document.getElementById("matchCount");
-        if (countEl) countEl.textContent = (scheduleData && scheduleData.matches) ? scheduleData.matches.length : 0;
-        if (scheduleData && scheduleData.notice){
-          const row = document.createElement("div");
-          row.className = "match";
-          row.innerHTML = `<div class="left"><div><b>Notice</b></div><div class="when">${scheduleData.notice}</div></div><div class="pill">i</div>`;
-          el.appendChild(row);
-          return;
-        }
+  const el = document.getElementById("schedule");
+  el.innerHTML = "";
 
-  const matches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches.slice() : [];
+  // Guard: show notice if backend returned one
+  if (scheduleData && scheduleData.notice){
+    const row = document.createElement("div");
+    row.className = "match";
+    row.innerHTML = `<div class="left"><div><b>Notice</b></div><div class="when">${escapeHtml(scheduleData.notice)}</div></div><div class="pill">i</div>`;
+    el.appendChild(row);
+    if (matchCountEl) matchCountEl.textContent = "0";
+    if (pagerEl) pagerEl.style.display = "none";
+    return;
+  }
 
-  if (!matches.length){
+  const rawMatches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches.slice() : [];
+
+  // Build timestamps for sorting + next-match highlight
+  const enriched = rawMatches.map(m => {
+    const ts = safeParseTimestamp(m.date, m.time);
+    return {...m, ts};
+  }).filter(m => m.ts !== null);
+
+  if (matchCountEl) matchCountEl.textContent = String(enriched.length);
+
+  if (!enriched.length){
     const empty = document.createElement("div");
     empty.className = "match";
     empty.innerHTML = `
@@ -650,36 +838,56 @@ function renderSchedule(){
       <div class="pill">—</div>
     `;
     el.appendChild(empty);
+    if (pagerEl) pagerEl.style.display = "none";
     return;
   }
 
-  const enriched = matches.map(m => {
-    const ts = safeParseTimestamp(m.date, m.time);
-    return {...m, ts};
-  }).filter(m => m.ts !== null);
+  enriched.sort((a,b)=>a.ts-b.ts);
 
   const now = Date.now();
-  const upcoming = enriched.filter(m => m.ts >= now).sort((a,b)=>a.ts-b.ts);
+  const upcoming = enriched.filter(m => m.ts >= now);
   const nextId = upcoming.length ? upcoming[0].id : null;
 
-  enriched.sort((a,b)=>a.ts-b.ts).forEach(m => {
+  // Pagination (All Matches only)
+  let pageMatches = enriched;
+  if (scope === "all"){
+    const totalPages = Math.max(1, Math.ceil(enriched.length / PAGE_SIZE));
+    if (currentPage > totalPages) currentPage = 1;
+
+    const start = (currentPage - 1) * PAGE_SIZE;
+    pageMatches = enriched.slice(start, start + PAGE_SIZE);
+
+    if (pagerEl) pagerEl.style.display = "flex";
+    if (pageIndicatorEl) pageIndicatorEl.textContent = `Page ${currentPage} of ${totalPages}`;
+    if (prevPageBtn) prevPageBtn.disabled = (currentPage <= 1);
+    if (nextPageBtn) nextPageBtn.disabled = (currentPage >= totalPages);
+  } else {
+    if (pagerEl) pagerEl.style.display = "none";
+    if (pageIndicatorEl) pageIndicatorEl.textContent = "";
+  }
+
+  pageMatches.forEach(m => {
     const row = document.createElement("div");
     row.className = "match" + (m.id === nextId ? " next" : "");
 
     const timeTxt = formatKickoffTime(m.time);
-    const teamsTxt = m.teams || (m.home && m.away ? `${m.home} vs ${m.away}` : "TBD vs TBD");
+    const teamsTxt = (m.teams && String(m.teams).trim())
+      ? m.teams
+      : ((m.home || m.away) ? `${m.home || "TBD"} vs ${m.away || "TBD"}` : "TBD vs TBD");
+
     const venueTxt = m.venue ? ` • ${m.venue}` : "";
 
     row.innerHTML = `
       <div class="left">
-        <div><b>Match</b> • ${escapeHtml(teamsTxt)}</div>
-        <div class="when">${escapeHtml(m.date)} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div>
+        <div><b>${escapeHtml(m.stage || "Match")}</b> • ${escapeHtml(teamsTxt)}</div>
+        <div class="when">${escapeHtml(m.date || "")} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div>
       </div>
       <div class="pill">${escapeHtml(m.id || "")}</div>
     `;
     el.appendChild(row);
   });
 }
+
 
 function updateMatchDayMode(){
   const isMatchDay = !!(scheduleData && scheduleData.is_match_day);
@@ -702,6 +910,7 @@ function updateMatchDayMode(){
 // -----------------------
 // Menu rendering
 // -----------------------
+
 function renderMenu(items){
   const el = document.getElementById("menu");
   el.innerHTML = "";
@@ -710,25 +919,52 @@ function renderMenu(items){
     const d = document.createElement("div");
     d.className = "menuitem";
     d.innerHTML = `
-      <div class="name">—</div>
-      <div class="desc">Menu not available.</div>
-      <div class="price"></div>
+      <div class="menuTop">
+        <div>
+          <div class="name">⚽ —</div>
+          <div class="desc">Menu not available.</div>
+        </div>
+        <div class="menuBadge">—</div>
+      </div>
     `;
     el.appendChild(d);
     return;
   }
 
-  items.forEach(it => {
+  const icons = ["⚽","🌮","🍗","🥤","🔥","🏟️","🌎","🥇"];
+  items.forEach((it, idx) => {
     const d = document.createElement("div");
     d.className = "menuitem";
+
+    const icon = icons[idx % icons.length];
+    const name = escapeHtml(it.name || "");
+    const desc = escapeHtml(it.desc || "");
+    const price = escapeHtml(it.price || "");
+
+    // Lightweight tags (cosmetic)
+    const tags = [];
+    const lower = ((it.name||"") + " " + (it.desc||"")).toLowerCase();
+    if (lower.includes("spicy") || lower.includes("picante")) tags.push("Spicy");
+    if (lower.includes("wings") || lower.includes("alitas") || lower.includes("asinhas")) tags.push("Share");
+    if (lower.includes("nacho")) tags.push("Snack");
+
     d.innerHTML = `
-      <div class="name">${escapeHtml(it.name || "")}</div>
-      <div class="desc">${escapeHtml(it.desc || "")}</div>
-      <div class="price">${escapeHtml(it.price || "")}</div>
+      <div class="menuTop">
+        <div>
+          <div class="name">${icon} ${name}</div>
+          <div class="desc">${desc}</div>
+          <div class="menuMeta">
+            ${tags.map(t => `<span class="menuTag">${escapeHtml(t)}</span>`).join("")}
+          </div>
+        </div>
+        <div class="menuBadge">${price || "—"}</div>
+      </div>
     `;
     el.appendChild(d);
   });
 }
+
+
 
 // simple HTML escaping (prevents broken DOM if text contains "<")
 function escapeHtml(s){
@@ -803,6 +1039,8 @@ msgEl.addEventListener("input", () => {
 function setScope(newScope){
   scope = (newScope === "all") ? "all" : "dallas";
   localStorage.setItem("schedule_scope", scope);
+  // Reset pagination when switching scope
+  currentPage = 1;
   if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
   if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
   loadSchedule();
@@ -810,10 +1048,53 @@ function setScope(newScope){
 if (scopeDallasBtn) scopeDallasBtn.addEventListener("click", () => setScope("dallas"));
 if (scopeAllBtn) scopeAllBtn.addEventListener("click", () => setScope("all"));
 
+// Pagination controls (All Matches only)
+if (prevPageBtn) prevPageBtn.addEventListener("click", () => { if (currentPage > 1){ currentPage--; renderSchedule(); } });
+if (nextPageBtn) nextPageBtn.addEventListener("click", () => {
+  if (!scheduleData || !Array.isArray(scheduleData.matches)) return;
+  const totalPages = Math.max(1, Math.ceil(scheduleData.matches.length / PAGE_SIZE));
+  
+
+// -----------------------
+// Menu pagination controls
+// -----------------------
+if (null){
+  null.addEventListener("click", () => {
+    if (!menuShowAll && menuPage > 1){
+      menuPage--;
+      renderMenu(window.menuDataList || []);
+    }
+  });
+}
+if (null){
+  null.addEventListener("click", () => {
+    if (!menuShowAll){
+      const items = window.menuDataList || [];
+      const totalPages = Math.max(1, Math.ceil((items.length || 0) / MENU_PAGE_SIZE));
+      if (menuPage < totalPages){
+        menuPage++;
+        renderMenu(items);
+      }
+    }
+  });
+}
+if (null){
+  null.addEventListener("click", () => {
+    menuShowAll = !menuShowAll;
+    menuPage = 1;
+    renderMenu(window.menuDataList || []);
+  });
+}
+if (currentPage < totalPages){ currentPage++; renderSchedule(); }
+});
+
+
 // Team search (simple text input)
 let _searchTimer = null;
 function setScheduleQuery(q){
-  scheduleQuery = (q || "").trim();
+  scheduleQuery = normalizeScheduleSearch((q || "").trim());
+  // Reset pagination when searching
+  currentPage = 1;
   if (_searchTimer) clearTimeout(_searchTimer);
   _searchTimer = setTimeout(() => loadSchedule(), 250);
 }

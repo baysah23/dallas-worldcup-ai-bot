@@ -453,74 +453,17 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
     ])
 
 
-def read_leads(limit: int = 300) -> List[List[str]]:
-    """
-    Read reservation leads from Google Sheet and return [header] + body.
-
-    - Keeps the header row at the top
-    - Ignores a header row accidentally appended at the bottom
-    - Falls back to standard column names if the sheet header is missing or junk (A,B,C,...)
-    - Pads/truncates rows so the admin table always aligns
-    """
+def read_leads(limit: int = 200) -> List[List[str]]:
     gc = get_gspread_client()
     ws = gc.open(SHEET_NAME).sheet1
-    rows = ws.get_all_values() or []
+    rows = ws.get_all_values()
     if not rows:
         return []
-
-    std_header = ["timestamp", "name", "phone", "date", "time", "party_size", "language"]
-
-    def looks_like_header(r: List[str]) -> bool:
-        joined = " ".join([(c or "").strip().lower() for c in (r or [])])
-        return ("timestamp" in joined and "name" in joined and "phone" in joined) or (
-            "date" in joined and "time" in joined and "party" in joined
-        )
-
-    # Find a header row anywhere (sometimes it gets appended at bottom)
-    header_idx = None
-    for i, r in enumerate(rows):
-        if looks_like_header(r):
-            header_idx = i
-            break
-
-    if header_idx is None:
-        header = std_header
-        body = rows
-    else:
-        header = [ (c or "").strip() for c in rows[header_idx] ]
-        body = rows[:header_idx] + rows[header_idx+1:]
-
-    # Clean header values
-    header = [h for h in header if h]  # drop empty columns
-
-    # If header looks like A/B/C... or is too short, fall back to standard header
-    simple_letters = set(list("ABCDEFGHIJKLMNOPQRSTUVWXYZ"))
-    if (len(header) < 4) or all((h.strip().upper() in simple_letters) for h in header if h.strip()):
-        header = std_header
-
-    # Ensure language column exists
-    if not any(h.strip().lower() == "language" for h in header):
-        header = header + ["language"]
-
-    # Ensure expected columns exist (fallback safety)
-    joined_header = " ".join([h.lower() for h in header])
-    if ("name" not in joined_header) or ("phone" not in joined_header) or ("date" not in joined_header):
-        header = std_header
-
-    # Keep last N leads
+    header = rows[0]
+    body = rows[1:]
     body = body[-limit:]
+    return [header] + body
 
-    width = len(header)
-    fixed = []
-    for r in body:
-        r = list(r or [])
-        if len(r) < width:
-            r = r + [""] * (width - len(r))
-        elif len(r) > width:
-            r = r[:width]
-        fixed.append(r)
-
-    return [header] + fixed
 
 # ============================================================
 # Reservation state machine (in-memory sessions)
@@ -991,10 +934,10 @@ def admin():
     # Simple HTML table
     html = []
     html.append("<html><head><meta charset='utf-8'><title>Leads Admin</title>")
-    html.append("<style>body{font-family:Arial,Helvetica,sans-serif;padding:16px;background:#0b152c;color:#eaf0ff}h2{margin:0;position:sticky;top:0;background:#0b152c;padding:10px 0;z-index:10}.meta{position:sticky;top:44px;background:#0b152c;padding:8px 0;z-index:9;color:#b9c7ee;font-size:12px}table{border-collapse:collapse;width:100%;background:#0f1b33;border:1px solid rgba(255,255,255,.14)}th,td{border:1px solid rgba(255,255,255,.14);padding:8px;font-size:12px;vertical-align:top}th{position:sticky;top:88px;background:#102246;z-index:8;text-transform:capitalize}tr:nth-child(even) td{background:rgba(255,255,255,.03)}</style>")
+    html.append("<style>body{font-family:Arial;padding:16px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ddd;padding:8px;font-size:12px} th{background:#f4f4f4}</style>")
     html.append("</head><body>")
     html.append(f"<h2>Leads Admin — {SHEET_NAME}</h2>")
-    html.append(f"<div class='meta'>Rows shown: {len(body)}</div>")
+    html.append(f"<p>Rows shown: {len(body)}</p>")
     html.append("<table><thead><tr>")
     for h in header:
         html.append(f"<th>{h}</th>")
