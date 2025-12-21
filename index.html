@@ -458,8 +458,8 @@ let scheduleData = null;
 let scope = localStorage.getItem("schedule_scope") || "dallas";
 let scheduleQuery = "";
 
-// Pagination (All Matches only)
-const PAGE_SIZE = 10;
+// Pagination (Dallas + All Matches)
+const PAGE_SIZE = 5;
 let currentPage = 1;
 
 
@@ -493,7 +493,7 @@ const pageIndicatorEl = document.getElementById("pageIndicator");
 
 const STRINGS = {
   en: {
-    welcome: "Hi! Want to book a table for a match day? Ask me anything.",
+    welcome: "⚽ Welcome, World Cup fan! I’m your Dallas Match-Day Concierge.\nType \"reservation\" to book a table, or ask about Dallas matches, all matches, or the menu.",
     lang_set: "Language set to English.",
     helper: 'Try: <code>reservation</code> to book • <code>Recall reservation so far</code> • Ask about the menu • Ask about Dallas match days. Search by team, venue, or date (e.g., "June 13").',
     send: "Send",
@@ -507,7 +507,7 @@ const STRINGS = {
     menu_title: "Menu"
   },
   es: {
-    welcome: "¡Hola! ¿Quieres reservar una mesa para un día de partido? Pregúntame lo que sea.",
+    welcome: "⚽ ¡Bienvenido, fan del Mundial! Soy tu concierge de días de partido en Dallas.\nEscribe \"reserva\" para reservar una mesa, o pregunta por los partidos (Dallas / todos) o el menú.",
     lang_set: "Idioma cambiado a Español.",
     helper: 'Prueba: <code>reserva</code> para reservar • <code>Recordar reserva</code> • Pregunta por el menú • Pregunta por los partidos en Dallas.',
     send: "Enviar",
@@ -521,7 +521,7 @@ const STRINGS = {
     menu_title: "Menú"
   },
   pt: {
-    welcome: "Olá! Quer reservar uma mesa para dia de jogo? Pergunte qualquer coisa.",
+    welcome: "⚽ Bem-vindo, fã da Copa do Mundo! Sou seu concierge de dias de jogo em Dallas.\nDigite \"reserva\" para reservar uma mesa, ou pergunte sobre jogos em Dallas, todos os jogos ou o cardápio.",
     lang_set: "Idioma definido para Português.",
     helper: 'Tente: <code>reserva</code> para reservar • <code>Relembrar reserva</code> • Pergunte sobre o cardápio • Pergunte sobre jogos em Dallas.',
     send: "Enviar",
@@ -535,7 +535,7 @@ const STRINGS = {
     menu_title: "Cardápio"
   },
   fr: {
-    welcome: "Bonjour ! Vous voulez réserver une table pour un jour de match ? Demandez-moi !",
+    welcome: "⚽ Bienvenue, fan de la Coupe du Monde ! Je suis votre concierge des jours de match à Dallas.\nTapez \"réservation\" pour réserver une table, ou demandez les matchs (Dallas / tous) ou le menu.",
     lang_set: "Langue définie sur Français.",
     helper: 'Essayez : <code>réservation</code> pour réserver • <code>Rappeler la réservation</code> • Demandez le menu • Demandez les matchs à Dallas.',
     send: "Envoyer",
@@ -848,23 +848,28 @@ function renderSchedule(){
   const upcoming = enriched.filter(m => m.ts >= now);
   const nextId = upcoming.length ? upcoming[0].id : null;
 
-  // Pagination (All Matches only)
-  let pageMatches = enriched;
-  if (scope === "all"){
-    const totalPages = Math.max(1, Math.ceil(enriched.length / PAGE_SIZE));
-    if (currentPage > totalPages) currentPage = 1;
+  // Pagination (Dallas + All Matches)
+let pageMatches = enriched;
 
-    const start = (currentPage - 1) * PAGE_SIZE;
-    pageMatches = enriched.slice(start, start + PAGE_SIZE);
+const totalPages = Math.max(1, Math.ceil(enriched.length / PAGE_SIZE));
+if (totalPages <= 1){
+  currentPage = 1;
+  if (pagerEl) pagerEl.style.display = "none";
+  if (pageIndicatorEl) pageIndicatorEl.textContent = "";
+  if (prevPageBtn) prevPageBtn.disabled = true;
+  if (nextPageBtn) nextPageBtn.disabled = true;
+} else {
+  if (currentPage > totalPages) currentPage = 1;
 
-    if (pagerEl) pagerEl.style.display = "flex";
-    if (pageIndicatorEl) pageIndicatorEl.textContent = `Page ${currentPage} of ${totalPages}`;
-    if (prevPageBtn) prevPageBtn.disabled = (currentPage <= 1);
-    if (nextPageBtn) nextPageBtn.disabled = (currentPage >= totalPages);
-  } else {
-    if (pagerEl) pagerEl.style.display = "none";
-    if (pageIndicatorEl) pageIndicatorEl.textContent = "";
-  }
+  const start = (currentPage - 1) * PAGE_SIZE;
+  pageMatches = enriched.slice(start, start + PAGE_SIZE);
+
+  if (pagerEl) pagerEl.style.display = "flex";
+  if (pageIndicatorEl) pageIndicatorEl.textContent = `Page ${currentPage} of ${totalPages}`;
+  if (prevPageBtn) prevPageBtn.disabled = (currentPage <= 1);
+  if (nextPageBtn) nextPageBtn.disabled = (currentPage >= totalPages);
+}
+
 
   pageMatches.forEach(m => {
     const row = document.createElement("div");
@@ -1048,7 +1053,7 @@ function setScope(newScope){
 if (scopeDallasBtn) scopeDallasBtn.addEventListener("click", () => setScope("dallas"));
 if (scopeAllBtn) scopeAllBtn.addEventListener("click", () => setScope("all"));
 
-// Pagination controls (All Matches only)
+// Pagination controls (Dallas + All Matches)
 if (prevPageBtn) prevPageBtn.addEventListener("click", () => { if (currentPage > 1){ currentPage--; renderSchedule(); } });
 if (nextPageBtn) nextPageBtn.addEventListener("click", () => {
   if (!scheduleData || !Array.isArray(scheduleData.matches)) return;
