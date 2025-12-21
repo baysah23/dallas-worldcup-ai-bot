@@ -160,6 +160,14 @@
     }
     button:disabled{opacity:.6; cursor:not-allowed;}
 
+    button.secondary{
+      background: rgba(255,255,255,.10);
+      border:1px solid rgba(255,255,255,.18);
+      color: var(--text);
+      min-width:92px;
+    }
+    button.secondary:hover{background: rgba(255,255,255,.16);}
+
     .sidepad{padding:12px 14px;}
     .countdown{
       display:flex;
@@ -271,6 +279,7 @@
         <div class="composer">
           <textarea id="msg" placeholder="Type your message... (Enter to send, Shift+Enter for new line)"></textarea>
           <button id="sendBtn">Send</button>
+          <button id="clearBtn" class="secondary" title="Clear chat">Clear</button>
         </div>
 
         <div class="hint" id="helperHint"></div>
@@ -328,7 +337,7 @@
 // -----------------------
 // Session + state
 // -----------------------
-const sessionId = (localStorage.getItem("session_id") || (() => {
+let sessionId = (localStorage.getItem("session_id") || (() => {
   const id = "sess_" + Math.random().toString(16).slice(2) + "_" + Date.now();
   localStorage.setItem("session_id", id);
   return id;
@@ -344,6 +353,7 @@ const history = [];
 const chatEl = document.getElementById("chat");
 const msgEl = document.getElementById("msg");
 const sendBtn = document.getElementById("sendBtn");
+const clearBtn = document.getElementById("clearBtn");
 const helperHint = document.getElementById("helperHint");
 const pillLang = document.getElementById("pillLang");
 const pillMode = document.getElementById("pillMode");
@@ -732,6 +742,35 @@ async function sendMessage(){
     msgEl.focus();
   }
 }
+
+
+// -----------------------
+// Clear chat (client-side reset)
+// - Clears bubbles + local history
+// - Generates a new session_id so the server reservation flow resets too
+// -----------------------
+function clearChat(){
+  chatEl.innerHTML = "";
+  history.length = 0;
+
+  const newId = "sess_" + Math.random().toString(16).slice(2) + "_" + Date.now();
+  localStorage.setItem("session_id", newId);
+  sessionId = newId;
+
+  // Show welcome again after clearing
+  addBubble("assistant", L().welcome);
+  history.push({role:"assistant", content: L().welcome});
+
+  msgEl.value = "";
+  msgEl.style.height = "44px";
+  msgEl.focus();
+
+  // Also refresh match-day banner/schedule/menu in case language changed
+  applyLanguageToUI();
+}
+
+// Wire button
+clearBtn && clearBtn.addEventListener("click", clearChat);
 
 sendBtn.addEventListener("click", sendMessage);
 
