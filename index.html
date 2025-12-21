@@ -159,7 +159,7 @@
       background: rgba(0,0,0,.22);
       color:var(--text);
       padding:10px 12px;
-      font-size:14px;
+      font-size:13px;
       outline:none;
     }
     button{
@@ -318,6 +318,48 @@
       .menucard{max-width:none; max-height:none;}
     }
 
+
+    /* --- Chat readability upgrades (requested) --- */
+    #chat{gap:8px;} /* tighter vertical spacing */
+    .bubble{
+      padding:8px 10px;           /* tighter bubble padding */
+      line-height:1.28;           /* tighter line-height */
+      font-size:13px;             /* base (user) */
+    }
+    .bot{font-size:12px;}         /* slightly smaller bot text */
+    .user{font-size:13px;}        /* slightly larger user text */
+
+    /* “Stadium announcer” emphasis for match alerts */
+    .banner.show,
+    .matchday.show{
+      text-transform:uppercase;
+      letter-spacing:.7px;
+      font-weight:900;
+    }
+    .banner.show{
+      background: linear-gradient(90deg, rgba(245,215,110,.18) 0%, rgba(46,160,67,.10) 40%, rgba(31,111,235,.10) 100%);
+      border-bottom: 1px solid rgba(245,215,110,.35);
+      text-shadow: 0 2px 18px rgba(0,0,0,.35);
+    }
+    @keyframes announcerPulse{
+      0%{transform:translateY(0); filter:brightness(1);}
+      50%{transform:translateY(-1px); filter:brightness(1.08);}
+      100%{transform:translateY(0); filter:brightness(1);}
+    }
+    .banner.show{animation: announcerPulse 1.6s ease-in-out infinite;}
+
+    /* Compact mode (power users) */
+    .compact #chat{gap:6px;}
+    .compact .bubble{padding:7px 9px; line-height:1.22;}
+    .compact .user{font-size:12.5px;}
+    .compact .bot{font-size:11.5px;}
+    .compact textarea{height:40px; font-size:13px; padding:9px 11px;}
+    .compact .composer{padding:10px 12px;}
+    .compact .match{padding:8px 9px; font-size:11px;}
+    .compact .pill{padding:5px 9px; font-size:10.5px;}
+    .compact .cardhead{padding:10px 12px;}
+    .compact .menu{font-size:8.5px;}
+
 </style>
 </head>
 
@@ -361,7 +403,12 @@
         <div class="card chatcard" style="display:flex;flex-direction:column;min-height:0;">
           <div class="cardhead">
             <div class="title" id="chatTitle">Chat</div>
-            <div class="pill" id="pillMode">Live</div>
+            
+            <div style="display:flex; gap:8px; align-items:center;">
+              <div class="pill" id="pillMode">Live</div>
+              <button id="compactToggle" class="secondary" style="min-width:auto; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:800;">Compact</button>
+            </div>
+
           </div>
 
           <div class="banner" id="matchBanner"></div>
@@ -491,6 +538,30 @@ const pageIndicatorEl = document.getElementById("pageIndicator");
 
 
 
+
+
+// -----------------------
+// Compact mode (power users)
+// -----------------------
+let compactMode = (localStorage.getItem("compact_mode") || "0") === "1";
+const compactToggleBtn = document.getElementById("compactToggle");
+
+function applyCompactMode(){
+  document.body.classList.toggle("compact", compactMode);
+  if (compactToggleBtn){
+    compactToggleBtn.textContent = compactMode ? "Compact: ON" : "Compact";
+    compactToggleBtn.classList.toggle("active", compactMode);
+  }
+}
+
+if (compactToggleBtn){
+  compactToggleBtn.addEventListener("click", () => {
+    compactMode = !compactMode;
+    localStorage.setItem("compact_mode", compactMode ? "1" : "0");
+    applyCompactMode();
+  });
+}
+
 const STRINGS = {
   en: {
     welcome: "⚽ Welcome, World Cup fan! I’m your Dallas Match-Day Concierge.\nType \"reservation\" to book a table, or ask about Dallas matches, all matches, or the menu.",
@@ -588,12 +659,14 @@ function applyLanguageToUI(){
 
   helperHint.innerHTML = L().helper;
   sendBtn.textContent = L().send;
+  applyCompactMode();
 }
 
 async function setLanguage(newLang){
   lang = newLang;
   localStorage.setItem("lang", lang);
   applyLanguageToUI();
+applyCompactMode();
 
   // reload menu in the chosen language
   await loadMenu();
