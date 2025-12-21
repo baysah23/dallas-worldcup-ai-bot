@@ -6,210 +6,179 @@
   <title>Dallas World Cup 2026 Concierge</title>
   <style>
     :root{
-      --bg:#070a12;
-      --panel:#0d1326;
-      --panel2:#0b1020;
-      --line:rgba(255,255,255,.10);
-      --text:#eef2ff;
-      --muted:#b9c3e6;
-      --accent:#22c55e;
-      --accent2:#60a5fa;
-      --danger:#fb7185;
-      --chip:#111a34;
+      --bg:#07111f;
+      --card:#0e1b33;
+      --card2:#0b162b;
+      --text:#eaf0ff;
+      --muted:#b7c3e6;
+      --accent:#2ea043;
+      --accent2:#1f6feb;
+      --danger:#ff5a5f;
+      --border:rgba(255,255,255,0.10);
+      --shadow: 0 10px 30px rgba(0,0,0,0.35);
     }
-
-    *{ box-sizing:border-box; }
+    *{box-sizing:border-box}
     body{
       margin:0;
       font-family: Arial, sans-serif;
-      background:
-        radial-gradient(1200px 600px at 10% 10%, rgba(96,165,250,.18), transparent 55%),
-        radial-gradient(1000px 500px at 90% 20%, rgba(34,197,94,.15), transparent 55%),
-        radial-gradient(900px 500px at 50% 100%, rgba(251,113,133,.12), transparent 60%),
-        var(--bg);
+      background: radial-gradient(1200px 600px at 20% 0%, #12345f 0%, rgba(7,17,31,0.2) 60%) ,
+                  radial-gradient(1000px 600px at 80% 10%, #2b114b 0%, rgba(7,17,31,0.2) 60%),
+                  var(--bg);
       color:var(--text);
-      height:100vh;
-      display:flex;
-      justify-content:center;
+      min-height:100vh;
     }
-
     .wrap{
-      width:100%;
-      max-width:1050px;
-      display:flex;
-      flex-direction:column;
-      height:100vh;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 18px;
+      display:grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 14px;
+    }
+    @media(max-width: 980px){
+      .wrap{grid-template-columns: 1fr}
     }
 
     header{
-      padding:18px 18px 12px;
-      border-bottom:1px solid var(--line);
-      background: linear-gradient(180deg, rgba(13,19,38,.9), rgba(13,19,38,.6));
-      backdrop-filter: blur(6px);
+      grid-column: 1 / -1;
+      background: linear-gradient(135deg, rgba(31,111,235,0.25), rgba(46,160,67,0.18));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 16px;
+      box-shadow: var(--shadow);
+      position:relative;
+      overflow:hidden;
     }
-
-    .topRow{
+    header:before{
+      content:"";
+      position:absolute;
+      inset:-40px;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.10), transparent 45%),
+                  radial-gradient(circle at 70% 10%, rgba(255,255,255,0.08), transparent 40%);
+      transform: rotate(-8deg);
+      pointer-events:none;
+    }
+    .titleRow{
       display:flex;
-      gap:14px;
-      align-items:flex-start;
-      justify-content:space-between;
       flex-wrap:wrap;
+      align-items:center;
+      justify-content:space-between;
+      gap: 10px;
+      position:relative;
+      z-index:1;
     }
-
     .brand{
       display:flex;
       flex-direction:column;
-      gap:6px;
-      min-width:270px;
+      gap:4px;
     }
-
-    .title{
-      font-size:16px;
-      font-weight:800;
-      letter-spacing:.2px;
+    .brand h1{
+      margin:0;
+      font-size: 18px;
+      letter-spacing: 0.3px;
+    }
+    .brand p{
+      margin:0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height:1.3;
+    }
+    .pillRow{
       display:flex;
-      align-items:center;
-      gap:10px;
-    }
-
-    .badge{
-      font-size:11px;
-      padding:4px 8px;
-      border:1px solid var(--line);
-      border-radius:999px;
-      color:var(--muted);
-      background:rgba(255,255,255,.05);
-    }
-
-    .subtitle{
-      font-size:12px;
-      color:var(--muted);
-      line-height:1.35;
-    }
-
-    .rightTools{
-      display:flex;
-      gap:10px;
-      align-items:flex-start;
       flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
       justify-content:flex-end;
+    }
+    .pill{
+      border: 1px solid var(--border);
+      background: rgba(0,0,0,0.18);
+      padding: 8px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      color: var(--muted);
+      display:flex;
+      gap:8px;
+      align-items:center;
+      white-space:nowrap;
+    }
+    .pill b{color: var(--text)}
+    .banner{
+      margin-top: 12px;
+      position:relative;
+      z-index:1;
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+    }
+    .matchBanner{
+      padding: 10px 12px;
+      border-radius: 12px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,0.06);
+      font-size: 13px;
+    }
+    .matchBanner b{color: #fff}
+    .langs{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+      justify-content:flex-end;
+    }
+    .langBtn{
+      border:1px solid var(--border);
+      background: rgba(0,0,0,0.25);
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 12px;
+      cursor:pointer;
+      font-weight:700;
+      font-size:12px;
+    }
+    .langBtn.active{
+      outline: 2px solid rgba(46,160,67,0.55);
+      background: rgba(46,160,67,0.18);
     }
 
     .card{
-      background:rgba(255,255,255,.04);
-      border:1px solid var(--line);
-      border-radius:14px;
-      padding:10px 12px;
-      min-width:220px;
-    }
-    .card h3{
-      margin:0 0 6px;
-      font-size:12px;
-      color:var(--muted);
-      font-weight:700;
-      letter-spacing:.2px;
-    }
-    .countdown{
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-    }
-    .pill{
-      background:rgba(0,0,0,.25);
-      border:1px solid var(--line);
-      border-radius:12px;
-      padding:8px 10px;
-      min-width:68px;
-      text-align:center;
-    }
-    .pill .num{ font-size:16px; font-weight:900; }
-    .pill .lab{ font-size:10px; color:var(--muted); }
-
-    .langRow{
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-    }
-    .langBtn{
-      background:var(--chip);
-      border:1px solid var(--line);
-      color:var(--text);
-      padding:8px 10px;
-      border-radius:12px;
-      font-weight:800;
-      font-size:12px;
-      cursor:pointer;
-    }
-    .langBtn.active{
-      border-color:rgba(96,165,250,.55);
-      box-shadow:0 0 0 2px rgba(96,165,250,.16);
-    }
-
-    .banner{
-      margin-top:10px;
-      padding:10px 12px;
-      border-radius:14px;
-      border:1px solid rgba(34,197,94,.25);
-      background: linear-gradient(90deg, rgba(34,197,94,.12), rgba(96,165,250,.10));
-      color:var(--text);
-      font-size:12px;
-      display:flex;
-      gap:10px;
-      align-items:center;
-      flex-wrap:wrap;
-    }
-    .banner strong{ color:#dcfce7; }
-
-    main{
-      display:grid;
-      grid-template-columns: 1.25fr .75fr;
-      gap:14px;
-      padding:14px 18px;
-      flex:1;
-      min-height:0;
-    }
-
-    @media (max-width: 900px){
-      main{ grid-template-columns: 1fr; }
-    }
-
-    .panel{
-      background:rgba(255,255,255,.03);
-      border:1px solid var(--line);
-      border-radius:16px;
+      background: rgba(14,27,51,0.82);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
       overflow:hidden;
-      display:flex;
-      flex-direction:column;
-      min-height:0;
     }
-
-    .panelHead{
-      padding:10px 12px;
-      border-bottom:1px solid var(--line);
-      background: rgba(13,19,38,.55);
+    .cardHeader{
+      padding: 12px 14px;
+      background: rgba(255,255,255,0.04);
+      border-bottom:1px solid var(--border);
       display:flex;
       align-items:center;
       justify-content:space-between;
       gap:10px;
-      flex-wrap:wrap;
     }
-    .panelHead .hint{
-      font-size:12px;
-      color:var(--muted);
+    .cardHeader h2{
+      margin:0;
+      font-size: 14px;
     }
+    .cardHeader small{
+      color: var(--muted);
+    }
+    .cardBody{padding: 14px;}
 
+    /* Chat */
     #chat{
-      flex:1;
+      height: 430px;
       overflow:auto;
-      padding:14px;
+      padding: 14px;
       display:flex;
       flex-direction:column;
-      gap:10px;
-      min-height:0;
+      gap: 10px;
     }
-
     .bubble{
-      max-width: 78%;
+      max-width: 80%;
       padding: 10px 12px;
       border-radius: 14px;
       line-height: 1.35;
@@ -217,399 +186,478 @@
       word-wrap: break-word;
       border: 1px solid rgba(255,255,255,0.10);
     }
-
     .user{
       align-self:flex-end;
-      background: rgba(96,165,250,.18);
-      border-color: rgba(96,165,250,.35);
+      background: rgba(31,111,235,0.85);
       border-bottom-right-radius: 6px;
     }
-
     .bot{
       align-self:flex-start;
-      background: rgba(255,255,255,.05);
+      background: rgba(11,22,43,0.85);
       border-bottom-left-radius: 6px;
     }
-
     .composer{
-      padding:12px;
-      border-top:1px solid var(--line);
-      background: rgba(13,19,38,.55);
       display:flex;
       gap:10px;
+      padding: 12px;
+      border-top:1px solid var(--border);
+      background: rgba(255,255,255,0.03);
       align-items:center;
     }
-
     textarea{
       flex:1;
       resize:none;
-      height:44px;
-      max-height:140px;
-      border-radius:12px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.25);
+      height: 44px;
+      max-height: 140px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(0,0,0,0.20);
       color: var(--text);
-      padding:10px 12px;
-      font-size:14px;
+      padding: 10px 12px;
+      font-size: 14px;
       outline:none;
     }
-
-    button.send{
-      background: var(--accent);
+    .btn{
       border:none;
-      padding:10px 14px;
-      border-radius:12px;
-      font-size:14px;
-      font-weight:900;
-      color:#05210f;
+      padding: 10px 12px;
+      border-radius: 12px;
+      font-weight: 800;
       cursor:pointer;
-      min-width:92px;
+      color:#fff;
+      background: var(--accent2);
+      min-width: 92px;
     }
-    button.send:disabled{ opacity:.65; cursor:not-allowed; }
+    .btn:disabled{opacity:0.6; cursor:not-allowed}
+    .btn.secondary{background: rgba(255,255,255,0.10); border:1px solid var(--border)}
+    .btn.good{background: var(--accent)}
+    .btn.danger{background: rgba(255,90,95,0.85)}
 
-    .side{
-      display:flex;
-      flex-direction:column;
-      gap:14px;
-      min-height:0;
-    }
-
+    /* Schedule list */
     .scheduleList{
-      padding:10px 12px;
       display:flex;
       flex-direction:column;
-      gap:10px;
-      overflow:auto;
-      min-height:0;
+      gap:8px;
+      margin-top:10px;
     }
-    .match{
-      border:1px solid var(--line);
-      background: rgba(0,0,0,.18);
-      border-radius:14px;
-      padding:10px 10px;
+    .matchItem{
+      border:1px solid var(--border);
+      background: rgba(0,0,0,0.18);
+      border-radius: 12px;
+      padding: 10px 10px;
+      display:flex;
+      flex-direction:column;
+      gap:3px;
     }
-    .match .row1{
+    .matchTop{
       display:flex;
       justify-content:space-between;
       gap:10px;
-      flex-wrap:wrap;
       align-items:center;
+      flex-wrap:wrap;
     }
     .tag{
+      display:inline-block;
       font-size:11px;
-      padding:4px 8px;
-      border-radius:999px;
-      border:1px solid var(--line);
-      background: rgba(255,255,255,.05);
+      padding: 4px 8px;
+      border-radius: 999px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,0.06);
       color: var(--muted);
-      font-weight:800;
     }
-    .match .when{
-      font-weight:900;
-      font-size:12px;
-    }
-    .match .who{
-      margin-top:6px;
-      font-size:13px;
-      font-weight:900;
-    }
-    .match .meta{
-      margin-top:4px;
-      font-size:12px;
-      color:var(--muted);
-    }
+    .muted{color: var(--muted)}
 
-    .smallNote{
-      font-size:12px;
-      color:var(--muted);
-      padding:10px 12px;
-      border-top:1px solid var(--line);
-      background: rgba(13,19,38,.55);
+    /* Reservation form */
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:10px;
     }
-    .smallNote code{
-      background:rgba(255,255,255,.07);
-      border:1px solid var(--line);
-      padding:2px 6px;
-      border-radius:8px;
-      color:var(--text);
+    @media(max-width: 980px){
+      .grid{grid-template-columns: 1fr}
+    }
+    .field label{
+      display:block;
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .field input{
+      width:100%;
+      padding: 10px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(0,0,0,0.20);
+      color: var(--text);
+      outline:none;
+      font-size: 14px;
+    }
+    .smallNote{
+      font-size: 12px;
+      color: var(--muted);
+      line-height:1.35;
+    }
+    .rowBtns{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      margin-top: 10px;
+    }
+    .countdown{
+      font-weight:900;
+      font-size: 14px;
+      color: #ffffff;
     }
   </style>
 </head>
-
 <body>
-<div class="wrap">
-  <header>
-    <div class="topRow">
-      <div class="brand">
-        <div class="title">
-          Dallas World Cup 2026 Concierge
-          <span class="badge">Live • Reservations • Schedule</span>
+  <div class="wrap">
+    <header>
+      <div class="titleRow">
+        <div class="brand">
+          <h1>Dallas World Cup 2026 Concierge</h1>
+          <p>Match-day questions, reservations, and Dallas schedule — fast & friendly.</p>
         </div>
-        <div class="subtitle">
-          World Cup match-day help for Dallas-area businesses — ask about hours, specials, directions, or book a table.
-          <br/>
-          <span style="color:#dcfce7;font-weight:800;">Languages:</span>
-          <span id="langsInline" style="color:var(--muted);">Auto, English, Español, Português, Français</span>
+
+        <div class="pillRow">
+          <div class="pill">🏟️ <b>Dallas / Arlington</b> host city</div>
+          <div class="pill">🗓️ Countdown: <span class="countdown" id="countdown">…</span></div>
         </div>
       </div>
 
-      <div class="rightTools">
-        <div class="card">
-          <h3>World Cup countdown</h3>
-          <div class="countdown" id="countdown">
-            <div class="pill"><div class="num" id="cdDays">--</div><div class="lab">days</div></div>
-            <div class="pill"><div class="num" id="cdHours">--</div><div class="lab">hours</div></div>
-            <div class="pill"><div class="num" id="cdMins">--</div><div class="lab">mins</div></div>
-            <div class="pill"><div class="num" id="cdSecs">--</div><div class="lab">secs</div></div>
-          </div>
+      <div class="banner">
+        <div class="matchBanner">
+          🇺🇸 <b>Match-Day Banner:</b> Opening at <b>11:00am</b> on match days. Arrive early for seating.
         </div>
 
-        <div class="card">
-          <h3>Language</h3>
-          <div class="langRow" id="langButtons"></div>
+        <div class="langs">
+          <span class="muted" style="font-size:12px;">Languages:</span>
+          <button class="langBtn active" id="btn-en" onclick="setLanguage('en')">English</button>
+          <button class="langBtn" id="btn-es" onclick="setLanguage('es')">Español</button>
+          <button class="langBtn" id="btn-pt" onclick="setLanguage('pt')">Português</button>
+          <button class="langBtn" id="btn-fr" onclick="setLanguage('fr')">Français</button>
         </div>
       </div>
-    </div>
+    </header>
 
-    <div class="banner" id="matchdayBanner">
-      <strong>Match day info:</strong> Loading…
-    </div>
-  </header>
-
-  <main>
-    <!-- CHAT -->
-    <section class="panel">
-      <div class="panelHead">
-        <div class="hint">Tip: “Reservation for Cliff, 2145551212, 06/14/2026 at 3pm, party of 4”</div>
-        <div class="hint">Or ask: “What time do you open on match days?”</div>
+    <!-- LEFT: Chat -->
+    <div class="card">
+      <div class="cardHeader">
+        <h2>Concierge Chat</h2>
+        <small id="langHint">Language: English</small>
       </div>
 
       <div id="chat"></div>
 
       <div class="composer">
-        <textarea id="msg" placeholder="Type your message... (Enter to send, Shift+Enter for new line)"></textarea>
-        <button class="send" id="sendBtn" onclick="sendMessage()">Send</button>
-      </div>
-    </section>
-
-    <!-- SCHEDULE -->
-    <aside class="panel side">
-      <div class="panelHead">
-        <div class="hint"><strong>Dallas match schedule</strong></div>
-        <div class="hint"><span class="tag">Dynamic from server</span></div>
+        <textarea id="msg" placeholder="Type... (Enter to send, Shift+Enter for new line)"></textarea>
+        <button class="btn" id="sendBtn" onclick="sendMessage()">Send</button>
+        <button class="btn secondary" onclick="recallReservation()">Recall</button>
       </div>
 
-      <div class="scheduleList" id="scheduleList"></div>
-
-      <div class="smallNote">
-        Schedule loads from <code>/api/schedule</code>. You can update it by editing <code>matches_dallas.json</code> on the server/repo.
+      <div class="cardBody">
+        <div class="smallNote">
+          Tip: You can type <b>“recall reservation so far”</b> or <b>“reset reservation”</b> anytime.
+        </div>
       </div>
-    </aside>
-  </main>
-</div>
+    </div>
 
-<script>
-  // Conversation memory stored in the browser and sent each request
-  const history = []; // {role:'user'|'assistant', content:'...'}
-  let preferredLanguage = "auto"; // auto|en|es|pt|fr
-  let config = null;
+    <!-- RIGHT: Schedule + Reservation Form -->
+    <div class="card">
+      <div class="cardHeader">
+        <h2>Dallas Match Schedule</h2>
+        <small>Dynamic from server</small>
+      </div>
+      <div class="cardBody">
+        <div class="smallNote">These are the currently published Dallas/Arlington match dates. Knockout matchups may show as TBD.</div>
+        <div class="scheduleList" id="scheduleList"></div>
+      </div>
 
-  const chatEl = document.getElementById("chat");
-  const msgEl = document.getElementById("msg");
-  const sendBtn = document.getElementById("sendBtn");
+      <div class="cardHeader">
+        <h2>Quick Reservation Form</h2>
+        <small>Saves directly</small>
+      </div>
+      <div class="cardBody">
+        <div class="grid">
+          <div class="field">
+            <label>Date (YYYY-MM-DD)</label>
+            <input id="r_date" placeholder="2026-06-23" />
+          </div>
+          <div class="field">
+            <label>Time</label>
+            <input id="r_time" placeholder="7pm" />
+          </div>
+          <div class="field">
+            <label>Party size</label>
+            <input id="r_party" placeholder="4" />
+          </div>
+          <div class="field">
+            <label>Name</label>
+            <input id="r_name" placeholder="Cliff" />
+          </div>
+          <div class="field" style="grid-column: 1 / -1;">
+            <label>Phone (10 digits)</label>
+            <input id="r_phone" placeholder="2145551212" />
+          </div>
+        </div>
 
-  function addBubble(role, text) {
-    const div = document.createElement("div");
-    div.className = "bubble " + (role === "user" ? "user" : "bot");
-    div.textContent = text;
-    chatEl.appendChild(div);
-    chatEl.scrollTop = chatEl.scrollHeight;
-  }
+        <div class="rowBtns">
+          <button class="btn good" onclick="submitReservation()">Save Reservation</button>
+          <button class="btn secondary" onclick="loadReservationDraft()">Load Draft</button>
+          <button class="btn danger" onclick="resetReservationDraft()">Reset Draft</button>
+        </div>
 
-  function setSending(isSending){
-    sendBtn.disabled = isSending;
-    msgEl.disabled = isSending;
-    sendBtn.textContent = isSending ? "..." : "Send";
-  }
+        <div class="smallNote" id="formStatus" style="margin-top:10px;"></div>
+      </div>
+    </div>
+  </div>
 
-  async function sendMessage() {
-    const text = msgEl.value.trim();
-    if (!text) return;
+  <script>
+    // -----------------------------
+    // Client state
+    // -----------------------------
+    const history = []; // {role:'user'|'assistant', content:'...'}
+    let currentLang = "en";
 
-    addBubble("user", text);
-    history.push({ role: "user", content: text });
-    msgEl.value = "";
-    msgEl.style.height = "44px";
+    const chatEl = document.getElementById("chat");
+    const msgEl = document.getElementById("msg");
+    const sendBtn = document.getElementById("sendBtn");
+    const langHint = document.getElementById("langHint");
+    const formStatus = document.getElementById("formStatus");
 
-    setSending(true);
-    try{
-      const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: text,
-          history: history,
-          preferred_language: preferredLanguage
-        })
+    function addBubble(role, text) {
+      const div = document.createElement("div");
+      div.className = "bubble " + (role === "user" ? "user" : "bot");
+      div.textContent = text;
+      chatEl.appendChild(div);
+      chatEl.scrollTop = chatEl.scrollHeight;
+    }
+
+    function setSending(isSending) {
+      sendBtn.disabled = isSending;
+      msgEl.disabled = isSending;
+      sendBtn.textContent = isSending ? "..." : "Send";
+    }
+
+    function setLanguage(lang) {
+      currentLang = lang;
+
+      // Button UI
+      ["en","es","pt","fr"].forEach(x => {
+        document.getElementById("btn-" + x).classList.toggle("active", x === lang);
       });
 
-      const data = await res.json();
-      const reply = data.reply || "Sorry — no reply received.";
-      addBubble("assistant", reply);
-      history.push({ role: "assistant", content: reply });
+      const label = {en:"English", es:"Español", pt:"Português", fr:"Français"}[lang] || "English";
+      langHint.textContent = "Language: " + label;
 
-    } catch (e){
-      addBubble("assistant", "⚠️ Network error. Please try again.");
-    } finally {
-      setSending(false);
-      msgEl.focus();
+      // Send a silent instruction via history so the assistant stays consistent
+      const instruction = {
+        en: "Respond in English.",
+        es: "Respond in Spanish.",
+        pt: "Respond in Portuguese.",
+        fr: "Respond in French."
+      }[lang];
+
+      // Add as assistant-visible context (not shown in chat)
+      history.push({ role: "user", content: instruction });
+      formStatus.textContent = "✅ Language set to " + label;
     }
-  }
 
-  // Enter to send, Shift+Enter for newline
-  msgEl.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
+    async function sendMessage() {
+      const text = msgEl.value.trim();
+      if (!text) return;
+
+      addBubble("user", text);
+      history.push({ role: "user", content: text });
+      msgEl.value = "";
+      msgEl.style.height = "44px";
+
+      setSending(true);
+
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({
+            message: text,
+            history: history,
+            lang: currentLang
+          })
+        });
+
+        const data = await res.json();
+        const reply = data.reply || "Sorry — no reply received.";
+
+        addBubble("assistant", reply);
+        history.push({ role: "assistant", content: reply });
+
+      } catch (e) {
+        addBubble("assistant", "⚠️ Network error. Please try again.");
+      } finally {
+        setSending(false);
+        msgEl.focus();
+      }
     }
-  });
 
-  // Auto-grow textarea height
-  msgEl.addEventListener("input", () => {
-    msgEl.style.height = "44px";
-    msgEl.style.height = Math.min(msgEl.scrollHeight, 140) + "px";
-  });
-
-  function renderLanguageButtons(langs){
-    const container = document.getElementById("langButtons");
-    container.innerHTML = "";
-
-    langs.forEach(l => {
-      const b = document.createElement("button");
-      b.className = "langBtn" + (l.code === preferredLanguage ? " active" : "");
-      b.textContent = l.label;
-      b.onclick = () => {
-        preferredLanguage = l.code;
-        renderLanguageButtons(langs);
-
-        // “toggle buttons that send instruction”
-        // We do it safely by setting preferred_language for server system prompt.
-        // Also add a small local message so user sees what happened.
-        if (preferredLanguage === "auto") {
-          addBubble("assistant", "Language set to Auto (I’ll reply in the language you use).");
-          history.push({ role: "assistant", content: "Language set to Auto (I’ll reply in the language you use)." });
-        } else {
-          addBubble("assistant", `Language set to ${l.label}.`);
-          history.push({ role: "assistant", content: `Language set to ${l.label}.` });
-        }
-      };
-      container.appendChild(b);
+    msgEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
     });
 
-    // Update inline languages display
-    document.getElementById("langsInline").textContent = langs.map(x => x.label).join(", ");
-  }
+    msgEl.addEventListener("input", () => {
+      msgEl.style.height = "44px";
+      msgEl.style.height = Math.min(msgEl.scrollHeight, 140) + "px";
+    });
 
-  function startCountdown(isoLocal){
-    // Safe/local countdown based on client clock
-    const target = new Date(isoLocal);
-    const cdDays = document.getElementById("cdDays");
-    const cdHours = document.getElementById("cdHours");
-    const cdMins = document.getElementById("cdMins");
-    const cdSecs = document.getElementById("cdSecs");
-
-    function tick(){
-      const now = new Date();
-      let diff = target - now;
-      if (diff < 0) diff = 0;
-
-      const totalSec = Math.floor(diff / 1000);
-      const days = Math.floor(totalSec / (3600 * 24));
-      const hours = Math.floor((totalSec % (3600 * 24)) / 3600);
-      const mins = Math.floor((totalSec % 3600) / 60);
-      const secs = totalSec % 60;
-
-      cdDays.textContent = String(days);
-      cdHours.textContent = String(hours).padStart(2, "0");
-      cdMins.textContent = String(mins).padStart(2, "0");
-      cdSecs.textContent = String(secs).padStart(2, "0");
-    }
-
-    tick();
-    setInterval(tick, 1000);
-  }
-
-  function fmtDatePretty(yyyy_mm_dd){
-    const [y,m,d] = yyyy_mm_dd.split("-").map(Number);
-    const dt = new Date(y, m-1, d);
-    return dt.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
-  }
-
-  async function loadSchedule(){
-    const box = document.getElementById("scheduleList");
-    box.innerHTML = `<div class="match"><div class="meta">Loading schedule…</div></div>`;
-    try{
-      const res = await fetch("/api/schedule");
-      const data = await res.json();
-      const matches = data.matches || [];
-      box.innerHTML = "";
-
-      matches.forEach(m => {
-        const div = document.createElement("div");
-        div.className = "match";
-
-        const whenText = `${fmtDatePretty(m.date)} • ${m.time || "TBD"} ${m.tz || ""}`.trim();
-        div.innerHTML = `
-          <div class="row1">
-            <div class="when">${whenText}</div>
-            <div class="tag">${m.stage || "Match"}</div>
-          </div>
-          <div class="who">${m.match || "TBD"}</div>
-          <div class="meta">${m.venue || ""}</div>
-        `;
-        box.appendChild(div);
-      });
-
-      if (!matches.length){
-        box.innerHTML = `<div class="match"><div class="meta">No Dallas matches found.</div></div>`;
+    // -----------------------------
+    // Reservation helpers
+    // -----------------------------
+    async function recallReservation() {
+      try {
+        const res = await fetch("/reservation/status");
+        const data = await res.json();
+        addBubble("assistant", data.summary || "No reservation draft yet.");
+        history.push({ role: "assistant", content: data.summary || "" });
+      } catch (e) {
+        addBubble("assistant", "⚠️ Could not recall reservation.");
       }
-    } catch(e){
-      box.innerHTML = `<div class="match"><div class="meta">⚠️ Could not load schedule.</div></div>`;
     }
-  }
 
-  async function bootstrap(){
-    // Config from server
-    const res = await fetch("/api/config");
-    config = await res.json();
+    async function loadReservationDraft() {
+      try {
+        const res = await fetch("/reservation/status");
+        const data = await res.json();
+        const d = data.draft || {};
+        document.getElementById("r_date").value = d.date || "";
+        document.getElementById("r_time").value = d.time || "";
+        document.getElementById("r_party").value = d.party_size || "";
+        document.getElementById("r_name").value = d.name || "";
+        document.getElementById("r_phone").value = d.phone || "";
+        formStatus.textContent = "✅ Draft loaded.";
+      } catch (e) {
+        formStatus.textContent = "⚠️ Could not load draft.";
+      }
+    }
 
-    // Banner
-    const banner = document.getElementById("matchdayBanner");
-    banner.innerHTML = `<strong>Match day info:</strong> ${config.matchday_banner || "Welcome!"}`;
+    async function resetReservationDraft() {
+      try {
+        await fetch("/reservation/reset", { method: "POST" });
+        formStatus.textContent = "✅ Draft reset.";
+        document.getElementById("r_date").value = "";
+        document.getElementById("r_time").value = "";
+        document.getElementById("r_party").value = "";
+        document.getElementById("r_name").value = "";
+        document.getElementById("r_phone").value = "";
+      } catch (e) {
+        formStatus.textContent = "⚠️ Could not reset.";
+      }
+    }
 
-    // Languages
-    renderLanguageButtons(config.supported_languages || [
-      {code:"auto",label:"Auto"},
-      {code:"en",label:"English"},
-      {code:"es",label:"Español"},
-      {code:"pt",label:"Português"},
-      {code:"fr",label:"Français"},
-    ]);
+    async function submitReservation() {
+      const payload = {
+        date: document.getElementById("r_date").value.trim(),
+        time: document.getElementById("r_time").value.trim(),
+        party_size: document.getElementById("r_party").value.trim(),
+        name: document.getElementById("r_name").value.trim(),
+        phone: document.getElementById("r_phone").value.trim(),
+      };
 
-    // Countdown
-    startCountdown(config.tournament_start_local || "2026-06-11T00:00:00");
+      try {
+        const res = await fetch("/reserve", {
+          method: "POST",
+          headers: {"Content-Type":"application/json"},
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
 
-    // Schedule
-    await loadSchedule();
+        if (data.ok) {
+          formStatus.textContent = "✅ Saved! Check Google Sheet.";
+          addBubble("assistant", "✅ Reservation saved via form. See you soon!");
+          history.push({ role: "assistant", content: "Reservation saved via form." });
+        } else {
+          formStatus.textContent = "⚠️ " + (data.error || "Could not save.");
+        }
+      } catch (e) {
+        formStatus.textContent = "⚠️ Network error saving reservation.";
+      }
+    }
 
-    // Greeting
-    const greeting = "Hi! Want to book a table for a match day? Ask me anything.";
-    addBubble("assistant", greeting);
-    history.push({ role:"assistant", content: greeting });
-  }
+    // -----------------------------
+    // Countdown widget (local safe clock)
+    // World Cup 26 kickoff: 2026-06-11
+    // -----------------------------
+    function updateCountdown() {
+      const kickoff = new Date("2026-06-11T00:00:00"); // local
+      const now = new Date();
+      const diff = kickoff - now;
 
-  bootstrap();
-</script>
+      const el = document.getElementById("countdown");
+      if (diff <= 0) {
+        el.textContent = "It’s here!";
+        return;
+      }
+      const days = Math.floor(diff / (1000*60*60*24));
+      const hrs = Math.floor((diff / (1000*60*60)) % 24);
+      const mins = Math.floor((diff / (1000*60)) % 60);
+      el.textContent = `${days}d ${hrs}h ${mins}m`;
+    }
+    setInterval(updateCountdown, 1000 * 10);
+    updateCountdown();
 
+    // -----------------------------
+    // Schedule loader (dynamic from server)
+    // -----------------------------
+    async function loadSchedule() {
+      const list = document.getElementById("scheduleList");
+      list.innerHTML = "Loading…";
+
+      try {
+        const res = await fetch("/schedule");
+        const data = await res.json();
+        const matches = data.matches || [];
+
+        list.innerHTML = "";
+        matches.forEach(m => {
+          const div = document.createElement("div");
+          div.className = "matchItem";
+
+          const top = document.createElement("div");
+          top.className = "matchTop";
+
+          const left = document.createElement("div");
+          left.innerHTML = `<b>${m.match}</b><div class="muted">${m.venue}</div>`;
+
+          const right = document.createElement("div");
+          right.innerHTML = `<span class="tag">${m.stage}</span>`;
+
+          top.appendChild(left);
+          top.appendChild(right);
+
+          const bottom = document.createElement("div");
+          bottom.className = "muted";
+          bottom.textContent = `Date: ${m.date}  •  Time (CT): ${m.time_ct}`;
+
+          div.appendChild(top);
+          div.appendChild(bottom);
+
+          list.appendChild(div);
+        });
+
+      } catch (e) {
+        list.innerHTML = "⚠️ Could not load schedule.";
+      }
+    }
+
+    // Initial greeting
+    addBubble("assistant", "Hi! Want to book a table for a match day? Ask me anything.");
+    history.push({ role: "assistant", content: "Hi! Want to book a table for a match day? Ask me anything." });
+
+    // Default language
+    setLanguage("en");
+
+    // Load schedule on startup
+    loadSchedule();
+  </script>
 </body>
 </html>
