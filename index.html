@@ -3,36 +3,39 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>World Cup 2026 Dallas Concierge</title>
+  <title>Dallas World Cup 2026 Concierge</title>
   <style>
     :root{
-      --bg:#070A12;
-      --panel:#0F1530;
-      --panel2:#0B1026;
-      --border:rgba(255,255,255,0.10);
-      --text:#EAF0FF;
-      --muted:#B8C3E6;
-      --accent:#2EA043;
-      --blue:#1F6FEB;
-      --gold:#F6C453;
-      --danger:#FF5C5C;
+      --bg:#070a12;
+      --panel:#0d1326;
+      --panel2:#0b1020;
+      --line:rgba(255,255,255,.10);
+      --text:#eef2ff;
+      --muted:#b9c3e6;
+      --accent:#22c55e;
+      --accent2:#60a5fa;
+      --danger:#fb7185;
+      --chip:#111a34;
     }
-    *{box-sizing:border-box;}
+
+    *{ box-sizing:border-box; }
     body{
       margin:0;
       font-family: Arial, sans-serif;
-      background: radial-gradient(1200px 600px at 20% 0%, rgba(31,111,235,0.25), transparent 55%),
-                  radial-gradient(900px 500px at 80% 20%, rgba(246,196,83,0.20), transparent 60%),
-                  radial-gradient(900px 500px at 50% 90%, rgba(46,160,67,0.18), transparent 60%),
-                  var(--bg);
-      color: var(--text);
+      background:
+        radial-gradient(1200px 600px at 10% 10%, rgba(96,165,250,.18), transparent 55%),
+        radial-gradient(1000px 500px at 90% 20%, rgba(34,197,94,.15), transparent 55%),
+        radial-gradient(900px 500px at 50% 100%, rgba(251,113,133,.12), transparent 60%),
+        var(--bg);
+      color:var(--text);
       height:100vh;
       display:flex;
       justify-content:center;
     }
-    .container{
+
+    .wrap{
       width:100%;
-      max-width:980px;
+      max-width:1050px;
       display:flex;
       flex-direction:column;
       height:100vh;
@@ -40,10 +43,11 @@
 
     header{
       padding:18px 18px 12px;
-      border-bottom:1px solid var(--border);
-      background: linear-gradient(180deg, rgba(15,21,48,0.92), rgba(15,21,48,0.75));
-      backdrop-filter: blur(8px);
+      border-bottom:1px solid var(--line);
+      background: linear-gradient(180deg, rgba(13,19,38,.9), rgba(13,19,38,.6));
+      backdrop-filter: blur(6px);
     }
+
     .topRow{
       display:flex;
       gap:14px;
@@ -51,554 +55,561 @@
       justify-content:space-between;
       flex-wrap:wrap;
     }
+
     .brand{
       display:flex;
       flex-direction:column;
       gap:6px;
-      min-width:260px;
-    }
-    .brandTitle{
-      font-weight:800;
-      letter-spacing:0.2px;
-      font-size:18px;
-      display:flex;
-      align-items:center;
-      gap:10px;
-    }
-    .badge{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding:4px 10px;
-      border-radius:999px;
-      border:1px solid var(--border);
-      background: rgba(255,255,255,0.04);
-      color: var(--muted);
-      font-size:12px;
-      font-weight:700;
-    }
-    .brandSub{
-      color: var(--muted);
-      font-size:13px;
-      line-height:1.3;
+      min-width:270px;
     }
 
-    .widgets{
+    .title{
+      font-size:16px;
+      font-weight:800;
+      letter-spacing:.2px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+
+    .badge{
+      font-size:11px;
+      padding:4px 8px;
+      border:1px solid var(--line);
+      border-radius:999px;
+      color:var(--muted);
+      background:rgba(255,255,255,.05);
+    }
+
+    .subtitle{
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.35;
+    }
+
+    .rightTools{
       display:flex;
       gap:10px;
+      align-items:flex-start;
       flex-wrap:wrap;
       justify-content:flex-end;
-      align-items:stretch;
     }
+
     .card{
-      border:1px solid var(--border);
-      background: rgba(11,16,38,0.6);
+      background:rgba(255,255,255,.04);
+      border:1px solid var(--line);
       border-radius:14px;
       padding:10px 12px;
       min-width:220px;
     }
-    .cardTitle{
+    .card h3{
+      margin:0 0 6px;
       font-size:12px;
-      color: var(--muted);
-      font-weight:800;
-      margin-bottom:6px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
+      color:var(--muted);
+      font-weight:700;
+      letter-spacing:.2px;
     }
     .countdown{
-      font-size:14px;
-      font-weight:800;
       display:flex;
-      gap:10px;
+      gap:8px;
       flex-wrap:wrap;
     }
     .pill{
-      border:1px solid var(--border);
-      background: rgba(255,255,255,0.04);
-      padding:6px 10px;
+      background:rgba(0,0,0,.25);
+      border:1px solid var(--line);
       border-radius:12px;
-      font-size:12px;
-      font-weight:800;
-      color: var(--text);
+      padding:8px 10px;
+      min-width:68px;
+      text-align:center;
     }
-    .mutedSmall{
-      color: var(--muted);
-      font-size:12px;
-      margin-top:6px;
-    }
+    .pill .num{ font-size:16px; font-weight:900; }
+    .pill .lab{ font-size:10px; color:var(--muted); }
 
-    .bannerRow{
-      margin-top:10px;
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:center;
-      justify-content:space-between;
-    }
-    .banner{
-      flex:1;
-      border:1px solid var(--border);
-      background: linear-gradient(90deg, rgba(31,111,235,0.18), rgba(246,196,83,0.12));
-      border-radius:14px;
-      padding:10px 12px;
-      font-weight:800;
-      color: var(--text);
-      min-width:260px;
-    }
-
-    .langArea{
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:center;
-      justify-content:flex-end;
-    }
-    .langList{
-      color: var(--muted);
-      font-size:12px;
-      font-weight:700;
-    }
-    .langBtns{
+    .langRow{
       display:flex;
       gap:8px;
       flex-wrap:wrap;
     }
-    .btn{
-      border:1px solid var(--border);
-      background: rgba(255,255,255,0.05);
-      color: var(--text);
+    .langBtn{
+      background:var(--chip);
+      border:1px solid var(--line);
+      color:var(--text);
       padding:8px 10px;
       border-radius:12px;
-      cursor:pointer;
-      font-size:12px;
       font-weight:800;
-    }
-    .btn.primary{
-      background: rgba(46,160,67,0.20);
-      border-color: rgba(46,160,67,0.35);
-    }
-    .btn:disabled{
-      opacity:0.6;
-      cursor:not-allowed;
-    }
-
-    .main{
-      display:flex;
-      flex:1;
-      overflow:hidden;
-    }
-
-    /* Left: schedule */
-    .sidebar{
-      width:340px;
-      border-right:1px solid var(--border);
-      background: rgba(15,21,48,0.35);
-      padding:14px;
-      overflow:auto;
-    }
-    .sideTitle{
-      font-weight:900;
-      font-size:13px;
-      margin-bottom:10px;
-      color: var(--text);
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:10px;
-    }
-    .scheduleList{
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-    }
-    .match{
-      border:1px solid var(--border);
-      background: rgba(255,255,255,0.03);
-      border-radius:12px;
-      padding:10px;
-      display:flex;
-      justify-content:space-between;
-      gap:10px;
-      align-items:center;
-    }
-    .matchLeft{
-      display:flex;
-      flex-direction:column;
-      gap:3px;
-    }
-    .matchDate{
-      font-weight:900;
-      font-size:13px;
-    }
-    .matchStage{
       font-size:12px;
-      color: var(--muted);
-      font-weight:700;
+      cursor:pointer;
     }
-    .tag{
-      font-size:11px;
-      font-weight:900;
-      border:1px solid var(--border);
-      padding:4px 8px;
-      border-radius:999px;
-      color: var(--gold);
-      background: rgba(246,196,83,0.10);
-      white-space:nowrap;
+    .langBtn.active{
+      border-color:rgba(96,165,250,.55);
+      box-shadow:0 0 0 2px rgba(96,165,250,.16);
     }
-    .sideHint{
+
+    .banner{
       margin-top:10px;
-      font-size:12px;
-      color: var(--muted);
-      line-height:1.35;
-    }
-
-    /* Right: chat */
-    .chatPane{
-      flex:1;
-      display:flex;
-      flex-direction:column;
-      overflow:hidden;
-    }
-    #chat{
-      flex:1;
-      overflow-y:auto;
-      padding:16px;
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-    }
-    .bubble{
-      max-width:78%;
       padding:10px 12px;
       border-radius:14px;
-      line-height:1.35;
-      white-space:pre-wrap;
-      word-wrap:break-word;
-      border:1px solid rgba(255,255,255,0.10);
+      border:1px solid rgba(34,197,94,.25);
+      background: linear-gradient(90deg, rgba(34,197,94,.12), rgba(96,165,250,.10));
+      color:var(--text);
+      font-size:12px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
     }
+    .banner strong{ color:#dcfce7; }
+
+    main{
+      display:grid;
+      grid-template-columns: 1.25fr .75fr;
+      gap:14px;
+      padding:14px 18px;
+      flex:1;
+      min-height:0;
+    }
+
+    @media (max-width: 900px){
+      main{ grid-template-columns: 1fr; }
+    }
+
+    .panel{
+      background:rgba(255,255,255,.03);
+      border:1px solid var(--line);
+      border-radius:16px;
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+    }
+
+    .panelHead{
+      padding:10px 12px;
+      border-bottom:1px solid var(--line);
+      background: rgba(13,19,38,.55);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .panelHead .hint{
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    #chat{
+      flex:1;
+      overflow:auto;
+      padding:14px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      min-height:0;
+    }
+
+    .bubble{
+      max-width: 78%;
+      padding: 10px 12px;
+      border-radius: 14px;
+      line-height: 1.35;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      border: 1px solid rgba(255,255,255,0.10);
+    }
+
     .user{
       align-self:flex-end;
-      background: rgba(31,111,235,0.85);
-      color:#fff;
-      border-bottom-right-radius:6px;
+      background: rgba(96,165,250,.18);
+      border-color: rgba(96,165,250,.35);
+      border-bottom-right-radius: 6px;
     }
+
     .bot{
       align-self:flex-start;
-      background: rgba(11,16,38,0.80);
-      color: var(--text);
-      border-bottom-left-radius:6px;
+      background: rgba(255,255,255,.05);
+      border-bottom-left-radius: 6px;
     }
+
     .composer{
-      padding:14px;
-      border-top:1px solid var(--border);
-      background: rgba(15,21,48,0.55);
+      padding:12px;
+      border-top:1px solid var(--line);
+      background: rgba(13,19,38,.55);
       display:flex;
       gap:10px;
       align-items:center;
     }
+
     textarea{
       flex:1;
       resize:none;
-      height:46px;
+      height:44px;
       max-height:140px;
       border-radius:12px;
-      border:1px solid rgba(255,255,255,0.14);
-      background: rgba(7,10,18,0.8);
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.25);
       color: var(--text);
       padding:10px 12px;
       font-size:14px;
       outline:none;
     }
 
-    .sendBtn{
-      background: rgba(46,160,67,0.95);
+    button.send{
+      background: var(--accent);
       border:none;
       padding:10px 14px;
       border-radius:12px;
       font-size:14px;
       font-weight:900;
-      color:#fff;
+      color:#05210f;
       cursor:pointer;
       min-width:92px;
     }
-    .sendBtn:disabled{opacity:0.6; cursor:not-allowed;}
+    button.send:disabled{ opacity:.65; cursor:not-allowed; }
 
-    @media (max-width: 900px){
-      .sidebar{display:none;}
+    .side{
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+      min-height:0;
+    }
+
+    .scheduleList{
+      padding:10px 12px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      overflow:auto;
+      min-height:0;
+    }
+    .match{
+      border:1px solid var(--line);
+      background: rgba(0,0,0,.18);
+      border-radius:14px;
+      padding:10px 10px;
+    }
+    .match .row1{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .tag{
+      font-size:11px;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.05);
+      color: var(--muted);
+      font-weight:800;
+    }
+    .match .when{
+      font-weight:900;
+      font-size:12px;
+    }
+    .match .who{
+      margin-top:6px;
+      font-size:13px;
+      font-weight:900;
+    }
+    .match .meta{
+      margin-top:4px;
+      font-size:12px;
+      color:var(--muted);
+    }
+
+    .smallNote{
+      font-size:12px;
+      color:var(--muted);
+      padding:10px 12px;
+      border-top:1px solid var(--line);
+      background: rgba(13,19,38,.55);
+    }
+    .smallNote code{
+      background:rgba(255,255,255,.07);
+      border:1px solid var(--line);
+      padding:2px 6px;
+      border-radius:8px;
+      color:var(--text);
     }
   </style>
 </head>
+
 <body>
-  <div class="container">
-    <header>
-      <div class="topRow">
-        <div class="brand">
-          <div class="brandTitle">
-            🏟️ World Cup 2026 Dallas Concierge
-            <span class="badge">Dallas / Arlington • Match Day Ready</span>
-          </div>
-          <div class="brandSub">
-            Ask about hours, address, specials — or book a reservation in seconds.
-          </div>
+<div class="wrap">
+  <header>
+    <div class="topRow">
+      <div class="brand">
+        <div class="title">
+          Dallas World Cup 2026 Concierge
+          <span class="badge">Live • Reservations • Schedule</span>
         </div>
-
-        <div class="widgets">
-          <div class="card">
-            <div class="cardTitle">
-              ⏳ Countdown to World Cup Kickoff
-              <span class="pill" id="wcDates">—</span>
-            </div>
-            <div class="countdown" id="countdown">Loading…</div>
-            <div class="mutedSmall" id="localClock">Local time: —</div>
-          </div>
+        <div class="subtitle">
+          World Cup match-day help for Dallas-area businesses — ask about hours, specials, directions, or book a table.
+          <br/>
+          <span style="color:#dcfce7;font-weight:800;">Languages:</span>
+          <span id="langsInline" style="color:var(--muted);">Auto, English, Español, Português, Français</span>
         </div>
       </div>
 
-      <div class="bannerRow">
-        <div class="banner" id="matchBanner">🏟️ Match-day banner loading…</div>
-
-        <div class="langArea">
-          <div class="langList" id="langList">Languages: —</div>
-          <div class="langBtns">
-            <button class="btn" onclick="setLanguage('en')">English</button>
-            <button class="btn" onclick="setLanguage('es')">Español</button>
-            <button class="btn" onclick="setLanguage('pt')">Português</button>
-            <button class="btn" onclick="setLanguage('fr')">Français</button>
-            <button class="btn primary" onclick="clearLanguage()">Auto</button>
+      <div class="rightTools">
+        <div class="card">
+          <h3>World Cup countdown</h3>
+          <div class="countdown" id="countdown">
+            <div class="pill"><div class="num" id="cdDays">--</div><div class="lab">days</div></div>
+            <div class="pill"><div class="num" id="cdHours">--</div><div class="lab">hours</div></div>
+            <div class="pill"><div class="num" id="cdMins">--</div><div class="lab">mins</div></div>
+            <div class="pill"><div class="num" id="cdSecs">--</div><div class="lab">secs</div></div>
           </div>
         </div>
+
+        <div class="card">
+          <h3>Language</h3>
+          <div class="langRow" id="langButtons"></div>
+        </div>
       </div>
-    </header>
-
-    <div class="main">
-      <aside class="sidebar">
-        <div class="sideTitle">
-          📅 Dallas Match Schedule
-          <button class="btn" id="refreshBtn" onclick="loadSchedule()">Refresh</button>
-        </div>
-
-        <div class="scheduleList" id="scheduleList">
-          <div class="sideHint">Loading schedule…</div>
-        </div>
-
-        <div class="sideHint">
-          Tip: On match days, customers will ask the same questions nonstop. This concierge answers fast and captures reservations so your staff can focus on service.
-        </div>
-      </aside>
-
-      <section class="chatPane">
-        <div id="chat"></div>
-
-        <div class="composer">
-          <textarea id="msg" placeholder="Type your message… (Enter to send, Shift+Enter for new line)"></textarea>
-          <button class="sendBtn" id="sendBtn" onclick="sendMessage()">Send</button>
-        </div>
-      </section>
     </div>
-  </div>
 
-  <script>
-    // Conversation memory: sends history to /chat
-    const history = []; // {role:'user'|'assistant', content:'...'}
+    <div class="banner" id="matchdayBanner">
+      <strong>Match day info:</strong> Loading…
+    </div>
+  </header>
 
-    const chatEl = document.getElementById("chat");
-    const msgEl = document.getElementById("msg");
-    const sendBtn = document.getElementById("sendBtn");
-    const refreshBtn = document.getElementById("refreshBtn");
+  <main>
+    <!-- CHAT -->
+    <section class="panel">
+      <div class="panelHead">
+        <div class="hint">Tip: “Reservation for Cliff, 2145551212, 06/14/2026 at 3pm, party of 4”</div>
+        <div class="hint">Or ask: “What time do you open on match days?”</div>
+      </div>
 
-    let scheduleData = null;
-    let preferredLang = null; // 'en'|'es'|'pt'|'fr'|null
+      <div id="chat"></div>
 
-    function addBubble(role, text) {
-      const bubble = document.createElement("div");
-      bubble.className = "bubble " + (role === "user" ? "user" : "bot");
-      bubble.textContent = text;
-      chatEl.appendChild(bubble);
-      chatEl.scrollTop = chatEl.scrollHeight;
+      <div class="composer">
+        <textarea id="msg" placeholder="Type your message... (Enter to send, Shift+Enter for new line)"></textarea>
+        <button class="send" id="sendBtn" onclick="sendMessage()">Send</button>
+      </div>
+    </section>
+
+    <!-- SCHEDULE -->
+    <aside class="panel side">
+      <div class="panelHead">
+        <div class="hint"><strong>Dallas match schedule</strong></div>
+        <div class="hint"><span class="tag">Dynamic from server</span></div>
+      </div>
+
+      <div class="scheduleList" id="scheduleList"></div>
+
+      <div class="smallNote">
+        Schedule loads from <code>/api/schedule</code>. You can update it by editing <code>matches_dallas.json</code> on the server/repo.
+      </div>
+    </aside>
+  </main>
+</div>
+
+<script>
+  // Conversation memory stored in the browser and sent each request
+  const history = []; // {role:'user'|'assistant', content:'...'}
+  let preferredLanguage = "auto"; // auto|en|es|pt|fr
+  let config = null;
+
+  const chatEl = document.getElementById("chat");
+  const msgEl = document.getElementById("msg");
+  const sendBtn = document.getElementById("sendBtn");
+
+  function addBubble(role, text) {
+    const div = document.createElement("div");
+    div.className = "bubble " + (role === "user" ? "user" : "bot");
+    div.textContent = text;
+    chatEl.appendChild(div);
+    chatEl.scrollTop = chatEl.scrollHeight;
+  }
+
+  function setSending(isSending){
+    sendBtn.disabled = isSending;
+    msgEl.disabled = isSending;
+    sendBtn.textContent = isSending ? "..." : "Send";
+  }
+
+  async function sendMessage() {
+    const text = msgEl.value.trim();
+    if (!text) return;
+
+    addBubble("user", text);
+    history.push({ role: "user", content: text });
+    msgEl.value = "";
+    msgEl.style.height = "44px";
+
+    setSending(true);
+    try{
+      const res = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: text,
+          history: history,
+          preferred_language: preferredLanguage
+        })
+      });
+
+      const data = await res.json();
+      const reply = data.reply || "Sorry — no reply received.";
+      addBubble("assistant", reply);
+      history.push({ role: "assistant", content: reply });
+
+    } catch (e){
+      addBubble("assistant", "⚠️ Network error. Please try again.");
+    } finally {
+      setSending(false);
+      msgEl.focus();
     }
+  }
 
-    function setSending(isSending){
-      sendBtn.disabled = isSending;
-      msgEl.disabled = isSending;
-      sendBtn.textContent = isSending ? "..." : "Send";
+  // Enter to send, Shift+Enter for newline
+  msgEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
     }
+  });
 
-    function formatDatePretty(isoDate){
-      // isoDate: YYYY-MM-DD
-      const d = new Date(isoDate + "T12:00:00");
-      return d.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric", year:"numeric" });
-    }
+  // Auto-grow textarea height
+  msgEl.addEventListener("input", () => {
+    msgEl.style.height = "44px";
+    msgEl.style.height = Math.min(msgEl.scrollHeight, 140) + "px";
+  });
 
-    // Language toggles: push instruction into conversation history
-    function setLanguage(code){
-      preferredLang = code;
-      const map = {en:"English", es:"Spanish", pt:"Portuguese", fr:"French"};
-      const label = map[code] || "English";
+  function renderLanguageButtons(langs){
+    const container = document.getElementById("langButtons");
+    container.innerHTML = "";
 
-      // show a small user-visible note
-      addBubble("user", `🌐 Language set: ${label}`);
+    langs.forEach(l => {
+      const b = document.createElement("button");
+      b.className = "langBtn" + (l.code === preferredLanguage ? " active" : "");
+      b.textContent = l.label;
+      b.onclick = () => {
+        preferredLanguage = l.code;
+        renderLanguageButtons(langs);
 
-      // push an instruction message into history (so the model obeys)
-      const instruction = `From now on, respond in ${label}. Keep answers concise.`;
-      history.push({ role: "user", content: instruction });
-    }
-
-    function clearLanguage(){
-      preferredLang = null;
-      addBubble("user", "🌐 Language set: Auto (detect my language)");
-      history.push({ role: "user", content: "From now on, auto-detect my language and respond in it." });
-    }
-
-    async function sendMessage(){
-      const text = msgEl.value.trim();
-      if (!text) return;
-
-      addBubble("user", text);
-      history.push({ role:"user", content:text });
-
-      msgEl.value = "";
-      msgEl.style.height = "46px";
-      setSending(true);
-
-      try{
-        const res = await fetch("/chat", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({ message:text, history })
-        });
-
-        const data = await res.json();
-        const reply = data.reply || "Sorry — no reply received.";
-        addBubble("assistant", reply);
-        history.push({ role:"assistant", content: reply });
-
-      } catch (e){
-        addBubble("assistant", "⚠️ Network error. Please try again.");
-      } finally {
-        setSending(false);
-        msgEl.focus();
-      }
-    }
-
-    msgEl.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey){
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-
-    msgEl.addEventListener("input", () => {
-      msgEl.style.height = "46px";
-      msgEl.style.height = Math.min(msgEl.scrollHeight, 140) + "px";
-    });
-
-    function setCountdown(startISO){
-      const countdownEl = document.getElementById("countdown");
-      const localClockEl = document.getElementById("localClock");
-      const datesEl = document.getElementById("wcDates");
-
-      const target = new Date(startISO + "T00:00:00");
-
-      function tick(){
-        const now = new Date();
-        localClockEl.textContent = "Local time: " + now.toLocaleString();
-
-        const diff = target - now;
-        if (diff <= 0){
-          countdownEl.textContent = "It’s kickoff time! ⚽";
-          return;
+        // “toggle buttons that send instruction”
+        // We do it safely by setting preferred_language for server system prompt.
+        // Also add a small local message so user sees what happened.
+        if (preferredLanguage === "auto") {
+          addBubble("assistant", "Language set to Auto (I’ll reply in the language you use).");
+          history.push({ role: "assistant", content: "Language set to Auto (I’ll reply in the language you use)." });
+        } else {
+          addBubble("assistant", `Language set to ${l.label}.`);
+          history.push({ role: "assistant", content: `Language set to ${l.label}.` });
         }
-        const totalSeconds = Math.floor(diff / 1000);
-        const days = Math.floor(totalSeconds / 86400);
-        const hours = Math.floor((totalSeconds % 86400) / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = totalSeconds % 60;
+      };
+      container.appendChild(b);
+    });
 
-        countdownEl.innerHTML = `
-          <span class="pill">${days}d</span>
-          <span class="pill">${hours}h</span>
-          <span class="pill">${minutes}m</span>
-          <span class="pill">${seconds}s</span>
-        `;
-      }
+    // Update inline languages display
+    document.getElementById("langsInline").textContent = langs.map(x => x.label).join(", ");
+  }
 
-      datesEl.textContent = startISO;
-      tick();
-      setInterval(tick, 1000);
+  function startCountdown(isoLocal){
+    // Safe/local countdown based on client clock
+    const target = new Date(isoLocal);
+    const cdDays = document.getElementById("cdDays");
+    const cdHours = document.getElementById("cdHours");
+    const cdMins = document.getElementById("cdMins");
+    const cdSecs = document.getElementById("cdSecs");
+
+    function tick(){
+      const now = new Date();
+      let diff = target - now;
+      if (diff < 0) diff = 0;
+
+      const totalSec = Math.floor(diff / 1000);
+      const days = Math.floor(totalSec / (3600 * 24));
+      const hours = Math.floor((totalSec % (3600 * 24)) / 3600);
+      const mins = Math.floor((totalSec % 3600) / 60);
+      const secs = totalSec % 60;
+
+      cdDays.textContent = String(days);
+      cdHours.textContent = String(hours).padStart(2, "0");
+      cdMins.textContent = String(mins).padStart(2, "0");
+      cdSecs.textContent = String(secs).padStart(2, "0");
     }
 
-    function renderSchedule(matches){
-      const list = document.getElementById("scheduleList");
-      list.innerHTML = "";
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  function fmtDatePretty(yyyy_mm_dd){
+    const [y,m,d] = yyyy_mm_dd.split("-").map(Number);
+    const dt = new Date(y, m-1, d);
+    return dt.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+  }
+
+  async function loadSchedule(){
+    const box = document.getElementById("scheduleList");
+    box.innerHTML = `<div class="match"><div class="meta">Loading schedule…</div></div>`;
+    try{
+      const res = await fetch("/api/schedule");
+      const data = await res.json();
+      const matches = data.matches || [];
+      box.innerHTML = "";
 
       matches.forEach(m => {
-        const row = document.createElement("div");
-        row.className = "match";
+        const div = document.createElement("div");
+        div.className = "match";
 
-        const left = document.createElement("div");
-        left.className = "matchLeft";
-
-        const date = document.createElement("div");
-        date.className = "matchDate";
-        date.textContent = formatDatePretty(m.date);
-
-        const stage = document.createElement("div");
-        stage.className = "matchStage";
-        stage.textContent = m.stage;
-
-        left.appendChild(date);
-        left.appendChild(stage);
-
-        const tag = document.createElement("div");
-        tag.className = "tag";
-        tag.textContent = "Dallas";
-
-        row.appendChild(left);
-        row.appendChild(tag);
-        list.appendChild(row);
+        const whenText = `${fmtDatePretty(m.date)} • ${m.time || "TBD"} ${m.tz || ""}`.trim();
+        div.innerHTML = `
+          <div class="row1">
+            <div class="when">${whenText}</div>
+            <div class="tag">${m.stage || "Match"}</div>
+          </div>
+          <div class="who">${m.match || "TBD"}</div>
+          <div class="meta">${m.venue || ""}</div>
+        `;
+        box.appendChild(div);
       });
-    }
 
-    async function loadSchedule(){
-      refreshBtn.disabled = true;
-      refreshBtn.textContent = "…";
-
-      try{
-        const res = await fetch("/schedule", { cache: "no-store" });
-        scheduleData = await res.json();
-
-        // Banner + languages
-        document.getElementById("matchBanner").textContent = "🎉 " + (scheduleData.match_day_banner || "Match day info coming soon");
-        const langs = (scheduleData.supported_languages || []).map(l => l.label).join(" • ");
-        document.getElementById("langList").textContent = "Languages: " + (langs || "English");
-
-        // Countdown
-        const startDate = scheduleData.world_cup?.start_date || "2026-06-11";
-        const endDate = scheduleData.world_cup?.end_date || "2026-07-19";
-        document.getElementById("wcDates").textContent = `${startDate} → ${endDate}`;
-        setCountdown(startDate);
-
-        // Schedule list
-        renderSchedule(scheduleData.dallas_matches || []);
-
-      } catch (e){
-        const list = document.getElementById("scheduleList");
-        list.innerHTML = `<div class="sideHint">⚠️ Could not load schedule from server.</div>`;
-      } finally {
-        refreshBtn.disabled = false;
-        refreshBtn.textContent = "Refresh";
+      if (!matches.length){
+        box.innerHTML = `<div class="match"><div class="meta">No Dallas matches found.</div></div>`;
       }
+    } catch(e){
+      box.innerHTML = `<div class="match"><div class="meta">⚠️ Could not load schedule.</div></div>`;
     }
+  }
 
-    // Initial greeting
+  async function bootstrap(){
+    // Config from server
+    const res = await fetch("/api/config");
+    config = await res.json();
+
+    // Banner
+    const banner = document.getElementById("matchdayBanner");
+    banner.innerHTML = `<strong>Match day info:</strong> ${config.matchday_banner || "Welcome!"}`;
+
+    // Languages
+    renderLanguageButtons(config.supported_languages || [
+      {code:"auto",label:"Auto"},
+      {code:"en",label:"English"},
+      {code:"es",label:"Español"},
+      {code:"pt",label:"Português"},
+      {code:"fr",label:"Français"},
+    ]);
+
+    // Countdown
+    startCountdown(config.tournament_start_local || "2026-06-11T00:00:00");
+
+    // Schedule
+    await loadSchedule();
+
+    // Greeting
     const greeting = "Hi! Want to book a table for a match day? Ask me anything.";
     addBubble("assistant", greeting);
     history.push({ role:"assistant", content: greeting });
+  }
 
-    // Load server-driven schedule + widgets
-    loadSchedule();
-  </script>
+  bootstrap();
+</script>
+
 </body>
 </html>
