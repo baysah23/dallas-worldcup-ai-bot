@@ -182,7 +182,7 @@
 
     .leftcol{
       display:grid;
-      O0px 1fr; /* Menu | Chat (chat gets more space) */
+      grid-template-columns: 170px 1fr; /* Menu | Chat */
       gap:14px;
       min-height:0;
       height:100%;
@@ -419,20 +419,44 @@
     .match{padding:9px 10px;}
 
 
-    /* Layout override: compact menu + wide chat (desktop) */
-    .leftcol{
-      display:grid;
-      grid-template-columns: 170px 1fr; /* Menu | Chat */
-      gap:14px;
-      min-height:0;
-      height:100%;
-      align-items:stretch;
+    .menucard{max-width:none; max-height:none;}
     }
-    .chatcard{display:flex; flex-direction:column; min-height:0;}
-    .menucard{display:flex; flex-direction:column; min-height:0; max-width:190px; max-height:460px;}
-    @media (max-width: 950px){
-      .leftcol{grid-template-columns: 1fr;}
-      .menucard{max-width:none; max-height:none;}
+
+
+    /* Phase 1 UI: World Cup venue hero (pure CSS/emoji — no external assets) */
+    .wc-hero{margin-top:12px; border-top:1px solid var(--line); padding-top:12px;}
+    .wc-hero-inner{
+      display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+      background: linear-gradient(90deg, rgba(245,215,110,.10) 0%, rgba(31,111,235,.12) 45%, rgba(46,160,67,.10) 100%);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:16px;
+      padding:10px 12px;
+      overflow:hidden;
+      position:relative;
+    }
+    .wc-hero-inner:before{
+      content:"";
+      position:absolute; inset:-1px;
+      background: radial-gradient(600px 140px at 15% 30%, rgba(245,215,110,.18) 0%, rgba(0,0,0,0) 60%);
+      pointer-events:none;
+    }
+    .wc-marquee{
+      font-size:18px;
+      white-space:nowrap;
+      opacity:.95;
+      animation: wcScroll 18s linear infinite;
+      will-change: transform;
+      max-width:100%;
+    }
+    @keyframes wcScroll{
+      0%{transform: translateX(0);}
+      100%{transform: translateX(-45%);}
+    }
+    .wc-hero-text{display:flex; flex-direction:column; gap:2px; z-index:1;}
+    .wc-title{font-weight:900; letter-spacing:.3px;}
+    .wc-sub{color:var(--muted); font-size:12px;}
+    @media (prefers-reduced-motion: reduce){
+      .wc-marquee{animation:none;}
     }
 
 </style>
@@ -457,6 +481,19 @@
           <div class="langbtn" data-lang="fr">Français</div>
         </div>
       </div>
+    
+      <div class="wc-hero" aria-label="World Cup 2026 venue banner">
+        <div class="wc-hero-inner">
+          <div class="wc-marquee" aria-hidden="true">
+            🇺🇸 🇲🇽 🇨🇦 🇧🇷 🇦🇷 🇫🇷 🇩🇪 🇪🇸 🇵🇹 🇳🇬 🇬🇭 🇸🇳 🇲🇦 🇯🇵 🇰🇷 🇦🇺 🇨🇴 🇺🇾 🇳🇱 🇮🇹 🏆
+          </div>
+          <div class="wc-hero-text">
+            <span class="wc-title">🏟️ Venue Mode</span>
+            <span class="wc-sub">World Cup 2026 • Dallas/Arlington • Match-day Concierge</span>
+          </div>
+        </div>
+      </div>
+
     </header>
 
 
@@ -1289,47 +1326,26 @@ if (scopeDallasBtn) scopeDallasBtn.addEventListener("click", () => setScope("dal
 if (scopeAllBtn) scopeAllBtn.addEventListener("click", () => setScope("all"));
 
 // Pagination controls (All Matches only)
-if (prevPageBtn) prevPageBtn.addEventListener("click", () => { if (currentPage > 1){ currentPage--; renderSchedule(); } });
-if (nextPageBtn) nextPageBtn.addEventListener("click", () => {
-  if (!scheduleData || !Array.isArray(scheduleData.matches)) return;
-  const totalPages = Math.max(1, Math.ceil(scheduleData.matches.length / PAGE_SIZE));
-  
-
-// -----------------------
-// Menu pagination controls
-// -----------------------
-if (null){
-  null.addEventListener("click", () => {
-    if (!menuShowAll && menuPage > 1){
-      menuPage--;
-      renderMenu(window.menuDataList || []);
-    }
-  });
-}
-if (null){
-  null.addEventListener("click", () => {
-    if (!menuShowAll){
-      const items = window.menuDataList || [];
-      const totalPages = Math.max(1, Math.ceil((items.length || 0) / MENU_PAGE_SIZE));
-      if (menuPage < totalPages){
-        menuPage++;
-        renderMenu(items);
-      }
-    }
-  });
-}
-if (null){
-  null.addEventListener("click", () => {
-    menuShowAll = !menuShowAll;
-    menuPage = 1;
-    renderMenu(window.menuDataList || []);
-  });
-}
-if (currentPage < totalPages){ currentPage++; renderSchedule(); }
+if (prevPageBtn) prevPageBtn.addEventListener("click", () => {
+  if (scope !== "all") return;
+  if (currentPage > 1){
+    currentPage--;
+    renderSchedule();
+  }
 });
 
+if (nextPageBtn) nextPageBtn.addEventListener("click", () => {
+  if (scope !== "all") return;
+  if (!scheduleData || !Array.isArray(scheduleData.matches)) return;
+  const totalPages = Math.max(1, Math.ceil(scheduleData.matches.length / PAGE_SIZE));
+  if (currentPage < totalPages){
+    currentPage++;
+    renderSchedule();
+  }
+});
 
 // Team search (simple text input)
+
 let _searchTimer = null;
 function setScheduleQuery(q){
   scheduleQuery = normalizeScheduleSearch((q || "").trim());
