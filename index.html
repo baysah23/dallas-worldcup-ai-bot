@@ -233,16 +233,7 @@
       border-top:1px dashed rgba(255,255,255,.14);
     }
     code{background:rgba(255,255,255,.10); padding:2px 6px; border-radius:8px;}
-  
-button.secondary{
-  background: rgba(255,255,255,.10);
-  border:1px solid rgba(255,255,255,.16);
-  color: var(--text);
-  font-weight:800;
-}
-button.secondary:hover{filter:brightness(1.1);}
-
-</style>
+  </style>
 </head>
 
 <body>
@@ -280,7 +271,6 @@ button.secondary:hover{filter:brightness(1.1);}
         <div class="composer">
           <textarea id="msg" placeholder="Type your message... (Enter to send, Shift+Enter for new line)"></textarea>
           <button id="sendBtn">Send</button>
-          <button id="clearBtn" class="secondary" type="button">Clear</button>
         </div>
 
         <div class="hint" id="helperHint"></div>
@@ -338,12 +328,11 @@ button.secondary:hover{filter:brightness(1.1);}
 // -----------------------
 // Session + state
 // -----------------------
-function newSessionId(){
+const sessionId = (localStorage.getItem("session_id") || (() => {
   const id = "sess_" + Math.random().toString(16).slice(2) + "_" + Date.now();
   localStorage.setItem("session_id", id);
   return id;
-}
-let sessionId = (localStorage.getItem("session_id") || newSessionId());
+})());
 
 let lang = localStorage.getItem("lang") || "en";
 let scheduleData = null;
@@ -355,7 +344,6 @@ const history = [];
 const chatEl = document.getElementById("chat");
 const msgEl = document.getElementById("msg");
 const sendBtn = document.getElementById("sendBtn");
-const clearBtn = document.getElementById("clearBtn");
 const helperHint = document.getElementById("helperHint");
 const pillLang = document.getElementById("pillLang");
 const pillMode = document.getElementById("pillMode");
@@ -517,6 +505,37 @@ function safeParseTimestamp(dateIso, timeStr){
 }
 
 // -----------------------
+// Time formatting (display only)
+// - Converts "17:00" -> "5:00 PM"
+// - Keeps "7:00 pm" but normalizes to "7:00 PM"
+// -----------------------
+function formatTime12(timeStr){
+  if (!timeStr) return "TBD";
+  const raw = String(timeStr).trim();
+  if (!raw || raw.toUpperCase() === "TBD") return "TBD";
+
+  // Already has AM/PM? Normalize casing and spacing.
+  const ampmMatch = raw.match(/\b(am|pm)\b/i);
+  if (ampmMatch){
+    // Normalize like "7:00 pm" -> "7:00 PM"
+    return raw.replace(/\b(am|pm)\b/ig, (m)=>m.toUpperCase()).replace(/\s+/g," ").trim();
+  }
+
+  // 24h format "HH:MM"
+  const m = raw.match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return raw; // unknown format, leave as-is
+
+  let hh = parseInt(m[1], 10);
+  const mm = m[2];
+  if (Number.isNaN(hh) || hh < 0 || hh > 23) return raw;
+
+  const ap = (hh >= 12) ? "PM" : "AM";
+  hh = hh % 12;
+  if (hh === 0) hh = 12;
+  return `${hh}:${mm} ${ap}`;
+}
+
+// -----------------------
 // Countdown
 // -----------------------
 let countdownTimer = null;
@@ -600,7 +619,8 @@ function renderSchedule(){
     const row = document.createElement("div");
     row.className = "match" + (m.id === nextId ? " next" : "");
 
-    const timeTxt = (m.time && String(m.time).trim()) ? String(m.time).trim() : "TBD";
+    const timeTxtRaw = (m.time && String(m.time).trim()) ? String(m.time).trim() : "TBD";
+    const timeTxt = formatTime12(timeTxtRaw);
     const teamsTxt = m.teams || (m.home && m.away ? `${m.home} vs ${m.away}` : "TBD vs TBD");
     const venueTxt = m.venue ? ` • ${m.venue}` : "";
 
@@ -714,30 +734,6 @@ async function sendMessage(){
 }
 
 sendBtn.addEventListener("click", sendMessage);
-
-clearBtn.addEventListener("click", async () => {
-  // Clear UI
-  chatEl.innerHTML = "";
-  history.length = 0;
-
-  // Reset server session (best-effort)
-  try{
-    await fetch("/api/reset_session", {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ session_id: sessionId })
-    });
-  }catch(e){ /* ignore */ }
-
-  // Start a fresh session id so old server memory can't bleed into a new conversation
-  sessionId = newSessionId();
-
-  // Re-add welcome message
-  addBubble("assistant", ui && ui.strings && ui.strings.welcome ? ui.strings.welcome : "Hi! Want to book a table for a match day? Ask me anything.");
-  history.push({role:"assistant", content: ui && ui.strings && ui.strings.welcome ? ui.strings.welcome : "Hi! Want to book a table for a match day? Ask me anything."});
-  msgEl.focus();
-});
-
 
 // Enter to send, Shift+Enter newline
 msgEl.addEventListener("keydown", (e) => {
