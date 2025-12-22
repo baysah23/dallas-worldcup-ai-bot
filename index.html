@@ -51,169 +51,6 @@
     }
     .langbtn.active{background:rgba(46,160,67,.18); border-color:rgba(46,160,67,.45);}
 
-    /* --- HERO banner (Session 1) --- */
-    .hero{
-      position:relative;
-      margin:14px 14px 0;
-      border-radius:18px;
-      overflow:hidden;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.20);
-      min-height:158px;
-      box-shadow: 0 18px 55px rgba(0,0,0,.28);
-      isolation:isolate;
-    }
-    .heroMedia{position:absolute; inset:0; background:#000;}
-    .heroLayer{position:absolute; inset:0; opacity:0; transition: opacity 900ms ease;}
-    .heroLayer.on{opacity:1;}
-    /* Ensure player layers sit above bloom/smoke/grain */
-    .heroLayer{ z-index:1; }
-    .heroBg{ z-index:1; }
-    .heroFg{ z-index:2; }
-
-    .heroBg{
-      position:absolute; inset:-10%;
-      background-size:cover;
-      background-position:center 22%;
-      filter: blur(12px) saturate(1.08) contrast(1.10);
-      transform: scale(1.10);
-      opacity:.96;
-    }
-    .heroFg{
-      position:absolute; inset:0;
-      background-repeat:no-repeat;
-      background-size:contain;         /* keeps the player visible */
-      background-position:center 52%;  /* chest/face sits nicely */
-      filter: drop-shadow(0 18px 45px rgba(0,0,0,.58));
-      opacity:1;
-    }
-    .heroScrim{
-      position:absolute; inset:0;
-      background:
-        linear-gradient(90deg, rgba(7,16,34,.78) 0%, rgba(7,16,34,.48) 45%, rgba(7,16,34,.86) 100%),
-        radial-gradient(900px 340px at 20% 20%, rgba(245,215,110,.18) 0%, rgba(0,0,0,0) 60%),
-        radial-gradient(900px 380px at 70% 25%, rgba(31,111,235,.14) 0%, rgba(0,0,0,0) 62%),
-        radial-gradient(1100px 520px at 55% 115%, rgba(0,0,0,0) 0%, rgba(0,0,0,.55) 70%);
-      pointer-events:none;
-      z-index:4;
-    }
-    /* Crowd bloom (light + atmosphere) */
-    .heroBloom{
-      position:absolute; inset:-10%;
-      background:
-        radial-gradient(620px 240px at 18% 28%, rgba(245,215,110,.20) 0%, rgba(0,0,0,0) 65%),
-        radial-gradient(740px 300px at 78% 30%, rgba(31,111,235,.18) 0%, rgba(0,0,0,0) 62%),
-        radial-gradient(720px 340px at 55% 80%, rgba(46,160,67,.14) 0%, rgba(0,0,0,0) 62%);
-      mix-blend-mode: screen;
-      opacity:.85;
-      pointer-events:none;
-      z-index:2;
-      animation: bloomPulse 7.6s ease-in-out infinite;
-    }
-    @keyframes bloomPulse{
-      0%{transform:translateY(0) scale(1);}
-      50%{transform:translateY(-2px) scale(1.02);}
-      100%{transform:translateY(0) scale(1);}
-    }
-    /* Smoke haze (subtle, animated) */
-    .heroSmoke{
-      position:absolute; inset:-20% -30%;
-      background:
-        radial-gradient(520px 280px at 18% 38%, rgba(255,255,255,.08) 0%, rgba(0,0,0,0) 70%),
-        radial-gradient(560px 300px at 62% 40%, rgba(255,255,255,.07) 0%, rgba(0,0,0,0) 72%),
-        radial-gradient(520px 320px at 45% 74%, rgba(255,255,255,.06) 0%, rgba(0,0,0,0) 72%);
-      filter: blur(18px);
-      opacity:.55;
-      pointer-events:none;
-      z-index:3;
-      animation: smokeDrift 9.5s ease-in-out infinite;
-    }
-    @keyframes smokeDrift{
-      0%{transform:translateX(-2%) translateY(0);}
-      50%{transform:translateX(2%) translateY(-1.5%);}
-      100%{transform:translateX(-2%) translateY(0);}
-    }
-    /* Light sweep */
-    .hero:before{
-      content:"";
-      position:absolute;
-      inset:-40% -30%;
-      background: linear-gradient(110deg, rgba(255,255,255,0) 32%, rgba(255,255,255,.10) 50%, rgba(255,255,255,0) 68%);
-      transform: translateX(-55%) rotate(8deg);
-      animation: heroSweep 6.2s ease-in-out infinite;
-      pointer-events:none;
-      z-index:5;
-      mix-blend-mode: overlay;
-    }
-    @keyframes heroSweep{
-      0%{transform: translateX(-55%) rotate(8deg);}
-      50%{transform: translateX(25%) rotate(8deg);}
-      100%{transform: translateX(55%) rotate(8deg);}
-    }
-    .heroContent{
-      position:relative;
-      z-index:6;
-      padding:16px 18px;
-      display:flex;
-      flex-direction:column;
-      gap:8px;
-    }
-    .heroKicker{
-      font-weight:900;
-      letter-spacing:.9px;
-      text-transform:uppercase;
-      font-size:13px;
-      color:#f5d76e;
-      text-shadow: 0 2px 18px rgba(0,0,0,.45);
-    }
-    .heroSub{
-      color:var(--text);
-      font-size:12px;
-      max-width:760px;
-      line-height:1.25;
-      opacity:.95;
-    }
-    .heroChips{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:2px;}
-    .heroChip{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.20);
-      font-size:12px;
-      color:var(--text);
-      backdrop-filter: blur(6px);
-    }
-    .heroDot{
-      width:8px; height:8px; border-radius:999px;
-      background: rgba(46,160,67,.82);
-      box-shadow: 0 0 0 6px rgba(46,160,67,.12);
-    }
-    /* rotating flag rail (visible + tasteful) */
-    .flagRail{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:6px;}
-    .flagPill{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.22);
-      font-size:12px;
-      color:var(--text);
-      backdrop-filter: blur(6px);
-    }
-    .flagEmoji{
-      font-size:16px;
-      line-height:1;
-      transform: translateY(1px);
-    }
-    .twemoji{width:18px; height:18px; vertical-align:-3px;}
-    .hero:hover:before{animation-play-state:paused;}
-
-    /* --- Main grid --- */
     .grid{
       display:grid;
       grid-template-columns: 1.45fr .55fr;
@@ -222,20 +59,26 @@
       flex:1;
       min-height:0;
     }
-    @media (max-width: 950px){ .grid{grid-template-columns:1fr;} }
+    @media (max-width: 950px){
+      .grid{grid-template-columns:1fr;}
+    }
 
-    /* Left column: compact menu + wide chat (desktop) */
     .leftcol{
       display:grid;
-      grid-template-columns: 170px 1fr; /* Menu | Chat */
+      O0px 1fr; /* Menu | Chat (chat gets more space) */
       gap:14px;
       min-height:0;
       height:100%;
       align-items:stretch;
     }
-    @media (max-width: 950px){ .leftcol{grid-template-columns:1fr;} }
-
-    .card{
+    .chatcard{display:flex; flex-direction:column; min-height:0;}
+    .menucard{display:flex; flex-direction:column; min-height:0;}
+    #chat{padding:14px; height:100%; overflow:auto; display:flex; flex-direction:column; gap:10px;}
+    .menu{padding:8px 8px 10px; font-size:9px; line-height:1.25; display:flex; flex-direction:column; gap:8px; overflow:auto; max-height:390px;}
+    @media (max-width: 950px){
+      .leftcol{grid-template-columns: 1fr;}
+    }
+.card{
       background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.03) 100%);
       border:1px solid var(--line);
       border-radius:16px;
@@ -262,10 +105,6 @@
       white-space:nowrap;
     }
 
-    .chatcard{display:flex; flex-direction:column; min-height:0;}
-    .menucard{display:flex; flex-direction:column; min-height:0; max-width:190px; max-height:460px;}
-    @media (max-width: 950px){ .menucard{max-width:none; max-height:none;} }
-
     .banner{
       padding:10px 14px;
       border-bottom:1px dashed rgba(255,255,255,.16);
@@ -275,19 +114,32 @@
     }
     .banner.show{display:block;}
 
-    #chat{padding:14px; height:100%; overflow:auto; display:flex; flex-direction:column; gap:8px;}
+    #chat{
+      padding:14px;
+      height:100%;
+      overflow:auto;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
     .bubble{
       max-width:78%;
-      padding:8px 10px;
+      padding:10px 12px;
       border-radius:14px;
-      line-height:1.28;
+      line-height:1.35;
       white-space:pre-wrap;
       word-wrap:break-word;
       border:1px solid rgba(255,255,255,.10);
-      font-size:13px;
     }
-    .user{align-self:flex-end; background: rgba(31,111,235,.22); border-color: rgba(31,111,235,.35);}
-    .bot{align-self:flex-start; background: rgba(0,0,0,.18); font-size:12px;}
+    .user{
+      align-self:flex-end;
+      background: rgba(31,111,235,.22);
+      border-color: rgba(31,111,235,.35);
+    }
+    .bot{
+      align-self:flex-start;
+      background: rgba(0,0,0,.18);
+    }
 
     .composer{
       display:flex;
@@ -307,10 +159,29 @@
       background: rgba(0,0,0,.22);
       color:var(--text);
       padding:10px 12px;
-      font-size:13px;
+      font-size:14px;
       outline:none;
     }
     button{
+    background: var(--accent);
+    border:none;
+    padding:10px 14px;
+    border-radius:12px;
+    font-size:14px;
+    font-weight:800;
+    color:#fff;
+    cursor:pointer;
+    min-width:92px;
+  }
+  button.secondary{
+    background: rgba(255,255,255,.10);
+    border:1px solid rgba(255,255,255,.18);
+    color: var(--text);
+    min-width:88px;
+  }
+  button.secondary:hover{background: rgba(255,255,255,.14);} 
+
+  button{
       background: var(--accent);
       border:none;
       padding:10px 14px;
@@ -321,31 +192,15 @@
       cursor:pointer;
       min-width:92px;
     }
-    button.secondary{
-      background: rgba(255,255,255,.10);
-      border:1px solid rgba(255,255,255,.18);
-      color: var(--text);
-      min-width:88px;
-    }
-    button.secondary:hover{background: rgba(255,255,255,.14);}
     button:disabled{opacity:.6; cursor:not-allowed;}
 
-    .hint{
-      padding:10px 14px;
-      font-size:12px;
-      color:var(--muted);
-      border-top:1px dashed rgba(255,255,255,.14);
-    }
-    code{background:rgba(255,255,255,.10); padding:2px 6px; border-radius:8px;}
-
-    /* Sidebar */
     .sidepad{padding:12px 14px;}
     .countdown{
       display:flex;
       align-items:center;
       justify-content:space-between;
       gap:10px;
-      padding:10px 12px;
+      padding:12px 14px;
       border-bottom:1px solid var(--line);
     }
     .countdown .label{font-size:12px; color:var(--muted); font-weight:700;}
@@ -361,30 +216,20 @@
     .nums b{color:#f5d76e;}
 
     .schedule{flex:1; min-height:160px; overflow:auto;}
-    /* Keep pagination controls visible (sticky footer inside sidebar) */
-    #pager{
-      position: sticky;
-      bottom: 0;
-      background: linear-gradient(180deg, rgba(7,16,34,0) 0%, rgba(7,16,34,.78) 30%, rgba(7,16,34,.92) 100%);
-      backdrop-filter: blur(6px);
-      border-top: 1px solid rgba(255,255,255,.10);
-      margin-top: 0;
-      padding-bottom: 14px;
-      z-index: 10;
-    }
-    .schedule{ padding-bottom: 86px; }
     .match{
       display:flex;
       justify-content:space-between;
       gap:10px;
-      padding:9px 10px;
+      padding:10px 12px;
       border-top:1px solid rgba(255,255,255,.10);
       font-size:12px;
     }
     .match .left{display:flex; flex-direction:column; gap:2px;}
     .match .when{color:var(--muted);}
-    .match.next{background: rgba(46,160,67,.18); border-top:1px solid rgba(46,160,67,.35);}
-    .vs{opacity:.8; margin:0 6px; font-weight:800;}
+    .match.next{
+      background: rgba(46,160,67,.18);
+      border-top:1px solid rgba(46,160,67,.35);
+    }
 
     .matchday{
       margin:12px 14px 0;
@@ -396,10 +241,6 @@
       display:none;
     }
     .matchday.show{display:block;}
-
-    /* Menu */
-    .menu{padding:8px 8px 10px; font-size:9px; line-height:1.25; display:flex; flex-direction:column; gap:8px; overflow:auto; max-height:390px;}
-    @media (max-width: 950px){ .menu{max-height:none;} }
 
     .menuitem{
       padding:7px 7px;
@@ -418,6 +259,7 @@
     }
     .menuitem .name{font-weight:900; font-size:11px; letter-spacing:.15px;}
     .menuitem .desc{color:var(--muted); margin-top:3px; font-size:9px; line-height:1.25;}
+    .menuitem .price{margin-top:6px; font-weight:900; color:#f5d76e; font-size:10px;}
     .menuTop{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
     .menuBadge{
       border:1px solid rgba(245,215,110,.35);
@@ -438,128 +280,45 @@
       background:rgba(0,0,0,.10);
     }
 
-    /* Announcer emphasis */
-    .banner.show, .matchday.show{
-      text-transform:uppercase;
-      letter-spacing:.7px;
-      font-weight:900;
-    }
-    .banner.show{
-      background: linear-gradient(90deg, rgba(245,215,110,.18) 0%, rgba(46,160,67,.10) 40%, rgba(31,111,235,.10) 100%);
-      border-bottom: 1px solid rgba(245,215,110,.35);
-      text-shadow: 0 2px 18px rgba(0,0,0,.35);
-      animation: announcerPulse 1.6s ease-in-out infinite;
-    }
-    @keyframes announcerPulse{
-      0%{transform:translateY(0); filter:brightness(1);}
-      50%{transform:translateY(-1px); filter:brightness(1.08);}
-      100%{transform:translateY(0); filter:brightness(1);}
-    }
-
-    /* Compact mode */
-    .compact #chat{gap:6px;}
-    .compact .bubble{padding:7px 9px; line-height:1.22;}
-    .compact .user{font-size:12.5px;}
-    .compact .bot{font-size:11.5px;}
-    .compact textarea{height:40px; font-size:13px; padding:9px 11px;}
-    .compact .composer{padding:10px 12px;}
-    .compact .match{padding:8px 9px; font-size:11px;}
-    .compact .pill{padding:5px 9px; font-size:10.5px;}
-    .compact .cardhead{padding:10px 12px;}
-    .compact .menu{font-size:8.5px;}
-  
-    /* --- HERO banner upgrades (Session 1+) --- */
-    /* Make the player feel more "hero / action figure" */
-    .hero{ min-height:190px; }
-    @media (max-width: 950px){ .hero{ min-height:175px; } }
-
-    /* Foreground player: bigger + punchier */
-    .heroFg{
-      background-size: 118% auto;     /* larger than container */
-      background-position: 62% 55%;   /* default: slightly right so face is centered in wide banner */
-      filter:
-        drop-shadow(0 20px 55px rgba(0,0,0,.62))
-        contrast(1.06)
-        saturate(1.05);
-      opacity: 1;
-    }
-
-    /* Add a subtle film grain + stadium sparkles */
-    .heroGrain{
-      position:absolute; inset:0;
-      background-image:
-        radial-gradient(1px 1px at 12% 22%, rgba(255,255,255,.18) 0%, rgba(0,0,0,0) 55%),
-        radial-gradient(1px 1px at 28% 65%, rgba(255,255,255,.16) 0%, rgba(0,0,0,0) 55%),
-        radial-gradient(1px 1px at 66% 36%, rgba(255,255,255,.14) 0%, rgba(0,0,0,0) 55%),
-        radial-gradient(1px 1px at 82% 58%, rgba(255,255,255,.15) 0%, rgba(0,0,0,0) 55%),
-        repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0px, rgba(255,255,255,.03) 1px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 4px);
-      opacity:.28;
-      mix-blend-mode: overlay;
-      pointer-events:none;
-      z-index:3; /* above bloom/smoke, under scrim */
-    }
-
-    /* Continuous scrolling flag marquee across the banner */
-    .flagMarquee{
-      margin-top:8px;
-      border-radius:999px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.22);
-      overflow:hidden;
-      height:34px;
-      display:flex;
-      align-items:center;
-      position:relative;
-      backdrop-filter: blur(6px);
-    }
-    .flagMarquee:before,
-    .flagMarquee:after{
-      content:"";
-      position:absolute;
-      top:0; bottom:0;
-      width:60px;
-      pointer-events:none;
-      z-index:2;
-    }
-    .flagMarquee:before{
-      left:0;
-      background: linear-gradient(90deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,0) 100%);
-    }
-    .flagMarquee:after{
-      right:0;
-      background: linear-gradient(270deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,0) 100%);
-    }
-    .flagTrack{
-      display:flex;
-      align-items:center;
-      gap:14px;
-      padding:0 16px;
-      white-space:nowrap;
-      will-change: transform;
-      animation: flagScroll 38s linear infinite;
-    }
-    .flagTrack:hover{ animation-play-state: paused; }
-    @keyframes flagScroll{
-      0%{transform:translateX(0);}
-      100%{transform:translateX(-50%);} /* because we duplicate the track */
-    }
-    .flagItem{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      color:var(--text);
-      opacity:.98;
+    .hint{
+      padding:10px 14px;
       font-size:12px;
-      letter-spacing:.2px;
+      color:var(--muted);
+      border-top:1px dashed rgba(255,255,255,.14);
     }
-    .flagItem .flagEmoji{ font-size:16px; line-height:1; transform: translateY(1px); }
-    .flagItem b{ font-weight:900; }
-    .twemoji{width:18px; height:18px; vertical-align:-3px;}
+    code{background:rgba(255,255,255,.10); padding:2px 6px; border-radius:8px;}
+  
+    /* Compact WC menu (small + sleek) */
+    .menucard{max-height:460px;}
+    .menu{max-height:390px;}
+    @media (max-width: 950px){
+      .menucard{max-height:none;}
+      .menu{max-height:none;}
+    }
 
-  </style>
 
-  <!-- Optional: Twemoji makes flags consistently visible across platforms -->
-  <script src="https://cdn.jsdelivr.net/npm/twemoji@14.0.2/dist/twemoji.min.js" crossorigin="anonymous"></script>
+    /* Slightly tighter sidebar so it stays compact */
+    .countdown{padding:10px 12px;}
+    .match{padding:9px 10px;}
+
+
+    /* Layout override: compact menu + wide chat (desktop) */
+    .leftcol{
+      display:grid;
+      grid-template-columns: 170px 1fr; /* Menu | Chat */
+      gap:14px;
+      min-height:0;
+      height:100%;
+      align-items:stretch;
+    }
+    .chatcard{display:flex; flex-direction:column; min-height:0;}
+    .menucard{display:flex; flex-direction:column; min-height:0; max-width:190px; max-height:460px;}
+    @media (max-width: 950px){
+      .leftcol{grid-template-columns: 1fr;}
+      .menucard{max-width:none; max-height:none;}
+    }
+
+</style>
 </head>
 
 <body>
@@ -583,57 +342,30 @@
       </div>
     </header>
 
-    <!-- HERO banner (ABOVE menu/chat/schedule) -->
-    <div class="hero" id="heroBanner" aria-label="World Cup 2026 hero banner">
-      <div class="heroMedia" aria-hidden="true">
-        <div class="heroLayer" id="heroLayerA">
-          <div class="heroBg" id="heroBgA"></div>
-          <div class="heroFg" id="heroFgA"></div>
-        </div>
-        <div class="heroLayer" id="heroLayerB">
-          <div class="heroBg" id="heroBgB"></div>
-          <div class="heroFg" id="heroFgB"></div>
-        </div>
-
-        <div class="heroBloom"></div>
-        <div class="heroSmoke"></div>
-        <div class="heroGrain"></div>
-        <div class="heroScrim"></div>
-      </div>
-
-      <div class="heroContent">
-        <div class="heroKicker">WORLD CUP 2026 • DALLAS MATCH DAY HQ</div>
-        <div class="heroSub">A cinematic match-day hub for fans: chat, reserve tables, and browse the schedule — all in one place.</div>
-        <div class="heroChips" id="heroChips"></div>
-        <div class="flagMarquee" id="flagMarquee" aria-label="World Cup country flags">
-          <div class="flagTrack" id="flagTrack"></div>
-        </div>
-      </div>
-    </div>
-
+    
     <div class="grid">
-      <!-- Left column: Menu + Chat -->
+      <!-- Left column: Menu (left) + Chat/Reservations (right) -->
       <div class="leftcol">
+
         <!-- Menu -->
-        <div class="card menucard">
+        <div class="card menucard" style="display:flex;flex-direction:column;min-height:0; max-width:190px;">
           <div class="cardhead">
             <div class="title" id="menuTitle">Menu</div>
             <div class="pill" id="menuPill">4 languages</div>
           </div>
+
           <div class="menu" id="menu"></div>
         </div>
 
         <!-- Chat / Reservations -->
-        <div class="card chatcard">
+        <div class="card chatcard" style="display:flex;flex-direction:column;min-height:0;">
           <div class="cardhead">
             <div class="title" id="chatTitle">Chat</div>
-            <div style="display:flex; gap:8px; align-items:center;">
-              <div class="pill" id="pillMode">Live</div>
-              <button id="compactToggle" class="secondary" style="min-width:auto; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:800;">Compact</button>
-            </div>
+            <div class="pill" id="pillMode">Live</div>
           </div>
 
           <div class="banner" id="matchBanner"></div>
+
           <div id="chat"></div>
 
           <div class="composer">
@@ -644,9 +376,10 @@
 
           <div class="hint" id="helperHint"></div>
         </div>
+
       </div>
 
-      <!-- Sidebar -->
+<!-- Sidebar -->
       <div class="card" style="display:flex;flex-direction:column;min-height:0;">
         <div class="cardhead">
           <div class="title" id="sideTitle">Dallas Schedule</div>
@@ -681,6 +414,7 @@
             <div class="pill" id="matchCount">0</div>
           </div>
         </div>
+    
 
         <div class="sidepad" style="padding-bottom:0;">
           <div class="pill" style="display:inline-block;" id="nextHint">Next upcoming match is highlighted</div>
@@ -695,16 +429,19 @@
             <button id="nextPage" class="secondary" style="min-width:88px;">Next</button>
           </div>
         </div>
-      </div>
+</div>
     </div>
   </div>
 
 <script>
 /**
- * Frontend endpoints (unchanged):
- *  - GET /schedule.json?scope=dallas|all&q=...
+ * This frontend matches your current app.py endpoints:
+ *  - GET /schedule.json
  *  - GET /menu.json?lang=en|es|pt|fr
- *  - POST /chat { message, session_id, language, history }
+ *  - POST /chat { message, session_id, language }
+ *
+ * Keeps all original features: language toggle, chat, helper hint,
+ * countdown, schedule highlight, match-day banner.
  */
 
 // -----------------------
@@ -721,16 +458,18 @@ let scheduleData = null;
 let scope = localStorage.getItem("schedule_scope") || "dallas";
 let scheduleQuery = "";
 
-// Pagination sizes (restore expected behavior)
-const PAGE_SIZE_DALLAS = 5;
-const PAGE_SIZE_ALL = 10;
-function pageSize(){ return (scope === "all") ? PAGE_SIZE_ALL : PAGE_SIZE_DALLAS; }
+// Pagination (All Matches only)
+const PAGE_SIZE = 10;
 let currentPage = 1;
 
-// Conversation memory (client-side history) — kept
+
+let menuData = null;
+let menuPage = 1; // safe default (menu is non-paginated)
+
+
+// Conversation memory (client-side history) — kept as a feature
 const history = [];
 
-// DOM refs
 const chatEl = document.getElementById("chat");
 const msgEl = document.getElementById("msg");
 const sendBtn = document.getElementById("sendBtn");
@@ -750,265 +489,11 @@ const prevPageBtn = document.getElementById("prevPage");
 const nextPageBtn = document.getElementById("nextPage");
 const pageIndicatorEl = document.getElementById("pageIndicator");
 
-// -----------------------
-// HERO banner (Session 1) — UI-only
-// (Wikimedia images: stable + typically high-res; "contain" keeps faces visible)
-// -----------------------
-const HERO_SLIDES = [
-  { name: "Kylian Mbappé", country: "France", flag: "🇫🇷",
-    img: "https://upload.wikimedia.org/wikipedia/commons/9/96/Kylian_Mbapp%C3%A9_2019.jpg",
-    fgPos: "60% 52%", bgPos: "center 25%" },
 
-  { name: "Lionel Messi", country: "Argentina", flag: "🇦🇷",
-    img: "https://upload.wikimedia.org/wikipedia/commons/8/89/Lionel_Messi_20180626.jpg",
-    fgPos: "58% 54%", bgPos: "center 22%" },
 
-  { name: "Erling Haaland", country: "Norway", flag: "🇳🇴",
-    img: "https://upload.wikimedia.org/wikipedia/commons/0/0d/Erling_Haaland_2023_%28cropped%29.jpg",
-    fgPos: "62% 54%", bgPos: "center 26%" },
-
-  { name: "Jude Bellingham", country: "England", flag: "🏴",
-    img: "https://upload.wikimedia.org/wikipedia/commons/5/5c/Jude_Bellingham_2022.jpg",
-    fgPos: "62% 54%", bgPos: "center 25%" },
-
-  { name: "Vinícius Júnior", country: "Brazil", flag: "🇧🇷",
-    img: "https://upload.wikimedia.org/wikipedia/commons/6/6a/Vinicius_Junior_2022.jpg",
-    fgPos: "60% 55%", bgPos: "center 25%" },
-
-  { name: "Neymar Jr.", country: "Brazil", flag: "🇧🇷",
-    img: "https://upload.wikimedia.org/wikipedia/commons/8/83/Neymar_2018.jpg",
-    fgPos: "60% 56%", bgPos: "center 24%" },
-
-  { name: "Pedri", country: "Spain", flag: "🇪🇸",
-    img: "https://upload.wikimedia.org/wikipedia/commons/8/80/Pedri_2021.jpg",
-    fgPos: "60% 56%", bgPos: "center 25%" },
-
-  { name: "Jamal Musiala", country: "Germany", flag: "🇩🇪",
-    img: "https://upload.wikimedia.org/wikipedia/commons/0/0d/Jamal_Musiala_2022.jpg",
-    fgPos: "60% 56%", bgPos: "center 25%" },
-
-  { name: "Florian Wirtz", country: "Germany", flag: "🇩🇪",
-    img: "https://upload.wikimedia.org/wikipedia/commons/8/8b/Florian_Wirtz_2022.jpg",
-    fgPos: "60% 56%", bgPos: "center 25%" },
-
-  { name: "Bukayo Saka", country: "England", flag: "🏴",
-    img: "https://upload.wikimedia.org/wikipedia/commons/a/a3/Bukayo_Saka_2022.jpg",
-    fgPos: "60% 56%", bgPos: "center 25%" },
-
-  { name: "Alphonso Davies", country: "Canada", flag: "🇨🇦",
-    img: "https://upload.wikimedia.org/wikipedia/commons/1/1c/Alphonso_Davies_2019.jpg",
-    fgPos: "60% 56%", bgPos: "center 25%" },
-
-  { name: "Endrick", country: "Brazil", flag: "🇧🇷",
-    img: "https://upload.wikimedia.org/wikipedia/commons/2/21/Endrick_2023.jpg",
-    fgPos: "60% 56%", bgPos: "center 25%" },
-
-  { name: "Cristiano Ronaldo", country: "Portugal", flag: "🇵🇹",
-    img: "https://upload.wikimedia.org/wikipedia/commons/8/8c/Cristiano_Ronaldo_2018.jpg",
-    fgPos: "60% 54%", bgPos: "center 23%" }
-];
-
-let heroIdx = 0;
-let heroTimer = null;
-let heroUseA = true;
-let heroPaused = false;
-
-const heroBannerEl = document.getElementById("heroBanner");
-const heroLayerA = document.getElementById("heroLayerA");
-const heroLayerB = document.getElementById("heroLayerB");
-const heroBgA = document.getElementById("heroBgA");
-const heroFgA = document.getElementById("heroFgA");
-const heroBgB = document.getElementById("heroBgB");
-const heroFgB = document.getElementById("heroFgB");
-const heroChips = document.getElementById("heroChips");
-const flagTrackEl = document.getElementById("flagTrack");
-
-// Render emoji as SVG using Twemoji (helps "flags not visible" on some systems)
-// -----------------------
-// World flags marquee (continuous scroll)
-// -----------------------
-// Goal: derive flags from actual teams in /schedule.json?scope=all (no backend changes).
-// Fallback: a small seeded list so marquee never breaks if schedule data is unavailable.
-const FALLBACK_FLAGS = [
-  "🇺🇸","🇲🇽","🇨🇦","🇦🇷","🇧🇷","🇫🇷","🇩🇪","🇪🇸","🇵🇹","🇯🇵","🇰🇷","🇲🇦","🇳🇬"
-];
-
-// Minimal country->flag mapping (covers the most common World Cup team names).
-// If your schedule uses different naming, add aliases here (UI-only).
-const COUNTRY_TO_FLAG = {
-  "united states":"🇺🇸","usa":"🇺🇸","u.s.":"🇺🇸","us":"🇺🇸",
-  "mexico":"🇲🇽","canada":"🇨🇦",
-  "argentina":"🇦🇷","brazil":"🇧🇷","uruguay":"🇺🇾","colombia":"🇨🇴","ecuador":"🇪🇨","chile":"🇨🇱","peru":"🇵🇪","paraguay":"🇵🇾",
-  "france":"🇫🇷","germany":"🇩🇪","spain":"🇪🇸","portugal":"🇵🇹","italy":"🇮🇹",
-  "netherlands":"🇳🇱","holland":"🇳🇱","belgium":"🇧🇪","croatia":"🇭🇷","denmark":"🇩🇰","sweden":"🇸🇪","norway":"🇳🇴","switzerland":"🇨🇭","austria":"🇦🇹","poland":"🇵🇱","ukraine":"🇺🇦","serbia":"🇷🇸","turkey":"🇹🇷","greece":"🇬🇷","czechia":"🇨🇿","czech republic":"🇨🇿","hungary":"🇭🇺","romania":"🇷🇴",
-  "england":"🏴","scotland":"🏴","wales":"🏴",
-  "japan":"🇯🇵","south korea":"🇰🇷","korea":"🇰🇷","australia":"🇦🇺","new zealand":"🇳🇿","iran":"🇮🇷","saudi arabia":"🇸🇦","qatar":"🇶🇦","united arab emirates":"🇦🇪","uae":"🇦🇪","iraq":"🇮🇶",
-  "morocco":"🇲🇦","senegal":"🇸🇳","ghana":"🇬🇭","nigeria":"🇳🇬","cameroon":"🇨🇲","tunisia":"🇹🇳","algeria":"🇩🇿","south africa":"🇿🇦","egypt":"🇪🇬","côte d’ivoire":"🇨🇮","cote d'ivoire":"🇨🇮","mali":"🇲🇱"
-};
-
-function toFlag(teamName){
-  const k = (teamName || "").toString().trim().toLowerCase();
-  if (!k) return null;
-  return COUNTRY_TO_FLAG[k] || null;
-}
-
-function extractTeamsFromScheduleJson(data){
-  const out = new Set();
-  const matches = (data && Array.isArray(data.matches)) ? data.matches : [];
-  for (const m of matches){
-    if (m.home) out.add(String(m.home));
-    if (m.away) out.add(String(m.away));
-    if (m.teams){
-      const raw = String(m.teams);
-      const parts = raw.split(/\s+vs\s+|\s+v\.?\s+/i);
-      if (parts.length >= 2){ out.add(parts[0]); out.add(parts[1]); }
-    }
-  }
-  return Array.from(out).map(s=>s.trim()).filter(Boolean);
-}
-
-async function buildFlagMarquee(){
-  if (!flagTrackEl) return;
-
-  let flags = [];
-  try{
-    const res = await fetch("/schedule.json?scope=all&q=", {cache:"no-store"});
-    const data = await res.json();
-    const teams = extractTeamsFromScheduleJson(data);
-    const uniqueFlags = [];
-    const seen = new Set();
-    for (const t of teams){
-      const f = toFlag(t);
-      if (f && !seen.has(f)){
-        seen.add(f);
-        uniqueFlags.push(f);
-      }
-    }
-    // Only use dynamic list if it looks real (at least a handful)
-    if (uniqueFlags.length >= 8) flags = uniqueFlags;
-  }catch(e){ /* ignore */ }
-
-  if (!flags.length) flags = FALLBACK_FLAGS;
-
-  const base = flags.map(f => `<span class="flagItem"><span class="flagEmoji">${f}</span></span>`).join("");
-  flagTrackEl.innerHTML = base + base; // duplicate for seamless scroll
-
-  renderTwemoji(flagTrackEl);
-
-  // restart animation cleanly
-  flagTrackEl.style.animation = "none";
-  void flagTrackEl.offsetHeight;
-  flagTrackEl.style.animation = "";
-}
-
-function renderTwemoji(node){
-  try{
-    if (window.twemoji && node){
-      window.twemoji.parse(node, {folder: "svg", ext: ".svg", className: "twemoji"});
-    }
-  }catch(e){}
-}
-
-const HERO_IMG_OK = new Map();
-function preloadHeroImages(){
-  HERO_SLIDES.forEach(s => {
-    const img = new Image();
-    img.onload = () => HERO_IMG_OK.set(s.img, true);
-    img.onerror = () => HERO_IMG_OK.set(s.img, false);
-    img.src = s.img;
-  });
-}
-function heroImgUrlOrFallback(url){
-  const ok = HERO_IMG_OK.get(url);
-  if (ok === false) return null; // blocked or failed
-  return url;
-}
-
-function setHeroSlide(idx){
-  const s = HERO_SLIDES[idx % HERO_SLIDES.length];
-
-  const nextWrap = heroUseA ? heroLayerA : heroLayerB;
-  const nextBg = heroUseA ? heroBgA : heroBgB;
-  const nextFg = heroUseA ? heroFgA : heroFgB;
-
-  const prevWrap = heroUseA ? heroLayerB : heroLayerA;
-
-  if (nextBg){
-    const u = heroImgUrlOrFallback(s.img);
-    nextBg.style.backgroundImage = u ? `url('${u}')` : "radial-gradient(900px 420px at 30% 20%, rgba(245,215,110,.22) 0%, rgba(0,0,0,0) 60%), radial-gradient(900px 420px at 70% 25%, rgba(31,111,235,.18) 0%, rgba(0,0,0,0) 62%), radial-gradient(1200px 600px at 55% 120%, rgba(0,0,0,0) 0%, rgba(0,0,0,.75) 70%)";
-    nextBg.style.backgroundPosition = s.bgPos || "center 22%";
-  }
-  if (nextFg){
-    nextFg.style.backgroundImage = u ? `url('${u}')` : "none";
-    nextFg.style.backgroundPosition = s.fgPos || "center 54%";
-  }
-
-  if (nextWrap) nextWrap.classList.add("on");
-  if (prevWrap) prevWrap.classList.remove("on");
-
-  if (heroChips){
-    heroChips.innerHTML = `
-      <span class="heroChip"><span class="heroDot"></span> Live • Dallas</span>
-      <span class="heroChip"><span class="flagEmoji">${s.flag}</span> <b>${escapeHtml(s.name)}</b> • ${escapeHtml(s.country)}</span>
-      <span class="heroChip">AT&amp;T Stadium • Arlington</span>
-    `;
-    renderTwemoji(heroChips);
-  }
-  // World flags marquee is managed separately (continuous scroll)
-
-  heroUseA = !heroUseA;
-}
-
-function startHeroRotation(){
-  if (!heroBannerEl || !heroLayerA || !heroLayerB || !heroBgA || !heroFgA || !heroBgB || !heroFgB) return;
-
-  // initial
-  setHeroSlide(heroIdx);
-
-  // rotate
-  if (heroTimer) clearInterval(heroTimer);
-  heroTimer = setInterval(() => {
-    if (heroPaused) return;
-    heroIdx = (heroIdx + 1) % HERO_SLIDES.length;
-    setHeroSlide(heroIdx);
-  }, 5200);
-
-  // pause on hover (bind once)
-  if (!heroBannerEl.dataset.bound){
-    heroBannerEl.addEventListener("mouseenter", () => { heroPaused = true; });
-    heroBannerEl.addEventListener("mouseleave", () => { heroPaused = false; });
-    heroBannerEl.dataset.bound = "1";
-  }
-}
-
-// -----------------------
-// Compact mode
-// -----------------------
-let compactMode = (localStorage.getItem("compact_mode") || "0") === "1";
-const compactToggleBtn = document.getElementById("compactToggle");
-
-function applyCompactMode(){
-  document.body.classList.toggle("compact", compactMode);
-  if (compactToggleBtn){
-    compactToggleBtn.textContent = compactMode ? "Compact: ON" : "Compact";
-    compactToggleBtn.classList.toggle("active", compactMode);
-  }
-}
-
-if (compactToggleBtn){
-  compactToggleBtn.addEventListener("click", () => {
-    compactMode = !compactMode;
-    localStorage.setItem("compact_mode", compactMode ? "1" : "0");
-    applyCompactMode();
-  });
-}
-
-// -----------------------
-// Copy strings (preserve existing behavior)
-// -----------------------
 const STRINGS = {
   en: {
-    welcome: "⚽ Welcome, World Cup fan! I’m your Dallas Match-Day Concierge.\nType \"reservation\" to book a table, or ask about Dallas matches, all matches, or the menu.",
+    welcome: "Hi! Want to book a table for a match day? Ask me anything.",
     lang_set: "Language set to English.",
     helper: 'Try: <code>reservation</code> to book • <code>Recall reservation so far</code> • Ask about the menu • Ask about Dallas match days. Search by team, venue, or date (e.g., "June 13").',
     send: "Send",
@@ -1022,7 +507,7 @@ const STRINGS = {
     menu_title: "Menu"
   },
   es: {
-    welcome: "⚽ ¡Bienvenido, fan del Mundial! Soy tu concierge de días de partido en Dallas.\nEscribe \"reserva\" para reservar una mesa, o pregunta por los partidos (Dallas / todos) o el menú.",
+    welcome: "¡Hola! ¿Quieres reservar una mesa para un día de partido? Pregúntame lo que sea.",
     lang_set: "Idioma cambiado a Español.",
     helper: 'Prueba: <code>reserva</code> para reservar • <code>Recordar reserva</code> • Pregunta por el menú • Pregunta por los partidos en Dallas.',
     send: "Enviar",
@@ -1036,7 +521,7 @@ const STRINGS = {
     menu_title: "Menú"
   },
   pt: {
-    welcome: "⚽ Bem-vindo, fã da Copa do Mundo! Sou seu concierge de dias de jogo em Dallas.\nDigite \"reserva\" para reservar uma mesa, ou pergunte sobre jogos em Dallas, todos os jogos ou o cardápio.",
+    welcome: "Olá! Quer reservar uma mesa para dia de jogo? Pergunte qualquer coisa.",
     lang_set: "Idioma definido para Português.",
     helper: 'Tente: <code>reserva</code> para reservar • <code>Relembrar reserva</code> • Pergunte sobre o cardápio • Pergunte sobre jogos em Dallas.',
     send: "Enviar",
@@ -1050,7 +535,7 @@ const STRINGS = {
     menu_title: "Cardápio"
   },
   fr: {
-    welcome: "⚽ Bienvenue, fan de la Coupe du Monde ! Je suis votre concierge des jours de match à Dallas.\nTapez \"réservation\" pour réserver une table, ou demandez les matchs (Dallas / tous) ou le menu.",
+    welcome: "Bonjour ! Vous voulez réserver une table pour un jour de match ? Demandez-moi !",
     lang_set: "Langue définie sur Français.",
     helper: 'Essayez : <code>réservation</code> pour réserver • <code>Rappeler la réservation</code> • Demandez le menu • Demandez les matchs à Dallas.',
     send: "Envoyer",
@@ -1064,24 +549,9 @@ const STRINGS = {
     menu_title: "Menu"
   }
 };
+
 function L(){ return STRINGS[lang] || STRINGS.en; }
 
-// -----------------------
-// Helpers
-// -----------------------
-function escapeHtml(s){
-  return String(s ?? "")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
-}
-function stripHtml(html){
-  const tmp = document.createElement("div");
-  tmp.innerHTML = html;
-  return tmp.textContent || tmp.innerText || "";
-}
 function addBubble(role, text){
   const b = document.createElement("div");
   b.className = "bubble " + (role === "user" ? "user" : "bot");
@@ -1089,6 +559,7 @@ function addBubble(role, text){
   chatEl.appendChild(b);
   chatEl.scrollTop = chatEl.scrollHeight;
 }
+
 function setSending(isSending){
   sendBtn.disabled = isSending;
   msgEl.disabled = isSending;
@@ -1100,16 +571,14 @@ function setSending(isSending){
 // -----------------------
 function applyLanguageToUI(){
   pillLang.textContent = lang.toUpperCase();
-
+        // apply schedule scope UI
+        document.getElementById("scopeDallas")?.classList.toggle("active", scope === "dallas");
+        document.getElementById("scopeAll")?.classList.toggle("active", scope === "all");
   document.querySelectorAll(".langbtn[data-lang]").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.lang === lang);
   });
 
-  // scope UI
-  scopeDallasBtn?.classList.toggle("active", scope === "dallas");
-  scopeAllBtn?.classList.toggle("active", scope === "all");
-
-  // titles
+  // Titles + helper
   document.getElementById("chatTitle").textContent = L().chat_title;
   document.getElementById("sideTitle").textContent = L().side_title;
   document.getElementById("countLabel").textContent = L().countdown;
@@ -1119,8 +588,6 @@ function applyLanguageToUI(){
 
   helperHint.innerHTML = L().helper;
   sendBtn.textContent = L().send;
-
-  applyCompactMode();
 }
 
 async function setLanguage(newLang){
@@ -1128,12 +595,10 @@ async function setLanguage(newLang){
   localStorage.setItem("lang", lang);
   applyLanguageToUI();
 
-  // UI-only
-  await buildFlagMarquee();
-  startHeroRotation();
-
+  // reload menu in the chosen language
   await loadMenu();
 
+  // show a bot notice (feature preserved)
   addBubble("assistant", L().lang_set + "\n\n" + stripHtml(L().helper));
   history.push({role:"assistant", content: L().lang_set});
 }
@@ -1142,26 +607,39 @@ document.querySelectorAll(".langbtn[data-lang]").forEach(btn => {
   btn.addEventListener("click", () => setLanguage(btn.dataset.lang));
 });
 
+// helper: render helper text in bubble without html tags
+function stripHtml(html){
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || "";
+}
+
 // -----------------------
-// Fetchers
+// Fetchers (match app.py)
 // -----------------------
 async function loadSchedule(){
   const res = await fetch(`/schedule.json?scope=${encodeURIComponent(scope)}&q=${encodeURIComponent(scheduleQuery)}`, {cache:"no-store"});
   scheduleData = await res.json();
   renderSchedule();
   updateMatchDayMode();
-  restartCountdown();
+  restartCountdown(); // uses schedule info when available
 }
 
 async function loadMenu(){
   const res = await fetch("/menu.json?lang=" + encodeURIComponent(lang), {cache:"no-store"});
   const data = await res.json();
-  const menuData = data.menu;
-  const items = (menuData && Array.isArray(menuData.items)) ? menuData.items : [];
-  renderMenu(items);
+  // app.py returns { lang, menu: {title, items:[]}}
+  menuData = data.menu;
+  window.menuDataList = (menuData && Array.isArray(menuData.items)) ? menuData.items : [];
+  menuPage = 1;
+  renderMenu(window.menuDataList);
 }
 
 function safeParseTimestamp(dateIso, timeStr){
+  // Supports:
+  // - "19:00"
+  // - "7:00 PM" / "7:00PM" / "7 PM"
+  // - empty / "TBD" (falls back to end-of-day)
   if (!dateIso) return null;
 
   const raw = (timeStr || "").toString().trim();
@@ -1173,6 +651,7 @@ function safeParseTimestamp(dateIso, timeStr){
       const mm = m24[2];
       return Date.parse(`${dateIso}T${hh}:${mm}:00`);
     }
+
     // 12-hour "H(:MM)? AM/PM"
     const m12 = raw.match(/^(\d{1,2})(?::(\d{2}))?\s*([AaPp][Mm])$/);
     if (m12){
@@ -1184,7 +663,8 @@ function safeParseTimestamp(dateIso, timeStr){
       const hh2 = String(hh).padStart(2,"0");
       return Date.parse(`${dateIso}T${hh2}:${mm}:00`);
     }
-    // "7 PM"
+
+    // 12-hour with no minutes: "7 PM"
     const m12b = raw.match(/^(\d{1,2})\s*([AaPp][Mm])$/);
     if (m12b){
       let hh = parseInt(m12b[1],10);
@@ -1195,7 +675,8 @@ function safeParseTimestamp(dateIso, timeStr){
       return Date.parse(`${dateIso}T${hh2}:00:00`);
     }
   }
-  // end-of-day fallback
+
+  // end-of-day fallback (still keeps countdown alive even if time missing)
   return Date.parse(`${dateIso}T23:59:59`);
 }
 
@@ -1205,11 +686,14 @@ function safeParseTimestamp(dateIso, timeStr){
 let countdownTimer = null;
 
 function chooseCountdownTarget(){
+  // Prefer next match datetime if present; otherwise fixed World Cup-ish date.
+  // If DALLAS_MATCHES is empty, still show a countdown.
   if (scheduleData && scheduleData.next_match && scheduleData.next_match.date){
     const nm = scheduleData.next_match;
     const ts = safeParseTimestamp(nm.date, nm.time);
     if (ts) return new Date(ts);
   }
+  // fallback: World Cup June 2026 (safe constant, preserves feature)
   return new Date("2026-06-11T00:00:00");
 }
 
@@ -1245,14 +729,18 @@ function restartCountdown(){
 }
 
 // -----------------------
-// Schedule rendering + highlight + pagination
+// Schedule rendering + next match highlight
 // -----------------------
+
 function formatKickoffTime(t){
   const s = (t || "").toString().trim();
   if (!s || s.toUpperCase() === "TBD") return "TBD";
-  if (/[AP]M/i.test(s)){
+  // Already 12-hour?
+  if (/[AP]M/i.test(s)) {
+    // normalize spacing: "7:00 pm" -> "7:00 PM"
     return s.replace(/\s+/g," ").replace(/am/i,"AM").replace(/pm/i,"PM");
   }
+  // "19:00" -> "7:00 PM"
   const m = s.match(/^(\d{1,2}):(\d{2})$/);
   if (m){
     let hh = parseInt(m[1],10);
@@ -1264,7 +752,8 @@ function formatKickoffTime(t){
   return s;
 }
 
-// normalize search input so "June 13" can match backend ISO dates
+// Normalize schedule search so users can type a specific day like "June 13" and still match backend dates ("YYYY-MM-DD").
+// Backend filters against m.date (ISO), so we convert common date inputs to ISO when possible.
 function normalizeScheduleSearch(raw){
   const s = (raw || "").toString().trim();
   if (!s) return "";
@@ -1276,7 +765,9 @@ function normalizeScheduleSearch(raw){
     let dd = parseInt(slash[2],10);
     let yy = parseInt(slash[3],10);
     if (yy < 100) yy += 2000;
-    return `${yy}-${String(mm).padStart(2,"0")}-${String(dd).padStart(2,"0")}`;
+    const m2 = String(mm).padStart(2,"0");
+    const d2 = String(dd).padStart(2,"0");
+    return `${yy}-${m2}-${d2}`;
   }
 
   const lower = s.toLowerCase();
@@ -1302,85 +793,93 @@ function normalizeScheduleSearch(raw){
       const dd = parseInt(dayMatch[1],10);
       const yMatch = lower.match(/\b(20\d{2})\b/);
       const yy = yMatch ? parseInt(yMatch[1],10) : 2026;
-      return `${yy}-${String(mon).padStart(2,"0")}-${String(dd).padStart(2,"0")}`;
+      const m2 = String(mon).padStart(2,"0");
+      const d2 = String(dd).padStart(2,"0");
+      return `${yy}-${m2}-${d2}`;
     }
   }
   return s;
 }
 
-function getEnrichedMatches(){
-  const raw = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches.slice() : [];
-  return raw.map(m => ({...m, ts: safeParseTimestamp(m.date, m.time)}))
-            .filter(m => m.ts !== null)
-            .sort((a,b)=>a.ts-b.ts);
-}
 
 function renderSchedule(){
   const el = document.getElementById("schedule");
   el.innerHTML = "";
 
+  // Guard: show notice if backend returned one
   if (scheduleData && scheduleData.notice){
     const row = document.createElement("div");
     row.className = "match";
     row.innerHTML = `<div class="left"><div><b>Notice</b></div><div class="when">${escapeHtml(scheduleData.notice)}</div></div><div class="pill">i</div>`;
     el.appendChild(row);
-    matchCountEl.textContent = "0";
-    pagerEl.style.display = "none";
+    if (matchCountEl) matchCountEl.textContent = "0";
+    if (pagerEl) pagerEl.style.display = "none";
     return;
   }
 
-  const enriched = getEnrichedMatches();
-  matchCountEl.textContent = String(enriched.length);
+  const rawMatches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches.slice() : [];
+
+  // Build timestamps for sorting + next-match highlight
+  const enriched = rawMatches.map(m => {
+    const ts = safeParseTimestamp(m.date, m.time);
+    return {...m, ts};
+  }).filter(m => m.ts !== null);
+
+  if (matchCountEl) matchCountEl.textContent = String(enriched.length);
 
   if (!enriched.length){
     const empty = document.createElement("div");
     empty.className = "match";
-    empty.innerHTML = `<div class="left"><div><b>Notice</b></div><div class="when">${L().schedule_empty}</div></div><div class="pill">—</div>`;
+    empty.innerHTML = `
+      <div class="left">
+        <div><b>Notice</b></div>
+        <div class="when">${L().schedule_empty}</div>
+      </div>
+      <div class="pill">—</div>
+    `;
     el.appendChild(empty);
-    pagerEl.style.display = "none";
+    if (pagerEl) pagerEl.style.display = "none";
     return;
   }
+
+  enriched.sort((a,b)=>a.ts-b.ts);
 
   const now = Date.now();
   const upcoming = enriched.filter(m => m.ts >= now);
   const nextId = upcoming.length ? upcoming[0].id : null;
 
-  const totalPages = Math.max(1, Math.ceil(enriched.length / pageSize()));
-  if (currentPage > totalPages) currentPage = 1;
+  // Pagination (All Matches only)
+  let pageMatches = enriched;
+  if (scope === "all"){
+    const totalPages = Math.max(1, Math.ceil(enriched.length / PAGE_SIZE));
+    if (currentPage > totalPages) currentPage = 1;
 
-  const start = (currentPage - 1) * pageSize();
-  const pageMatches = enriched.slice(start, start + pageSize());
+    const start = (currentPage - 1) * PAGE_SIZE;
+    pageMatches = enriched.slice(start, start + PAGE_SIZE);
 
-  pagerEl.style.display = (totalPages > 1) ? "block" : "none";
-  pageIndicatorEl.textContent = (totalPages > 1) ? `Page ${currentPage} of ${totalPages}` : "";
-  prevPageBtn.disabled = (currentPage <= 1);
-  nextPageBtn.disabled = (currentPage >= totalPages);
+    if (pagerEl) pagerEl.style.display = "flex";
+    if (pageIndicatorEl) pageIndicatorEl.textContent = `Page ${currentPage} of ${totalPages}`;
+    if (prevPageBtn) prevPageBtn.disabled = (currentPage <= 1);
+    if (nextPageBtn) nextPageBtn.disabled = (currentPage >= totalPages);
+  } else {
+    if (pagerEl) pagerEl.style.display = "none";
+    if (pageIndicatorEl) pageIndicatorEl.textContent = "";
+  }
 
   pageMatches.forEach(m => {
     const row = document.createElement("div");
     row.className = "match" + (m.id === nextId ? " next" : "");
 
     const timeTxt = formatKickoffTime(m.time);
-
-    // Prefer home/away; fallback parse m.teams
-    let homeName = (m.home || "").toString().trim();
-    let awayName = (m.away || "").toString().trim();
-    if ((!homeName || !awayName) && m.teams){
-      const rawTeams = String(m.teams).trim();
-      const parts = rawTeams.split(/\s+vs\s+|\s+v\.?\s+/i);
-      if (parts.length >= 2){
-        homeName = homeName || parts[0].trim();
-        awayName = awayName || parts[1].trim();
-      }
-    }
-    homeName = homeName || "TBD";
-    awayName = awayName || "TBD";
+    const teamsTxt = (m.teams && String(m.teams).trim())
+      ? m.teams
+      : ((m.home || m.away) ? `${m.home || "TBD"} vs ${m.away || "TBD"}` : "TBD vs TBD");
 
     const venueTxt = m.venue ? ` • ${m.venue}` : "";
 
     row.innerHTML = `
       <div class="left">
-        <div><b>${escapeHtml(m.stage || "Match")}</b> • ${escapeHtml(homeName)} <span class="vs">vs</span> ${escapeHtml(awayName)}</div>
+        <div><b>${escapeHtml(m.stage || "Match")}</b> • ${escapeHtml(teamsTxt)}</div>
         <div class="when">${escapeHtml(m.date || "")} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div>
       </div>
       <div class="pill">${escapeHtml(m.id || "")}</div>
@@ -1389,12 +888,14 @@ function renderSchedule(){
   });
 }
 
+
 function updateMatchDayMode(){
   const isMatchDay = !!(scheduleData && scheduleData.is_match_day);
 
   if (isMatchDay){
     pillMode.textContent = "Mode: Match-day";
-    matchBanner.textContent = (scheduleData && scheduleData.match_day_banner) ? scheduleData.match_day_banner : "Match-day hours";
+    const banner = (scheduleData && scheduleData.match_day_banner) ? scheduleData.match_day_banner : "Match-day hours";
+    matchBanner.textContent = banner;
     matchBanner.classList.add("show");
 
     matchdayBox.textContent = "🏟️ Match-day mode is ON today. Expect higher traffic — reserve early!";
@@ -1409,6 +910,7 @@ function updateMatchDayMode(){
 // -----------------------
 // Menu rendering
 // -----------------------
+
 function renderMenu(items){
   const el = document.getElementById("menu");
   el.innerHTML = "";
@@ -1416,7 +918,15 @@ function renderMenu(items){
   if (!items || !items.length){
     const d = document.createElement("div");
     d.className = "menuitem";
-    d.innerHTML = `<div class="menuTop"><div><div class="name">⚽ —</div><div class="desc">Menu not available.</div></div><div class="menuBadge">—</div></div>`;
+    d.innerHTML = `
+      <div class="menuTop">
+        <div>
+          <div class="name">⚽ —</div>
+          <div class="desc">Menu not available.</div>
+        </div>
+        <div class="menuBadge">—</div>
+      </div>
+    `;
     el.appendChild(d);
     return;
   }
@@ -1431,6 +941,7 @@ function renderMenu(items){
     const desc = escapeHtml(it.desc || "");
     const price = escapeHtml(it.price || "");
 
+    // Lightweight tags (cosmetic)
     const tags = [];
     const lower = ((it.name||"") + " " + (it.desc||"")).toLowerCase();
     if (lower.includes("spicy") || lower.includes("picante")) tags.push("Spicy");
@@ -1451,6 +962,18 @@ function renderMenu(items){
     `;
     el.appendChild(d);
   });
+}
+
+
+
+// simple HTML escaping (prevents broken DOM if text contains "<")
+function escapeHtml(s){
+  return String(s ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 }
 
 // -----------------------
@@ -1475,7 +998,7 @@ async function sendMessage(){
         message: text,
         session_id: sessionId,
         language: lang,
-        history
+        history // kept as a feature; server will safely ignore
       })
     });
 
@@ -1509,43 +1032,75 @@ msgEl.addEventListener("input", () => {
 });
 
 // -----------------------
-// Schedule scope toggle + search
+
+// -----------------------
+// Schedule scope toggle + search (Dallas ↔ All Matches)
 // -----------------------
 function setScope(newScope){
   scope = (newScope === "all") ? "all" : "dallas";
   localStorage.setItem("schedule_scope", scope);
+  // Reset pagination when switching scope
   currentPage = 1;
-  scopeDallasBtn?.classList.toggle("active", scope === "dallas");
-  scopeAllBtn?.classList.toggle("active", scope === "all");
+  if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
+  if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
   loadSchedule();
 }
-scopeDallasBtn?.addEventListener("click", () => setScope("dallas"));
-scopeAllBtn?.addEventListener("click", () => setScope("all"));
+if (scopeDallasBtn) scopeDallasBtn.addEventListener("click", () => setScope("dallas"));
+if (scopeAllBtn) scopeAllBtn.addEventListener("click", () => setScope("all"));
 
-// Pagination controls
-prevPageBtn?.addEventListener("click", () => {
-  if (currentPage > 1){
-    currentPage--;
-    renderSchedule();
-  }
-});
-nextPageBtn?.addEventListener("click", () => {
-  const totalPages = Math.max(1, Math.ceil(getEnrichedMatches().length / pageSize()));
-  if (currentPage < totalPages){
-    currentPage++;
-    renderSchedule();
-  }
+// Pagination controls (All Matches only)
+if (prevPageBtn) prevPageBtn.addEventListener("click", () => { if (currentPage > 1){ currentPage--; renderSchedule(); } });
+if (nextPageBtn) nextPageBtn.addEventListener("click", () => {
+  if (!scheduleData || !Array.isArray(scheduleData.matches)) return;
+  const totalPages = Math.max(1, Math.ceil(scheduleData.matches.length / PAGE_SIZE));
+  
+
+// -----------------------
+// Menu pagination controls
+// -----------------------
+if (null){
+  null.addEventListener("click", () => {
+    if (!menuShowAll && menuPage > 1){
+      menuPage--;
+      renderMenu(window.menuDataList || []);
+    }
+  });
+}
+if (null){
+  null.addEventListener("click", () => {
+    if (!menuShowAll){
+      const items = window.menuDataList || [];
+      const totalPages = Math.max(1, Math.ceil((items.length || 0) / MENU_PAGE_SIZE));
+      if (menuPage < totalPages){
+        menuPage++;
+        renderMenu(items);
+      }
+    }
+  });
+}
+if (null){
+  null.addEventListener("click", () => {
+    menuShowAll = !menuShowAll;
+    menuPage = 1;
+    renderMenu(window.menuDataList || []);
+  });
+}
+if (currentPage < totalPages){ currentPage++; renderSchedule(); }
 });
 
-// Team search (filters before pagination on backend)
+
+// Team search (simple text input)
 let _searchTimer = null;
 function setScheduleQuery(q){
   scheduleQuery = normalizeScheduleSearch((q || "").trim());
+  // Reset pagination when searching
   currentPage = 1;
   if (_searchTimer) clearTimeout(_searchTimer);
   _searchTimer = setTimeout(() => loadSchedule(), 250);
 }
-teamSearchEl?.addEventListener("input", (e) => setScheduleQuery(e.target.value));
+if (teamSearchEl){
+  teamSearchEl.addEventListener("input", (e) => setScheduleQuery(e.target.value));
+}
 
 // -----------------------
 // Clear conversation (UI-only reset, keeps session id)
@@ -1559,31 +1114,26 @@ function clearConversation(){
   msgEl.style.height = "44px";
   msgEl.focus();
 }
-clearBtn?.addEventListener("click", clearConversation);
+if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 
-// -----------------------
 // Init
 // -----------------------
 (async function init(){
   applyLanguageToUI();
 
-  // build continuous world flags marquee (UI-only)
-  await buildFlagMarquee();
+  // Restore schedule scope UI
+  if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
+  if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
 
-  // preload hero images (helps ensure players show)
-  preloadHeroImages();
-
-  // start hero rotation immediately (UI-only)
-  startHeroRotation();
-
-  // Load sidebar + menu
+  // Load sidebar data
   await loadSchedule();
   await loadMenu();
 
-  // Welcome message (preserved)
+  // Welcome message (feature preserved)
   addBubble("assistant", L().welcome);
   history.push({role:"assistant", content: L().welcome});
 
+  // Ensure focus
   msgEl.focus();
 })();
 </script>

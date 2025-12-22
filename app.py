@@ -316,7 +316,7 @@ MENU = {
 # ============================================================
 LANG = {
     "en": {
-        "welcome": "⚽ Welcome, World Cup fan! I'm your Dallas Match-Day Concierge.\nType reservation to book a table, or ask about Dallas matches, all matches, or the menu.",
+        "welcome": "Hi! Want to book a table for a match day? Ask me anything.",
         "ask_date": "What date would you like? (Example: June 23, 2026)\n\n(You can also type: “Recall reservation so far”)",
         "ask_time": "What time would you like?",
         "ask_party": "How many people are in your party?",
@@ -329,7 +329,7 @@ LANG = {
         "rule_closed": "⚠️ We’re closed on that date. Want the next available day?",
     },
     "es": {
-        "welcome": "⚽ ¡Bienvenido, fan del Mundial! Soy tu concierge de días de partido en Dallas.\nEscribe reserva para reservar una mesa, o pregunta por los partidos (Dallas / todos) o el menú.",
+        "welcome": "¡Hola! ¿Quieres reservar una mesa para un día de partido? Pregúntame lo que sea.",
         "ask_date": "¿Qué fecha te gustaría? (Ejemplo: 23 de junio de 2026)\n\n(También puedes escribir: “Recordar reserva”)",
         "ask_time": "¿A qué hora te gustaría?",
         "ask_party": "¿Cuántas personas serán?",
@@ -342,7 +342,7 @@ LANG = {
         "rule_closed": "⚠️ Estamos cerrados ese día. ¿Quieres el siguiente día disponible?",
     },
     "pt": {
-        "welcome": "⚽ Bem-vindo, fã da Copa do Mundo! Sou seu concierge de dias de jogo em Dallas.\nDigite reserva para reservar uma mesa, ou pergunte sobre jogos em Dallas, todos os jogos ou o cardápio.",
+        "welcome": "Olá! Quer reservar uma mesa para dia de jogo? Pergunte qualquer coisa.",
         "ask_date": "Qual data você gostaria? (Exemplo: 23 de junho de 2026)\n\n(Você também pode digitar: “Relembrar reserva”)",
         "ask_time": "Que horas você gostaria?",
         "ask_party": "Quantas pessoas?",
@@ -355,7 +355,7 @@ LANG = {
         "rule_closed": "⚠️ Estaremos fechados nessa data. Quer o próximo dia disponível?",
     },
     "fr": {
-        "welcome": "⚽ Bienvenue, fan de la Coupe du Monde ! Je suis votre concierge des jours de match à Dallas.\nTapez réservation pour réserver une table, ou demandez les matchs (Dallas / tous) ou le menu.",
+        "welcome": "Bonjour ! Vous voulez réserver une table pour un jour de match ? Demandez-moi !",
         "ask_date": "Quelle date souhaitez-vous ? (Exemple : 23 juin 2026)\n\n(Vous pouvez aussi écrire : « Rappeler la réservation »)",
         "ask_time": "À quelle heure ?",
         "ask_party": "Pour combien de personnes ?",
