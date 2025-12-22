@@ -59,7 +59,7 @@
       overflow:hidden;
       border:1px solid rgba(255,255,255,.14);
       background: rgba(0,0,0,.18);
-      min-height:150px;
+      min-height:180px;
       box-shadow: 0 18px 55px rgba(0,0,0,.28);
       isolation:isolate;
     }
@@ -80,7 +80,7 @@
       inset:0;
       background:
         radial-gradient(900px 240px at 20% 20%, rgba(245,215,110,.22) 0%, rgba(0,0,0,0) 60%),
-        linear-gradient(90deg, rgba(7,16,34,.78) 0%, rgba(7,16,34,.55) 45%, rgba(7,16,34,.86) 100%);
+        linear-gradient(90deg, rgba(7,16,34,.65) 0%, rgba(7,16,34,.45) 45%, rgba(7,16,34,.75) 100%);
       pointer-events:none;
       z-index:2;
     }
@@ -414,15 +414,22 @@
       display:inline-flex;
       align-items:center;
       justify-content:center;
-      width:22px;
-      height:18px;
+      width:28px;
+      height:22px;
       border-radius:999px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.18);
+      border:1px solid rgba(255,255,255,.18);
+      background: rgba(0,0,0,.26);
       margin-right:6px;
-      font-size:14px;
+      font-size:16px;
       line-height:1;
       transform: translateY(1px);
+      font-family: "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Twemoji Mozilla",system-ui,sans-serif;
+      box-shadow: 0 6px 16px rgba(0,0,0,.22);
+    }
+    .flagchip img{
+      width:16px;
+      height:16px;
+      display:block;
     }
     .vs{
       opacity:.8;
@@ -430,6 +437,7 @@
       font-weight:800;
     }
   </style>
+  <script src="https://twemoji.maxcdn.com/v/latest/twemoji.min.js" crossorigin="anonymous"></script>
 </head>
 
 <body>
@@ -607,10 +615,10 @@ const pageIndicatorEl = document.getElementById("pageIndicator");
 // HERO banner (Session 1)
 // -----------------------
 const HERO_SLIDES = [
-  { name: "Lionel Messi", country: "Argentina", flag: "🇦🇷", img: "https://upload.wikimedia.org/wikipedia/commons/6/6c/Lionel_Messi_in_2018.jpg" },
-  { name: "Kylian Mbappé", country: "France", flag: "🇫🇷", img: "https://upload.wikimedia.org/wikipedia/commons/7/72/Kylian_Mbappe_2017.jpg" },
-  { name: "Cristiano Ronaldo", country: "Portugal", flag: "🇵🇹", img: "https://upload.wikimedia.org/wikipedia/commons/6/6d/Cristiano_Ronaldo%2C_2012_2.JPG" },
-  { name: "Vinícius Júnior", country: "Brazil", flag: "🇧🇷", img: "https://upload.wikimedia.org/wikipedia/commons/7/77/Vin%C3%ADcius_J%C3%BAnior.jpg" }
+  { name: "Lionel Messi", country: "Argentina", flag: "🇦🇷", img: "https://upload.wikimedia.org/wikipedia/commons/c/c8/Lionel_Messi_WC2022.jpg" },
+  { name: "Kylian Mbappé", country: "France", flag: "🇫🇷", img: "https://upload.wikimedia.org/wikipedia/commons/1/1e/Picture_with_Mbapp%C3%A9_%28cropped%29.jpg" },
+  { name: "Cristiano Ronaldo", country: "Portugal", flag: "🇵🇹", img: "https://upload.wikimedia.org/wikipedia/commons/6/6a/Cristiano_Ronaldo_WC2022_-_02.jpg" },
+  { name: "Vinícius Júnior", country: "Brazil", flag: "🇧🇷", img: "https://upload.wikimedia.org/wikipedia/commons/f/f3/Vinicius_Jr_2021.jpg" }
 ];
 
 let heroIdx = 0;
@@ -642,7 +650,8 @@ function setHeroSlide(idx){
       <span class="heroChip">${s.flag} <b>${escapeHtml(s.name)}</b> • ${escapeHtml(s.country)}</span>
       <span class="heroChip">AT&amp;T Stadium • Arlington</span>
     `;
-  }
+      renderTwemoji(heroChips);
+}
 
   heroUseA = !heroUseA;
 }
@@ -833,6 +842,15 @@ function escapeHtml(s){
     .replaceAll('"',"&quot;")
     .replaceAll("'","&#039;");
 }
+
+function renderTwemoji(rootEl){
+  try{
+    if (window.twemoji && rootEl){
+      window.twemoji.parse(rootEl, { folder: 'svg', ext: '.svg' });
+    }
+  } catch(e){}
+}
+
 function stripHtml(html){
   const tmp = document.createElement("div");
   tmp.innerHTML = html;
@@ -1167,7 +1185,9 @@ function renderSchedule(){
     `;
     el.appendChild(row);
   });
+  renderTwemoji(el);
 }
+
 
 function updateMatchDayMode(){
   const isMatchDay = !!(scheduleData && scheduleData.is_match_day);
