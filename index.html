@@ -105,6 +105,151 @@
       white-space:nowrap;
     }
 
+
+    /* -----------------------
+       HERO CINEMATIC BANNER
+       ----------------------- */
+    .hero{
+      position:relative;
+      height:170px;
+      border-bottom:1px solid rgba(255,255,255,.10);
+      overflow:hidden;
+      border-radius:16px;
+      margin:12px 12px 10px 12px;
+      background: linear-gradient(135deg, rgba(31,111,235,.22), rgba(46,160,67,.14));
+      box-shadow: 0 10px 25px rgba(0,0,0,.25);
+      isolation:isolate;
+    }
+    /* In compact mode, shorten hero */
+    .compact .hero{ height:120px; margin:10px 10px 8px 10px; border-radius:14px; }
+
+    .heroSlides{
+      position:absolute; inset:0;
+    }
+    .heroSlide{
+      position:absolute; inset:0;
+      opacity:0;
+      transform: scale(1.02);
+      transition: opacity 900ms ease, transform 1100ms ease;
+      display:flex;
+      align-items:stretch;
+      justify-content:stretch;
+    }
+    .heroSlide.active{
+      opacity:1;
+      transform: scale(1.0);
+    }
+    .heroSlide::before{
+      content:"";
+      position:absolute; inset:0;
+      background:
+        radial-gradient(800px 220px at 20% 0%, rgba(255,255,255,.16), transparent 60%),
+        radial-gradient(900px 260px at 80% 120%, rgba(255,255,255,.10), transparent 55%),
+        linear-gradient(90deg, rgba(0,0,0,.72) 0%, rgba(0,0,0,.40) 44%, rgba(0,0,0,.10) 75%, rgba(0,0,0,.05) 100%);
+      z-index:1;
+    }
+    .heroSlide .heroImg{
+      position:absolute; right:0; top:0; bottom:0;
+      width:52%;
+      display:flex;
+      align-items:flex-end;
+      justify-content:flex-end;
+      z-index:0;
+      pointer-events:none;
+    }
+    .heroSlide img{
+      max-height:100%;
+      width:auto;
+      object-fit:contain;
+      filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
+      opacity:.98;
+    }
+    /* Mobile: image takes less space */
+    @media (max-width: 720px){
+      .hero{ height:160px; margin:10px; }
+      .heroSlide .heroImg{ width:58%; }
+      .heroSlide img{ max-height:92%; }
+    }
+    .heroOverlay{
+      position:absolute; inset:0;
+      z-index:3;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      gap:6px;
+      padding:18px 16px;
+    }
+    .heroKicker{
+      letter-spacing:.18em;
+      font-size:11px;
+      font-weight:900;
+      color:rgba(234,240,255,.85);
+      text-transform:uppercase;
+    }
+    .heroTitle{
+      font-size:22px;
+      font-weight:900;
+      line-height:1.05;
+      text-transform:uppercase;
+      text-shadow: 0 10px 20px rgba(0,0,0,.55);
+    }
+    .compact .heroTitle{ font-size:18px; }
+    .heroSub{
+      font-size:12px;
+      color:rgba(234,240,255,.82);
+      max-width: 430px;
+    }
+    .heroFX{ position:absolute; inset:0; z-index:2; pointer-events:none; }
+    .heroSmoke{
+      position:absolute; inset:-40px;
+      background:
+        radial-gradient(380px 220px at 18% 62%, rgba(255,255,255,.12), transparent 62%),
+        radial-gradient(520px 260px at 58% 78%, rgba(255,255,255,.08), transparent 65%),
+        radial-gradient(520px 260px at 88% 35%, rgba(255,255,255,.07), transparent 70%);
+      filter: blur(18px);
+      opacity:.55;
+      animation: smokeFloat 10s ease-in-out infinite;
+      mix-blend-mode: screen;
+    }
+    @keyframes smokeFloat{
+      0%,100%{ transform: translate3d(0,0,0) scale(1.02); }
+      50%{ transform: translate3d(-8px, -6px, 0) scale(1.04); }
+    }
+    .heroGlow{
+      position:absolute; inset:0;
+      background:
+        radial-gradient(520px 260px at 65% 25%, rgba(255,215,64,.12), transparent 62%),
+        radial-gradient(720px 280px at 25% 20%, rgba(31,111,235,.18), transparent 60%);
+      opacity:.9;
+      mix-blend-mode: screen;
+    }
+    .heroSweep{
+      position:absolute; top:-30%; left:-30%;
+      width:60%; height:160%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
+      transform: rotate(18deg);
+      animation: sweep 5.8s linear infinite;
+      opacity:.55;
+    }
+    @keyframes sweep{
+      0%{ transform: translateX(-50%) rotate(18deg); }
+      100%{ transform: translateX(220%) rotate(18deg); }
+    }
+    .heroDots{
+      position:absolute; left:14px; bottom:12px;
+      z-index:4;
+      display:flex; gap:6px;
+      opacity:.92;
+    }
+    .heroDot{
+      width:7px; height:7px; border-radius:999px;
+      background: rgba(234,240,255,.35);
+      border:1px solid rgba(255,255,255,.20);
+    }
+    .heroDot.active{
+      background: rgba(234,240,255,.90);
+    }
+
     .banner{
       padding:10px 14px;
       border-bottom:1px dashed rgba(255,255,255,.16);
@@ -411,6 +556,23 @@
 
           </div>
 
+
+          <!-- HERO: Cinematic rotating banner (UI-only; no backend impact) -->
+          <div class="hero" id="heroBanner" aria-label="World Cup 2026 hero banner">
+            <div class="heroSlides" id="heroSlides" aria-hidden="true"></div>
+            <div class="heroFX" aria-hidden="true">
+              <div class="heroSmoke"></div>
+              <div class="heroGlow"></div>
+              <div class="heroSweep"></div>
+            </div>
+            <div class="heroOverlay">
+              <div class="heroKicker">WORLD CUP 2026</div>
+              <div class="heroTitle">DALLAS MATCH DAY HQ</div>
+              <div class="heroSub">Reserve tables • Live schedules • Concierge chat</div>
+            </div>
+            <div class="heroDots" id="heroDots" aria-hidden="true"></div>
+          </div>
+
           <div class="banner" id="matchBanner"></div>
 
           <div id="chat"></div>
@@ -523,6 +685,9 @@ const sendBtn = document.getElementById("sendBtn");
 const helperHint = document.getElementById("helperHint");
 const pillLang = document.getElementById("pillLang");
 const pillMode = document.getElementById("pillMode");
+const heroBanner = document.getElementById("heroBanner");
+const heroSlidesEl = document.getElementById("heroSlides");
+const heroDotsEl = document.getElementById("heroDots");
 const matchBanner = document.getElementById("matchBanner");
 const matchdayBox = document.getElementById("matchdayBox");
 
@@ -685,6 +850,107 @@ function stripHtml(html){
   const tmp = document.createElement("div");
   tmp.innerHTML = html;
   return tmp.textContent || tmp.innerText || "";
+}
+
+
+// -----------------------
+// HERO banner (UI-only)
+// -----------------------
+const HERO_SLIDE_MS = 5200;
+let _heroTimer = null;
+let _heroIndex = 0;
+let _heroPaused = false;
+
+// NOTE: These are safe, replaceable image URLs. You can swap in your own hosted images anytime.
+const heroPlayers = [
+  { name:"Kylian Mbappé", country:"France", color:"#0055A4",
+    img:"https://upload.wikimedia.org/wikipedia/commons/6/6e/Kylian_Mbapp%C3%A9_2018.jpg" },
+  { name:"Lionel Messi", country:"Argentina", color:"#74ACDF",
+    img:"https://upload.wikimedia.org/wikipedia/commons/c/c1/Lionel_Messi_20180626.jpg" },
+  { name:"Jude Bellingham", country:"England", color:"#CE1126",
+    img:"https://upload.wikimedia.org/wikipedia/commons/3/36/Jude_Bellingham_2020.jpg" },
+  { name:"Vinícius Júnior", country:"Brazil", color:"#009C3B",
+    img:"https://upload.wikimedia.org/wikipedia/commons/3/3a/Vinicius_Junior_2022.jpg" }
+];
+
+function buildHero(){
+  if (!heroBanner || !heroSlidesEl) return;
+
+  heroSlidesEl.innerHTML = "";
+  if (heroDotsEl) heroDotsEl.innerHTML = "";
+
+  heroPlayers.forEach((p, i) => {
+    const slide = document.createElement("div");
+    slide.className = "heroSlide" + (i === 0 ? " active" : "");
+    slide.style.background = `linear-gradient(135deg, ${p.color}33, rgba(0,0,0,.10))`;
+
+    const imgWrap = document.createElement("div");
+    imgWrap.className = "heroImg";
+
+    const img = document.createElement("img");
+    img.alt = p.name + " — " + p.country;
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.referrerPolicy = "no-referrer";
+    img.src = p.img;
+
+    imgWrap.appendChild(img);
+    slide.appendChild(imgWrap);
+    heroSlidesEl.appendChild(slide);
+
+    if (heroDotsEl){
+      const dot = document.createElement("div");
+      dot.className = "heroDot" + (i === 0 ? " active" : "");
+      dot.title = p.country;
+      dot.addEventListener("click", () => setHeroIndex(i, true));
+      heroDotsEl.appendChild(dot);
+    }
+  });
+
+  // Pause on hover/touch
+  heroBanner.addEventListener("mouseenter", () => { _heroPaused = true; });
+  heroBanner.addEventListener("mouseleave", () => { _heroPaused = false; });
+  heroBanner.addEventListener("touchstart", () => { _heroPaused = true; }, {passive:true});
+  heroBanner.addEventListener("touchend", () => { _heroPaused = false; }, {passive:true});
+
+  startHero();
+}
+
+function setHeroIndex(i, userAction=false){
+  const slides = heroSlidesEl ? Array.from(heroSlidesEl.children) : [];
+  if (!slides.length) return;
+
+  _heroIndex = (i + slides.length) % slides.length;
+
+  slides.forEach((s, idx) => s.classList.toggle("active", idx === _heroIndex));
+  if (heroDotsEl){
+    Array.from(heroDotsEl.children).forEach((d, idx) => d.classList.toggle("active", idx === _heroIndex));
+  }
+
+  // Optional: subtly personalize overlay based on player (no backend)
+  if (userAction){
+    // Reset sweep timing for a "responsive" feel
+    heroBanner.style.animation = "none";
+    heroBanner.offsetHeight; // force reflow
+    heroBanner.style.animation = "";
+  }
+}
+
+function tickHero(){
+  if (_heroPaused) return;
+  const slides = heroSlidesEl ? heroSlidesEl.children.length : 0;
+  if (!slides) return;
+  setHeroIndex(_heroIndex + 1);
+}
+
+function startHero(){
+  stopHero();
+  _heroTimer = setInterval(tickHero, HERO_SLIDE_MS);
+}
+
+function stopHero(){
+  if (_heroTimer) clearInterval(_heroTimer);
+  _heroTimer = null;
 }
 
 // -----------------------
@@ -1202,6 +1468,9 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
   // Restore schedule scope UI
   if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
   if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
+
+  // Init cinematic hero (UI-only)
+  buildHero();
 
   // Load sidebar data
   await loadSchedule();
