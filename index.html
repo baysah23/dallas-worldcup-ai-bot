@@ -365,7 +365,7 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
     .nums span{color:var(--text);}
     .nums b{color:#f5d76e;}
 
-    .schedule{flex:1; min-height:160px; overflow:auto;}
+    .schedule{flex:1; min-height:0; overflow:auto; padding-bottom:78px;}
     .match{
       display:flex;
       justify-content:space-between;
@@ -509,6 +509,18 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
     .compact .pill{padding:5px 9px; font-size:10.5px;}
     .compact .cardhead{padding:10px 12px;}
     .compact .menu{font-size:8.5px;}
+
+
+    /* Keep pagination controls visible (fix: pager off-screen in regular mode) */
+    #pager{
+      position: sticky;
+      bottom: 0;
+      z-index: 6;
+      background: rgba(7,16,34,.92);
+      backdrop-filter: blur(8px);
+      border-top: 1px solid rgba(255,255,255,.12);
+      margin-top: auto;
+    }
 
 </style>
 </head>
