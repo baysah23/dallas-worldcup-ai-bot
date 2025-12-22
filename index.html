@@ -1,11 +1,11 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>World Cup 2026 Dallas Concierge</title>
-
-  <style>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>World Cup 2026 Dallas Concierge</title>
+<style>
     :root{
       --bg:#071022;
       --panel:#0f1b33;
@@ -51,7 +51,6 @@
     }
     .langbtn.active{background:rgba(46,160,67,.18); border-color:rgba(46,160,67,.45);}
 
-    /* Main layout */
     .grid{
       display:grid;
       grid-template-columns: 1.45fr .55fr;
@@ -64,20 +63,22 @@
       .grid{grid-template-columns:1fr;}
     }
 
-    /* Left column: Menu + Chat */
     .leftcol{
       display:grid;
-      grid-template-columns: 170px 1fr; /* Menu | Chat */
+      O0px 1fr; /* Menu | Chat (chat gets more space) */
       gap:14px;
       min-height:0;
       height:100%;
       align-items:stretch;
     }
+    .chatcard{display:flex; flex-direction:column; min-height:0;}
+    .menucard{display:flex; flex-direction:column; min-height:0;}
+    #chat{padding:14px; height:100%; overflow:auto; display:flex; flex-direction:column; gap:10px;}
+    .menu{padding:8px 8px 10px; font-size:9px; line-height:1.25; display:flex; flex-direction:column; gap:8px; overflow:auto; max-height:390px;}
     @media (max-width: 950px){
       .leftcol{grid-template-columns: 1fr;}
     }
-
-    .card{
+.card{
       background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.03) 100%);
       border:1px solid var(--line);
       border-radius:16px;
@@ -104,24 +105,29 @@
       white-space:nowrap;
     }
 
+
     /* -----------------------
        HERO CINEMATIC BANNER
-       (above Menu + Chat + Schedule)
        ----------------------- */
-    .hero{
+    .hero{ grid-column:1 / -1;
+      
       position:relative;
-      height:185px;
+      height:170px;
       border-bottom:1px solid rgba(255,255,255,.10);
       overflow:hidden;
       border-radius:16px;
-      margin:14px 14px 0 14px; /* align with grid padding */
+      margin:12px 12px 10px 12px;
       background: linear-gradient(135deg, rgba(31,111,235,.22), rgba(46,160,67,.14));
       box-shadow: 0 10px 25px rgba(0,0,0,.25);
       isolation:isolate;
     }
-    .compact .hero{ height:135px; border-radius:14px; }
+    /* In compact mode, shorten hero */
+    .compact .hero{ grid-column:1 / -1;
+       height:120px; margin:10px 10px 8px 10px; border-radius:14px; }
 
-    .heroSlides{ position:absolute; inset:0; }
+    .heroSlides{
+      position:absolute; inset:0;
+    }
     .heroSlide{
       position:absolute; inset:0;
       opacity:0;
@@ -131,7 +137,10 @@
       align-items:stretch;
       justify-content:stretch;
     }
-    .heroSlide.active{ opacity:1; transform: scale(1.0); }
+    .heroSlide.active{
+      opacity:1;
+      transform: scale(1.0);
+    }
     .heroSlide::before{
       content:"";
       position:absolute; inset:0;
@@ -143,23 +152,26 @@
     }
     .heroSlide .heroImg{
       position:absolute; right:0; top:0; bottom:0;
-      width:50%;
+      width:52%;
       display:flex;
       align-items:flex-end;
       justify-content:flex-end;
+      padding:10px 14px;
       z-index:0;
       pointer-events:none;
-      padding-right:6px;
     }
     .heroSlide img{
-      max-height:100%;
+      max-height:92%;
       width:auto;
       object-fit:contain;
-      filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
+      object-position: 50% 15%;
+filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
       opacity:.98;
     }
+    /* Mobile: image takes less space */
     @media (max-width: 720px){
-      .hero{ height:175px; margin:12px 12px 0 12px; }
+      .hero{ grid-column:1 / -1;
+       height:160px; margin:10px; }
       .heroSlide .heroImg{ width:58%; }
       .heroSlide img{ max-height:92%; }
     }
@@ -190,7 +202,7 @@
     .heroSub{
       font-size:12px;
       color:rgba(234,240,255,.82);
-      max-width: 520px;
+      max-width: 430px;
     }
     .heroFX{ position:absolute; inset:0; z-index:2; pointer-events:none; }
     .heroSmoke{
@@ -238,33 +250,9 @@
       width:7px; height:7px; border-radius:999px;
       background: rgba(234,240,255,.35);
       border:1px solid rgba(255,255,255,.20);
-      cursor:pointer;
     }
-    .heroDot.active{ background: rgba(234,240,255,.90); }
-
-    /* Chat */
-    .chatcard{display:flex; flex-direction:column; min-height:0;}
-    #chat{padding:14px; height:100%; overflow:auto; display:flex; flex-direction:column; gap:8px;}
-    .bubble{
-      max-width:78%;
-      padding:8px 10px;
-      border-radius:14px;
-      line-height:1.28;
-      white-space:pre-wrap;
-      word-wrap:break-word;
-      border:1px solid rgba(255,255,255,.10);
-      font-size:13px;
-    }
-    .user{
-      align-self:flex-end;
-      background: rgba(31,111,235,.22);
-      border-color: rgba(31,111,235,.35);
-      font-size:13px;
-    }
-    .bot{
-      align-self:flex-start;
-      background: rgba(0,0,0,.18);
-      font-size:12px;
+    .heroDot.active{
+      background: rgba(234,240,255,.90);
     }
 
     .banner{
@@ -273,19 +261,34 @@
       color:var(--warn);
       font-size:12px;
       display:none;
-      text-transform:uppercase;
-      letter-spacing:.7px;
-      font-weight:900;
-      background: linear-gradient(90deg, rgba(245,215,110,.18) 0%, rgba(46,160,67,.10) 40%, rgba(31,111,235,.10) 100%);
-      border-bottom: 1px solid rgba(245,215,110,.35);
-      text-shadow: 0 2px 18px rgba(0,0,0,.35);
-      animation: announcerPulse 1.6s ease-in-out infinite;
     }
     .banner.show{display:block;}
-    @keyframes announcerPulse{
-      0%{transform:translateY(0); filter:brightness(1);}
-      50%{transform:translateY(-1px); filter:brightness(1.08);}
-      100%{transform:translateY(0); filter:brightness(1);}
+
+    #chat{
+      padding:14px;
+      height:100%;
+      overflow:auto;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .bubble{
+      max-width:78%;
+      padding:10px 12px;
+      border-radius:14px;
+      line-height:1.35;
+      white-space:pre-wrap;
+      word-wrap:break-word;
+      border:1px solid rgba(255,255,255,.10);
+    }
+    .user{
+      align-self:flex-end;
+      background: rgba(31,111,235,.22);
+      border-color: rgba(31,111,235,.35);
+    }
+    .bot{
+      align-self:flex-start;
+      background: rgba(0,0,0,.18);
     }
 
     .composer{
@@ -310,6 +313,25 @@
       outline:none;
     }
     button{
+    background: var(--accent);
+    border:none;
+    padding:10px 14px;
+    border-radius:12px;
+    font-size:14px;
+    font-weight:800;
+    color:#fff;
+    cursor:pointer;
+    min-width:92px;
+  }
+  button.secondary{
+    background: rgba(255,255,255,.10);
+    border:1px solid rgba(255,255,255,.18);
+    color: var(--text);
+    min-width:88px;
+  }
+  button.secondary:hover{background: rgba(255,255,255,.14);} 
+
+  button{
       background: var(--accent);
       border:none;
       padding:10px 14px;
@@ -321,29 +343,55 @@
       min-width:92px;
     }
     button:disabled{opacity:.6; cursor:not-allowed;}
-    button.secondary{
-      background: rgba(255,255,255,.10);
-      border:1px solid rgba(255,255,255,.18);
-      color: var(--text);
-      min-width:88px;
-    }
-    button.secondary:hover{background: rgba(255,255,255,.14);}
 
-    .hint{
-      padding:10px 14px;
+    .sidepad{padding:12px 14px;}
+    .countdown{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:12px 14px;
+      border-bottom:1px solid var(--line);
+    }
+    .countdown .label{font-size:12px; color:var(--muted); font-weight:700;}
+    .countdown .nums{
+      display:flex;
+      gap:10px;
+      align-items:baseline;
+      font-weight:900;
+      font-size:13px;
+      white-space:nowrap;
+    }
+    .nums span{color:var(--text);}
+    .nums b{color:#f5d76e;}
+
+    .schedule{flex:1; min-height:160px; overflow:auto;}
+    .match{
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      padding:10px 12px;
+      border-top:1px solid rgba(255,255,255,.10);
       font-size:12px;
-      color:var(--muted);
-      border-top:1px dashed rgba(255,255,255,.14);
     }
-    code{background:rgba(255,255,255,.10); padding:2px 6px; border-radius:8px;}
+    .match .left{display:flex; flex-direction:column; gap:2px;}
+    .match .when{color:var(--muted);}
+    .match.next{
+      background: rgba(46,160,67,.18);
+      border-top:1px solid rgba(46,160,67,.35);
+    }
 
-    /* Menu */
-    .menucard{display:flex; flex-direction:column; min-height:0; max-width:190px; max-height:460px;}
-    .menu{padding:8px 8px 10px; font-size:9px; line-height:1.25; display:flex; flex-direction:column; gap:8px; overflow:auto; max-height:390px;}
-    @media (max-width: 950px){
-      .menucard{max-width:none; max-height:none;}
-      .menu{max-height:none;}
+    .matchday{
+      margin:12px 14px 0;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid rgba(245,215,110,.35);
+      background: rgba(245,215,110,.10);
+      font-size:12px;
+      display:none;
     }
+    .matchday.show{display:block;}
+
     .menuitem{
       padding:7px 7px;
       border:1px solid rgba(255,255,255,.12);
@@ -361,6 +409,7 @@
     }
     .menuitem .name{font-weight:900; font-size:11px; letter-spacing:.15px;}
     .menuitem .desc{color:var(--muted); margin-top:3px; font-size:9px; line-height:1.25;}
+    .menuitem .price{margin-top:6px; font-weight:900; color:#f5d76e; font-size:10px;}
     .menuTop{display:flex; align-items:flex-start; justify-content:space-between; gap:10px;}
     .menuBadge{
       border:1px solid rgba(245,215,110,.35);
@@ -381,59 +430,75 @@
       background:rgba(0,0,0,.10);
     }
 
-    /* Sidebar */
-    .sidepad{padding:12px 14px;}
-    .countdown{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      padding:10px 12px;
-      border-bottom:1px solid var(--line);
-    }
-    .countdown .label{font-size:12px; color:var(--muted); font-weight:700;}
-    .countdown .nums{
-      display:flex;
-      gap:10px;
-      align-items:baseline;
-      font-weight:900;
-      font-size:13px;
-      white-space:nowrap;
-    }
-    .nums span{color:var(--text);}
-    .nums b{color:#f5d76e;}
-
-    .schedule{flex:1; min-height:160px; overflow:auto;}
-    .match{
-      display:flex;
-      justify-content:space-between;
-      gap:10px;
-      padding:9px 10px;
-      border-top:1px solid rgba(255,255,255,.10);
+    .hint{
+      padding:10px 14px;
       font-size:12px;
+      color:var(--muted);
+      border-top:1px dashed rgba(255,255,255,.14);
     }
-    .match .left{display:flex; flex-direction:column; gap:2px;}
-    .match .when{color:var(--muted);}
-    .match.next{
-      background: rgba(46,160,67,.18);
-      border-top:1px solid rgba(46,160,67,.35);
+    code{background:rgba(255,255,255,.10); padding:2px 6px; border-radius:8px;}
+  
+    /* Compact WC menu (small + sleek) */
+    .menucard{max-height:460px;}
+    .menu{max-height:390px;}
+    @media (max-width: 950px){
+      .menucard{max-height:none;}
+      .menu{max-height:none;}
     }
 
-    .matchday{
-      margin:12px 14px 0;
-      padding:10px 12px;
-      border-radius:14px;
-      border:1px solid rgba(245,215,110,.35);
-      background: rgba(245,215,110,.10);
-      font-size:12px;
-      display:none;
+
+    /* Slightly tighter sidebar so it stays compact */
+    .countdown{padding:10px 12px;}
+    .match{padding:9px 10px;}
+
+
+    /* Layout override: compact menu + wide chat (desktop) */
+    .leftcol{
+      display:grid;
+      grid-template-columns: 170px 1fr; /* Menu | Chat */
+      gap:14px;
+      min-height:0;
+      height:100%;
+      align-items:stretch;
+    }
+    .chatcard{display:flex; flex-direction:column; min-height:0;}
+    .menucard{display:flex; flex-direction:column; min-height:0; max-width:190px; max-height:460px;}
+    @media (max-width: 950px){
+      .leftcol{grid-template-columns: 1fr;}
+      .menucard{max-width:none; max-height:none;}
+    }
+
+
+    /* --- Chat readability upgrades (requested) --- */
+    #chat{gap:8px;} /* tighter vertical spacing */
+    .bubble{
+      padding:8px 10px;           /* tighter bubble padding */
+      line-height:1.28;           /* tighter line-height */
+      font-size:13px;             /* base (user) */
+    }
+    .bot{font-size:12px;}         /* slightly smaller bot text */
+    .user{font-size:13px;}        /* slightly larger user text */
+
+    /* “Stadium announcer” emphasis for match alerts */
+    .banner.show,
+    .matchday.show{
       text-transform:uppercase;
       letter-spacing:.7px;
       font-weight:900;
     }
-    .matchday.show{display:block;}
+    .banner.show{
+      background: linear-gradient(90deg, rgba(245,215,110,.18) 0%, rgba(46,160,67,.10) 40%, rgba(31,111,235,.10) 100%);
+      border-bottom: 1px solid rgba(245,215,110,.35);
+      text-shadow: 0 2px 18px rgba(0,0,0,.35);
+    }
+    @keyframes announcerPulse{
+      0%{transform:translateY(0); filter:brightness(1);}
+      50%{transform:translateY(-1px); filter:brightness(1.08);}
+      100%{transform:translateY(0); filter:brightness(1);}
+    }
+    .banner.show{animation: announcerPulse 1.6s ease-in-out infinite;}
 
-    /* Compact mode */
+    /* Compact mode (power users) */
     .compact #chat{gap:6px;}
     .compact .bubble{padding:7px 9px; line-height:1.22;}
     .compact .user{font-size:12.5px;}
@@ -444,137 +509,119 @@
     .compact .pill{padding:5px 9px; font-size:10.5px;}
     .compact .cardhead{padding:10px 12px;}
     .compact .menu{font-size:8.5px;}
-  </style>
+
+</style>
 </head>
-
 <body>
-  <div class="wrap">
-    <header>
-      <div class="toprow">
-        <div class="brand">
-          <div class="badge" aria-hidden="true"></div>
-          <div>
-            <h1>World Cup 2026 • Dallas Match-Day Concierge</h1>
-            <div class="sub">Reserve tables, see Dallas match schedule, and chat in English • Español • Português • Français</div>
-          </div>
-        </div>
+<div class="wrap">
+<header>
+<div class="toprow">
+<div class="brand">
+<div aria-hidden="true" class="badge"></div>
+<div>
+<h1>World Cup 2026 • Dallas Match-Day Concierge</h1>
+<div class="sub">Reserve tables, see Dallas match schedule, and chat in English • Español • Português • Français</div>
+</div>
+</div>
+<div aria-label="Language toggle" class="langbar">
+<div class="langbtn active" data-lang="en">English</div>
+<div class="langbtn" data-lang="es">Español</div>
+<div class="langbtn" data-lang="pt">Português</div>
+<div class="langbtn" data-lang="fr">Français</div>
+</div>
+</div>
+</header>
+<div class="grid"><div aria-label="World Cup 2026 hero banner" class="hero" id="heroBanner">
+<div aria-hidden="true" class="heroSlides" id="heroSlides"></div>
+<div aria-hidden="true" class="heroFX">
+<div class="heroSmoke"></div>
+<div class="heroGlow"></div>
+<div class="heroSweep"></div>
+</div>
+<div class="heroOverlay">
+<div class="heroKicker">WORLD CUP 2026</div>
+<div class="heroTitle">DALLAS MATCH DAY HQ</div>
+<div class="heroSub">Reserve tables • Live schedules • Concierge chat</div>
+</div>
+<div aria-hidden="true" class="heroDots" id="heroDots"></div>
+</div>
+<!-- Left column: Menu (left) + Chat/Reservations (right) -->
+<div class="leftcol">
+<!-- Menu -->
+<div class="card menucard" style="display:flex;flex-direction:column;min-height:0; max-width:190px;">
+<div class="cardhead">
+<div class="title" id="menuTitle">Menu</div>
+<div class="pill" id="menuPill">4 languages</div>
+</div>
+<div class="menu" id="menu"></div>
+</div>
+<!-- Chat / Reservations -->
+<div class="card chatcard" style="display:flex;flex-direction:column;min-height:0;">
+<div class="cardhead">
+<div class="title" id="chatTitle">Chat</div>
+<div style="display:flex; gap:8px; align-items:center;">
+<div class="pill" id="pillMode">Live</div>
+<button class="secondary" id="compactToggle" style="min-width:auto; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:800;">Compact</button>
+</div>
+</div>
+<!-- HERO: Cinematic rotating banner (UI-only; no backend impact) -->
 
-        <div class="langbar" aria-label="Language toggle">
-          <div class="langbtn active" data-lang="en">English</div>
-          <div class="langbtn" data-lang="es">Español</div>
-          <div class="langbtn" data-lang="pt">Português</div>
-          <div class="langbtn" data-lang="fr">Français</div>
-        </div>
-      </div>
-    </header>
-
-    <!-- HERO: Cinematic rotating banner ABOVE the app windows (UI-only; no backend impact) -->
-    <div class="hero" id="heroBanner" aria-label="World Cup 2026 hero banner">
-      <div class="heroSlides" id="heroSlides" aria-hidden="true"></div>
-      <div class="heroFX" aria-hidden="true">
-        <div class="heroSmoke"></div>
-        <div class="heroGlow"></div>
-        <div class="heroSweep"></div>
-      </div>
-      <div class="heroOverlay">
-        <div class="heroKicker">WORLD CUP 2026</div>
-        <div class="heroTitle">DALLAS MATCH DAY HQ</div>
-        <div class="heroSub">Reserve tables • Live schedules • Concierge chat</div>
-      </div>
-      <div class="heroDots" id="heroDots" aria-hidden="true"></div>
-    </div>
-
-    <div class="grid">
-      <!-- Left column: Menu (left) + Chat/Reservations (right) -->
-      <div class="leftcol">
-
-        <!-- Menu -->
-        <div class="card menucard">
-          <div class="cardhead">
-            <div class="title" id="menuTitle">Menu</div>
-            <div class="pill" id="menuPill">4 languages</div>
-          </div>
-          <div class="menu" id="menu"></div>
-        </div>
-
-        <!-- Chat / Reservations -->
-        <div class="card chatcard">
-          <div class="cardhead">
-            <div class="title" id="chatTitle">Chat</div>
-
-            <div style="display:flex; gap:8px; align-items:center;">
-              <div class="pill" id="pillMode">Live</div>
-              <button id="compactToggle" class="secondary" style="min-width:auto; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:800;">Compact</button>
-            </div>
-          </div>
-
-          <div class="banner" id="matchBanner"></div>
-          <div id="chat"></div>
-
-          <div class="composer">
-            <textarea id="msg" placeholder="Type here..."></textarea>
-            <button id="sendBtn">Send</button>
-            <button id="clearBtn" class="secondary">Clear</button>
-          </div>
-
-          <div class="hint" id="helperHint"></div>
-        </div>
-
-      </div>
-
-      <!-- Sidebar -->
-      <div class="card" style="display:flex;flex-direction:column;min-height:0;">
-        <div class="cardhead">
-          <div class="title" id="sideTitle">Dallas Schedule</div>
-          <div class="pill" id="pillLang">EN</div>
-        </div>
-
-        <div class="countdown">
-          <div>
-            <div class="label" id="countLabel">World Cup countdown</div>
-            <div class="sub" style="margin:4px 0 0;" id="countSub">Dallas / Arlington match days</div>
-          </div>
-          <div class="nums" id="countNums">
-            <span><b id="d">0</b>d</span>
-            <span><b id="h">0</b>h</span>
-            <span><b id="m">0</b>m</span>
-            <span><b id="s">0</b>s</span>
-          </div>
-        </div>
-
-        <div class="matchday" id="matchdayBox"></div>
-
-        <div class="sidepad" style="padding-top:10px; padding-bottom:0;">
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <div class="pill" style="padding:6px 10px;">Schedule</div>
-            <div class="langbar" style="gap:6px;">
-              <div class="langbtn active" id="scopeDallas">Dallas</div>
-              <div class="langbtn" id="scopeAll">All Matches</div>
-            </div>
-          </div>
-          <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
-            <input id="teamSearch" placeholder="Search team / venue / date (e.g., June 13 or 2026-06-13)..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;" />
-            <div class="pill" id="matchCount">0</div>
-          </div>
-        </div>
-
-        <div class="sidepad" style="padding-bottom:0;">
-          <div class="pill" style="display:inline-block;" id="nextHint">Next upcoming match is highlighted</div>
-        </div>
-
-        <div class="schedule" id="schedule"></div>
-
-        <div class="sidepad" id="pager" style="display:none; padding-top:10px;">
-          <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
-            <button id="prevPage" class="secondary" style="min-width:88px;">Prev</button>
-            <div class="pill" id="pageIndicator">Page 1 of 1</div>
-            <button id="nextPage" class="secondary" style="min-width:88px;">Next</button>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
+<div class="banner" id="matchBanner"></div>
+<div id="chat"></div>
+<div class="composer">
+<textarea id="msg" placeholder="Type here..."></textarea>
+<button id="sendBtn">Send</button>
+<button class="secondary" id="clearBtn">Clear</button>
+</div>
+<div class="hint" id="helperHint"></div>
+</div>
+</div>
+<!-- Sidebar -->
+<div class="card" style="display:flex;flex-direction:column;min-height:0;">
+<div class="cardhead">
+<div class="title" id="sideTitle">Dallas Schedule</div>
+<div class="pill" id="pillLang">EN</div>
+</div>
+<div class="countdown">
+<div>
+<div class="label" id="countLabel">World Cup countdown</div>
+<div class="sub" id="countSub" style="margin:4px 0 0;">Dallas / Arlington match days</div>
+</div>
+<div class="nums" id="countNums">
+<span><b id="d">0</b>d</span>
+<span><b id="h">0</b>h</span>
+<span><b id="m">0</b>m</span>
+<span><b id="s">0</b>s</span>
+</div>
+</div>
+<div class="matchday" id="matchdayBox"></div>
+<div class="sidepad" style="padding-top:10px; padding-bottom:0;">
+<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+<div class="pill" style="padding:6px 10px;">Schedule</div>
+<div class="langbar" style="gap:6px;">
+<div class="langbtn active" id="scopeDallas">Dallas</div>
+<div class="langbtn" id="scopeAll">All Matches</div>
+</div>
+</div>
+<div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
+<input id="teamSearch" placeholder="Search team / venue / date (e.g., June 13 or 2026-06-13)..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;"/>
+<div class="pill" id="matchCount">0</div>
+</div>
+</div>
+<div class="sidepad" style="padding-bottom:0;">
+<div class="pill" id="nextHint" style="display:inline-block;">Next upcoming match is highlighted</div>
+</div>
+<div class="schedule" id="schedule"></div>
+<div class="sidepad" id="pager" style="display:none; padding-top:10px;">
+<div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
+<button class="secondary" id="prevPage" style="min-width:88px;">Prev</button>
+<div class="pill" id="pageIndicator">Page 1 of 1</div>
+<button class="secondary" id="nextPage" style="min-width:88px;">Next</button>
+</div>
+</div>
+</div>
+</div>
+</div>
 <script>
 /**
  * This frontend matches your current app.py endpoints:
@@ -582,8 +629,8 @@
  *  - GET /menu.json?lang=en|es|pt|fr
  *  - POST /chat { message, session_id, language }
  *
- * Preserves: language toggle, chat, helper hint, countdown, schedule highlight, match-day mode,
- * and adds: cinematic hero banner (UI-only) + pagination across Dallas & All Matches.
+ * Keeps all original features: language toggle, chat, helper hint,
+ * countdown, schedule highlight, match-day banner.
  */
 
 // -----------------------
@@ -604,21 +651,23 @@ let scheduleQuery = "";
 const PAGE_SIZE = 5;
 let currentPage = 1;
 
-// Conversation memory (client-side history)
+
+let menuData = null;
+let menuPage = 1; // safe default (menu is non-paginated)
+
+
+// Conversation memory (client-side history) — kept as a feature
 const history = [];
 
-// Elements
 const chatEl = document.getElementById("chat");
 const msgEl = document.getElementById("msg");
 const sendBtn = document.getElementById("sendBtn");
 const helperHint = document.getElementById("helperHint");
 const pillLang = document.getElementById("pillLang");
 const pillMode = document.getElementById("pillMode");
-
 const heroBanner = document.getElementById("heroBanner");
 const heroSlidesEl = document.getElementById("heroSlides");
 const heroDotsEl = document.getElementById("heroDots");
-
 const matchBanner = document.getElementById("matchBanner");
 const matchdayBox = document.getElementById("matchdayBox");
 
@@ -632,10 +681,12 @@ const prevPageBtn = document.getElementById("prevPage");
 const nextPageBtn = document.getElementById("nextPage");
 const pageIndicatorEl = document.getElementById("pageIndicator");
 
-let menuData = null;
+
+
+
 
 // -----------------------
-// Compact mode
+// Compact mode (power users)
 // -----------------------
 let compactMode = (localStorage.getItem("compact_mode") || "0") === "1";
 const compactToggleBtn = document.getElementById("compactToggle");
@@ -656,9 +707,6 @@ if (compactToggleBtn){
   });
 }
 
-// -----------------------
-// i18n strings
-// -----------------------
 const STRINGS = {
   en: {
     welcome: "⚽ Welcome, World Cup fan! I’m your Dallas Match-Day Concierge.\nType \"reservation\" to book a table, or ask about Dallas matches, all matches, or the menu.",
@@ -717,11 +765,9 @@ const STRINGS = {
     menu_title: "Menu"
   }
 };
+
 function L(){ return STRINGS[lang] || STRINGS.en; }
 
-// -----------------------
-// UI helpers
-// -----------------------
 function addBubble(role, text){
   const b = document.createElement("div");
   b.className = "bubble " + (role === "user" ? "user" : "bot");
@@ -729,23 +775,11 @@ function addBubble(role, text){
   chatEl.appendChild(b);
   chatEl.scrollTop = chatEl.scrollHeight;
 }
+
 function setSending(isSending){
   sendBtn.disabled = isSending;
   msgEl.disabled = isSending;
   sendBtn.textContent = isSending ? L().typing : L().send;
-}
-function stripHtml(html){
-  const tmp = document.createElement("div");
-  tmp.innerHTML = html;
-  return tmp.textContent || tmp.innerText || "";
-}
-function escapeHtml(s){
-  return String(s ?? "")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
 }
 
 // -----------------------
@@ -753,11 +787,14 @@ function escapeHtml(s){
 // -----------------------
 function applyLanguageToUI(){
   pillLang.textContent = lang.toUpperCase();
-
+        // apply schedule scope UI
+        document.getElementById("scopeDallas")?.classList.toggle("active", scope === "dallas");
+        document.getElementById("scopeAll")?.classList.toggle("active", scope === "all");
   document.querySelectorAll(".langbtn[data-lang]").forEach(btn => {
     btn.classList.toggle("active", btn.dataset.lang === lang);
   });
 
+  // Titles + helper
   document.getElementById("chatTitle").textContent = L().chat_title;
   document.getElementById("sideTitle").textContent = L().side_title;
   document.getElementById("countLabel").textContent = L().countdown;
@@ -767,11 +804,6 @@ function applyLanguageToUI(){
 
   helperHint.innerHTML = L().helper;
   sendBtn.textContent = L().send;
-
-  // keep scope buttons consistent
-  if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
-  if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
-
   applyCompactMode();
 }
 
@@ -779,9 +811,12 @@ async function setLanguage(newLang){
   lang = newLang;
   localStorage.setItem("lang", lang);
   applyLanguageToUI();
+applyCompactMode();
 
+  // reload menu in the chosen language
   await loadMenu();
 
+  // show a bot notice (feature preserved)
   addBubble("assistant", L().lang_set + "\n\n" + stripHtml(L().helper));
   history.push({role:"assistant", content: L().lang_set});
 }
@@ -789,6 +824,14 @@ async function setLanguage(newLang){
 document.querySelectorAll(".langbtn[data-lang]").forEach(btn => {
   btn.addEventListener("click", () => setLanguage(btn.dataset.lang));
 });
+
+// helper: render helper text in bubble without html tags
+function stripHtml(html){
+  const tmp = document.createElement("div");
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || "";
+}
+
 
 // -----------------------
 // HERO banner (UI-only)
@@ -798,16 +841,16 @@ let _heroTimer = null;
 let _heroIndex = 0;
 let _heroPaused = false;
 
-// Replace these URLs with your own hosted images anytime.
+// NOTE: These are safe, replaceable image URLs. You can swap in your own hosted images anytime.
 const heroPlayers = [
   { name:"Kylian Mbappé", country:"France", color:"#0055A4",
-    img:"https://upload.wikimedia.org/wikipedia/commons/6/6e/Kylian_Mbapp%C3%A9_2018.jpg" },
+    img: "https://upload.wikimedia.org/wikipedia/commons/6/61/Kylian_Mbapp%C3%A9_World_Cup_Trophy.jpg" },
   { name:"Lionel Messi", country:"Argentina", color:"#74ACDF",
-    img:"https://upload.wikimedia.org/wikipedia/commons/c/c1/Lionel_Messi_20180626.jpg" },
+    img: "https://upload.wikimedia.org/wikipedia/commons/c/ce/Lionel-Messi-Argentina-2022-FIFA-World-Cup.jpg" },
   { name:"Jude Bellingham", country:"England", color:"#CE1126",
-    img:"https://upload.wikimedia.org/wikipedia/commons/3/36/Jude_Bellingham_2020.jpg" },
+    img: "https://upload.wikimedia.org/wikipedia/commons/0/0d/2022_FIFA_World_Cup_England_0-0_USA_-_Pulisic_and_Bellingham.jpg" },
   { name:"Vinícius Júnior", country:"Brazil", color:"#009C3B",
-    img:"https://upload.wikimedia.org/wikipedia/commons/3/3a/Vinicius_Junior_2022.jpg" }
+    img: "https://upload.wikimedia.org/wikipedia/commons/3/34/Vinicius_Junior_WC2022.jpg" }
 ];
 
 function buildHero(){
@@ -839,7 +882,7 @@ function buildHero(){
       const dot = document.createElement("div");
       dot.className = "heroDot" + (i === 0 ? " active" : "");
       dot.title = p.country;
-      dot.addEventListener("click", () => setHeroIndex(i));
+      dot.addEventListener("click", () => setHeroIndex(i, true));
       heroDotsEl.appendChild(dot);
     }
   });
@@ -853,22 +896,30 @@ function buildHero(){
   startHero();
 }
 
-function setHeroIndex(i){
+function setHeroIndex(i, userAction=false){
   const slides = heroSlidesEl ? Array.from(heroSlidesEl.children) : [];
   if (!slides.length) return;
 
   _heroIndex = (i + slides.length) % slides.length;
-  slides.forEach((s, idx) => s.classList.toggle("active", idx === _heroIndex));
 
+  slides.forEach((s, idx) => s.classList.toggle("active", idx === _heroIndex));
   if (heroDotsEl){
     Array.from(heroDotsEl.children).forEach((d, idx) => d.classList.toggle("active", idx === _heroIndex));
+  }
+
+  // Optional: subtly personalize overlay based on player (no backend)
+  if (userAction){
+    // Reset sweep timing for a "responsive" feel
+    heroBanner.style.animation = "none";
+    heroBanner.offsetHeight; // force reflow
+    heroBanner.style.animation = "";
   }
 }
 
 function tickHero(){
   if (_heroPaused) return;
-  const slidesCount = heroSlidesEl ? heroSlidesEl.children.length : 0;
-  if (!slidesCount) return;
+  const slides = heroSlidesEl ? heroSlidesEl.children.length : 0;
+  if (!slides) return;
   setHeroIndex(_heroIndex + 1);
 }
 
@@ -890,24 +941,29 @@ async function loadSchedule(){
   scheduleData = await res.json();
   renderSchedule();
   updateMatchDayMode();
-  restartCountdown();
+  restartCountdown(); // uses schedule info when available
 }
 
 async function loadMenu(){
   const res = await fetch("/menu.json?lang=" + encodeURIComponent(lang), {cache:"no-store"});
   const data = await res.json();
+  // app.py returns { lang, menu: {title, items:[]}}
   menuData = data.menu;
-  renderMenu((menuData && Array.isArray(menuData.items)) ? menuData.items : []);
+  window.menuDataList = (menuData && Array.isArray(menuData.items)) ? menuData.items : [];
+  menuPage = 1;
+  renderMenu(window.menuDataList);
 }
 
-// -----------------------
-// Countdown helpers
-// -----------------------
 function safeParseTimestamp(dateIso, timeStr){
+  // Supports:
+  // - "19:00"
+  // - "7:00 PM" / "7:00PM" / "7 PM"
+  // - empty / "TBD" (falls back to end-of-day)
   if (!dateIso) return null;
-  const raw = (timeStr || "").toString().trim();
 
+  const raw = (timeStr || "").toString().trim();
   if (raw && raw.toUpperCase() !== "TBD"){
+    // 24-hour "HH:MM"
     const m24 = raw.match(/^(\d{1,2}):(\d{2})$/);
     if (m24){
       const hh = m24[1].padStart(2,"0");
@@ -915,6 +971,7 @@ function safeParseTimestamp(dateIso, timeStr){
       return Date.parse(`${dateIso}T${hh}:${mm}:00`);
     }
 
+    // 12-hour "H(:MM)? AM/PM"
     const m12 = raw.match(/^(\d{1,2})(?::(\d{2}))?\s*([AaPp][Mm])$/);
     if (m12){
       let hh = parseInt(m12[1],10);
@@ -926,6 +983,7 @@ function safeParseTimestamp(dateIso, timeStr){
       return Date.parse(`${dateIso}T${hh2}:${mm}:00`);
     }
 
+    // 12-hour with no minutes: "7 PM"
     const m12b = raw.match(/^(\d{1,2})\s*([AaPp][Mm])$/);
     if (m12b){
       let hh = parseInt(m12b[1],10);
@@ -936,17 +994,25 @@ function safeParseTimestamp(dateIso, timeStr){
       return Date.parse(`${dateIso}T${hh2}:00:00`);
     }
   }
+
+  // end-of-day fallback (still keeps countdown alive even if time missing)
   return Date.parse(`${dateIso}T23:59:59`);
 }
 
+// -----------------------
+// Countdown
+// -----------------------
 let countdownTimer = null;
 
 function chooseCountdownTarget(){
+  // Prefer next match datetime if present; otherwise fixed World Cup-ish date.
+  // If DALLAS_MATCHES is empty, still show a countdown.
   if (scheduleData && scheduleData.next_match && scheduleData.next_match.date){
     const nm = scheduleData.next_match;
     const ts = safeParseTimestamp(nm.date, nm.time);
     if (ts) return new Date(ts);
   }
+  // fallback: World Cup June 2026 (safe constant, preserves feature)
   return new Date("2026-06-11T00:00:00");
 }
 
@@ -982,14 +1048,18 @@ function restartCountdown(){
 }
 
 // -----------------------
-// Schedule rendering
+// Schedule rendering + next match highlight
 // -----------------------
+
 function formatKickoffTime(t){
   const s = (t || "").toString().trim();
   if (!s || s.toUpperCase() === "TBD") return "TBD";
+  // Already 12-hour?
   if (/[AP]M/i.test(s)) {
+    // normalize spacing: "7:00 pm" -> "7:00 PM"
     return s.replace(/\s+/g," ").replace(/am/i,"AM").replace(/pm/i,"PM");
   }
+  // "19:00" -> "7:00 PM"
   const m = s.match(/^(\d{1,2}):(\d{2})$/);
   if (m){
     let hh = parseInt(m[1],10);
@@ -1001,6 +1071,8 @@ function formatKickoffTime(t){
   return s;
 }
 
+// Normalize schedule search so users can type a specific day like "June 13" and still match backend dates ("YYYY-MM-DD").
+// Backend filters against m.date (ISO), so we convert common date inputs to ISO when possible.
 function normalizeScheduleSearch(raw){
   const s = (raw || "").toString().trim();
   if (!s) return "";
@@ -1048,10 +1120,12 @@ function normalizeScheduleSearch(raw){
   return s;
 }
 
+
 function renderSchedule(){
   const el = document.getElementById("schedule");
   el.innerHTML = "";
 
+  // Guard: show notice if backend returned one
   if (scheduleData && scheduleData.notice){
     const row = document.createElement("div");
     row.className = "match";
@@ -1064,6 +1138,7 @@ function renderSchedule(){
 
   const rawMatches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches.slice() : [];
 
+  // Build timestamps for sorting + next-match highlight
   const enriched = rawMatches.map(m => {
     const ts = safeParseTimestamp(m.date, m.time);
     return {...m, ts};
@@ -1093,23 +1168,27 @@ function renderSchedule(){
   const nextId = upcoming.length ? upcoming[0].id : null;
 
   // Pagination (Dallas + All Matches)
-  const totalPages = Math.max(1, Math.ceil(enriched.length / PAGE_SIZE));
+let pageMatches = enriched;
+
+const totalPages = Math.max(1, Math.ceil(enriched.length / PAGE_SIZE));
+if (totalPages <= 1){
+  currentPage = 1;
+  if (pagerEl) pagerEl.style.display = "none";
+  if (pageIndicatorEl) pageIndicatorEl.textContent = "";
+  if (prevPageBtn) prevPageBtn.disabled = true;
+  if (nextPageBtn) nextPageBtn.disabled = true;
+} else {
   if (currentPage > totalPages) currentPage = 1;
 
-  let pageMatches = enriched;
-  if (totalPages > 1){
-    const start = (currentPage - 1) * PAGE_SIZE;
-    pageMatches = enriched.slice(start, start + PAGE_SIZE);
-    if (pagerEl) pagerEl.style.display = "flex";
-    if (pageIndicatorEl) pageIndicatorEl.textContent = `Page ${currentPage} of ${totalPages}`;
-    if (prevPageBtn) prevPageBtn.disabled = (currentPage <= 1);
-    if (nextPageBtn) nextPageBtn.disabled = (currentPage >= totalPages);
-  } else {
-    if (pagerEl) pagerEl.style.display = "none";
-    if (pageIndicatorEl) pageIndicatorEl.textContent = "";
-    if (prevPageBtn) prevPageBtn.disabled = true;
-    if (nextPageBtn) nextPageBtn.disabled = true;
-  }
+  const start = (currentPage - 1) * PAGE_SIZE;
+  pageMatches = enriched.slice(start, start + PAGE_SIZE);
+
+  if (pagerEl) pagerEl.style.display = "flex";
+  if (pageIndicatorEl) pageIndicatorEl.textContent = `Page ${currentPage} of ${totalPages}`;
+  if (prevPageBtn) prevPageBtn.disabled = (currentPage <= 1);
+  if (nextPageBtn) nextPageBtn.disabled = (currentPage >= totalPages);
+}
+
 
   pageMatches.forEach(m => {
     const row = document.createElement("div");
@@ -1133,6 +1212,7 @@ function renderSchedule(){
   });
 }
 
+
 function updateMatchDayMode(){
   const isMatchDay = !!(scheduleData && scheduleData.is_match_day);
 
@@ -1154,6 +1234,7 @@ function updateMatchDayMode(){
 // -----------------------
 // Menu rendering
 // -----------------------
+
 function renderMenu(items){
   const el = document.getElementById("menu");
   el.innerHTML = "";
@@ -1184,6 +1265,7 @@ function renderMenu(items){
     const desc = escapeHtml(it.desc || "");
     const price = escapeHtml(it.price || "");
 
+    // Lightweight tags (cosmetic)
     const tags = [];
     const lower = ((it.name||"") + " " + (it.desc||"")).toLowerCase();
     if (lower.includes("spicy") || lower.includes("picante")) tags.push("Spicy");
@@ -1204,6 +1286,18 @@ function renderMenu(items){
     `;
     el.appendChild(d);
   });
+}
+
+
+
+// simple HTML escaping (prevents broken DOM if text contains "<")
+function escapeHtml(s){
+  return String(s ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 }
 
 // -----------------------
@@ -1228,7 +1322,7 @@ async function sendMessage(){
         message: text,
         session_id: sessionId,
         language: lang,
-        history
+        history // kept as a feature; server will safely ignore
       })
     });
 
@@ -1262,11 +1356,14 @@ msgEl.addEventListener("input", () => {
 });
 
 // -----------------------
-// Schedule scope toggle + search + pagination
+
+// -----------------------
+// Schedule scope toggle + search (Dallas ↔ All Matches)
 // -----------------------
 function setScope(newScope){
   scope = (newScope === "all") ? "all" : "dallas";
   localStorage.setItem("schedule_scope", scope);
+  // Reset pagination when switching scope
   currentPage = 1;
   if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
   if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
@@ -1275,25 +1372,52 @@ function setScope(newScope){
 if (scopeDallasBtn) scopeDallasBtn.addEventListener("click", () => setScope("dallas"));
 if (scopeAllBtn) scopeAllBtn.addEventListener("click", () => setScope("all"));
 
-if (prevPageBtn) prevPageBtn.addEventListener("click", () => {
-  if (currentPage > 1){
-    currentPage--;
-    renderSchedule();
-  }
-});
-
+// Pagination controls (Dallas + All Matches)
+if (prevPageBtn) prevPageBtn.addEventListener("click", () => { if (currentPage > 1){ currentPage--; renderSchedule(); } });
 if (nextPageBtn) nextPageBtn.addEventListener("click", () => {
   if (!scheduleData || !Array.isArray(scheduleData.matches)) return;
-  const total = Math.max(1, Math.ceil(scheduleData.matches.length / PAGE_SIZE));
-  if (currentPage < total){
-    currentPage++;
-    renderSchedule();
-  }
+  const totalPages = Math.max(1, Math.ceil(scheduleData.matches.length / PAGE_SIZE));
+  
+
+// -----------------------
+// Menu pagination controls
+// -----------------------
+if (null){
+  null.addEventListener("click", () => {
+    if (!menuShowAll && menuPage > 1){
+      menuPage--;
+      renderMenu(window.menuDataList || []);
+    }
+  });
+}
+if (null){
+  null.addEventListener("click", () => {
+    if (!menuShowAll){
+      const items = window.menuDataList || [];
+      const totalPages = Math.max(1, Math.ceil((items.length || 0) / MENU_PAGE_SIZE));
+      if (menuPage < totalPages){
+        menuPage++;
+        renderMenu(items);
+      }
+    }
+  });
+}
+if (null){
+  null.addEventListener("click", () => {
+    menuShowAll = !menuShowAll;
+    menuPage = 1;
+    renderMenu(window.menuDataList || []);
+  });
+}
+if (currentPage < totalPages){ currentPage++; renderSchedule(); }
 });
 
+
+// Team search (simple text input)
 let _searchTimer = null;
 function setScheduleQuery(q){
   scheduleQuery = normalizeScheduleSearch((q || "").trim());
+  // Reset pagination when searching
   currentPage = 1;
   if (_searchTimer) clearTimeout(_searchTimer);
   _searchTimer = setTimeout(() => loadSchedule(), 250);
@@ -1303,7 +1427,7 @@ if (teamSearchEl){
 }
 
 // -----------------------
-// Clear conversation
+// Clear conversation (UI-only reset, keeps session id)
 // -----------------------
 function clearConversation(){
   history.length = 0;
@@ -1316,23 +1440,29 @@ function clearConversation(){
 }
 if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 
-// -----------------------
 // Init
 // -----------------------
 (async function init(){
   applyLanguageToUI();
 
+  // Restore schedule scope UI
+  if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
+  if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
+
+  // Init cinematic hero (UI-only)
   buildHero();
 
+  // Load sidebar data
   await loadSchedule();
   await loadMenu();
 
+  // Welcome message (feature preserved)
   addBubble("assistant", L().welcome);
   history.push({role:"assistant", content: L().welcome});
 
+  // Ensure focus
   msgEl.focus();
 })();
 </script>
-
 </body>
 </html>
