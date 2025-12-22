@@ -188,7 +188,7 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
       letter-spacing:.18em;
       font-size:11px;
       font-weight:900;
-      color:rgba(234,240,255,.85);
+      color:rgba(255,204,102,.95);
       text-transform:uppercase;
     }
     .heroTitle{
@@ -196,14 +196,33 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
       font-weight:900;
       line-height:1.05;
       text-transform:uppercase;
-      text-shadow: 0 10px 20px rgba(0,0,0,.55);
-    }
+      text-shadow:0 2px 12px rgba(0,0,0,.55);
+    
+  color:var(--warn);}
     .compact .heroTitle{ font-size:18px; }
     .heroSub{
       font-size:12px;
       color:rgba(234,240,255,.82);
       max-width: 430px;
     }
+    .heroTonightTag{
+      margin-top:10px;
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+      padding:8px 10px;
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:12px;
+      background: rgba(0,0,0,.28);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      font-size:13px;
+      line-height:1.2;
+      color: rgba(255,255,255,.92);
+      max-width: 520px;
+    }
+    .heroTonightTag .muted{ color: rgba(255,255,255,.72); }
+    
     .heroFX{ position:absolute; inset:0; z-index:2; pointer-events:none; }
     .heroSmoke{
       position:absolute; inset:-40px;
@@ -681,7 +700,7 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
   position:absolute;
   top:14px; bottom:14px;
   right:14px;
-  width:min(460px, 48%);
+  width:min(560px, 56%);
   z-index:4;
   pointer-events:none; /* never blocks chat/menu/schedule */
   display:flex;
@@ -694,56 +713,16 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
   width:100%;
   display:grid;
   grid-template-columns:repeat(3, 1fr);
-  gap:12px;
+  gap:22px;
   align-items:end;
   opacity:1;
   transform: translateY(0);
-  transition: opacity 520ms ease, transform 520ms ease, filter 520ms ease;
+  transition: opacity 420ms ease, transform 420ms ease;
 }
 .heroTri.isFading{
   opacity:0;
   transform: translateY(6px);
 }
-
-/* World Cup flare: blur + glow + staggered card entry */
-.heroTri.isFading{
-  filter: blur(2px) saturate(1.05);
-  transform: translateY(10px) scale(.985);
-}
-.heroTri.isFlareIn .heroCard.heroCardTri{
-  animation: heroCardEnter 720ms cubic-bezier(.16,1,.3,1) both;
-}
-.heroTri.isFlareIn .heroCard.heroCardTri:nth-child(2){ animation-delay: 90ms; }
-.heroTri.isFlareIn .heroCard.heroCardTri:nth-child(3){ animation-delay: 180ms; }
-
-@keyframes heroCardEnter{
-  0%{ opacity:0; transform: translateY(14px) scale(.975); filter: blur(2px); }
-  55%{ opacity:1; transform: translateY(0) scale(1.02); filter: blur(0); }
-  100%{ opacity:1; transform: translateY(0) scale(1.00); filter: blur(0); }
-}
-
-/* light sweep over each card on entry */
-.heroCard.heroCardTri::before{
-  content:"";
-  position:absolute; inset:-30% -40%;
-  background: linear-gradient(120deg, transparent 35%, rgba(255,255,255,.22) 50%, transparent 65%);
-  transform: translateX(-60%) rotate(6deg);
-  opacity:0;
-  pointer-events:none;
-}
-.heroTri.isFlareIn .heroCard.heroCardTri::before{
-  opacity:1;
-  animation: heroSweep 720ms ease both;
-}
-.heroTri.isFlareIn .heroCard.heroCardTri:nth-child(2)::before{ animation-delay: 90ms; }
-.heroTri.isFlareIn .heroCard.heroCardTri:nth-child(3)::before{ animation-delay: 180ms; }
-
-@keyframes heroSweep{
-  0%{ transform: translateX(-70%) rotate(6deg); opacity:0; }
-  15%{ opacity:1; }
-  100%{ transform: translateX(70%) rotate(6deg); opacity:0; }
-}
-
 
 .heroCard.heroCardTri{
   width:auto;
@@ -773,7 +752,34 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
   text-shadow: 0 10px 26px rgba(0,0,0,.80);
 }
 
-</style>
+
+    .uiDebug{
+      position:fixed;
+      left:10px;
+      right:10px;
+      bottom:10px;
+      z-index:9999;
+      pointer-events:none;
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size:11px;
+      color: rgba(255,255,255,.82);
+    }
+    .uiDebug .box{
+      pointer-events:none;
+      background: rgba(0,0,0,.42);
+      border:1px solid rgba(255,255,255,.16);
+      border-radius:10px;
+      padding:6px 8px;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    </style>
 </head>
 <body>
 <div class="wrap">
@@ -805,6 +811,7 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
 <div class="heroKicker">WORLD CUP 2026</div>
 <div class="heroTitle">DALLAS MATCH DAY HQ</div>
 <div class="heroSub">Reserve tables • Live schedules • Concierge chat</div>
+<div class="heroTonightTag" id="heroTonightTag">Tonight’s Dallas Match: <span class="muted">loading…</span></div>
 <div class="heroRoster" id="heroRoster" aria-hidden="true"></div>
 </div>
 <div aria-hidden="true" class="heroDots" id="heroDots"></div>
@@ -1100,7 +1107,7 @@ function stripHtml(html){
 // -----------------------
 // HERO banner (UI-only)
 // -----------------------
-const HERO_SLIDE_MS = 5000; // 3 seconds per group
+const HERO_SLIDE_MS = 5000; // 5 seconds per group
 const HERO_GROUP_SIZE = 3;
 let _heroTimer = null;
 let _heroIndex = 0;
@@ -1108,26 +1115,26 @@ let _heroPaused = false;
 
 // NOTE: These are safe, replaceable image URLs. You can swap in your own hosted images anytime.
 const heroPlayers = [
-  { name:"Cristiano Ronaldo", country:"Portugal", color:"#ff3b30", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Cristiano%20Ronaldo%202018.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Cristiano%20Ronaldo%202018.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Cristiano%20Ronaldo%202018.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Cristiano%20Ronaldo%202018.jpg?width=1200"], pos:"50% 20%" },
-  { name:"Lionel Messi", country:"Argentina", color:"#00b3ff", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Lionel%20Messi%20Argentina%202022.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Lionel%20Messi%20Argentina%202022.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Lionel%20Messi%20Argentina%202022.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Lionel%20Messi%20Argentina%202022.jpg?width=1200"], pos:"50% 18%" },
-  { name:"Kylian Mbapp\u00e9", country:"France", color:"#1f6feb", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Kylian%20Mbapp%C3%A9%20France%202022.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Kylian%20Mbapp%C3%A9%20France%202022.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Kylian%20Mbapp%C3%A9%20France%202022.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Kylian%20Mbapp%C3%A9%20France%202022.jpg?width=1200"], pos:"50% 18%" },
-  { name:"Erling Haaland", country:"Norway", color:"#ffcc66", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Erling%20Haaland%202023%20%28cropped-v2%29.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Erling%20Haaland%202023%20%28cropped-v2%29.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Erling%20Haaland%202023%20%28cropped-v2%29.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Erling%20Haaland%202023%20%28cropped-v2%29.jpg?width=1200"], pos:"50% 18%" },
-  { name:"Lamine Yamal", country:"Spain", color:"#f5d76e", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Lamine%20Yamal%20in%202024.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Lamine%20Yamal%20in%202024.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Lamine%20Yamal%20in%202024.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Lamine%20Yamal%20in%202024.jpg?width=1200"], pos:"50% 18%" },
-  { name:"Jude Bellingham", country:"England", color:"#2ea043", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Jude%20Bellingham%202023.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Jude%20Bellingham%202023.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Jude%20Bellingham%202023.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Jude%20Bellingham%202023.jpg?width=1200"], pos:"50% 18%" },
-  { name:"Vin\u00edcius J\u00fanior", country:"Brazil", color:"#00d26a", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Vinicius%20Jr%202022.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Vinicius%20Jr%202022.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Vinicius%20Jr%202022.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Vinicius%20Jr%202022.jpg?width=1200"], pos:"50% 18%" },
-  { name:"Pedri", country:"Spain", color:"#ffcc66", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Pedri%20Spain%202022.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Pedri%20Spain%202022.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Pedri%20Spain%202022.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Pedri%20Spain%202022.jpg?width=1200"], pos:"50% 20%" },
-  { name:"Alphonso Davies", country:"Canada", color:"#ff3b30", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Alphonso%20Davies%202022.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Alphonso%20Davies%202022.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Alphonso%20Davies%202022.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Alphonso%20Davies%202022.jpg?width=1200"], pos:"50% 20%" },
-  { name:"Son Heung-min", country:"Korea Republic", color:"#00b3ff", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Son%20Heung-min%202018.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Son%20Heung-min%202018.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Son%20Heung-min%202018.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Son%20Heung-min%202018.jpg?width=1200"], pos:"50% 18%" },
-  { name:"R\u00faben Dias", country:"Portugal", color:"#2ea043", img:"https://commons.wikimedia.org/wiki/Special:FilePath/R%C3%BAben%20Dias%202021.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/R%C3%BAben%20Dias%202021.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/R%C3%BAben%20Dias%202021.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/R%C3%BAben%20Dias%202021.jpg?width=1200"], pos:"50% 18%" },
-  { name:"Rodri", country:"Spain", color:"#1f6feb", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Rodri%202022.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Rodri%202022.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Rodri%202022.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Rodri%202022.jpg?width=1200"], pos:"50% 18%" },
-  { name:"Phil Foden", country:"England", color:"#00b3ff", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Phil%20Foden%202021.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Phil%20Foden%202021.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Phil%20Foden%202021.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Phil%20Foden%202021.jpg?width=1200"], pos:"50% 18%" },
-  { name:"Kevin De Bruyne", country:"Belgium", color:"#ffcc66", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Kevin%20De%20Bruyne%2020180709.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Kevin%20De%20Bruyne%2020180709.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Kevin%20De%20Bruyne%2020180709.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Kevin%20De%20Bruyne%2020180709.jpg?width=1200"], pos:"50% 18%" },
-  { name:"Harry Kane", country:"England", color:"#1f6feb", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Harry%20Kane%202018.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Harry%20Kane%202018.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Harry%20Kane%202018.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Harry%20Kane%202018.jpg?width=1200"], pos:"50% 18%" },
-  { name:"Bernardo Silva", country:"Portugal", color:"#2ea043", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Bernardo%20Silva%202018.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Bernardo%20Silva%202018.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Bernardo%20Silva%202018.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Bernardo%20Silva%202018.jpg?width=1200"], pos:"50% 18%" },
-  { name:"Manuel Neuer", country:"Germany", color:"#ffcc66", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Manuel%20Neuer%202018.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Manuel%20Neuer%202018.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Manuel%20Neuer%202018.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Manuel%20Neuer%202018.jpg?width=1200"], pos:"50% 18%" },
-  { name:"Giacomo Raspadori", country:"Italy", color:"#00b3ff", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Giacomo%20Raspadori%202021.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Giacomo%20Raspadori%202021.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Giacomo%20Raspadori%202021.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Giacomo%20Raspadori%202021.jpg?width=1200"], pos:"50% 18%" },
-  { name:"Bukayo Saka", country:"England", color:"#1f6feb", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Bukayo%20Saka%202021.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Bukayo%20Saka%202021.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Bukayo%20Saka%202021.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Bukayo%20Saka%202021.jpg?width=1200"], pos:"50% 18%" },
-  { name:"Federico Valverde", country:"Uruguay", color:"#00d26a", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Federico%20Valverde%202022.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Federico%20Valverde%202022.jpg?width=2000", "https://commons.wikimedia.org/wiki/Special:FilePath/Federico%20Valverde%202022.jpg?width=1600", "https://commons.wikimedia.org/wiki/Special:FilePath/Federico%20Valverde%202022.jpg?width=1200"], pos:"50% 18%" }
+  { name:"Cristiano Ronaldo", country:"Portugal", color:"#ff3b30", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Cristiano_Ronaldo_2018.jpg?width=1600", pos:"50% 18%" },
+  { name:"Lionel Messi", country:"Argentina", color:"#00b3ff", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Lionel-Messi-Argentina-2022-FIFA-World-Cup.jpg?width=1600", pos:"50% 18%" },
+  { name:"Kylian Mbappé", country:"France", color:"#2ea043", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Kylian_Mbapp%C3%A9_France.jpg?width=1600", pos:"50% 18%" },
+  { name:"Erling Haaland", country:"Norway", color:"#ffd166", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Erling_Haaland_2023_(cropped-v2).jpg?width=1600", pos:"50% 18%" },
+  { name:"Lamine Yamal", country:"Spain", color:"#ffcc66", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Lamine_Yamal_in_2025_(cropped).jpg?width=1600", pos:"50% 18%" },
+  { name:"Jude Bellingham", country:"England", color:"#7aa2ff", img:"https://commons.wikimedia.org/wiki/Special:FilePath/2022_FIFA_World_Cup_-_Bellingham_(cropped).jpg?width=1600", pos:"50% 20%" },
+  { name:"Vinícius Júnior", country:"Brazil", color:"#2ea043", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Vinicius_Jr_2018.png?width=1600", pos:"50% 18%" },
+  { name:"Pedri", country:"Spain", color:"#ffcc66", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Pedri_-_Paris_SG_-_FC_Barcelone_2021.png?width=1600", pos:"50% 18%" },
+  { name:"Alphonso Davies", country:"Canada", color:"#ff3b30", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Alphonso_Davies_in_2022.jpg?width=1600", pos:"50% 18%" },
+  { name:"Son Heung-min", country:"South Korea", color:"#ff3b30", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Son_Heung-min_2016.jpg?width=1600", pos:"50% 18%" },
+  { name:"Rúben Dias", country:"Portugal", color:"#00b3ff", img:"https://commons.wikimedia.org/wiki/Special:FilePath/2021-12-07_Fu%C3%9Fball%2C_M%C3%A4nner%2C_UEFA_Champions_League%2C_RB_Leipzig_-_Manchester_City_FC_1DX_2828_by_Stepro_(cropped).jpg?width=1600", pos:"50% 18%" },
+  { name:"Rodri", country:"Spain", color:"#ffcc66", img:"https://commons.wikimedia.org/wiki/Special:FilePath/2023-10-04_Fu%C3%9Fball%2C_M%C3%A4nner%2C_UEFA_Champions_League%2C_RB_Leipzig_-_Manchester_City_FC_1DX_2685.jpg?width=1600", pos:"50% 18%" },
+  { name:"Phil Foden", country:"England", color:"#7aa2ff", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Phil_Foden_2022_(cropped).jpeg?width=1600", pos:"50% 18%" },
+  { name:"Kevin De Bruyne", country:"Belgium", color:"#ffd166", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Kevin_De_Bruyne_celebrating_Belgium%27s_2%E2%80%931_win_over_Brazil.jpg?width=1600", pos:"50% 18%" },
+  { name:"Harry Kane", country:"England", color:"#7aa2ff", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Harry_Kane_2018-07-03_1.jpg?width=1600", pos:"50% 18%" },
+  { name:"Bernardo Silva", country:"Portugal", color:"#00b3ff", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Bernardo_Silva_2018.jpg?width=1600", pos:"50% 18%" },
+  { name:"Manuel Neuer", country:"Germany", color:"#c7d2fe", img:"https://commons.wikimedia.org/wiki/Special:FilePath/20180602_FIFA_Friendly_Match_Austria_vs._Germany_Manuel_Neuer_850_0657.jpg?width=1600", pos:"50% 18%" },
+  { name:"Giacomo Raspadori", country:"Italy", color:"#2ea043", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Raspadori_Nazionale.jpg?width=1600", pos:"50% 18%" },
+  { name:"Bukayo Saka", country:"England", color:"#7aa2ff", img:"https://commons.wikimedia.org/wiki/Special:FilePath/1_bukayo_saka_arsenal_2025_(cropped).jpg?width=1600", pos:"50% 18%" },
+  { name:"Federico Valverde", country:"Uruguay", color:"#ffd166", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Federico_Valverde_Real_Madrid_2018.jpg?width=1600", pos:"50% 18%" },
 ];
 
 const heroRosterNames = [
@@ -1222,14 +1229,12 @@ function renderHeroGroup(startIdx, immediate=false){
     return;
   }
 
-  // Fade out -> swap -> flare in (World Cup style)
+  // Fade out -> swap -> fade in
   tri.classList.add("isFading");
   setTimeout(() => {
     doSwap();
     tri.classList.remove("isFading");
-    tri.classList.add("isFlareIn");
-    setTimeout(() => { tri.classList.remove("isFlareIn"); }, 760);
-  }, 420);
+  }, 220);
 }
 
 function tickHero(){
@@ -1774,6 +1779,8 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 
   // Load sidebar data
   await loadSchedule();
+  // Update cinematic tag (UI-only)
+  loadDallasHeroTag();
   await loadMenu();
 
   // Welcome message (feature preserved)
@@ -1784,5 +1791,79 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
   msgEl.focus();
 })();
 </script>
+<div id="uiDebug" class="uiDebug" hidden></div>
 </body>
-</html>
+</html
+// -----------------------
+// Hero: Tonight's Dallas Match (UI-only)
+// -----------------------
+let heroDallasNext = null;
+
+function matchLabel(m){
+  if (!m) return "";
+  // Common schemas: `teams` or `team1`/`team2`
+  const t = m.teams || (m.team1 && m.team2 ? `${m.team1} vs ${m.team2}` : "") || "";
+  return String(t).trim();
+}
+
+function matchTimeLabel(m){
+  if (!m) return "";
+  // Prefer already-parsed `time` or `datetime_local`
+  const t = m.time || "";
+  if (t) return to12Hour(String(t));
+  return "";
+}
+
+function matchDateLabel(m){
+  if (!m) return "";
+  const d = m.date || "";
+  return String(d);
+}
+
+function formatHeroTonightHTML(m){
+  if (!m) return `Tonight’s Dallas Match: <span class="muted">TBD</span>`;
+  const label = escapeHtml(matchLabel(m)) || "Next Dallas Match";
+  const date = escapeHtml(matchDateLabel(m));
+  const time = escapeHtml(matchTimeLabel(m));
+  const venue = escapeHtml((m.venue || "").toString());
+  const bits = [date, time].filter(Boolean).join(" • ");
+  const right = [bits, venue].filter(Boolean).join(" • ");
+  return `Tonight’s Dallas Match: <b>${label}</b>${right ? ` <span class="muted">— ${right}</span>` : ""}`;
+}
+
+async function loadDallasHeroTag(){
+  const tag = document.getElementById("heroTonightTag");
+  if (!tag) return;
+  try{
+    const res = await fetch(`/schedule.json?scope=dallas&q=`);
+    const data = await res.json();
+    heroDallasNext = (data && data.next_match) ? data.next_match : null;
+    tag.innerHTML = formatHeroTonightHTML(heroDallasNext);
+  }catch(e){
+    heroDallasNext = null;
+    tag.innerHTML = `Tonight’s Dallas Match: <span class="muted">unavailable</span>`;
+  }
+  updateDebugFooter();
+}
+
+function debugEnabled(){
+  return (new URLSearchParams(location.search).get("debug") === "1") || (localStorage.getItem("debug") === "1");
+}
+
+function updateDebugFooter(){
+  const el = document.getElementById("uiDebug");
+  if (!el) return;
+  if (!debugEnabled()){
+    el.hidden = true;
+    return;
+  }
+  el.hidden = false;
+  const nxt = heroDallasNext ? matchLabel(heroDallasNext) : "TBD";
+  const pageInfo = `scope=${scope} page=${currentPage} q=${(scheduleQ||"").trim()||"∅"}`;
+  el.innerHTML = `
+    <div class="box">Tonight(Dallas): ${escapeHtml(nxt)}</div>
+    <div class="box">${escapeHtml(pageInfo)}</div>
+  `;
+}
+
+>
