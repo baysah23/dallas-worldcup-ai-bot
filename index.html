@@ -2043,7 +2043,9 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 })();
 </script>
 
-// Sync hero mini flags with active slide (UI-only)
+
+<script>
+/* Sync hero mini flags with active slide (UI-only) */
 (function(){
   const flags = Array.from(document.querySelectorAll('.hero-flag'));
   const slides = Array.from(document.querySelectorAll('.heroSlide'));
@@ -2056,13 +2058,12 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
     flags.forEach(f => f.classList.toggle('active', f.getAttribute('data-country') === c));
   }
 
-  // Initial
   updateFlags();
 
-  // Observe class changes on slides
   const mo = new MutationObserver(updateFlags);
   slides.forEach(s => mo.observe(s, { attributes:true, attributeFilter:['class'] }));
 })();
+</script>
 
 </body>
 </html>
