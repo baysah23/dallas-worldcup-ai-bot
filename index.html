@@ -188,7 +188,7 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
       letter-spacing:.18em;
       font-size:11px;
       font-weight:900;
-      color:rgba(234,240,255,.85);
+      color:#d4af37;
       text-transform:uppercase;
     }
     .heroTitle{
@@ -197,8 +197,11 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
       line-height:1.05;
       text-transform:uppercase;
       text-shadow: 0 10px 20px rgba(0,0,0,.55);
-    }
-    .compact .heroTitle{ font-size:18px; }
+  color:#d4af37;
+}
+    .compact .heroTitle{ font-size:18px;
+  color:#d4af37;
+}
     .heroSub{
       font-size:12px;
       color:rgba(234,240,255,.82);
@@ -642,35 +645,6 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
   z-index:-1;
 }
 
-.heroRoster{
-  margin-top:10px;
-  overflow:hidden;
-  border-radius:999px;
-  border:1px solid rgba(255,255,255,.10);
-  background: rgba(0,0,0,.18);
-}
-.heroRosterTrack{
-  display:inline-flex;
-  gap:8px;
-  padding:6px 10px;
-  white-space:nowrap;
-  animation: rosterScroll 18s linear infinite;
-}
-@keyframes rosterScroll{
-  0%{ transform: translateX(0); }
-  100%{ transform: translateX(-50%); }
-}
-.heroChip{
-  display:inline-flex;
-  align-items:center;
-  padding:4px 8px;
-  border-radius:999px;
-  font-size:11px;
-  font-weight:800;
-  letter-spacing:.01em;
-  background: rgba(255,255,255,.08);
-  border:1px solid rgba(255,255,255,.10);
-}
 /* ===== END HERO UPGRADE ===== */
 
 
@@ -690,7 +664,7 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
 }
 .compact .heroTriWrap{ width:min(380px, 56%); right:10px; top:10px; bottom:10px; }
 
-#heroSlides{
+.heroTri{
   width:100%;
   display:grid;
   grid-template-columns:repeat(3, 1fr);
@@ -700,7 +674,7 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
   transform: translateY(0);
   transition: opacity 420ms ease, transform 420ms ease;
 }
-#heroSlides.isFading{
+.heroTri.isFading{
   opacity:0;
   transform: translateY(6px);
 }
@@ -732,119 +706,6 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
 .heroTitle, .heroSub{
   text-shadow: 0 10px 26px rgba(0,0,0,.80);
 }
-
-
-/* ===== HERO BANNER UPGRADE (single-player cinematic) ===== */
-:root{
-  --gold:#f6d365;
-  --gold2:#fda085;
-}
-.heroTitle{ color: var(--gold); text-shadow: 0 10px 24px rgba(0,0,0,.55), 0 0 22px rgba(246,211,101,.18); }
-.heroKicker{ color: rgba(255,255,255,.86); }
-
-#heroSlides{
-  position:absolute;
-  inset:0;
-  display:block;
-  position:relative;
-  width:100%;
-  height:100%;
-  transition: opacity .48s ease, transform .48s ease;
-}
-#heroSlides.isFading{ opacity:0; transform: scale(.995); }
-
-.heroCard.isSingle{
-  position:absolute;
-  inset:0;
-  border-radius:18px;
-  overflow:hidden;
-  background: rgba(0,0,0,.25);
-}
-
-/* blurred background fill (so landscape images still look premium) */
-.heroBg{
-  position:absolute;
-  inset:-18%;
-  background-size:cover;
-  background-position:center;
-  filter: blur(18px) saturate(1.15) brightness(.78);
-  transform: scale(1.08);
-  opacity:.9;
-}
-.heroCard.isSingle::after{
-  content:"";
-  position:absolute;
-  inset:0;
-  background: radial-gradient(700px 380px at 50% 45%, rgba(255,255,255,.08), rgba(0,0,0,.42) 60%, rgba(0,0,0,.60) 100%);
-  pointer-events:none;
-}
-
-/* main player image (centered, visible, cinematic) */
-.heroImg{
-  position:absolute;
-  left:50%;
-  top:50%;
-  transform: translate(-50%,-46%);
-  max-width: 82%;
-  max-height: 92%;
-  width:auto;
-  height:auto;
-  object-fit: contain;
-  filter: drop-shadow(0 18px 30px rgba(0,0,0,.55));
-  opacity:1;
-}
-
-/* subtle zoom that pairs with crossfade */
-.heroImg.kenBurns{
-  animation: heroKenBurns 5s ease-in-out forwards;
-}
-@keyframes heroKenBurns{
-  from{ transform: translate(-50%,-46%) scale(1.02); }
-  to  { transform: translate(-50%,-46%) scale(1.08); }
-}
-
-/* country glow */
-.heroGlow{
-  position:absolute;
-  inset:-20%;
-  background: radial-gradient(460px 340px at 50% 55%, color-mix(in srgb, var(--glow) 58%, transparent), transparent 70%);
-  opacity:.9;
-  mix-blend-mode: screen;
-  pointer-events:none;
-}
-
-/* nameplate (kept low to avoid headers) */
-.heroMeta{
-  position:absolute;
-  left:50%;
-  bottom:16px;
-  transform: translateX(-50%);
-  text-align:center;
-  padding:10px 14px;
-  border-radius:999px;
-  background: rgba(0,0,0,.35);
-  border: 1px solid rgba(255,255,255,.12);
-  backdrop-filter: blur(10px);
-  pointer-events:none;
-}
-.heroMetaName{
-  font-weight: 800;
-  letter-spacing: .3px;
-  color: #fff;
-  font-size: 14px;
-}
-.heroMetaCountry{
-  font-size: 12px;
-  color: rgba(255,255,255,.8);
-  margin-top:2px;
-}
-
-/* If an image fails to load, keep the background + glow (no blank banner). */
-.heroCard.imgFail .heroBg{ opacity: .65; }
-.heroCard.imgFail .heroGlow{ opacity: .7; }
-
-/* light sweep: ensure the sweep stays visible on top */
-.heroSweep{ opacity: .55; }
 
 </style>
 </head>
@@ -878,7 +739,6 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
 <div class="heroKicker">WORLD CUP 2026</div>
 <div class="heroTitle">DALLAS MATCH DAY HQ</div>
 <div class="heroSub">Reserve tables • Live schedules • Concierge chat</div>
-<div class="heroRoster" id="heroRoster" aria-hidden="true"></div>
 </div>
 <div aria-hidden="true" class="heroDots" id="heroDots"></div>
 </div>
@@ -1174,39 +1034,108 @@ function stripHtml(html){
 // HERO banner (UI-only)
 // -----------------------
 const HERO_SLIDE_MS = 5000; // 5 seconds per player
-const HERO_GROUP_SIZE = 1;  // one at a time (required)
 let _heroTimer = null;
 let _heroIndex = 0;
 let _heroPaused = false;
+let _heroActiveLayer = 0;
 
-// High-quality, license-friendly images (Wikimedia upload URLs). Swap with your own hosted images anytime.
+// Highest-quality (and replaceable) image URLs (Wikimedia Commons / public pages).
+// You can swap these with your own hosted images anytime.
 const heroPlayers = [
-  { name:"Lionel Messi",      country:"Argentina",    color:"#75AADB", img:"https://upload.wikimedia.org/wikipedia/commons/6/6c/Lionel_Messi_in_2018.jpg", pos:"50% 22%" },
-  { name:"Cristiano Ronaldo", country:"Portugal",     color:"#006A4E", img:"https://upload.wikimedia.org/wikipedia/commons/9/9a/Cristiano_Ronaldo_Portugal.jpg", pos:"50% 18%" },
-  { name:"Kylian Mbappé",     country:"France",       color:"#0055A4", img:"https://upload.wikimedia.org/wikipedia/commons/6/61/Kylian_Mbapp%C3%A9_World_Cup_Trophy.jpg", pos:"45% 18%" },
-  { name:"Erling Haaland",    country:"Norway",       color:"#BA0C2F", img:"https://upload.wikimedia.org/wikipedia/commons/7/71/Erling_Haaland_June_2025.jpg", pos:"50% 16%" },
-  { name:"Lamine Yamal",      country:"Spain",        color:"#C60B1E", img:"https://upload.wikimedia.org/wikipedia/commons/2/2c/Lamine_Yamal_in_2025_%28cropped%29.jpg", pos:"50% 20%" },
-  { name:"Bukayo Saka",       country:"England",      color:"#CF142B", img:"https://upload.wikimedia.org/wikipedia/commons/1/14/2022_FIFA_World_Cup_England_0-0_USA_-_Saka_vs_Pulisic.jpg", pos:"50% 55%" },
-  { name:"Vinícius Júnior",   country:"Brazil",       color:"#009C3B", img:"https://upload.wikimedia.org/wikipedia/commons/f/f3/Vinicius_Jr_2021.jpg", pos:"50% 18%" },
-  { name:"Alphonso Davies",   country:"Canada",       color:"#D80621", img:"https://upload.wikimedia.org/wikipedia/commons/5/5e/Alphonso_Davies_2018.jpg", pos:"50% 30%" },
-  { name:"Son Heung-min",     country:"South Korea",  color:"#003478", img:"https://upload.wikimedia.org/wikipedia/commons/archive/d/df/20180919042751%21Mex-Kor_%2819%29_%28cropped%29.jpg", pos:"50% 28%" }
+  { name:"Lionel Messi", country:"Argentina", color:"#74ACDF", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Argentina_vs_mexico_messi_vs_alvarado.jpg" },
+  { name:"Cristiano Ronaldo", country:"Portugal", color:"#006600", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Cristiano_Ronaldo_WC2022_-_02.jpg" },
+  { name:"Kylian Mbappé", country:"France", color:"#0055A4", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Kylian_Mbappe_2017.jpg" },
+  { name:"Erling Haaland", country:"Norway", color:"#BA0C2F", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Erling_Haaland_2023_(cropped-v2).jpg" },
+  { name:"Lamine Yamal", country:"Spain", color:"#AA151B", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Lamine_Yamal_in_2025.jpg" },
+  { name:"Bukayo Saka", country:"England", color:"#CE1126", img:"https://commons.wikimedia.org/wiki/Special:FilePath/2022_FIFA_World_Cup_England_0-0_USA_-_Saka_vs_Pulisic.jpg" },
+  { name:"Vinícius Júnior", country:"Brazil", color:"#009C3B", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Vinicius_Jr_2018_(cropped).jpg" },
+  { name:"Alphonso Davies", country:"Canada", color:"#D52B1E", img:"https://commons.wikimedia.org/w/index.php?curid=79676267" },
+  { name:"Son Heung-min", country:"Korea Republic", color:"#CD2E3A", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Son_Heung-min_at_2019_AFC_Asian_Cup.jpg" }
 ];
 
-const heroRosterNames = heroPlayers.map(p => p.name);
+function stopHero(){
+  if (_heroTimer) { clearInterval(_heroTimer); _heroTimer = null; }
+}
+function startHero(){
+  stopHero();
+  _heroTimer = setInterval(() => {
+    if (_heroPaused) return;
+    _heroIndex = (_heroIndex + 1) % heroPlayers.length;
+    setHeroPlayer(_heroIndex);
+  }, HERO_SLIDE_MS);
+}
 
-function renderHero(){
-  const tri = document.getElementById("heroSlides");
+function setHeroPlayer(idx, immediate=false){
   const heroBanner = document.getElementById("heroBanner");
-  const heroDotsEl = document.getElementById("heroDots");
-  const rosterEl = document.getElementById("heroRoster");
+  const stage = document.getElementById("heroSlides");
+  const dots = document.getElementById("heroDots");
+  if (!heroBanner || !stage) return;
 
-  if (!tri || !heroBanner) return;
+  const p = heroPlayers[idx] || heroPlayers[0];
 
-  // Roster list (UI-only)
-  if (rosterEl){
-    rosterEl.innerHTML = heroRosterNames.map(n => `<span>${escapeHtml(n)}</span>`).join("");
+  // set glow color for FX layer
+  heroBanner.style.setProperty("--heroGlowColor", (p.color || "#1f6feb"));
+
+  // Ensure stage markup (two layers for crossfade)
+  if (!stage.dataset.ready){
+    stage.innerHTML = `
+      <div class="heroStage" aria-hidden="true">
+        <div class="heroLayer active" id="heroLayerA">
+          <div class="heroFigure">
+            <img class="heroPlayerImg" id="heroImgA" alt="" loading="eager" decoding="async"/>
+            <div class="heroNameTag" id="heroNameA"></div>
+          </div>
+        </div>
+        <div class="heroLayer" id="heroLayerB">
+          <div class="heroFigure">
+            <img class="heroPlayerImg" id="heroImgB" alt="" loading="eager" decoding="async"/>
+            <div class="heroNameTag" id="heroNameB"></div>
+          </div>
+        </div>
+      </div>
+    `;
+    stage.dataset.ready = "1";
   }
-  if (heroDotsEl) heroDotsEl.innerHTML = "";
+
+  const a = document.getElementById("heroLayerA");
+  const b = document.getElementById("heroLayerB");
+  const imgA = document.getElementById("heroImgA");
+  const imgB = document.getElementById("heroImgB");
+  const nameA = document.getElementById("heroNameA");
+  const nameB = document.getElementById("heroNameB");
+  if (!a || !b || !imgA || !imgB || !nameA || !nameB) return;
+
+  const nextIsA = (_heroActiveLayer === 1); // toggle
+  const nextLayer = nextIsA ? a : b;
+  const prevLayer = nextIsA ? b : a;
+  const nextImg = nextIsA ? imgA : imgB;
+  const nextName = nextIsA ? nameA : nameB;
+
+  nextImg.src = p.img;
+  nextImg.alt = `${p.name} — ${p.country}`;
+  nextName.textContent = p.name;
+
+  // crossfade
+  if (immediate){
+    a.classList.toggle("active", nextIsA);
+    b.classList.toggle("active", !nextIsA);
+  } else {
+    // ensure next starts hidden
+    nextLayer.classList.add("active");
+    prevLayer.classList.remove("active");
+  }
+  _heroActiveLayer = nextIsA ? 0 : 1;
+
+  // dots
+  if (dots){
+    dots.innerHTML = heroPlayers.map((_, i) => `<span class="heroDot ${i===idx ? "active":""}" aria-hidden="true"></span>`).join("");
+  }
+}
+
+function initHero(){
+  const heroBanner = document.getElementById("heroBanner");
+  const stage = document.getElementById("heroSlides");
+  if (!heroBanner || !stage || !Array.isArray(heroPlayers) || heroPlayers.length === 0) return;
 
   // Pause on hover/touch (UI-only)
   heroBanner.addEventListener("mouseenter", () => { _heroPaused = true; });
@@ -1214,203 +1143,12 @@ function renderHero(){
   heroBanner.addEventListener("touchstart", () => { _heroPaused = true; }, {passive:true});
   heroBanner.addEventListener("touchend", () => { _heroPaused = false; }, {passive:true});
 
-  // Start at 0
+  // Preload images (best-effort)
+  heroPlayers.forEach(p => { const im = new Image(); im.src = p.img; });
+
   _heroIndex = 0;
-  renderHeroGroup(_heroIndex, true);
+  setHeroPlayer(_heroIndex, true);
   startHero();
-}
-
-function renderHeroGroup(startIdx, immediate=false){
-  const tri = document.getElementById("heroSlides");
-  if (!tri) return;
-
-  const n = heroPlayers.length;
-  if (!n) return;
-
-  const i = ((startIdx % n) + n) % n;
-  const p = heroPlayers[i] || {};
-  const safeName = escapeHtml(p.name || "");
-  const safeCountry = escapeHtml(p.country || "");
-  const color = p.color || "#1f6feb";
-  const pos = p.pos || "50% 20%";
-  const img = p.img || "";
-
-  const cardHTML = `
-    <div class="heroCard isSingle" style="--glow:${color}">
-      <div class="heroBg" style="background-image:url('${img.replace(/'/g, "%27")}')"></div>
-      <img class="heroImg" alt="${safeName}" src="${img}" style="object-position:${pos}" loading="eager" decoding="async" referrerpolicy="no-referrer"
-        onerror="this.onerror=null; this.style.display='none'; this.parentElement.classList.add('imgFail');" />
-      <div class="heroMeta">
-        <div class="heroMetaName">${safeName}</div>
-        <div class="heroMetaCountry">${safeCountry}</div>
-      </div>
-      <div class="heroGlow"></div>
-    </div>
-  `;
-
-  const doSwap = () => { tri.innerHTML = cardHTML; };
-
-  if (immediate){
-    tri.classList.remove("isFading");
-    doSwap();
-    // retrigger ken-burns
-    requestAnimationFrame(() => {
-      const imgEl = tri.querySelector(".heroImg");
-      if (imgEl){
-        imgEl.classList.remove("kenBurns");
-        void imgEl.offsetWidth; // reflow
-        imgEl.classList.add("kenBurns");
-      }
-    });
-    return;
-  }
-
-  // Fade out -> swap -> fade in
-  tri.classList.add("isFading");
-  setTimeout(() => {
-    doSwap();
-    // fade back in + restart zoom
-    requestAnimationFrame(() => {
-      tri.classList.remove("isFading");
-      const imgEl = tri.querySelector(".heroImg");
-      if (imgEl){
-        imgEl.classList.remove("kenBurns");
-        void imgEl.offsetWidth;
-        imgEl.classList.add("kenBurns");
-      }
-    });
-  }, 480);
-}
-
-function startHero(){
-  stopHero();
-  _heroTimer = setInterval(() => {
-    if (_heroPaused) return;
-    const n = heroPlayers.length;
-    if (!n) return;
-    _heroIndex = (_heroIndex + HERO_GROUP_SIZE) % n;
-    renderHeroGroup(_heroIndex, false);
-  }, HERO_SLIDE_MS);
-}
-
-function stopHero(){
-  if (_heroTimer) clearInterval(_heroTimer);
-  _heroTimer = null;
-}
-
-// -----------------------
-// -----------------------
-// Fetchers (match app.py)
-// -----------------------
-async function loadSchedule(){
-  const res = await fetch(`/schedule.json?scope=${encodeURIComponent(scope)}&q=${encodeURIComponent(scheduleQuery)}`, {cache:"no-store"});
-  scheduleData = await res.json();
-  renderSchedule();
-  updateMatchDayMode();
-  restartCountdown(); // uses schedule info when available
-}
-
-async function loadMenu(){
-  const res = await fetch("/menu.json?lang=" + encodeURIComponent(lang), {cache:"no-store"});
-  const data = await res.json();
-  // app.py returns { lang, menu: {title, items:[]}}
-  menuData = data.menu;
-  window.menuDataList = (menuData && Array.isArray(menuData.items)) ? menuData.items : [];
-  menuPage = 1;
-  renderMenu(window.menuDataList);
-}
-
-function safeParseTimestamp(dateIso, timeStr){
-  // Supports:
-  // - "19:00"
-  // - "7:00 PM" / "7:00PM" / "7 PM"
-  // - empty / "TBD" (falls back to end-of-day)
-  if (!dateIso) return null;
-
-  const raw = (timeStr || "").toString().trim();
-  if (raw && raw.toUpperCase() !== "TBD"){
-    // 24-hour "HH:MM"
-    const m24 = raw.match(/^(\d{1,2}):(\d{2})$/);
-    if (m24){
-      const hh = m24[1].padStart(2,"0");
-      const mm = m24[2];
-      return Date.parse(`${dateIso}T${hh}:${mm}:00`);
-    }
-
-    // 12-hour "H(:MM)? AM/PM"
-    const m12 = raw.match(/^(\d{1,2})(?::(\d{2}))?\s*([AaPp][Mm])$/);
-    if (m12){
-      let hh = parseInt(m12[1],10);
-      const mm = (m12[2] || "00");
-      const ap = m12[3].toUpperCase();
-      if (ap === "PM" && hh !== 12) hh += 12;
-      if (ap === "AM" && hh === 12) hh = 0;
-      const hh2 = String(hh).padStart(2,"0");
-      return Date.parse(`${dateIso}T${hh2}:${mm}:00`);
-    }
-
-    // 12-hour with no minutes: "7 PM"
-    const m12b = raw.match(/^(\d{1,2})\s*([AaPp][Mm])$/);
-    if (m12b){
-      let hh = parseInt(m12b[1],10);
-      const ap = m12b[2].toUpperCase();
-      if (ap === "PM" && hh !== 12) hh += 12;
-      if (ap === "AM" && hh === 12) hh = 0;
-      const hh2 = String(hh).padStart(2,"0");
-      return Date.parse(`${dateIso}T${hh2}:00:00`);
-    }
-  }
-
-  // end-of-day fallback (still keeps countdown alive even if time missing)
-  return Date.parse(`${dateIso}T23:59:59`);
-}
-
-// -----------------------
-// Countdown
-// -----------------------
-let countdownTimer = null;
-
-function chooseCountdownTarget(){
-  // Prefer next match datetime if present; otherwise fixed World Cup-ish date.
-  // If DALLAS_MATCHES is empty, still show a countdown.
-  if (scheduleData && scheduleData.next_match && scheduleData.next_match.date){
-    const nm = scheduleData.next_match;
-    const ts = safeParseTimestamp(nm.date, nm.time);
-    if (ts) return new Date(ts);
-  }
-  // fallback: World Cup June 2026 (safe constant, preserves feature)
-  return new Date("2026-06-11T00:00:00");
-}
-
-function restartCountdown(){
-  if (countdownTimer) clearInterval(countdownTimer);
-
-  const target = chooseCountdownTarget();
-  const dEl = document.getElementById("d");
-  const hEl = document.getElementById("h");
-  const mEl = document.getElementById("m");
-  const sEl = document.getElementById("s");
-
-  function tick(){
-    const now = new Date();
-    let diff = Math.max(0, target - now);
-
-    const days = Math.floor(diff / (1000*60*60*24));
-    diff -= days*(1000*60*60*24);
-    const hrs = Math.floor(diff / (1000*60*60));
-    diff -= hrs*(1000*60*60);
-    const mins = Math.floor(diff / (1000*60));
-    diff -= mins*(1000*60);
-    const secs = Math.floor(diff / 1000);
-
-    dEl.textContent = days;
-    hEl.textContent = hrs;
-    mEl.textContent = mins;
-    sEl.textContent = secs;
-  }
-
-  tick();
-  countdownTimer = setInterval(tick, 1000);
 }
 
 // -----------------------
@@ -1809,10 +1547,9 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 // Init
 // -----------------------
 (async function init(){
-  applyLanguageToUI();
-
-  // Start cinematic HERO banner rotation (UI-only)
-  try { renderHero(); } catch(e) { console.warn('Hero banner init failed', e); }
+  // Init cinematic hero banner (UI-only)
+  initHero();
+applyLanguageToUI();
 
   // Restore schedule scope UI
   if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
