@@ -159,7 +159,7 @@
       background: rgba(0,0,0,.22);
       color:var(--text);
       padding:10px 12px;
-      font-size:14px;
+      font-size:13px;
       outline:none;
     }
     button{
@@ -318,6 +318,48 @@
       .menucard{max-width:none; max-height:none;}
     }
 
+
+    /* --- Chat readability upgrades (requested) --- */
+    #chat{gap:8px;} /* tighter vertical spacing */
+    .bubble{
+      padding:8px 10px;           /* tighter bubble padding */
+      line-height:1.28;           /* tighter line-height */
+      font-size:13px;             /* base (user) */
+    }
+    .bot{font-size:12px;}         /* slightly smaller bot text */
+    .user{font-size:13px;}        /* slightly larger user text */
+
+    /* “Stadium announcer” emphasis for match alerts */
+    .banner.show,
+    .matchday.show{
+      text-transform:uppercase;
+      letter-spacing:.7px;
+      font-weight:900;
+    }
+    .banner.show{
+      background: linear-gradient(90deg, rgba(245,215,110,.18) 0%, rgba(46,160,67,.10) 40%, rgba(31,111,235,.10) 100%);
+      border-bottom: 1px solid rgba(245,215,110,.35);
+      text-shadow: 0 2px 18px rgba(0,0,0,.35);
+    }
+    @keyframes announcerPulse{
+      0%{transform:translateY(0); filter:brightness(1);}
+      50%{transform:translateY(-1px); filter:brightness(1.08);}
+      100%{transform:translateY(0); filter:brightness(1);}
+    }
+    .banner.show{animation: announcerPulse 1.6s ease-in-out infinite;}
+
+    /* Compact mode (power users) */
+    .compact #chat{gap:6px;}
+    .compact .bubble{padding:7px 9px; line-height:1.22;}
+    .compact .user{font-size:12.5px;}
+    .compact .bot{font-size:11.5px;}
+    .compact textarea{height:40px; font-size:13px; padding:9px 11px;}
+    .compact .composer{padding:10px 12px;}
+    .compact .match{padding:8px 9px; font-size:11px;}
+    .compact .pill{padding:5px 9px; font-size:10.5px;}
+    .compact .cardhead{padding:10px 12px;}
+    .compact .menu{font-size:8.5px;}
+
 </style>
 </head>
 
@@ -361,7 +403,12 @@
         <div class="card chatcard" style="display:flex;flex-direction:column;min-height:0;">
           <div class="cardhead">
             <div class="title" id="chatTitle">Chat</div>
-            <div class="pill" id="pillMode">Live</div>
+            
+            <div style="display:flex; gap:8px; align-items:center;">
+              <div class="pill" id="pillMode">Live</div>
+              <button id="compactToggle" class="secondary" style="min-width:auto; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:800;">Compact</button>
+            </div>
+
           </div>
 
           <div class="banner" id="matchBanner"></div>
@@ -458,8 +505,8 @@ let scheduleData = null;
 let scope = localStorage.getItem("schedule_scope") || "dallas";
 let scheduleQuery = "";
 
-// Pagination (All Matches only)
-const PAGE_SIZE = 10;
+// Pagination (Dallas + All Matches)
+const PAGE_SIZE = 5;
 let currentPage = 1;
 
 
@@ -491,9 +538,33 @@ const pageIndicatorEl = document.getElementById("pageIndicator");
 
 
 
+
+
+// -----------------------
+// Compact mode (power users)
+// -----------------------
+let compactMode = (localStorage.getItem("compact_mode") || "0") === "1";
+const compactToggleBtn = document.getElementById("compactToggle");
+
+function applyCompactMode(){
+  document.body.classList.toggle("compact", compactMode);
+  if (compactToggleBtn){
+    compactToggleBtn.textContent = compactMode ? "Compact: ON" : "Compact";
+    compactToggleBtn.classList.toggle("active", compactMode);
+  }
+}
+
+if (compactToggleBtn){
+  compactToggleBtn.addEventListener("click", () => {
+    compactMode = !compactMode;
+    localStorage.setItem("compact_mode", compactMode ? "1" : "0");
+    applyCompactMode();
+  });
+}
+
 const STRINGS = {
   en: {
-    welcome: "Hi! Want to book a table for a match day? Ask me anything.",
+    welcome: "⚽ Welcome, World Cup fan! I’m your Dallas Match-Day Concierge.\nType \"reservation\" to book a table, or ask about Dallas matches, all matches, or the menu.",
     lang_set: "Language set to English.",
     helper: 'Try: <code>reservation</code> to book • <code>Recall reservation so far</code> • Ask about the menu • Ask about Dallas match days. Search by team, venue, or date (e.g., "June 13").',
     send: "Send",
@@ -507,7 +578,7 @@ const STRINGS = {
     menu_title: "Menu"
   },
   es: {
-    welcome: "¡Hola! ¿Quieres reservar una mesa para un día de partido? Pregúntame lo que sea.",
+    welcome: "⚽ ¡Bienvenido, fan del Mundial! Soy tu concierge de días de partido en Dallas.\nEscribe \"reserva\" para reservar una mesa, o pregunta por los partidos (Dallas / todos) o el menú.",
     lang_set: "Idioma cambiado a Español.",
     helper: 'Prueba: <code>reserva</code> para reservar • <code>Recordar reserva</code> • Pregunta por el menú • Pregunta por los partidos en Dallas.',
     send: "Enviar",
@@ -521,7 +592,7 @@ const STRINGS = {
     menu_title: "Menú"
   },
   pt: {
-    welcome: "Olá! Quer reservar uma mesa para dia de jogo? Pergunte qualquer coisa.",
+    welcome: "⚽ Bem-vindo, fã da Copa do Mundo! Sou seu concierge de dias de jogo em Dallas.\nDigite \"reserva\" para reservar uma mesa, ou pergunte sobre jogos em Dallas, todos os jogos ou o cardápio.",
     lang_set: "Idioma definido para Português.",
     helper: 'Tente: <code>reserva</code> para reservar • <code>Relembrar reserva</code> • Pergunte sobre o cardápio • Pergunte sobre jogos em Dallas.',
     send: "Enviar",
@@ -535,7 +606,7 @@ const STRINGS = {
     menu_title: "Cardápio"
   },
   fr: {
-    welcome: "Bonjour ! Vous voulez réserver une table pour un jour de match ? Demandez-moi !",
+    welcome: "⚽ Bienvenue, fan de la Coupe du Monde ! Je suis votre concierge des jours de match à Dallas.\nTapez \"réservation\" pour réserver une table, ou demandez les matchs (Dallas / tous) ou le menu.",
     lang_set: "Langue définie sur Français.",
     helper: 'Essayez : <code>réservation</code> pour réserver • <code>Rappeler la réservation</code> • Demandez le menu • Demandez les matchs à Dallas.',
     send: "Envoyer",
@@ -588,12 +659,14 @@ function applyLanguageToUI(){
 
   helperHint.innerHTML = L().helper;
   sendBtn.textContent = L().send;
+  applyCompactMode();
 }
 
 async function setLanguage(newLang){
   lang = newLang;
   localStorage.setItem("lang", lang);
   applyLanguageToUI();
+applyCompactMode();
 
   // reload menu in the chosen language
   await loadMenu();
@@ -848,23 +921,28 @@ function renderSchedule(){
   const upcoming = enriched.filter(m => m.ts >= now);
   const nextId = upcoming.length ? upcoming[0].id : null;
 
-  // Pagination (All Matches only)
-  let pageMatches = enriched;
-  if (scope === "all"){
-    const totalPages = Math.max(1, Math.ceil(enriched.length / PAGE_SIZE));
-    if (currentPage > totalPages) currentPage = 1;
+  // Pagination (Dallas + All Matches)
+let pageMatches = enriched;
 
-    const start = (currentPage - 1) * PAGE_SIZE;
-    pageMatches = enriched.slice(start, start + PAGE_SIZE);
+const totalPages = Math.max(1, Math.ceil(enriched.length / PAGE_SIZE));
+if (totalPages <= 1){
+  currentPage = 1;
+  if (pagerEl) pagerEl.style.display = "none";
+  if (pageIndicatorEl) pageIndicatorEl.textContent = "";
+  if (prevPageBtn) prevPageBtn.disabled = true;
+  if (nextPageBtn) nextPageBtn.disabled = true;
+} else {
+  if (currentPage > totalPages) currentPage = 1;
 
-    if (pagerEl) pagerEl.style.display = "flex";
-    if (pageIndicatorEl) pageIndicatorEl.textContent = `Page ${currentPage} of ${totalPages}`;
-    if (prevPageBtn) prevPageBtn.disabled = (currentPage <= 1);
-    if (nextPageBtn) nextPageBtn.disabled = (currentPage >= totalPages);
-  } else {
-    if (pagerEl) pagerEl.style.display = "none";
-    if (pageIndicatorEl) pageIndicatorEl.textContent = "";
-  }
+  const start = (currentPage - 1) * PAGE_SIZE;
+  pageMatches = enriched.slice(start, start + PAGE_SIZE);
+
+  if (pagerEl) pagerEl.style.display = "flex";
+  if (pageIndicatorEl) pageIndicatorEl.textContent = `Page ${currentPage} of ${totalPages}`;
+  if (prevPageBtn) prevPageBtn.disabled = (currentPage <= 1);
+  if (nextPageBtn) nextPageBtn.disabled = (currentPage >= totalPages);
+}
+
 
   pageMatches.forEach(m => {
     const row = document.createElement("div");
@@ -1048,7 +1126,7 @@ function setScope(newScope){
 if (scopeDallasBtn) scopeDallasBtn.addEventListener("click", () => setScope("dallas"));
 if (scopeAllBtn) scopeAllBtn.addEventListener("click", () => setScope("all"));
 
-// Pagination controls (All Matches only)
+// Pagination controls (Dallas + All Matches)
 if (prevPageBtn) prevPageBtn.addEventListener("click", () => { if (currentPage > 1){ currentPage--; renderSchedule(); } });
 if (nextPageBtn) nextPageBtn.addEventListener("click", () => {
   if (!scheduleData || !Array.isArray(scheduleData.matches)) return;
