@@ -399,16 +399,20 @@
       border-top:1px solid rgba(46,160,67,.35);
     }
 
-    .matchday{
-      margin:12px 14px 0;
-      padding:10px 12px;
+    .matchday-callout{
+      margin:10px 14px 0;
+      padding:8px 10px;
       border-radius:14px;
       border:1px solid rgba(245,215,110,.35);
       background: rgba(245,215,110,.10);
-      font-size:12px;
+  font-size:10.5px;
+  line-height:1.2;
+  letter-spacing:.05px;
+  max-height:48px;
+  overflow:hidden;
       display:none;
     }
-    .matchday.show{display:block;}
+    .matchday-callout.show{display:block;}
 
     .menuitem{
       padding:7px 7px;
@@ -499,11 +503,7 @@
 
     /* “Stadium announcer” emphasis for match alerts */
     .banner.show,
-    .matchday.show{
-      text-transform:uppercase;
-      letter-spacing:.7px;
-      font-weight:900;
-    }
+    .matchday-callout.show{font-weight:700; letter-spacing:.15px; text-transform:none;}
     .banner.show{
       background: linear-gradient(90deg, rgba(245,215,110,.18) 0%, rgba(46,160,67,.10) 40%, rgba(31,111,235,.10) 100%);
       border-bottom: 1px solid rgba(245,215,110,.35);
@@ -1076,6 +1076,11 @@ body.matchday-mode #matchBanner.show{
   border-color: rgba(212,175,55,.55);
   box-shadow: 0 0 18px rgba(212,175,55,.20);
 }
+    body.matchday-mode .banner.show{
+      padding:8px 12px;
+      font-size:11px;
+    }
+
 
 /* Highlight the next match card in gold */
 body.matchday-mode .match.next{
@@ -1184,7 +1189,7 @@ body.matchday-mode .match.next::before{
 <span><b id="s">0</b>s</span>
 </div>
 </div>
-<div class="matchday" id="matchdayBox"></div>
+<div class="matchday-callout" id="matchdayBox"></div>
 <div class="sidepad" style="padding-top:10px; padding-bottom:0;">
 <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
 <div class="pill" style="padding:6px 10px;">Schedule</div>
@@ -2201,17 +2206,71 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 
 
 <script>
-/* Match Day countdown label fallback (UI-only) */
+
+
+
+<script>
+/* Match Day countdown label switch (UI-only, safe) */
 (function(){
-  const cd = document.getElementById("countdown");
-  if(!cd) return;
+  const lbl = document.getElementById("countLabel");
+  if(!lbl) return;
+
+  function formatKickoffIn(ms){
+    const m = Math.max(0, Math.floor(ms/60000));
+    const h = Math.floor(m/60);
+    const mm = m%60;
+    return `${h}h ${mm}m`;
+  }
+
   function tick(){
     if(!document.body.classList.contains("matchday-mode")) return;
     if(typeof window.__nextKickoffAt !== "number") return;
     const ms = window.__nextKickoffAt - Date.now();
-    cd.textContent = `Kickoff in ${formatKickoffIn(ms)}`;
+    lbl.textContent = `Kickoff in ${formatKickoffIn(ms)}`;
   }
+
   setInterval(tick, 15000);
+})();
+</script>
+
+
+<script>
+/* Match Day preview helper (UI-only, safe)
+   DevTools:
+     __setMatchDayUI(true)  -> preview Match Day Mode styles
+     __setMatchDayUI(false) -> revert preview
+*/
+(function(){
+  window.__setMatchDayUI = function(on){
+    try{
+      document.body.classList.toggle("matchday-mode", !!on);
+
+      // show / hide banner + callout text without touching any backend logic
+      const banner = document.getElementById("matchBanner");
+      if(banner){
+        banner.classList.toggle("show", !!on);
+        if(on){
+          banner.textContent = "🏟️ MATCH DAY — DOORS OPEN EARLY";
+        }
+      }
+
+      const box = document.getElementById("matchdayBox");
+      if(box){
+        box.classList.toggle("show", !!on);
+        if(on){
+          box.textContent = "🏟️ Match-day mode is ON today. Expect higher traffic — reserve early!";
+        }
+      }
+
+      // for countdown label demo (optional):
+      // sets a kickoff time ~2h 14m from now if not already set
+      if(on && typeof window.__nextKickoffAt !== "number"){
+        window.__nextKickoffAt = Date.now() + (2*60+14)*60*1000;
+      }
+    }catch(e){
+      console.warn("Match Day preview failed:", e);
+    }
+  };
 })();
 </script>
 
