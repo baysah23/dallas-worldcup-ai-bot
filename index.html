@@ -712,6 +712,27 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
 .heroRoster{ display:none !important; }
 /* ===== END HERO UPGRADE v2 ===== */
 
+
+.debugFooter{
+  position:fixed;
+  left:10px;
+  right:10px;
+  bottom:10px;
+  z-index:9999;
+  font-size:11px;
+  color:rgba(255,255,255,.85);
+  background:rgba(0,0,0,.45);
+  border:1px solid rgba(255,255,255,.12);
+  backdrop-filter: blur(10px);
+  border-radius:12px;
+  padding:8px 10px;
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  pointer-events:none;
+}
+body.compact .debugFooter{bottom:6px;}
+
 </style>
 </head>
 <body>
@@ -897,6 +918,36 @@ const pageIndicatorEl = document.getElementById("pageIndicator");
 let compactMode = (localStorage.getItem("compact_mode") || "0") === "1";
 const compactToggleBtn = document.getElementById("compactToggle");
 
+// -----------------------
+// Debug mode (UI-only)
+// -----------------------
+let debugMode = (localStorage.getItem("debug_mode") || "0") === "1";
+const debugFooter = document.getElementById("debugFooter");
+const dbgTonight = document.getElementById("dbgTonight");
+const dbgScope = document.getElementById("dbgScope");
+const dbgPage = document.getElementById("dbgPage");
+const dbgCount = document.getElementById("dbgCount");
+
+function applyDebugMode(){
+  if (debugFooter) debugFooter.style.display = debugMode ? "flex" : "none";
+}
+
+function toggleDebugMode(){
+  debugMode = !debugMode;
+  localStorage.setItem("debug_mode", debugMode ? "1" : "0");
+  applyDebugMode();
+  updateDebugFooter();
+}
+
+// Press "D" to toggle debug
+document.addEventListener("keydown", (e) => {
+  if (e.key && e.key.toLowerCase() === "d" && !e.ctrlKey && !e.metaKey && !e.altKey){
+    // avoid toggling while typing in inputs
+    const t = (document.activeElement && document.activeElement.tagName || "").toLowerCase();
+    if (t !== "textarea" && t !== "input") toggleDebugMode();
+  }
+});
+
 function applyCompactMode(){
   document.body.classList.toggle("compact", compactMode);
   if (compactToggleBtn){
@@ -1067,15 +1118,16 @@ const heroPlayers = [
 function buildHero(){
   if (!heroBanner || !heroSlidesEl) return;
 
-  // Single, premium marquee track (less clutter). Names appear ONLY under each player card.
+  // Simple, clean marquee: 4–5 cards visible, slow drift (less distortion).
   heroSlidesEl.innerHTML = `<div class="heroTrack" id="heroTrack" aria-hidden="true"></div>`;
-  const track = document.getElementById("heroTrack");
 
-  // Build cards
+  const track = document.getElementById("heroTrack");
+  if (!track) return;
+
   const cardsHTML = heroPlayers.map(p => {
     const safeName = (p.name || "").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     const safeCountry = (p.country || "").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    const img = p.img ? `<img src="${p.img}" alt="${safeName} — ${safeCountry}" loading="eager" decoding="async" style="object-position:${p.pos || "50% 20%"}">` : "";
+    const img = p.img ? `<img src="${p.img}" alt="${safeName} — ${safeCountry}" loading="eager" decoding="async" style="object-position:${p.pos || "50% 18%"}">` : "";
     return `
       <div class="heroCard" style="--c:${p.color || "#1f6feb"}">
         <div class="heroCardImg">${img}</div>
@@ -1088,7 +1140,7 @@ function buildHero(){
   }).join("");
 
   // Duplicate for seamless loop
-  if (track) track.innerHTML = cardsHTML + cardsHTML;
+  track.innerHTML = cardsHTML + cardsHTML;
 
   // Dots not used in marquee mode; keep empty for compatibility
   if (heroDotsEl) heroDotsEl.innerHTML = "";
@@ -1097,7 +1149,6 @@ function buildHero(){
 
 // -----------------------
 // Fetchers (match app.py)
- (match app.py)
 // -----------------------
 async function loadSchedule(){
   const res = await fetch(`/schedule.json?scope=${encodeURIComponent(scope)}&q=${encodeURIComponent(scheduleQuery)}`, {cache:"no-store"});
@@ -1107,6 +1158,7 @@ async function loadSchedule(){
   renderSchedule();
   updateMatchDayMode();
   updateTonightTag();
+  updateDebugFooter();
   restartCountdown(); // uses schedule info when available
 }
 
@@ -1343,6 +1395,7 @@ if (totalPages <= 1){
   if (pageIndicatorEl) pageIndicatorEl.textContent = "";
   if (prevPageBtn) prevPageBtn.disabled = true;
   if (nextPageBtn) nextPageBtn.disabled = true;
+  updateDebugFooter();
 } else {
   if (currentPage > totalPages) currentPage = 1;
 
@@ -1414,6 +1467,21 @@ function updateTonightTag(){
   const isTonight = (String(next.date).trim() === todayIso);
   tag.textContent = (isTonight ? "Tonight’s Dallas Match: " : "Next Dallas Match: ") + `${teamsTxt} • ${timeTxt}`;
 }
+
+
+function updateDebugFooter(){
+  if (!debugMode) return;
+  if (dbgScope) dbgScope.textContent = scope || "—";
+  if (dbgPage){
+    const total = (scheduleData && Array.isArray(scheduleData.matches)) ? Math.max(1, Math.ceil(scheduleData.matches.length / PAGE_SIZE)) : 1;
+    dbgPage.textContent = `${currentPage} / ${total}`;
+  }
+  if (dbgCount) dbgCount.textContent = (scheduleData && Array.isArray(scheduleData.matches)) ? String(scheduleData.matches.length) : "0";
+  // tonight tag text
+  const tag = document.getElementById("heroTonightTag");
+  if (dbgTonight) dbgTonight.textContent = tag ? (tag.textContent || "—") : "—";
+}
+
 
 
 function updateMatchDayMode(){
@@ -1648,6 +1716,8 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 (async function init(){
   applyLanguageToUI();
 
+  applyDebugMode();
+
   // Restore schedule scope UI
   if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
   if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
@@ -1667,5 +1737,10 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
   msgEl.focus();
 })();
 </script>
+
+<div id="debugFooter" class="debugFooter" style="display:none;">
+  <div><b>Debug</b> • Tonight: <span id="dbgTonight">—</span></div>
+  <div>Scope: <span id="dbgScope">—</span> • Page: <span id="dbgPage">—</span> • Matches: <span id="dbgCount">—</span></div>
+</div>
 </body>
 </html>
