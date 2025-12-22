@@ -1709,19 +1709,15 @@ function restartCountdown(){
 
     const isMatchDayUI = document.body.classList.contains("matchday");
 
-    // Match-day label: "Kickoff in Xh Ym" (UI-only). Fall back to normal label otherwise.
+    // Match-day label: always show "Kickoff in ..." when match-day UI is ON (UI-only).
     if (isMatchDayUI){
-      // If kickoff is more than a day away, keep normal wording.
-      if (days === 0){
-        setText(labelEl, `Kickoff in ${hrs}h ${mins}m`);
-        if (subEl) subEl.style.display = "none";
+      // Prefer short, readable label that doesn't cause layout shifts.
+      if (days > 0){
+        setText(labelEl, `Kickoff in ${days}d ${hrs}h`);
       } else {
-        setText(labelEl, "World Cup countdown");
-        if (subEl){
-          subEl.style.display = "";
-          setText(subEl, "Dallas / Arlington match days");
-        }
+        setText(labelEl, `Kickoff in ${hrs}h ${mins}m`);
       }
+      if (subEl) subEl.style.display = "none";
     } else {
       setText(labelEl, "World Cup countdown");
       if (subEl){
@@ -1990,6 +1986,14 @@ function updateMatchDayMode(){
       bannerEl.classList.add("show");
     }
 
+    // Optional: one-time chat notice when Match Day turns on (safe, no backend)
+    if (!window.__matchdayNoticeSent && typeof addBubble === "function"){
+      try {
+        addBubble("bot", bannerText);
+        window.__matchdayNoticeSent = true;
+      } catch(e){}
+    }
+
     // Sidebar message removed (kept empty to avoid layout/overflow issues).
     if (boxEl){
       boxEl.textContent = "";
@@ -1998,6 +2002,7 @@ function updateMatchDayMode(){
     }
   } else {
     document.body.classList.remove("matchday");
+    window.__matchdayNoticeSent = false;
     if (pill) pill.textContent = "Mode: Standard";
     if (bannerEl) bannerEl.classList.remove("show");
     if (boxEl){
@@ -2010,6 +2015,26 @@ function updateMatchDayMode(){
   // Ensure countdown label reflects current mode immediately.
   if (typeof restartCountdown === "function") restartCountdown();
 }
+
+// -----------------------
+// Dev-only: Force Match Day UI for full-page testing (no backend changes)
+// Usage in Console:
+//   setMatchDayTest(true)  // force ON
+//   setMatchDayTest(false) // force OFF
+//   setMatchDayTest(null)  // return to auto mode (based on scheduleData.is_match_day)
+// -----------------------
+window.setMatchDayTest = function(state){
+  if (state === null){
+    delete window.__MATCHDAY_TEST;
+  } else {
+    window.__MATCHDAY_TEST = !!state;
+  }
+  // Re-apply mode safely
+  try { updateMatchDayMode(); } catch(e) {}
+  // Ensure countdown label reflects current mode immediately
+  try { if (typeof restartCountdown === "function") restartCountdown(); } catch(e) {}
+};
+
 
 // -----------------------
 // Menu rendering
