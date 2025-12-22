@@ -1914,6 +1914,15 @@ if (totalPages <= 1){
 }
 
 
+
+function formatKickoffIn(ms){
+  const totalMin = Math.max(0, Math.floor(ms / 60000));
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h <= 0) return `${m}m`;
+  return `${h}h ${m}m`;
+}
+
 function updateMatchDayMode(){
   const isMatchDay = !!(scheduleData && scheduleData.is_match_day);
 
@@ -2187,6 +2196,22 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 
   const mo = new MutationObserver(updateFlags);
   slides.forEach(s => mo.observe(s, { attributes:true, attributeFilter:['class'] }));
+})();
+</script>
+
+
+<script>
+/* Match Day countdown label fallback (UI-only) */
+(function(){
+  const cd = document.getElementById("countdown");
+  if(!cd) return;
+  function tick(){
+    if(!document.body.classList.contains("matchday")) return;
+    if(typeof window.__nextKickoffAt !== "number") return;
+    const ms = window.__nextKickoffAt - Date.now();
+    cd.textContent = `Kickoff in ${formatKickoffIn(ms)}`;
+  }
+  setInterval(tick, 15000);
 })();
 </script>
 
