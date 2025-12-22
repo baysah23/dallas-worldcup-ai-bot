@@ -1058,6 +1058,34 @@
   box-shadow: 0 6px 18px rgba(0,0,0,.18);
 }
 
+
+/* =========================
+   MATCH DAY MODE (Step 1)
+   Visual amplify only (UI-only)
+   ========================= */
+@keyframes matchdayPulse{
+  0%, 100% { transform: translateZ(0) scale(1); filter: drop-shadow(0 0 0 rgba(212,175,55,0)); }
+  50%      { transform: translateZ(0) scale(1.015); filter: drop-shadow(0 0 16px rgba(212,175,55,.35)); }
+}
+body.matchday .hero-title{
+  animation: matchdayPulse 1.6s ease-in-out infinite;
+}
+
+/* Banner takeover text styling when matchday */
+body.matchday #matchBanner.show{
+  border-color: rgba(212,175,55,.55);
+  box-shadow: 0 0 18px rgba(212,175,55,.20);
+}
+
+/* Highlight the next match card in gold */
+body.matchday .match.next{
+  border-color: rgba(212,175,55,.55) !important;
+  box-shadow: 0 10px 26px rgba(212,175,55,.14);
+}
+body.matchday .match.next::before{
+  opacity: .9;
+}
+
 </style>
 </head>
 <body>
@@ -1890,14 +1918,16 @@ function updateMatchDayMode(){
   const isMatchDay = !!(scheduleData && scheduleData.is_match_day);
 
   if (isMatchDay){
+    document.body.classList.add("matchday");
     pillMode.textContent = "Mode: Match-day";
-    const banner = (scheduleData && scheduleData.match_day_banner) ? scheduleData.match_day_banner : "Match-day hours";
+    const banner = (scheduleData && scheduleData.match_day_banner) ? scheduleData.match_day_banner : "🏟️ MATCH DAY — DOORS OPEN EARLY";
     matchBanner.textContent = banner;
     matchBanner.classList.add("show");
 
     matchdayBox.textContent = "🏟️ Match-day mode is ON today. Expect higher traffic — reserve early!";
     matchdayBox.classList.add("show");
   } else {
+    document.body.classList.remove("matchday");
     pillMode.textContent = "Mode: Standard";
     matchBanner.classList.remove("show");
     matchdayBox.classList.remove("show");
