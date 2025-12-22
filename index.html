@@ -859,6 +859,31 @@
   text-align:center !important;
 }
 
+
+/* =========================
+   BANNER POLISH: ZOOM + GLOW
+   ========================= */
+
+/* Subtle, safer zoom */
+.heroSlide.active img,
+.star-img{
+  transition: transform 5s ease-in-out, filter 1s ease-in-out;
+}
+.heroSlide.active img{
+  transform: scale(1.025); /* reduced from stronger zoom */
+}
+
+/* Country color glows */
+.heroSlide[data-country="ARG"] img{ filter: drop-shadow(0 0 18px rgba(116,172,223,.6)); }
+.heroSlide[data-country="POR"] img{ filter: drop-shadow(0 0 18px rgba(0,102,0,.6)); }
+.heroSlide[data-country="FRA"] img{ filter: drop-shadow(0 0 18px rgba(0,85,164,.6)); }
+.heroSlide[data-country="NOR"] img{ filter: drop-shadow(0 0 18px rgba(186,12,47,.6)); }
+.heroSlide[data-country="ESP"] img{ filter: drop-shadow(0 0 18px rgba(198,12,48,.6)); }
+.heroSlide[data-country="ENG"] img{ filter: drop-shadow(0 0 18px rgba(207,20,43,.6)); }
+.heroSlide[data-country="BRA"] img{ filter: drop-shadow(0 0 18px rgba(0,156,59,.6)); }
+.heroSlide[data-country="CAN"] img{ filter: drop-shadow(0 0 18px rgba(255,0,0,.6)); }
+.heroSlide[data-country="KOR"] img{ filter: drop-shadow(0 0 18px rgba(205,46,58,.6)); }
+
 </style>
 </head>
 <body>
