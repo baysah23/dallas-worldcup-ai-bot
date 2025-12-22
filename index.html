@@ -2206,7 +2206,7 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
   const cd = document.getElementById("countdown");
   if(!cd) return;
   function tick(){
-    if(!document.body.classList.contains("matchday")) return;
+    if(!document.body.classList.contains("matchday-mode")) return;
     if(typeof window.__nextKickoffAt !== "number") return;
     const ms = window.__nextKickoffAt - Date.now();
     cd.textContent = `Kickoff in ${formatKickoffIn(ms)}`;
