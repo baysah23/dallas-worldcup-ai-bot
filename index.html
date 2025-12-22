@@ -450,6 +450,95 @@
     .compact .pill{padding:5px 9px; font-size:10.5px;}
     .compact .cardhead{padding:10px 12px;}
     .compact .menu{font-size:8.5px;}
+  
+    /* --- HERO banner upgrades (Session 1+) --- */
+    /* Make the player feel more "hero / action figure" */
+    .hero{ min-height:190px; }
+    @media (max-width: 950px){ .hero{ min-height:175px; } }
+
+    /* Foreground player: bigger + punchier */
+    .heroFg{
+      background-size: 118% auto;     /* larger than container */
+      background-position: 62% 55%;   /* default: slightly right so face is centered in wide banner */
+      filter:
+        drop-shadow(0 20px 55px rgba(0,0,0,.62))
+        contrast(1.06)
+        saturate(1.05);
+      opacity: 1;
+    }
+
+    /* Add a subtle film grain + stadium sparkles */
+    .heroGrain{
+      position:absolute; inset:0;
+      background-image:
+        radial-gradient(1px 1px at 12% 22%, rgba(255,255,255,.18) 0%, rgba(0,0,0,0) 55%),
+        radial-gradient(1px 1px at 28% 65%, rgba(255,255,255,.16) 0%, rgba(0,0,0,0) 55%),
+        radial-gradient(1px 1px at 66% 36%, rgba(255,255,255,.14) 0%, rgba(0,0,0,0) 55%),
+        radial-gradient(1px 1px at 82% 58%, rgba(255,255,255,.15) 0%, rgba(0,0,0,0) 55%),
+        repeating-linear-gradient(0deg, rgba(255,255,255,.03) 0px, rgba(255,255,255,.03) 1px, rgba(0,0,0,0) 2px, rgba(0,0,0,0) 4px);
+      opacity:.28;
+      mix-blend-mode: overlay;
+      pointer-events:none;
+      z-index:3; /* above bloom/smoke, under scrim */
+    }
+
+    /* Continuous scrolling flag marquee across the banner */
+    .flagMarquee{
+      margin-top:8px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.22);
+      overflow:hidden;
+      height:34px;
+      display:flex;
+      align-items:center;
+      position:relative;
+      backdrop-filter: blur(6px);
+    }
+    .flagMarquee:before,
+    .flagMarquee:after{
+      content:"";
+      position:absolute;
+      top:0; bottom:0;
+      width:60px;
+      pointer-events:none;
+      z-index:2;
+    }
+    .flagMarquee:before{
+      left:0;
+      background: linear-gradient(90deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,0) 100%);
+    }
+    .flagMarquee:after{
+      right:0;
+      background: linear-gradient(270deg, rgba(0,0,0,.55) 0%, rgba(0,0,0,0) 100%);
+    }
+    .flagTrack{
+      display:flex;
+      align-items:center;
+      gap:14px;
+      padding:0 16px;
+      white-space:nowrap;
+      will-change: transform;
+      animation: flagScroll 38s linear infinite;
+    }
+    .flagTrack:hover{ animation-play-state: paused; }
+    @keyframes flagScroll{
+      0%{transform:translateX(0);}
+      100%{transform:translateX(-50%);} /* because we duplicate the track */
+    }
+    .flagItem{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      color:var(--text);
+      opacity:.98;
+      font-size:12px;
+      letter-spacing:.2px;
+    }
+    .flagItem .flagEmoji{ font-size:16px; line-height:1; transform: translateY(1px); }
+    .flagItem b{ font-weight:900; }
+    .twemoji{width:18px; height:18px; vertical-align:-3px;}
+
   </style>
 
   <!-- Optional: Twemoji makes flags consistently visible across platforms -->
@@ -491,6 +580,7 @@
 
         <div class="heroBloom"></div>
         <div class="heroSmoke"></div>
+        <div class="heroGrain"></div>
         <div class="heroScrim"></div>
       </div>
 
@@ -498,7 +588,9 @@
         <div class="heroKicker">WORLD CUP 2026 • DALLAS MATCH DAY HQ</div>
         <div class="heroSub">A cinematic match-day hub for fans: chat, reserve tables, and browse the schedule — all in one place.</div>
         <div class="heroChips" id="heroChips"></div>
-        <div class="flagRail" id="flagRail" aria-label="Rotating country flags"></div>
+        <div class="flagMarquee" id="flagMarquee" aria-label="World Cup country flags">
+          <div class="flagTrack" id="flagTrack"></div>
+        </div>
       </div>
     </div>
 
@@ -646,21 +738,57 @@ const pageIndicatorEl = document.getElementById("pageIndicator");
 // (Wikimedia images: stable + typically high-res; "contain" keeps faces visible)
 // -----------------------
 const HERO_SLIDES = [
-  { name: "Lionel Messi", country: "Argentina", flag: "🇦🇷",
-    img: "https://upload.wikimedia.org/wikipedia/commons/c/c8/Lionel_Messi_WC2022.jpg",
-    fgPos: "center 54%", bgPos: "center 22%" },
-
   { name: "Kylian Mbappé", country: "France", flag: "🇫🇷",
-    img: "https://upload.wikimedia.org/wikipedia/commons/5/5c/Kylian_Mbapp%C3%A9_2022.jpg",
-    fgPos: "center 56%", bgPos: "center 24%" },
+    img: "https://upload.wikimedia.org/wikipedia/commons/9/96/Kylian_Mbapp%C3%A9_2019.jpg",
+    fgPos: "60% 52%", bgPos: "center 25%" },
+
+  { name: "Lionel Messi", country: "Argentina", flag: "🇦🇷",
+    img: "https://upload.wikimedia.org/wikipedia/commons/8/89/Lionel_Messi_20180626.jpg",
+    fgPos: "58% 54%", bgPos: "center 22%" },
+
+  { name: "Erling Haaland", country: "Norway", flag: "🇳🇴",
+    img: "https://upload.wikimedia.org/wikipedia/commons/0/0d/Erling_Haaland_2023_%28cropped%29.jpg",
+    fgPos: "62% 54%", bgPos: "center 26%" },
+
+  { name: "Jude Bellingham", country: "England", flag: "🏴",
+    img: "https://upload.wikimedia.org/wikipedia/commons/5/5c/Jude_Bellingham_2022.jpg",
+    fgPos: "62% 54%", bgPos: "center 25%" },
+
+  { name: "Vinícius Júnior", country: "Brazil", flag: "🇧🇷",
+    img: "https://upload.wikimedia.org/wikipedia/commons/6/6a/Vinicius_Junior_2022.jpg",
+    fgPos: "60% 55%", bgPos: "center 25%" },
+
+  { name: "Neymar Jr.", country: "Brazil", flag: "🇧🇷",
+    img: "https://upload.wikimedia.org/wikipedia/commons/8/83/Neymar_2018.jpg",
+    fgPos: "60% 56%", bgPos: "center 24%" },
+
+  { name: "Pedri", country: "Spain", flag: "🇪🇸",
+    img: "https://upload.wikimedia.org/wikipedia/commons/8/80/Pedri_2021.jpg",
+    fgPos: "60% 56%", bgPos: "center 25%" },
+
+  { name: "Jamal Musiala", country: "Germany", flag: "🇩🇪",
+    img: "https://upload.wikimedia.org/wikipedia/commons/0/0d/Jamal_Musiala_2022.jpg",
+    fgPos: "60% 56%", bgPos: "center 25%" },
+
+  { name: "Florian Wirtz", country: "Germany", flag: "🇩🇪",
+    img: "https://upload.wikimedia.org/wikipedia/commons/8/8b/Florian_Wirtz_2022.jpg",
+    fgPos: "60% 56%", bgPos: "center 25%" },
+
+  { name: "Bukayo Saka", country: "England", flag: "🏴",
+    img: "https://upload.wikimedia.org/wikipedia/commons/a/a3/Bukayo_Saka_2022.jpg",
+    fgPos: "60% 56%", bgPos: "center 25%" },
+
+  { name: "Alphonso Davies", country: "Canada", flag: "🇨🇦",
+    img: "https://upload.wikimedia.org/wikipedia/commons/1/1c/Alphonso_Davies_2019.jpg",
+    fgPos: "60% 56%", bgPos: "center 25%" },
+
+  { name: "Endrick", country: "Brazil", flag: "🇧🇷",
+    img: "https://upload.wikimedia.org/wikipedia/commons/2/21/Endrick_2023.jpg",
+    fgPos: "60% 56%", bgPos: "center 25%" },
 
   { name: "Cristiano Ronaldo", country: "Portugal", flag: "🇵🇹",
-    img: "https://upload.wikimedia.org/wikipedia/commons/6/6a/Cristiano_Ronaldo_WC2022_-_02.jpg",
-    fgPos: "center 55%", bgPos: "center 22%" },
-
-  { name: "Neymar Jr", country: "Brazil", flag: "🇧🇷",
-    img: "https://upload.wikimedia.org/wikipedia/commons/8/83/Neymar_2018.jpg",
-    fgPos: "center 56%", bgPos: "center 24%" }
+    img: "https://upload.wikimedia.org/wikipedia/commons/8/8c/Cristiano_Ronaldo_2018.jpg",
+    fgPos: "60% 54%", bgPos: "center 23%" }
 ];
 
 let heroIdx = 0;
@@ -676,9 +804,39 @@ const heroFgA = document.getElementById("heroFgA");
 const heroBgB = document.getElementById("heroBgB");
 const heroFgB = document.getElementById("heroFgB");
 const heroChips = document.getElementById("heroChips");
-const flagRailEl = document.getElementById("flagRail");
+const flagTrackEl = document.getElementById("flagTrack");
 
 // Render emoji as SVG using Twemoji (helps "flags not visible" on some systems)
+// -----------------------
+// World flags marquee (continuous scroll)
+// -----------------------
+// Note: 2026 qualifiers are not final here; this UI list is a broad "World Cup nations" vibe.
+// If your /schedule.json?scope=all includes country names, you can later derive this dynamically.
+// For now we provide a rich set of common WC nations + hosts (48-ish vibe).
+const WORLD_FLAG_EMOJIS = [
+  "🇺🇸","🇲🇽","🇨🇦","🇦🇷","🇧🇷","🇺🇾","🇨🇴","🇪🇨","🇨🇱","🇵🇪","🇵🇾",
+  "🇫🇷","🇩🇪","🇪🇸","🇵🇹","🇮🇹","🇳🇱","🇧🇪","🇭🇷","🇩🇰","🇸🇪","🇳🇴","🇨🇭","🇦🇹","🇵🇱","🇺🇦","🇷🇸","🇹🇷","🇬🇷","🇨🇿","🇭🇺","🇷🇴",
+  "🏴","🏴","🏴", /* UK home nations (England/Scotland/Wales) */
+  "🇯🇵","🇰🇷","🇦🇺","🇳🇿","🇮🇷","🇸🇦","🇶🇦","🇦🇪","🇮🇶",
+  "🇲🇦","🇸🇳","🇬🇭","🇳🇬","🇨🇲","🇹🇳","🇩🇿","🇿🇦","🇪🇬","🇨🇮","🇲🇱"
+];
+
+function buildFlagMarquee(){
+  if (!flagTrackEl) return;
+
+  // Build a long rail, then duplicate it once for seamless scroll.
+  const base = WORLD_FLAG_EMOJIS.map(f => `<span class="flagItem"><span class="flagEmoji">${f}</span></span>`).join("");
+  flagTrackEl.innerHTML = base + base;
+
+  renderTwemoji(flagTrackEl);
+
+  // Ensure animation restarts cleanly (useful after hot reload)
+  flagTrackEl.style.animation = "none";
+  // force reflow
+  void flagTrackEl.offsetHeight;
+  flagTrackEl.style.animation = "";
+}
+
 function renderTwemoji(node){
   try{
     if (window.twemoji && node){
@@ -716,17 +874,7 @@ function setHeroSlide(idx){
     `;
     renderTwemoji(heroChips);
   }
-
-  if (flagRailEl){
-    // Rotate the "featured nation" first, then keep 2026 hosts as constant vibes.
-    flagRailEl.innerHTML = `
-      <span class="flagPill"><span class="flagEmoji">${s.flag}</span> Featured: <b>${escapeHtml(s.country)}</b></span>
-      <span class="flagPill"><span class="flagEmoji">🇺🇸</span> USA</span>
-      <span class="flagPill"><span class="flagEmoji">🇲🇽</span> Mexico</span>
-      <span class="flagPill"><span class="flagEmoji">🇨🇦</span> Canada</span>
-    `;
-    renderTwemoji(flagRailEl);
-  }
+  // World flags marquee is managed separately (continuous scroll)
 
   heroUseA = !heroUseA;
 }
@@ -901,6 +1049,7 @@ async function setLanguage(newLang){
   applyLanguageToUI();
 
   // UI-only
+  buildFlagMarquee();
   startHeroRotation();
 
   await loadMenu();
@@ -1337,6 +1486,9 @@ clearBtn?.addEventListener("click", clearConversation);
 // -----------------------
 (async function init(){
   applyLanguageToUI();
+
+  // build continuous world flags marquee (UI-only)
+  buildFlagMarquee();
 
   // start hero rotation immediately (UI-only)
   startHeroRotation();
