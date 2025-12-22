@@ -1011,6 +1011,53 @@
   }
 }
 
+
+/* =========================
+   MICRO UI TWEAKS
+   ========================= */
+
+/* 1) Tiny accent underline under hero header (gold -> transparent fade) */
+.hero-title::after{
+  content:"";
+  display:block;
+  height:2px;
+  width:min(560px, 78vw);
+  margin:10px auto 0;
+  background: linear-gradient(90deg, rgba(212,175,55,.95), rgba(212,175,55,.0));
+  border-radius:999px;
+  opacity:.9;
+}
+
+/* 2) Mobile-only header spacing tweak */
+@media (max-width: 520px){
+  .hero-title{
+    top:14px !important;
+    font-size:18px !important;
+    letter-spacing:.10em !important;
+    padding:0 14px;
+    text-align:center;
+  }
+  .hero-title::after{
+    margin-top:8px;
+    width:min(420px, 86vw);
+  }
+  .hero-flags{
+    top:14px !important;
+    right:12px !important;
+    gap:6px !important;
+  }
+}
+
+/* 3) Match card hover elevation (very subtle) */
+.match{
+  transition: transform 160ms ease, box-shadow 160ms ease;
+  will-change: transform;
+}
+.match:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0,0,0,.18);
+}
+
 </style>
 </head>
 <body>
