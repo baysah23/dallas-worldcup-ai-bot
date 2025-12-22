@@ -16,6 +16,7 @@
       --accent:#2ea043;
       --accent2:#1f6feb;
       --warn:#ffcc66;
+          --gold:#d4af37;
     }
     body{
       margin:0; height:100vh; display:flex; flex-direction:column;
@@ -112,7 +113,7 @@
     .hero{ grid-column:1 / -1;
       
       position:relative;
-      height:170px;
+      height: 230px;
       border-bottom:1px solid rgba(255,255,255,.10);
       overflow:hidden;
       border-radius:16px;
@@ -180,15 +181,17 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
       z-index:3;
       display:flex;
       flex-direction:column;
-      justify-content:center;
+      align-items:flex-start;
+      justify-content:flex-start;
       gap:6px;
-      padding:18px 16px;
+      padding:14px 16px;
+      pointer-events:none;
     }
     .heroKicker{
       letter-spacing:.18em;
       font-size:11px;
       font-weight:900;
-      color:rgba(234,240,255,.85);
+      color:var(--gold);
       text-transform:uppercase;
     }
     .heroTitle{
@@ -196,6 +199,7 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
       font-weight:900;
       line-height:1.05;
       text-transform:uppercase;
+      color:var(--gold);
       text-shadow: 0 10px 20px rgba(0,0,0,.55);
     }
     .compact .heroTitle{ font-size:18px; }
@@ -246,6 +250,79 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
       display:flex; gap:6px;
       opacity:.92;
     }
+
+/* --- Single-player center layout (override) --- */
+.heroSlides{ position:absolute; inset:0; z-index:0; }
+.heroSlide{
+  position:absolute; inset:0;
+  opacity:0;
+  transition:opacity 900ms ease-in-out;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.heroSlide.active{ opacity:1; }
+
+.heroCenter{
+  position:relative;
+  z-index:0;
+  height:100%;
+  width:100%;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding-top:30px; /* keep clear of header text */
+}
+.heroCenter::before{
+  content:"";
+  position:absolute;
+  width:380px; height:220px;
+  border-radius:999px;
+  background: radial-gradient(circle, color-mix(in srgb, var(--glow) 55%, transparent) 0%, transparent 70%);
+  filter: blur(10px);
+  opacity:.65;
+  transform: translateY(-10px);
+  pointer-events:none;
+}
+.heroCenter img{
+  position:relative;
+  max-height:78%;
+  max-width:92%;
+  width:auto;
+  height:auto;
+  object-fit:contain;
+  filter: drop-shadow(0 18px 26px rgba(0,0,0,.55));
+  transform: scale(1.0);
+  transition: transform 5s ease; /* subtle zoom */
+}
+.heroSlide.active .heroCenter img{
+  transform: scale(1.04);
+}
+.heroPlayerName{
+  position:relative;
+  font-size:14px; /* smaller name */
+  font-weight:800;
+  letter-spacing:.04em;
+  color:var(--gold);
+  text-shadow:0 10px 18px rgba(0,0,0,.55);
+  text-transform:none;
+}
+
+.heroDots{ z-index:4; }
+.heroDot{
+  width:10px; height:10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.35);
+  background:rgba(0,0,0,.25);
+  cursor:pointer;
+}
+.heroDot.active{
+  background:var(--gold);
+  border-color:rgba(255,255,255,.35);
+}
+
     .heroDot{
       width:7px; height:7px; border-radius:999px;
       background: rgba(234,240,255,.35);
@@ -642,7 +719,8 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
   z-index:-1;
 }
 
-.heroRoster{
+.heroRoster{ display:none !important;
+
   margin-top:10px;
   overflow:hidden;
   border-radius:999px;
@@ -1060,162 +1138,95 @@ function stripHtml(html){
 // -----------------------
 // HERO banner (UI-only)
 // -----------------------
-const HERO_SLIDE_MS = 3000; // 3 seconds per group
-const HERO_GROUP_SIZE = 3;
+const HERO_SLIDE_MS = 5000; // 5 seconds per player
 let _heroTimer = null;
 let _heroIndex = 0;
 let _heroPaused = false;
 
-// NOTE: These are safe, replaceable image URLs. You can swap in your own hosted images anytime.
+// Uses the user-provided local images (place these files next to index.html)
 const heroPlayers = [
-  { name:"Cristiano Ronaldo", country:"Portugal",  color:"#ff3b30", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Cristiano%20Ronaldo%20(3).jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Cristiano%20Ronaldo%20(3).jpg?width=1200","https://commons.wikimedia.org/wiki/Special:FilePath/Cristiano%20Ronaldo%20(3).jpg?width=2000","https://commons.wikimedia.org/wiki/Special:FilePath/Cristiano%20Ronaldo%20(3).jpg?width=1600"], pos:"50% 20%" },
-  { name:"Lionel Messi",      country:"Argentina", color:"#00b3ff", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Lionel%20Messi%20NE%20Revolution%20Inter%20Miami%207.9.25-055.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Lionel%20Messi%20NE%20Revolution%20Inter%20Miami%207.9.25-055.jpg?width=1200","https://commons.wikimedia.org/wiki/Special:FilePath/Lionel%20Messi%20NE%20Revolution%20Inter%20Miami%207.9.25-055.jpg?width=2000","https://commons.wikimedia.org/wiki/Special:FilePath/Lionel%20Messi%20NE%20Revolution%20Inter%20Miami%207.9.25-055.jpg?width=1600"], pos:"50% 18%" },
-  { name:"Kylian Mbappé",     country:"France",    color:"#2ea043", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Kylian%20Mbappe%202017.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Kylian%20Mbappe%202017.jpg?width=1200","https://commons.wikimedia.org/wiki/Special:FilePath/Kylian%20Mbappe%202017.jpg?width=2000","https://commons.wikimedia.org/wiki/Special:FilePath/Kylian%20Mbappe%202017.jpg?width=1600"], pos:"50% 20%" },
-  { name:"Erling Haaland",    country:"Norway",    color:"#ffcc66", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Erling%20Haaland%202023%20(cropped-v2).jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Erling%20Haaland%202023%20(cropped-v2).jpg?width=1200","https://commons.wikimedia.org/wiki/Special:FilePath/Erling%20Haaland%202023%20(cropped-v2).jpg?width=2000","https://commons.wikimedia.org/wiki/Special:FilePath/Erling%20Haaland%202023%20(cropped-v2).jpg?width=1600"], pos:"50% 18%" },
-  { name:"Jude Bellingham",   country:"England",   color:"#1f6feb", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Jude%20Bellingham%20Birmingham%202019.jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Jude%20Bellingham%20Birmingham%202019.jpg?width=1200","https://commons.wikimedia.org/wiki/Special:FilePath/Jude%20Bellingham%20Birmingham%202019.jpg?width=2000","https://commons.wikimedia.org/wiki/Special:FilePath/Jude%20Bellingham%20Birmingham%202019.jpg?width=1600"], pos:"50% 18%" },
-  { name:"Vinícius Júnior",   country:"Brazil",    color:"#00d26a", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Vinicius%20Jr%202018%20(cropped).jpg?width=1200", imgs:["https://commons.wikimedia.org/wiki/Special:FilePath/Vinicius%20Jr%202018%20(cropped).jpg?width=1200","https://commons.wikimedia.org/wiki/Special:FilePath/Vinicius%20Jr%202018%20(cropped).jpg?width=2000","https://commons.wikimedia.org/wiki/Special:FilePath/Vinicius%20Jr%202018%20(cropped).jpg?width=1600"], pos:"50% 18%" }
-];
-
-const heroRosterNames = [
-  "Cristiano Ronaldo",
-  "Lionel Messi",
-  "Kylian Mbappé",
-  "Erling Haaland",
-  "Lamine Yamal",
-  "Jude Bellingham",
-  "Vinícius Júnior",
-  "Pedri",
-  "Alphonso Davies",
-  "Son Heung-min",
-  "Rúben Dias",
-  "Rodri",
-  "Phil Foden",
-  "Kevin De Bruyne",
-  "Harry Kane",
-  "Bernardo Silva",
-  "Manuel Neuer",
-  "Giacomo Raspadori",
-  "Bukayo Saka",
-  "Federico Valverde"
+  { name:"Lionel Messi",      country:"Argentina", color:"#6ec1ff", img:"Lionel-Messi-Argentina-Netherlands-World-Cup-Qatar-2022.webp" },
+  { name:"Cristiano Ronaldo", country:"Portugal",  color:"#ff5b5b", img:"gettyimages-2234200789.jpg" },
+  { name:"Kylian Mbappé",     country:"France",    color:"#3aa3ff", img:"5b0af8c9a489bd4226b7e60e643619bb.jpg" },
+  { name:"Erling Haaland",    country:"Norway",    color:"#ffcc66", img:"ERLING+HAALAND.webp" },
+  { name:"Lamine Yamal",      country:"Spain",     color:"#ffcf3d", img:"agencia-efe_multimedia_55014106243.multimedia.photos.55014106243003.file.jpg" },
+  { name:"Bukayo Saka",       country:"England",   color:"#7b61ff", img:"0_GettyImages-2245961874.webp" },
+  { name:"Vinícius Júnior",   country:"Brazil",    color:"#42d26f", img:"resizedcrop-503457b06b5beda2fba2933775b94fca-840x630.jpg" },
+  { name:"Alphonso Davies",   country:"Canada",    color:"#ff3b3b", img:"Davies-2-768x432.jpg" },
+  { name:"Son Heung-min",     country:"Korea Republic", color:"#ff6a00", img:"son-heung-min-south-korea-world-cup-lede.jpg" }
 ];
 
 function buildHero(){
   if (!heroBanner || !heroSlidesEl) return;
 
-  // 3-player premium rotation on the RIGHT (no scrolling, less distortion).
-  heroSlidesEl.innerHTML = `
-    <div class="heroTriWrap" aria-hidden="true">
-      <div class="heroTri" id="heroTri"></div>
+  // Build slides (one player at a time)
+  heroSlidesEl.innerHTML = heroPlayers.map((p, i) => `
+    <div class="heroSlide${i===0 ? " active" : ""}" data-idx="${i}" style="--glow:${p.color}">
+      <div class="heroCenter">
+        <img src="${p.img}" alt="${p.name}" loading="eager" decoding="async" />
+        <div class="heroPlayerName">${p.name}</div>
+      </div>
     </div>
-  `;
-  if (heroDotsEl) heroDotsEl.innerHTML = "";
+  `).join("");
 
-  // Pause on hover/touch (UI-only)
+  // Dots (optional)
+  if (heroDotsEl){
+    heroDotsEl.innerHTML = heroPlayers.map((_, i) =>
+      `<button class="heroDot${i===0 ? " active" : ""}" aria-label="Show player ${i+1}" data-idx="${i}"></button>`
+    ).join("");
+    heroDotsEl.querySelectorAll(".heroDot").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.getAttribute("data-idx") || "0");
+        setHeroActive(idx, true);
+      });
+    });
+  }
+
+  // Pause on hover/touch (kiosk friendly)
   heroBanner.addEventListener("mouseenter", () => { _heroPaused = true; });
   heroBanner.addEventListener("mouseleave", () => { _heroPaused = false; });
   heroBanner.addEventListener("touchstart", () => { _heroPaused = true; }, {passive:true});
   heroBanner.addEventListener("touchend", () => { _heroPaused = false; }, {passive:true});
 
-  // Start at 0
   _heroIndex = 0;
-  renderHeroGroup(_heroIndex, true);
   startHero();
 }
 
-function renderHeroGroup(startIdx, immediate=false){
-  const tri = document.getElementById("heroTri");
-  if (!tri || !Array.isArray(heroPlayers) || heroPlayers.length === 0) return;
+function setHeroActive(idx, immediate=false){
+  const slides = heroSlidesEl.querySelectorAll(".heroSlide");
+  if (!slides.length) return;
 
-  const n = heroPlayers.length;
-  const idxs = [0,1,2].map(k => (startIdx + k) % n);
+  // clamp
+  idx = ((idx % slides.length) + slides.length) % slides.length;
 
-  const cardsHTML = idxs.map(i => {
-    const p = heroPlayers[i] || {};
-    const safeName = escapeHtml(p.name || "");
-    const safeCountry = escapeHtml(p.country || "");
-    const color = p.color || "#1f6feb";
-    const pos = p.pos || "50% 18%";
+  slides.forEach((s, i) => {
+    if (i === idx) s.classList.add("active");
+    else s.classList.remove("active");
+    if (immediate) s.style.transitionDuration = "0ms";
+    else s.style.transitionDuration = "";
+  });
 
-    // Allow either `img` or `imgs: []` as sources.
-    const candidates = Array.isArray(p.imgs) ? p.imgs : (p.img ? [p.img] : []);
-    const primary = candidates[0] || "";
-    const rest = candidates.slice(1);
-
-    // We attach fallbacks via inline onerror handler that cycles candidates (UI-only).
-    // Note: JSON stringify is safe here (we escape quotes in HTML below).
-    const dataCandidates = escapeHtml(JSON.stringify([primary, ...rest].filter(Boolean)));
-
-    return `
-      <div class="heroCard heroCardTri" style="--c:${color}">
-        <div class="heroCardImg">
-          ${primary ? `<img src="${primary}" alt="${safeName} — ${safeCountry}" loading="eager" decoding="async" referrerpolicy="no-referrer" style="object-position:${pos}" data-candidates="${dataCandidates}" data-ci="0" onerror="(function(img){try{const arr=JSON.parse(img.dataset.candidates||'[]');let ci=parseInt(img.dataset.ci||'0',10);ci++;if(arr[ci]){img.dataset.ci=String(ci);img.src=arr[ci];}else{img.removeAttribute('onerror');img.style.opacity='0';}}catch(e){}})(this)">` : ""}
-        </div>
-        <div class="heroCardMeta">
-          <div class="heroCardName">${safeName}</div>
-          <div class="heroCardCountry">${safeCountry}</div>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  const doSwap = () => {
-    tri.innerHTML = cardsHTML;
-  };
-
-  if (immediate){
-    tri.classList.remove("isFading");
-    doSwap();
-    return;
+  if (heroDotsEl){
+    const dots = heroDotsEl.querySelectorAll(".heroDot");
+    dots.forEach((d, i) => d.classList.toggle("active", i === idx));
   }
 
-  // Fade out -> swap -> fade in
-  tri.classList.add("isFading");
-  setTimeout(() => {
-    doSwap();
-    tri.classList.remove("isFading");
-  }, 220);
-}
+  // restore transitions after immediate jump
+  if (immediate){
+    requestAnimationFrame(() => {
+      slides.forEach(s => s.style.transitionDuration = "");
+    });
+  }
 
-function tickHero(){
-  if (_heroPaused) return;
-  const n = Array.isArray(heroPlayers) ? heroPlayers.length : 0;
-  if (!n) return;
-
-  _heroIndex = (_heroIndex + HERO_GROUP_SIZE) % n;
-  renderHeroGroup(_heroIndex, false);
+  _heroIndex = idx;
 }
 
 function startHero(){
-  stopHero();
-  _heroTimer = setInterval(tickHero, HERO_SLIDE_MS);
-}
-
-function stopHero(){
   if (_heroTimer) clearInterval(_heroTimer);
-  _heroTimer = null;
-}
-
-
-
-// -----------------------
-// Fetchers (match app.py)
-// -----------------------
-async function loadSchedule(){
-  const res = await fetch(`/schedule.json?scope=${encodeURIComponent(scope)}&q=${encodeURIComponent(scheduleQuery)}`, {cache:"no-store"});
-  scheduleData = await res.json();
-  renderSchedule();
-  updateMatchDayMode();
-  restartCountdown(); // uses schedule info when available
-}
-
-async function loadMenu(){
-  const res = await fetch("/menu.json?lang=" + encodeURIComponent(lang), {cache:"no-store"});
-  const data = await res.json();
-  // app.py returns { lang, menu: {title, items:[]}}
-  menuData = data.menu;
-  window.menuDataList = (menuData && Array.isArray(menuData.items)) ? menuData.items : [];
-  menuPage = 1;
-  renderMenu(window.menuDataList);
+  _heroTimer = setInterval(() => {
+    if (_heroPaused) return;
+    setHeroActive(_heroIndex + 1);
+  }, HERO_SLIDE_MS);
 }
 
 function safeParseTimestamp(dateIso, timeStr){
