@@ -391,8 +391,6 @@
       padding:10px 12px;
       border-top:1px solid rgba(255,255,255,.10);
       font-size:12px;
-      position:relative;
-      overflow:hidden;
     }
     .match .left{display:flex; flex-direction:column; gap:2px;}
     .match .when{color:var(--muted);}
@@ -400,49 +398,6 @@
       background: rgba(46,160,67,.18);
       border-top:1px solid rgba(46,160,67,.35);
     }
-
-    /* =========================
-       FLAGS (badge style) + tint
-       - UI-only
-       - Safe: does NOT alter backend
-       ========================= */
-    .flag-badge{
-      width:18px;
-      height:18px;
-      border-radius:999px;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      font-size:13px;
-      line-height:1;
-      border:1px solid rgba(255,255,255,.18);
-      background: rgba(0,0,0,.22);
-      box-shadow: 0 6px 16px rgba(0,0,0,.25);
-      margin-right:6px;
-      transform: translateY(1px);
-      transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
-    }
-    .flag-badge:hover{
-      transform: translateY(0px) scale(1.06);
-      box-shadow: 0 10px 24px rgba(0,0,0,.30);
-      filter: drop-shadow(0 0 8px rgba(212,175,55,.55));
-    }
-    .flags-inline{ display:inline-flex; align-items:center; gap:0; margin-right:6px; }
-
-    /* subtle tint overlay using two team colors */
-    .match.hasTint::before{
-      content:"";
-      position:absolute;
-      inset:0;
-      background: linear-gradient(90deg,
-        color-mix(in srgb, var(--t1, rgba(31,111,235,.40)) 22%, transparent),
-        transparent 45%,
-        color-mix(in srgb, var(--t2, rgba(46,160,67,.35)) 18%, transparent)
-      );
-      opacity:.55;
-      pointer-events:none;
-    }
-    .match > *{ position:relative; z-index:1; }
 
     .matchday{
       margin:12px 14px 0;
@@ -952,6 +907,49 @@
 .heroSlide[data-country="CAN"] img{ filter: drop-shadow(0 0 18px rgba(255,0,0,.6)); }
 .heroSlide[data-country="KOR"] img{ filter: drop-shadow(0 0 18px rgba(205,46,58,.6)); }
 
+
+/* =========================
+   FLAGS (tasteful)
+   ========================= */
+.flag-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:18px;
+  height:18px;
+  border-radius:999px;
+  background: rgba(255,255,255,.10);
+  border: 1px solid rgba(255,255,255,.18);
+  margin-right:6px;
+  font-size:12px;
+  line-height:1;
+  transform: translateY(1px);
+  transition: box-shadow 180ms ease, transform 180ms ease, background 180ms ease;
+}
+.match:hover .flag-badge{
+  box-shadow: 0 0 14px rgba(212,175,55,.35);
+  background: rgba(255,255,255,.16);
+  transform: translateY(1px) scale(1.04);
+}
+
+/* Soft team-color tint on match rows */
+.match{
+  position:relative;
+  overflow:hidden;
+}
+.match::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background: linear-gradient(90deg, rgba(var(--tint-a,255,255,255), .08), rgba(var(--tint-b,255,255,255), .03));
+  opacity:0;
+  transition: opacity 200ms ease;
+  pointer-events:none;
+}
+.match:hover::before{
+  opacity:1;
+}
+
 </style>
 </head>
 <body>
@@ -1047,7 +1045,9 @@
 </div>
 </div>
 <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
-<input id="teamSearch" placeholder="Search team / venue / date (e.g., June 13 or 2026-06-13)..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;"/>
+<input id="teamSearch" placeholder="Search team / venue / date (e.g., June 13 or 2026-06-13)..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;"/ list="teamSuggestions">
+
+<datalist id="teamSuggestions"></datalist>
 <div class="pill" id="matchCount">0</div>
 </div>
 </div>
@@ -1547,133 +1547,6 @@ function restartCountdown(){
 // Schedule rendering + next match highlight
 // -----------------------
 
-// =======================
-// Flags + country colors (UI-only)
-// =======================
-// Note: schedule feed uses country/team names. We map common names to ISO-2 codes,
-// then derive emoji flags. Fallback is no flag (safe).
-const TEAM_TO_ISO2 = {
-  "argentina":"AR",
-  "brazil":"BR",
-  "france":"FR",
-  "portugal":"PT",
-  "spain":"ES",
-  "england":"GB", // FIFA uses England; emoji uses GB
-  "united states":"US",
-  "usa":"US",
-  "mexico":"MX",
-  "canada":"CA",
-  "germany":"DE",
-  "italy":"IT",
-  "netherlands":"NL",
-  "belgium":"BE",
-  "croatia":"HR",
-  "denmark":"DK",
-  "norway":"NO",
-  "sweden":"SE",
-  "switzerland":"CH",
-  "poland":"PL",
-  "serbia":"RS",
-  "cameroon":"CM",
-  "ghana":"GH",
-  "morocco":"MA",
-  "nigeria":"NG",
-  "senegal":"SN",
-  "south africa":"ZA",
-  "tunisia":"TN",
-  "japan":"JP",
-  "south korea":"KR",
-  "korea republic":"KR",
-  "australia":"AU",
-  "china":"CN",
-  "saudi arabia":"SA",
-  "iran":"IR",
-  "qatar":"QA",
-  "united arab emirates":"AE",
-  "uruguay":"UY",
-  "colombia":"CO",
-  "chile":"CL",
-  "ecuador":"EC",
-  "peru":"PE",
-  "venezuela":"VE",
-  "costa rica":"CR",
-  "panama":"PA",
-  "jamaica":"JM",
-  "ivory coast":"CI",
-  "cote d'ivoire":"CI",
-  "côte d’ivoire":"CI",
-  "egypt":"EG",
-  "algeria":"DZ",
-  "mali":"ML",
-  "guinea":"GN",
-  "guinea-bissau":"GW",
-  "cape verde":"CV",
-  "cabo verde":"CV",
-  "new zealand":"NZ",
-  "wales":"GB",
-  "scotland":"GB",
-  "ireland":"IE",
-  "czech republic":"CZ",
-  "czechia":"CZ",
-  "bosnia and herzegovina":"BA",
-  "south sudan":"SS",
-};
-
-// lightweight team color map for subtle tinting (safe defaults)
-const TEAM_TO_COLOR = {
-  "argentina":"#74acdf",
-  "brazil":"#009c3b",
-  "france":"#0055a4",
-  "portugal":"#006600",
-  "spain":"#c60c30",
-  "england":"#cf142b",
-  "united states":"#3c3b6e",
-  "mexico":"#006847",
-  "canada":"#ff0000",
-  "japan":"#bc002d",
-  "south korea":"#cd2e3a",
-  "netherlands":"#ae1c28",
-  "germany":"#000000",
-  "italy":"#008c45",
-};
-
-function _normTeamName(name){
-  return String(name||"")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ")
-    .replace(/[“”]/g,'"')
-    .replace(/[’]/g,"'");
-}
-
-function iso2ToFlagEmoji(iso2){
-  const cc = String(iso2||"").toUpperCase();
-  if (!/^[A-Z]{2}$/.test(cc)) return "";
-  // Regional indicator symbols
-  const A = 0x1F1E6;
-  const first = cc.charCodeAt(0) - 65;
-  const second = cc.charCodeAt(1) - 65;
-  return String.fromCodePoint(A + first) + String.fromCodePoint(A + second);
-}
-
-function teamToISO2(teamName){
-  const n = _normTeamName(teamName);
-  if (!n) return "";
-  return TEAM_TO_ISO2[n] || "";
-}
-
-function teamToColor(teamName){
-  const n = _normTeamName(teamName);
-  return TEAM_TO_COLOR[n] || "";
-}
-
-function flagBadgeHTML(teamName){
-  const iso2 = teamToISO2(teamName);
-  const emoji = iso2ToFlagEmoji(iso2);
-  if (!emoji) return "";
-  return `<span class="flag-badge" title="${escapeHtml(teamName)}">${emoji}</span>`;
-}
-
 function formatKickoffTime(t){
   const s = (t || "").toString().trim();
   if (!s || s.toUpperCase() === "TBD") return "TBD";
@@ -1744,6 +1617,52 @@ function normalizeScheduleSearch(raw){
 }
 
 
+
+// -----------------------
+// Flags + tasteful tinting (UI-only)
+// -----------------------
+const TEAM_META = {
+  "Argentina": { flag:"🇦🇷", tint:[120,190,255] },
+  "Portugal": { flag:"🇵🇹", tint:[0,102,0] },
+  "France": { flag:"🇫🇷", tint:[0,85,164] },
+  "Norway": { flag:"🇳🇴", tint:[186,12,47] },
+  "Spain": { flag:"🇪🇸", tint:[198,12,48] },
+  "England": { flag:"🏴", tint:[207,20,43] }, // St George's; emoji support varies
+  "Brazil": { flag:"🇧🇷", tint:[0,156,59] },
+  "Canada": { flag:"🇨🇦", tint:[255,0,0] },
+  "Korea Republic": { flag:"🇰🇷", tint:[205,46,58] },
+  "South Korea": { flag:"🇰🇷", tint:[205,46,58] },
+  "USA": { flag:"🇺🇸", tint:[60,59,110] },
+  "United States": { flag:"🇺🇸", tint:[60,59,110] },
+  "Mexico": { flag:"🇲🇽", tint:[0,104,71] }
+};
+
+function teamMeta(name){
+  const key = String(name || "").trim();
+  return TEAM_META[key] || { flag:"🏳️", tint:[255,255,255] };
+}
+function flagBadge(name){
+  const m = teamMeta(name);
+  return `<span class="flag-badge" title="${escapeHtml(String(name||""))}">${m.flag}</span>`;
+}
+function setRowTint(row, aName, bName){
+  const a = teamMeta(aName).tint;
+  const b = teamMeta(bName).tint;
+  row.style.setProperty("--tint-a", `${a[0]},${a[1]},${a[2]}`);
+  row.style.setProperty("--tint-b", `${b[0]},${b[1]},${b[2]}`);
+}
+function updateSearchSuggestions(matches){
+  const dl = document.getElementById("teamSuggestions");
+  if (!dl) return;
+  const set = new Set();
+  (matches || []).forEach(m => {
+    if (m.home) set.add(String(m.home).trim());
+    if (m.away) set.add(String(m.away).trim());
+  });
+  const teams = Array.from(set).filter(Boolean).sort((a,b)=>a.localeCompare(b));
+  dl.innerHTML = teams.map(t => `<option value="${escapeHtml(t)}"></option>`).join("");
+}
+
 function renderSchedule(){
   const el = document.getElementById("schedule");
   el.innerHTML = "";
@@ -1752,6 +1671,8 @@ function renderSchedule(){
   if (scheduleData && scheduleData.notice){
     const row = document.createElement("div");
     row.className = "match";
+    setRowTint(row, homeName, awayName);
+
     row.innerHTML = `<div class="left"><div><b>Notice</b></div><div class="when">${escapeHtml(scheduleData.notice)}</div></div><div class="pill">i</div>`;
     el.appendChild(row);
     if (matchCountEl) matchCountEl.textContent = "0";
@@ -1768,6 +1689,10 @@ function renderSchedule(){
   }).filter(m => m.ts !== null);
 
   if (matchCountEl) matchCountEl.textContent = String(enriched.length);
+
+  // Populate search autocomplete suggestions (UI-only)
+  updateSearchSuggestions(enriched);
+
 
   if (!enriched.length){
     const empty = document.createElement("div");
@@ -1818,32 +1743,21 @@ if (totalPages <= 1){
     row.className = "match" + (m.id === nextId ? " next" : "");
 
     const timeTxt = formatKickoffTime(m.time);
-
-    const home = (m.home || "").toString().trim();
-    const away = (m.away || "").toString().trim();
     const teamsTxt = (m.teams && String(m.teams).trim())
       ? m.teams
-      : ((home || away) ? `${home || "TBD"} vs ${away || "TBD"}` : "TBD vs TBD");
+      : ((m.home || m.away) ? `${m.home || "TBD"} vs ${m.away || "TBD"}` : "TBD vs TBD");
 
-    // Flags (badge style) — safe fallback if team name isn't mapped
-    const homeFlag = home ? flagBadgeHTML(home) : "";
-    const awayFlag = away ? flagBadgeHTML(away) : "";
-
-    let teamsHTML = escapeHtml(teamsTxt);
-    if (home && away){
-      teamsHTML = `${homeFlag}${escapeHtml(home)} vs ${awayFlag}${escapeHtml(away)}`;
-      row.classList.add("hasTint");
-      const c1 = teamToColor(home);
-      const c2 = teamToColor(away);
-      if (c1) row.style.setProperty("--t1", c1);
-      if (c2) row.style.setProperty("--t2", c2);
-    }
+    const homeName = m.home || (String(teamsTxt).includes(" vs ") ? String(teamsTxt).split(" vs ")[0] : "");
+    const awayName = m.away || (String(teamsTxt).includes(" vs ") ? String(teamsTxt).split(" vs ").slice(1).join(" vs ") : "");
+    const teamsHtml = (homeName || awayName)
+      ? `${flagBadge(homeName)}${escapeHtml(homeName || "TBD")} <span style="opacity:.8">vs</span> ${flagBadge(awayName)}${escapeHtml(awayName || "TBD")}`
+      : escapeHtml(teamsTxt);
 
     const venueTxt = m.venue ? ` • ${m.venue}` : "";
 
     row.innerHTML = `
       <div class="left">
-        <div><b>${escapeHtml(m.stage || "Match")}</b> • <span class="teams">${teamsHTML}</span></div>
+        <div><b>${escapeHtml(m.stage || "Match")}</b> • ${teamsHtml}</div>
         <div class="when">${escapeHtml(m.date || "")} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div>
       </div>
       <div class="pill">${escapeHtml(m.id || "")}</div>
