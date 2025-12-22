@@ -789,6 +789,21 @@
     .heroRoster{ display:none !important; }
     .heroKicker, .heroTitle{ color: var(--gold); }
 
+
+/* === STAR PLAYER IMAGE NORMALIZATION (Ronaldo reference) === */
+.star-img{
+  height: 320px;        /* matches Ronaldo visual scale */
+  max-width: 100%;
+  width: auto;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+  transition: transform 5s ease-in-out, opacity 1s ease-in-out;
+}
+.star-slide.active .star-img{
+  transform: scale(1.03); /* subtle safe zoom */
+}
+
 </style>
 </head>
 <body>
