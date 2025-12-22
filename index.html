@@ -1067,22 +1067,22 @@
   0%, 100% { transform: translateZ(0) scale(1); filter: drop-shadow(0 0 0 rgba(212,175,55,0)); }
   50%      { transform: translateZ(0) scale(1.015); filter: drop-shadow(0 0 16px rgba(212,175,55,.35)); }
 }
-body.matchday .hero-title{
+body.matchday-mode .hero-title{
   animation: matchdayPulse 1.6s ease-in-out infinite;
 }
 
 /* Banner takeover text styling when matchday */
-body.matchday #matchBanner.show{
+body.matchday-mode #matchBanner.show{
   border-color: rgba(212,175,55,.55);
   box-shadow: 0 0 18px rgba(212,175,55,.20);
 }
 
 /* Highlight the next match card in gold */
-body.matchday .match.next{
+body.matchday-mode .match.next{
   border-color: rgba(212,175,55,.55) !important;
   box-shadow: 0 10px 26px rgba(212,175,55,.14);
 }
-body.matchday .match.next::before{
+body.matchday-mode .match.next::before{
   opacity: .9;
 }
 
@@ -1927,7 +1927,7 @@ function updateMatchDayMode(){
   const isMatchDay = !!(scheduleData && scheduleData.is_match_day);
 
   if (isMatchDay){
-    document.body.classList.add("matchday");
+    document.body.classList.add("matchday-mode");
     pillMode.textContent = "Mode: Match-day";
     const banner = (scheduleData && scheduleData.match_day_banner) ? scheduleData.match_day_banner : "🏟️ MATCH DAY — DOORS OPEN EARLY";
     matchBanner.textContent = banner;
@@ -1936,7 +1936,7 @@ function updateMatchDayMode(){
     matchdayBox.textContent = "🏟️ Match-day mode is ON today. Expect higher traffic — reserve early!";
     matchdayBox.classList.add("show");
   } else {
-    document.body.classList.remove("matchday");
+    document.body.classList.remove("matchday-mode");
     pillMode.textContent = "Mode: Standard";
     matchBanner.classList.remove("show");
     matchdayBox.classList.remove("show");
