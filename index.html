@@ -830,6 +830,35 @@
   color:#d4af37 !important;
 }
 
+
+/* =========================
+   FINAL OVERRIDES (BANNER)
+   ========================= */
+:root{ --gold:#d4af37; }
+
+/* Banner header gold */
+.heroKicker, .heroTitle, .heroTitleRow, .heroTitleWrap, .hero-title, .hero-title *{
+  color: var(--gold) !important;
+}
+
+/* Player name under the image: smaller + gold */
+.heroCaption .heroName,
+.heroName,
+.player-name{
+  font-size:11px !important;
+  font-weight:700 !important;
+  color: var(--gold) !important;
+  text-align:center !important;
+  letter-spacing: .4px !important;
+}
+
+/* Make sure caption centers under the image */
+.heroCaption{
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  text-align:center !important;
+}
+
 </style>
 </head>
 <body>
