@@ -65,7 +65,7 @@
 
     .leftcol{
       display:grid;
-      O0px 1fr; /* Menu | Chat (chat gets more space) */
+      grid-template-rows: 170px 1fr; /* Menu | Chat */
       gap:14px;
       min-height:0;
       height:100%;
@@ -458,7 +458,7 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
     /* Layout override: compact menu + wide chat (desktop) */
     .leftcol{
       display:grid;
-      grid-template-columns: 170px 1fr; /* Menu | Chat */
+      grid-template-rows: 170px 1fr; /* Menu | Chat */
       gap:14px;
       min-height:0;
       height:100%;
@@ -707,6 +707,61 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
   text-shadow: 0 10px 26px rgba(0,0,0,.80);
 }
 
+
+    /* Banner header gold */
+    .heroKicker, .heroTitle{ color: var(--gold) !important; text-shadow: 0 2px 18px rgba(0,0,0,.55);} 
+
+    /* --- HERO player rotation: centered, no distortion --- */
+    .hero{ position:relative; overflow:hidden; }
+    .heroSlides{ position:absolute; inset:0; z-index:0; }
+    .heroStage{ position:absolute; inset:0; }
+    .heroLayer{
+      position:absolute; inset:0;
+      display:flex; flex-direction:column;
+      align-items:center; justify-content:center;
+      padding-top:72px; /* keeps player below the header text */
+      gap:10px;
+      opacity:0;
+      transition: opacity 900ms ease-in-out;
+      pointer-events:none;
+    }
+    .heroLayer.isOn{ opacity:1; }
+    .heroPlayerImg{
+      max-width:min(78%, 680px);
+      max-height:calc(100% - 120px);
+      width:auto; height:auto;
+      object-fit:contain;
+      object-position:center;
+      filter: drop-shadow(0 18px 28px rgba(0,0,0,.38));
+    }
+    .heroPlayerName{
+      font-weight:800;
+      letter-spacing:.2px;
+      font-size:18px;
+      color:rgba(255,255,255,.92);
+      text-shadow: 0 2px 16px rgba(0,0,0,.65);
+    }
+    /* Country glow (subtle) */
+    .heroGlow{
+      background: radial-gradient(650px 320px at 50% 55%, color-mix(in oklab, var(--heroCountry, #ffffff) 45%, transparent) 0%, rgba(0,0,0,0) 70%);
+      opacity:.65;
+      filter: blur(2px);
+    }
+
+
+    .matchBanner{
+      display:none;
+      margin:10px 0 6px;
+      padding:10px 12px;
+      border:1px solid var(--line);
+      border-radius:14px;
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      font-weight:700;
+      line-height:1.25;
+    }
+    .matchBanner.show{ display:block; }
+
 </style>
 </head>
 <body>
@@ -761,9 +816,6 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
 <button class="secondary" id="compactToggle" style="min-width:auto; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:800;">Compact</button>
 </div>
 </div>
-<!-- HERO: Cinematic rotating banner (UI-only; no backend impact) -->
-
-<div class="banner" id="matchBanner"></div>
 <div id="chat"></div>
 <div class="composer">
 <textarea id="msg" placeholder="Type here..."></textarea>
@@ -791,6 +843,7 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
 <span><b id="s">0</b>s</span>
 </div>
 </div>
+<div class="matchBanner" id="matchBanner"></div>
 <div class="matchday" id="matchdayBox"></div>
 <div class="sidepad" style="padding-top:10px; padding-bottom:0;">
 <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -820,6 +873,7 @@ filter: drop-shadow(0 14px 24px rgba(0,0,0,.35));
 </div>
 </div>
 <script>
+
 /**
  * This frontend matches your current app.py endpoints:
  *  - GET /schedule.json
@@ -1033,29 +1087,100 @@ function stripHtml(html){
 // -----------------------
 // HERO banner (UI-only)
 // -----------------------
-const HERO_SLIDE_MS = 5000; // 5 seconds per player
+
+// -----------------------
+// HERO banner rotation (simple + stable):
+//  - One player centered
+//  - 5 seconds per player
+//  - Fade out -> next player
+// -----------------------
+const HERO_SLIDE_MS = 5000;
+
+const heroPlayers = [
+  { name:'Lionel Messi', country:'Argentina', color:'#74ACDF', img:'https://commons.wikimedia.org/wiki/Special:FilePath/Lionel_Messi_in_2018.jpg' },
+  { name:'Cristiano Ronaldo', country:'Portugal', color:'#006600', img:'https://commons.wikimedia.org/wiki/Special:FilePath/Cristiano_Ronaldo_in_action_(3868278887).jpg' },
+  { name:'Kylian Mbappé', country:'France', color:'#0055A4', img:'https://commons.wikimedia.org/wiki/Special:FilePath/Mbapp%C3%A9_25032021.jpg' },
+  { name:'Erling Haaland', country:'Norway', color:'#BA0C2F', img:'https://commons.wikimedia.org/wiki/Special:FilePath/Erling_Haaland_2020.jpg' },
+  { name:'Lamine Yamal', country:'Spain', color:'#AA151B', img:'https://commons.wikimedia.org/wiki/Special:FilePath/Lamine_Yamal,_S%C3%A1nchez_se_reuni%C3%B3_con_los_futbolistas_de_la_selecci%C3%B3n_espa%C3%B1ola_tras_ganar_la_Eurocopa_2024_(3)_(cropped).jpg' },
+  { name:'Bukayo Saka', country:'England', color:'#CE1126', img:'https://commons.wikimedia.org/wiki/Special:FilePath/2022_FIFA_World_Cup_England_0-0_USA_-_Saka_vs_Pulisic.jpg' },
+  { name:'Vinícius Júnior', country:'Brazil', color:'#009C3B', img:'https://commons.wikimedia.org/wiki/Special:FilePath/Vinicius_Jr_2018.jpg' },
+  { name:'Alphonso Davies', country:'Canada', color:'#D52B1E', img:'https://commons.wikimedia.org/wiki/Special:FilePath/Alphonso_Davies_in_2022.jpg' },
+  { name:'Son Heung-min', country:'Korea Republic', color:'#CD2E3A', img:'https://commons.wikimedia.org/wiki/Special:FilePath/Mex-Kor_(19)_(cropped).jpg' }
+];
+
 let _heroTimer = null;
 let _heroIndex = 0;
 let _heroPaused = false;
-let _heroActiveLayer = 0;
-
-// Highest-quality (and replaceable) image URLs (Wikimedia Commons / public pages).
-// You can swap these with your own hosted images anytime.
-const heroPlayers = [
-  { name:"Lionel Messi", country:"Argentina", color:"#74ACDF", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Argentina_vs_mexico_messi_vs_alvarado.jpg" },
-  { name:"Cristiano Ronaldo", country:"Portugal", color:"#006600", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Cristiano_Ronaldo_WC2022_-_02.jpg" },
-  { name:"Kylian Mbappé", country:"France", color:"#0055A4", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Kylian_Mbappe_2017.jpg" },
-  { name:"Erling Haaland", country:"Norway", color:"#BA0C2F", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Erling_Haaland_2023_(cropped-v2).jpg" },
-  { name:"Lamine Yamal", country:"Spain", color:"#AA151B", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Lamine_Yamal_in_2025.jpg" },
-  { name:"Bukayo Saka", country:"England", color:"#CE1126", img:"https://commons.wikimedia.org/wiki/Special:FilePath/2022_FIFA_World_Cup_England_0-0_USA_-_Saka_vs_Pulisic.jpg" },
-  { name:"Vinícius Júnior", country:"Brazil", color:"#009C3B", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Vinicius_Jr_2018_(cropped).jpg" },
-  { name:"Alphonso Davies", country:"Canada", color:"#D52B1E", img:"https://commons.wikimedia.org/w/index.php?curid=79676267" },
-  { name:"Son Heung-min", country:"Korea Republic", color:"#CD2E3A", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Son_Heung-min_at_2019_AFC_Asian_Cup.jpg" }
-];
 
 function stopHero(){
   if (_heroTimer) { clearInterval(_heroTimer); _heroTimer = null; }
 }
+
+function mountHeroStage(){
+  const stage = document.getElementById("heroSlides");
+  if (!stage) return;
+  if (stage.dataset.ready) return;
+
+  stage.innerHTML = `
+    <div class="heroStage" aria-hidden="true">
+      <div class="heroLayer" id="heroLayerA">
+        <img class="heroPlayerImg" id="heroImgA" alt="" loading="eager" decoding="async" />
+        <div class="heroPlayerName" id="heroNameA"></div>
+      </div>
+      <div class="heroLayer" id="heroLayerB">
+        <img class="heroPlayerImg" id="heroImgB" alt="" loading="eager" decoding="async" />
+        <div class="heroPlayerName" id="heroNameB"></div>
+      </div>
+    </div>
+  `;
+  stage.dataset.ready = "1";
+}
+
+function setHeroPlayer(idx, immediate=false){
+  const heroBanner = document.getElementById("heroBanner");
+  const stage = document.getElementById("heroSlides");
+  if (!heroBanner || !stage) return;
+
+  mountHeroStage();
+
+  const p = heroPlayers[idx];
+
+  const layerA = document.getElementById("heroLayerA");
+  const layerB = document.getElementById("heroLayerB");
+  const imgA = document.getElementById("heroImgA");
+  const imgB = document.getElementById("heroImgB");
+  const nameA = document.getElementById("heroNameA");
+  const nameB = document.getElementById("heroNameB");
+  if (!layerA || !layerB || !imgA || !imgB || !nameA || !nameB) return;
+
+  const useB = (idx % 2 === 1);
+  const showLayer = useB ? layerB : layerA;
+  const hideLayer = useB ? layerA : layerB;
+  const showImg = useB ? imgB : imgA;
+  const showName = useB ? nameB : nameA;
+
+  // Set country glow tint
+  heroBanner.style.setProperty("--heroCountry", p.color);
+
+  // Prepare incoming
+  showImg.src = p.img;
+  showImg.alt = p.name;
+  showName.textContent = p.name;
+
+  // Crossfade
+  if (immediate){
+    hideLayer.classList.remove("isOn");
+    showLayer.classList.add("isOn");
+    return;
+  }
+
+  // Fade out current quickly then fade in next cleanly (prevents “double exposure”)
+  hideLayer.classList.remove("isOn");
+  window.requestAnimationFrame(() => {
+    showLayer.classList.add("isOn");
+  });
+}
+
 function startHero(){
   stopHero();
   _heroTimer = setInterval(() => {
@@ -1065,166 +1190,19 @@ function startHero(){
   }, HERO_SLIDE_MS);
 }
 
-function setHeroPlayer(idx, immediate=false){
-  const heroBanner = document.getElementById("heroBanner");
-  const stage = document.getElementById("heroSlides");
-  const dots = document.getElementById("heroDots");
-  if (!heroBanner || !stage) return;
-
-  const p = heroPlayers[idx] || heroPlayers[0];
-
-  // set glow color for FX layer
-  heroBanner.style.setProperty("--heroGlowColor", (p.color || "#1f6feb"));
-
-  // Ensure stage markup (two layers for crossfade)
-  if (!stage.dataset.ready){
-    stage.innerHTML = `
-      <div class="heroStage" aria-hidden="true">
-        <div class="heroLayer active" id="heroLayerA">
-          <div class="heroFigure">
-            <img class="heroPlayerImg" id="heroImgA" alt="" loading="eager" decoding="async"/>
-            <div class="heroNameTag" id="heroNameA"></div>
-          </div>
-        </div>
-        <div class="heroLayer" id="heroLayerB">
-          <div class="heroFigure">
-            <img class="heroPlayerImg" id="heroImgB" alt="" loading="eager" decoding="async"/>
-            <div class="heroNameTag" id="heroNameB"></div>
-          </div>
-        </div>
-      </div>
-    `;
-    stage.dataset.ready = "1";
-  }
-
-  const a = document.getElementById("heroLayerA");
-  const b = document.getElementById("heroLayerB");
-  const imgA = document.getElementById("heroImgA");
-  const imgB = document.getElementById("heroImgB");
-  const nameA = document.getElementById("heroNameA");
-  const nameB = document.getElementById("heroNameB");
-  if (!a || !b || !imgA || !imgB || !nameA || !nameB) return;
-
-  const nextIsA = (_heroActiveLayer === 1); // toggle
-  const nextLayer = nextIsA ? a : b;
-  const prevLayer = nextIsA ? b : a;
-  const nextImg = nextIsA ? imgA : imgB;
-  const nextName = nextIsA ? nameA : nameB;
-
-  nextImg.src = p.img;
-  nextImg.alt = `${p.name} — ${p.country}`;
-  nextName.textContent = p.name;
-
-  // crossfade
-  if (immediate){
-    a.classList.toggle("active", nextIsA);
-    b.classList.toggle("active", !nextIsA);
-  } else {
-    // ensure next starts hidden
-    nextLayer.classList.add("active");
-    prevLayer.classList.remove("active");
-  }
-  _heroActiveLayer = nextIsA ? 0 : 1;
-
-  // dots
-  if (dots){
-    dots.innerHTML = heroPlayers.map((_, i) => `<span class="heroDot ${i===idx ? "active":""}" aria-hidden="true"></span>`).join("");
-  }
-}
-
 function initHero(){
   const heroBanner = document.getElementById("heroBanner");
-  const stage = document.getElementById("heroSlides");
-  if (!heroBanner || !stage || !Array.isArray(heroPlayers) || heroPlayers.length === 0) return;
+  if (!heroBanner) return;
 
-  // Pause on hover/touch (UI-only)
-  heroBanner.addEventListener("mouseenter", () => { _heroPaused = true; });
-  heroBanner.addEventListener("mouseleave", () => { _heroPaused = false; });
-  heroBanner.addEventListener("touchstart", () => { _heroPaused = true; }, {passive:true});
-  heroBanner.addEventListener("touchend", () => { _heroPaused = false; }, {passive:true});
-
-  // Preload images (best-effort)
-  heroPlayers.forEach(p => { const im = new Image(); im.src = p.img; });
-
+  mountHeroStage();
   _heroIndex = 0;
   setHeroPlayer(_heroIndex, true);
+
+  heroBanner.addEventListener("mouseenter", () => _heroPaused = true);
+  heroBanner.addEventListener("mouseleave", () => _heroPaused = false);
+
   startHero();
 }
-
-// -----------------------
-// Schedule rendering + next match highlight
-// -----------------------
-
-function formatKickoffTime(t){
-  const s = (t || "").toString().trim();
-  if (!s || s.toUpperCase() === "TBD") return "TBD";
-  // Already 12-hour?
-  if (/[AP]M/i.test(s)) {
-    // normalize spacing: "7:00 pm" -> "7:00 PM"
-    return s.replace(/\s+/g," ").replace(/am/i,"AM").replace(/pm/i,"PM");
-  }
-  // "19:00" -> "7:00 PM"
-  const m = s.match(/^(\d{1,2}):(\d{2})$/);
-  if (m){
-    let hh = parseInt(m[1],10);
-    const mm = m[2];
-    const ap = hh >= 12 ? "PM" : "AM";
-    hh = hh % 12; if (hh === 0) hh = 12;
-    return `${hh}:${mm} ${ap}`;
-  }
-  return s;
-}
-
-// Normalize schedule search so users can type a specific day like "June 13" and still match backend dates ("YYYY-MM-DD").
-// Backend filters against m.date (ISO), so we convert common date inputs to ISO when possible.
-function normalizeScheduleSearch(raw){
-  const s = (raw || "").toString().trim();
-  if (!s) return "";
-  if (/^20\d{2}-\d{2}-\d{2}$/.test(s)) return s;
-
-  const slash = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-  if (slash){
-    let mm = parseInt(slash[1],10);
-    let dd = parseInt(slash[2],10);
-    let yy = parseInt(slash[3],10);
-    if (yy < 100) yy += 2000;
-    const m2 = String(mm).padStart(2,"0");
-    const d2 = String(dd).padStart(2,"0");
-    return `${yy}-${m2}-${d2}`;
-  }
-
-  const lower = s.toLowerCase();
-  const monthMap = {
-    january:1, jan:1, february:2, feb:2, march:3, mar:3, april:4, apr:4, may:5,
-    june:6, jun:6, july:7, jul:7, august:8, aug:8, september:9, sep:9, sept:9,
-    october:10, oct:10, november:11, nov:11, december:12, dec:12,
-    // Spanish
-    enero:1, febrero:2, marzo:3, abril:4, mayo:5, junio:6, julio:7, agosto:8, septiembre:9, octubre:10, noviembre:11, diciembre:12,
-    // Portuguese
-    janeiro:1, fevereiro:2, março:3, marco:3, abril:4, maio:5, junho:6, julho:7, agosto:8, setembro:9, outubro:10, novembro:11, dezembro:12,
-    // French
-    janvier:1, février:2, fevrier:2, mars:3, avril:4, mai:5, juin:6, juillet:7, août:8, aout:8, septembre:9, octobre:10, novembre:11, décembre:12, decembre:12
-  };
-  const words = lower.split(/[\s,\-]+/).filter(Boolean);
-  let mon = null;
-  for (const w of words){
-    if (monthMap[w] != null){ mon = monthMap[w]; break; }
-  }
-  if (mon != null){
-    const dayMatch = lower.match(/\b(\d{1,2})\b/);
-    if (dayMatch){
-      const dd = parseInt(dayMatch[1],10);
-      const yMatch = lower.match(/\b(20\d{2})\b/);
-      const yy = yMatch ? parseInt(yMatch[1],10) : 2026;
-      const m2 = String(mon).padStart(2,"0");
-      const d2 = String(dd).padStart(2,"0");
-      return `${yy}-${m2}-${d2}`;
-    }
-  }
-  return s;
-}
-
-
 function renderSchedule(){
   const el = document.getElementById("schedule");
   el.innerHTML = "";
@@ -1569,6 +1547,7 @@ applyLanguageToUI();
   // Ensure focus
   msgEl.focus();
 })();
+
 </script>
 </body>
 </html>
