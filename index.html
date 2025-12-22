@@ -132,7 +132,8 @@
       position:absolute; inset:0;
       opacity:0;
       transform: scale(1.02);
-      transition: opacity 900ms ease;
+      transition: opacity 1100ms ease-in-out;
+
       display:flex;
       align-items:center;
       justify-content:center;
@@ -862,15 +863,37 @@
 
 /* =========================
    BANNER POLISH: ZOOM + GLOW
+
+/* === RECOMMENDED TRANSITION UPGRADE ===
+   - Smoother crossfade: 1100ms ease-in-out (container opacity)
+   - Ken Burns zoom on active image: 5s gentle push-in
+   - Hover pauses zoom animation (in addition to JS pause) */
+@keyframes heroKenBurns{
+  from { transform: translateZ(0) scale(1.00); }
+  to   { transform: translateZ(0) scale(1.035); }
+}
+
+.heroSlide.active img{
+  animation: heroKenBurns 5s ease-in-out forwards;
+  will-change: transform, filter;
+}
+
+.hero:hover .heroSlide.active img{
+  animation-play-state: paused;
+}
    ========================= */
 
 /* Subtle, safer zoom */
 .heroSlide.active img,
 .star-img{
-  transition: transform 5s ease-in-out, filter 1s ease-in-out;
+  transition: filter 800ms ease-in-out;
 }
+
+
+
+/* Soft ambient lift for all active images (keeps your country-color glow rules) */
 .heroSlide.active img{
-  transform: scale(1.025); /* reduced from stronger zoom */
+  filter: brightness(1.03) contrast(1.03);
 }
 
 /* Country color glows */
