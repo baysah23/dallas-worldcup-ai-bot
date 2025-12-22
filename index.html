@@ -130,7 +130,11 @@
       0%,100%{ transform: translate3d(0,0,0) scale(1); opacity:.82; }
       50%{ transform: translate3d(-10px,-8px,0) scale(1.03); opacity:1; }
     }
-    .heroSweep{
+        @keyframes heroZoom{
+      0%{ transform: scale(1.02); }
+      100%{ transform: scale(1.06); }
+    }
+.heroSweep{
       position:absolute; top:-30%; left:-30%;
       width:60%; height:160%;
       background: linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent);
@@ -153,20 +157,20 @@
       pointer-events:none;
     }
     .heroPlayer img{
-      max-height:92%;
-      max-width:68%;
+      max-height:100%;
+      max-width:82%;
       width:auto;
       height:auto;
       object-fit:contain;
-      filter: drop-shadow(0 16px 26px rgba(0,0,0,.40));
+      filter: drop-shadow(0 18px 40px rgba(0,0,0,.55));
+      transform: scale(1.02);
       opacity:0;
-      transform: scale(1.00);
-      transition: opacity 900ms ease, transform 5000ms ease;
+      transition: opacity 800ms ease, transform 800ms ease;
       will-change: opacity, transform;
     }
     .heroPlayer img.show{
       opacity:1;
-      transform: scale(1.03); /* subtle zoom over 5s */
+      animation: heroZoom 5s linear forwards;
     }
     @media (max-width: 720px){
       .hero{ height:160px; margin:10px; }
@@ -220,17 +224,17 @@
     }
     .heroName span{
       font-weight:900;
-      font-size:13px;
+      font-size:11px;
       letter-spacing:.04em;
       text-transform:uppercase;
-      padding:7px 12px;
+      padding:6px 10px;
       border-radius:999px;
       background: rgba(0,0,0,.28);
       border: 1px solid rgba(255,255,255,.14);
       backdrop-filter: blur(8px);
       text-shadow: 0 10px 20px rgba(0,0,0,.60);
     }
-    .compact .heroName span{ font-size:12px; padding:6px 11px; }
+    .compact .heroName span{ font-size:10px; padding:5px 9px; }
 
     /* -----------------------
        CARDS + LAYOUT
@@ -853,17 +857,16 @@ let heroTimer = null;
 let heroPaused = false;
 
 const heroPlayers = [
-  { name:"Lionel Messi",      glow:"rgba(0,179,255,.22)", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Lionel%20Messi%20NE%20Revolution%20Inter%20Miami%207.9.25-055.jpg?width=2000" },
-  { name:"Cristiano Ronaldo", glow:"rgba(255,59,48,.20)", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Cristiano%20Ronaldo%20(3).jpg?width=2000" },
-  { name:"Kylian Mbappé",     glow:"rgba(31,111,235,.22)", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Kylian%20Mbappe%202017.jpg?width=2000" },
-  { name:"Erling Haaland",    glow:"rgba(255,204,102,.22)", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Erling%20Haaland%202023%20(cropped-v2).jpg?width=2000" },
-  { name:"Lamine Yamal",      glow:"rgba(255,215,110,.20)", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Lamine%20Yamal%20Spain%20v%20Croatia%20UEFA%20Euro%202024%20(3).jpg?width=2000" },
-  { name:"Bukayo Saka",       glow:"rgba(245,215,110,.20)", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Bukayo%20Saka%202022.jpg?width=2000" },
-  { name:"Vinícius Júnior",   glow:"rgba(0,210,106,.20)", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Vinicius%20Jr%202018%20(cropped).jpg?width=2000" },
-  { name:"Alphonso Davies",   glow:"rgba(255,215,110,.18)", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Alphonso%20Davies%20Canada%202021.jpg?width=2000" },
-  { name:"Son%20Heung-min".replaceAll("%20"," "), glow:"rgba(31,111,235,.18)", img:"https://commons.wikimedia.org/wiki/Special:FilePath/Son%20Heung-min%202019.jpg?width=2000" }
+  { name:"Lionel Messi",      glow:"rgba(0,179,255,.22)", img:"Lionel-Messi-Argentina-Netherlands-World-Cup-Qatar-2022.webp" },
+  { name:"Cristiano Ronaldo", glow:"rgba(255,59,48,.20)", img:"gettyimages-2234200789.jpg" },
+  { name:"Kylian Mbappé",     glow:"rgba(31,111,235,.22)", img:"5b0af8c9a489bd4226b7e60e643619bb.jpg" },
+  { name:"Erling Haaland",    glow:"rgba(255,204,102,.22)", img:"ERLING+HAALAND.webp" },
+  { name:"Lamine Yamal",      glow:"rgba(255,215,110,.20)", img:"agencia-efe_multimedia_55014106243.multimedia.photos.55014106243003.file.jpg" },
+  { name:"Bukayo Saka",       glow:"rgba(245,215,110,.20)", img:"0_GettyImages-2245961874.webp" },
+  { name:"Vinícius Júnior",   glow:"rgba(0,210,106,.20)", img:"resizedcrop-503457b06b5beda2fba2933775b94fca-840x630.jpg" },
+  { name:"Alphonso Davies",   glow:"rgba(255,215,110,.18)", img:"Davies-2-768x432.jpg" },
+  { name:"Son Heung-min",     glow:"rgba(31,111,235,.18)", img:"son-heung-min-south-korea-world-cup-lede.jpg" }
 ];
-
 function setHeroPlayer(i, immediate=false){
   const p = heroPlayers[i] || heroPlayers[0];
   if (!p) return;
@@ -895,6 +898,12 @@ function setHeroPlayer(i, immediate=false){
 
 function startHero(){
   stopHero();
+
+  // Preload local star images (avoids flicker / blank frames)
+  try{
+    heroPlayers.forEach(p => { const im = new Image(); im.src = p.img; });
+  }catch(e){}
+
   setHeroPlayer(heroIdx, true);
   heroTimer = setInterval(() => {
     if (heroPaused) return;
