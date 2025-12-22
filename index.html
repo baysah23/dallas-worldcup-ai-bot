@@ -1067,27 +1067,27 @@
   0%, 100% { transform: translateZ(0) scale(1); filter: drop-shadow(0 0 0 rgba(212,175,55,0)); }
   50%      { transform: translateZ(0) scale(1.015); filter: drop-shadow(0 0 16px rgba(212,175,55,.35)); }
 }
-body.matchday-mode .hero-title{
+body.matchday-mode, .matchday .hero-title{
   animation: matchdayPulse 1.6s ease-in-out infinite;
 }
 
 /* Banner takeover text styling when matchday */
-body.matchday-mode #matchBanner.show{
+body.matchday-mode, .matchday #matchBanner.show{
   border-color: rgba(212,175,55,.55);
   box-shadow: 0 0 18px rgba(212,175,55,.20);
 }
-    body.matchday-mode .banner.show{
+    body.matchday-mode, .matchday .banner.show{
       padding:8px 12px;
       font-size:11px;
     }
 
 
 /* Highlight the next match card in gold */
-body.matchday-mode .match.next{
+body.matchday-mode, .matchday .match.next{
   border-color: rgba(212,175,55,.55) !important;
   box-shadow: 0 10px 26px rgba(212,175,55,.14);
 }
-body.matchday-mode .match.next::before{
+body.matchday-mode, .matchday .match.next::before{
   opacity: .9;
 }
 
@@ -1189,7 +1189,6 @@ body.matchday-mode .match.next::before{
 <span><b id="s">0</b>s</span>
 </div>
 </div>
-<div class="matchday-callout" id="matchdayBox"></div>
 <div class="sidepad" style="padding-top:10px; padding-bottom:0;">
 <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
 <div class="pill" style="padding:6px 10px;">Schedule</div>
@@ -1394,7 +1393,8 @@ function applyLanguageToUI(){
   // Titles + helper
   document.getElementById("chatTitle").textContent = L().chat_title;
   document.getElementById("sideTitle").textContent = L().side_title;
-  document.getElementById("countLabel").textContent = L().countdown;
+  const __cl = document.getElementById("countLabel");
+  if(__cl){ __cl.textContent = L().countdown; __cl.dataset.defaultLabel = L().countdown; }
   document.getElementById("countSub").textContent = L().countdown_sub;
   document.getElementById("nextHint").textContent = L().next_hint;
   document.getElementById("menuTitle").textContent = L().menu_title;
@@ -1670,6 +1670,8 @@ function restartCountdown(){
   if (countdownTimer) clearInterval(countdownTimer);
 
   const target = chooseCountdownTarget();
+  // expose kickoff timestamp for Match Day label mode
+  window.__nextKickoffAt = target.getTime();
   const dEl = document.getElementById("d");
   const hEl = document.getElementById("h");
   const mEl = document.getElementById("m");
@@ -1933,18 +1935,22 @@ function updateMatchDayMode(){
 
   if (isMatchDay){
     document.body.classList.add("matchday-mode");
+    document.body.classList.add("matchday");
     pillMode.textContent = "Mode: Match-day";
     const banner = (scheduleData && scheduleData.match_day_banner) ? scheduleData.match_day_banner : "🏟️ MATCH DAY — DOORS OPEN EARLY";
-    matchBanner.textContent = banner;
+    matchBanner.textContent = banner + " • Higher traffic — reserve early!";
     matchBanner.classList.add("show");
 
-    matchdayBox.textContent = "🏟️ Match-day mode is ON today. Expect higher traffic — reserve early!";
-    matchdayBox.classList.add("show");
+    if(matchdayBox){
+      matchdayBox.textContent = "🏟️ Match-day mode is ON today. Expect higher traffic — reserve early!";
+      matchdayBox.classList.add("show");
+    }
   } else {
     document.body.classList.remove("matchday-mode");
+    document.body.classList.remove("matchday");
     pillMode.textContent = "Mode: Standard";
     matchBanner.classList.remove("show");
-    matchdayBox.classList.remove("show");
+    if(matchdayBox) matchdayBox.classList.remove("show");
   }
 }
 
@@ -2206,30 +2212,35 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 
 
 <script>
-
-
-
-<script>
 /* Match Day countdown label switch (UI-only, safe) */
 (function(){
   const lbl = document.getElementById("countLabel");
   if(!lbl) return;
 
+  function isMatchDay(){
+    return document.body.classList.contains("matchday") || document.body.classList.contains("matchday-mode");
+  }
+
   function formatKickoffIn(ms){
-    const m = Math.max(0, Math.floor(ms/60000));
-    const h = Math.floor(m/60);
-    const mm = m%60;
+    const totalM = Math.max(0, Math.floor(ms/60000));
+    const h = Math.floor(totalM/60);
+    const mm = totalM%60;
     return `${h}h ${mm}m`;
   }
 
   function tick(){
-    if(!document.body.classList.contains("matchday-mode")) return;
+    if(!isMatchDay()){
+      // Restore default label (language-aware)
+      if(lbl.dataset.defaultLabel) lbl.textContent = lbl.dataset.defaultLabel;
+      return;
+    }
     if(typeof window.__nextKickoffAt !== "number") return;
     const ms = window.__nextKickoffAt - Date.now();
     lbl.textContent = `Kickoff in ${formatKickoffIn(ms)}`;
   }
 
-  setInterval(tick, 15000);
+  tick();
+  setInterval(tick, 1000);
 })();
 </script>
 
@@ -2243,28 +2254,26 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 (function(){
   window.__setMatchDayUI = function(on){
     try{
-      document.body.classList.toggle("matchday-mode", !!on);
+      const enabled = !!on;
 
-      // show / hide banner + callout text without touching any backend logic
+      // Support both class names so manual console tests work:
+      document.body.classList.toggle("matchday", enabled);
+      document.body.classList.toggle("matchday-mode", enabled);
+
+      // Banner text (combined + compact)
       const banner = document.getElementById("matchBanner");
       if(banner){
-        banner.classList.toggle("show", !!on);
-        if(on){
-          banner.textContent = "🏟️ MATCH DAY — DOORS OPEN EARLY";
+        banner.classList.toggle("show", enabled);
+        if(enabled){
+          banner.textContent = "🏟️ MATCH DAY — DOORS OPEN EARLY • Higher traffic — reserve early!";
+        }else{
+          banner.textContent = "";
         }
       }
 
-      const box = document.getElementById("matchdayBox");
-      if(box){
-        box.classList.toggle("show", !!on);
-        if(on){
-          box.textContent = "🏟️ Match-day mode is ON today. Expect higher traffic — reserve early!";
-        }
-      }
-
-      // for countdown label demo (optional):
+      // For countdown label demo:
       // sets a kickoff time ~2h 14m from now if not already set
-      if(on && typeof window.__nextKickoffAt !== "number"){
+      if(enabled && typeof window.__nextKickoffAt !== "number"){
         window.__nextKickoffAt = Date.now() + (2*60+14)*60*1000;
       }
     }catch(e){
