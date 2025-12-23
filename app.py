@@ -5,8 +5,6 @@ import os
 import json
 import re
 import time
-import io
-import qrcode
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
@@ -21,26 +19,6 @@ from google.oauth2.service_account import Credentials
 # ============================================================
 app = Flask(__name__)
 
-# ============================================================
-# QR code helper (real QR PNG for posters)
-# ============================================================
-@app.get("/qr.png")
-def qr_png():
-    """Return a PNG QR code for the given text/url.
-
-    Usage: /qr.png?data=<urlencoded>
-
-    Safe default: current page URL if omitted.
-    """
-    data = request.args.get("data") or (request.host_url.rstrip("/") + request.path.replace("/qr.png", "/"))
-    # Keep it short; QR libs can handle long but poster use should be a URL.
-    if len(data) > 2048:
-        data = data[:2048]
-    img = qrcode.make(data)
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    buf.seek(0)
-    return send_file(buf, mimetype="image/png")
 client = OpenAI()
 
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
