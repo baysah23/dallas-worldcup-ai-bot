@@ -2418,7 +2418,12 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="fz-card" id="drinkCard" style="margin-top:10px;">
 <h3>🍹 Drink highlights</h3>
 <div class="fz-muted">Based on who you’re supporting (or pick a country).</div>
-<div id="drinkHighlight" style="margin-top:10px;"></div>
+<div id="drinkHighlight" style="margin-top:10px;">
+      <div style="border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:10px; background: rgba(0,0,0,.10);">
+        <div id="drinkName" style="font-weight:900;">Country-themed drink</div>
+        <div id="drinkDesc" class="fz-muted" style="margin-top:4px;">Based on who you’re supporting (or pick a country).</div>
+      </div>
+    </div>
 </div>
 <div class="fz-card" id="qrCard" style="display:none; margin-top:10px;">
 <h3>📱 QR poster</h3>
@@ -3900,14 +3905,14 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   const el = (id)=>document.getElementById(id);
 
   // ----- Elements -----
-  const modal = el("fzCountryModal");
-  const countryGrid = el("fzCountryGrid");
+  const modal = el("countryModal");
+  const countryGrid = el("countryGrid");
   const supporterLabel = el("supporterLabel");
   const pollCard = el("pollCard");
   const pollList = el("pollList");
   const drinkName = el("drinkName");
   const drinkDesc = el("drinkDesc");
-  const qrModal = el("fzQrModal");
+  const qrModal = el("qrCard");
   const qrCanvas = el("qrCanvas");
   const qrLink = el("qrLink");
 
@@ -4116,18 +4121,24 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   // ----- QR poster -----
   function openQR(){
     if(!qrModal) return;
+    // Toggle the inline QR card (not a modal overlay)
+    const isHidden = (qrModal.style.display === "none" || !qrModal.style.display);
+    if(!isHidden){
+      qrModal.style.display = "none";
+      return;
+    }
     const url = window.location.href;
     if(qrLink) { qrLink.textContent = url; qrLink.href = url; }
-    qrModal.classList.add("show");
+    qrModal.style.display = "block";
     // best-effort draw
     try{ drawPseudoQR(url); }catch(e){}
   }
   function closeQR(){
     if(!qrModal) return;
-    qrModal.classList.remove("show");
+    qrModal.style.display = "none";
   }
 
-  function drawPseudoQR(text){
+function drawPseudoQR(text){
     if(!qrCanvas) return;
     const ctx = qrCanvas.getContext("2d");
     const size = qrCanvas.width;
