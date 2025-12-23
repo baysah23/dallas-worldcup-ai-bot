@@ -440,74 +440,86 @@ def get_gspread_client():
 
 
 
-def ensure_sheet_header(ws):
-    """Ensure the sheet has headers in row 1 and never lets headers drift to the bottom.
+def _normalize_header(h: str) -> str:
+    return (h or "").strip().lower().replace(" ", "_")
 
-    - If an older 7-column header is detected, upgrade it to the new 9-column header.
-    - If a header row (old or new) is found at the bottom, remove it.
-    - If row 1 is not a header, insert the correct header at row 1.
+
+def ensure_sheet_schema(ws) -> List[str]:
     """
-    expected = ['timestamp', 'name', 'phone', 'date', 'time', 'party_size', 'language', 'status', 'vip']
-    old_expected = ['timestamp', 'name', 'phone', 'date', 'time', 'party_size', 'language']
+    Make sure row 1 is the header and includes the CRM columns we need.
+    Returns the final header list (as stored in the sheet).
+    """
+    desired = ["timestamp", "name", "phone", "date", "time", "party_size", "language", "status", "vip"]
 
-    # Read first row
-    first = ws.row_values(1)
+    existing = ws.row_values(1) or []
+    existing_norm = [_normalize_header(x) for x in existing]
 
-    # If the sheet already has the older 7-column header, upgrade it in place.
-    if first == old_expected:
-        ws.update("A1:I1", [expected])
-        return
-    if first == expected:
-        # Still remove any trailing (duplicated) header rows.
-        try:
-            all_vals = ws.get_all_values()
-        except Exception:
-            all_vals = []
-        # Remove trailing duplicates
-        while all_vals and (all_vals[-1] == expected or all_vals[-1] == old_expected):
-            ws.delete_rows(len(all_vals))
-            all_vals = all_vals[:-1]
-        return
+    # If sheet is empty, write the full header
+    if not any(x.strip() for x in existing):
+        ws.update("A1", [desired])
+        return desired
 
-    # Otherwise, attempt to clean up any header that drifted to the bottom
-    try:
-        all_vals = ws.get_all_values()
-    except Exception:
-        all_vals = []
+    # If the existing header doesn't even contain "timestamp" (common sign row1 isn't a header),
+    # don't try to reshuffle rows automatically—just ensure required columns exist at the end.
+    header = existing[:]  # keep original display names
+    header_norm = existing_norm[:]
 
-    # Remove trailing header duplicates (old or new). (Sometimes prior code inserted at top,
-    # and the Google Sheet UI still shows an old header at the bottom.)
-    while all_vals and (all_vals[-1] == expected or all_vals[-1] == old_expected):
-        ws.delete_rows(len(all_vals))
-        all_vals = all_vals[:-1]
+    # Append missing columns
+    for col in desired:
+        if col not in header_norm:
+            header.append(col)
+            header_norm.append(col)
 
-    # If row 1 is empty, just set it. Otherwise, insert a new row at top.
-    first_now = ws.row_values(1)
-    if not any((c or "").strip() for c in first_now):
-        ws.update("A1:I1", [expected])
-    else:
-        ws.insert_row(expected, index=1)
+    # If we changed anything, write header back (row 1)
+    if header != existing:
+        ws.update("A1", [header])
+
+    return header
+
+
+def header_map(header: List[str]) -> Dict[str, int]:
+    """Return {normalized_header: 1-based column_index}"""
+    m = {}
+    for i, h in enumerate(header):
+        m[_normalize_header(h)] = i + 1
+    return m
+
 
 def append_lead_to_sheet(lead: Dict[str, Any]):
     gc = get_gspread_client()
     ws = gc.open(SHEET_NAME).sheet1
-    ensure_sheet_header(ws)
-    ws.append_row([
-        datetime.now().isoformat(timespec="seconds"),
-        lead.get("name", ""),
-        lead.get("phone", ""),
-        lead.get("date", ""),
-        lead.get("time", ""),
-        int(lead.get("party_size") or 0),
-        lead.get("language", "en"),
-        lead.get("status", "New"),
-        "VIP" if lead.get("vip") else "",
-    ])
+
+    header = ensure_sheet_schema(ws)
+    hmap = header_map(header)
+
+    # Defaults
+    status = (lead.get("status") or "New").strip() or "New"
+    vip = "Yes" if str(lead.get("vip") or "").strip().lower() in ["1", "true", "yes", "y"] else "No"
+
+    row = [""] * len(header)
+
+    def setv(key: str, val: Any):
+        k = _normalize_header(key)
+        if k in hmap:
+            row[hmap[k] - 1] = val
+
+    setv("timestamp", datetime.now().isoformat(timespec="seconds"))
+    setv("name", lead.get("name", ""))
+    setv("phone", lead.get("phone", ""))
+    setv("date", lead.get("date", ""))
+    setv("time", lead.get("time", ""))
+    setv("party_size", int(lead.get("party_size") or 0))
+    setv("language", lead.get("language", "en"))
+    setv("status", status)
+    setv("vip", vip)
+
+    # Append at bottom (keeps headers at the top)
+    ws.append_row(row, value_input_option="USER_ENTERED")
+
 
 def read_leads(limit: int = 200) -> List[List[str]]:
     gc = get_gspread_client()
     ws = gc.open(SHEET_NAME).sheet1
-    ensure_sheet_header(ws)
     rows = ws.get_all_values()
     if not rows:
         return []
@@ -541,7 +553,7 @@ def get_session(sid: str) -> Dict[str, Any]:
         s = {
             "mode": "idle",         # idle | reserving
             "lang": "en",
-            "lead": {"name": "", "phone": "", "date": "", "time": "", "party_size": 0, "language": "en", "status": "New", "vip": False},
+            "lead": {"name": "", "phone": "", "date": "", "time": "", "party_size": 0, "language": "en"},
             "updated_at": time.time(),
         }
         _sessions[sid] = s
@@ -840,7 +852,6 @@ def recall_text(sess: Dict[str, Any]) -> str:
             f"Date: {lead.get('date') or '—'}",
             f"Time: {lead.get('time') or '—'}",
             f"Party size: {lead.get('party_size') or '—'}",
-            f"VIP: {'Yes' if lead.get('vip') else 'No'}",
             f"Name: {lead.get('name') or '—'}",
             f"Phone: {lead.get('phone') or '—'}",
         ]
@@ -967,6 +978,101 @@ def test_sheet():
 # ============================================================
 # Admin dashboard
 # ============================================================
+
+# ============================================================
+# Admin dashboard (CRM-lite)
+#   - inline Status dropdown + VIP toggle
+#   - quick filters + metrics
+#   - export CSV
+# ============================================================
+def _hesc(s: Any) -> str:
+    s = "" if s is None else str(s)
+    return (s.replace("&", "&amp;")
+             .replace("<", "&lt;")
+             .replace(">", "&gt;")
+             .replace('"', "&quot;")
+             .replace("'", "&#39;"))
+
+
+@app.route("/admin/update-lead", methods=["POST"])
+def admin_update_lead():
+    key = request.args.get("key", "")
+    if not ADMIN_KEY or key != ADMIN_KEY:
+        return jsonify({"ok": False, "error": "Unauthorized"}), 401
+
+    data = request.get_json(silent=True) or {}
+    row_num = int(data.get("row") or 0)
+    if row_num < 2:
+        return jsonify({"ok": False, "error": "Bad row"}), 400
+
+    status = (data.get("status") or "").strip()
+    vip = (data.get("vip") or "").strip()
+
+    allowed_status = ["New", "Confirmed", "Seated", "No-Show"]
+    if status and status not in allowed_status:
+        return jsonify({"ok": False, "error": "Invalid status"}), 400
+
+    if vip:
+        vip_norm = vip.lower()
+        if vip_norm in ["true", "1", "yes", "y", "on"]:
+            vip = "Yes"
+        elif vip_norm in ["false", "0", "no", "n", "off"]:
+            vip = "No"
+        elif vip not in ["Yes", "No"]:
+            return jsonify({"ok": False, "error": "Invalid vip"}), 400
+
+    gc = get_gspread_client()
+    ws = gc.open(SHEET_NAME).sheet1
+    header = ensure_sheet_schema(ws)
+    hmap = header_map(header)
+
+    updates = 0
+    if status:
+        col = hmap.get("status")
+        if col:
+            ws.update_cell(row_num, col, status)
+            updates += 1
+
+    if vip:
+        col = hmap.get("vip")
+        if col:
+            ws.update_cell(row_num, col, vip)
+            updates += 1
+
+    return jsonify({"ok": True, "updated": updates})
+
+
+@app.route("/admin/export.csv")
+def admin_export_csv():
+    key = request.args.get("key", "")
+    if not ADMIN_KEY or key != ADMIN_KEY:
+        return "Unauthorized", 401
+
+    gc = get_gspread_client()
+    ws = gc.open(SHEET_NAME).sheet1
+    rows = ws.get_all_values() or []
+    if not rows:
+        return "", 200, {"Content-Type": "text/csv; charset=utf-8"}
+
+    # Basic CSV with escaping
+    def csv_escape(x: str) -> str:
+        x = "" if x is None else str(x)
+        if any(c in x for c in [",", '"', "\n", "\r"]):
+            return '"' + x.replace('"', '""') + '"'
+        return x
+
+    out_lines = []
+    for r in rows:
+        out_lines.append(",".join(csv_escape(c) for c in r))
+    payload = "\n".join(out_lines)
+
+    return payload, 200, {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": "attachment; filename=leads_export.csv",
+        "Cache-Control": "no-store",
+    }
+
+
 @app.route("/admin")
 def admin():
     key = request.args.get("key", "")
@@ -974,7 +1080,7 @@ def admin():
         return "Unauthorized", 401
 
     try:
-        rows = read_leads(limit=300)
+        rows = read_leads(limit=600)
     except Exception as e:
         return f"Error reading leads: {repr(e)}", 500
 
@@ -984,169 +1090,255 @@ def admin():
     header = rows[0]
     body = rows[1:]
 
-    # Simple HTML table
-    html = []
-    html.append("<html><head><meta charset='utf-8'><title>Leads Admin</title>")
-    html.append("<style>body{font-family:Arial;padding:16px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ddd;padding:8px;font-size:12px} th{background:#f4f4f4;position:sticky;top:0;z-index:2}</style>")
-    html.append("</head><body>")
-    html.append(f"<h2>Leads Admin — {SHEET_NAME}</h2>")
-    html.append(f"<p>Rows shown: {len(body)}</p>")
-    html.append("<table><thead><tr>")
-    for h in header:
-        html.append(f"<th>{h}</th>")
-    html.append("</tr></thead><tbody>")
+    # Build header indices (best effort even if header labels differ)
+    hnorm = [_normalize_header(h) for h in header]
+    def idx(name: str) -> int:
+        n = _normalize_header(name)
+        return hnorm.index(n) if n in hnorm else -1
+
+    i_ts = idx("timestamp")
+    i_name = idx("name")
+    i_phone = idx("phone")
+    i_date = idx("date")
+    i_time = idx("time")
+    i_party = idx("party_size")
+    i_lang = idx("language")
+    i_status = idx("status")
+    i_vip = idx("vip")
+
+    # Metrics
+    def colval(r, i, default=""):
+        return (r[i] if 0 <= i < len(r) else default).strip() if isinstance(r, list) else default
+
+    status_counts = {"New": 0, "Confirmed": 0, "Seated": 0, "No-Show": 0}
+    vip_count = 0
     for r in body:
-        html.append("<tr>")
-        for i in range(len(header)):
-            val = r[i] if i < len(r) else ""
-            html.append(f"<td>{val}</td>")
+        s = colval(r, i_status, "New") or "New"
+        if s not in status_counts:
+            status_counts[s] = 0
+        status_counts[s] += 1
+        if colval(r, i_vip, "No").lower() in ["yes", "true", "1", "y"]:
+            vip_count += 1
+
+    # Render newest first but keep correct sheet row numbers
+    # body is oldest->newest, sheet rows start at 2
+    numbered = [(i + 2, r) for i, r in enumerate(body)]
+    numbered = list(reversed(numbered))
+
+    html = []
+    html.append("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'/>")
+    html.append("<title>Leads Admin</title>")
+    html.append("""
+<style>
+:root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
+body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(1200px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);color:var(--text);}
+.wrap{max-width:1200px;margin:0 auto;padding:18px;}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
+.h1{font-size:18px;font-weight:800;letter-spacing:.3px}
+.sub{color:var(--muted);font-size:12px}
+.pills{display:flex;gap:8px;flex-wrap:wrap}
+.pill{border:1px solid var(--line);background:rgba(255,255,255,.03);padding:8px 10px;border-radius:999px;font-size:12px}
+.pill b{color:var(--gold)}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
+.inp, select{background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px 10px;font-size:12px;outline:none}
+.btn{cursor:pointer;background:linear-gradient(180deg, rgba(212,175,55,.18), rgba(212,175,55,.06));border:1px solid rgba(212,175,55,.35);color:var(--text);border-radius:12px;padding:9px 12px;font-size:12px}
+.btn:active{transform:translateY(1px)}
+.tablewrap{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:rgba(255,255,255,.03);box-shadow:0 10px 35px rgba(0,0,0,.35)}
+table{border-collapse:collapse;width:100%}
+thead th{position:sticky;top:0;background:rgba(10,16,34,.95);backdrop-filter: blur(6px);z-index:2}
+th,td{border-bottom:1px solid var(--line);padding:10px 10px;font-size:12px;vertical-align:top}
+th{color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:11px}
+tr:hover td{background:rgba(255,255,255,.03)}
+.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:11px}
+.badge.vip{border-color:rgba(212,175,55,.5);box-shadow:0 0 0 1px rgba(212,175,55,.18) inset}
+.dot{width:7px;height:7px;border-radius:999px;background:var(--muted);display:inline-block}
+.dot.new{background:var(--warn)}
+.dot.confirmed{background:var(--good)}
+.dot.seated{background:#7aa7ff}
+.dot.noshow{background:var(--bad)}
+.small{font-size:11px;color:var(--muted)}
+.right{text-align:right}
+.tel{color:var(--text);text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
+.toast{position:fixed;right:14px;bottom:14px;background:rgba(0,0,0,.55);border:1px solid var(--line);padding:10px 12px;border-radius:12px;font-size:12px;display:none}
+</style>
+""")
+
+    html.append("</head><body><div class='wrap'>")
+    html.append("<div class='topbar'>")
+    html.append(f"<div><div class='h1'>Leads Admin — {_hesc(SHEET_NAME)}</div><div class='sub'>Rows shown: {len(body)} • Key required • CRM-lite</div></div>")
+    html.append("<div class='pills'>")
+    html.append(f"<div class='pill'><b>VIP</b> {vip_count}</div>")
+    html.append(f"<div class='pill'><b>New</b> {status_counts.get('New',0)}</div>")
+    html.append(f"<div class='pill'><b>Confirmed</b> {status_counts.get('Confirmed',0)}</div>")
+    html.append(f"<div class='pill'><b>Seated</b> {status_counts.get('Seated',0)}</div>")
+    html.append(f"<div class='pill'><b>No‑Show</b> {status_counts.get('No-Show',0)}</div>")
+    html.append("</div></div>")
+
+    html.append("<div class='controls'>")
+    html.append("<input class='inp' id='q' placeholder='Search name / phone / date / notes...' style='min-width:260px'/>")
+    html.append("""
+<select id="fStatus">
+  <option value="">All Status</option>
+  <option>New</option>
+  <option>Confirmed</option>
+  <option>Seated</option>
+  <option>No-Show</option>
+</select>
+<label class="small" style="display:flex;align-items:center;gap:6px">
+  <input type="checkbox" id="fVip"/> VIP only
+</label>
+""")
+    html.append(f"<a class='btn' href='/admin/export.csv?key={_hesc(key)}'>Export CSV</a>")
+    html.append(f"<button class='btn' onclick='location.reload()'>Refresh</button>")
+    html.append("</div>")
+
+    html.append("<div class='tablewrap'><table id='tbl'><thead><tr>")
+    # Show a clean set of columns (not every raw column), but keep the raw order if indices missing
+    cols = [
+        ("Timestamp", i_ts),
+        ("Name", i_name),
+        ("Phone", i_phone),
+        ("Date", i_date),
+        ("Time", i_time),
+        ("Party", i_party),
+        ("Lang", i_lang),
+        ("Status", i_status),
+        ("VIP", i_vip),
+        ("Actions", -999),
+    ]
+    for label, _ in cols:
+        html.append(f"<th>{_hesc(label)}</th>")
+    html.append("</tr></thead><tbody>")
+
+    def status_dot(s: str) -> str:
+        s2 = (s or "").lower()
+        if s2 == "confirmed": return "confirmed"
+        if s2 == "seated": return "seated"
+        if s2 in ["no-show", "noshow", "no_show"]: return "noshow"
+        return "new"
+
+    for row_num, r in numbered:
+        name = colval(r, i_name)
+        phone = colval(r, i_phone)
+        d = colval(r, i_date)
+        t = colval(r, i_time)
+        ps = colval(r, i_party)
+        lang = colval(r, i_lang)
+        status = colval(r, i_status, "New") or "New"
+        vip = colval(r, i_vip, "No") or "No"
+        ts = colval(r, i_ts)
+
+        is_vip = vip.lower() in ["yes", "true", "1", "y"]
+        badge = f"<span class='badge{' vip' if is_vip else ''}'><span class='dot {status_dot(status)}'></span>{_hesc(status)}{' • VIP' if is_vip else ''}</span>"
+
+        html.append(f"<tr data-row='{row_num}' data-status='{_hesc(status)}' data-vip='{ '1' if is_vip else '0' }'>")
+        html.append(f"<td class='small'>{_hesc(ts)}</td>")
+        html.append(f"<td><b>{_hesc(name)}</b></td>")
+        html.append(f"<td><a class='tel' href='tel:{_hesc(phone)}'>{_hesc(phone)}</a></td>")
+        html.append(f"<td>{_hesc(d)}</td>")
+        html.append(f"<td>{_hesc(t)}</td>")
+        html.append(f"<td class='right'>{_hesc(ps)}</td>")
+        html.append(f"<td class='right'>{_hesc(lang)}</td>")
+
+        # Status dropdown
+        html.append("<td>")
+        html.append(f"{badge}<div style='height:6px'></div>")
+        html.append(f"""
+<select onchange="updateLead({row_num}, this.value, null)">
+  <option {'selected' if status=='New' else ''}>New</option>
+  <option {'selected' if status=='Confirmed' else ''}>Confirmed</option>
+  <option {'selected' if status=='Seated' else ''}>Seated</option>
+  <option {'selected' if status=='No-Show' else ''}>No-Show</option>
+</select>
+""")
+        html.append("</td>")
+
+        # VIP toggle
+        checked = "checked" if is_vip else ""
+        html.append("<td class='right'>")
+        html.append(f"<label class='small' style='display:inline-flex;align-items:center;gap:6px;justify-content:flex-end'><input type='checkbox' {checked} onchange=\"updateLead({row_num}, null, this.checked)\"/> VIP</label>")
+        html.append("</td>")
+
+        # Quick actions
+        html.append("<td class='right'>")
+        html.append(f"<button class='btn' style='padding:7px 10px' onclick=\"updateLead({row_num}, 'Confirmed', true)\">Confirm</button> ")
+        html.append(f"<button class='btn' style='padding:7px 10px' onclick=\"updateLead({row_num}, 'Seated', true)\">Seat</button>")
+        html.append("</td>")
+
         html.append("</tr>")
-    html.append("</tbody></table>")
-    html.append("</body></html>")
-    return "\n".join(html)
+
+    html.append("</tbody></table></div>")
+    html.append("<div class='toast' id='toast'></div>")
+
+    html.append("""
+<script>
+const ADMIN_KEY = __ADMIN_KEY__;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(()=>t.style.display='none', 1400);
+}
+
+async function updateLead(row, status, vipBool){
+  const payload = {row: row};
+  if(status !== null){ payload.status = status; }
+  if(vipBool !== null){
+    payload.vip = vipBool ? "Yes" : "No";
+  }
+  try{
+    const res = await fetch(`/admin/update-lead?key=${encodeURIComponent(ADMIN_KEY)}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if(!data.ok) throw new Error(data.error || 'Update failed');
+    toast('Saved ✓');
+    // Update row dataset for filtering
+    const tr = document.querySelector(`tr[data-row="${row}"]`);
+    if(tr){
+      if(payload.status){ tr.dataset.status = payload.status; }
+      if(payload.vip !== undefined){ tr.dataset.vip = payload.vip === "Yes" ? "1" : "0"; }
+    }
+  }catch(err){
+    console.error(err);
+    toast('Error: ' + err.message);
+  }
+}
+
+// Filters
+const qEl = document.getElementById('q');
+const fStatus = document.getElementById('fStatus');
+const fVip = document.getElementById('fVip');
+
+function applyFilters(){
+  const q = (qEl.value || '').toLowerCase().trim();
+  const st = (fStatus.value || '').trim();
+  const vipOnly = fVip.checked;
+
+  const rows = Array.from(document.querySelectorAll('#tbl tbody tr'));
+  for(const tr of rows){
+    const text = tr.innerText.toLowerCase();
+    const okQ = !q || text.includes(q);
+    const okS = !st || (tr.dataset.status === st);
+    const okV = !vipOnly || (tr.dataset.vip === "1");
+    tr.style.display = (okQ && okS && okV) ? '' : 'none';
+  }
+}
+
+qEl.addEventListener('input', applyFilters);
+fStatus.addEventListener('change', applyFilters);
+fVip.addEventListener('change', applyFilters);
+</script>
+""".replace("__ADMIN_KEY__", json.dumps(key)))
 
 
-# ============================================================
-# Chat endpoint with reservation state machine
-# ============================================================
-@app.route("/chat", methods=["POST"])
-def chat():
-    ip = client_ip()
-    allowed, remaining = check_rate_limit(ip)
-    if not allowed:
-        return jsonify({
-            "reply": "⚠️ Too many requests. Please wait a minute and try again.",
-            "rate_limit_remaining": 0,
-        }), 429
-
-    data = request.get_json(force=True) or {}
-    msg = (data.get("message") or "").strip()
-    lang = norm_lang(data.get("language") or data.get("lang"))
-    sid = get_session_id()
-    sess = get_session(sid)
-
-    # update session language if user toggled
-    sess["lang"] = lang
-    sess["lead"]["language"] = lang
-
-    # VIP tagging (ties to the VIP Table Hold button in the Fan Zone UI)
-    msg_l = msg.lower()
-    if "vip" in msg_l:
-        sess["lead"]["vip"] = True
+    html.append("</div></body></html>")
+    return "".join(html)
 
 
-    if not msg:
-        return jsonify({"reply": "Please type a message.", "rate_limit_remaining": remaining})
-
-    # recall support (all languages)
-    if want_recall(msg, lang):
-        return jsonify({"reply": recall_text(sess), "rate_limit_remaining": remaining})
-
-    # start reservation flow if user indicates intent
-    if sess["mode"] == "idle" and want_reservation(msg):
-        sess["mode"] = "reserving"
-
-        # IMPORTANT: do NOT treat the word "reservation" as the name.
-        # Clear any accidental name just in case.
-        if msg.lower().strip() in ["reservation", "reserva", "réservation"]:
-            sess["lead"]["name"] = ""
-
-        q = next_question(sess)
-        return jsonify({"reply": q, "rate_limit_remaining": remaining})
-
-    # If reserving, keep collecting fields deterministically
-    if sess["mode"] == "reserving":
-        # Extract fields from message (order doesn't matter)
-        d_iso = extract_date(msg)
-        if d_iso:
-            if validate_date_iso(d_iso):
-                sess["lead"]["date"] = d_iso
-            else:
-                return jsonify({"reply": LANG[lang]["ask_date"], "rate_limit_remaining": remaining})
-
-        t = extract_time(msg)
-        if t:
-            sess["lead"]["time"] = t
-
-        ps = extract_party_size(msg)
-        if ps:
-            sess["lead"]["party_size"] = ps
-
-        ph = extract_phone(msg)
-        if ph:
-            sess["lead"]["phone"] = ph
-
-        # NAME extraction
-        if not sess["lead"]["name"]:
-            cand = extract_name_candidate(msg)
-            if cand:
-                sess["lead"]["name"] = cand
-
-        # apply business rules if we have enough to check
-        rule = apply_business_rules(sess["lead"])
-        if rule == "party":
-            sess["mode"] = "idle"
-            return jsonify({"reply": LANG[lang]["rule_party"], "rate_limit_remaining": remaining})
-        if rule == "closed":
-            sess["mode"] = "idle"
-            return jsonify({"reply": LANG[lang]["rule_closed"], "rate_limit_remaining": remaining})
-
-        # If complete, save + confirm
-        lead = sess["lead"]
-        if lead.get("date") and lead.get("time") and lead.get("party_size") and lead.get("name") and lead.get("phone"):
-            try:
-                append_lead_to_sheet(lead)
-                sess["mode"] = "idle"
-                saved_msg = LANG[lang]["saved"]
-                confirm = (
-                    f"{saved_msg}\n"
-                    f"Name: {lead['name']}\n"
-                    f"Phone: {lead['phone']}\n"
-                    f"Date: {lead['date']}\n"
-                    f"Time: {lead['time']}\n"
-                    f"Party size: {lead['party_size']}"
-                )
-                sess["lead"] = {"name": "", "phone": "", "date": "", "time": "", "party_size": 0, "language": lang}
-                return jsonify({"reply": confirm, "rate_limit_remaining": remaining})
-            except Exception as e:
-                return jsonify({"reply": f"⚠️ Could not save reservation: {repr(e)}", "rate_limit_remaining": remaining}), 500
-
-        # Otherwise ask next missing field
-        q = next_question(sess)
-        return jsonify({"reply": q, "rate_limit_remaining": remaining})
-
-    # Otherwise: normal Q&A using OpenAI (with language + business profile + menu)
-    system_msg = f"""
-You are a World Cup 2026 Dallas business concierge.
-
-Business profile (source of truth):
-{BUSINESS_PROFILE}
-
-Menu (source of truth, language={lang}):
-{json.dumps(MENU.get(lang, MENU["en"]), ensure_ascii=False)}
-
-Rules:
-- Be friendly, fast, and concise.
-- Always respond in the user's chosen language: {lang}.
-- If user asks about the World Cup match schedule, tell them to use the schedule panel on the page.
-- If user asks to make a reservation, instruct them to type "reservation" (or equivalent) to start.
-"""
-
-    resp = client.responses.create(
-        model="gpt-4o-mini",
-        input=[
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": msg},
-        ],
-    )
-
-    reply = (resp.output_text or "").strip()
-    return jsonify({"reply": reply, "rate_limit_remaining": remaining})
-
-
-# ============================================================
-# Run
-# ============================================================
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
     app.run(host="0.0.0.0", port=port, debug=False)
