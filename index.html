@@ -1782,7 +1782,7 @@ header{ flex:0 0 auto; }
 /* HERO fixed, then app grid fills remaining space */
 .hero{
   flex:0 0 auto;
-  height: 195px !important;
+  height: 180px !important;
   margin: 12px 12px 10px 12px !important;
 }
 .compact .hero{ height: 150px !important; }
@@ -1796,7 +1796,7 @@ header{ flex:0 0 auto; }
   min-height:0 !important;
   height: auto !important;
   overflow:hidden !important;
-  padding: 12px !important;
+  padding: 10px !important;
   margin: 0 !important;
 }
 
@@ -1962,6 +1962,55 @@ header{ flex:0 0 auto; }
 /* Keep schedule scrollbar fully usable */
 .schedule{
   padding-bottom: 58px !important; /* space for sticky pager */
+  scrollbar-gutter: stable both-edges;
+}
+
+
+/* =======================
+   COMPACT TEXT PAGER (Prev/Next visible, ultra-sleek)
+   ======================= */
+#pager{
+  position: sticky !important;
+  bottom: 6px !important;
+  margin: 0 10px 8px !important;
+  width: calc(100% - 20px) !important;
+  border-radius: 14px !important;
+  padding: 6px 8px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  background: rgba(7,16,34,.70) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  box-shadow: 0 10px 24px rgba(0,0,0,.20) !important;
+  pointer-events:auto;
+}
+
+/* Buttons: small, readable */
+#pager button{
+  min-width: 64px !important;
+  height: 28px !important;
+  padding: 0 10px !important;
+  border-radius: 12px !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  letter-spacing: .06em !important;
+  line-height: 1 !important;
+}
+
+/* Page indicator tiny */
+#pageIndicator, .pageLabel, #pager .pill{
+  font-size: 10.5px !important;
+  padding: 4px 8px !important;
+  border-radius: 999px !important;
+  white-space: nowrap !important;
+}
+
+/* Ensure scrollbar never gets covered */
+.schedule{
+  padding-bottom: 54px !important; /* space for pager */
+  padding-right: 10px !important;  /* keep scrollbar free */
   scrollbar-gutter: stable both-edges;
 }
 
