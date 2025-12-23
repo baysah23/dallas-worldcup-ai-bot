@@ -1219,6 +1219,10 @@ body.phase-finals{ background: var(--phaseF); }
 
 /* Prevent fan zone popouts from pushing content off-screen */
 #pollCard{ max-height: 55vh; overflow:auto; }
+(max-width: 1199px){
+  #pollCard{ position:fixed; left:10px; right:10px; top:110px; margin:0 auto; width:min(460px, 92vw); z-index:10000; }
+}
+
 #countryModal .panel{ max-height: 80vh; overflow:auto; }
 .fz-muted{ color: var(--muted); font-size: 12px; }
 
@@ -1253,7 +1257,7 @@ body.phase-finals{ background: var(--phaseF); }
 
 /* QR box */
 .qrWrap{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-#qrCanvas{ width:128px; height:128px; background:#fff; border-radius:12px; padding:8px; }
+#qrCanvas{ display:none; width:128px; height:128px; background:#fff; border-radius:12px; padding:8px; }
 .qrText a{ color: var(--warn); text-decoration:none; }
 
 
@@ -4007,7 +4011,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
 
   // Load qualified countries (server provides)
   let COUNTRIES = [];
-  async async function loadCountries(){
+  async function loadCountries(){
   // Fast, non-blocking fetch; never freeze UI if the network is slow
   const ctrl = ("AbortController" in window) ? new AbortController() : null;
   const t = setTimeout(()=>{ try{ ctrl?.abort(); }catch(e){} }, 2500);

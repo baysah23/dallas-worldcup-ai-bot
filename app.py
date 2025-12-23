@@ -1561,7 +1561,20 @@ def api_config():
 def api_poll_state():
     motd = _get_match_of_day()
     if not motd:
-        return jsonify({"ok": False, "error": "No matches available"}), 404
+        # Keep the UI responsive even if matches failed to load.
+        cfg = get_config()
+        return jsonify({
+            "ok": True,
+            "locked": True,
+            "post_match": False,
+            "winner": None,
+            "sponsor_text": cfg.get("poll_sponsor_text", ""),
+            "match": {"id": "", "home": "Team A", "away": "Team B", "kickoff": ""},
+            "counts": {"Team A": 0, "Team B": 0},
+            "percent": {"Team A": 0.0, "Team B": 0.0},
+            "total": 0,
+            "note": "Matches not available yet."
+        }), 200
 
     mid = _match_id(motd)
     locked = _poll_is_locked(motd)
@@ -1608,7 +1621,20 @@ def api_poll_vote():
 
     motd = _get_match_of_day()
     if not motd:
-        return jsonify({"ok": False, "error": "No matches available"}), 404
+        # Keep the UI responsive even if matches failed to load.
+        cfg = get_config()
+        return jsonify({
+            "ok": True,
+            "locked": True,
+            "post_match": False,
+            "winner": None,
+            "sponsor_text": cfg.get("poll_sponsor_text", ""),
+            "match": {"id": "", "home": "Team A", "away": "Team B", "kickoff": ""},
+            "counts": {"Team A": 0, "Team B": 0},
+            "percent": {"Team A": 0.0, "Team B": 0.0},
+            "total": 0,
+            "note": "Matches not available yet."
+        }), 200
 
     mid = _match_id(motd)
     if _poll_is_locked(motd):
