@@ -1899,6 +1899,72 @@ header{ flex:0 0 auto; }
   padding: 4px 8px !important;
 }
 
+
+/* =======================
+   ULTRA-SLEEK PAGER (icon-only, never blocks scrollbars)
+   ======================= */
+#pager{
+  position: sticky !important;
+  bottom: 6px !important;
+  margin: 0 8px 8px !important;
+  width: calc(100% - 16px) !important;
+  border-radius: 14px !important;
+  padding: 6px 8px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  background: rgba(7,16,34,.72) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  box-shadow: 0 10px 26px rgba(0,0,0,.22) !important;
+}
+
+/* Icon buttons */
+#pager button{
+  min-width: 34px !important;
+  width: 34px !important;
+  height: 30px !important;
+  padding: 0 !important;
+  border-radius: 12px !important;
+  font-size: 0 !important;            /* hide text */
+  line-height: 0 !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
+
+/* Prev / Next icons */
+#prevBtn::before{
+  content:"‹";
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 900;
+  color: var(--text);
+}
+#nextBtn::before{
+  content:"›";
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 900;
+  color: var(--text);
+}
+
+/* Page indicator compact */
+#pageIndicator, .pageLabel, #pager .pill{
+  font-size: 11px !important;
+  padding: 4px 8px !important;
+  border-radius: 999px !important;
+  white-space: nowrap !important;
+}
+#pager .pill{ margin: 0 !important; }
+
+/* Keep schedule scrollbar fully usable */
+.schedule{
+  padding-bottom: 58px !important; /* space for sticky pager */
+  scrollbar-gutter: stable both-edges;
+}
+
 </style>
 </head>
 <body>
