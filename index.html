@@ -2116,6 +2116,14 @@ body.kiosk-mode *::-webkit-scrollbar{
   :root{ --pagerH: 42px; --pagerGap: 16px; }
 }
 
+
+/* =======================
+   PAGER OVERLAP FIX v2 (extra-safe)
+   ======================= */
+.schedule{
+  padding-bottom: calc(var(--pagerH) + var(--pagerGap) + 48px) !important;
+}
+
 </style>
 </head>
 <body>
@@ -3470,10 +3478,36 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
     window.renderSchedule = function(){
       const r = _origRenderSchedule.apply(this, arguments);
       try{ attachScheduleGlow(); }catch(e){}
-      try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
+      
+  try{ adjustScheduleBottomPadding(); }catch(e){}
+try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
       return r;
     }
   }
+
+
+  // -----------------------
+  // Dynamic schedule bottom padding (prevents last match under pager)
+  // -----------------------
+  function adjustScheduleBottomPadding(){
+    try{
+      const pager = document.getElementById("pager");
+      const panels = Array.from(document.querySelectorAll(".schedule"));
+      if(!panels.length) return;
+
+      const ph = pager ? Math.ceil(pager.getBoundingClientRect().height) : 0;
+      // Also account for sticky bottom offset + margins
+      const extra = 28; // safety
+      const pad = Math.max(72, ph + extra);
+
+      panels.forEach(sc=>{
+        sc.style.paddingBottom = `calc(${pad}px + 12px)`;
+      });
+    }catch(e){}
+  }
+
+  window.addEventListener("resize", adjustScheduleBottomPadding);
+  window.addEventListener("load", ()=> setTimeout(adjustScheduleBottomPadding, 250));
 
 </script>
 
