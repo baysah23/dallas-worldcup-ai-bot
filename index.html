@@ -1633,6 +1633,22 @@ html, body{ overflow-x: hidden !important; }
   word-break:break-word;
 }
 
+
+/* =======================
+   FAN ZONE: drink highlight (vertical stack, zero overflow)
+   ======================= */
+.fz-drinkStack{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:0;
+}
+#drinkHighlight, #drinkHighlight *{ min-width:0 !important; }
+
+
+/* Last-resort: never allow a horizontal scrollbar anywhere */
+body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
+
 </style>
 </head>
 <body>
@@ -2930,13 +2946,19 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
     const code = getSupporter();
     const c = countryByCode(code) || COUNTRIES[0];
     if(!drinkHighlight) return;
+
+    // Vertical-first layout (prevents any horizontal overflow in ultra-compact rails)
     drinkHighlight.innerHTML = `
-      <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;">
-        <div class="fz-chip"><span class="fz-flag">${c.flag}</span><b>${c.name}</b></div>
-        <div style="flex:1; min-width:220px;">
-          <div style="font-weight:700; margin-bottom:6px;">Featured drink</div>
-          <div style="color:var(--text)">${c.drink}</div>
-          <div class="fz-muted" style="margin-top:6px;">Add a “Supporter Special” badge on your menu board (UI-only).</div>
+      <div class="fz-drinkStack">
+        <div class="fz-chip" style="width:fit-content;">
+          <span class="fz-flag">${c.flag}</span><b>${c.name}</b>
+        </div>
+
+        <div class="fz-muted" style="margin-top:6px;">Featured drink</div>
+        <div style="color:var(--text); font-weight:800; line-height:1.25;">${c.drink}</div>
+
+        <div class="fz-muted" style="margin-top:8px;">
+          Tip: add a “Supporter Special” badge on your menu board (UI-only).
         </div>
       </div>
     `;
