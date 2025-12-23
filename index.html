@@ -2659,57 +2659,87 @@ function setSending(isSending){
     // Header
     const h1 = document.querySelector("header h1");
     if(h1) h1.textContent = t("app_title");
+
     const sub = document.querySelector("header .sub");
     if(sub) sub.textContent = t("app_sub");
 
-    // Card headers (best-effort by IDs/classes if present)
+    // Card headers
     const menuTitle = document.querySelector(".menucard .cardhead .title");
     if(menuTitle) menuTitle.textContent = t("menu_title");
+
     const chatTitle = document.querySelector(".chatcard .cardhead .title");
     if(chatTitle) chatTitle.textContent = t("chat_title");
 
-    // Right schedule panel title
+    // Schedule panel title
     const schedTitle = document.querySelector(".grid > .card:not(.hero) .cardhead .title");
-    if(schedTitle){
-      // If there is a scope toggle, set to generic title
-      schedTitle.textContent = t("schedule_title");
-    }
+    if(schedTitle) schedTitle.textContent = t("schedule_title");
+
+    // Toggle labels (Dallas / All) if present
+    const dallasBtn = document.querySelector("#scopeDallas, button[data-scope='dallas']");
+    if(dallasBtn) dallasBtn.textContent = t("scope_dallas");
+    const allBtn = document.querySelector("#scopeAll, button[data-scope='all']");
+    if(allBtn) allBtn.textContent = t("scope_all");
 
     // Search placeholder + clear
-    const search = document.querySelector("#teamSearch, input[type='search'], input[placeholder*='Search']");
+    const search = document.getElementById("teamSearch") || document.querySelector("input[type='search']");
     if(search) search.setAttribute("placeholder", t("search_ph"));
-    const clearBtn = document.querySelector("#clearSearch, button[data-action='clear'], button.secondary#clearBtn");
+
+    const clearBtn = document.getElementById("clearSearch") || document.querySelector("button[data-action='clear']");
     if(clearBtn) clearBtn.textContent = t("clear");
 
-    // Pager buttons + label
-    const prevBtn = document.getElementById("prevBtn") || document.getElementById("prev") || document.querySelector("#pager button:first-child");
-    const nextBtn = document.getElementById("nextBtn") || document.getElementById("next") || document.querySelector("#pager button:last-child");
+    // Pager
+    const prevBtn = document.getElementById("prevBtn") || document.getElementById("prev");
+    const nextBtn = document.getElementById("nextBtn") || document.getElementById("next");
     if(prevBtn) prevBtn.textContent = t("prev");
     if(nextBtn) nextBtn.textContent = t("next");
 
-    // Page indicator (if it's like "Page X of Y")
     const pi = document.getElementById("pageIndicator");
     if(pi){
-      // Keep numbers already present; just swap labels if we can detect them
-      // Example formats: "Page 1 of 11" or "1 / 11"
-      const txt = pi.textContent || "";
+      const txt = (pi.textContent || "").trim();
       const m = txt.match(/(\d+)\s*(?:\/|of|sur|de)\s*(\d+)/i);
       if(m){
         pi.textContent = `${t("page")} ${m[1]} ${t("of")} ${m[2]}`;
       }
     }
 
-    // Fan zone labels (right/left rails)
-    const supportQ = document.querySelector("#supporterChip b, #supporterChip .label, .supporterQ");
-    if(supportQ && supportQ.tagName.toLowerCase() === "b") supportQ.textContent = t("support_q");
+    // Fan zone: support question label (left rail)
+    const supportLabel = document.querySelector("#supporterChip b") || document.querySelector(".supporterQ");
+    if(supportLabel) supportLabel.textContent = t("support_q");
 
-    const pollH = document.querySelector("#fanPoll h3, .fz-card.poll h3");
+    // Fan poll title
+    const pollH = document.querySelector("#fanPoll h3") || document.querySelector(".fz-card.poll h3");
     if(pollH) pollH.textContent = t("poll_title");
 
-    const drinkH = document.querySelector("#drinkHighlightTitle, #drinkCard h3, #drinkHighlight").closest?.(".fz-card")?.querySelector("h3");
-    if(drinkH) drinkH.textContent = t("drink_title");
+    // Drink highlight title: find the card that contains #drinkHighlight
+    const drinkEl = document.getElementById("drinkHighlight");
+    if(drinkEl){
+      const card = drinkEl.closest(".fz-card");
+      const h3 = card ? card.querySelector("h3") : null;
+      if(h3) h3.textContent = t("drink_title");
+      const label = drinkEl.querySelector(".fz-muted");
+      if(label && label.textContent.toLowerCase().includes("featured")){
+        label.textContent = t("drink_label");
+      }
+    }
 
-    const qrH = document.querySelector("#qrTitle") || (document.getElementById("qrCanvas") ? document.getElementById("qrCanvas").closest('.fz-card')?.querySelector('h3') : null);
+    // QR title: find the card that contains #qrCanvas
+    const qrCanvas = document.getElementById("qrCanvas");
+    if(qrCanvas){
+      const card = qrCanvas.closest(".fz-card");
+      const h3 = card ? card.querySelector("h3") : null;
+      if(h3) h3.textContent = t("qr_title");
+      const hint = card ? card.querySelector(".fz-muted") : null;
+      if(hint && hint.textContent.toLowerCase().includes("ui")){
+        hint.textContent = t("qr_hint");
+      }
+    }
+
+    // World Cup countdown label
+    const wcLabel = document.querySelector("#wcCount .wcLabel");
+    if(wcLabel){
+      const isLive = (wcLabel.textContent || "").toUpperCase().includes("LIVE");
+      wcLabel.textContent = isLive ? t("wc_live") : t("wc_label");
+    }
   }
 
     if(qrH) qrH.textContent = t("qr_title");
