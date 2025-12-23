@@ -4046,7 +4046,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     return `${y}-${m}-${day}`;
   }
 
-  async function loadMatchOfDay(){
+  async async function loadMatchOfDay(){
     try{
       const res = await fetch(`/schedule.json?scope=all&q=`, {cache:"no-store"});
       const data = await res.json();
