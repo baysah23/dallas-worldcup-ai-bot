@@ -2379,6 +2379,19 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 /* --- Fan Zone usability fixes (Dec 2025) --- */
+
+@media(max-width: 1199px){
+  #pollCard{
+    max-height: 60vh;
+    overflow: auto;
+  }
+  #vipHoldCard{
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+}
+
 @media(min-width: 1200px){
   .fz-left-stack{
     max-height: calc(100vh - 110px);
@@ -2480,7 +2493,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div aria-labelledby="countryModalTitle" aria-modal="true" class="fz-modal" id="countryModal" role="dialog">
 <div class="panel">
 <h2 id="countryModalTitle">Which country are you supporting?</h2>
-<div class="fz-muted" style="margin-bottom:10px;">Pick one. We’ll personalize the experience (stored locally).</div>
+<div class="fz-muted" style="margin-bottom:10px;">Pick one.</div>
 <div class="fz-country-grid" id="countryGrid"></div>
 <div class="fz-footer">
 <button class="fz-btn" id="btnCloseCountry">Close</button>
@@ -3990,18 +4003,32 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   // Load qualified countries (server provides)
   let COUNTRIES = [];
   async function loadCountries(){
-    try{
-      const r = await fetch("/worldcup/qualified.json", {cache:"no-store"});
-      const j = await r.json();
-      COUNTRIES = (j?.qualified || j?.countries || j || []).map(x=>{
-        if(typeof x === "string") return {name:x, flag:"🏳️"};
-        return {name:x.name||x.country||"", flag:x.flag||x.emoji||"🏳️"};
-      }).filter(x=>x.name);
-    }catch(e){
+  // Fast, non-blocking fetch; never freeze UI if the network is slow
+  const ctrl = ("AbortController" in window) ? new AbortController() : null;
+  const t = setTimeout(()=>{ try{ ctrl?.abort(); }catch(e){} }, 2500);
+
+  try{
+    const r = await fetch("/countries/qualified.json", {
+      cache:"no-store",
+      signal: ctrl ? ctrl.signal : undefined
+    });
+    const j = await r.json();
+    const list = (j?.qualified || j?.countries || j || []);
+    COUNTRIES = list.map(x=>{
+      if(typeof x === "string") return {name:x, flag:"🏳️"};
+      return {name:x.name||x.country||"", flag:x.flag||x.emoji||"🏳️"};
+    }).filter(c=>c.name);
+
+    if(!COUNTRIES.length){
       COUNTRIES = [];
     }
+  }catch(e){
+    COUNTRIES = [];
+  }finally{
+    clearTimeout(t);
     buildCountryGrid();
   }
+}
   function buildCountryGrid(){
     if(!countryGrid) return;
     if(!COUNTRIES.length){
@@ -4124,19 +4151,28 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
 
   // ----- QR -----
   function drawQR(text){
-    try{
-      const target = text || (location.origin + location.pathname);
-      if(qrLink){ qrLink.href = target; qrLink.textContent = target; }
-      if(window.QRious && qrCanvas){
-        new QRious({ element: qrCanvas, value: target, size: 128, level: "H" });
-        qrCanvas.style.display = "block";
-        if(qrImg) qrImg.style.display = "none";
-      }else{
-        if(qrImg) qrImg.style.display = "none";
-        if(qrCanvas) qrCanvas.style.display = "none";
-      }
-    }catch(e){}
-  }
+  try{
+    const target = text || (location.origin + location.pathname);
+    if(qrLink){ qrLink.href = target; qrLink.textContent = target; }
+
+    // Prefer on-device canvas QR if QRious is available
+    if(window.QRious && qrCanvas){
+      new QRious({ element: qrCanvas, value: target, size: 160, level: "H" });
+      qrCanvas.style.display = "block";
+      if(qrImg) qrImg.style.display = "none";
+      return;
+    }
+
+    // Fallback: render as an <img> via Google Charts (no extra dependencies)
+    if(qrImg){
+      const src = "https://chart.googleapis.com/chart?cht=qr&chs=180x180&chl=" + encodeURIComponent(target);
+      qrImg.src = src;
+      qrImg.alt = "QR code";
+      qrImg.style.display = "block";
+    }
+    if(qrCanvas) qrCanvas.style.display = "none";
+  }catch(e){}
+}
 
   function openQR(){
     if(!qrCard) return;

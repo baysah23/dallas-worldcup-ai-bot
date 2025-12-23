@@ -140,7 +140,7 @@ def _fetch_fixture_feed() -> List[Dict[str, Any]]:
         headers={"User-Agent": "worldcup-concierge/1.0"},
         method="GET",
     )
-    with urllib.request.urlopen(req, timeout=15) as resp:
+    with urllib.request.urlopen(req, timeout=3) as resp:
         raw = resp.read().decode("utf-8", errors="replace")
     payload = json.loads(raw)
     if not isinstance(payload, list):
@@ -990,7 +990,7 @@ def _fetch_qualified_teams() -> List[str]:
         headers={"User-Agent": "worldcup-concierge/1.0"},
         method="GET",
     )
-    with urllib.request.urlopen(req, timeout=15) as resp:
+    with urllib.request.urlopen(req, timeout=3) as resp:
         html = resp.read().decode("utf-8", errors="replace")
 
     # Find the "Qualified teams" section and the first wikitable following it
@@ -1045,19 +1045,37 @@ def _fetch_qualified_teams() -> List[str]:
     return teams
 
 def get_qualified_teams(force: bool = False) -> List[str]:
+    """Return qualified teams quickly.
+
+    We keep a cache and *never* block user requests on a slow external fetch.
+    If cache is stale, we refresh it in a background thread and return the
+    most recent cached value immediately.
+    """
     now = int(time.time())
-    if (not force and _qualified_cache["teams"]
-        and (now - int(_qualified_cache["loaded_at"] or 0) < QUALIFIED_CACHE_SECONDS)):
-        return _qualified_cache["teams"]
 
-    try:
-        teams = _fetch_qualified_teams()
-    except Exception:
-        teams = ["Canada", "Mexico", "United States"]
+    # Ensure we always have something usable
+    if not _qualified_cache.get("teams"):
+        _qualified_cache["teams"] = ["Canada", "Mexico", "United States"]
+        _qualified_cache["loaded_at"] = now
 
-    _qualified_cache["loaded_at"] = now
-    _qualified_cache["teams"] = teams
-    return teams
+    fresh = (now - int(_qualified_cache.get("loaded_at") or 0) < QUALIFIED_CACHE_SECONDS)
+    if force or not fresh:
+        # Refresh asynchronously
+        try:
+            import threading
+            def _refresh():
+                try:
+                    teams = _fetch_qualified_teams()
+                    if teams:
+                        _qualified_cache["teams"] = teams
+                        _qualified_cache["loaded_at"] = int(time.time())
+                except Exception:
+                    pass
+            threading.Thread(target=_refresh, daemon=True).start()
+        except Exception:
+            pass
+
+    return _qualified_cache.get("teams") or ["Canada", "Mexico", "United States"]
 
 @app.route("/worldcup/qualified.json")
 def qualified_json():
@@ -1068,6 +1086,14 @@ def qualified_json():
         "teams": teams,
         "note": "Qualification is ongoing; this list reflects teams qualified so far.",
     })
+
+
+
+@app.route("/countries/qualified.json")
+def qualified_json_alias():
+    # Alias for compatibility with older front-ends/tests
+    return qualified_json()
+
 
 @app.route("/test-sheet")
 def test_sheet():
@@ -1259,7 +1285,10 @@ def _hesc(s: Any) -> str:
 # - Falls back to local JSON file if Sheets isn't configured.
 # ============================================================
 
-CONFIG_FILE = os.path.join(os.path.dirname(__file__), "app_config.json")
+DATA_DIR = os.environ.get("DATA_DIR", os.path.join("/tmp", "worldcup_app_data"))
+# Store small JSON state in a writable directory (Render slug is read-only)
+os.makedirs(DATA_DIR, exist_ok=True)
+CONFIG_FILE = os.path.join(DATA_DIR, "app_config.json")
 
 def _safe_read_json(path: str) -> dict:
     try:
