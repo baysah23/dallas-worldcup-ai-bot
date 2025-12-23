@@ -2240,6 +2240,36 @@ body.kiosk-mode *::-webkit-scrollbar{
   border-color: rgba(255,204,102,.30);
 }
 
+
+/* =======================
+   VIP HOLD RAIL (separate from Fan Zone)
+   ======================= */
+.vip-rail{
+  margin-top: 12px;
+}
+.vip-rail .vip-hold{
+  border-radius: 16px;
+}
+.vip-rail .vip-hold h3{ font-size: 13px; margin:0 0 6px 0; }
+.vip-rail .fz-actions{ margin-top: 8px !important; gap:6px; }
+.vip-rail .fz-btn{ padding: 6px 10px; font-size: 12px; border-radius: 999px; }
+.vip-rail .fz-muted{ font-size: 11px; }
+
+/* Desktop: pin VIP rail above Fan Zone rails, then push Fan Zone down */
+@media(min-width: 1200px){
+  .vip-rail{
+    position: fixed;
+    top: 84px; /* below header */
+    left: 16px;
+    width: 220px;
+    z-index: 60;
+    max-height: 160px;
+    overflow: hidden;
+  }
+  /* Fan Zone rails start below VIP rail with clear separation */
+  .fanzone-left{ top: 264px !important; } /* 84px + 160px + 20px gap */
+}
+
 </style>
 </head>
 <body>
@@ -2266,6 +2296,13 @@ body.kiosk-mode *::-webkit-scrollbar{
      FAN ZONE (UI-only) — SIDE PANELS
      Desktop: left + right rails so the main page never shifts off-screen.
      ======================= -->
+
+<aside class="fanzone vip-rail" id="vipHoldRail" aria-label="VIP Table Hold">
+  <div class="fz-card vip-hold" id="vipHoldCard">
+    <h3>⭐ VIP Table Hold</h3>
+    
+</aside>
+
 <aside class="fanzone fanzone-left" id="fanZoneLeft" aria-label="Fan Zone Left Panel">
   
   <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
@@ -2291,14 +2328,7 @@ body.kiosk-mode *::-webkit-scrollbar{
   </div>
 
   <div class="fz-muted" style="margin-top:10px;">Tip: set your country first for a more personalized vibe.</div>
-
-
-  <!-- VIP Table Hold (UI-only) — inside Fan Zone LEFT rail -->
-  <div class="vip-gap" aria-hidden="true"></div>
-  <div class="fz-card vip-hold" id="vipHoldCard">
-    <h3>⭐ VIP Table Hold</h3>
-    <div class="fz-muted">One-tap VIP hold request. Starts the reservation flow and tags your message as VIP (UI-only).</div>
-    <div class="fz-actions" style="margin-top:10px; justify-content:flex-start;">
+<div class="fz-actions" style="margin-top:10px; justify-content:flex-start;">
       <button class="fz-btn" id="vipHoldBtn">Hold VIP table</button>
       <button class="fz-btn" id="vipHoldInfoBtn">How it works</button>
     </div>
