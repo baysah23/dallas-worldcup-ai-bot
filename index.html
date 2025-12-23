@@ -1822,6 +1822,36 @@ header{ flex:0 0 auto; }
   }
 }
 
+
+/* =======================
+   FINAL LAYOUT TUNING
+   - Bigger banner width
+   - Taller Dallas schedule
+   ======================= */
+
+/* Make banner wider (bleed closer to edges) */
+.hero{
+  margin-left: 6px !important;
+  margin-right: 6px !important;
+  width: calc(100% - 12px) !important;
+}
+
+/* Give Dallas schedule more vertical dominance */
+.schedule{
+  flex: 2 1 auto !important;      /* takes more space than chat/menu */
+  min-height: 320px !important;   /* guarantees visibility */
+}
+
+/* Slightly reduce chat dominance so schedule gains height */
+.chatcard{
+  flex: 1 1 auto !important;
+}
+
+/* On large screens, emphasize schedule even more */
+@media (min-height: 800px){
+  .schedule{ min-height: 380px !important; }
+}
+
 </style>
 </head>
 <body>
