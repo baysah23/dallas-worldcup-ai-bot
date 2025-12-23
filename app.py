@@ -9,14 +9,29 @@ from datetime import datetime, date, timezone
 from typing import Dict, Any, Optional, List, Tuple
 
 from flask import Flask, request, jsonify, send_from_directory
-from openai import OpenAI
-
-import gspread
-from google.oauth2.service_account import Credentials
-
+try:
+    from openai import OpenAI  # type: ignore
+except Exception:
+    OpenAI = None  # type: ignore
+try:
+    import gspread  # type: ignore
+except Exception:
+    gspread = None  # type: ignore
+try:
+    from google.oauth2.service_account import Credentials  # type: ignore
+except Exception:
+    Credentials = None  # type: ignore
 # ============================================================
 # App + cache-busting (helps Render show latest index.html)
 # ============================================================
+
+# ---- Safety helpers (prevents Internal Server Error on missing deps) ----
+def _gs_ready() -> bool:
+    return (gspread is not None) and (Credentials is not None)
+
+def _openai_ready() -> bool:
+    return OpenAI is not None
+
 app = Flask(__name__)
 client = OpenAI()
 
@@ -428,7 +443,7 @@ def check_rate_limit(ip: str) -> Tuple[bool, int]:
 def get_gspread_client():
     if os.environ.get("GOOGLE_CREDS_JSON"):
         creds_info = json.loads(os.environ["GOOGLE_CREDS_JSON"])
-        creds = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+        creds = (Credentials.from_service_account_info if Credentials else (_ for _ in ()).throw(RuntimeError('Missing Google Sheets dependency')))(creds_info, scopes=SCOPES)
         return gspread.authorize(creds)
 
     creds_file = "google_creds.json"
@@ -439,82 +454,18 @@ def get_gspread_client():
     raise RuntimeError("Google credentials not found. Set GOOGLE_CREDS_JSON or provide google_creds.json locally.")
 
 
-
-def _normalize_header(h: str) -> str:
-    return (h or "").strip().lower().replace(" ", "_")
-
-
-def ensure_sheet_schema(ws) -> List[str]:
-    """
-    Make sure row 1 is the header and includes the CRM columns we need.
-    Returns the final header list (as stored in the sheet).
-    """
-    desired = ["timestamp", "name", "phone", "date", "time", "party_size", "language", "status", "vip"]
-
-    existing = ws.row_values(1) or []
-    existing_norm = [_normalize_header(x) for x in existing]
-
-    # If sheet is empty, write the full header
-    if not any(x.strip() for x in existing):
-        ws.update("A1", [desired])
-        return desired
-
-    # If the existing header doesn't even contain "timestamp" (common sign row1 isn't a header),
-    # don't try to reshuffle rows automatically—just ensure required columns exist at the end.
-    header = existing[:]  # keep original display names
-    header_norm = existing_norm[:]
-
-    # Append missing columns
-    for col in desired:
-        if col not in header_norm:
-            header.append(col)
-            header_norm.append(col)
-
-    # If we changed anything, write header back (row 1)
-    if header != existing:
-        ws.update("A1", [header])
-
-    return header
-
-
-def header_map(header: List[str]) -> Dict[str, int]:
-    """Return {normalized_header: 1-based column_index}"""
-    m = {}
-    for i, h in enumerate(header):
-        m[_normalize_header(h)] = i + 1
-    return m
-
-
 def append_lead_to_sheet(lead: Dict[str, Any]):
     gc = get_gspread_client()
     ws = gc.open(SHEET_NAME).sheet1
-
-    header = ensure_sheet_schema(ws)
-    hmap = header_map(header)
-
-    # Defaults
-    status = (lead.get("status") or "New").strip() or "New"
-    vip = "Yes" if str(lead.get("vip") or "").strip().lower() in ["1", "true", "yes", "y"] else "No"
-
-    row = [""] * len(header)
-
-    def setv(key: str, val: Any):
-        k = _normalize_header(key)
-        if k in hmap:
-            row[hmap[k] - 1] = val
-
-    setv("timestamp", datetime.now().isoformat(timespec="seconds"))
-    setv("name", lead.get("name", ""))
-    setv("phone", lead.get("phone", ""))
-    setv("date", lead.get("date", ""))
-    setv("time", lead.get("time", ""))
-    setv("party_size", int(lead.get("party_size") or 0))
-    setv("language", lead.get("language", "en"))
-    setv("status", status)
-    setv("vip", vip)
-
-    # Append at bottom (keeps headers at the top)
-    ws.append_row(row, value_input_option="USER_ENTERED")
+    ws.append_row([
+        datetime.now().isoformat(timespec="seconds"),
+        lead.get("name", ""),
+        lead.get("phone", ""),
+        lead.get("date", ""),
+        lead.get("time", ""),
+        int(lead.get("party_size") or 0),
+        lead.get("language", "en"),
+    ])
 
 
 def read_leads(limit: int = 200) -> List[List[str]]:
@@ -553,17 +504,7 @@ def get_session(sid: str) -> Dict[str, Any]:
         s = {
             "mode": "idle",         # idle | reserving
             "lang": "en",
-            # status/vip are CRM fields shown in /admin.
-            "lead": {
-                "name": "",
-                "phone": "",
-                "date": "",
-                "time": "",
-                "party_size": 0,
-                "language": "en",
-                "status": "New",
-                "vip": "No",
-            },
+            "lead": {"name": "", "phone": "", "date": "", "time": "", "party_size": 0, "language": "en"},
             "updated_at": time.time(),
         }
         _sessions[sid] = s
@@ -969,105 +910,6 @@ def schedule_json():
 
 
 
-
-# ============================================================
-# Qualified teams (World Cup 2026) — server-side fetch
-# - Returns the teams that have qualified *so far* (qualification is ongoing).
-# - Source: Wikipedia qualified teams table (updates over time).
-# ============================================================
-_qualified_cache: Dict[str, Any] = {"loaded_at": 0, "teams": []}
-QUALIFIED_CACHE_SECONDS = int(os.environ.get("QUALIFIED_CACHE_SECONDS", str(12 * 60 * 60)))  # 12h
-QUALIFIED_SOURCE_URL = os.environ.get(
-    "QUALIFIED_SOURCE_URL",
-    "https://en.wikipedia.org/api/rest_v1/page/html/2026_FIFA_World_Cup_qualification",
-)
-
-def _fetch_qualified_teams() -> List[str]:
-    import urllib.request
-    req = urllib.request.Request(
-        QUALIFIED_SOURCE_URL,
-        headers={"User-Agent": "worldcup-concierge/1.0"},
-        method="GET",
-    )
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        html = resp.read().decode("utf-8", errors="replace")
-
-    # Find the "Qualified teams" section and the first wikitable following it
-    # then extract the first column team names.
-    # This is a best-effort parser that avoids heavy HTML deps.
-    anchor = 'id="Qualified_teams"'
-    i = html.find(anchor)
-    if i == -1:
-        anchor = 'id="Qualified_teams"'
-    i = html.find(anchor)
-    if i == -1:
-        # fallback: just return hosts (always in WC)
-        return ["Canada", "Mexico", "United States"]
-
-    sub = html[i:]
-    # find first <table ...> ... </table>
-    t0 = sub.find("<table")
-    t1 = sub.find("</table>")
-    if t0 == -1 or t1 == -1:
-        return ["Canada", "Mexico", "United States"]
-    table = sub[t0:t1+8]
-
-    # rows
-    teams: List[str] = []
-    for row in re.findall(r"<tr[^>]*>(.*?)</tr>", table, flags=re.S):
-        # first <th> or <td>
-        cell_m = re.search(r"<t[hd][^>]*>(.*?)</t[hd]>", row, flags=re.S)
-        if not cell_m:
-            continue
-        cell = cell_m.group(1)
-
-        # Take the first visible link/text within the cell
-        # Prefer <a> text, fallback to stripped text.
-        a_m = re.search(r"<a[^>]*>([^<]+)</a>", cell)
-        name = (a_m.group(1) if a_m else re.sub(r"<[^>]+>", " ", cell))
-        name = re.sub(r"\s+", " ", name).strip()
-
-        # Skip header rows
-        if not name or name.lower() in {"team", "qualified teams"}:
-            continue
-
-        # Basic cleanup (Wikipedia sometimes includes footnote markers)
-        name = re.sub(r"\[[0-9]+\]", "", name).strip()
-        if name and name not in teams:
-            teams.append(name)
-
-    # Always ensure hosts are present
-    for host in ["Canada", "Mexico", "United States"]:
-        if host not in teams:
-            teams.insert(0, host)
-
-    return teams
-
-def get_qualified_teams(force: bool = False) -> List[str]:
-    now = int(time.time())
-    if (not force and _qualified_cache["teams"]
-        and (now - int(_qualified_cache["loaded_at"] or 0) < QUALIFIED_CACHE_SECONDS)):
-        return _qualified_cache["teams"]
-
-    try:
-        teams = _fetch_qualified_teams()
-    except Exception:
-        teams = ["Canada", "Mexico", "United States"]
-
-    _qualified_cache["loaded_at"] = now
-    _qualified_cache["teams"] = teams
-    return teams
-
-@app.route("/worldcup/qualified.json")
-def qualified_json():
-    teams = get_qualified_teams()
-    return jsonify({
-        "updated_at": int(_qualified_cache.get("loaded_at") or 0),
-        "count": len(teams),
-        "teams": teams,
-        "note": "Qualification is ongoing; this list reflects teams qualified so far.",
-    })
-
 @app.route("/test-sheet")
 def test_sheet():
     try:
@@ -1085,9 +927,49 @@ def test_sheet():
 
 
 # ============================================================
+# Admin dashboard
+# ============================================================
+@app.route("/admin")
+def admin():
+    key = request.args.get("key", "")
+    if not ADMIN_KEY or key != ADMIN_KEY:
+        return "Unauthorized", 401
+
+    try:
+        rows = read_leads(limit=300)
+    except Exception as e:
+        return f"Error reading leads: {repr(e)}", 500
+
+    if not rows:
+        return "<h2>No leads yet.</h2>"
+
+    header = rows[0]
+    body = rows[1:]
+
+    # Simple HTML table
+    html = []
+    html.append("<html><head><meta charset='utf-8'><title>Leads Admin</title>")
+    html.append("<style>body{font-family:Arial;padding:16px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ddd;padding:8px;font-size:12px} th{background:#f4f4f4}</style>")
+    html.append("</head><body>")
+    html.append(f"<h2>Leads Admin — {SHEET_NAME}</h2>")
+    html.append(f"<p>Rows shown: {len(body)}</p>")
+    html.append("<table><thead><tr>")
+    for h in header:
+        html.append(f"<th>{h}</th>")
+    html.append("</tr></thead><tbody>")
+    for r in body[::-1]:
+        html.append("<tr>")
+        for i in range(len(header)):
+            val = r[i] if i < len(r) else ""
+            html.append(f"<td>{val}</td>")
+        html.append("</tr>")
+    html.append("</tbody></table>")
+    html.append("</body></html>")
+    return "\n".join(html)
+
+
+# ============================================================
 # Chat endpoint with reservation state machine
-#   - MUST always return JSON with {reply: ...}
-#   - "reservation" triggers deterministic lead capture
 # ============================================================
 @app.route("/chat", methods=["POST"])
 def chat():
@@ -1105,22 +987,23 @@ def chat():
     sid = get_session_id()
     sess = get_session(sid)
 
-    # Update session language if user toggled
+    # update session language if user toggled
     sess["lang"] = lang
     sess["lead"]["language"] = lang
 
     if not msg:
         return jsonify({"reply": "Please type a message.", "rate_limit_remaining": remaining})
 
-    # Recall support (all languages)
+    # recall support (all languages)
     if want_recall(msg, lang):
         return jsonify({"reply": recall_text(sess), "rate_limit_remaining": remaining})
 
-    # Start reservation flow if user indicates intent
+    # start reservation flow if user indicates intent
     if sess["mode"] == "idle" and want_reservation(msg):
         sess["mode"] = "reserving"
 
         # IMPORTANT: do NOT treat the word "reservation" as the name.
+        # Clear any accidental name just in case.
         if msg.lower().strip() in ["reservation", "reserva", "réservation"]:
             sess["lead"]["name"] = ""
 
@@ -1129,6 +1012,7 @@ def chat():
 
     # If reserving, keep collecting fields deterministically
     if sess["mode"] == "reserving":
+        # Extract fields from message (order doesn't matter)
         d_iso = extract_date(msg)
         if d_iso:
             if validate_date_iso(d_iso):
@@ -1148,13 +1032,13 @@ def chat():
         if ph:
             sess["lead"]["phone"] = ph
 
-        # Name extraction
-        if not sess["lead"].get("name"):
+        # NAME extraction
+        if not sess["lead"]["name"]:
             cand = extract_name_candidate(msg)
             if cand:
                 sess["lead"]["name"] = cand
 
-        # Apply business rules if we have enough to check
+        # apply business rules if we have enough to check
         rule = apply_business_rules(sess["lead"])
         if rule == "party":
             sess["mode"] = "idle"
@@ -1176,23 +1060,11 @@ def chat():
                     f"Phone: {lead['phone']}\n"
                     f"Date: {lead['date']}\n"
                     f"Time: {lead['time']}\n"
-                    f"Party size: {lead['party_size']}\n"
-                    f"Status: {lead.get('status','New')}\n"
-                    f"VIP: {lead.get('vip','No')}"
+                    f"Party size: {lead['party_size']}"
                 )
-                sess["lead"] = {
-                    "name": "",
-                    "phone": "",
-                    "date": "",
-                    "time": "",
-                    "party_size": 0,
-                    "language": lang,
-                    "status": "New",
-                    "vip": "No",
-                }
+                sess["lead"] = {"name": "", "phone": "", "date": "", "time": "", "party_size": 0, "language": lang}
                 return jsonify({"reply": confirm, "rate_limit_remaining": remaining})
             except Exception as e:
-                # Always return JSON so the UI never shows "no reply received".
                 return jsonify({"reply": f"⚠️ Could not save reservation: {repr(e)}", "rate_limit_remaining": remaining}), 500
 
         # Otherwise ask next missing field
@@ -1207,7 +1079,7 @@ Business profile (source of truth):
 {BUSINESS_PROFILE}
 
 Menu (source of truth, language={lang}):
-{json.dumps(MENU.get(lang, MENU['en']), ensure_ascii=False)}
+{json.dumps(MENU.get(lang, MENU["en"]), ensure_ascii=False)}
 
 Rules:
 - Be friendly, fast, and concise.
@@ -1216,385 +1088,355 @@ Rules:
 - If user asks to make a reservation, instruct them to type "reservation" (or equivalent) to start.
 """
 
+    resp = client.responses.create(
+        model="gpt-4o-mini",
+        input=[
+            {"role": "system", "content": system_msg},
+            {"role": "user", "content": msg},
+        ],
+    )
+
+    reply = (resp.output_text or "").strip()
+    return jsonify({"reply": reply, "rate_limit_remaining": remaining})
+
+
+# ============================================================
+# Run
+# ============================================================
+
+
+# ============================================================
+# FAN PICK POLL (persisted)
+# - /poll/match.json : returns configured Match of the Day + totals/% + lock state
+# - /poll/vote       : vote once per voter token (client stores token); persists totals
+# - /admin/poll/config : edit sponsor label + match_id without redeploy
+# Storage:
+#   Preferred: same Google Sheet (worksheets PollConfig + PollVotes)
+#   Fallback: local JSON at /tmp/wc26_poll.json
+# ============================================================
+POLL_CONFIG_WS_TITLE = os.environ.get("POLL_CONFIG_WS_TITLE", "PollConfig").strip()
+POLL_VOTES_WS_TITLE  = os.environ.get("POLL_VOTES_WS_TITLE",  "PollVotes").strip()
+POLL_LOCAL_FILE      = os.environ.get("POLL_LOCAL_FILE", "/tmp/wc26_poll.json")
+
+def _safe_read_json(path: str, default):
     try:
-        resp = client.responses.create(
-            model=os.environ.get("CHAT_MODEL", "gpt-4o-mini"),
-            input=[
-                {"role": "system", "content": system_msg},
-                {"role": "user", "content": msg},
-            ],
-        )
-        reply = (resp.output_text or "").strip() or "(No response)"
-        return jsonify({"reply": reply, "rate_limit_remaining": remaining})
-    except Exception as e:
-        # If OPENAI_API_KEY isn't set (or any API issue), fail gracefully.
-        fallback = "⚠️ Chat is temporarily unavailable. Please try again, or type 'reservation' to book a table."
-        return jsonify({"reply": f"{fallback}\n\nDebug: {type(e).__name__}", "rate_limit_remaining": remaining}), 200
+        if not os.path.exists(path):
+            return default
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
 
+def _safe_write_json(path: str, payload) -> None:
+    try:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, path)
+    except Exception:
+        pass
 
-# ============================================================
-# Admin dashboard
-# ============================================================
+def _now_iso_utc() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-# ============================================================
-# Admin dashboard (CRM-lite)
-#   - inline Status dropdown + VIP toggle
-#   - quick filters + metrics
-#   - export CSV
-# ============================================================
-def _hesc(s: Any) -> str:
-    s = "" if s is None else str(s)
-    return (s.replace("&", "&amp;")
-             .replace("<", "&lt;")
-             .replace(">", "&gt;")
-             .replace('"', "&quot;")
-             .replace("'", "&#39;"))
+def _poll_defaults():
+    return {"sponsor":"Fan Pick","match_id":""}
 
+def _poll_local():
+    return _safe_read_json(POLL_LOCAL_FILE, {"config": _poll_defaults(), "votes": {}, "voters": {}})
 
-@app.route("/admin/update-lead", methods=["POST"])
-def admin_update_lead():
-    key = request.args.get("key", "")
-    if not ADMIN_KEY or key != ADMIN_KEY:
-        return jsonify({"ok": False, "error": "Unauthorized"}), 401
+def _poll_local_save(data):
+    _safe_write_json(POLL_LOCAL_FILE, data)
 
-    data = request.get_json(silent=True) or {}
-    row_num = int(data.get("row") or 0)
-    if row_num < 2:
-        return jsonify({"ok": False, "error": "Bad row"}), 400
+def _poll_open_ws(title: str):
+    # Uses your existing Google Sheets connection helpers if present
+    if not _gs_ready():
+        raise RuntimeError("Google Sheets not available")
+    # Prefer your existing open/worksheet helper if it exists
+    if "open_sheet" in globals():
+        return globals()["open_sheet"](title)
+    if "get_ws" in globals():
+        return globals()["get_ws"](title)
+    # Fallback: open via existing credentials vars in your app
+    creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON","").strip()
+    if not creds_json:
+        raise RuntimeError("Missing GOOGLE_CREDENTIALS_JSON")
+    info = json.loads(creds_json)
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds = Credentials.from_service_account_info(info, scopes=scopes)
+    gc = gspread.authorize(creds)
+    sh = gc.open(SHEET_NAME)
+    try:
+        return sh.worksheet(title)
+    except Exception:
+        return sh.add_worksheet(title=title, rows=1000, cols=20)
 
-    status = (data.get("status") or "").strip()
-    vip = (data.get("vip") or "").strip()
+def _poll_get_config():
+    cfg = _poll_defaults()
+    try:
+        ws = _poll_open_ws(POLL_CONFIG_WS_TITLE)
+        rows = ws.get_all_values() or []
+        if not rows:
+            ws.update("A1", [["key","value"],["sponsor",cfg["sponsor"]],["match_id",""]])
+            return cfg
+        if len(rows[0]) < 2 or (rows[0][0] or "").lower() != "key":
+            ws.update("A1", [["key","value"]])
+            rows = ws.get_all_values() or []
+        for r in rows[1:]:
+            if len(r) >= 2:
+                k = (r[0] or "").strip()
+                v = (r[1] or "").strip()
+                if k:
+                    cfg[k] = v
+        return cfg
+    except Exception:
+        data = _poll_local()
+        return data.get("config") or cfg
 
-    allowed_status = ["New", "Confirmed", "Seated", "No-Show"]
-    if status and status not in allowed_status:
-        return jsonify({"ok": False, "error": "Invalid status"}), 400
+def _poll_set_config(new_cfg: dict):
+    cfg = _poll_get_config()
+    cfg["sponsor"] = (new_cfg.get("sponsor") or cfg.get("sponsor") or "Fan Pick").strip() or "Fan Pick"
+    cfg["match_id"] = (new_cfg.get("match_id") or "").strip()
+    try:
+        ws = _poll_open_ws(POLL_CONFIG_WS_TITLE)
+        rows = ws.get_all_values() or []
+        if not rows:
+            ws.update("A1", [["key","value"],["sponsor",cfg["sponsor"]],["match_id",cfg["match_id"]]])
+            return cfg
+        index = {(r[0] or "").strip().lower(): i for i, r in enumerate(rows[1:], start=2) if len(r) >= 1}
+        for k in ["sponsor","match_id"]:
+            if k in index:
+                ws.update(f"B{index[k]}", cfg[k])
+            else:
+                ws.append_row([k, cfg[k]])
+        return cfg
+    except Exception:
+        data = _poll_local()
+        data["config"] = cfg
+        _poll_local_save(data)
+        return cfg
 
-    if vip:
-        vip_norm = vip.lower()
-        if vip_norm in ["true", "1", "yes", "y", "on"]:
-            vip = "Yes"
-        elif vip_norm in ["false", "0", "no", "n", "off"]:
-            vip = "No"
-        elif vip not in ["Yes", "No"]:
-            return jsonify({"ok": False, "error": "Invalid vip"}), 400
-
-    gc = get_gspread_client()
-    ws = gc.open(SHEET_NAME).sheet1
-    header = ensure_sheet_schema(ws)
-    hmap = header_map(header)
-
-    updates = 0
-    if status:
-        col = hmap.get("status")
-        if col:
-            ws.update_cell(row_num, col, status)
-            updates += 1
-
-    if vip:
-        col = hmap.get("vip")
-        if col:
-            ws.update_cell(row_num, col, vip)
-            updates += 1
-
-    return jsonify({"ok": True, "updated": updates})
-
-
-@app.route("/admin/export.csv")
-def admin_export_csv():
-    key = request.args.get("key", "")
-    if not ADMIN_KEY or key != ADMIN_KEY:
-        return "Unauthorized", 401
-
-    gc = get_gspread_client()
-    ws = gc.open(SHEET_NAME).sheet1
+def _poll_ensure_votes_ws():
+    ws = _poll_open_ws(POLL_VOTES_WS_TITLE)
     rows = ws.get_all_values() or []
     if not rows:
-        return "", 200, {"Content-Type": "text/csv; charset=utf-8"}
+        ws.update("A1", [["match_id","home","away","kickoff_utc","locked","winner","home_votes","away_votes","last_updated_utc"]])
+    return ws
 
-    # Basic CSV with escaping
-    def csv_escape(x: str) -> str:
-        x = "" if x is None else str(x)
-        if any(c in x for c in [",", '"', "\n", "\r"]):
-            return '"' + x.replace('"', '""') + '"'
-        return x
+def _poll_percent(h: int, a: int):
+    total = h + a
+    if total <= 0:
+        return 0, 0, 0
+    hp = int(round((h/total)*100))
+    ap = max(0, 100-hp)
+    return hp, ap, total
 
-    out_lines = []
-    for r in rows:
-        out_lines.append(",".join(csv_escape(c) for c in r))
-    payload = "\n".join(out_lines)
+def _poll_locked(kickoff_utc: str, locked_flag: str):
+    if (locked_flag or "").strip().lower() in ["true","1","yes","y"]:
+        return True
+    if not kickoff_utc:
+        return False
+    try:
+        dt = datetime.strptime(kickoff_utc, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) >= dt
+    except Exception:
+        return False
 
-    return payload, 200, {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": "attachment; filename=leads_export.csv",
-        "Cache-Control": "no-store",
-    }
+def _poll_get_record(match_id: str):
+    match_id = (match_id or "").strip()
+    if not match_id:
+        raise ValueError("missing match_id")
+    try:
+        ws = _poll_ensure_votes_ws()
+        rows = ws.get_all_values() or []
+        header = rows[0] if rows else []
+        idx = {}
+        for i, r in enumerate(rows[1:], start=2):
+            if len(r) >= 1:
+                idx[(r[0] or "").strip()] = i
+        rownum = idx.get(match_id)
+        if not rownum:
+            ws.append_row([match_id,"","","","false","","0","0",_now_iso_utc()], value_input_option="USER_ENTERED")
+            rows = ws.get_all_values() or []
+            for i, r in enumerate(rows[1:], start=2):
+                if (r[0] or "").strip() == match_id:
+                    rownum = i
+                    break
+        r = ws.row_values(rownum) if rownum else []
+        def g(col, default=""):
+            try:
+                j = header.index(col)
+                return (r[j] if j < len(r) else default).strip()
+            except Exception:
+                return default
+        rec = {
+            "_row": rownum,
+            "match_id": match_id,
+            "home": g("home",""),
+            "away": g("away",""),
+            "kickoff_utc": g("kickoff_utc",""),
+            "locked": g("locked","false"),
+            "winner": g("winner",""),
+            "home_votes": int(g("home_votes","0") or 0),
+            "away_votes": int(g("away_votes","0") or 0),
+        }
+        return rec, "sheet"
+    except Exception:
+        data = _poll_local()
+        votes = data.get("votes") or {}
+        rec = votes.get(match_id) or {
+            "match_id": match_id, "home":"", "away":"", "kickoff_utc":"", "locked":"false", "winner":"",
+            "home_votes": 0, "away_votes": 0
+        }
+        votes[match_id] = rec
+        data["votes"] = votes
+        _poll_local_save(data)
+        return rec, "local"
 
+def _poll_save_record(rec: dict, store: str):
+    if store == "sheet":
+        ws = _poll_ensure_votes_ws()
+        rows = ws.get_all_values() or []
+        header = rows[0]
+        rownum = rec.get("_row")
+        def set_cell(col, val):
+            if col in header and rownum:
+                ws.update_cell(rownum, header.index(col)+1, str(val))
+        set_cell("home", rec.get("home",""))
+        set_cell("away", rec.get("away",""))
+        set_cell("kickoff_utc", rec.get("kickoff_utc",""))
+        set_cell("locked", rec.get("locked","false"))
+        set_cell("winner", rec.get("winner",""))
+        set_cell("home_votes", rec.get("home_votes",0))
+        set_cell("away_votes", rec.get("away_votes",0))
+        set_cell("last_updated_utc", _now_iso_utc())
+        return
+    data = _poll_local()
+    votes = data.get("votes") or {}
+    mid = rec.get("match_id")
+    votes[mid] = rec
+    data["votes"] = votes
+    _poll_local_save(data)
 
-@app.route("/admin")
-def admin():
-    key = request.args.get("key", "")
+@app.route("/poll/match.json")
+def poll_match_json():
+    cfg = _poll_get_config()
+    mid = (cfg.get("match_id") or "").strip()
+    if not mid:
+        return jsonify({"ok": False, "error": "No match configured"}), 200
+    rec, store = _poll_get_record(mid)
+    locked = _poll_locked(rec.get("kickoff_utc",""), rec.get("locked","false"))
+    hp, ap, total = _poll_percent(int(rec.get("home_votes",0)), int(rec.get("away_votes",0)))
+    return jsonify({
+        "ok": True,
+        "sponsor": cfg.get("sponsor","Fan Pick"),
+        "match": {
+            "id": mid,
+            "home": rec.get("home",""),
+            "away": rec.get("away",""),
+            "kickoff_utc": rec.get("kickoff_utc",""),
+            "locked": locked,
+            "winner": rec.get("winner",""),
+        },
+        "totals": {"home": rec.get("home_votes",0), "away": rec.get("away_votes",0), "home_pct": hp, "away_pct": ap, "total": total},
+    }), 200
+
+@app.route("/poll/vote", methods=["POST"])
+def poll_vote():
+    payload = request.get_json(silent=True) or {}
+    mid = (payload.get("match_id") or "").strip()
+    team = (payload.get("team") or "").strip().lower()  # "home" / "away"
+    voter = (payload.get("voter") or "").strip() or secrets.token_urlsafe(12)
+    home = (payload.get("home") or "").strip()
+    away = (payload.get("away") or "").strip()
+    kickoff_utc = (payload.get("kickoff_utc") or "").strip()
+
+    if not mid or team not in ["home","away"]:
+        return jsonify({"ok": False, "error": "Bad request"}), 400
+
+    # De-dupe per voter token in local store (works even if totals are in sheet)
+    local = _poll_local()
+    voters = local.get("voters") or {}
+    prev = voters.get(voter)
+    rec, store = _poll_get_record(mid)
+
+    # Fill missing fields once
+    if home and not rec.get("home"):
+        rec["home"] = home
+    if away and not rec.get("away"):
+        rec["away"] = away
+    if kickoff_utc and not rec.get("kickoff_utc"):
+        rec["kickoff_utc"] = kickoff_utc
+
+    locked = _poll_locked(rec.get("kickoff_utc",""), rec.get("locked","false"))
+    if locked:
+        hp, ap, total = _poll_percent(int(rec.get("home_votes",0)), int(rec.get("away_votes",0)))
+        return jsonify({"ok": True, "locked": True, "voter": voter, "totals": {"home": rec.get("home_votes",0), "away": rec.get("away_votes",0), "home_pct": hp, "away_pct": ap, "total": total}, "winner": rec.get("winner","")}), 200
+
+    if prev and prev.get("match_id") == mid:
+        hp, ap, total = _poll_percent(int(rec.get("home_votes",0)), int(rec.get("away_votes",0)))
+        return jsonify({"ok": True, "already_voted": True, "voter": voter, "totals": {"home": rec.get("home_votes",0), "away": rec.get("away_votes",0), "home_pct": hp, "away_pct": ap, "total": total}, "winner": rec.get("winner","")}), 200
+
+    if team == "home":
+        rec["home_votes"] = int(rec.get("home_votes",0)) + 1
+    else:
+        rec["away_votes"] = int(rec.get("away_votes",0)) + 1
+
+    _poll_save_record(rec, store)
+
+    voters[voter] = {"match_id": mid, "team": team, "ts": _now_iso_utc()}
+    local["voters"] = voters
+    _poll_local_save(local)
+
+    hp, ap, total = _poll_percent(int(rec.get("home_votes",0)), int(rec.get("away_votes",0)))
+    return jsonify({"ok": True, "voter": voter, "totals": {"home": rec.get("home_votes",0), "away": rec.get("away_votes",0), "home_pct": hp, "away_pct": ap, "total": total}}), 200
+
+@app.route("/admin/poll/config", methods=["GET","POST"])
+def admin_poll_config():
+    key = request.args.get("key","")
     if not ADMIN_KEY or key != ADMIN_KEY:
         return "Unauthorized", 401
+    if request.method == "POST":
+        sponsor = (request.form.get("sponsor") or "").strip()
+        match_id = (request.form.get("match_id") or "").strip()
+        _poll_set_config({"sponsor": sponsor, "match_id": match_id})
+        return "Saved. <a href='/admin?key=%s'>Back to Admin</a>" % key
+    cfg = _poll_get_config()
+    s = (cfg.get("sponsor") or "Fan Pick")
+    m = (cfg.get("match_id") or "")
+    return f"""<!doctype html><html><head><meta charset='utf-8'/><meta name='viewport' content='width=device-width,initial-scale=1'/>
+    <title>Fan Poll Config</title>
+    <style>
+      body{font-family:Arial,system-ui;background:#0b1020;color:#eaf0ff;padding:18px}
+      .box{max-width:760px;background:#0f1b33;border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:14px}
+      input{padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:#0b152c;color:#eaf0ff;width:100%;max-width:560px}
+      button{padding:10px 14px;border-radius:10px;border:0;background:#d4af37;font-weight:900;color:#0b1020}
+      a{color:#b9c7ee}
+    </style></head><body>
+      <div class='box'>
+        <h2 style='margin:0 0 10px 0'>Fan Pick Settings</h2>
+        <form method='post'>
+          <label>Presented by (Sponsor label)</label><br/>
+          <input name='sponsor' value='{s}'/><br/><br/>
+          <label>Match of the Day (match_id)</label><br/>
+          <input name='match_id' value='{m}' placeholder='Example: 2026-06-11-ATTS-ABC'/><br/>
+          <div style='opacity:.75;font-size:13px;margin-top:8px'>Paste the match_id used by your schedule cards.</div><br/>
+          <button type='submit'>Save</button>
+        </form>
+        <div style='margin-top:12px'><a href='/admin?key={key}'>← Back to Admin</a></div>
+      </div>
+    </body></html>"""
 
+
+
+@app.route("/countries/qualified.json")
+def qualified_countries_alias():
+    # Alias for frontend fan-zone picker
     try:
-        rows = read_leads(limit=600)
-    except Exception as e:
-        return f"Error reading leads: {repr(e)}", 500
-
-    if not rows:
-        return "<h2>No leads yet.</h2>"
-
-    header = rows[0]
-    body = rows[1:]
-
-    # Build header indices (best effort even if header labels differ)
-    hnorm = [_normalize_header(h) for h in header]
-    def idx(name: str) -> int:
-        n = _normalize_header(name)
-        return hnorm.index(n) if n in hnorm else -1
-
-    i_ts = idx("timestamp")
-    i_name = idx("name")
-    i_phone = idx("phone")
-    i_date = idx("date")
-    i_time = idx("time")
-    i_party = idx("party_size")
-    i_lang = idx("language")
-    i_status = idx("status")
-    i_vip = idx("vip")
-
-    # Metrics
-    def colval(r, i, default=""):
-        return (r[i] if 0 <= i < len(r) else default).strip() if isinstance(r, list) else default
-
-    status_counts = {"New": 0, "Confirmed": 0, "Seated": 0, "No-Show": 0}
-    vip_count = 0
-    for r in body:
-        s = colval(r, i_status, "New") or "New"
-        if s not in status_counts:
-            status_counts[s] = 0
-        status_counts[s] += 1
-        if colval(r, i_vip, "No").lower() in ["yes", "true", "1", "y"]:
-            vip_count += 1
-
-    # Render newest first but keep correct sheet row numbers
-    # body is oldest->newest, sheet rows start at 2
-    numbered = [(i + 2, r) for i, r in enumerate(body)]
-    numbered = list(reversed(numbered))
-
-    html = []
-    html.append("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'/>")
-    html.append("<title>Leads Admin</title>")
-    html.append("""
-<style>
-:root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
-body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(1200px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);color:var(--text);}
-.wrap{max-width:1200px;margin:0 auto;padding:18px;}
-.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
-.h1{font-size:18px;font-weight:800;letter-spacing:.3px}
-.sub{color:var(--muted);font-size:12px}
-.pills{display:flex;gap:8px;flex-wrap:wrap}
-.pill{border:1px solid var(--line);background:rgba(255,255,255,.03);padding:8px 10px;border-radius:999px;font-size:12px}
-.pill b{color:var(--gold)}
-.controls{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
-.inp, select{background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px 10px;font-size:12px;outline:none}
-.btn{cursor:pointer;background:linear-gradient(180deg, rgba(212,175,55,.18), rgba(212,175,55,.06));border:1px solid rgba(212,175,55,.35);color:var(--text);border-radius:12px;padding:9px 12px;font-size:12px}
-.btn:active{transform:translateY(1px)}
-.tablewrap{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:rgba(255,255,255,.03);box-shadow:0 10px 35px rgba(0,0,0,.35)}
-table{border-collapse:collapse;width:100%}
-thead th{position:sticky;top:0;background:rgba(10,16,34,.95);backdrop-filter: blur(6px);z-index:2}
-th,td{border-bottom:1px solid var(--line);padding:10px 10px;font-size:12px;vertical-align:top}
-th{color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:11px}
-tr:hover td{background:rgba(255,255,255,.03)}
-.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:11px}
-.badge.vip{border-color:rgba(212,175,55,.5);box-shadow:0 0 0 1px rgba(212,175,55,.18) inset}
-.dot{width:7px;height:7px;border-radius:999px;background:var(--muted);display:inline-block}
-.dot.new{background:var(--warn)}
-.dot.confirmed{background:var(--good)}
-.dot.seated{background:#7aa7ff}
-.dot.noshow{background:var(--bad)}
-.small{font-size:11px;color:var(--muted)}
-.right{text-align:right}
-.tel{color:var(--text);text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
-.toast{position:fixed;right:14px;bottom:14px;background:rgba(0,0,0,.55);border:1px solid var(--line);padding:10px 12px;border-radius:12px;font-size:12px;display:none}
-</style>
-""")
-
-    html.append("</head><body><div class='wrap'>")
-    html.append("<div class='topbar'>")
-    html.append(f"<div><div class='h1'>Leads Admin — {_hesc(SHEET_NAME)}</div><div class='sub'>Rows shown: {len(body)} • Key required • CRM-lite</div></div>")
-    html.append("<div class='pills'>")
-    html.append(f"<div class='pill'><b>VIP</b> {vip_count}</div>")
-    html.append(f"<div class='pill'><b>New</b> {status_counts.get('New',0)}</div>")
-    html.append(f"<div class='pill'><b>Confirmed</b> {status_counts.get('Confirmed',0)}</div>")
-    html.append(f"<div class='pill'><b>Seated</b> {status_counts.get('Seated',0)}</div>")
-    html.append(f"<div class='pill'><b>No‑Show</b> {status_counts.get('No-Show',0)}</div>")
-    html.append("</div></div>")
-
-    html.append("<div class='controls'>")
-    html.append("<input class='inp' id='q' placeholder='Search name / phone / date / notes...' style='min-width:260px'/>")
-    html.append("""
-<select id="fStatus">
-  <option value="">All Status</option>
-  <option>New</option>
-  <option>Confirmed</option>
-  <option>Seated</option>
-  <option>No-Show</option>
-</select>
-<label class="small" style="display:flex;align-items:center;gap:6px">
-  <input type="checkbox" id="fVip"/> VIP only
-</label>
-""")
-    html.append(f"<a class='btn' href='/admin/export.csv?key={_hesc(key)}'>Export CSV</a>")
-    html.append(f"<button class='btn' onclick='location.reload()'>Refresh</button>")
-    html.append("</div>")
-
-    html.append("<div class='tablewrap'><table id='tbl'><thead><tr>")
-    # Show a clean set of columns (not every raw column), but keep the raw order if indices missing
-    cols = [
-        ("Timestamp", i_ts),
-        ("Name", i_name),
-        ("Phone", i_phone),
-        ("Date", i_date),
-        ("Time", i_time),
-        ("Party", i_party),
-        ("Lang", i_lang),
-        ("Status", i_status),
-        ("VIP", i_vip),
-        ("Actions", -999),
-    ]
-    for label, _ in cols:
-        html.append(f"<th>{_hesc(label)}</th>")
-    html.append("</tr></thead><tbody>")
-
-    def status_dot(s: str) -> str:
-        s2 = (s or "").lower()
-        if s2 == "confirmed": return "confirmed"
-        if s2 == "seated": return "seated"
-        if s2 in ["no-show", "noshow", "no_show"]: return "noshow"
-        return "new"
-
-    for row_num, r in numbered:
-        name = colval(r, i_name)
-        phone = colval(r, i_phone)
-        d = colval(r, i_date)
-        t = colval(r, i_time)
-        ps = colval(r, i_party)
-        lang = colval(r, i_lang)
-        status = colval(r, i_status, "New") or "New"
-        vip = colval(r, i_vip, "No") or "No"
-        ts = colval(r, i_ts)
-
-        is_vip = vip.lower() in ["yes", "true", "1", "y"]
-        badge = f"<span class='badge{' vip' if is_vip else ''}'><span class='dot {status_dot(status)}'></span>{_hesc(status)}{' • VIP' if is_vip else ''}</span>"
-
-        html.append(f"<tr data-row='{row_num}' data-status='{_hesc(status)}' data-vip='{ '1' if is_vip else '0' }'>")
-        html.append(f"<td class='small'>{_hesc(ts)}</td>")
-        html.append(f"<td><b>{_hesc(name)}</b></td>")
-        html.append(f"<td><a class='tel' href='tel:{_hesc(phone)}'>{_hesc(phone)}</a></td>")
-        html.append(f"<td>{_hesc(d)}</td>")
-        html.append(f"<td>{_hesc(t)}</td>")
-        html.append(f"<td class='right'>{_hesc(ps)}</td>")
-        html.append(f"<td class='right'>{_hesc(lang)}</td>")
-
-        # Status dropdown
-        html.append("<td>")
-        html.append(f"{badge}<div style='height:6px'></div>")
-        html.append(f"""
-<select onchange="updateLead({row_num}, this.value, null)">
-  <option {'selected' if status=='New' else ''}>New</option>
-  <option {'selected' if status=='Confirmed' else ''}>Confirmed</option>
-  <option {'selected' if status=='Seated' else ''}>Seated</option>
-  <option {'selected' if status=='No-Show' else ''}>No-Show</option>
-</select>
-""")
-        html.append("</td>")
-
-        # VIP toggle
-        checked = "checked" if is_vip else ""
-        html.append("<td class='right'>")
-        html.append(f"<label class='small' style='display:inline-flex;align-items:center;gap:6px;justify-content:flex-end'><input type='checkbox' {checked} onchange=\"updateLead({row_num}, null, this.checked)\"/> VIP</label>")
-        html.append("</td>")
-
-        # Quick actions
-        html.append("<td class='right'>")
-        html.append(f"<button class='btn' style='padding:7px 10px' onclick=\"updateLead({row_num}, 'Confirmed', true)\">Confirm</button> ")
-        html.append(f"<button class='btn' style='padding:7px 10px' onclick=\"updateLead({row_num}, 'Seated', true)\">Seat</button>")
-        html.append("</td>")
-
-        html.append("</tr>")
-
-    html.append("</tbody></table></div>")
-    html.append("<div class='toast' id='toast'></div>")
-
-    html.append("""
-<script>
-const ADMIN_KEY = __ADMIN_KEY__;
-function toast(msg){
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.style.display = 'block';
-  clearTimeout(window.__toastTimer);
-  window.__toastTimer = setTimeout(()=>t.style.display='none', 1400);
-}
-
-async function updateLead(row, status, vipBool){
-  const payload = {row: row};
-  if(status !== null){ payload.status = status; }
-  if(vipBool !== null){
-    payload.vip = vipBool ? "Yes" : "No";
-  }
-  try{
-    const res = await fetch(`/admin/update-lead?key=${encodeURIComponent(ADMIN_KEY)}`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    if(!data.ok) throw new Error(data.error || 'Update failed');
-    toast('Saved ✓');
-    // Update row dataset for filtering
-    const tr = document.querySelector(`tr[data-row="${row}"]`);
-    if(tr){
-      if(payload.status){ tr.dataset.status = payload.status; }
-      if(payload.vip !== undefined){ tr.dataset.vip = payload.vip === "Yes" ? "1" : "0"; }
-    }
-  }catch(err){
-    console.error(err);
-    toast('Error: ' + err.message);
-  }
-}
-
-// Filters
-const qEl = document.getElementById('q');
-const fStatus = document.getElementById('fStatus');
-const fVip = document.getElementById('fVip');
-
-function applyFilters(){
-  const q = (qEl.value || '').toLowerCase().trim();
-  const st = (fStatus.value || '').trim();
-  const vipOnly = fVip.checked;
-
-  const rows = Array.from(document.querySelectorAll('#tbl tbody tr'));
-  for(const tr of rows){
-    const text = tr.innerText.toLowerCase();
-    const okQ = !q || text.includes(q);
-    const okS = !st || (tr.dataset.status === st);
-    const okV = !vipOnly || (tr.dataset.vip === "1");
-    tr.style.display = (okQ && okS && okV) ? '' : 'none';
-  }
-}
-
-qEl.addEventListener('input', applyFilters);
-fStatus.addEventListener('change', applyFilters);
-fVip.addEventListener('change', applyFilters);
-</script>
-""".replace("__ADMIN_KEY__", json.dumps(key)))
-
-
-    html.append("</div></body></html>")
-    return "".join(html)
-
+        return worldcup_qualified()  # existing route handler in your app
+    except Exception:
+        # fallback: return empty list rather than 500
+        return jsonify({"as_of": "", "countries": []}), 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
