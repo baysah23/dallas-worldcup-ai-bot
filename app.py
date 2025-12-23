@@ -5,8 +5,6 @@ import os
 import json
 import re
 import time
-import uuid
-import threading
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
@@ -38,146 +36,6 @@ def add_no_cache_headers(response):
 # ============================================================
 ADMIN_KEY = os.environ.get("ADMIN_KEY", "")  # required to view /admin
 RATE_LIMIT_PER_MIN = int(os.environ.get("RATE_LIMIT_PER_MIN", "30"))
-# ============================================================
-# Fan Poll + Admin Settings (persistent, file-based)
-# ============================================================
-DATA_DIR = os.environ.get("DATA_DIR", "/tmp")
-ADMIN_SETTINGS_FILE = os.path.join(DATA_DIR, "wc26_admin_settings.json")
-POLL_STATE_FILE = os.path.join(DATA_DIR, "wc26_poll_state.json")
-
-_POLL_LOCK = threading.Lock()
-_SETTINGS_LOCK = threading.Lock()
-
-DEFAULT_ADMIN_SETTINGS = {
-    "sponsor_text": "Fan Pick presented by …",
-    "motd_match_id": "",          # match id from /schedule.json (e.g., wc-001)
-    "force_lock": False,          # admin override
-    "final_winner": "",           # admin can set post-match winner highlight
-    "updated_at": "",
-}
-
-def _utcnow():
-    return datetime.utcnow()
-
-def _safe_read_json(path: str, default):
-    try:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception:
-        return default
-    return default
-
-def _safe_write_json(path: str, payload: dict):
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
-
-def _get_admin_settings() -> dict:
-    with _SETTINGS_LOCK:
-        s = _safe_read_json(ADMIN_SETTINGS_FILE, {}) or {}
-        merged = dict(DEFAULT_ADMIN_SETTINGS)
-        merged.update({k: v for k, v in s.items() if k in merged})
-        return merged
-
-def _save_admin_settings(patch: dict) -> dict:
-    with _SETTINGS_LOCK:
-        cur = _get_admin_settings()
-        cur.update({k: v for k, v in (patch or {}).items() if k in DEFAULT_ADMIN_SETTINGS})
-        cur["updated_at"] = _utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
-        _safe_write_json(ADMIN_SETTINGS_FILE, cur)
-        return cur
-
-def _admin_ok(req) -> bool:
-    # Supports query ?key=... OR header X-Admin-Key
-    key = (req.args.get("key") or "").strip()
-    hdr = (req.headers.get("X-Admin-Key") or "").strip()
-    return bool(ADMIN_KEY) and (key == ADMIN_KEY or hdr == ADMIN_KEY)
-
-def _get_voter_id(req) -> str:
-    vid = (req.cookies.get("wc26_voter") or "").strip()
-    if vid and len(vid) >= 8:
-        return vid
-    return ""
-
-def _new_voter_id() -> str:
-    return uuid.uuid4().hex
-
-def _load_poll_state() -> dict:
-    with _POLL_LOCK:
-        return _safe_read_json(POLL_STATE_FILE, {}) or {}
-
-def _save_poll_state(state: dict):
-    with _POLL_LOCK:
-        _safe_write_json(POLL_STATE_FILE, state or {})
-
-def _get_match_by_id(match_id: str) -> Optional[Dict[str, Any]]:
-    if not match_id:
-        return None
-    try:
-        allm = load_all_matches()
-        for m in allm:
-            if m.get("id") == match_id:
-                return m
-    except Exception:
-        return None
-    return None
-
-def _pick_default_motd() -> Optional[Dict[str, Any]]:
-    # Default: today's first match; else next upcoming; else first in list
-    try:
-        matches = load_all_matches()
-        if not matches:
-            return None
-        now = _utcnow()
-        today = now.date().isoformat()
-        todays = [m for m in matches if (m.get("date") == today)]
-        if todays:
-            return todays[0]
-        upcoming = [m for m in matches if (m.get("datetime_utc") or "") >= now.strftime("%Y-%m-%dT%H:%M:%SZ")]
-        return upcoming[0] if upcoming else matches[0]
-    except Exception:
-        return None
-
-def _compute_lock_and_winner(match: Dict[str, Any], poll_entry: dict, settings: dict) -> dict:
-    """
-    Returns derived state:
-      locked (bool), lock_reason, phase: pre|live|post, winner (team or "")
-    """
-    dt_utc = None
-    try:
-        dt_utc = datetime.strptime((match.get("datetime_utc") or ""), "%Y-%m-%dT%H:%M:%SZ")
-    except Exception:
-        dt_utc = None
-
-    now = _utcnow()
-    locked = bool(settings.get("force_lock"))
-    lock_reason = "admin" if locked else ""
-
-    if dt_utc:
-        if now >= dt_utc:
-            locked = True
-            lock_reason = lock_reason or "kickoff"
-    phase = "pre"
-    if dt_utc:
-        if now >= dt_utc:
-            phase = "live"
-        if now >= (dt_utc + timedelta(hours=2)):
-            phase = "post"
-    elif locked:
-        phase = "live"
-
-    # Winner highlight: admin override first; else highest votes after post-match
-    winner = (settings.get("final_winner") or "").strip()
-    if not winner and phase == "post":
-        votes = (poll_entry.get("votes") or {})
-        if isinstance(votes, dict) and votes:
-            best = sorted(votes.items(), key=lambda kv: (-int(kv[1] or 0), kv[0]))[0]
-            if best and int(best[1] or 0) > 0:
-                winner = best[0]
-    return {"locked": locked, "lock_reason": lock_reason, "phase": phase, "winner": winner, "kickoff_utc": (match.get("datetime_utc") or "")}
-
 
 SHEET_NAME = os.environ.get("GOOGLE_SHEET_NAME", "World Cup AI Reservations")
 
@@ -1117,215 +975,6 @@ def schedule_json():
 # - Returns the teams that have qualified *so far* (qualification is ongoing).
 # - Source: Wikipedia qualified teams table (updates over time).
 # ============================================================
-
-
-# ============================================================
-# Fan Poll API (live %, persistence, kickoff lock, winner highlight)
-# ============================================================
-def _ensure_poll_entry(state: dict, match: Dict[str, Any]) -> dict:
-    mid = match.get("id") or ""
-    if not mid:
-        return {}
-    entry = state.get(mid) or {}
-    home = (match.get("home") or "").strip()
-    away = (match.get("away") or "").strip()
-    votes = entry.get("votes") if isinstance(entry.get("votes"), dict) else {}
-    voters = entry.get("voters") if isinstance(entry.get("voters"), dict) else {}
-
-    # Ensure keys exist
-    if home and home not in votes:
-        votes[home] = int(votes.get(home) or 0)
-    if away and away not in votes:
-        votes[away] = int(votes.get(away) or 0)
-
-    entry["home"] = home
-    entry["away"] = away
-    entry["datetime_utc"] = match.get("datetime_utc") or ""
-    entry["votes"] = votes
-    entry["voters"] = voters
-    state[mid] = entry
-    return entry
-
-def _poll_payload(match: Dict[str, Any], entry: dict, settings: dict, voter_id: str) -> dict:
-    derived = _compute_lock_and_winner(match, entry, settings)
-    votes = entry.get("votes") or {}
-    home = entry.get("home") or (match.get("home") or "")
-    away = entry.get("away") or (match.get("away") or "")
-
-    hv = int(votes.get(home) or 0)
-    av = int(votes.get(away) or 0)
-    total = hv + av
-    hpct = int(round((hv / total) * 100)) if total > 0 else 0
-    apct = 100 - hpct if total > 0 else 0
-
-    my_vote = ""
-    try:
-        my_vote = (entry.get("voters") or {}).get(voter_id, "") if voter_id else ""
-    except Exception:
-        my_vote = ""
-
-    return {
-        "match": {
-            "id": match.get("id") or "",
-            "date": match.get("date") or "",
-            "time": match.get("time") or "",
-            "datetime_utc": match.get("datetime_utc") or "",
-            "venue": match.get("venue") or "",
-            "stage": match.get("stage") or "",
-            "home": match.get("home") or "",
-            "away": match.get("away") or "",
-        },
-        "sponsor_text": (settings.get("sponsor_text") or "").strip(),
-        "locked": bool(derived.get("locked")),
-        "lock_reason": derived.get("lock_reason") or "",
-        "phase": derived.get("phase") or "pre",
-        "winner": derived.get("winner") or "",
-        "votes": {
-            home: hv,
-            away: av,
-        },
-        "percentages": {
-            home: hpct,
-            away: apct,
-        },
-        "total_votes": total,
-        "my_vote": my_vote,
-    }
-
-@app.route("/api/motd", methods=["GET"])
-def api_motd():
-    settings = _get_admin_settings()
-    match = _get_match_by_id((settings.get("motd_match_id") or "").strip()) or _pick_default_motd()
-    if not match:
-        return jsonify({"error": "No matches available"}), 404
-
-    state = _load_poll_state()
-    entry = _ensure_poll_entry(state, match)
-
-    voter_id = _get_voter_id(request)
-    new_vid = ""
-    if not voter_id:
-        new_vid = _new_voter_id()
-        voter_id = new_vid
-
-    payload = _poll_payload(match, entry, settings, voter_id)
-    _save_poll_state(state)
-
-    resp = jsonify(payload)
-    if new_vid:
-        resp.set_cookie("wc26_voter", new_vid, max_age=60*60*24*365, httponly=True, samesite="Lax")
-    return resp
-
-@app.route("/api/poll/state", methods=["GET"])
-def api_poll_state():
-    match_id = (request.args.get("match_id") or "").strip()
-    settings = _get_admin_settings()
-    match = _get_match_by_id(match_id) or None
-    if not match:
-        return jsonify({"error": "Unknown match_id"}), 404
-
-    state = _load_poll_state()
-    entry = _ensure_poll_entry(state, match)
-
-    voter_id = _get_voter_id(request)
-    new_vid = ""
-    if not voter_id:
-        new_vid = _new_voter_id()
-        voter_id = new_vid
-
-    payload = _poll_payload(match, entry, settings, voter_id)
-    _save_poll_state(state)
-
-    resp = jsonify(payload)
-    if new_vid:
-        resp.set_cookie("wc26_voter", new_vid, max_age=60*60*24*365, httponly=True, samesite="Lax")
-    return resp
-
-@app.route("/api/poll/vote", methods=["POST"])
-def api_poll_vote():
-    data = request.get_json(silent=True) or {}
-    match_id = (data.get("match_id") or "").strip()
-    team = (data.get("team") or "").strip()
-    if not match_id or not team:
-        return jsonify({"error": "match_id and team are required"}), 400
-
-    settings = _get_admin_settings()
-    match = _get_match_by_id(match_id)
-    if not match:
-        return jsonify({"error": "Unknown match_id"}), 404
-
-    state = _load_poll_state()
-    entry = _ensure_poll_entry(state, match)
-
-    voter_id = _get_voter_id(request)
-    new_vid = ""
-    if not voter_id:
-        new_vid = _new_voter_id()
-        voter_id = new_vid
-
-    derived = _compute_lock_and_winner(match, entry, settings)
-    if derived.get("locked"):
-        payload = _poll_payload(match, entry, settings, voter_id)
-        _save_poll_state(state)
-        resp = jsonify({"error": "Poll is locked", **payload})
-        if new_vid:
-            resp.set_cookie("wc26_voter", new_vid, max_age=60*60*24*365, httponly=True, samesite="Lax")
-        return resp, 409
-
-    # Apply vote (one per voter per match; can change pre-kickoff)
-    voters = entry.get("voters") or {}
-    votes = entry.get("votes") or {}
-
-    home = entry.get("home") or match.get("home") or ""
-    away = entry.get("away") or match.get("away") or ""
-    if team not in (home, away):
-        return jsonify({"error": "Invalid team for this match"}), 400
-
-    prev = voters.get(voter_id, "")
-    if prev and prev in votes:
-        votes[prev] = max(0, int(votes.get(prev) or 0) - 1)
-
-    votes[team] = int(votes.get(team) or 0) + 1
-    voters[voter_id] = team
-
-    entry["votes"] = votes
-    entry["voters"] = voters
-    state[match_id] = entry
-    _save_poll_state(state)
-
-    payload = _poll_payload(match, entry, settings, voter_id)
-    resp = jsonify(payload)
-    if new_vid:
-        resp.set_cookie("wc26_voter", new_vid, max_age=60*60*24*365, httponly=True, samesite="Lax")
-    return resp
-
-# ============================================================
-# Admin: poll sponsor + Match of the Day controls (no redeploy)
-# ============================================================
-@app.route("/admin/settings.json")
-def admin_settings_json():
-    if not _admin_ok(request):
-        return "Unauthorized", 401
-    return jsonify(_get_admin_settings())
-
-@app.route("/admin/settings", methods=["POST"])
-def admin_settings_update():
-    if not _admin_ok(request):
-        return "Unauthorized", 401
-    data = request.get_json(silent=True) or {}
-    patch = {}
-    if "sponsor_text" in data:
-        patch["sponsor_text"] = str(data.get("sponsor_text") or "")[:120]
-    if "motd_match_id" in data:
-        patch["motd_match_id"] = str(data.get("motd_match_id") or "")[:32]
-    if "force_lock" in data:
-        patch["force_lock"] = bool(data.get("force_lock"))
-    if "final_winner" in data:
-        patch["final_winner"] = str(data.get("final_winner") or "")[:80]
-    saved = _save_admin_settings(patch)
-    return jsonify(saved)
-
-
 _qualified_cache: Dict[str, Any] = {"loaded_at": 0, "teams": []}
 QUALIFIED_CACHE_SECONDS = int(os.environ.get("QUALIFIED_CACHE_SECONDS", str(12 * 60 * 60)))  # 12h
 QUALIFIED_SOURCE_URL = os.environ.get(
@@ -1409,7 +1058,6 @@ def get_qualified_teams(force: bool = False) -> List[str]:
     _qualified_cache["teams"] = teams
     return teams
 
-@app.route("/countries/qualified.json")
 @app.route("/worldcup/qualified.json")
 def qualified_json():
     teams = get_qualified_teams()
@@ -1601,6 +1249,357 @@ def _hesc(s: Any) -> str:
              .replace(">", "&gt;")
              .replace('"', "&quot;")
              .replace("'", "&#39;"))
+
+
+# ============================================================
+# Fan Poll + Admin-config (Sponsor label, Match of the Day)
+# - Persists votes in Google Sheet (worksheet "PollVotes") when available.
+# - Stores admin-editable config in Google Sheet (worksheet "Config") when available.
+# - Falls back to local JSON file if Sheets isn't configured.
+# ============================================================
+
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), "app_config.json")
+
+def _safe_read_json(path: str) -> dict:
+    try:
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f) or {}
+    except Exception:
+        pass
+    return {}
+
+def _safe_write_json(path: str, data: dict) -> None:
+    try:
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, sort_keys=True)
+        os.replace(tmp, path)
+    except Exception:
+        pass
+
+def _ensure_ws(gc, title: str):
+    sh = gc.open(SHEET_NAME)
+    try:
+        return sh.worksheet(title)
+    except Exception:
+        return sh.add_worksheet(title=title, rows=2000, cols=20)
+
+def get_config() -> Dict[str, str]:
+    # Defaults
+    cfg = {
+        "poll_sponsor_text": "Fan Pick presented by World Cup Dallas HQ",
+        "match_of_day_id": "",
+    }
+
+    # Try Sheets first
+    try:
+        gc = get_gspread_client()
+        ws = _ensure_ws(gc, "Config")
+        rows = ws.get_all_values()
+        for r in rows[1:]:
+            if len(r) >= 2 and r[0]:
+                cfg[r[0]] = r[1]
+        return cfg
+    except Exception:
+        pass
+
+    # Fallback to local file
+    local = _safe_read_json(CONFIG_FILE)
+    if isinstance(local, dict):
+        cfg.update({k: str(v) for k, v in local.items() if v is not None})
+    return cfg
+
+def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
+    # Sheets
+    try:
+        gc = get_gspread_client()
+        ws = _ensure_ws(gc, "Config")
+        # Ensure header
+        rows = ws.get_all_values()
+        if not rows:
+            ws.append_row(["key", "value"])
+            rows = ws.get_all_values()
+
+        existing = {r[0]: (i + 1) for i, r in enumerate(rows) if len(r) >= 1 and r[0]}
+        for k, v in pairs.items():
+            if not k:
+                continue
+            v = "" if v is None else str(v)
+            if k in existing:
+                ws.update_cell(existing[k], 2, v)
+            else:
+                ws.append_row([k, v])
+        return get_config()
+    except Exception:
+        pass
+
+    # Fallback local file
+    local = _safe_read_json(CONFIG_FILE)
+    if not isinstance(local, dict):
+        local = {}
+    for k, v in pairs.items():
+        if not k:
+            continue
+        local[k] = "" if v is None else str(v)
+    _safe_write_json(CONFIG_FILE, local)
+    return get_config()
+
+def _match_id(m: Dict[str, Any]) -> str:
+    # Stable-ish id: datetime_utc + home + away (safe for URL/storage)
+    dt = (m.get("datetime_utc") or "").strip()
+    home = (m.get("home") or "").strip()
+    away = (m.get("away") or "").strip()
+    base = f"{dt}|{home}|{away}"
+    base = re.sub(r"[^A-Za-z0-9|:_-]+", "_", base)
+    return base[:180]
+
+def _get_match_of_day() -> Optional[Dict[str, Any]]:
+    cfg = get_config()
+    override_id = (cfg.get("match_of_day_id") or "").strip()
+
+    try:
+        matches = load_all_matches()
+    except Exception:
+        matches = []
+
+    if override_id:
+        for m in matches:
+            if _match_id(m) == override_id:
+                return m
+
+    # Default: next upcoming match globally (all matches is already sorted by datetime_utc)
+    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for m in matches:
+        if (m.get("datetime_utc") or "") >= now_utc:
+            return m
+    return matches[0] if matches else None
+
+def _poll_is_locked(match: Optional[Dict[str, Any]]) -> bool:
+    if not match:
+        return False
+    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    kickoff = (match.get("datetime_utc") or "").strip()
+    return bool(kickoff and now_utc >= kickoff)
+
+def _poll_is_post_match(match: Optional[Dict[str, Any]]) -> bool:
+    # Best-effort: assume 2h match duration, then post-match highlight
+    try:
+        kickoff = (match.get("datetime_utc") or "").strip()
+        if not kickoff:
+            return False
+        k = datetime.strptime(kickoff, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) >= (k + timedelta(hours=2))
+    except Exception:
+        return False
+
+def _poll_counts(match_id: str) -> Dict[str, int]:
+    counts: Dict[str, int] = {}
+    # Sheets
+    try:
+        gc = get_gspread_client()
+        ws = _ensure_ws(gc, "PollVotes")
+        rows = ws.get_all_values()
+        # header: ts, match_id, client_id, team
+        for r in rows[1:]:
+            if len(r) < 4:
+                continue
+            if r[1] != match_id:
+                continue
+            team = r[3] or ""
+            if not team:
+                continue
+            counts[team] = counts.get(team, 0) + 1
+        return counts
+    except Exception:
+        pass
+
+    # local fallback (in config file under key "poll_votes")
+    local = _safe_read_json(CONFIG_FILE)
+    votes = local.get("poll_votes", [])
+    if isinstance(votes, list):
+        for v in votes:
+            try:
+                if v.get("match_id") != match_id:
+                    continue
+                team = v.get("team") or ""
+                if team:
+                    counts[team] = counts.get(team, 0) + 1
+            except Exception:
+                continue
+    return counts
+
+def _poll_has_voted(match_id: str, client_id: str) -> Optional[str]:
+    # return team if already voted, else None
+    if not client_id:
+        return None
+    # Sheets
+    try:
+        gc = get_gspread_client()
+        ws = _ensure_ws(gc, "PollVotes")
+        rows = ws.get_all_values()
+        for r in rows[1:]:
+            if len(r) < 4:
+                continue
+            if r[1] == match_id and r[2] == client_id:
+                return r[3] or ""
+    except Exception:
+        pass
+
+    local = _safe_read_json(CONFIG_FILE)
+    votes = local.get("poll_votes", [])
+    if isinstance(votes, list):
+        for v in votes:
+            try:
+                if v.get("match_id") == match_id and v.get("client_id") == client_id:
+                    return v.get("team") or ""
+            except Exception:
+                continue
+    return None
+
+def _poll_record_vote(match_id: str, client_id: str, team: str) -> bool:
+    if not (match_id and client_id and team):
+        return False
+    # Sheets
+    try:
+        gc = get_gspread_client()
+        ws = _ensure_ws(gc, "PollVotes")
+        rows = ws.get_all_values()
+        if not rows:
+            ws.append_row(["ts", "match_id", "client_id", "team"])
+        # prevent duplicates
+        existing = _poll_has_voted(match_id, client_id)
+        if existing:
+            return False
+        ws.append_row([datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), match_id, client_id, team])
+        return True
+    except Exception:
+        pass
+
+    # local fallback
+    local = _safe_read_json(CONFIG_FILE)
+    if not isinstance(local, dict):
+        local = {}
+    votes = local.get("poll_votes", [])
+    if not isinstance(votes, list):
+        votes = []
+    # prevent duplicates
+    for v in votes:
+        try:
+            if v.get("match_id") == match_id and v.get("client_id") == client_id:
+                return False
+        except Exception:
+            continue
+    votes.append({"ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "match_id": match_id, "client_id": client_id, "team": team})
+    local["poll_votes"] = votes
+    _safe_write_json(CONFIG_FILE, local)
+    return True
+
+@app.route("/api/config")
+def api_config():
+    cfg = get_config()
+    public = {
+        "poll_sponsor_text": cfg.get("poll_sponsor_text", ""),
+        "match_of_day_id": cfg.get("match_of_day_id", ""),
+    }
+    return jsonify(public)
+
+@app.route("/api/poll/state")
+def api_poll_state():
+    motd = _get_match_of_day()
+    if not motd:
+        return jsonify({"ok": False, "error": "No matches available"}), 404
+
+    mid = _match_id(motd)
+    locked = _poll_is_locked(motd)
+    post_match = _poll_is_post_match(motd)
+
+    teams = [motd.get("home") or "Team A", motd.get("away") or "Team B"]
+    counts = _poll_counts(mid)
+    total = sum(counts.get(t, 0) for t in teams)
+    pct = {}
+    for t in teams:
+        pct[t] = (counts.get(t, 0) / total * 100.0) if total > 0 else 0.0
+
+    winner = None
+    if post_match and total > 0:
+        winner = max(teams, key=lambda t: counts.get(t, 0))
+
+    cfg = get_config()
+    return jsonify({
+        "ok": True,
+        "match": {
+            "id": mid,
+            "date": motd.get("date"),
+            "time": motd.get("time"),
+            "datetime_utc": motd.get("datetime_utc"),
+            "home": teams[0],
+            "away": teams[1],
+            "stage": motd.get("stage"),
+            "venue": motd.get("venue"),
+        },
+        "locked": locked,
+        "post_match": post_match,
+        "winner": winner,
+        "counts": {t: int(counts.get(t, 0)) for t in teams},
+        "percentages": {t: round(pct[t], 1) for t in teams},
+        "total_votes": int(total),
+        "sponsor_text": cfg.get("poll_sponsor_text", ""),
+    })
+
+@app.route("/api/poll/vote", methods=["POST"])
+def api_poll_vote():
+    data = request.get_json(silent=True) or {}
+    client_id = (data.get("client_id") or "").strip()
+    team = (data.get("team") or "").strip()
+
+    motd = _get_match_of_day()
+    if not motd:
+        return jsonify({"ok": False, "error": "No matches available"}), 404
+
+    mid = _match_id(motd)
+    if _poll_is_locked(motd):
+        return jsonify({"ok": False, "error": "Poll locked at kickoff"}), 423
+
+    teams = [motd.get("home") or "Team A", motd.get("away") or "Team B"]
+    if team not in teams:
+        return jsonify({"ok": False, "error": "Invalid team"}), 400
+
+    already = _poll_has_voted(mid, client_id)
+    if already:
+        return jsonify({"ok": False, "error": "Already voted", "voted_for": already}), 409
+
+    ok = _poll_record_vote(mid, client_id, team)
+    if not ok:
+        return jsonify({"ok": False, "error": "Could not record vote"}), 500
+
+    # return updated state
+    return api_poll_state()
+
+@app.route("/admin/update-config", methods=["POST"])
+def admin_update_config():
+    key = request.args.get("key", "")
+    if not ADMIN_KEY or key != ADMIN_KEY:
+        return jsonify({"ok": False, "error": "Unauthorized"}), 401
+
+    data = request.get_json(silent=True) or {}
+    sponsor = (data.get("poll_sponsor_text") or "").strip()
+    match_id = (data.get("match_of_day_id") or "").strip()
+
+    pairs = {}
+    if sponsor:
+        pairs["poll_sponsor_text"] = sponsor
+    if match_id is not None:
+        pairs["match_of_day_id"] = match_id
+
+    cfg = set_config(pairs)
+    return jsonify({"ok": True, "config": {
+        "poll_sponsor_text": cfg.get("poll_sponsor_text",""),
+        "match_of_day_id": cfg.get("match_of_day_id",""),
+    }})
+
+
+
 
 
 @app.route("/admin/update-lead", methods=["POST"])
@@ -1802,44 +1801,155 @@ tr:hover td{background:rgba(255,255,255,.03)}
     html.append("</div>")
 
 
-    html.append("""
-<div class="box" style="margin-top:12px">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
-    <div style="min-width:300px">
-      <div class="h2" style="margin:0 0 6px 0">Fan Pick Poll Controls</div>
-      <div class="small">Edits apply instantly (no redeploy). Poll locks automatically at kickoff.</div>
+    # Fan Zone / Poll controls
+    html.append(r"""
+<div class="panelcard" style="margin:14px 0;border:1px solid var(--line);border-radius:16px;padding:12px;background:rgba(255,255,255,.03);box-shadow:0 10px 35px rgba(0,0,0,.25)">
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
+    <div>
+      <div style="font-weight:800;letter-spacing:.02em">Fan Zone • Poll Controls</div>
+      <div class="sub">Edit sponsor text + set Match of the Day (no redeploy). Also shows live poll status.</div>
     </div>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <a class="btn" href="/" target="_blank">Open App</a>
+    <button class="btn" id="btnSaveConfig">Save settings</button>
+  </div>
+
+  <div class="controls" style="margin:12px 0 0 0">
+    <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
+      <div class="sub">Sponsor label (“Presented by …”)</div>
+      <input class="inp" id="pollSponsorText" placeholder="Fan Pick presented by …" />
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
+      <div class="sub">Match of the Day</div>
+      <select id="motdSelect"></select>
     </div>
   </div>
 
-  <div style="display:grid;grid-template-columns:1.1fr 1.2fr;gap:12px;margin-top:10px">
-    <div>
-      <label class="small">Sponsor label (shows above poll)</label><br/>
-      <input class="inp" id="sponsorText" placeholder="Fan Pick presented by ..." style="width:100%"/>
-      <div style="height:8px"></div>
-      <label class="small">Match of the Day</label><br/>
-      <select id="motdMatch" style="width:100%"></select>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
-        <label class="small" style="display:flex;align-items:center;gap:6px">
-          <input type="checkbox" id="forceLock"/> Force lock (admin override)
-        </label>
-        <button class="btn" id="savePollSettings">Save</button>
-        <span class="small" id="pollSaveMsg"></span>
-      </div>
-      <div style="height:8px"></div>
-      <label class="small">Post-match winner highlight (optional)</label><br/>
-      <select id="finalWinner" style="width:100%"></select>
-    </div>
-
-    <div>
-      <div class="h2" style="margin:0 0 6px 0">Live Poll Snapshot</div>
-      <div class="small" id="pollMeta">Loading...</div>
-      <div id="pollBars" style="margin-top:10px"></div>
-    </div>
+  <div id="pollStatus" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
+    <div class="sub">Loading poll status…</div>
   </div>
 </div>
+<script>
+(function(){
+  const ADMIN_KEY = (new URLSearchParams(location.search)).get("key") || "";
+
+  const $ = (id)=>document.getElementById(id);
+
+  function esc(s){ return (s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
+
+  async function loadScheduleOptions(selected){
+    const sel = $("motdSelect");
+    if(!sel) return;
+    sel.innerHTML = "<option value=''>Auto (next upcoming match)</option>";
+    try{
+      const res = await fetch("/schedule.json?scope=all&q=", {cache:"no-store"});
+      const data = await res.json();
+      const matches = (data && data.matches) ? data.matches : [];
+      let added = 0;
+      for(const m of matches){
+        if(added > 180) break;
+        const id = (m.datetime_utc || "") + "|" + (m.home||"") + "|" + (m.away||"");
+        const safeId = id.replace(/[^A-Za-z0-9|:_-]+/g,"_").slice(0,180);
+        const label = `${m.date||""} ${m.time||""} • ${m.home||""} vs ${m.away||""} • ${m.venue||""}`;
+        const opt = document.createElement("option");
+        opt.value = safeId;
+        opt.textContent = label;
+        if(selected && selected === safeId) opt.selected = true;
+        sel.appendChild(opt);
+        added++;
+      }
+    }catch(e){}
+  }
+
+  async function loadConfig(){
+    try{
+      const res = await fetch("/api/config", {cache:"no-store"});
+      const cfg = await res.json();
+      if($("pollSponsorText")) $("pollSponsorText").value = (cfg.poll_sponsor_text || "");
+      await loadScheduleOptions(cfg.match_of_day_id || "");
+    }catch(e){
+      await loadScheduleOptions("");
+    }
+  }
+
+  function renderPollStatus(state){
+    const wrap = $("pollStatus");
+    if(!wrap) return;
+    if(!state || !state.ok){
+      wrap.innerHTML = "<div class='sub'>Poll status unavailable.</div>";
+      return;
+    }
+    const m = state.match || {};
+    const teams = [m.home, m.away];
+    const counts = state.counts || {};
+    const pct = state.percentages || {};
+    const locked = !!state.locked;
+    const post = !!state.post_match;
+    const winner = state.winner || "";
+    const sponsor = state.sponsor_text || "";
+    const total = state.total_votes || 0;
+
+    const rows = teams.map(t=>{
+      const isWin = post && winner && winner === t;
+      return `
+        <div style="display:flex;align-items:center;gap:10px;margin:8px 0">
+          <div style="flex:0 0 160px;font-weight:700">${esc(t)} ${isWin ? "🏆" : ""}</div>
+          <div style="flex:1;border:1px solid rgba(255,255,255,.12);border-radius:999px;overflow:hidden;height:10px;background:rgba(255,255,255,.04)">
+            <div style="height:100%;width:${Number(pct[t]||0)}%;background:${isWin ? "rgba(212,175,55,.85)" : "rgba(46,160,67,.75)"}"></div>
+          </div>
+          <div style="flex:0 0 120px;text-align:right;color:var(--muted)">${Number(pct[t]||0).toFixed(1)}% • ${counts[t]||0}</div>
+        </div>
+      `;
+    }).join("");
+
+    wrap.innerHTML = `
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:800">${esc(m.home)} vs ${esc(m.away)}</div>
+          <div class="sub">${esc(m.date||"")} • ${esc(m.time||"")} • ${esc(m.venue||"")}</div>
+          <div class="sub">${esc(sponsor)} • Total votes: <b style="color:var(--gold)">${total}</b></div>
+        </div>
+        <div class="pill"><b>Status</b> ${locked ? (post ? "Post-match" : "Locked (kickoff)") : "Open"}</div>
+      </div>
+      <div style="margin-top:6px">${rows}</div>
+    `;
+  }
+
+  async function loadPoll(){
+    try{
+      const res = await fetch("/api/poll/state", {cache:"no-store"});
+      const st = await res.json();
+      renderPollStatus(st);
+    }catch(e){
+      renderPollStatus(null);
+    }
+  }
+
+  async function saveConfig(){
+    const sponsor = ($("pollSponsorText")?.value || "").trim();
+    const matchId = ($("motdSelect")?.value || "").trim();
+    try{
+      const res = await fetch(`/admin/update-config?key=${encodeURIComponent(ADMIN_KEY)}`,{
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ poll_sponsor_text: sponsor, match_of_day_id: matchId })
+      });
+      const out = await res.json();
+      if(out && out.ok){
+        await loadConfig();
+        await loadPoll();
+      } else {
+        alert("Save failed: " + (out.error || "unknown"));
+      }
+    }catch(e){
+      alert("Save failed.");
+    }
+  }
+
+  $("btnSaveConfig")?.addEventListener("click", saveConfig);
+
+  loadConfig().then(loadPoll);
+  setInterval(loadPoll, 5000);
+})();
+</script>
 """)
 
     html.append("<div class='tablewrap'><table id='tbl'><thead><tr>")
@@ -1981,127 +2091,6 @@ function applyFilters(){
 qEl.addEventListener('input', applyFilters);
 fStatus.addEventListener('change', applyFilters);
 fVip.addEventListener('change', applyFilters);
-
-
-// ===== Fan Poll Admin controls =====
-async function fetchJSON(url, opts){
-  const res = await fetch(url, opts || {});
-  const txt = await res.text();
-  try{ return {ok: res.ok, status: res.status, json: JSON.parse(txt)}; }
-  catch(e){ return {ok: res.ok, status: res.status, json: {raw: txt}}; }
-}
-
-function barRow(label, pct, votes, isWinner){
-  const w = Math.max(0, Math.min(100, pct||0));
-  return `
-    <div style="margin:10px 0 8px 0">
-      <div style="display:flex;justify-content:space-between;gap:10px;align-items:center">
-        <div style="font-weight:900">${label}${isWinner ? " ✅" : ""}</div>
-        <div class="small">${w}% • ${votes} votes</div>
-      </div>
-      <div style="height:10px;border:1px solid rgba(255,255,255,.14);border-radius:999px;overflow:hidden;background:rgba(0,0,0,.18)">
-        <div style="height:100%;width:${w}%;background:rgba(245,215,110,.55)"></div>
-      </div>
-    </div>`;
-}
-
-async function loadPollAdmin(){
-  const s = await fetchJSON(`/admin/settings.json?key=${encodeURIComponent(ADMIN_KEY)}`);
-  if(!s.ok){ document.getElementById("pollMeta").textContent = "Poll admin unavailable (bad key?)"; return; }
-  const settings = s.json || {};
-
-  const matchesRes = await fetchJSON(`/schedule.json?scope=all&q=`);
-  const matches = Array.isArray(matchesRes.json) ? matchesRes.json : [];
-  const sel = document.getElementById("motdMatch");
-  sel.innerHTML = "";
-  for(const m of matches){
-    const opt = document.createElement("option");
-    opt.value = m.id || "";
-    opt.textContent = `${m.date || ""} • ${m.time || ""} • ${m.home || ""} vs ${m.away || ""}`;
-    sel.appendChild(opt);
-  }
-
-  document.getElementById("sponsorText").value = settings.sponsor_text || "";
-  document.getElementById("forceLock").checked = !!settings.force_lock;
-
-  // select MOTD
-  if(settings.motd_match_id){
-    sel.value = settings.motd_match_id;
-  }
-  if(!sel.value && sel.options.length){ sel.selectedIndex = 0; }
-
-  async function refreshWinnerChoices(){
-    const mid = sel.value;
-    const stateRes = await fetchJSON(`/api/poll/state?match_id=${encodeURIComponent(mid)}`);
-    const st = stateRes.json || {};
-    const home = st.match?.home || "";
-    const away = st.match?.away || "";
-    const fw = document.getElementById("finalWinner");
-    fw.innerHTML = "";
-    const opt0 = document.createElement("option"); opt0.value = ""; opt0.textContent = "Auto (highest votes after match)";
-    fw.appendChild(opt0);
-    const opt1 = document.createElement("option"); opt1.value = home; opt1.textContent = home || "(home)";
-    fw.appendChild(opt1);
-    const opt2 = document.createElement("option"); opt2.value = away; opt2.textContent = away || "(away)";
-    fw.appendChild(opt2);
-    fw.value = settings.final_winner || "";
-  }
-
-  async function refreshSnapshot(){
-    const mid = sel.value;
-    const stateRes = await fetchJSON(`/api/poll/state?match_id=${encodeURIComponent(mid)}`);
-    const st = stateRes.json || {};
-    const m = st.match || {};
-    const meta = document.getElementById("pollMeta");
-    meta.textContent = `${st.sponsor_text || ""} • ${m.date || ""} ${m.time || ""} • ${m.home || ""} vs ${m.away || ""} • ${st.locked ? "LOCKED" : "OPEN"} (${st.phase || ""})`;
-
-    const bars = document.getElementById("pollBars");
-    const home = m.home || "";
-    const away = m.away || "";
-    const hp = (st.percentages || {})[home] || 0;
-    const ap = (st.percentages || {})[away] || 0;
-    const hv = (st.votes || {})[home] || 0;
-    const av = (st.votes || {})[away] || 0;
-    const win = st.winner || "";
-    bars.innerHTML = barRow(home, hp, hv, win && win === home) + barRow(away, ap, av, win && win === away);
-  }
-
-  await refreshWinnerChoices();
-  await refreshSnapshot();
-
-  sel.addEventListener("change", async ()=>{
-    await refreshWinnerChoices();
-    await refreshSnapshot();
-  });
-
-  document.getElementById("savePollSettings").addEventListener("click", async ()=>{
-    const patch = {
-      sponsor_text: document.getElementById("sponsorText").value || "",
-      motd_match_id: sel.value || "",
-      force_lock: document.getElementById("forceLock").checked,
-      final_winner: document.getElementById("finalWinner").value || ""
-    };
-    const out = await fetchJSON(`/admin/settings?key=${encodeURIComponent(ADMIN_KEY)}`, {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify(patch)
-    });
-    const msg = document.getElementById("pollSaveMsg");
-    if(out.ok){
-      msg.textContent = "Saved.";
-      setTimeout(()=>msg.textContent="", 1200);
-      await refreshSnapshot();
-    }else{
-      msg.textContent = "Save failed.";
-    }
-  });
-
-  // live refresh
-  setInterval(refreshSnapshot, 8000);
-}
-
-window.addEventListener("load", ()=>{ try{ loadPollAdmin(); }catch(e){} });
-
 </script>
 """.replace("__ADMIN_KEY__", json.dumps(key)))
 
