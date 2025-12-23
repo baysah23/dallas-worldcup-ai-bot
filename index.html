@@ -1756,6 +1756,72 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
 }
 .schedule{ min-height: 220px; }
 
+
+/* =======================
+   ONE-PAGE LOCK (everything fits in viewport)
+   - No body scroll
+   - Internal panels scroll (chat + schedules + menus + rails)
+   ======================= */
+html, body{
+  height:100%;
+  overflow:hidden !important;
+}
+body{
+  height:100vh !important;
+  min-height:100vh !important;
+}
+.wrap{
+  height:100vh !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+  display:flex;
+  flex-direction:column;
+}
+header{ flex:0 0 auto; }
+
+/* HERO fixed, then app grid fills remaining space */
+.hero{
+  flex:0 0 auto;
+  height: 210px !important;
+  margin: 12px 12px 10px 12px !important;
+}
+.compact .hero{ height: 150px !important; }
+@media (max-width: 720px){
+  .hero{ height: 190px !important; margin: 10px 10px 8px 10px !important; }
+}
+
+/* Main grid consumes remaining height */
+.grid{
+  flex: 1 1 auto !important;
+  min-height:0 !important;
+  height: auto !important;
+  overflow:hidden !important;
+  padding: 12px !important;
+  margin: 0 !important;
+}
+
+/* Columns/panels must be allowed to shrink and scroll inside */
+.leftcol, .chatcard, .menucard, .card{
+  min-height:0 !important;
+  height:100% !important;
+}
+
+/* Chat/menu/schedule internal scroll areas */
+#chat{ min-height:0 !important; height:auto !important; flex:1 1 auto !important; overflow:auto !important; }
+.menu{ min-height:0 !important; overflow:auto !important; }
+.schedule{ min-height:0 !important; flex:1 1 auto !important; overflow:auto !important; padding-bottom:78px; }
+
+/* Sticky pager stays visible within schedule panel */
+#pager{ position: sticky; bottom: 0; }
+
+/* Fan zone rails: keep them within viewport and scroll internally */
+@media(min-width:1200px){
+  .fanzone-left, .fanzone-right{
+    max-height: calc(100vh - 110px) !important;
+    overflow: auto !important;
+  }
+}
+
 </style>
 </head>
 <body>
