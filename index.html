@@ -399,7 +399,7 @@
       border-top:1px solid rgba(46,160,67,.35);
     }
 
-    #matchdayBox{
+    .matchday{
       margin:12px 14px 0;
       padding:10px 12px;
       border-radius:14px;
@@ -408,7 +408,7 @@
       font-size:12px;
       display:none;
     }
-    #matchdayBox.show{display:block;}
+    .matchday.show{display:block;}
 
     .menuitem{
       padding:7px 7px;
@@ -499,7 +499,7 @@
 
     /* “Stadium announcer” emphasis for match alerts */
     .banner.show,
-    #matchdayBox.show{
+    .matchday.show{
       text-transform:uppercase;
       letter-spacing:.7px;
       font-weight:900;
@@ -1390,7 +1390,6 @@ function applyLanguageToUI(){
   document.getElementById("chatTitle").textContent = L().chat_title;
   document.getElementById("sideTitle").textContent = L().side_title;
   document.getElementById("countLabel").textContent = L().countdown;
-  window.__baseCountdownLabel = L().countdown;
   document.getElementById("countSub").textContent = L().countdown_sub;
   document.getElementById("nextHint").textContent = L().next_hint;
   document.getElementById("menuTitle").textContent = L().menu_title;
@@ -1670,13 +1669,6 @@ function restartCountdown(){
   const hEl = document.getElementById("h");
   const mEl = document.getElementById("m");
   const sEl = document.getElementById("s");
-  const labelEl = document.getElementById("countLabel");
-  // keep a baseline label so we can restore it when matchday is off
-  if(!window.__baseCountdownLabel){ window.__baseCountdownLabel = labelEl ? labelEl.textContent : ""; }
-
-  function isMatchdayActive(){
-    return document.body.classList.contains("matchday") || window.__matchdayForced === true;
-  }
 
   function tick(){
     const now = new Date();
@@ -1694,22 +1686,6 @@ function restartCountdown(){
     hEl.textContent = hrs;
     mEl.textContent = mins;
     sEl.textContent = secs;
-
-    // Match Day label override: "Kickoff in Xh Ym"
-    if(labelEl){
-      if(isMatchdayActive()){
-        // Prefer a forced kickoff timestamp for testing; otherwise use the real target Date
-        const tMs = (typeof window.__nextKickoffAt === "number") ? window.__nextKickoffAt : (+target);
-        const msLeft = Math.max(0, tMs - Date.now());
-        const totalMins = Math.floor(msLeft / (1000*60));
-        const hh = Math.floor(totalMins / 60);
-        const mm = totalMins % 60;
-        labelEl.textContent = `Kickoff in ${hh}h ${mm}m`;
-      } else {
-        // Restore baseline (localized) label
-        labelEl.textContent = window.__baseCountdownLabel || labelEl.textContent;
-      }
-    }
   }
 
   tick();
@@ -2203,86 +2179,6 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 
 
 <script>
-/* -----------------------
-   MATCH DAY TEST CONTROLS (safe, UI-only)
-   Usage in DevTools console:
-     MatchDayTest.enable({ kickoffInMinutes: 134 }); // turns on matchday + simulates kickoff in 2h14m
-     MatchDayTest.disable();                         // restores normal UI
-     MatchDayTest.toggle();
------------------------- */
-(function(){
-  function safeSetBanner(on){
-    const banner = document.getElementById("matchBanner");
-    const box = document.getElementById("matchdayBox");
-    if(!banner || !box) return;
-
-    if(on){
-      // Combined message (short + fits the banner area)
-      banner.textContent = "🏟️ MATCH DAY — DOORS OPEN EARLY • Expect higher traffic — reserve early!";
-      banner.classList.add("show");
-
-      // Keep the same message, but show it in the dedicated matchday box (not inside schedule list)
-      box.textContent = "🏟️ MATCH DAY — DOORS OPEN EARLY • Expect higher traffic — reserve early!";
-      box.classList.add("show");
-    } else {
-      banner.classList.remove("show");
-      box.classList.remove("show");
-    }
-  }
-
-  function safeChatNote(on){
-    // One-time note per page-load (doesn't break chat flow)
-    if(!on) return;
-    if(window.__matchdayNoteShown) return;
-    window.__matchdayNoteShown = true;
-    try{
-      if(typeof addBubble === "function"){
-        addBubble("assistant", "🏟️ MATCH DAY — DOORS OPEN EARLY. Expect higher traffic — reserve early!");
-      }
-    }catch(_e){}
-  }
-
-  function apply(on){
-    window.__matchdayForced = !!on;
-    document.body.classList.toggle("matchday", !!on);
-
-    // Ensure countdown label & numbers update immediately
-    try{ restartCountdown(); }catch(_e){}
-
-    // Banner + box message
-    safeSetBanner(!!on);
-
-    // One-time chat message
-    safeChatNote(!!on);
-
-    // Highlight next Dallas match card if your existing logic uses it
-    try{ if(typeof renderSchedule === "function"){ renderSchedule(); } }catch(_e){}
-  }
-
-  window.MatchDayTest = {
-    enable(opts){
-      const minutes = Math.max(1, Number(opts?.kickoffInMinutes ?? 134));
-      window.__nextKickoffAt = Date.now() + minutes*60*1000; // used by the countdown label override
-      apply(true);
-      return { matchday:true, kickoffInMinutes: minutes };
-    },
-    disable(){
-      window.__nextKickoffAt = undefined;
-      apply(false);
-      return { matchday:false };
-    },
-    toggle(){
-      const on = !(document.body.classList.contains("matchday") || window.__matchdayForced === true);
-      if(on) return this.enable({ kickoffInMinutes: 134 });
-      return this.disable();
-    }
-  };
-})();
-</script>
-;
-
-
-<script>
 /* Sync hero mini flags with active slide (UI-only) */
 (function(){
   const flags = Array.from(document.querySelectorAll('.hero-flag'));
@@ -2306,6 +2202,148 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 
 <script>
 /* Match Day countdown label fallback (UI-only) */
+(function(){
+  const cd = document.getElementById("countdown");
+  if(!cd) return;
+  function tick(){
+    if(!document.body.classList.contains("matchday")) return;
+    if(typeof window.__nextKickoffAt !== "number") return;
+    const ms = window.__nextKickoffAt - Date.now();
+    cd.textContent = `Kickoff in ${formatKickoffIn(ms)}`;
+  }
+  setInterval(tick, 15000);
+})();
+
+
+/* -----------------------
+MATCH DAY TEST CONTROLS (safe, UI-only)
+
+DevTools console:
+  MatchDayTest.enable({ kickoffInMinutes: 134 }); // matchday ON + simulate kickoff in 2h14m
+  MatchDayTest.disable();                         // back to normal
+  MatchDayTest.toggle();
+
+Notes:
+- Does NOT touch backend.
+- Does NOT inject anything into the Dallas schedule list.
+- Uses the existing banner (#matchBanner) + countdown label (#countLabel).
+------------------------ */
+(function(){
+  // Store original label so we can restore it.
+  const labelEl = document.getElementById("countLabel");
+  const subEl   = document.getElementById("countSub");
+  const banner  = document.getElementById("matchBanner");
+  const originalLabel = labelEl ? (labelEl.textContent || "World Cup countdown") : "World Cup countdown";
+  const originalSub   = subEl ? (subEl.textContent || "") : "";
+
+  function isMatchdayOn(){
+    return document.body.classList.contains("matchday") || window.__matchdayForced === true;
+  }
+
+  function setBanner(on){
+    if(!banner) return;
+    if(on){
+      banner.textContent = "🏟️ MATCH DAY — DOORS OPEN EARLY • Expect higher traffic — reserve early!";
+      banner.classList.add("show");
+    }else{
+      banner.classList.remove("show");
+      banner.textContent = "";
+    }
+  }
+
+  function updateCountdownLabel(){
+    if(!labelEl) return;
+    if(isMatchdayOn()){
+      labelEl.textContent = "Kickoff in";
+      if(subEl) subEl.textContent = "Dallas match day";
+    }else{
+      labelEl.textContent = originalLabel;
+      if(subEl) subEl.textContent = originalSub;
+    }
+  }
+
+  function oneTimeChatNote(){
+    if(window.__matchdayNoteShown) return;
+    window.__matchdayNoteShown = true;
+
+    // Add a single bubble without breaking the chat flow.
+    // Works whether addBubble exists now or is defined later.
+    function tryAdd(){
+      try{
+        if(typeof addBubble === "function"){
+          addBubble("bot", "🏟️ MATCH DAY — DOORS OPEN EARLY. Expect higher traffic — reserve early!");
+          return true;
+        }
+      }catch(_e){}
+      return false;
+    }
+    if(tryAdd()) return;
+    // If chat boots a bit later, retry a few times quickly.
+    let tries = 0;
+    const t = setInterval(() => {
+      tries++;
+      if(tryAdd() || tries >= 10) clearInterval(t);
+    }, 200);
+  }
+
+  // Patch chooseCountdownTarget to honor a simulated kickoff time when matchday is forced.
+  if(typeof chooseCountdownTarget === "function" && !window.__chooseCountdownTargetPatched){
+    window.__chooseCountdownTargetPatched = true;
+    const __origChoose = chooseCountdownTarget;
+    chooseCountdownTarget = function(){
+      try{
+        if(isMatchdayOn() && window.__nextKickoffAt){
+          return new Date(window.__nextKickoffAt);
+        }
+      }catch(_e){}
+      return __origChoose();
+    };
+  }
+
+  // Patch restartCountdown so the label updates every time it runs.
+  if(typeof restartCountdown === "function" && !window.__restartCountdownPatched){
+    window.__restartCountdownPatched = true;
+    const __origRestart = restartCountdown;
+    restartCountdown = function(){
+      const out = __origRestart();
+      updateCountdownLabel();
+      return out;
+    };
+  }
+
+  function apply(on){
+    window.__matchdayForced = !!on;
+    document.body.classList.toggle("matchday", !!on);
+
+    setBanner(!!on);
+    updateCountdownLabel();
+
+    // Refresh countdown + schedule highlights using existing functions, safely.
+    try{ if(typeof restartCountdown === "function") restartCountdown(); }catch(_e){}
+    try{ if(typeof renderSchedule === "function") renderSchedule(); }catch(_e){}
+
+    if(on) oneTimeChatNote();
+  }
+
+  window.MatchDayTest = {
+    enable(opts){
+      const minutes = Math.max(1, Number(opts && opts.kickoffInMinutes != null ? opts.kickoffInMinutes : 134));
+      window.__nextKickoffAt = Date.now() + minutes*60*1000;
+      apply(true);
+      return { matchday:true, kickoffInMinutes: minutes };
+    },
+    disable(){
+      window.__nextKickoffAt = undefined;
+      apply(false);
+      return { matchday:false };
+    },
+    toggle(){
+      const on = !isMatchdayOn();
+      return on ? this.enable({ kickoffInMinutes: 134 }) : this.disable();
+    }
+  };
+})();
+
 </script>
 
 </body>
