@@ -441,29 +441,45 @@ def get_gspread_client():
 
 
 def ensure_sheet_header(ws):
-    """Ensure the sheet has headers in row 1 (and remove a duplicated header at the bottom if present)."""
+    """Ensure the sheet has headers in row 1 and never lets headers drift to the bottom.
+
+    - If an older 7-column header is detected, upgrade it to the new 9-column header.
+    - If a header row (old or new) is found at the bottom, remove it.
+    - If row 1 is not a header, insert the correct header at row 1.
+    """
     expected = ['timestamp', 'name', 'phone', 'date', 'time', 'party_size', 'language', 'status', 'vip']
+    old_expected = ['timestamp', 'name', 'phone', 'date', 'time', 'party_size', 'language']
 
     # Read first row
     first = ws.row_values(1)
 
     # If the sheet already has the older 7-column header, upgrade it in place.
-    old_expected = ['timestamp', 'name', 'phone', 'date', 'time', 'party_size', 'language']
     if first == old_expected:
         ws.update("A1:I1", [expected])
         return
     if first == expected:
+        # Still remove any trailing (duplicated) header rows.
+        try:
+            all_vals = ws.get_all_values()
+        except Exception:
+            all_vals = []
+        # Remove trailing duplicates
+        while all_vals and (all_vals[-1] == expected or all_vals[-1] == old_expected):
+            ws.delete_rows(len(all_vals))
+            all_vals = all_vals[:-1]
         return
 
-    # If the last row looks like the header (common from earlier insert-at-top bugs), remove it.
+    # Otherwise, attempt to clean up any header that drifted to the bottom
     try:
         all_vals = ws.get_all_values()
     except Exception:
         all_vals = []
-    if all_vals:
-        last = all_vals[-1]
-        if last == expected:
-            ws.delete_rows(len(all_vals))
+
+    # Remove trailing header duplicates (old or new). (Sometimes prior code inserted at top,
+    # and the Google Sheet UI still shows an old header at the bottom.)
+    while all_vals and (all_vals[-1] == expected or all_vals[-1] == old_expected):
+        ws.delete_rows(len(all_vals))
+        all_vals = all_vals[:-1]
 
     # If row 1 is empty, just set it. Otherwise, insert a new row at top.
     first_now = ws.row_values(1)
