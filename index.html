@@ -1285,6 +1285,71 @@ body.phase-finals{ background: var(--phaseF); }
   body{ padding-left: 300px; padding-right: 300px; }
 }
 
+
+/* =======================
+   FAN ZONE: ultra-compact + luxury rails
+   ======================= */
+.fanzone-left, .fanzone-right{
+  width: 220px;
+  font-size: 11px;
+  border-radius: 18px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.02));
+}
+.fz-card{ border-radius: 16px; background: rgba(0,0,0,.10); }
+.fz-btn{
+  border-radius: 999px;
+  background: rgba(255,255,255,.035);
+}
+.fz-actions{ gap:6px; }
+.fz-chip{ border-radius: 999px; background: rgba(0,0,0,.10); }
+.qrWrap{ gap:10px; }
+#qrCanvas{ width:84px; height:84px; border-radius: 12px; padding:6px; }
+@media(min-width:1200px){
+  body{ padding-left: 260px; padding-right: 260px; }
+  .fanzone-left, .fanzone-right{ top: 84px; }
+}
+/* Auto-hide rails on scroll */
+body.fz-hidden .fanzone-left{ transform: translateX(-110%); opacity:0; pointer-events:none; }
+body.fz-hidden .fanzone-right{ transform: translateX(110%); opacity:0; pointer-events:none; }
+.fanzone-left, .fanzone-right{ transition: transform .22s ease, opacity .22s ease, box-shadow .22s ease; }
+/* Collapse to icon-only mode */
+.fz-iconbtn{
+  width: 34px; height: 34px;
+  border-radius: 999px;
+  border:1px solid var(--line);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center;
+}
+.fz-iconbtn:hover{ transform: translateY(-1px); }
+.fz-minirow{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+
+body.fz-collapsed .fanzone-left,
+body.fz-collapsed .fanzone-right{ width: 56px; padding: 10px; }
+
+body.fz-collapsed .fanzone-left .fz-actions,
+body.fz-collapsed .fanzone-right .fz-actions{ justify-content:center; }
+
+body.fz-collapsed .fanzone-left .fz-btn,
+body.fz-collapsed .fanzone-right .fz-btn{ display:none; }
+
+body.fz-collapsed .fanzone-left .fz-card,
+body.fz-collapsed .fanzone-right .fz-card,
+body.fz-collapsed #supporterChip,
+body.fz-collapsed .fz-muted{ display:none !important; }
+
+body.fz-collapsed .fz-rail-title{ display:none; }
+body.fz-collapsed .fz-minirow{ justify-content:center; }
+
+/* Luxury glow ONLY when Dallas plays */
+body.has-dallas-today .fanzone-left,
+body.has-dallas-today .fanzone-right{
+  box-shadow: 0 0 0 1px rgba(255,204,102,.18) inset, 0 10px 35px rgba(255,204,102,.08);
+}
+
 </style>
 </head>
 <body>
@@ -1312,12 +1377,19 @@ body.phase-finals{ background: var(--phaseF); }
      Desktop: left + right rails so the main page never shifts off-screen.
      ======================= -->
 <aside class="fanzone fanzone-left" id="fanZoneLeft" aria-label="Fan Zone Left Panel">
-  <div class="fz-row" style="justify-content:flex-start;">
+  
+  <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
+    <span class="fz-muted fz-rail-title">Fan Zone</span>
+    <button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button>
+  </div>
+<div class="fz-row" style="justify-content:flex-start;">
     <div class="fz-chip" id="supporterChip" title="Personalization stored on this device only">
       <span>🏁</span><span>Supporting:</span> <b id="supporterLabel">Not set</b>
     </div>
   </div>
   <div class="fz-actions" style="margin-top:10px;">
+    <button class="fz-iconbtn" id="fzIconCountry" title="Pick country">🏁</button>
+    <button class="fz-iconbtn" id="fzIconPoll" title="Fan poll">📊</button>
     <button class="fz-btn" id="btnPickCountry">Which country are you supporting?</button>
     <button class="fz-btn" id="btnOpenPoll">Fan poll (live)</button>
   </div>
@@ -1332,7 +1404,14 @@ body.phase-finals{ background: var(--phaseF); }
 </aside>
 
 <aside class="fanzone fanzone-right" id="fanZoneRight" aria-label="Fan Zone Right Panel">
-  <div class="fz-actions" style="justify-content:flex-end;">
+  
+  <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
+    <span class="fz-muted fz-rail-title">Extras</span>
+    <button class="fz-iconbtn" id="fzCollapseToggle2" title="Collapse / expand">⫶</button>
+  </div>
+<div class="fz-actions" style="justify-content:flex-end;">
+    <button class="fz-iconbtn" id="fzIconDrinks" title="Drink highlight">🍹</button>
+    <button class="fz-iconbtn" id="fzIconQR" title="QR poster">📱</button>
     <button class="fz-btn" id="btnSharePoster">QR poster</button>
   </div>
 
@@ -2818,6 +2897,122 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
   if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
   else init();
 
+})();
+</script>
+
+
+<script>
+/* =======================
+   FAN ZONE RAIL BEHAVIOR (UI-only)
+   - Auto-hide rails on scroll down; show on scroll up
+   - Collapse rails into icon-only mode
+   - Glow accent only when Dallas plays (best-effort detection)
+   ======================= */
+(function(){
+  const $ = (id)=>document.getElementById(id);
+
+  // Auto-hide on scroll (desktop only)
+  let lastY = window.scrollY || 0;
+  let ticking = false;
+  function onScroll(){
+    if(ticking) return;
+    ticking = true;
+    requestAnimationFrame(()=>{
+      const y = window.scrollY || 0;
+      const goingDown = y > lastY + 8;
+      const goingUp   = y < lastY - 8;
+      lastY = y;
+
+      if(window.innerWidth >= 1200){
+        if(goingDown) document.body.classList.add("fz-hidden");
+        if(goingUp) document.body.classList.remove("fz-hidden");
+      } else {
+        document.body.classList.remove("fz-hidden");
+      }
+      ticking = false;
+    });
+  }
+  window.addEventListener("scroll", onScroll, {passive:true});
+  window.addEventListener("resize", ()=>{ if(window.innerWidth < 1200) document.body.classList.remove("fz-hidden"); });
+
+  // Collapse toggle
+  function toggleCollapse(){ document.body.classList.toggle("fz-collapsed"); }
+  $("fzCollapseToggle")?.addEventListener("click", toggleCollapse);
+  $("fzCollapseToggle2")?.addEventListener("click", toggleCollapse);
+
+  // Icon-only shortcuts
+  $("fzIconCountry")?.addEventListener("click", ()=>document.getElementById("btnPickCountry")?.click());
+  $("fzIconPoll")?.addEventListener("click", ()=>document.getElementById("btnOpenPoll")?.click());
+  $("fzIconDrinks")?.addEventListener("click", ()=>{
+    document.body.classList.remove("fz-hidden");
+    if(!document.body.classList.contains("fz-collapsed")){
+      document.getElementById("drinkCard")?.scrollIntoView({behavior:"smooth", block:"nearest"});
+    }
+  });
+  $("fzIconQR")?.addEventListener("click", ()=>document.getElementById("btnSharePoster")?.click());
+
+  // Dallas glow detection (best-effort)
+  function parsePossibleDate(text){
+    const iso = text.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+    if(iso) return new Date(Number(iso[1]), Number(iso[2])-1, Number(iso[3]));
+    const us = text.match(/\b(\d{1,2})\/(\d{1,2})\/(20\d{2})\b/);
+    if(us) return new Date(Number(us[3]), Number(us[1])-1, Number(us[2]));
+    return null;
+  }
+
+  function hasDallasToday(){
+    const today = new Date(); today.setHours(0,0,0,0);
+
+    const candidates = []
+      .concat(Array.isArray(window.dallasMatches) ? window.dallasMatches : [])
+      .concat(Array.isArray(window.allMatches) ? window.allMatches : [])
+      .concat(Array.isArray(window.matches) ? window.matches : []);
+
+    for(const m of candidates){
+      const venue = (m?.venue || "").toString().toLowerCase();
+      const isDallasVenue = venue.includes("dallas") || venue.includes("arlington") || venue.includes("at&t") || venue.includes("att stadium") || venue.includes("cotton bowl");
+      if(!isDallasVenue) continue;
+
+      const raw = (m?.date || m?.datetime || m?.kickoff || m?.start || "").toString();
+      const d = raw ? new Date(raw) : null;
+      if(d && !isNaN(d.getTime())){
+        const dd = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        if(dd.getTime() === today.getTime()) return true;
+      }
+    }
+
+    const cards = document.querySelectorAll(".match-card.dallas, .match-card");
+    const mmdd = `${today.getMonth()+1}/${today.getDate()}`;
+    for(const card of cards){
+      const t = (card.textContent || "").toLowerCase();
+      if(!(t.includes("dallas") || t.includes("arlington") || t.includes("at&t") || t.includes("att stadium") || t.includes("cotton bowl"))) continue;
+      if(t.includes("today")) return true;
+      if(t.includes(mmdd)) return true;
+
+      const pd = parsePossibleDate(card.textContent || "");
+      if(pd){
+        pd.setHours(0,0,0,0);
+        if(pd.getTime() === today.getTime()) return true;
+      }
+    }
+    return false;
+  }
+
+  function refreshDallasGlow(){
+    try{
+      if(hasDallasToday()) document.body.classList.add("has-dallas-today");
+      else document.body.classList.remove("has-dallas-today");
+    }catch(e){}
+  }
+
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", refreshDallasGlow);
+  else refreshDallasGlow();
+
+  const target = document.getElementById("scheduleList") || document.body;
+  try{
+    const obs = new MutationObserver(()=>{ refreshDallasGlow(); });
+    obs.observe(target, {subtree:true, childList:true});
+  }catch(e){}
 })();
 </script>
 
