@@ -439,9 +439,37 @@ def get_gspread_client():
     raise RuntimeError("Google credentials not found. Set GOOGLE_CREDS_JSON or provide google_creds.json locally.")
 
 
+
+def ensure_sheet_header(ws):
+    """Ensure the sheet has headers in row 1 (and remove a duplicated header at the bottom if present)."""
+    expected = ['timestamp', 'name', 'phone', 'date', 'time', 'party_size', 'language']
+
+    # Read first row
+    first = ws.row_values(1)
+    if first == expected:
+        return
+
+    # If the last row looks like the header (common from earlier insert-at-top bugs), remove it.
+    try:
+        all_vals = ws.get_all_values()
+    except Exception:
+        all_vals = []
+    if all_vals:
+        last = all_vals[-1]
+        if last == expected:
+            ws.delete_rows(len(all_vals))
+
+    # If row 1 is empty, just set it. Otherwise, insert a new row at top.
+    first_now = ws.row_values(1)
+    if not any((c or "").strip() for c in first_now):
+        ws.update("A1:G1", [expected])
+    else:
+        ws.insert_row(expected, index=1)
+
 def append_lead_to_sheet(lead: Dict[str, Any]):
     gc = get_gspread_client()
     ws = gc.open(SHEET_NAME).sheet1
+    ensure_sheet_header(ws)
     ws.append_row([
         datetime.now().isoformat(timespec="seconds"),
         lead.get("name", ""),
@@ -456,6 +484,7 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
 def read_leads(limit: int = 200) -> List[List[str]]:
     gc = get_gspread_client()
     ws = gc.open(SHEET_NAME).sheet1
+    ensure_sheet_header(ws)
     rows = ws.get_all_values()
     if not rows:
         return []
@@ -934,7 +963,7 @@ def admin():
     # Simple HTML table
     html = []
     html.append("<html><head><meta charset='utf-8'><title>Leads Admin</title>")
-    html.append("<style>body{font-family:Arial;padding:16px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ddd;padding:8px;font-size:12px} th{background:#f4f4f4}</style>")
+    html.append("<style>body{font-family:Arial;padding:16px} table{border-collapse:collapse;width:100%} th,td{border:1px solid #ddd;padding:8px;font-size:12px} th{background:#f4f4f4;position:sticky;top:0;z-index:2}</style>")
     html.append("</head><body>")
     html.append(f"<h2>Leads Admin — {SHEET_NAME}</h2>")
     html.append(f"<p>Rows shown: {len(body)}</p>")
@@ -942,7 +971,7 @@ def admin():
     for h in header:
         html.append(f"<th>{h}</th>")
     html.append("</tr></thead><tbody>")
-    for r in body[::-1]:
+    for r in body:
         html.append("<tr>")
         for i in range(len(header)):
             val = r[i] if i < len(r) else ""
