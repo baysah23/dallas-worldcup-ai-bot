@@ -2397,14 +2397,13 @@ body.kiosk-mode *::-webkit-scrollbar{
 <button class="fz-iconbtn" id="fzIconCountry" title="Pick country">🏁</button>
 <button class="fz-iconbtn" id="fzIconPoll" title="Fan poll">📊</button>
 <button class="fz-btn" id="btnPickCountry">Which country are you supporting?</button>
-<button class="fz-btn" id="btnOpenPoll">Fan poll (live)</button>
+<button class="fz-btn" id="btnOpenPoll">Match poll (live)</button>
 </div>
 <div class="fz-card" id="pollCard" style="display:none; margin-top:10px;">
-<h3>📊 Fan Poll (live)</h3>
-<div class="fz-muted">Tap your country to vote. Counts are simulated “live” on this device (UI-only).</div>
+<h3>⚔️ Match of the Day Poll</h3>
+<div class="fz-muted">Vote who wins today’s match. Counts are simulated “live” on this device (UI-only).</div>
 <div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
 </div>
-<div class="fz-muted" style="margin-top:10px;">Tip: set your country first for a more personalized vibe.</div>
 </aside></div>
 <aside aria-label="Fan Zone Right Panel" class="fanzone fanzone-right" id="fanZoneRight">
 <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
@@ -2667,7 +2666,7 @@ const STRINGS = {
     of: 'of',
     supporting_prefix: 'Supporting:',
     not_set: 'Not set',
-    fz_poll_title: 'Fan Poll (live)',
+    fz_poll_title: 'Match poll (live)',
     fz_drink_title: 'Drink Highlight',
     fz_qr_title: '📱 QR poster',
     fz_qr_desc: 'Print/display at the entrance. Scan to open the app.',
@@ -3967,7 +3966,9 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     try{ localStorage.setItem(LS_KEY, code); }catch(e){}
     renderSupporter();
     renderDrink();
-    renderPoll(); // keep poll list ordered with supporter on top
+    loadMatchOfDay().then(()=>renderPoll());
+    // refresh the match-of-day poll occasionally
+    setInterval(()=>{ loadMatchOfDay().then(()=>renderPoll(true)); }, 60*1000); // keep poll list ordered with supporter on top
   }
   function clearSupporter(){
     try{ localStorage.removeItem(LS_KEY); }catch(e){}
@@ -4032,44 +4033,142 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     try{ localStorage.setItem(POLL_KEY, JSON.stringify(p)); }catch(e){}
   }
 
-  function vote(code){
-    const poll = getPoll();
-    poll[code] = (poll[code] || 0) + 1;
-    setPoll(poll);
+  
+  // =========================
+  // Match of the Day Poll (UI-only)
+  // =========================
+  let motdMatch = null;
+
+  function localISODate(d=new Date()){
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2,'0');
+    const day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+
+  async function loadMatchOfDay(){
+    try{
+      const res = await fetch(`/schedule.json?scope=all&q=`, {cache:"no-store"});
+      const data = await res.json();
+      const raw = (data && Array.isArray(data.matches)) ? data.matches : [];
+      const now = new Date();
+      const nowTs = now.getTime();
+      const today = localISODate(now);
+
+      // use existing safeParseTimestamp(date,time) helper
+      const enriched = raw.map(m=>{
+        const ts = safeParseTimestamp(m.date, m.time);
+        return {...m, ts};
+      }).filter(m => m.ts !== null).sort((a,b)=>a.ts-b.ts);
+
+      const todays = enriched.filter(m => (m.date||"") === today);
+      if(todays.length){
+        // Prefer the next upcoming match today; otherwise the earliest today
+        motdMatch = todays.find(m => m.ts >= nowTs) || todays[0];
+      }else{
+        // Otherwise: next upcoming anywhere; else first match in feed
+        motdMatch = enriched.find(m => m.ts >= nowTs) || (enriched[0] || null);
+      }
+    }catch(e){
+      motdMatch = null;
+    }
+  }
+
+  function motdPollKey(){
+    const d = localISODate();
+    const id = motdMatch?.id ? String(motdMatch.id) : "unknown";
+    return `motd_poll_${d}_${id}`;
+  }
+
+  function getMotdPoll(){
+    try{
+      const raw = localStorage.getItem(motdPollKey());
+      const obj = raw ? JSON.parse(raw) : {};
+      return (obj && typeof obj === "object") ? obj : {};
+    }catch(e){ return {}; }
+  }
+
+  function setMotdPoll(p){
+    try{ localStorage.setItem(motdPollKey(), JSON.stringify(p)); }catch(e){}
+  }
+
+  function vote(team){
+    if(!motdMatch) return;
+    const poll = getMotdPoll();
+    poll[team] = (poll[team] || 0) + 1;
+    setMotdPoll(poll);
     renderPoll(true);
   }
 
   function renderPoll(bumpLive=false){
     if(!pollList) return;
-    const poll = getPoll();
-    // Make it feel "live" (device-only): occasional small bumps to random countries
+
+    if(!motdMatch){
+      pollList.innerHTML = `<div class="fz-muted">Loading today’s match…</div>`;
+      return;
+    }
+
+    const home = motdMatch.home || "Home";
+    const away = motdMatch.away || "Away";
+
+    const poll = getMotdPoll();
+
+    // Make it feel "live" (device-only): occasional bumps to either team
     if(bumpLive){
       const r = Math.random();
-      if(r < 0.35){
-        const pick = COUNTRIES[Math.floor(Math.random()*COUNTRIES.length)].code;
+      if(r < 0.25){
+        const pick = (Math.random() < 0.5) ? home : away;
         poll[pick] = (poll[pick] || 0) + 1;
-        setPoll(poll);
+        setMotdPoll(poll);
       }
     }
-    const total = Object.values(poll).reduce((a,b)=>a+b,0) || 1;
 
-    // order: supporter first, then by count desc
-    const supporter = getSupporter();
-    const rows = COUNTRIES.map(c=>({c, n: poll[c.code]||0}));
-    rows.sort((a,b)=> b.n-a.n);
-    if(supporter){
-      rows.sort((a,b)=>{
-        if(a.c.code===supporter) return -1;
-        if(b.c.code===supporter) return 1;
-        return (b.n-a.n);
-      });
-    }
+    const h = poll[home] || 0;
+    const a = poll[away] || 0;
+    const total = (h + a) || 1;
 
-    pollList.innerHTML = rows.slice(0,10).map(({c,n})=>{
-      const pct = Math.round((n/total)*100);
-      return `
-        <div style="display:grid; grid-template-columns: 1fr 70px; gap:10px; align-items:center;">
-          <button class="fz-chip" style="justify-content:space-between; width:100%; cursor:pointer;" onclick="window.__fanVote && window.__fanVote('${c.code}')">
+    const hPct = Math.round((h/total)*100);
+    const aPct = 100 - hPct;
+
+    const line = `${escapeHtml(home)} vs ${escapeHtml(away)} • ${escapeHtml(motdMatch.date||"")} • ${escapeHtml(motdMatch.time||"")}`;
+
+    pollList.innerHTML = `
+      <div class="fz-muted" style="margin-bottom:8px;">${line}</div>
+
+      <div style="display:grid; grid-template-columns: 1fr 74px; gap:10px; align-items:center;">
+        <button class="fz-chip" style="justify-content:space-between; width:100%; cursor:pointer;" onclick="window.__fanVote && window.__fanVote('${escapeHtml(home).replace(/'/g,'&#39;')}')">
+          <span style="display:flex; gap:8px; align-items:center;">
+            <span style="width:10px; height:10px; border-radius:999px; background:rgba(255,204,102,.85); display:inline-block;"></span>
+            <b>${escapeHtml(home)}</b>
+          </span>
+          <span class="fz-muted" style="font-size:11px">${h}</span>
+        </button>
+        <div class="fz-muted" style="text-align:right; font-weight:900;">${hPct}%</div>
+      </div>
+      <div style="height:8px; border-radius:999px; background:rgba(255,255,255,.10); overflow:hidden; border:1px solid rgba(255,255,255,.12); margin-top:6px;">
+        <div style="height:100%; width:${hPct}%; background:linear-gradient(90deg, rgba(255,204,102,.75), rgba(46,160,67,.55));"></div>
+      </div>
+
+      <div style="height:10px"></div>
+
+      <div style="display:grid; grid-template-columns: 1fr 74px; gap:10px; align-items:center;">
+        <button class="fz-chip" style="justify-content:space-between; width:100%; cursor:pointer;" onclick="window.__fanVote && window.__fanVote('${escapeHtml(away).replace(/'/g,'&#39;')}')">
+          <span style="display:flex; gap:8px; align-items:center;">
+            <span style="width:10px; height:10px; border-radius:999px; background:rgba(31,111,235,.85); display:inline-block;"></span>
+            <b>${escapeHtml(away)}</b>
+          </span>
+          <span class="fz-muted" style="font-size:11px">${a}</span>
+        </button>
+        <div class="fz-muted" style="text-align:right; font-weight:900;">${aPct}%</div>
+      </div>
+      <div style="height:8px; border-radius:999px; background:rgba(255,255,255,.10); overflow:hidden; border:1px solid rgba(255,255,255,.12); margin-top:6px;">
+        <div style="height:100%; width:${aPct}%; background:linear-gradient(90deg, rgba(31,111,235,.70), rgba(0,0,0,.25));"></div>
+      </div>
+    `;
+  }
+
+
+  window.__fanVote && window.__fanVote('${c.code}')">
             <span style="display:flex; gap:8px; align-items:center;">
               <span class="fz-flag">${c.flag}</span><span>${c.name}</span>
             </span>
@@ -4234,7 +4333,9 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     buildCountryGrid();
     renderSupporter();
     renderDrink();
-    renderPoll();
+    loadMatchOfDay().then(()=>renderPoll());
+    // refresh the match-of-day poll occasionally
+    setInterval(()=>{ loadMatchOfDay().then(()=>renderPoll(true)); }, 60*1000);
     applyPhase();
     attachObserver();
     bind();
