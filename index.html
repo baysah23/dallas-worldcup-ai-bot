@@ -1669,24 +1669,11 @@ function restartCountdown(){
   const hEl = document.getElementById("h");
   const mEl = document.getElementById("m");
   const sEl = document.getElementById("s");
-  const labelEl = document.getElementById("countLabel");
 
   function tick(){
     const now = new Date();
-    const diffMs = Math.max(0, target - now);
+    let diff = Math.max(0, target - now);
 
-    // Label: switch to "Kickoff in Xh Ym" on match day (UI-only)
-    const isMatchDay = !!(scheduleData && scheduleData.is_match_day);
-    if (labelEl){
-      if (isMatchDay){
-        labelEl.textContent = `Kickoff in ${formatKickoffIn(diffMs)}`;
-      } else {
-        // Use language string if available, fallback to English
-        try{ labelEl.textContent = L().countdown; } catch(e){ labelEl.textContent = "World Cup countdown"; }
-      }
-    }
-
-    let diff = diffMs;
     const days = Math.floor(diff / (1000*60*60*24));
     diff -= days*(1000*60*60*24);
     const hrs = Math.floor(diff / (1000*60*60));
@@ -1695,16 +1682,15 @@ function restartCountdown(){
     diff -= mins*(1000*60);
     const secs = Math.floor(diff / 1000);
 
-    if (dEl) dEl.textContent = days;
-    if (hEl) hEl.textContent = hrs;
-    if (mEl) mEl.textContent = mins;
-    if (sEl) sEl.textContent = secs;
+    dEl.textContent = days;
+    hEl.textContent = hrs;
+    mEl.textContent = mins;
+    sEl.textContent = secs;
   }
 
   tick();
   countdownTimer = setInterval(tick, 1000);
 }
-
 
 // -----------------------
 // Schedule rendering + next match highlight
@@ -1938,41 +1924,58 @@ function formatKickoffIn(ms){
 }
 
 function updateMatchDayMode(){
-  const isMatchDay = !!(scheduleData && scheduleData.is_match_day);
+  const isMatchDay = (window.__WC_MATCHDAY_OVERRIDE__ !== undefined)
+    ? !!window.__WC_MATCHDAY_OVERRIDE__
+    : !!(scheduleData && scheduleData.is_match_day);
 
-  // Banner + body styling
   if (isMatchDay){
-    document.body.classList.add("matchday");
+    try{ document.body.classList.add("matchday"); } catch(e){}
+
     if (pillMode) pillMode.textContent = "Mode: Match-day";
 
+    // Combine messaging into the banner (so it doesn't push the Dallas schedule off-screen)
     const bannerText =
       (scheduleData && typeof scheduleData.match_day_banner === "string" && scheduleData.match_day_banner.trim())
         ? scheduleData.match_day_banner.trim()
-        : "🏟️ MATCH DAY — DOORS OPEN EARLY • Reserve early (higher traffic today)";
+        : "🏟️ MATCH DAY — DOORS OPEN EARLY • Expect higher traffic — reserve early!";
 
     if (matchBanner){
       matchBanner.textContent = bannerText;
       matchBanner.classList.add("show");
     }
 
-    // One-time chat note (does not interrupt chat flow)
-    try{
-      const key = "wc_matchday_note_shown";
-      if (!sessionStorage.getItem(key)){
-        const note = "🏟️ Match Day today — doors open early. Expect higher traffic, so reserve early!";
-        addBubble("assistant", note);
-        history.push({role:"assistant", content: note});
-        sessionStorage.setItem(key, "1");
-      }
-    } catch(e){ /* sessionStorage can be blocked; ignore safely */ }
-
-    // Keep legacy box hidden to avoid pushing schedule off-screen
+    // Keep the schedule area clean; do NOT show the long note here
     if (matchdayBox){
       matchdayBox.classList.remove("show");
       matchdayBox.textContent = "";
     }
+
+    // One-time chat note (doesn't break chat flow)
+    try{
+      const key = "wc_matchday_note_shown";
+      if (!sessionStorage.getItem(key)){
+        const note = "🏟️ MATCH DAY — DOORS OPEN EARLY • Expect higher traffic — reserve early!";
+        if (typeof addBubble === "function"){
+          addBubble("assistant", note);
+        } else {
+          // Fallback: append a simple line into the chat container
+          const chatEl = document.getElementById("chat");
+          if (chatEl){
+            const div = document.createElement("div");
+            div.textContent = note;
+            div.style.opacity = "0.9";
+            div.style.margin = "8px 0";
+            chatEl.appendChild(div);
+            chatEl.scrollTop = chatEl.scrollHeight;
+          }
+        }
+        if (Array.isArray(history)) history.push({role:"assistant", content: note});
+        sessionStorage.setItem(key, "1");
+      }
+    } catch(e){ /* ignore */ }
+
   } else {
-    document.body.classList.remove("matchday");
+    try{ document.body.classList.remove("matchday"); } catch(e){}
     if (pillMode) pillMode.textContent = "Mode: Standard";
     if (matchBanner) matchBanner.classList.remove("show");
     if (matchdayBox){
@@ -1982,6 +1985,25 @@ function updateMatchDayMode(){
     try{ sessionStorage.removeItem("wc_matchday_note_shown"); } catch(e){}
   }
 }
+
+
+// === Match Day testing helpers (Console) ===
+// Usage:
+//   WC.setMatchDayTest(true)  // force Match Day UI (no backend changes)
+//   WC.setMatchDayTest(false) // force Standard UI
+//   WC.clearMatchDayTest()    // return to backend-driven behavior
+window.WC = window.WC || {};
+window.WC.setMatchDayTest = function(on){
+  window.__WC_MATCHDAY_OVERRIDE__ = !!on;
+  try{ updateMatchDayMode(); } catch(e){}
+  try{ if (typeof restartCountdown === "function") restartCountdown(); } catch(e){}
+};
+window.WC.clearMatchDayTest = function(){
+  try{ delete window.__WC_MATCHDAY_OVERRIDE__; } catch(e){ window.__WC_MATCHDAY_OVERRIDE__ = undefined; }
+  try{ updateMatchDayMode(); } catch(e){}
+  try{ if (typeof restartCountdown === "function") restartCountdown(); } catch(e){}
+};
+
 
 
 // -----------------------
