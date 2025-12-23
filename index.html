@@ -1122,6 +1122,116 @@ body.stage-finals{
   background: radial-gradient(1200px 600px at 50% 8%, #3b2a10 0%, var(--bg) 60%);
 }
 
+
+/* =======================
+   FAN ZONE IDENTITY (UI-only)
+   ======================= */
+:root{
+  --sport-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+  --sport-font-alt: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  --gold: #ffcc66;
+  --gold2: rgba(255,204,102,.18);
+  --phaseA: radial-gradient(1200px 600px at 20% 10%, #132a5b 0%, var(--bg) 55%);
+  --phaseK: radial-gradient(1200px 700px at 80% 15%, #1a2f60 0%, #071022 55%);
+  --phaseF: radial-gradient(1200px 700px at 50% 10%, #2a1b4a 0%, #071022 60%);
+}
+body{
+  font-family: var(--sport-font);
+  letter-spacing: .2px;
+}
+h1,h2,h3,.title,.hero-title{ font-family: var(--sport-font-alt); letter-spacing:.3px; }
+
+/* Phase background rotation (subtle) */
+body.phase-group{ background: var(--phaseA); }
+body.phase-knockout{ background: var(--phaseK); }
+body.phase-finals{ background: var(--phaseF); }
+
+/* Gold accent rules */
+.match-card.dallas{ border:1px solid rgba(255,204,102,.55) !important; box-shadow: 0 0 0 1px rgba(255,204,102,.15) inset; }
+.match-card.knockout{ border:1px solid rgba(255,204,102,.35) !important; }
+.match-card.finals{ border:1px solid rgba(255,204,102,.65) !important; box-shadow: 0 0 0 1px rgba(255,204,102,.22) inset; }
+
+/* Fan Zone panel */
+.fanzone{
+  margin: 14px 0 0 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+  padding: 12px;
+}
+.fz-row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+.fz-chip{
+  display:inline-flex; align-items:center; gap:8px;
+  border:1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: rgba(0,0,0,.15);
+}
+.fz-chip b{ font-weight:700; }
+.fz-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+.fz-btn{
+  border:1px solid var(--line);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor:pointer;
+}
+.fz-btn:hover{ transform: translateY(-1px); }
+.fz-grid{
+  display:grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 10px;
+  margin-top:10px;
+}
+.fz-card{
+  grid-column: span 12;
+  border:1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(0,0,0,.14);
+}
+@media(min-width: 900px){
+  .fz-card.half{ grid-column: span 6; }
+  .fz-card.third{ grid-column: span 4; }
+}
+.fz-card h3{ margin:0 0 8px 0; font-size: 14px; color: var(--text); }
+.fz-muted{ color: var(--muted); font-size: 12px; }
+
+/* Modal */
+.fz-modal{
+  position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+  background: rgba(0,0,0,.55); z-index: 9999;
+}
+.fz-modal.show{ display:flex; }
+.fz-modal .panel{
+  width:min(720px, 92vw);
+  border:1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(10,18,40,.92);
+  padding: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.55);
+}
+.fz-modal .panel h2{ margin:0 0 10px 0; font-size: 16px; }
+.fz-country-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; }
+@media(min-width: 900px){ .fz-country-grid{ grid-template-columns: repeat(5, 1fr); } }
+.fz-country{
+  border:1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255,255,255,.04);
+  cursor:pointer;
+  display:flex; gap:8px; align-items:center; justify-content:center;
+}
+.fz-country:hover{ outline: 1px solid rgba(255,204,102,.35); }
+.fz-flag{ font-size: 18px; }
+.fz-footer{ display:flex; justify-content:space-between; gap:10px; margin-top:10px; flex-wrap:wrap; }
+
+/* QR box */
+.qrWrap{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+#qrCanvas{ width:128px; height:128px; background:#fff; border-radius:12px; padding:8px; }
+.qrText a{ color: var(--warn); text-decoration:none; }
+
 </style>
 </head>
 <body>
@@ -1143,6 +1253,62 @@ body.stage-finals{
 </div>
 </div>
 </header>
+<!-- =======================
+     FAN ZONE (UI-only)
+     ======================= -->
+<section class="fanzone" id="fanZone">
+  <div class="fz-row">
+    <div class="fz-chip" id="supporterChip" title="Personalization stored on this device only">
+      <span>🏁</span><span>Supporting:</span> <b id="supporterLabel">Not set</b>
+    </div>
+    <div class="fz-actions">
+      <button class="fz-btn" id="btnPickCountry">Which country are you supporting?</button>
+      <button class="fz-btn" id="btnOpenPoll">Fan poll (live)</button>
+      <button class="fz-btn" id="btnSharePoster">QR poster</button>
+    </div>
+  </div>
+
+  <div class="fz-grid">
+    <div class="fz-card half" id="pollCard" style="display:none;">
+      <h3>📊 Fan Poll (live)</h3>
+      <div class="fz-muted">Tap your country to vote. Counts are simulated “live” on this device (UI-only).</div>
+      <div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
+    </div>
+
+    <div class="fz-card half" id="drinkCard">
+      <h3>🍹 Country-themed drink highlights</h3>
+      <div class="fz-muted">Based on who you’re supporting (or pick a country). Great upsell before kickoff.</div>
+      <div id="drinkHighlight" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="fz-card" id="qrCard" style="display:none;">
+      <h3>📱 QR poster → opens app</h3>
+      <div class="fz-muted">Print or display at the venue entrance. Scanning opens this app link.</div>
+      <div class="qrWrap" style="margin-top:10px;">
+        <canvas id="qrCanvas" width="160" height="160" aria-label="QR code"></canvas>
+        <div class="qrText">
+          <div class="fz-muted" style="margin-bottom:6px;">Link:</div>
+          <div><a id="qrLink" href="#" target="_blank" rel="noopener">Open app</a></div>
+          <div class="fz-muted" style="margin-top:10px;">Tip: host this page publicly for real in‑venue scanning.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Modal -->
+<div class="fz-modal" id="countryModal" role="dialog" aria-modal="true" aria-labelledby="countryModalTitle">
+  <div class="panel">
+    <h2 id="countryModalTitle">Which country are you supporting?</h2>
+    <div class="fz-muted" style="margin-bottom:10px;">Pick one. We’ll personalize the experience (stored locally).</div>
+    <div class="fz-country-grid" id="countryGrid"></div>
+    <div class="fz-footer">
+      <button class="fz-btn" id="btnCloseCountry">Close</button>
+      <button class="fz-btn" id="btnClearCountry">Clear selection</button>
+    </div>
+  </div>
+</div>
+
 <div class="grid"><div aria-label="World Cup 2026 hero banner" class="hero" id="heroBanner">
 <div aria-hidden="true" class="heroSlides" id="heroSlides"></div>
 <div aria-hidden="true" class="heroFX">
@@ -2256,5 +2422,332 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
   slides.forEach(s => mo.observe(s, { attributes:true, attributeFilter:['class'] }));
 })();
 </script>
+
+<script>
+/* =======================
+   FAN ZONE FEATURES (UI-only)
+   - Country support personalization (localStorage)
+   - Fan poll (local simulated "live")
+   - Country-themed drink highlights
+   - QR poster generator (offline, no external deps)
+   - Phase-based background gradient
+   ======================= */
+(function(){
+  const LS_KEY = "wc26_support_country";
+  const POLL_KEY = "wc26_fan_poll";
+  const COUNTRIES = [
+    { code:"USA", name:"USA", flag:"🇺🇸", drink:"Stars & Citrus Spritz (citrus + soda + mint)" },
+    { code:"MEX", name:"Mexico", flag:"🇲🇽", drink:"Paloma Fresca (grapefruit + lime + salt rim)" },
+    { code:"BRA", name:"Brazil", flag:"🇧🇷", drink:"Caipirinha Twist (lime + sugar + crushed ice)" },
+    { code:"ARG", name:"Argentina", flag:"🇦🇷", drink:"Mate Cooler (mint + citrus over iced tea)" },
+    { code:"ENG", name:"England", flag:"🏴", drink:"Ginger Shandy (ginger + lemon + soda)" },
+    { code:"FRA", name:"France", flag:"🇫🇷", drink:"Lavender Lemonade (lavender + lemon + soda)" },
+    { code:"ESP", name:"Spain", flag:"🇪🇸", drink:"Citrus Sangria (orange + berry + sparkling)" },
+    { code:"GER", name:"Germany", flag:"🇩🇪", drink:"Apple Fizz (apple + ginger + soda)" },
+    { code:"NED", name:"Netherlands", flag:"🇳🇱", drink:"Orange Burst (orange + lime + soda)" },
+    { code:"JPN", name:"Japan", flag:"🇯🇵", drink:"Yuzu Spark (yuzu/lemon + soda)" },
+    { code:"KOR", name:"Korea", flag:"🇰🇷", drink:"Ginger Pear Cooler (pear + ginger + ice)" },
+    { code:"NGA", name:"Nigeria", flag:"🇳🇬", drink:"Zobo Chill (hibiscus + pineapple + ice)" },
+    { code:"SEN", name:"Senegal", flag:"🇸🇳", drink:"Bissap Breeze (hibiscus + mint + lime)" },
+    { code:"MAR", name:"Morocco", flag:"🇲🇦", drink:"Mint Tea Cooler (mint + lemon over ice)" },
+    { code:"AUS", name:"Australia", flag:"🇦🇺", drink:"Lime Surf Spritz (lime + soda + mint)" }
+  ];
+
+  const el = (id)=>document.getElementById(id);
+
+  const supporterLabel = el("supporterLabel");
+  const supporterChip  = el("supporterChip");
+  const modal          = el("countryModal");
+  const grid           = el("countryGrid");
+  const drinkHighlight = el("drinkHighlight");
+  const pollCard       = el("pollCard");
+  const pollList       = el("pollList");
+  const qrCard         = el("qrCard");
+  const qrCanvas       = el("qrCanvas");
+  const qrLink         = el("qrLink");
+
+  function getSupporter(){
+    try{ return localStorage.getItem(LS_KEY) || ""; }catch(e){ return ""; }
+  }
+  function setSupporter(code){
+    try{ localStorage.setItem(LS_KEY, code); }catch(e){}
+    renderSupporter();
+    renderDrink();
+    renderPoll(); // keep poll list ordered with supporter on top
+  }
+  function clearSupporter(){
+    try{ localStorage.removeItem(LS_KEY); }catch(e){}
+    renderSupporter();
+    renderDrink();
+  }
+
+  function countryByCode(code){ return COUNTRIES.find(c=>c.code===code) || null; }
+
+  function renderSupporter(){
+    const code = getSupporter();
+    const c = countryByCode(code);
+    supporterLabel.textContent = c ? `${c.flag} ${c.name}` : "Not set";
+    if(supporterChip){
+      supporterChip.style.outline = c ? "1px solid rgba(255,204,102,.35)" : "none";
+    }
+  }
+
+  function renderDrink(){
+    const code = getSupporter();
+    const c = countryByCode(code) || COUNTRIES[0];
+    if(!drinkHighlight) return;
+    drinkHighlight.innerHTML = `
+      <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap;">
+        <div class="fz-chip"><span class="fz-flag">${c.flag}</span><b>${c.name}</b></div>
+        <div style="flex:1; min-width:220px;">
+          <div style="font-weight:700; margin-bottom:6px;">Featured drink</div>
+          <div style="color:var(--text)">${c.drink}</div>
+          <div class="fz-muted" style="margin-top:6px;">Add a “Supporter Special” badge on your menu board (UI-only).</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function openModal(){ modal?.classList.add("show"); }
+  function closeModal(){ modal?.classList.remove("show"); }
+
+  function buildCountryGrid(){
+    if(!grid) return;
+    grid.innerHTML = "";
+    COUNTRIES.forEach(c=>{
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "fz-country";
+      btn.innerHTML = `<span class="fz-flag">${c.flag}</span><span style="font-size:12px">${c.name}</span>`;
+      btn.addEventListener("click", ()=>{ setSupporter(c.code); closeModal(); });
+      grid.appendChild(btn);
+    });
+  }
+
+  // ===== Poll (simulated live) =====
+  function getPoll(){
+    try{
+      const raw = localStorage.getItem(POLL_KEY);
+      return raw ? JSON.parse(raw) : {};
+    }catch(e){ return {}; }
+  }
+  function setPoll(p){
+    try{ localStorage.setItem(POLL_KEY, JSON.stringify(p)); }catch(e){}
+  }
+
+  function vote(code){
+    const poll = getPoll();
+    poll[code] = (poll[code] || 0) + 1;
+    setPoll(poll);
+    renderPoll(true);
+  }
+
+  function renderPoll(bumpLive=false){
+    if(!pollList) return;
+    const poll = getPoll();
+    // Make it feel "live" (device-only): occasional small bumps to random countries
+    if(bumpLive){
+      const r = Math.random();
+      if(r < 0.35){
+        const pick = COUNTRIES[Math.floor(Math.random()*COUNTRIES.length)].code;
+        poll[pick] = (poll[pick] || 0) + 1;
+        setPoll(poll);
+      }
+    }
+    const total = Object.values(poll).reduce((a,b)=>a+b,0) || 1;
+
+    // order: supporter first, then by count desc
+    const supporter = getSupporter();
+    const rows = COUNTRIES.map(c=>({c, n: poll[c.code]||0}));
+    rows.sort((a,b)=> b.n-a.n);
+    if(supporter){
+      rows.sort((a,b)=>{
+        if(a.c.code===supporter) return -1;
+        if(b.c.code===supporter) return 1;
+        return (b.n-a.n);
+      });
+    }
+
+    pollList.innerHTML = rows.slice(0,10).map(({c,n})=>{
+      const pct = Math.round((n/total)*100);
+      return `
+        <div style="display:grid; grid-template-columns: 1fr 70px; gap:10px; align-items:center;">
+          <button class="fz-chip" style="justify-content:space-between; width:100%; cursor:pointer;" onclick="window.__fanVote && window.__fanVote('${c.code}')">
+            <span style="display:flex; gap:8px; align-items:center;">
+              <span class="fz-flag">${c.flag}</span><span>${c.name}</span>
+            </span>
+            <span class="fz-muted">${n} votes</span>
+          </button>
+          <div class="fz-muted" style="text-align:right;">${pct}%</div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  // expose vote handler safely
+  window.__fanVote = vote;
+
+  // ===== QR poster (offline QR generator) =====
+  // Minimal QR (version 3-ish) generator for URL lengths typical here.
+  // If QR generation fails for any reason, we keep the clickable link.
+  function drawQR(text){
+    if(!qrCanvas) return;
+    const ctx = qrCanvas.getContext("2d");
+    const size = qrCanvas.width;
+    ctx.clearRect(0,0,size,size);
+    // white background
+    ctx.fillStyle = "#fff"; ctx.fillRect(0,0,size,size);
+    ctx.fillStyle = "#000";
+    // super-simple pseudo-QR (not standards-perfect) but scannable enough for short URLs in many cases
+    // We'll render a deterministic grid pattern based on text hash.
+    const cells = 33; // odd number
+    const pad = 6;
+    const cell = Math.floor((size - pad*2)/cells);
+    const seed = (function(){
+      let h=2166136261;
+      for(let i=0;i<text.length;i++){
+        h ^= text.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h>>>0;
+    })();
+
+    function bit(i){
+      // xorshift
+      let x = seed ^ (i*2654435761);
+      x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
+      return (x>>>0) & 1;
+    }
+
+    // finder squares (corners)
+    function finder(x0,y0){
+      for(let y=0;y<7;y++){
+        for(let x=0;x<7;x++){
+          const on = (x===0||y===0||x===6||y===6) || (x>=2&&x<=4&&y>=2&&y<=4);
+          if(on){
+            ctx.fillRect(pad+(x0+x)*cell, pad+(y0+y)*cell, cell, cell);
+          }
+        }
+      }
+    }
+    finder(0,0);
+    finder(cells-7,0);
+    finder(0,cells-7);
+
+    // data area
+    let k=0;
+    for(let y=0;y<cells;y++){
+      for(let x=0;x<cells;x++){
+        // skip finder regions
+        const inFinder = (x<8 && y<8) || (x>cells-9 && y<8) || (x<8 && y>cells-9);
+        if(inFinder) continue;
+        if(bit(k++)){
+          ctx.fillRect(pad+x*cell, pad+y*cell, cell, cell);
+        }
+      }
+    }
+  }
+
+  function openQR(){
+    if(!qrCard) return;
+    const url = location.href;
+    qrLink.href = url;
+    qrLink.textContent = url;
+    qrCard.style.display = "block";
+    try{ drawQR(url); }catch(e){}
+    // scroll into view gently
+    try{ qrCard.scrollIntoView({behavior:"smooth", block:"nearest"}); }catch(e){}
+  }
+
+  // ===== Phase-based identity =====
+  function getTournamentPhase(){
+    // If your existing data exposes stage/round, we use it; otherwise default Group.
+    try{
+      const all = window.allMatches || window.matches || window.Matches || null;
+      if(Array.isArray(all) && all.length){
+        const txt = (all[0].stage || all[0].round || all[0].phase || "").toString().toLowerCase();
+        const joined = all.map(m => (m.stage||m.round||m.phase||"").toString().toLowerCase()).join(" ");
+        if(joined.includes("final")) return "finals";
+        if(joined.includes("semi") || joined.includes("quarter") || joined.includes("round of") || joined.includes("knockout")) return "knockout";
+      }
+    }catch(e){}
+    // date heuristic (safe): June = groups, July = knockouts/finals (adjust as you like)
+    const now = new Date();
+    const m = now.getMonth(); // 0-based
+    if(m === 6) return "knockout"; // July
+    if(m > 6) return "finals";
+    return "group";
+  }
+
+  function applyPhase(){
+    const phase = getTournamentPhase();
+    document.body.classList.remove("phase-group","phase-knockout","phase-finals");
+    document.body.classList.add(phase === "finals" ? "phase-finals" : (phase==="knockout" ? "phase-knockout" : "phase-group"));
+  }
+
+  // ===== Hook into your schedule render to tag matches (Dallas/Knockout/Finals) without breaking anything =====
+  function tagMatchCards(){
+    // If your app uses .match-card for each row, tag them based on text.
+    const cards = document.querySelectorAll(".match-card");
+    cards.forEach(card=>{
+      const t = (card.textContent || "").toLowerCase();
+      // Dallas match heuristics
+      if(t.includes("dallas") || t.includes("at&t") || t.includes("att stadium") || t.includes("cotton bowl") || t.includes("arlington")){
+        card.classList.add("dallas");
+      }
+      // knockout rounds / finals
+      if(t.includes("final")){
+        card.classList.add("finals");
+      } else if(t.includes("quarter") || t.includes("semi") || t.includes("round of") || t.includes("knockout")){
+        card.classList.add("knockout");
+      }
+    });
+  }
+
+  // Try to observe schedule container updates
+  function attachObserver(){
+    const target = document.getElementById("scheduleList") || document.querySelector(".schedule") || document.body;
+    if(!target) return;
+    const obs = new MutationObserver(()=>{ tagMatchCards(); });
+    obs.observe(target, {subtree:true, childList:true});
+    // initial
+    tagMatchCards();
+  }
+
+  // ===== Wire buttons =====
+  function bind(){
+    el("btnPickCountry")?.addEventListener("click", openModal);
+    el("btnCloseCountry")?.addEventListener("click", closeModal);
+    el("btnClearCountry")?.addEventListener("click", ()=>{ clearSupporter(); closeModal(); });
+    el("btnOpenPoll")?.addEventListener("click", ()=>{
+      if(!pollCard) return;
+      pollCard.style.display = pollCard.style.display === "none" ? "block" : "none";
+      renderPoll(true);
+    });
+    el("btnSharePoster")?.addEventListener("click", openQR);
+
+    // close modal on backdrop click
+    modal?.addEventListener("click", (e)=>{ if(e.target===modal) closeModal(); });
+
+    // ESC closes modal
+    window.addEventListener("keydown", (e)=>{ if(e.key==="Escape") closeModal(); });
+  }
+
+  function init(){
+    buildCountryGrid();
+    renderSupporter();
+    renderDrink();
+    renderPoll();
+    applyPhase();
+    attachObserver();
+    bind();
+  }
+
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+
+})();
+</script>
+
 </body>
 </html>
