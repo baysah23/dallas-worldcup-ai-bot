@@ -2401,7 +2401,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 </div>
 <div class="fz-card" id="pollCard" style="display:none; margin-top:10px;">
 <h3>⚔️ Match of the Day Poll</h3>
-<div class="fz-muted">Vote who wins today’s match. Counts are simulated “live” on this device (UI-only).</div>
+<div class="fz-muted">Vote who wins today’s match. Live vote percentages • locks at kickoff • winner highlights post-match.</div>
 <div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
 </div>
 </aside></div>
@@ -4064,191 +4064,146 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   }
   window.__fanVote = vote; // used by inline onclick if any
 
-  async function loadMatchOfDay(){
-    try{
-      // Pull "all matches" and pick the first match happening today; otherwise next upcoming.
-      const res = await fetch(`/schedule.json?scope=all&q=${encodeURIComponent("")}`, {cache:"no-store"});
-      if(!res.ok) return;
-      const matches = await res.json();
-      if(!Array.isArray(matches) || !matches.length) return;
+  async 
+  // =============================
+  // Match-of-the-Day Poll (LIVE)
+  // - totals persisted server-side
+  // - shows live percentages
+  // - locks at kickoff (server)
+  // - winner highlight post-match (admin-set)
+  // =============================
+  let pollTimer = null;
+  let currentPoll = null;
 
-      const now = new Date();
-      const todayISO = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().slice(0,10);
-
-      // matches are already sorted by app.py kickoff UTC (then formatted); treat "date" as ISO yyyy-mm-dd.
-      let pick = matches.find(m => (m.date === todayISO)) || null;
-      if(!pick){
-        pick = matches.find(m => m.date && m.date >= todayISO) || matches[0];
-      }
-      if(pick){
-        motdMatch = { date: pick.date, time: pick.time, home: pick.home, away: pick.away, stage: pick.stage, venue: pick.venue };
-      }
-    }catch(e){
-      // best-effort; leave motdMatch null
-    }
+  function fmtPollLine(m){
+    const parts = [`${m.home} vs ${m.away}`];
+    if(m.date || m.time) parts.push(`${m.date||""} ${m.time||""}`.trim());
+    if(m.venue) parts.push(m.venue);
+    return parts.join(" • ");
   }
 
-  function renderPoll(bumpLive){
-    if(!pollList) return;
-    if(!motdMatch){
-      pollList.innerHTML = `<div class="fz-muted">No match loaded yet.</div>`;
-      return;
-    }
-    const home = motdMatch.home || "Home";
-    const away = motdMatch.away || "Away";
+  function renderPoll(p){
+    const card = el("pollList");
+    if(!card) return;
+    card.innerHTML = "";
 
-    const poll = getPoll();
+    const m = p.match;
+    const locked = !!p.locked;
+    const ended = !!p.ended;
+    const winner = (p.winner || "").toLowerCase();
 
-    // Device-only “live” bumps
-    if(bumpLive && Math.random() < 0.18){
-      const pick = (Math.random() < 0.5) ? home : away;
-      poll[pick] = (poll[pick] || 0) + 1;
-      setPoll(poll);
-    }
-
-    const h = poll[home] || 0;
-    const a = poll[away] || 0;
-    const total = (h + a) || 1;
-    const hPct = Math.round((h/total)*100);
-    const aPct = 100 - hPct;
-
-    const line = `${escapeHtml(home)} vs ${escapeHtml(away)} • ${escapeHtml(motdMatch.date||"")} • ${escapeHtml(motdMatch.time||"")}`;
-
-    pollList.innerHTML = `
-      <div class="fz-muted" style="margin-bottom:8px;">${line}</div>
-
-      <div style="display:grid; grid-template-columns: 1fr 74px; gap:10px; align-items:center;">
-        <button class="fz-chip" type="button" style="justify-content:space-between; width:100%; cursor:pointer;" onclick="window.__fanVote && window.__fanVote('${escapeHtml(home).replace(/'/g,'&#39;')}')">
-          <span style="display:flex; gap:8px; align-items:center;">
-            <span style="width:10px; height:10px; border-radius:999px; background:rgba(255,204,102,.85); display:inline-block;"></span>
-            <b>${escapeHtml(home)}</b>
-          </span>
-          <span class="fz-muted" style="font-size:11px">${h}</span>
-        </button>
-        <div class="fz-muted" style="text-align:right; font-weight:900;">${hPct}%</div>
-      </div>
-      <div style="height:8px; border-radius:999px; background:rgba(255,255,255,.10); overflow:hidden; border:1px solid rgba(255,255,255,.12); margin-top:6px;">
-        <div style="height:100%; width:${hPct}%; background:linear-gradient(90deg, rgba(255,204,102,.75), rgba(46,160,67,.55));"></div>
-      </div>
-
-      <div style="height:10px"></div>
-
-      <div style="display:grid; grid-template-columns: 1fr 74px; gap:10px; align-items:center;">
-        <button class="fz-chip" type="button" style="justify-content:space-between; width:100%; cursor:pointer;" onclick="window.__fanVote && window.__fanVote('${escapeHtml(away).replace(/'/g,'&#39;')}')">
-          <span style="display:flex; gap:8px; align-items:center;">
-            <span style="width:10px; height:10px; border-radius:999px; background:rgba(31,111,235,.85); display:inline-block;"></span>
-            <b>${escapeHtml(away)}</b>
-          </span>
-          <span class="fz-muted" style="font-size:11px">${a}</span>
-        </button>
-        <div class="fz-muted" style="text-align:right; font-weight:900;">${aPct}%</div>
-      </div>
-      <div style="height:8px; border-radius:999px; background:rgba(255,255,255,.10); overflow:hidden; border:1px solid rgba(255,255,255,.12); margin-top:6px;">
-        <div style="height:100%; width:${aPct}%; background:linear-gradient(90deg, rgba(31,111,235,.70), rgba(0,0,0,.25));"></div>
+    const sponsor = p.sponsor ? `<div class="fz-muted" style="margin-top:2px; font-weight:800; letter-spacing:.02em;">${escapeHtml(p.sponsor)} presented by <span style="color:var(--gold)">_____</span></div>` : "";
+    const header = document.createElement("div");
+    header.innerHTML = `
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+        <div>
+          <div style="font-weight:900">${escapeHtml(fmtPollLine(m))}</div>
+          ${sponsor}
+          <div class="fz-muted" style="margin-top:6px">
+            ${locked ? "🔒 Locked at kickoff" : "🟢 Voting open"}
+            ${ended ? " • Post-match" : ""}
+          </div>
+        </div>
+        <div style="text-align:right" class="fz-muted">${escapeHtml(m.stage||"")}</div>
       </div>
     `;
+    card.appendChild(header);
+
+    const mkRow = (side) => {
+      const name = side === "home" ? m.home : m.away;
+      const votes = side === "home" ? p.totals.home : p.totals.away;
+      const pct = side === "home" ? p.totals.home_pct : p.totals.away_pct;
+
+      const isWinner = ended && winner && ((winner==="home" && side==="home") || (winner==="away" && side==="away"));
+      const row = document.createElement("div");
+      row.style.border = "1px solid rgba(255,255,255,.12)";
+      row.style.borderRadius = "14px";
+      row.style.padding = "10px";
+      row.style.background = isWinner ? "linear-gradient(180deg, rgba(46,160,67,.20), rgba(0,0,0,.10))" : "rgba(0,0,0,.10)";
+      row.innerHTML = `
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+          <div style="font-weight:900">${escapeHtml(name)} ${isWinner ? "🏆" : ""}</div>
+          <div class="fz-muted" style="white-space:nowrap">${votes} • ${pct}%</div>
+        </div>
+        <div style="margin-top:8px; height:10px; border-radius:999px; border:1px solid rgba(255,255,255,.10); background:rgba(255,255,255,.06); overflow:hidden">
+          <div style="height:100%; width:${pct}%; background:linear-gradient(90deg, rgba(212,175,55,.80), rgba(31,111,235,.35));"></div>
+        </div>
+        <div style="margin-top:10px; display:flex; gap:10px; align-items:center; justify-content:flex-end;">
+          <button class="fz-btn" ${locked ? "disabled" : ""} data-pick="${side}" style="padding:8px 10px; border-radius:999px;">Vote</button>
+        </div>
+      `;
+      const btn = row.querySelector("button");
+      btn.addEventListener("click", () => castVote(m.id, side));
+      return row;
+    };
+
+    // Winner messaging
+    if(ended){
+      const msg = document.createElement("div");
+      msg.className = "fz-muted";
+      msg.style.marginTop = "10px";
+      msg.innerHTML = winner ? "Result locked — winner highlighted." : "Awaiting official result (admin will set winner).";
+      card.appendChild(msg);
+    }
+
+    card.appendChild(mkRow("home"));
+    card.appendChild(mkRow("away"));
+
+    if(p.totals.total === 0){
+      const tip = document.createElement("div");
+      tip.className = "fz-muted";
+      tip.style.marginTop = "10px";
+      tip.textContent = "Be the first to vote today.";
+      card.appendChild(tip);
+    }
   }
 
-  // ----- QR poster -----
-  function openQR(){
-    if(!qrModal) return;
-    // Toggle the inline QR card (not a modal overlay)
-    const isHidden = (qrModal.style.display === "none" || !qrModal.style.display);
-    if(!isHidden){
-      qrModal.style.display = "none";
-      return;
+  async function refreshPoll(){
+    try{
+      const r = await fetch("/poll/match.json", {cache:"no-store"});
+      const j = await r.json();
+      if(!j.ok) throw new Error(j.error || "Poll unavailable");
+      currentPoll = j;
+      renderPoll(j);
+
+      // Refresh periodically until locked; after lock, slow refresh
+      if(pollTimer) clearTimeout(pollTimer);
+      pollTimer = setTimeout(refreshPoll, j.locked ? 30000 : 10000);
+    }catch(e){
+      const list = el("pollList");
+      if(list) list.innerHTML = `<div class="fz-muted">Poll unavailable: ${escapeHtml(e.message)}</div>`;
+      if(pollTimer) clearTimeout(pollTimer);
+      pollTimer = setTimeout(refreshPoll, 30000);
     }
-    const url = window.location.href;
-    if(qrLink) { qrLink.textContent = url; qrLink.href = url; }
-    qrModal.style.display = "block";
-    // best-effort draw
-    try{ drawPseudoQR(url); }catch(e){}
   }
-  function closeQR(){
-    if(!qrModal) return;
-    qrModal.style.display = "none";
-  }
 
-function drawPseudoQR(text){
-    if(!qrCanvas) return;
-    const ctx = qrCanvas.getContext("2d");
-    const size = qrCanvas.width;
-    ctx.clearRect(0,0,size,size);
-    ctx.fillStyle="#fff"; ctx.fillRect(0,0,size,size);
-    ctx.fillStyle="#000";
+  function votedKey(matchId){ return "wc26_poll_voted_" + matchId; }
 
-    const cells=33, pad=6;
-    const cell=Math.floor((size - pad*2)/cells);
-
-    // hash
-    let h=2166136261;
-    for(let i=0;i<text.length;i++){
-      h ^= text.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    function bit(x,y){
-      const v = Math.imul((x+1)*2654435761, (y+1)*1597334677) ^ h;
-      return (v>>>0) & 1;
-    }
-    function finder(x0,y0){
-      for(let y=0;y<7;y++){
-        for(let x=0;x<7;x++){
-          const on = (x===0||y===0||x===6||y===6|| (x>=2&&x<=4&&y>=2&&y<=4));
-          if(on) ctx.fillRect(pad+(x0+x)*cell, pad+(y0+y)*cell, cell, cell);
-        }
+  async function castVote(matchId, pick){
+    try{
+      if(localStorage.getItem(votedKey(matchId)) === "1"){
+        alert("You already voted for this match on this device.");
+        return;
       }
-    }
-    finder(0,0); finder(cells-7,0); finder(0,cells-7);
-
-    for(let y=0;y<cells;y++){
-      for(let x=0;x<cells;x++){
-        // keep quiet areas around finders
-        const inTL = x<8 && y<8;
-        const inTR = x>(cells-9) && y<8;
-        const inBL = x<8 && y>(cells-9);
-        if(inTL||inTR||inBL) continue;
-        if(bit(x,y)) ctx.fillRect(pad+x*cell, pad+y*cell, cell, cell);
+      const r = await fetch("/poll/vote", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({match_id: matchId, pick})
+      });
+      const j = await r.json();
+      if(!j.ok){
+        if(j.locked){ alert("Poll locked at kickoff."); }
+        else alert(j.error || "Vote failed");
+        return;
       }
+      localStorage.setItem(votedKey(matchId), "1");
+      // Force refresh
+      await refreshPoll();
+    }catch(e){
+      alert("Vote failed: " + e.message);
     }
   }
-
-  // ----- Wire buttons -----
-  function bind(){
-    el("btnPickCountry")?.addEventListener("click", openCountryModal);
-    el("btnCloseCountry")?.addEventListener("click", closeCountryModal);
-    el("btnClearCountry")?.addEventListener("click", ()=>{ clearSupport(); renderSupporter(); renderDrink(); closeCountryModal(); });
-
-    el("btnOpenPoll")?.addEventListener("click", ()=>{
-      if(!pollCard) return;
-      pollCard.style.display = (pollCard.style.display === "none" || !pollCard.style.display) ? "block" : "none";
-      renderPoll(true);
-    });
-
-    el("btnSharePoster")?.addEventListener("click", openQR);
-    el("btnCloseQR")?.addEventListener("click", closeQR);
-
-    // close modals on backdrop click
-    modal?.addEventListener("click", (e)=>{ if(e.target===modal) closeCountryModal(); });
-    qrModal?.addEventListener("click", (e)=>{ if(e.target===qrModal) closeQR(); });
-
-    window.addEventListener("keydown", (e)=>{
-      if(e.key==="Escape"){ closeCountryModal(); closeQR(); }
-    });
-  }
-
-  async function init(){
-    buildCountryGrid();
-    renderSupporter();
-    renderDrink();
-    await loadMatchOfDay();
-    renderPoll(false);
-    setInterval(async ()=>{ await loadMatchOfDay(); renderPoll(true); }, 60*1000);
-    bind();
-  }
-
-  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
-  else init();
-})();
+)();
 </script>
 <script>
 /* =======================

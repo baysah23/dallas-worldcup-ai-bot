@@ -5,7 +5,7 @@ import os
 import json
 import re
 import time
-from datetime import datetime, date, timezone
+from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
 from flask import Flask, request, jsonify, send_from_directory
@@ -1233,6 +1233,317 @@ Rules:
 
 
 # ============================================================
+
+# ============================================================
+# Match-of-the-Day Fan Poll (CRM extension)
+# - Persists totals in Google Sheet worksheet "PollVotes"
+# - Live percentages
+# - Locks at kickoff (server-enforced)
+# - Winner highlight post-match (admin-set)
+# - Sponsor label (POLL_SPONSOR env var)
+# ============================================================
+POLL_SPONSOR = os.environ.get("POLL_SPONSOR", "Fan Pick")
+
+POLL_WS_TITLE = os.environ.get("POLL_WS_TITLE", "PollVotes")
+POLL_CACHE_FILE = os.environ.get("POLL_CACHE_FILE", "/tmp/wc26_poll_votes.json")
+
+def _poll_pct(a: int, b: int) -> Tuple[int, int]:
+    total = max(0, int(a or 0)) + max(0, int(b or 0))
+    if total <= 0:
+        return (0, 0)
+    pa = int(round((a * 100) / total))
+    pb = 100 - pa
+    return (pa, pb)
+
+def _poll_now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+def _poll_match_end_utc(kickoff_utc: datetime) -> datetime:
+    # Conservative default: 2h 15m after kickoff
+    return kickoff_utc + timedelta(minutes=135)
+
+def _poll_pick_match_of_day(matches: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """
+    Choose today's first match (UTC date). If no match today, choose the next upcoming match.
+    """
+    now = _poll_now_utc()
+    today = now.date().isoformat()
+
+    # upcoming matches
+    upcoming = []
+    for m in matches:
+        dt = _parse_dateutc((m.get("datetime_utc") or "").replace("T"," ").replace("Z","Z")) if "datetime_utc" in m else _parse_dateutc(m.get("DateUtc",""))
+        # Our normalized matches use datetime_utc string; parse it directly
+        if m.get("datetime_utc"):
+            try:
+                dt = datetime.strptime(m["datetime_utc"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            except Exception:
+                dt = None
+        if not dt:
+            continue
+        mm = dict(m)
+        mm["_kickoff_dt"] = dt
+        upcoming.append(mm)
+
+    if not upcoming:
+        return None
+    upcoming.sort(key=lambda x: x["_kickoff_dt"])
+
+    # first match today (UTC date)
+    for m in upcoming:
+        if m.get("date") == today:
+            return m
+    # otherwise next upcoming match
+    for m in upcoming:
+        if m["_kickoff_dt"] >= now:
+            return m
+    # else most recent (tournament ended)
+    return upcoming[-1]
+
+def _poll_sheet_client_and_ws():
+    gc = get_gspread_client()
+    sh = gc.open(SHEET_NAME)
+    try:
+        ws = sh.worksheet(POLL_WS_TITLE)
+    except Exception:
+        ws = sh.add_worksheet(title=POLL_WS_TITLE, rows=1000, cols=20)
+    # Ensure header
+    desired = ["match_id","home","away","kickoff_utc","created_at_utc","home_votes","away_votes","locked","winner","last_updated_utc"]
+    existing = ws.row_values(1) or []
+    if not any(x.strip() for x in existing):
+        ws.update("A1", [desired])
+    else:
+        # append missing columns
+        norm = [_normalize_header(x) for x in existing]
+        changed = False
+        for col in desired:
+            if col not in norm:
+                existing.append(col)
+                norm.append(col)
+                changed = True
+        if changed:
+            ws.update("A1", [existing])
+    return ws
+
+def _poll_ws_find_row(ws, match_id: str) -> Optional[int]:
+    try:
+        # find in first column (match_id), excluding header
+        col = ws.col_values(1)
+        for i, v in enumerate(col[1:], start=2):
+            if (v or "").strip() == match_id:
+                return i
+    except Exception:
+        return None
+    return None
+
+def _poll_get_record(match: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Ensure a row exists for match_id and return record dict.
+    """
+    ws = _poll_sheet_client_and_ws()
+    match_id = match.get("id") or ""
+    row = _poll_ws_find_row(ws, match_id)
+    now = _poll_now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    kickoff_utc = match.get("datetime_utc") or ""
+    if not row:
+        ws.append_row([
+            match_id,
+            match.get("home",""),
+            match.get("away",""),
+            kickoff_utc,
+            now,
+            0,
+            0,
+            "false",
+            "",
+            now
+        ], value_input_option="USER_ENTERED")
+        row = _poll_ws_find_row(ws, match_id)
+
+    # Read row values
+    vals = ws.row_values(row) if row else []
+    # Map header->value
+    header = ws.row_values(1)
+    data = { _normalize_header(header[i]): (vals[i] if i < len(vals) else "") for i in range(len(header))}
+
+    # Normalize types
+    hv = int(str(data.get("home_votes") or "0").strip() or "0")
+    av = int(str(data.get("away_votes") or "0").strip() or "0")
+    locked = str(data.get("locked") or "").strip().lower() in ["true","1","yes","y"]
+    winner = (data.get("winner") or "").strip().lower()
+    return {
+        "match_id": match_id,
+        "home": match.get("home",""),
+        "away": match.get("away",""),
+        "kickoff_utc": kickoff_utc,
+        "home_votes": hv,
+        "away_votes": av,
+        "locked_manual": locked,
+        "winner": winner,
+        "_ws_row": row
+    }
+
+def _poll_is_locked(kickoff_utc_str: str, manual_locked: bool) -> bool:
+    if manual_locked:
+        return True
+    try:
+        dt = datetime.strptime(kickoff_utc_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        return _poll_now_utc() >= dt
+    except Exception:
+        return False
+
+def _poll_has_ended(kickoff_utc_str: str) -> bool:
+    try:
+        dt = datetime.strptime(kickoff_utc_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        return _poll_now_utc() >= _poll_match_end_utc(dt)
+    except Exception:
+        return False
+
+def _poll_write_row(ws, row: int, header: List[str], updates: Dict[str, Any]) -> None:
+    # Build row array to update only specific cells (best effort)
+    hdr_norm = [_normalize_header(x) for x in header]
+    for k, v in updates.items():
+        kn = _normalize_header(k)
+        if kn in hdr_norm:
+            col = hdr_norm.index(kn) + 1
+            ws.update_cell(row, col, v)
+
+@app.route("/poll/match.json")
+def poll_match_of_day():
+    try:
+        matches = load_all_matches()
+        pick = _poll_pick_match_of_day(matches)
+        if not pick:
+            return jsonify({"ok": False, "error": "No matches found"}), 404
+
+        rec = _poll_get_record(pick)
+        locked = _poll_is_locked(rec["kickoff_utc"], rec["locked_manual"])
+        ended = _poll_has_ended(rec["kickoff_utc"])
+        home_pct, away_pct = _poll_pct(rec["home_votes"], rec["away_votes"])
+
+        payload = {
+            "ok": True,
+            "sponsor": POLL_SPONSOR,
+            "match": {
+                "id": rec["match_id"],
+                "home": rec["home"],
+                "away": rec["away"],
+                "date": pick.get("date"),
+                "time": pick.get("time"),
+                "venue": pick.get("venue"),
+                "kickoff_utc": rec["kickoff_utc"],
+                "stage": pick.get("stage",""),
+            },
+            "totals": {
+                "home": rec["home_votes"],
+                "away": rec["away_votes"],
+                "home_pct": home_pct,
+                "away_pct": away_pct,
+                "total": rec["home_votes"] + rec["away_votes"],
+            },
+            "locked": locked,
+            "ended": ended,
+            "winner": rec["winner"] if ended else "",
+        }
+        return jsonify(payload)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/poll/vote", methods=["POST"])
+def poll_vote():
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        match_id = (data.get("match_id") or "").strip()
+        pick = (data.get("pick") or "").strip().lower()
+        if not match_id or pick not in ["home", "away"]:
+            return jsonify({"ok": False, "error": "Invalid vote"}), 400
+
+        matches = load_all_matches()
+        match = next((m for m in matches if (m.get("id") == match_id)), None)
+        if not match:
+            return jsonify({"ok": False, "error": "Match not found"}), 404
+
+        ws = _poll_sheet_client_and_ws()
+        rec = _poll_get_record(match)
+        locked = _poll_is_locked(rec["kickoff_utc"], rec["locked_manual"])
+        if locked:
+            return jsonify({"ok": False, "locked": True, "error": "Poll locked at kickoff"}), 409
+
+        row = rec["_ws_row"]
+        header = ws.row_values(1)
+
+        hv, av = rec["home_votes"], rec["away_votes"]
+        if pick == "home":
+            hv += 1
+            _poll_write_row(ws, row, header, {"home_votes": hv})
+        else:
+            av += 1
+            _poll_write_row(ws, row, header, {"away_votes": av})
+
+        now = _poll_now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
+        _poll_write_row(ws, row, header, {"last_updated_utc": now})
+
+        home_pct, away_pct = _poll_pct(hv, av)
+        return jsonify({
+            "ok": True,
+            "match_id": match_id,
+            "totals": {"home": hv, "away": av, "home_pct": home_pct, "away_pct": away_pct, "total": hv+av},
+            "locked": False
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.route("/admin/poll/set", methods=["POST"])
+def admin_poll_set():
+    """
+    Admin controls:
+      - set winner: winner in ["home","away","draw",""]
+      - set locked: locked true/false
+    """
+    try:
+        if not ADMIN_KEY:
+            return jsonify({"ok": False, "error": "ADMIN_KEY not set"}), 500
+
+        data = request.get_json(force=True, silent=True) or {}
+        if (data.get("key") or "") != ADMIN_KEY:
+            return jsonify({"ok": False, "error": "Unauthorized"}), 401
+
+        match_id = (data.get("match_id") or "").strip()
+        winner = (data.get("winner") or "").strip().lower()
+        locked = data.get("locked", None)
+
+        if not match_id:
+            return jsonify({"ok": False, "error": "match_id required"}), 400
+        if winner not in ["", "home", "away", "draw"]:
+            return jsonify({"ok": False, "error": "winner invalid"}), 400
+        if locked is not None and not isinstance(locked, bool):
+            return jsonify({"ok": False, "error": "locked must be boolean"}), 400
+
+        matches = load_all_matches()
+        match = next((m for m in matches if (m.get("id") == match_id)), None)
+        if not match:
+            return jsonify({"ok": False, "error": "Match not found"}), 404
+
+        ws = _poll_sheet_client_and_ws()
+        rec = _poll_get_record(match)
+        row = rec["_ws_row"]
+        header = ws.row_values(1)
+
+        updates = {}
+        if winner is not None:
+            updates["winner"] = winner
+        if locked is not None:
+            updates["locked"] = "true" if locked else "false"
+        updates["last_updated_utc"] = _poll_now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        _poll_write_row(ws, row, header, updates)
+
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 # Admin dashboard
 # ============================================================
 
@@ -1447,6 +1758,129 @@ tr:hover td{background:rgba(255,255,255,.03)}
 """)
     html.append(f"<a class='btn' href='/admin/export.csv?key={_hesc(key)}'>Export CSV</a>")
     html.append(f"<button class='btn' onclick='location.reload()'>Refresh</button>")
+
+    # --- Match-of-the-Day Poll (admin visibility) ---
+    html.append("""
+    <div class='card' style='margin-top:14px'>
+      <div class='cardhead'>
+        <div class='h2'>📊 Match of the Day Poll</div>
+        <div class='muted' id='pollSponsor'>Fan Pick</div>
+      </div>
+      <div class='cardbody'>
+        <div class='row' style='gap:10px;flex-wrap:wrap'>
+          <div style='min-width:260px;flex:1'>
+            <div class='muted' id='pollMatchLine'>Loading…</div>
+            <div style='margin-top:10px'>
+              <div class='muted'>Home</div>
+              <div class='bar'><div class='fill' id='barHome' style='width:0%'></div></div>
+              <div class='muted' id='homeStats' style='margin-top:6px'></div>
+            </div>
+            <div style='margin-top:10px'>
+              <div class='muted'>Away</div>
+              <div class='bar'><div class='fill' id='barAway' style='width:0%'></div></div>
+              <div class='muted' id='awayStats' style='margin-top:6px'></div>
+            </div>
+            <div class='muted' id='pollState' style='margin-top:10px'></div>
+          </div>
+          <div style='min-width:260px;max-width:360px;flex:0 0 auto'>
+            <div class='muted' style='margin-bottom:6px'>Controls</div>
+            <div class='row' style='gap:10px;align-items:center;flex-wrap:wrap'>
+              <label class='muted'>Winner</label>
+              <select id='winnerSel' class='sel'>
+                <option value=''>—</option>
+                <option value='home'>Home</option>
+                <option value='away'>Away</option>
+                <option value='draw'>Draw</option>
+              </select>
+            </div>
+            <div class='row' style='gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap'>
+              <label class='muted'>Manual lock</label>
+              <label class='toggle'>
+                <input type='checkbox' id='lockChk'/>
+                <span class='knob'></span>
+              </label>
+            </div>
+            <div class='row' style='gap:10px;margin-top:12px;flex-wrap:wrap'>
+              <button class='btn' id='pollSaveBtn'>Save</button>
+              <button class='btn secondary' id='pollRefreshBtn'>Refresh</button>
+            </div>
+            <div class='muted' id='pollSaveMsg' style='margin-top:10px'></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <style>
+      .card{border:1px solid var(--line);border-radius:16px;background:rgba(0,0,0,.14);overflow:hidden}
+      .cardhead{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.03)}
+      .cardbody{padding:12px 14px}
+      .h2{font-weight:900}
+      .bar{height:10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);overflow:hidden}
+      .fill{height:100%;background:linear-gradient(90deg, rgba(212,175,55,.8), rgba(46,160,67,.55))}
+      .sel{width:100%;padding:10px 10px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:rgba(0,0,0,.18);color:var(--text)}
+      .toggle{position:relative;width:46px;height:26px;display:inline-block}
+      .toggle input{display:none}
+      .toggle .knob{position:absolute;inset:0;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.08)}
+      .toggle .knob:after{content:"";position:absolute;left:3px;top:3px;width:20px;height:20px;border-radius:999px;background:rgba(255,255,255,.80);transition:transform .18s ease}
+      .toggle input:checked + .knob{background:rgba(46,160,67,.18);border-color:rgba(46,160,67,.35)}
+      .toggle input:checked + .knob:after{transform:translateX(20px);background:#fff}
+    </style>
+    <script>
+      const ADMIN_KEY = %s;
+      let currentMatchId = "";
+
+      function $(id){ return document.getElementById(id); }
+      function setText(id, t){ const n=$(id); if(n) n.textContent = t; }
+      function setWidth(id, pct){ const n=$(id); if(n) n.style.width = String(pct||0) + "%%"; }
+
+      async function loadPoll(){
+        try{
+          const r = await fetch("/poll/match.json", {cache:"no-store"});
+          const j = await r.json();
+          if(!j.ok) throw new Error(j.error || "poll load failed");
+          currentMatchId = j.match.id;
+          setText("pollSponsor", j.sponsor || "Fan Pick");
+          setText("pollMatchLine", `${j.match.home} vs ${j.match.away} • ${j.match.date} ${j.match.time} • ${j.match.venue || ""}`.trim());
+          setWidth("barHome", j.totals.home_pct);
+          setWidth("barAway", j.totals.away_pct);
+          setText("homeStats", `${j.totals.home} votes • ${j.totals.home_pct}%%`);
+          setText("awayStats", `${j.totals.away} votes • ${j.totals.away_pct}%%`);
+          $("lockChk").checked = !!j.locked; // shows lock state; admin can set manual lock too
+          // winner only meaningful post-match
+          $("winnerSel").value = j.winner || "";
+          setText("pollState", j.locked ? "Locked (kickoff reached or manually locked)" : "Open");
+        }catch(e){
+          setText("pollMatchLine", "Poll unavailable: " + e.message);
+        }
+      }
+
+      async function savePoll(){
+        const msg = $("pollSaveMsg");
+        if(msg) msg.textContent = "Saving…";
+        try{
+          if(!currentMatchId) throw new Error("No match loaded yet");
+          const payload = {
+            key: ADMIN_KEY,
+            match_id: currentMatchId,
+            winner: $("winnerSel").value,
+            locked: $("lockChk").checked
+          };
+          const r = await fetch("/admin/poll/set", {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)});
+          const j = await r.json();
+          if(!j.ok) throw new Error(j.error || "save failed");
+          if(msg) msg.textContent = "Saved ✓";
+          await loadPoll();
+        }catch(e){
+          if(msg) msg.textContent = "Save failed: " + e.message;
+        }
+      }
+
+      $("pollSaveBtn").addEventListener("click", savePoll);
+      $("pollRefreshBtn").addEventListener("click", loadPoll);
+      loadPoll();
+    </script>
+    """ % (json.dumps(key)))
+
     html.append("</div>")
 
     html.append("<div class='tablewrap'><table id='tbl'><thead><tr>")
