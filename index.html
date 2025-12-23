@@ -2357,15 +2357,13 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div aria-hidden="true" class="badge"></div>
 <div>
 <h1>World Cup 2026 • Dallas Match-Day Concierge</h1>
-<div class="sub">Reserve tables, see Dallas match schedule, and chat in English • Español • Português • Français</div>
-</div>
+<div class="sub">Reserve tables, see Dallas match schedule, and chat in English • Español • Português • Français</div></div>
 </div>
 <div aria-label="Language toggle" class="langbar">
 <div class="langbtn active" data-lang="en">English</div>
 <div class="langbtn" data-lang="es">Español</div>
 <div class="langbtn" data-lang="pt">Português</div>
-<div class="langbtn" data-lang="fr">Français</div>
-</div>
+<div class="langbtn" data-lang="fr">Français</div></div>
 </div>
 </header>
 <!-- =======================
@@ -2380,50 +2378,42 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="fz-muted" style="margin-top:6px;">Fast-track your best tables for big matches.</div>
 <div class="vip-actions" style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
   <button class="fz-btn" id="vipHoldBtn">Hold VIP table</button>
-  <button class="fz-btn" id="vipHoldInfoBtn">How it works</button>
-</div>
+  <button class="fz-btn" id="vipHoldInfoBtn">How it works</button></div>
 </div></aside>
 <aside aria-label="Fan Zone Left Panel" class="fanzone fanzone-left" id="fanZoneLeft">
 <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
 <span class="fz-muted fz-rail-title">Fan Zone</span>
-<button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button>
-</div>
+<button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button></div>
 <div class="fz-row" style="justify-content:flex-start;">
 <div class="fz-chip" id="supporterChip" title="Personalization stored on this device only">
-<span>🏁</span><span>Supporting:</span> <b id="supporterLabel">Not set</b>
-</div>
+<span>🏁</span><span>Supporting:</span> <b id="supporterLabel">Not set</b></div>
 </div>
 <div class="fz-actions" style="margin-top:10px;">
 <button class="fz-iconbtn" id="fzIconCountry" title="Pick country">🏁</button>
 <button class="fz-iconbtn" id="fzIconPoll" title="Fan poll">📊</button>
 <button class="fz-btn" id="btnPickCountry">Which country are you supporting?</button>
-<button class="fz-btn" id="btnOpenPoll">Match poll (live)</button>
-</div>
+<button class="fz-btn" id="btnOpenPoll">Match poll</button></div>
 <div class="fz-card" id="pollCard" style="display:none; margin-top:10px;">
 <h3>⚔️ Match of the Day Poll</h3>
-<div class="fz-muted">Vote who wins today’s match. Counts are simulated “live” on this device (UI-only).</div>
+<div class="fz-muted">Vote for who you think will win.</div>
 <div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
 </div>
 </aside></div>
 <aside aria-label="Fan Zone Right Panel" class="fanzone fanzone-right" id="fanZoneRight">
 <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
 <span class="fz-muted fz-rail-title">Extras</span>
-<button class="fz-iconbtn" id="fzCollapseToggle2" title="Collapse / expand">⫶</button>
-</div>
+<button class="fz-iconbtn" id="fzCollapseToggle2" title="Collapse / expand">⫶</button></div>
 <div class="fz-actions" style="justify-content:flex-end;">
 <button class="fz-iconbtn" id="fzIconDrinks" title="Drink highlight">🍹</button>
 <button class="fz-iconbtn" id="fzIconQR" title="QR poster">📱</button>
-<button class="fz-btn" id="btnSharePoster">QR poster</button>
-</div>
+<button class="fz-btn" id="btnSharePoster">QR poster</button></div>
 <div class="fz-card" id="drinkCard" style="margin-top:10px;">
 <h3>🍹 Drink highlights</h3>
-<div class="fz-muted">Based on who you’re supporting (or pick a country).</div>
 <div id="drinkHighlight" style="margin-top:10px;">
       <div style="border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:10px; background: rgba(0,0,0,.10);">
         <div id="drinkName" style="font-weight:900;">Country-themed drink</div>
-        <div id="drinkDesc" class="fz-muted" style="margin-top:4px;">Based on who you’re supporting (or pick a country).</div>
-      </div>
-    </div>
+        <div id="drinkDesc" class="fz-muted" style="margin-top:4px;"></div>
+      </div></div>
 </div>
 <div class="fz-card" id="qrCard" style="display:none; margin-top:10px;">
 <h3>📱 QR poster</h3>
@@ -2433,10 +2423,8 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="qrText">
 <div class="fz-muted" style="margin-bottom:6px;">Link:</div>
 <div><a href="#" id="qrLink" rel="noopener" target="_blank">Open app</a></div>
-<div class="fz-muted" style="margin-top:10px;">Tip: host publicly for in‑venue scanning.</div>
-</div>
-</div>
-</div>
+<div class="fz-muted" style="margin-top:10px;">Tip: host publicly for in‑venue scanning.</div></div>
+</div></div>
 </aside>
 <!-- Modal -->
 <div aria-labelledby="countryModalTitle" aria-modal="true" class="fz-modal" id="countryModal" role="dialog">
@@ -2446,10 +2434,8 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="fz-country-grid" id="countryGrid"></div>
 <div class="fz-footer">
 <button class="fz-btn" id="btnCloseCountry">Close</button>
-<button class="fz-btn" id="btnClearCountry">Clear selection</button>
-</div>
-</div>
-</div>
+<button class="fz-btn" id="btnClearCountry">Clear selection</button></div>
+</div></div>
 <div class="grid"><div aria-label="World Cup 2026 hero banner" class="hero" id="heroBanner">
 <div aria-hidden="true" class="heroSlides" id="heroSlides"></div>
 <div aria-hidden="true" class="heroFX">
@@ -2463,8 +2449,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <span class="hero-flag" data-country="ENG">🏴</span>
 <span class="hero-flag" data-country="BRA">🇧🇷</span>
 <span class="hero-flag" data-country="CAN">🇨🇦</span>
-<span class="hero-flag" data-country="KOR">🇰🇷</span>
-</div>
+<span class="hero-flag" data-country="KOR">🇰🇷</span></div>
 </div>
 <div class="heroGlow"></div>
 <div class="heroSweep"></div>
@@ -2479,8 +2464,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <span><b id="wcD">--</b><small>d</small></span>
 <span><b id="wcH">--</b><small>h</small></span>
 <span><b id="wcM">--</b><small>m</small></span>
-<span><b id="wcS">--</b><small>s</small></span>
-</div>
+<span><b id="wcS">--</b><small>s</small></span></div>
 </div>
 <div aria-hidden="true" class="heroRoster" id="heroRoster"></div>
 </div>
@@ -2492,8 +2476,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="card menucard" style="display:flex;flex-direction:column;min-height:0; max-width:190px;">
 <div class="cardhead">
 <div class="title" id="menuTitle">Menu</div>
-<div class="pill" id="menuPill">4 languages</div>
-</div>
+<div class="pill" id="menuPill">4 languages</div></div>
 <div class="menu" id="menu"></div>
 </div>
 <!-- Chat / Reservations -->
@@ -2502,63 +2485,52 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="title" id="chatTitle">Chat</div>
 <div style="display:flex; gap:8px; align-items:center;">
 <div class="pill" id="pillMode">Live</div>
-<button class="secondary" id="compactToggle" style="min-width:auto; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:800;">Compact</button>
-</div>
+<button class="secondary" id="compactToggle" style="min-width:auto; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:800;">Compact</button></div>
 </div>
 <!-- HERO: Cinematic rotating banner (UI-only; no backend impact) -->
 <div id="chat"></div>
 <div class="composer">
 <textarea id="msg" placeholder="Type here..."></textarea>
 <button id="sendBtn">Send</button>
-<button class="secondary" id="clearBtn">Clear</button>
-</div>
+<button class="secondary" id="clearBtn">Clear</button></div>
 <div class="hint" id="helperHint"></div>
-</div>
-</div>
+</div></div>
 <!-- Sidebar -->
 <div class="card" style="display:flex;flex-direction:column;min-height:0;">
 <div class="cardhead">
 <div class="title" id="sideTitle">Dallas Schedule</div>
-<div class="pill" id="pillLang">EN</div>
-</div>
+<div class="pill" id="pillLang">EN</div></div>
 <div class="countdown">
 <div>
 <div class="label" id="countLabel">World Cup countdown</div>
-<div class="sub" id="countSub" style="margin:4px 0 0;">Dallas / Arlington match days</div>
-</div>
+<div class="sub" id="countSub" style="margin:4px 0 0;">Dallas / Arlington match days</div></div>
 <div class="nums" id="countNums">
 <span><b id="d">0</b>d</span>
 <span><b id="h">0</b>h</span>
 <span><b id="m">0</b>m</span>
-<span><b id="s">0</b>s</span>
-</div>
+<span><b id="s">0</b>s</span></div>
 </div>
 <div class="sidepad" style="padding-top:10px; padding-bottom:0;">
 <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
 <div class="pill" style="padding:6px 10px;">Schedule</div>
 <div class="langbar" style="gap:6px;">
 <div class="langbtn active" id="scopeDallas">Dallas</div>
-<div class="langbtn" id="scopeAll">All Matches</div>
-</div>
+<div class="langbtn" id="scopeAll">All Matches</div></div>
 </div>
 <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
 <input id="teamSearch" list="teamSuggestions" placeholder="Search team / venue / date (e.g., June 13 or 2026-06-13)..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;"/>
 <datalist id="teamSuggestions"></datalist>
-<div class="pill" id="matchCount">0</div>
-</div>
+<div class="pill" id="matchCount">0</div></div>
 </div>
 <div class="sidepad" style="padding-bottom:0;">
-<div class="pill" id="nextHint" style="display:inline-block;">Next upcoming match is highlighted</div>
-</div>
+<div class="pill" id="nextHint" style="display:inline-block;">Next upcoming match is highlighted</div></div>
 <div class="schedule" id="schedule"></div>
 <div class="sidepad" id="pager" style="display:none; padding-top:10px;">
 <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
 <button class="secondary" id="prevPage" style="min-width:88px;">Prev</button>
 <div class="pill" id="pageIndicator">Page 1 of 1</div>
-<button class="secondary" id="nextPage" style="min-width:88px;">Next</button>
-</div>
-</div>
-</div>
+<button class="secondary" id="nextPage" style="min-width:88px;">Next</button></div>
+</div></div>
 </div>
 
 <script>
@@ -3374,8 +3346,7 @@ function renderSchedule(){
     empty.innerHTML = `
       <div class="left">
         <div><b>Notice</b></div>
-        <div class="when">${L().schedule_empty}</div>
-      </div>
+        <div class="when">${L().schedule_empty}</div></div>
       <div class="pill">—</div>
     `;
     el.appendChild(empty);
@@ -3438,8 +3409,7 @@ if (totalPages <= 1){
     row.innerHTML = `
       <div class="left">
         <div><b>${escapeHtml(m.stage || "Match")}</b> • ${buildTeamsHtml(teamsTxt)}</div>
-        <div class="when">${escapeHtml(m.date || "")} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div>
-      </div>
+        <div class="when">${escapeHtml(m.date || "")} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div></div>
       <div class="pill">${escapeHtml(m.id || "")}</div>
     `;
     el.appendChild(row);
@@ -3482,10 +3452,8 @@ function renderMenu(items){
       <div class="menuTop">
         <div>
           <div class="name">⚽ —</div>
-          <div class="desc">Menu not available.</div>
-        </div>
-        <div class="menuBadge">—</div>
-      </div>
+          <div class="desc">Menu not available.</div></div>
+        <div class="menuBadge">—</div></div>
     `;
     el.appendChild(d);
     return;
@@ -3515,10 +3483,8 @@ function renderMenu(items){
           <div class="desc">${desc}</div>
           <div class="menuMeta">
             ${tags.map(t => `<span class="menuTag">${escapeHtml(t)}</span>`).join("")}
-          </div>
-        </div>
-        <div class="menuBadge">${price || "—"}</div>
-      </div>
+          </div></div>
+        <div class="menuBadge">${price || "—"}</div></div>
     `;
     el.appendChild(d);
   });
@@ -3918,15 +3884,15 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   const drinkCard = el("drinkCard");
   const drinkName = el("drinkName");
   const drinkDesc = el("drinkDesc");
-  const qrModal = el("qrModal");
-  const qrCanvas = el("qrCanvas");
-  const qrLink = el("qrLink");
+  const qrModal = el("qrModal") || el("qrCard"); // fallback to inline card if modal not present
+const qrCanvas = el("qrCanvas");
+const qrLink = el("qrLink");
 
-  // Buttons
-  const btnPickCountry = el("btnPickCountry");
-  const btnOpenPoll = el("btnOpenPoll");
-  const btnOpenDrinks = el("btnOpenDrinks");
-  const btnOpenQR = el("btnOpenQR");
+// Buttons (support both legacy + current Fan Zone markup)
+const btnPickCountry = el("btnPickCountry") || el("fzIconCountry");
+const btnOpenPoll = el("btnOpenPoll") || el("fzIconPoll");
+const btnOpenDrinks = el("btnOpenDrinks") || el("fzIconDrinks");
+const btnOpenQR = el("btnOpenQR") || el("btnSharePoster") || el("fzIconQR");
 
   // LocalStorage keys
   const LS_SUPPORT = "fz_support_country";
@@ -4076,17 +4042,36 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   }
 
   // ----- QR poster -----
-  function openQR(){
-    if(!qrModal) return;
-    qrModal.classList.add("show");
-    try{
-      const url = location.origin + location.pathname;
-      if(qrLink) qrLink.textContent = url;
-      drawQR(url);
-    }catch(e){}
+function openQR(){
+  if(!qrModal) return;
+
+  // If we are using the inline rail card (#qrCard), toggle display.
+  if(qrModal.id === "qrCard"){
+    const isOpen = (qrModal.style.display !== "none" && qrModal.style.display !== "");
+    qrModal.style.display = isOpen ? "none" : "block";
+    if(!isOpen){
+      try{
+        const url = location.origin + location.pathname;
+        if(qrLink) qrLink.textContent = url;
+        drawQR(url);
+      }catch(e){}
+      try{ qrModal.scrollIntoView({behavior:"smooth", block:"nearest"}); }catch(e){}
+    }
+    return;
   }
-  function closeQR(){
-    qrModal?.classList.remove("show");
+
+  // Otherwise, treat as modal overlay
+  qrModal.classList.add("show");
+  try{
+    const url = location.origin + location.pathname;
+    if(qrLink) qrLink.textContent = url;
+    drawQR(url);
+  }catch(e){}
+}
+function closeQR(){
+    if(!qrModal) return;
+    if(qrModal.id==="qrCard"){ qrModal.style.display="none"; return; }
+    qrModal.classList.remove("show");
   }
   function drawQR(text){
     // lightweight pseudo-QR (not a real QR) for UI-only poster feel
@@ -4161,8 +4146,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
             ${escapeHtml(t)} ${isWinner ? "🏆" : ""} ${isVoted ? "✅" : ""}
           </button>
           ${pctBar(pct[t]||0)}
-          <div class="fz-muted" style="width:110px;text-align:right">${Number(pct[t]||0).toFixed(1)}% • ${(counts[t]||0)}</div>
-        </div>
+          <div class="fz-muted" style="width:110px;text-align:right">${Number(pct[t]||0).toFixed(1)}% • ${(counts[t]||0)}</div></div>
       `;
     }).join("");
 
@@ -4250,7 +4234,9 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
 
     // close modals on backdrop click
     modal?.addEventListener("click", (e)=>{ if(e.target===modal) closeCountryModal(); });
-    qrModal?.addEventListener("click", (e)=>{ if(e.target===qrModal) closeQR(); });
+    if(qrModal && qrModal.id!=="qrCard"){
+      qrModal.addEventListener("click", (e)=>{ if(e.target===qrModal) closeQR(); });
+    }
 
     window.addEventListener("keydown", (e)=>{
       if(e.key==="Escape"){ closeCountryModal(); closeQR(); }

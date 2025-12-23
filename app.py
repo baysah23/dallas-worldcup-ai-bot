@@ -1799,9 +1799,215 @@ tr:hover td{background:rgba(255,255,255,.03)}
     html.append(f"<a class='btn' href='/admin/export.csv?key={_hesc(key)}'>Export CSV</a>")
     html.append(f"<button class='btn' onclick='location.reload()'>Refresh</button>")
     html.append("</div>")
+    html.append(f"<div style=\"display:flex;gap:8px;margin:10px 0 14px 0;flex-wrap:wrap;\"><a href=\"/admin?key={key}\" style=\"text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);font-weight:800\">Leads</a><a href=\"/admin/fanzone?key={key}\" style=\"text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid rgba(212,175,55,.35);border-radius:999px;background:rgba(212,175,55,.10);font-weight:900\">Fan Zone</a></div>")
+
+    # Fan Zone controls moved to /admin/fanzone
 
 
-    # Fan Zone / Poll controls
+    html.append("<div class='tablewrap'><table id='tbl'><thead><tr>")
+    # Show a clean set of columns (not every raw column), but keep the raw order if indices missing
+    cols = [
+        ("Timestamp", i_ts),
+        ("Name", i_name),
+        ("Phone", i_phone),
+        ("Date", i_date),
+        ("Time", i_time),
+        ("Party", i_party),
+        ("Lang", i_lang),
+        ("Status", i_status),
+        ("VIP", i_vip),
+        ("Actions", -999),
+    ]
+    for label, _ in cols:
+        html.append(f"<th>{_hesc(label)}</th>")
+    html.append("</tr></thead><tbody>")
+
+    def status_dot(s: str) -> str:
+        s2 = (s or "").lower()
+        if s2 == "confirmed": return "confirmed"
+        if s2 == "seated": return "seated"
+        if s2 in ["no-show", "noshow", "no_show"]: return "noshow"
+        return "new"
+
+    for row_num, r in numbered:
+        name = colval(r, i_name)
+        phone = colval(r, i_phone)
+        d = colval(r, i_date)
+        t = colval(r, i_time)
+        ps = colval(r, i_party)
+        lang = colval(r, i_lang)
+        status = colval(r, i_status, "New") or "New"
+        vip = colval(r, i_vip, "No") or "No"
+        ts = colval(r, i_ts)
+
+        is_vip = vip.lower() in ["yes", "true", "1", "y"]
+        badge = f"<span class='badge{' vip' if is_vip else ''}'><span class='dot {status_dot(status)}'></span>{_hesc(status)}{' • VIP' if is_vip else ''}</span>"
+
+        html.append(f"<tr data-row='{row_num}' data-status='{_hesc(status)}' data-vip='{ '1' if is_vip else '0' }'>")
+        html.append(f"<td class='small'>{_hesc(ts)}</td>")
+        html.append(f"<td><b>{_hesc(name)}</b></td>")
+        html.append(f"<td><a class='tel' href='tel:{_hesc(phone)}'>{_hesc(phone)}</a></td>")
+        html.append(f"<td>{_hesc(d)}</td>")
+        html.append(f"<td>{_hesc(t)}</td>")
+        html.append(f"<td class='right'>{_hesc(ps)}</td>")
+        html.append(f"<td class='right'>{_hesc(lang)}</td>")
+
+        # Status dropdown
+        html.append("<td>")
+        html.append(f"{badge}<div style='height:6px'></div>")
+        html.append(f"""
+<select onchange="updateLead({row_num}, this.value, null)">
+  <option {'selected' if status=='New' else ''}>New</option>
+  <option {'selected' if status=='Confirmed' else ''}>Confirmed</option>
+  <option {'selected' if status=='Seated' else ''}>Seated</option>
+  <option {'selected' if status=='No-Show' else ''}>No-Show</option>
+</select>
+""")
+        html.append("</td>")
+
+        # VIP toggle
+        checked = "checked" if is_vip else ""
+        html.append("<td class='right'>")
+        html.append(f"<label class='small' style='display:inline-flex;align-items:center;gap:6px;justify-content:flex-end'><input type='checkbox' {checked} onchange=\"updateLead({row_num}, null, this.checked)\"/> VIP</label>")
+        html.append("</td>")
+
+        # Quick actions
+        html.append("<td class='right'>")
+        html.append(f"<button class='btn' style='padding:7px 10px' onclick=\"updateLead({row_num}, 'Confirmed', true)\">Confirm</button> ")
+        html.append(f"<button class='btn' style='padding:7px 10px' onclick=\"updateLead({row_num}, 'Seated', true)\">Seat</button>")
+        html.append("</td>")
+
+        html.append("</tr>")
+
+    html.append("</tbody></table></div>")
+    html.append("<div class='toast' id='toast'></div>")
+
+    html.append("""
+<script>
+const ADMIN_KEY = __ADMIN_KEY__;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(()=>t.style.display='none', 1400);
+}
+
+async function updateLead(row, status, vipBool){
+  const payload = {row: row};
+  if(status !== null){ payload.status = status; }
+  if(vipBool !== null){
+    payload.vip = vipBool ? "Yes" : "No";
+  }
+  try{
+    const res = await fetch(`/admin/update-lead?key=${encodeURIComponent(ADMIN_KEY)}`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if(!data.ok) throw new Error(data.error || 'Update failed');
+    toast('Saved ✓');
+    // Update row dataset for filtering
+    const tr = document.querySelector(`tr[data-row="${row}"]`);
+    if(tr){
+      if(payload.status){ tr.dataset.status = payload.status; }
+      if(payload.vip !== undefined){ tr.dataset.vip = payload.vip === "Yes" ? "1" : "0"; }
+    }
+  }catch(err){
+    console.error(err);
+    toast('Error: ' + err.message);
+  }
+}
+
+// Filters
+const qEl = document.getElementById('q');
+const fStatus = document.getElementById('fStatus');
+const fVip = document.getElementById('fVip');
+
+function applyFilters(){
+  const q = (qEl.value || '').toLowerCase().trim();
+  const st = (fStatus.value || '').trim();
+  const vipOnly = fVip.checked;
+
+  const rows = Array.from(document.querySelectorAll('#tbl tbody tr'));
+  for(const tr of rows){
+    const text = tr.innerText.toLowerCase();
+    const okQ = !q || text.includes(q);
+    const okS = !st || (tr.dataset.status === st);
+    const okV = !vipOnly || (tr.dataset.vip === "1");
+    tr.style.display = (okQ && okS && okV) ? '' : 'none';
+  }
+}
+
+qEl.addEventListener('input', applyFilters);
+fStatus.addEventListener('change', applyFilters);
+fVip.addEventListener('change', applyFilters);
+</script>
+""".replace("__ADMIN_KEY__", json.dumps(key)))
+
+
+    html.append("</div></body></html>")
+    return "".join(html)
+
+
+
+
+
+@app.route("/admin/fanzone")
+def admin_fanzone():
+    key = request.args.get("key", "")
+    if not ADMIN_KEY or key != ADMIN_KEY:
+        return "Unauthorized", 401
+
+    html = []
+    html.append("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'/>")
+    html.append("<title>Fan Zone Admin</title>")
+    html.append("""<style>
+:root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
+body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(1200px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);color:var(--text);}
+.wrap{max-width:1200px;margin:0 auto;padding:18px;}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
+.h1{font-size:18px;font-weight:800;letter-spacing:.3px}
+.sub{color:var(--muted);font-size:12px}
+.pills{display:flex;gap:8px;flex-wrap:wrap}
+.pill{border:1px solid var(--line);background:rgba(255,255,255,.03);padding:8px 10px;border-radius:999px;font-size:12px}
+.pill b{color:var(--gold)}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
+.inp, select{background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px 10px;font-size:12px;outline:none}
+.btn{cursor:pointer;background:linear-gradient(180deg, rgba(212,175,55,.18), rgba(212,175,55,.06));border:1px solid rgba(212,175,55,.35);color:var(--text);border-radius:12px;padding:9px 12px;font-size:12px}
+.btn:active{transform:translateY(1px)}
+.tablewrap{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:rgba(255,255,255,.03);box-shadow:0 10px 35px rgba(0,0,0,.35)}
+table{border-collapse:collapse;width:100%}
+thead th{position:sticky;top:0;background:rgba(10,16,34,.95);backdrop-filter: blur(6px);z-index:2}
+th,td{border-bottom:1px solid var(--line);padding:10px 10px;font-size:12px;vertical-align:top}
+th{color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:11px}
+tr:hover td{background:rgba(255,255,255,.03)}
+.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:11px}
+.badge.vip{border-color:rgba(212,175,55,.5);box-shadow:0 0 0 1px rgba(212,175,55,.18) inset}
+.dot{width:7px;height:7px;border-radius:999px;background:var(--muted);display:inline-block}
+.dot.new{background:var(--warn)}
+.dot.confirmed{background:var(--good)}
+.dot.seated{background:#7aa7ff}
+.dot.noshow{background:var(--bad)}
+.small{font-size:11px;color:var(--muted)}
+.right{text-align:right}
+.tel{color:var(--text);text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
+.toast{position:fixed;right:14px;bottom:14px;background:rgba(0,0,0,.55);border:1px solid var(--line);padding:10px 12px;border-radius:12px;font-size:12px;display:none}
+</style>""")
+    html.append("</head><body><div class='wrap'>")
+
+    html.append("<div class='topbar'>")
+    html.append(f"<div><div class='h1'>Fan Zone Admin — {_hesc(SHEET_TITLE or 'World Cup')}</div><div class='sub'>Poll controls (Sponsor text + Match of the Day) • Key required</div></div>")
+    html.append("<div style='display:flex;gap:10px;align-items:center;flex-wrap:wrap'>")
+    html.append(f"<a class='btn' href='/admin?key={key}' style='text-decoration:none;display:inline-block'>Leads</a>")
+    html.append("</div></div>")
+
+    html.append(f"<div style='display:flex;gap:8px;margin:10px 0 14px 0;flex-wrap:wrap;'>"
+                f"<a href='/admin?key={key}' style='text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);font-weight:800'>Leads</a>"
+                f"<a href='/admin/fanzone?key={key}' style='text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid rgba(212,175,55,.35);border-radius:999px;background:rgba(212,175,55,.10);font-weight:900'>Fan Zone</a>"
+                f"</div>")
+
     html.append(r"""
 <div class="panelcard" style="margin:14px 0;border:1px solid var(--line);border-radius:16px;padding:12px;background:rgba(255,255,255,.03);box-shadow:0 10px 35px rgba(0,0,0,.25)">
   <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
@@ -1950,150 +2156,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
   setInterval(loadPoll, 5000);
 })();
 </script>
-""")
-
-    html.append("<div class='tablewrap'><table id='tbl'><thead><tr>")
-    # Show a clean set of columns (not every raw column), but keep the raw order if indices missing
-    cols = [
-        ("Timestamp", i_ts),
-        ("Name", i_name),
-        ("Phone", i_phone),
-        ("Date", i_date),
-        ("Time", i_time),
-        ("Party", i_party),
-        ("Lang", i_lang),
-        ("Status", i_status),
-        ("VIP", i_vip),
-        ("Actions", -999),
-    ]
-    for label, _ in cols:
-        html.append(f"<th>{_hesc(label)}</th>")
-    html.append("</tr></thead><tbody>")
-
-    def status_dot(s: str) -> str:
-        s2 = (s or "").lower()
-        if s2 == "confirmed": return "confirmed"
-        if s2 == "seated": return "seated"
-        if s2 in ["no-show", "noshow", "no_show"]: return "noshow"
-        return "new"
-
-    for row_num, r in numbered:
-        name = colval(r, i_name)
-        phone = colval(r, i_phone)
-        d = colval(r, i_date)
-        t = colval(r, i_time)
-        ps = colval(r, i_party)
-        lang = colval(r, i_lang)
-        status = colval(r, i_status, "New") or "New"
-        vip = colval(r, i_vip, "No") or "No"
-        ts = colval(r, i_ts)
-
-        is_vip = vip.lower() in ["yes", "true", "1", "y"]
-        badge = f"<span class='badge{' vip' if is_vip else ''}'><span class='dot {status_dot(status)}'></span>{_hesc(status)}{' • VIP' if is_vip else ''}</span>"
-
-        html.append(f"<tr data-row='{row_num}' data-status='{_hesc(status)}' data-vip='{ '1' if is_vip else '0' }'>")
-        html.append(f"<td class='small'>{_hesc(ts)}</td>")
-        html.append(f"<td><b>{_hesc(name)}</b></td>")
-        html.append(f"<td><a class='tel' href='tel:{_hesc(phone)}'>{_hesc(phone)}</a></td>")
-        html.append(f"<td>{_hesc(d)}</td>")
-        html.append(f"<td>{_hesc(t)}</td>")
-        html.append(f"<td class='right'>{_hesc(ps)}</td>")
-        html.append(f"<td class='right'>{_hesc(lang)}</td>")
-
-        # Status dropdown
-        html.append("<td>")
-        html.append(f"{badge}<div style='height:6px'></div>")
-        html.append(f"""
-<select onchange="updateLead({row_num}, this.value, null)">
-  <option {'selected' if status=='New' else ''}>New</option>
-  <option {'selected' if status=='Confirmed' else ''}>Confirmed</option>
-  <option {'selected' if status=='Seated' else ''}>Seated</option>
-  <option {'selected' if status=='No-Show' else ''}>No-Show</option>
-</select>
-""")
-        html.append("</td>")
-
-        # VIP toggle
-        checked = "checked" if is_vip else ""
-        html.append("<td class='right'>")
-        html.append(f"<label class='small' style='display:inline-flex;align-items:center;gap:6px;justify-content:flex-end'><input type='checkbox' {checked} onchange=\"updateLead({row_num}, null, this.checked)\"/> VIP</label>")
-        html.append("</td>")
-
-        # Quick actions
-        html.append("<td class='right'>")
-        html.append(f"<button class='btn' style='padding:7px 10px' onclick=\"updateLead({row_num}, 'Confirmed', true)\">Confirm</button> ")
-        html.append(f"<button class='btn' style='padding:7px 10px' onclick=\"updateLead({row_num}, 'Seated', true)\">Seat</button>")
-        html.append("</td>")
-
-        html.append("</tr>")
-
-    html.append("</tbody></table></div>")
-    html.append("<div class='toast' id='toast'></div>")
-
-    html.append("""
-<script>
-const ADMIN_KEY = __ADMIN_KEY__;
-function toast(msg){
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.style.display = 'block';
-  clearTimeout(window.__toastTimer);
-  window.__toastTimer = setTimeout(()=>t.style.display='none', 1400);
-}
-
-async function updateLead(row, status, vipBool){
-  const payload = {row: row};
-  if(status !== null){ payload.status = status; }
-  if(vipBool !== null){
-    payload.vip = vipBool ? "Yes" : "No";
-  }
-  try{
-    const res = await fetch(`/admin/update-lead?key=${encodeURIComponent(ADMIN_KEY)}`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    if(!data.ok) throw new Error(data.error || 'Update failed');
-    toast('Saved ✓');
-    // Update row dataset for filtering
-    const tr = document.querySelector(`tr[data-row="${row}"]`);
-    if(tr){
-      if(payload.status){ tr.dataset.status = payload.status; }
-      if(payload.vip !== undefined){ tr.dataset.vip = payload.vip === "Yes" ? "1" : "0"; }
-    }
-  }catch(err){
-    console.error(err);
-    toast('Error: ' + err.message);
-  }
-}
-
-// Filters
-const qEl = document.getElementById('q');
-const fStatus = document.getElementById('fStatus');
-const fVip = document.getElementById('fVip');
-
-function applyFilters(){
-  const q = (qEl.value || '').toLowerCase().trim();
-  const st = (fStatus.value || '').trim();
-  const vipOnly = fVip.checked;
-
-  const rows = Array.from(document.querySelectorAll('#tbl tbody tr'));
-  for(const tr of rows){
-    const text = tr.innerText.toLowerCase();
-    const okQ = !q || text.includes(q);
-    const okS = !st || (tr.dataset.status === st);
-    const okV = !vipOnly || (tr.dataset.vip === "1");
-    tr.style.display = (okQ && okS && okV) ? '' : 'none';
-  }
-}
-
-qEl.addEventListener('input', applyFilters);
-fStatus.addEventListener('change', applyFilters);
-fVip.addEventListener('change', applyFilters);
-</script>
 """.replace("__ADMIN_KEY__", json.dumps(key)))
-
 
     html.append("</div></body></html>")
     return "".join(html)
