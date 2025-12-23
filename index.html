@@ -1254,6 +1254,36 @@ body.phase-finals{ background: var(--phaseF); }
 
 
 /* --- Fan Zone side rails (desktop) --- */
+/* --- Left rail stack (VIP above Fan Zone) --- */
+@media(min-width: 1200px){
+  .fz-left-stack{
+    position: fixed;
+    left: 16px;
+    top: 84px; /* below header */
+    width: 220px;
+    max-height: calc(100vh - 110px);
+    display: flex;
+    flex-direction: column;
+    gap: 12px; /* SPACE between VIP + Fan Zone */
+    z-index: 55;
+  }
+  /* Fan zone left becomes normal inside the stack */
+  #fanZoneLeft.fanzone-left{
+    position: static;
+    width: 100%;
+    max-height: none;
+    overflow: auto;
+  }
+  /* VIP rail matches width and never affects main layout */
+  #vipHoldRail{
+    position: static;
+    width: 100%;
+  }
+}
+@media(max-width: 1199px){
+  .fz-left-stack{ width: auto; position: static; display: block; }
+}
+
 .fanzone-left, .fanzone-right{ width: 320px; }
 @media(min-width: 1200px){
   /* Keep header + core app centered while side rails stay visible */
@@ -2186,6 +2216,9 @@ body.kiosk-mode *::-webkit-scrollbar{
   background: linear-gradient(90deg, transparent, rgba(255,204,102,.35), transparent);
 }
 
+.vip-rail{ width:220px; max-width:220px; }
+.vip-rail .vip-card{ width:100%; }
+
 
 .vip-hold{
   margin-top: 18px;              /* space from Fan Zone card above */
@@ -2340,10 +2373,17 @@ body.kiosk-mode *::-webkit-scrollbar{
      Desktop: left + right rails so the main page never shifts off-screen.
      ======================= -->
 
-<aside aria-label="Fan Zone Left Panel" class="fanzone fanzone-left" id="fanZoneLeft"><aside aria-label="VIP Table Hold" class="vip-rail" id="vipHoldRail">
+<div class="fz-left-stack" id="fzLeftStack">
+<aside aria-label="VIP Table Hold" class="vip-rail" id="vipHoldRail">
 <div class="fz-card vip-hold vip-card" id="vipHoldCard">
 <h3>⭐ VIP Table Hold</h3>
+<div class="fz-muted" style="margin-top:6px;">Fast-track your best tables for big matches.</div>
+<div class="vip-actions" style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+  <button class="fz-btn" id="vipHoldBtn">Hold VIP table</button>
+  <button class="fz-btn" id="vipHoldInfoBtn">How it works</button>
+</div>
 </div></aside>
+<aside aria-label="Fan Zone Left Panel" class="fanzone fanzone-left" id="fanZoneLeft">
 <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
 <span class="fz-muted fz-rail-title">Fan Zone</span>
 <button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button>
@@ -2365,12 +2405,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
 </div>
 <div class="fz-muted" style="margin-top:10px;">Tip: set your country first for a more personalized vibe.</div>
-<div class="fz-actions" style="margin-top:10px; justify-content:flex-start;">
-<button class="fz-btn" id="vipHoldBtn">Hold VIP table</button>
-<button class="fz-btn" id="vipHoldInfoBtn">How it works</button>
-</div>
 </aside></div>
-
 <aside aria-label="Fan Zone Right Panel" class="fanzone fanzone-right" id="fanZoneRight">
 <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
 <span class="fz-muted fz-rail-title">Extras</span>
