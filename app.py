@@ -1247,6 +1247,71 @@ POLL_SPONSOR = os.environ.get("POLL_SPONSOR", "Fan Pick")
 POLL_WS_TITLE = os.environ.get("POLL_WS_TITLE", "PollVotes")
 POLL_CACHE_FILE = os.environ.get("POLL_CACHE_FILE", "/tmp/wc26_poll_votes.json")
 
+
+POLL_CONFIG_WS_TITLE = os.environ.get("POLL_CONFIG_WS_TITLE", "PollConfig")
+
+def _poll_config_defaults() -> Dict[str, str]:
+    return {
+        "sponsor": os.environ.get("POLL_SPONSOR", "Fan Pick"),
+        "match_id": "",  # if empty, server auto-picks match-of-day
+    }
+
+def _poll_get_config() -> Dict[str, str]:
+    """Load poll config from Google Sheet worksheet (key/value). Falls back to defaults."""
+    cfg = _poll_config_defaults()
+    try:
+        gc = get_gspread_client()
+        sh = gc.open(SHEET_NAME)
+        try:
+            ws = sh.worksheet(POLL_CONFIG_WS_TITLE)
+        except Exception:
+            ws = sh.add_worksheet(title=POLL_CONFIG_WS_TITLE, rows=20, cols=4)
+            ws.update("A1", [["key","value"], ["sponsor", cfg["sponsor"]], ["match_id",""]])
+            return cfg
+
+        rows = ws.get_all_values() or []
+        for r in rows[1:]:
+            if len(r) >= 2:
+                k = (r[0] or "").strip().lower()
+                v = (r[1] or "").strip()
+                if k in cfg:
+                    cfg[k] = v
+    except Exception:
+        pass
+    return cfg
+
+def _poll_set_config(patch: Dict[str, str]) -> Dict[str, str]:
+    allowed = set(_poll_config_defaults().keys())
+    patch = {str(k).strip().lower(): str(v).strip() for k, v in (patch or {}).items() if str(k).strip().lower() in allowed}
+    cfg = _poll_get_config()
+    cfg.update({k:v for k,v in patch.items()})
+    try:
+        gc = get_gspread_client()
+        sh = gc.open(SHEET_NAME)
+        try:
+            ws = sh.worksheet(POLL_CONFIG_WS_TITLE)
+        except Exception:
+            ws = sh.add_worksheet(title=POLL_CONFIG_WS_TITLE, rows=20, cols=4)
+            ws.update("A1", [["key","value"]])
+
+        rows = ws.get_all_values() or []
+        index = {}
+        for i, r in enumerate(rows[1:], start=2):
+            if len(r) >= 1:
+                index[(r[0] or "").strip().lower()] = i
+        for k,v in cfg.items():
+            row = index.get(k)
+            if row:
+                ws.update(f"B{row}", v)
+            else:
+                ws.append_row([k, v])
+    except Exception:
+        pass
+    return cfg
+
+def _poll_match_id(m: Dict[str, Any]) -> str:
+    return f"{m.get('datetime_utc','')}|{m.get('home','')}|{m.get('away','')}"
+
 def _poll_pct(a: int, b: int) -> Tuple[int, int]:
     total = max(0, int(a or 0)) + max(0, int(b or 0))
     if total <= 0:
@@ -1266,6 +1331,18 @@ def _poll_pick_match_of_day(matches: List[Dict[str, Any]]) -> Optional[Dict[str,
     """
     Choose today's first match (UTC date). If no match today, choose the next upcoming match.
     """
+
+    # Admin override (no redeploy): if PollConfig.match_id is set, use that match.
+    cfg = _poll_get_config()
+    override_id = (cfg.get("match_id") or "").strip()
+    if override_id:
+        for mm in matches:
+            try:
+                if (mm.get("match_id") or _poll_match_id(mm)) == override_id:
+                    return mm
+            except Exception:
+                continue
+
     now = _poll_now_utc()
     today = now.date().isoformat()
 
@@ -1424,7 +1501,7 @@ def poll_match_of_day():
 
         payload = {
             "ok": True,
-            "sponsor": POLL_SPONSOR,
+            "sponsor": _poll_get_config().get("sponsor","Fan Pick"),
             "match": {
                 "id": rec["match_id"],
                 "home": rec["home"],
@@ -1543,6 +1620,80 @@ def admin_poll_set():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+
+
+
+@app.route("/admin/poll/config", methods=["GET","POST"])
+def admin_poll_config():
+    # Fan Poll Settings: sponsor label + match-of-day override (no redeploy)
+    if request.method == "GET":
+        key = request.args.get("key","")
+        if not ADMIN_KEY or key != ADMIN_KEY:
+            return "Unauthorized", 401
+        cfg = _poll_get_config()
+
+        matches = load_all_matches()
+        now = datetime.now(timezone.utc)
+        upcoming = []
+        for m in matches:
+            try:
+                dt = datetime.strptime(m.get("datetime_utc",""), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+            except Exception:
+                continue
+            if dt >= now:
+                upcoming.append(m)
+        upcoming = sorted(upcoming, key=lambda x: x.get("datetime_utc",""))[:200]
+
+        cur = (cfg.get("match_id") or "")
+        opts = []
+        for m in upcoming:
+            mid = m.get("match_id") or _poll_match_id(m)
+            label = f"{m.get('date','')} {m.get('time','')} — {m.get('home','')} vs {m.get('away','')} ({m.get('venue','')})"
+            sel = "selected" if mid == cur else ""
+            opts.append(f"<option value='{_hesc(mid)}' {sel}>{_hesc(label)}</option>")
+
+        return f"""<!doctype html><html><head><meta charset='utf-8'><title>Fan Poll Settings</title>
+        <style>
+          body{{font-family:Arial;padding:16px;max-width:920px}}
+          label{{display:block;margin-top:10px;font-weight:800}}
+          input,select{{width:100%;padding:10px;border:1px solid #ccc;border-radius:12px}}
+          .muted{{color:#555;font-size:13px;line-height:1.35}}
+          button{{margin-top:14px;padding:10px 14px;border:0;border-radius:12px;background:#111;color:#fff;font-weight:900;cursor:pointer}}
+          a{{color:#0b5bd3}}
+        </style></head><body>
+          <h2>Fan Poll Settings</h2>
+          <p class='muted'>Changes apply immediately (no redeploy). <a href='/admin?key={_hesc(key)}'>Back to Admin</a></p>
+
+          <form method='post' action='/admin/poll/config?key={_hesc(key)}'>
+            <label>Presented by (sponsor)</label>
+            <input name='sponsor' value='{_hesc(cfg.get("sponsor","Fan Pick"))}' placeholder='Fan Pick presented by ...' />
+            <label>Match of the Day (override)</label>
+            <select name='match_id'>
+              <option value=''>Auto-pick (today / next match)</option>
+              {''.join(opts)}
+            </select>
+            <p class='muted'>If you select a match, the Fan Poll stays on that match until you change it. Leave blank to auto-pick daily.</p>
+            <button type='submit'>Save</button>
+          </form>
+        </body></html>"""
+
+    # POST (supports JSON or form)
+    key = request.args.get("key","")
+    if not ADMIN_KEY or key != ADMIN_KEY:
+        data = request.get_json(silent=True) or {}
+        if not ADMIN_KEY or (data.get("key") or "") != ADMIN_KEY:
+            return jsonify({"ok": False, "error": "Unauthorized"}), 401
+        key = data.get("key","")
+
+    if request.is_json:
+        data = request.get_json(force=True, silent=True) or {}
+        cfg = _poll_set_config({"sponsor": data.get("sponsor",""), "match_id": data.get("match_id","")})
+        return jsonify({"ok": True, "config": cfg})
+    else:
+        sponsor = request.form.get("sponsor","")
+        match_id = request.form.get("match_id","")
+        _poll_set_config({"sponsor": sponsor, "match_id": match_id})
+        return "Saved. <a href='/admin?key=%s'>Back to Admin</a>" % _hesc(key)
 
 # Admin dashboard
 # ============================================================
