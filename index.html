@@ -2014,6 +2014,84 @@ header{ flex:0 0 auto; }
   scrollbar-gutter: stable both-edges;
 }
 
+
+/* =======================
+   MINI SCROLLBAR (luxury cue that more games exist)
+   ======================= */
+/* WebKit browsers */
+.schedule::-webkit-scrollbar{
+  width: 6px;
+}
+.schedule::-webkit-scrollbar-track{
+  background: transparent;
+}
+.schedule::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.28);
+  border-radius: 999px;
+}
+.schedule::-webkit-scrollbar-thumb:hover{
+  background: rgba(255,204,102,.65); /* subtle gold on hover */
+}
+
+/* Firefox */
+.schedule{
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.35) transparent;
+}
+
+
+/* =======================
+   SCROLL DELIGHT PACK
+   - Gentle nudge on first load
+   - Match-day glow that tracks the scrollbar thumb
+   - Kiosk/TV mode scrollbar suppression
+   ======================= */
+
+/* Ensure schedule can host overlay glow */
+.schedule{ position: relative; }
+
+/* Subtle "nudge" hint (applied briefly via JS) */
+@keyframes scheduleNudge{
+  0%{ transform: translateY(0); }
+  35%{ transform: translateY(-6px); }
+  70%{ transform: translateY(4px); }
+  100%{ transform: translateY(0); }
+}
+.schedule.nudge{
+  animation: scheduleNudge 900ms ease-in-out 1;
+}
+
+/* Scrollbar-thumb-follow glow (overlay, not the real scrollbar) */
+.scrollGlow{
+  position:absolute;
+  right: 2px;
+  top: 10px;
+  width: 10px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(255,204,102,.55);
+  filter: blur(6px);
+  opacity: 0;
+  transform: translateY(0);
+  transition: opacity 220ms ease;
+  pointer-events:none;
+}
+
+/* Show glow only on match day (you already toggle has-dallas-today / matchday-mode elsewhere) */
+body.has-dallas-today .schedule .scrollGlow,
+body.matchday-mode .schedule .scrollGlow{
+  opacity: .95;
+}
+
+/* Kiosk / TV mode: hide scrollbars but keep scroll working */
+body.kiosk-mode *{
+  scrollbar-width: none !important; /* Firefox */
+}
+body.kiosk-mode *::-webkit-scrollbar{
+  width: 0 !important;
+  height: 0 !important;
+}
+
 </style>
 </head>
 <body>
@@ -3267,6 +3345,111 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
   // Start timer
   renderWcCountdown();
   setInterval(renderWcCountdown, 1000);
+
+
+  // -----------------------
+  // Scroll delight pack (UI-only)
+  // -----------------------
+  function prefersReducedMotion(){
+    return window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function enableKioskModeFromURL(){
+    try{
+      const qs = new URLSearchParams(location.search);
+      const kiosk = qs.get("kiosk") || qs.get("tv");
+      if(kiosk === "1" || kiosk === "true" || kiosk === "yes"){
+        document.body.classList.add("kiosk-mode");
+      }
+    }catch(e){}
+  }
+
+  function attachScheduleGlow(){
+    const panels = Array.from(document.querySelectorAll(".schedule"));
+    if(!panels.length) return;
+
+    panels.forEach(sc=>{
+      // Create overlay glow once per panel
+      let glow = sc.querySelector(".scrollGlow");
+      if(!glow){
+        glow = document.createElement("div");
+        glow.className = "scrollGlow";
+        sc.appendChild(glow);
+      }
+
+      function update(){
+        const sh = sc.scrollHeight;
+        const ch = sc.clientHeight;
+        if(sh <= ch + 2){
+          glow.style.opacity = "0";
+          return;
+        }
+        const thumbH = Math.max(22, Math.round((ch / sh) * ch));
+        const maxTop = ch - thumbH;
+        const maxScroll = sh - ch;
+        const top = maxScroll ? Math.round((sc.scrollTop / maxScroll) * maxTop) : 0;
+
+        glow.style.height = thumbH + "px";
+        glow.style.transform = `translateY(${top}px)`;
+        glow.style.opacity = ""; // body class controls base opacity
+      }
+
+      // Avoid duplicate listeners by caching
+      if(!sc.__wcGlowAttached){
+        sc.addEventListener("scroll", update, {passive:true});
+        window.addEventListener("resize", update);
+        sc.__wcGlowAttached = true;
+      }
+      update();
+    });
+  }
+
+  function gentleScheduleNudgeOnce(){
+    if(prefersReducedMotion()) return;
+    const panels = Array.from(document.querySelectorAll(".schedule"));
+    if(!panels.length) return;
+
+    // Nudge each panel once per session, only if it can scroll
+    panels.forEach((sc, idx)=>{
+      const key = "wc_schedule_nudged_" + idx;
+      if(sessionStorage.getItem(key) === "1") return;
+      if(sc.scrollHeight <= sc.clientHeight + 40) return;
+
+      sc.classList.add("nudge");
+      setTimeout(()=> sc.classList.remove("nudge"), 950);
+
+      const original = sc.scrollTop;
+      const down = Math.min(original + 36, sc.scrollHeight - sc.clientHeight);
+      try{
+        sc.scrollTo({ top: down, behavior: "smooth" });
+        setTimeout(()=> sc.scrollTo({ top: original, behavior: "smooth" }), 650);
+      }catch(e){
+        sc.scrollTop = down;
+        setTimeout(()=> sc.scrollTop = original, 250);
+      }
+
+      sessionStorage.setItem(key,"1");
+    });
+  }
+
+  // Hook into existing schedule rendering as best as possible:
+  // Run after load + also after any schedule updates.
+  window.addEventListener("load", ()=>{
+    enableKioskModeFromURL();
+    attachScheduleGlow();
+    setTimeout(gentleScheduleNudgeOnce, 900);
+  });
+
+  // If your app re-renders schedule dynamically, re-attach glow + allow nudge if never shown.
+  const _origRenderSchedule = window.renderSchedule;
+  if(typeof _origRenderSchedule === "function"){
+    window.renderSchedule = function(){
+      const r = _origRenderSchedule.apply(this, arguments);
+      try{ attachScheduleGlow(); }catch(e){}
+      try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
+      return r;
+    }
+  }
 
 </script>
 
