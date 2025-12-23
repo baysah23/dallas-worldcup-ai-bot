@@ -977,106 +977,127 @@ def schedule_json():
 # - Source: Wikipedia qualified teams table (updates over time).
 # ============================================================
 _qualified_cache: Dict[str, Any] = {"loaded_at": 0, "teams": []}
+
+# NOTE:
+# The full 48-team field for the 2026 World Cup is not known until qualification completes.
+# For the Fan Zone country selector we want a fast, reliable list that never blocks the UI.
+# We therefore default to an "eligible countries" list derived from pycountry (local data),
+# with hosts pinned to the top. If you want to switch back to a remote "qualified so far"
+# source, set USE_REMOTE_QUALIFIED=1 and provide QUALIFIED_SOURCE_URL.
+USE_REMOTE_QUALIFIED = os.environ.get("USE_REMOTE_QUALIFIED", "0") == "1"
 QUALIFIED_CACHE_SECONDS = int(os.environ.get("QUALIFIED_CACHE_SECONDS", str(12 * 60 * 60)))  # 12h
 QUALIFIED_SOURCE_URL = os.environ.get(
     "QUALIFIED_SOURCE_URL",
     "https://en.wikipedia.org/api/rest_v1/page/html/2026_FIFA_World_Cup_qualification",
 )
 
-def _fetch_qualified_teams() -> List[str]:
+def _local_country_list() -> List[str]:
+    """Return a stable, reasonably complete country list (no network)."""
+    try:
+        import pycountry
+        names = []
+        for c in pycountry.countries:
+            # Prefer common name if present, else official/name
+            n = getattr(c, "common_name", None) or getattr(c, "name", None) or getattr(c, "official_name", None)
+            if not n:
+                continue
+            n = str(n).strip()
+            # Exclude very odd historical entries; keep modern sovereigns + standard names
+            if n.lower() in {"occupied palestinian territory", "bolivia, plurinational state of", "venezuela, bolivarian republic of"}:
+                # We'll normalize these below
+                pass
+            names.append(n)
+
+        # Normalize a few common display names
+        normalize = {
+            "United States of America": "United States",
+            "Russian Federation": "Russia",
+            "Iran, Islamic Republic of": "Iran",
+            "Korea, Republic of": "South Korea",
+            "Korea, Democratic People's Republic of": "North Korea",
+            "Viet Nam": "Vietnam",
+            "Lao People's Democratic Republic": "Laos",
+            "Syrian Arab Republic": "Syria",
+            "Tanzania, United Republic of": "Tanzania",
+            "Bolivia, Plurinational State of": "Bolivia",
+            "Venezuela, Bolivarian Republic of": "Venezuela",
+            "Moldova, Republic of": "Moldova",
+            "Congo, The Democratic Republic of the": "DR Congo",
+            "Congo": "Congo",
+            "Czechia": "Czech Republic",
+            "Türkiye": "Turkey",
+            "Cabo Verde": "Cape Verde",
+        }
+        cleaned = []
+        for n in names:
+            cleaned.append(normalize.get(n, n))
+
+        # Deduplicate + sort
+        uniq = sorted(set(cleaned), key=lambda x: x.lower())
+
+        # Pin hosts to the top
+        for host in ["Canada", "Mexico", "United States"]:
+            if host in uniq:
+                uniq.remove(host)
+        return ["United States", "Canada", "Mexico"] + uniq
+    except Exception:
+        # Absolute fallback (never empty)
+        return ["United States", "Canada", "Mexico"]
+
+def _fetch_qualified_teams_remote() -> List[str]:
+    """Optional remote fetch. Not required for core functionality."""
     import urllib.request
     req = urllib.request.Request(
         QUALIFIED_SOURCE_URL,
         headers={"User-Agent": "worldcup-concierge/1.0"},
         method="GET",
     )
-    with urllib.request.urlopen(req, timeout=3) as resp:
-        html = resp.read().decode("utf-8", errors="replace")
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        html = resp.read().decode("utf-8", errors="ignore")
 
-    # Find the "Qualified teams" section and the first wikitable following it
-    # then extract the first column team names.
-    # This is a best-effort parser that avoids heavy HTML deps.
-    anchor = 'id="Qualified_teams"'
-    i = html.find(anchor)
-    if i == -1:
-        anchor = 'id="Qualified_teams"'
-    i = html.find(anchor)
-    if i == -1:
-        # fallback: just return hosts (always in WC)
-        return ["Canada", "Mexico", "United States"]
-
-    sub = html[i:]
-    # find first <table ...> ... </table>
-    t0 = sub.find("<table")
-    t1 = sub.find("</table>")
-    if t0 == -1 or t1 == -1:
-        return ["Canada", "Mexico", "United States"]
-    table = sub[t0:t1+8]
-
-    # rows
+    # Very lightweight parsing (best-effort)
     teams: List[str] = []
-    for row in re.findall(r"<tr[^>]*>(.*?)</tr>", table, flags=re.S):
-        # first <th> or <td>
-        cell_m = re.search(r"<t[hd][^>]*>(.*?)</t[hd]>", row, flags=re.S)
-        if not cell_m:
-            continue
-        cell = cell_m.group(1)
-
-        # Take the first visible link/text within the cell
-        # Prefer <a> text, fallback to stripped text.
-        a_m = re.search(r"<a[^>]*>([^<]+)</a>", cell)
-        name = (a_m.group(1) if a_m else re.sub(r"<[^>]+>", " ", cell))
-        name = re.sub(r"\s+", " ", name).strip()
-
-        # Skip header rows
-        if not name or name.lower() in {"team", "qualified teams"}:
-            continue
-
-        # Basic cleanup (Wikipedia sometimes includes footnote markers)
+    for name in re.findall(r">\s*([A-Za-z][A-Za-z .\-']{2,})\s*<", html):
         name = re.sub(r"\[[0-9]+\]", "", name).strip()
         if name and name not in teams:
             teams.append(name)
 
-    # Always ensure hosts are present
     for host in ["Canada", "Mexico", "United States"]:
         if host not in teams:
             teams.insert(0, host)
-
     return teams
 
 def get_qualified_teams(force: bool = False) -> List[str]:
-    """Return qualified teams quickly.
+    """Return countries for the Fan Zone selector (fast + reliable).
 
-    We keep a cache and *never* block user requests on a slow external fetch.
-    If cache is stale, we refresh it in a background thread and return the
-    most recent cached value immediately.
+    Default behavior (no network):
+      - Return a stable list of countries from local pycountry data.
+
+    Optional (network):
+      - If USE_REMOTE_QUALIFIED=1, we refresh from QUALIFIED_SOURCE_URL on a TTL.
     """
     now = int(time.time())
 
     # Ensure we always have something usable
     if not _qualified_cache.get("teams"):
-        _qualified_cache["teams"] = ["Canada", "Mexico", "United States"]
+        _qualified_cache["teams"] = _local_country_list()
         _qualified_cache["loaded_at"] = now
+
+    if not USE_REMOTE_QUALIFIED:
+        return list(_qualified_cache["teams"])
 
     fresh = (now - int(_qualified_cache.get("loaded_at") or 0) < QUALIFIED_CACHE_SECONDS)
     if force or not fresh:
-        # Refresh asynchronously
         try:
-            import threading
-            def _refresh():
-                try:
-                    teams = _fetch_qualified_teams()
-                    if teams:
-                        _qualified_cache["teams"] = teams
-                        _qualified_cache["loaded_at"] = int(time.time())
-                except Exception:
-                    pass
-            threading.Thread(target=_refresh, daemon=True).start()
+            teams = _fetch_qualified_teams_remote()
+            if teams:
+                _qualified_cache["teams"] = teams
+                _qualified_cache["loaded_at"] = now
         except Exception:
+            # Keep existing cache on failure
             pass
 
-    return _qualified_cache.get("teams") or ["Canada", "Mexico", "United States"]
-
+    return list(_qualified_cache["teams"])
 @app.route("/worldcup/qualified.json")
 def qualified_json():
     teams = get_qualified_teams()
@@ -1086,7 +1107,7 @@ def qualified_json():
         "teams": teams,
         "countries": teams,   # alias for front-end compatibility
         "qualified": teams,   # alias for front-end compatibility
-        "note": "Qualification is ongoing; this list reflects teams qualified so far.",
+        "note": "Countries list for Fan Zone selector. If qualification is ongoing, this may include countries not yet qualified.",
     })
 
 

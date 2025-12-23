@@ -1216,6 +1216,10 @@ body.phase-finals{ background: var(--phaseF); }
   .fz-card.third{ grid-column: span 4; }
 }
 .fz-card h3{ margin:0 0 8px 0; font-size: 14px; color: var(--text); }
+
+/* Prevent fan zone popouts from pushing content off-screen */
+#pollCard{ max-height: 55vh; overflow:auto; }
+#countryModal .panel{ max-height: 80vh; overflow:auto; }
 .fz-muted{ color: var(--muted); font-size: 12px; }
 
 /* Modal */
@@ -2457,7 +2461,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <button class="fz-btn" id="btnOpenPoll">Match poll</button></div>
 <div class="fz-card" id="pollCard" style="display:none; margin-top:10px;">
 <h3>⚔️ Match of the Day Poll</h3>
-<div class="fz-muted">Vote for who you think will win.</div>
+
 <div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
 </div>
 </aside></div>
@@ -4003,7 +4007,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
 
   // Load qualified countries (server provides)
   let COUNTRIES = [];
-  async function loadCountries(){
+  async async function loadCountries(){
   // Fast, non-blocking fetch; never freeze UI if the network is slow
   const ctrl = ("AbortController" in window) ? new AbortController() : null;
   const t = setTimeout(()=>{ try{ ctrl?.abort(); }catch(e){} }, 2500);
@@ -4169,6 +4173,21 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     if(qrImg){
       const src = "https://chart.googleapis.com/chart?cht=qr&chs=180x180&chl=" + encodeURIComponent(target);
       qrImg.src = src;
+      // Safety: if the image is blocked but doesn't trigger onerror (some blockers),
+      // detect "blank" loads and show fallback text.
+      setTimeout(()=>{
+        try{
+          if(!qrImg || qrImg.style.display==="none") return;
+          if(!qrImg.complete || (qrImg.naturalWidth||0)===0){
+            qrImg.removeAttribute("src");
+            qrImg.alt = "QR unavailable";
+            qrImg.style.display = "none";
+            const ph2 = document.getElementById("qrFallbackText");
+            if(ph2){ ph2.style.display = "block"; }
+          }
+        }catch(e){}
+      }, 1200);
+
       qrImg.alt = "QR code";
       qrImg.onerror = ()=>{
         // If external QR image is blocked, keep UX usable
