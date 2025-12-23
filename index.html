@@ -1546,6 +1546,41 @@ body.has-dallas-today .fanzone-right{
 .fanzone-right #qrCanvas{ width:96px; height:96px; }
 .fanzone-right .qrText a{ display:block; overflow-wrap:anywhere; word-break:break-all; }
 
+
+/* =======================
+   FAN ZONE RIGHT RAIL — overflow hard-fix (no horizontal scroll)
+   ======================= */
+.fanzone-left, .fanzone-right{
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+}
+.fz-card, .fanzone, .fz-row, .fz-grid, .qrWrap{ max-width: 100%; }
+.fz-card{ overflow: hidden; }
+.fz-muted, .fz-card, .fz-chip, .fz-btn, .qrText{
+  min-width: 0;
+}
+.qrText{
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.qrText a{
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  display: inline-block;
+  max-width: 100%;
+}
+
+/* Make the right rail content "taller" instead of wider */
+.fanzone-right .fz-card{ padding-bottom: 12px; }
+.fanzone-right .qrWrap{
+  flex-direction: column;
+  align-items: flex-start;
+}
+.fanzone-right #qrCanvas{
+  width: 92px;
+  height: 92px;
+}
+
 </style>
 </head>
 <body>
@@ -2775,7 +2810,7 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
    FAN ZONE FEATURES (UI-only)
    - Country support personalization (localStorage)
    - Fan poll (local simulated "live")
-   - Country-themed drink highlights
+   - Drink Highlights
    - QR poster generator (offline, no external deps)
    - Phase-based background gradient
    ======================= */
