@@ -2270,6 +2270,50 @@ body.kiosk-mode *::-webkit-scrollbar{
   .fanzone-left{ top: 264px !important; } /* 84px + 160px + 20px gap */
 }
 
+
+/* ===== VIP HOLD (layout-safe, luxury compact) ===== */
+.vip-rail{
+  margin: 0 0 14px 0; /* space below VIP, before Fan Zone */
+  width: 220px;
+}
+@media(max-width: 1199px){
+  .vip-rail{ width: auto; }
+}
+@media(min-width: 1200px){
+  /* keep VIP aligned with left rail fixed position */
+  .fanzone-left .vip-rail{ width: 220px; }
+}
+.vip-card{
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 18px;
+  padding: 10px 10px 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.02));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 18px 45px rgba(0,0,0,.25);
+}
+.vip-card h3{
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.vip-card .fz-muted{ font-size: 11px; line-height: 1.25; }
+.vip-card label{ font-size: 11px; color: var(--muted); }
+.vip-card input, .vip-card select, .vip-card textarea{
+  width: 100%;
+  font-size: 12px;
+  padding: 8px 9px;
+  border-radius: 12px;
+}
+.vip-card button, .vip-card .fz-btn{
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 12px;
+  border-radius: 999px;
+}
+.fanzone-left .fanzone{ margin-top: 14px; } /* ensures visible gap even if VIP collapses */
 </style>
 </head>
 <body>
@@ -2291,112 +2335,96 @@ body.kiosk-mode *::-webkit-scrollbar{
 </div>
 </div>
 </header>
-
 <!-- =======================
      FAN ZONE (UI-only) — SIDE PANELS
      Desktop: left + right rails so the main page never shifts off-screen.
      ======================= -->
 
-<aside class="fanzone vip-rail" id="vipHoldRail" aria-label="VIP Table Hold">
-  <div class="fz-card vip-hold" id="vipHoldCard">
-    <h3>⭐ VIP Table Hold</h3>
-    
-</aside>
-
-<aside class="fanzone fanzone-left" id="fanZoneLeft" aria-label="Fan Zone Left Panel">
-  
-  <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
-    <span class="fz-muted fz-rail-title">Fan Zone</span>
-    <button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button>
-  </div>
-<div class="fz-row" style="justify-content:flex-start;">
-    <div class="fz-chip" id="supporterChip" title="Personalization stored on this device only">
-      <span>🏁</span><span>Supporting:</span> <b id="supporterLabel">Not set</b>
-    </div>
-  </div>
-  <div class="fz-actions" style="margin-top:10px;">
-    <button class="fz-iconbtn" id="fzIconCountry" title="Pick country">🏁</button>
-    <button class="fz-iconbtn" id="fzIconPoll" title="Fan poll">📊</button>
-    <button class="fz-btn" id="btnPickCountry">Which country are you supporting?</button>
-    <button class="fz-btn" id="btnOpenPoll">Fan poll (live)</button>
-  </div>
-
-  <div class="fz-card" id="pollCard" style="display:none; margin-top:10px;">
-    <h3>📊 Fan Poll (live)</h3>
-    <div class="fz-muted">Tap your country to vote. Counts are simulated “live” on this device (UI-only).</div>
-    <div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
-  </div>
-
-  <div class="fz-muted" style="margin-top:10px;">Tip: set your country first for a more personalized vibe.</div>
-<div class="fz-actions" style="margin-top:10px; justify-content:flex-start;">
-      <button class="fz-btn" id="vipHoldBtn">Hold VIP table</button>
-      <button class="fz-btn" id="vipHoldInfoBtn">How it works</button>
-    </div>
-  </div>
-
-</aside>
-
-<aside class="fanzone fanzone-right" id="fanZoneRight" aria-label="Fan Zone Right Panel">
-  
-  <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
-    <span class="fz-muted fz-rail-title">Extras</span>
-    <button class="fz-iconbtn" id="fzCollapseToggle2" title="Collapse / expand">⫶</button>
-  </div>
-<div class="fz-actions" style="justify-content:flex-end;">
-    <button class="fz-iconbtn" id="fzIconDrinks" title="Drink highlight">🍹</button>
-    <button class="fz-iconbtn" id="fzIconQR" title="QR poster">📱</button>
-    <button class="fz-btn" id="btnSharePoster">QR poster</button>
-  </div>
-
-  <div class="fz-card" id="drinkCard" style="margin-top:10px;">
-    <h3>🍹 Drink highlights</h3>
-    <div class="fz-muted">Based on who you’re supporting (or pick a country).</div>
-    <div id="drinkHighlight" style="margin-top:10px;"></div>
-  </div>
-
-  <div class="fz-card" id="qrCard" style="display:none; margin-top:10px;">
-    <h3>📱 QR poster</h3>
-    <div class="fz-muted">Print/display at the entrance. Scan to open the app.</div>
-    <div class="qrWrap" style="margin-top:10px;">
-      <canvas id="qrCanvas" width="120" height="120" aria-label="QR code"></canvas>
-      <div class="qrText">
-        <div class="fz-muted" style="margin-bottom:6px;">Link:</div>
-        <div><a id="qrLink" href="#" target="_blank" rel="noopener">Open app</a></div>
-        <div class="fz-muted" style="margin-top:10px;">Tip: host publicly for in‑venue scanning.</div>
-      </div>
-    </div>
-  </div>
-</aside>
-
-<!-- Modal -->
-<div class="fz-modal" id="countryModal" role="dialog" aria-modal="true" aria-labelledby="countryModalTitle">
-  <div class="panel">
-    <h2 id="countryModalTitle">Which country are you supporting?</h2>
-    <div class="fz-muted" style="margin-bottom:10px;">Pick one. We’ll personalize the experience (stored locally).</div>
-    <div class="fz-country-grid" id="countryGrid"></div>
-    <div class="fz-footer">
-      <button class="fz-btn" id="btnCloseCountry">Close</button>
-      <button class="fz-btn" id="btnClearCountry">Clear selection</button>
-    </div>
-  </div>
+<aside aria-label="Fan Zone Left Panel" class="fanzone fanzone-left" id="fanZoneLeft"><aside aria-label="VIP Table Hold" class="vip-rail" id="vipHoldRail">
+<div class="fz-card vip-hold vip-card" id="vipHoldCard">
+<h3>⭐ VIP Table Hold</h3>
+</div></aside>
+<div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
+<span class="fz-muted fz-rail-title">Fan Zone</span>
+<button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button>
 </div>
+<div class="fz-row" style="justify-content:flex-start;">
+<div class="fz-chip" id="supporterChip" title="Personalization stored on this device only">
+<span>🏁</span><span>Supporting:</span> <b id="supporterLabel">Not set</b>
+</div>
+</div>
+<div class="fz-actions" style="margin-top:10px;">
+<button class="fz-iconbtn" id="fzIconCountry" title="Pick country">🏁</button>
+<button class="fz-iconbtn" id="fzIconPoll" title="Fan poll">📊</button>
+<button class="fz-btn" id="btnPickCountry">Which country are you supporting?</button>
+<button class="fz-btn" id="btnOpenPoll">Fan poll (live)</button>
+</div>
+<div class="fz-card" id="pollCard" style="display:none; margin-top:10px;">
+<h3>📊 Fan Poll (live)</h3>
+<div class="fz-muted">Tap your country to vote. Counts are simulated “live” on this device (UI-only).</div>
+<div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
+</div>
+<div class="fz-muted" style="margin-top:10px;">Tip: set your country first for a more personalized vibe.</div>
+<div class="fz-actions" style="margin-top:10px; justify-content:flex-start;">
+<button class="fz-btn" id="vipHoldBtn">Hold VIP table</button>
+<button class="fz-btn" id="vipHoldInfoBtn">How it works</button>
+</div>
+</aside></div>
 
-
+<aside aria-label="Fan Zone Right Panel" class="fanzone fanzone-right" id="fanZoneRight">
+<div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
+<span class="fz-muted fz-rail-title">Extras</span>
+<button class="fz-iconbtn" id="fzCollapseToggle2" title="Collapse / expand">⫶</button>
+</div>
+<div class="fz-actions" style="justify-content:flex-end;">
+<button class="fz-iconbtn" id="fzIconDrinks" title="Drink highlight">🍹</button>
+<button class="fz-iconbtn" id="fzIconQR" title="QR poster">📱</button>
+<button class="fz-btn" id="btnSharePoster">QR poster</button>
+</div>
+<div class="fz-card" id="drinkCard" style="margin-top:10px;">
+<h3>🍹 Drink highlights</h3>
+<div class="fz-muted">Based on who you’re supporting (or pick a country).</div>
+<div id="drinkHighlight" style="margin-top:10px;"></div>
+</div>
+<div class="fz-card" id="qrCard" style="display:none; margin-top:10px;">
+<h3>📱 QR poster</h3>
+<div class="fz-muted">Print/display at the entrance. Scan to open the app.</div>
+<div class="qrWrap" style="margin-top:10px;">
+<canvas aria-label="QR code" height="120" id="qrCanvas" width="120"></canvas>
+<div class="qrText">
+<div class="fz-muted" style="margin-bottom:6px;">Link:</div>
+<div><a href="#" id="qrLink" rel="noopener" target="_blank">Open app</a></div>
+<div class="fz-muted" style="margin-top:10px;">Tip: host publicly for in‑venue scanning.</div>
+</div>
+</div>
+</div>
+</aside>
+<!-- Modal -->
+<div aria-labelledby="countryModalTitle" aria-modal="true" class="fz-modal" id="countryModal" role="dialog">
+<div class="panel">
+<h2 id="countryModalTitle">Which country are you supporting?</h2>
+<div class="fz-muted" style="margin-bottom:10px;">Pick one. We’ll personalize the experience (stored locally).</div>
+<div class="fz-country-grid" id="countryGrid"></div>
+<div class="fz-footer">
+<button class="fz-btn" id="btnCloseCountry">Close</button>
+<button class="fz-btn" id="btnClearCountry">Clear selection</button>
+</div>
+</div>
+</div>
 <div class="grid"><div aria-label="World Cup 2026 hero banner" class="hero" id="heroBanner">
 <div aria-hidden="true" class="heroSlides" id="heroSlides"></div>
 <div aria-hidden="true" class="heroFX">
 <div class="heroSmoke">
-
-<div class="hero-flags" aria-hidden="true">
-  <span class="hero-flag" data-country="ARG">🇦🇷</span>
-  <span class="hero-flag" data-country="POR">🇵🇹</span>
-  <span class="hero-flag" data-country="FRA">🇫🇷</span>
-  <span class="hero-flag" data-country="NOR">🇳🇴</span>
-  <span class="hero-flag" data-country="ESP">🇪🇸</span>
-  <span class="hero-flag" data-country="ENG">🏴</span>
-  <span class="hero-flag" data-country="BRA">🇧🇷</span>
-  <span class="hero-flag" data-country="CAN">🇨🇦</span>
-  <span class="hero-flag" data-country="KOR">🇰🇷</span>
+<div aria-hidden="true" class="hero-flags">
+<span class="hero-flag" data-country="ARG">🇦🇷</span>
+<span class="hero-flag" data-country="POR">🇵🇹</span>
+<span class="hero-flag" data-country="FRA">🇫🇷</span>
+<span class="hero-flag" data-country="NOR">🇳🇴</span>
+<span class="hero-flag" data-country="ESP">🇪🇸</span>
+<span class="hero-flag" data-country="ENG">🏴</span>
+<span class="hero-flag" data-country="BRA">🇧🇷</span>
+<span class="hero-flag" data-country="CAN">🇨🇦</span>
+<span class="hero-flag" data-country="KOR">🇰🇷</span>
 </div>
 </div>
 <div class="heroGlow"></div>
@@ -2406,18 +2434,16 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="heroKicker">WORLD CUP 2026</div>
 <div class="heroTitle">DALLAS MATCH DAY HQ</div>
 <div class="heroSub">Reserve tables • Live schedules • Concierge chat</div>
-
-      <div class="wcCount" id="wcCount">
-        <div class="wcLabel">WORLD CUP KICKOFF IN</div>
-        <div class="wcNums" aria-live="polite">
-          <span><b id="wcD">--</b><small>d</small></span>
-          <span><b id="wcH">--</b><small>h</small></span>
-          <span><b id="wcM">--</b><small>m</small></span>
-          <span><b id="wcS">--</b><small>s</small></span>
-        </div>
-      </div>
-
-<div class="heroRoster" id="heroRoster" aria-hidden="true"></div>
+<div class="wcCount" id="wcCount">
+<div class="wcLabel">WORLD CUP KICKOFF IN</div>
+<div aria-live="polite" class="wcNums">
+<span><b id="wcD">--</b><small>d</small></span>
+<span><b id="wcH">--</b><small>h</small></span>
+<span><b id="wcM">--</b><small>m</small></span>
+<span><b id="wcS">--</b><small>s</small></span>
+</div>
+</div>
+<div aria-hidden="true" class="heroRoster" id="heroRoster"></div>
 </div>
 <div aria-hidden="true" class="heroDots" id="heroDots"></div>
 </div>
@@ -2431,7 +2457,6 @@ body.kiosk-mode *::-webkit-scrollbar{
 </div>
 <div class="menu" id="menu"></div>
 </div>
-
 <!-- Chat / Reservations -->
 <div class="card chatcard" style="display:flex;flex-direction:column;min-height:0;">
 <div class="cardhead">
@@ -2478,8 +2503,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 </div>
 </div>
 <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
-<input id="teamSearch" placeholder="Search team / venue / date (e.g., June 13 or 2026-06-13)..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;"/ list="teamSuggestions">
-
+<input id="teamSearch" list="teamSuggestions" placeholder="Search team / venue / date (e.g., June 13 or 2026-06-13)..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;"/>
 <datalist id="teamSuggestions"></datalist>
 <div class="pill" id="matchCount">0</div>
 </div>
@@ -2497,7 +2521,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 </div>
 </div>
 </div>
-</div>
+
 <script>
 /**
  * This frontend matches your current app.py endpoints:
@@ -3811,8 +3835,6 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   window.addEventListener("load", ()=> setTimeout(adjustScheduleBottomPadding, 250));
 
 </script>
-
-
 <script>
 /* Sync hero mini flags with active slide (UI-only) */
 (function(){
@@ -3833,7 +3855,6 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   slides.forEach(s => mo.observe(s, { attributes:true, attributeFilter:['class'] }));
 })();
 </script>
-
 <script>
 /* =======================
    FAN ZONE FEATURES (UI-only)
@@ -4189,8 +4210,6 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
 
 })();
 </script>
-
-
 <script>
 /* =======================
    FAN ZONE RAIL BEHAVIOR (UI-only)
@@ -4305,8 +4324,6 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   }catch(e){}
 })();
 </script>
-
-
 <script>
 /* VIP Table Hold (UI-only)
    IMPORTANT: this is intentionally NOT placed in/under the Dallas schedule panel
@@ -4336,6 +4353,5 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   });
 })();
 </script>
-
 </body>
 </html>
