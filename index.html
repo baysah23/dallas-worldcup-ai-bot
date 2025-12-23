@@ -2170,93 +2170,6 @@ body.kiosk-mode *::-webkit-scrollbar{
   box-shadow: none !important;
 }
 
-
-/* =======================
-   PAYMENTS / DEPOSITS (UI-only demo)
-   - No real charging; stores "deposit intent" locally
-   - Simulates CRM capture + remarketing tag
-   ======================= */
-.pay-card{
-  margin-top: 12px;
-  border: 1px solid rgba(255,255,255,.14);
-  border-radius: 16px;
-  background: rgba(0,0,0,.18);
-  padding: 12px;
-}
-.pay-card .row{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.pay-card .t{ font-weight:700; font-size: 13px; }
-.pay-card .sub{ color: var(--muted); font-size: 12px; margin-top: 6px; line-height: 1.35; }
-.pay-card .tag{
-  display:inline-flex; align-items:center; gap:6px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(255,255,255,.06);
-  border-radius: 999px;
-  padding: 4px 8px;
-  font-size: 11px;
-}
-.pay-card .tag b{ color: var(--warn); }
-.pay-card button{
-  border-radius: 12px;
-  padding: 8px 10px;
-}
-
-/* Modal */
-.pay-modal{
-  position: fixed; inset: 0;
-  display: none;
-  align-items: center; justify-content: center;
-  background: rgba(0,0,0,.55);
-  z-index: 10000;
-}
-.pay-modal.show{ display:flex; }
-.pay-modal .panel{
-  width: min(560px, 92vw);
-  border: 1px solid rgba(255,255,255,.16);
-  border-radius: 18px;
-  background: rgba(10,18,40,.94);
-  padding: 14px;
-  box-shadow: 0 24px 70px rgba(0,0,0,.55);
-}
-.pay-modal .head{
-  display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
-  margin-bottom: 10px;
-}
-.pay-modal h2{ margin:0; font-size: 15px; }
-.pay-modal .muted{ color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.35; }
-.pay-modal .grid{
-  display:grid;
-  grid-template-columns: 1fr 1fr;
-  gap:10px;
-}
-@media(max-width:560px){ .pay-modal .grid{ grid-template-columns: 1fr; } }
-.pay-modal label{ font-size: 11px; color: var(--muted); display:block; margin: 2px 0 6px; }
-.pay-modal input, .pay-modal select{
-  width: 100%;
-  height: 40px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(0,0,0,.24);
-  color: var(--text);
-  padding: 0 12px;
-  font-size: 13px;
-  outline: none;
-}
-.pay-modal .actions{
-  display:flex; gap:10px; justify-content:space-between; flex-wrap:wrap;
-  margin-top: 12px;
-}
-.pay-modal .actions .left{ display:flex; gap:10px; flex-wrap:wrap; }
-.pay-modal .ok{
-  margin-top: 10px;
-  border: 1px solid rgba(46,160,67,.35);
-  background: rgba(46,160,67,.10);
-  border-radius: 14px;
-  padding: 10px;
-  display:none;
-}
-.pay-modal .ok.show{ display:block; }
-.pay-modal .ok b{ color: #9af2b1; }
-
 </style>
 </head>
 <body>
@@ -2355,6 +2268,30 @@ body.kiosk-mode *::-webkit-scrollbar{
   </div>
 </div>
 
+<!-- VIP Table Hold (UI-only) — below Fan Zone (does not move Menu/Chat/Dallas schedule) -->
+<div class="vipHoldWrap" style="max-width:1050px; width:100%; margin:12px auto 0; padding:0 12px;">
+  <div class="card" id="vipHoldCard">
+    <div class="cardhead">
+      <div class="title">VIP Table Hold</div>
+      <div class="pill" style="background:rgba(212,175,55,.14); border-color:rgba(212,175,55,.28); color:rgba(255,235,185,.95);">VIP</div>
+    </div>
+    <div class="sidepad" style="padding-top:10px;">
+      <div class="muted" style="line-height:1.35;">
+        One-tap VIP hold request. This simply starts the reservation flow and tags your message as VIP (UI-only).
+      </div>
+    </div>
+    <div class="sidepad" style="padding-top:0; display:flex; gap:10px; flex-wrap:wrap;">
+      <button class="secondary" id="vipHoldBtn" style="border-color:rgba(212,175,55,.38);">
+        Hold a VIP table
+      </button>
+      <button class="secondary" id="vipHoldInfoBtn">
+        How it works
+      </button>
+    </div>
+  </div>
+</div>
+
+
 
 <div class="grid"><div aria-label="World Cup 2026 hero banner" class="hero" id="heroBanner">
 <div aria-hidden="true" class="heroSlides" id="heroSlides"></div>
@@ -2405,6 +2342,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 </div>
 <div class="menu" id="menu"></div>
 </div>
+
 <!-- Chat / Reservations -->
 <div class="card chatcard" style="display:flex;flex-direction:column;min-height:0;">
 <div class="cardhead">
@@ -2467,82 +2405,6 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="pill" id="pageIndicator">Page 1 of 1</div>
 <button class="secondary" id="nextPage" style="min-width:88px;">Next</button>
 </div>
-</div>
-
-<!-- =======================
-     PAYMENTS / DEPOSITS (UI-only demo)
-     ======================= -->
-<div class="pay-card" id="vipHoldCard" aria-label="VIP table hold demo">
-  <div class="row">
-    <div>
-      <div class="t">VIP table hold <span class="tag"><b>demo</b> • no charge</span></div>
-      <div class="sub">
-        Reserve a placeholder “deposit intent” (stored locally) to simulate payment → CRM capture → remarketing.
-      </div>
-    </div>
-    <button class="secondary" id="btnVipHold" type="button" style="min-width:140px;">Hold VIP Table</button>
-  </div>
-</div>
-
-<div class="pay-modal" id="vipModal" role="dialog" aria-modal="true" aria-label="VIP table hold modal">
-  <div class="panel">
-    <div class="head">
-      <div>
-        <h2>VIP table hold (demo)</h2>
-        <div class="muted">
-          No real charging. This stores a local “deposit intent” + pushes a demo remarketing event.
-        </div>
-      </div>
-      <button class="secondary" id="btnVipClose" type="button" aria-label="Close" style="min-width:88px;">Close</button>
-    </div>
-
-    <div class="grid">
-      <div>
-        <label for="vipName">Name</label>
-        <input id="vipName" autocomplete="name" placeholder="Your name" />
-      </div>
-      <div>
-        <label for="vipPhone">Phone</label>
-        <input id="vipPhone" inputmode="tel" autocomplete="tel" placeholder="(214) 555-0123" />
-      </div>
-
-      <div>
-        <label for="vipEmail">Email (optional)</label>
-        <input id="vipEmail" inputmode="email" autocomplete="email" placeholder="you@email.com" />
-      </div>
-      <div>
-        <label for="vipParty">Party size</label>
-        <select id="vipParty">
-          <option value="2">2</option><option value="3">3</option><option value="4" selected>4</option><option value="5">5</option>
-          <option value="6">6</option><option value="7">7</option><option value="8">8</option><option value="10">10</option>
-          <option value="12">12</option><option value="16">16</option>
-        </select>
-      </div>
-
-      <div>
-        <label for="vipMatch">Match preference</label>
-        <select id="vipMatch">
-          <option value="">Auto (next Dallas match)</option>
-        </select>
-      </div>
-      <div>
-        <label for="vipAmount">Deposit placeholder</label>
-        <input id="vipAmount" value="$50 (demo placeholder)" readonly />
-      </div>
-    </div>
-
-    <div class="actions">
-      <div class="left">
-        <button class="primary" id="btnVipConfirm" type="button" style="min-width:180px;">Save hold intent</button>
-        <button class="secondary" id="btnVipClear" type="button">Clear saved intent</button>
-      </div>
-      <div class="pill" id="vipStatus" style="padding:6px 10px;">Not saved</div>
-    </div>
-
-    <div class="ok" id="vipOk">
-      <b>Saved.</b> Demo CRM + remarketing events simulated. (No payment taken.)
-    </div>
-  </div>
 </div>
 </div>
 </div>
@@ -4357,194 +4219,32 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
 
 
 <script>
-/* =======================
-   PAYMENTS / DEPOSITS (UI-only demo)
-   - Adds VIP table hold card + modal
-   - Saves "deposit intent" locally (no charging)
-   - Simulates CRM capture + remarketing tag
-   - Defensive / null-safe wiring (won't break core app)
-   ======================= */
+/* VIP Table Hold (UI-only)
+   IMPORTANT: this is intentionally NOT placed in/under the Dallas schedule panel
+   to avoid pager overlap issues. */
 (function(){
-  const $ = (id)=>document.getElementById(id);
-  const safeJSON = (s, fallback)=>{ try{ return JSON.parse(s); }catch(e){ return fallback; } };
-
-  const card = $("vipHoldCard");
-  const modal = $("vipModal");
-  if(!card || !modal) return; // fail-closed
-
-  const btnOpen = $("btnVipHold");
-  const btnClose = $("btnVipClose");
-  const btnConfirm = $("btnVipConfirm");
-  const btnClear = $("btnVipClear");
-  const okBox = $("vipOk");
-  const status = $("vipStatus");
-
-  const nameEl = $("vipName");
-  const phoneEl = $("vipPhone");
-  const emailEl = $("vipEmail");
-  const partyEl = $("vipParty");
-  const matchEl = $("vipMatch");
-
-  const LS_INTENT = "vip_deposit_intent_demo";
-  const LS_CRM    = "crm_leads_demo";
-  const LS_RMKT   = "rmkt_vip_hold_demo";
-
-  function open(){
-    modal.classList.add("show");
-    okBox && okBox.classList.remove("show");
-    hydrateMatchOptions();
-    renderStatus();
-    try{ (nameEl || phoneEl || emailEl)?.focus?.(); }catch(e){}
-  }
-  function close(){
-    modal.classList.remove("show");
-  }
-
-  function getNextDallasFromSchedule(){
-    try{
-      const d = window.__lastScheduleResponse || window.scheduleDataCache || null;
-      const next = d && d.next_match ? d.next_match : null;
-      return next;
-    }catch(e){ return null; }
-  }
-
-  function labelMatch(m){
-    if(!m) return "";
-    const a = (m.team1 || m.home || m.a || m.team_a || "").toString();
-    const b = (m.team2 || m.away || m.b || m.team_b || "").toString();
-    const date = (m.date || "").toString();
-    const time = (m.time_local || m.time || "").toString();
-    const venue = (m.venue || "").toString();
-    const vs = (a && b) ? (a + " vs " + b) : (m.title || m.match || "").toString();
-    const bits = [vs, date, time, venue].filter(Boolean);
-    return bits.join(" • ");
-  }
-
-  function hydrateMatchOptions(){
-    if(!matchEl) return;
-    // preserve first option
-    const keep = matchEl.querySelector("option[value='']") ? matchEl.querySelector("option[value='']") : null;
-    matchEl.innerHTML = "";
-    if(keep) matchEl.appendChild(keep);
-
-    // Try to use the schedule cards currently rendered as a fallback
-    const opts = [];
-    try{
-      const next = getNextDallasFromSchedule();
-      if(next){
-        opts.push({value: "next_dallas", text: "Next Dallas match: " + labelMatch(next), meta: next});
-      }
-      const cards = Array.from(document.querySelectorAll(".match-card")).slice(0, 8);
-      cards.forEach((c, i)=>{
-        const t = (c.textContent || "").replace(/\s+/g, " ").trim();
-        if(!t) return;
-        opts.push({value:"card_"+i, text:t});
-      });
-    }catch(e){}
-
-    opts.slice(0, 10).forEach(o=>{
-      const opt = document.createElement("option");
-      opt.value = o.value;
-      opt.textContent = o.text;
-      matchEl.appendChild(opt);
+  const btn = document.getElementById("vipHoldBtn");
+  const info = document.getElementById("vipHoldInfoBtn");
+  if(info){
+    info.addEventListener("click", ()=>{
+      alert("VIP Hold = fast-start the reservation flow.\n\nClick ‘Hold a VIP table’ to begin, then answer the questions (name, phone, date, time, party size).");
     });
   }
-
-  function readIntent(){
-    return safeJSON(localStorage.getItem(LS_INTENT) || "null", null);
-  }
-  function writeIntent(intent){
-    try{ localStorage.setItem(LS_INTENT, JSON.stringify(intent)); }catch(e){}
-  }
-  function clearIntent(){
-    try{ localStorage.removeItem(LS_INTENT); }catch(e){}
-  }
-
-  function pushCRM(intent){
+  if(!btn) return;
+  btn.addEventListener("click", ()=>{
     try{
-      const list = safeJSON(localStorage.getItem(LS_CRM) || "[]", []);
-      list.push(intent);
-      localStorage.setItem(LS_CRM, JSON.stringify(list.slice(-200)));
-    }catch(e){}
-  }
-
-  function pushRemarketing(intent){
-    try{
-      localStorage.setItem(LS_RMKT, "1");
-      // Common pattern: dataLayer (GA4/GTAG). Demo only.
-      window.dataLayer = window.dataLayer || [];
-      window.dataLayer.push({
-        event: "vip_hold_demo",
-        source: "wc26_app_demo",
-        name: intent.name || "",
-        phone: intent.phone || "",
-        match_pref: intent.match_pref || "",
-        party_size: intent.party_size || "",
-        ts: intent.ts || Date.now()
-      });
-      document.body?.setAttribute?.("data-rmkt-vip-hold", "1");
-    }catch(e){}
-  }
-
-  function renderStatus(){
-    const intent = readIntent();
-    if(!status) return;
-    if(intent){
-      const when = intent.ts ? new Date(intent.ts) : null;
-      const stamp = when ? when.toLocaleString() : "saved";
-      status.textContent = "Saved • " + stamp;
-    } else {
-      status.textContent = "Not saved";
+      // Prefer sending a VIP-tagged message first, then ensure reservation flow starts.
+      if(typeof sendMessage === "function"){
+        sendMessage("VIP table hold — reservation");
+      } else {
+        const msgEl = document.getElementById("msg");
+        if(msgEl){ msgEl.value = "VIP table hold — reservation"; msgEl.focus(); }
+      }
+    }catch(e){
+      const msgEl = document.getElementById("msg");
+      if(msgEl){ msgEl.value = "VIP table hold — reservation"; msgEl.focus(); }
     }
-  }
-
-  function confirm(){
-    const intent = {
-      kind: "vip_hold_demo",
-      ts: Date.now(),
-      name: (nameEl?.value || "").trim(),
-      phone: (phoneEl?.value || "").trim(),
-      email: (emailEl?.value || "").trim(),
-      party_size: (partyEl?.value || "").toString(),
-      match_pref: (matchEl?.value || "").toString(),
-      session_id: (localStorage.getItem("session_id") || "")
-    };
-
-    // Minimal validation: do not block UX; just help the user
-    if(!intent.name && !intent.phone){
-      try{ status && (status.textContent = "Add name or phone to simulate CRM"); }catch(e){}
-    }
-
-    writeIntent(intent);
-    pushCRM(intent);
-    pushRemarketing(intent);
-    renderStatus();
-
-    if(okBox){
-      okBox.classList.add("show");
-      try{ okBox.scrollIntoView({behavior:"smooth", block:"nearest"}); }catch(e){}
-    }
-  }
-
-  function clearAll(){
-    clearIntent();
-    try{ localStorage.removeItem(LS_RMKT); }catch(e){}
-    renderStatus();
-    okBox && okBox.classList.remove("show");
-  }
-
-  // Events (null-safe)
-  btnOpen?.addEventListener("click", open);
-  btnClose?.addEventListener("click", close);
-  modal?.addEventListener("click", (e)=>{ if(e.target === modal) close(); });
-  window.addEventListener("keydown", (e)=>{ if(e.key === "Escape") close(); });
-
-  btnConfirm?.addEventListener("click", confirm);
-  btnClear?.addEventListener("click", clearAll);
-
-  // Keep status accurate on load
-  renderStatus();
-
+  });
 })();
 </script>
 
