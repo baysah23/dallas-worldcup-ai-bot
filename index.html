@@ -1350,6 +1350,131 @@ body.has-dallas-today .fanzone-right{
   box-shadow: 0 0 0 1px rgba(255,204,102,.18) inset, 0 10px 35px rgba(255,204,102,.08);
 }
 
+
+
+/* =========================================================
+   FAN ZONE — PREMIUM STADIUM ENERGY (FINAL OVERRIDES)
+   Goal: ultra-slim rails that POP (luxury), without breaking app
+   ========================================================= */
+:root{
+  --fzW: 168px;            /* default rail width (desktop) */
+  --fzW2: 152px;           /* extra-slim (wide screens) */
+  --fzGlass: rgba(255,255,255,.055);
+  --fzGlass2: rgba(0,0,0,.28);
+  --fzEdge: rgba(255,255,255,.14);
+  --fzGlow: rgba(255,204,102,.28);
+}
+
+/* Rails: slimmer + glass + premium border */
+.fanzone-left, .fanzone-right{
+  width: var(--fzW) !important;
+  font-size: 11px !important;
+  border-radius: 18px !important;
+  background: linear-gradient(180deg, var(--fzGlass), rgba(255,255,255,.02)) !important;
+  border: 1px solid var(--fzEdge) !important;
+  box-shadow:
+    0 14px 38px rgba(0,0,0,.30),
+    0 0 0 1px rgba(255,255,255,.06) inset !important;
+  backdrop-filter: blur(12px) saturate(1.15);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  overflow: hidden;
+}
+
+/* Keep main app centered and visible */
+@media (min-width: 1200px){
+  body{ padding-left: calc(var(--fzW) + 92px) !important; padding-right: calc(var(--fzW) + 92px) !important; }
+  .fanzone-left, .fanzone-right{ top: 84px !important; }
+}
+@media (min-width: 1500px){
+  :root{ --fzW: var(--fzW2); }
+}
+
+/* Inner cards: tighter, more luxury */
+.fz-card{
+  border-radius: 16px !important;
+  padding: 8px !important;
+  background: linear-gradient(180deg, rgba(0,0,0,.30), rgba(0,0,0,.18)) !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+}
+.fz-card h3{ font-size: 12px !important; letter-spacing: .02em; }
+
+/* Buttons/chips: slimmer */
+.fz-actions{ gap: 6px !important; }
+.fz-btn{
+  padding: 6px 8px !important;
+  font-size: 11px !important;
+  border-radius: 999px !important;
+  background: rgba(255,255,255,.08) !important;
+  border: 1px solid rgba(255,255,255,.14) !important;
+}
+.fz-chip{
+  padding: 6px 8px !important;
+  font-size: 11px !important;
+  border-radius: 999px !important;
+  background: rgba(0,0,0,.22) !important;
+  border: 1px solid rgba(255,255,255,.12) !important;
+}
+
+/* Icon buttons: premium round + subtle shine */
+.fz-iconbtn{
+  width: 34px !important; height: 34px !important;
+  border-radius: 999px !important;
+  background: radial-gradient(120px 60px at 30% 20%, rgba(255,255,255,.14), rgba(255,255,255,.06)) !important;
+  border: 1px solid rgba(255,255,255,.16) !important;
+  box-shadow: 0 10px 22px rgba(0,0,0,.22) !important;
+}
+.fz-iconbtn:hover{ transform: translateY(-1px); }
+
+/* QR: keep compact */
+#qrCanvas{ width: 78px !important; height: 78px !important; border-radius: 12px !important; }
+
+/* Auto-hide rails on scroll: smoother */
+body.fz-hidden .fanzone-left{ transform: translateX(-120%) !important; opacity:0 !important; pointer-events:none !important; }
+body.fz-hidden .fanzone-right{ transform: translateX(120%) !important; opacity:0 !important; pointer-events:none !important; }
+.fanzone-left, .fanzone-right{ transition: transform .24s ease, opacity .24s ease, box-shadow .24s ease !important; }
+
+/* Collapsed: icon-only “luxury strip” */
+body.fz-collapsed .fanzone-left,
+body.fz-collapsed .fanzone-right{
+  width: 56px !important;
+  padding: 10px 8px !important;
+}
+body.fz-collapsed .fanzone-left .fz-btn,
+body.fz-collapsed .fanzone-right .fz-btn,
+body.fz-collapsed .fanzone-left .fz-chip,
+body.fz-collapsed .fanzone-right .fz-chip,
+body.fz-collapsed .fanzone-left .fz-muted,
+body.fz-collapsed .fanzone-right .fz-muted,
+body.fz-collapsed .fanzone-left #pollCard,
+body.fz-collapsed .fanzone-right #drinkCard{
+  display:none !important;
+}
+body.fz-collapsed .fanzone-left .fz-actions,
+body.fz-collapsed .fanzone-right .fz-actions{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:10px !important;
+  align-items:center !important;
+}
+
+/* ===== Premium “stadium energy” POP =====
+   Glow ONLY when Dallas plays (your JS adds body.has-dallas-today) */
+@keyframes fzPulse{
+  0%,100%{ box-shadow: 0 14px 38px rgba(0,0,0,.30), 0 0 0 1px rgba(255,255,255,.06) inset; }
+  50%{ box-shadow: 0 18px 46px rgba(0,0,0,.34), 0 0 0 1px rgba(255,255,255,.08) inset, 0 0 26px var(--fzGlow); }
+}
+body.has-dallas-today .fanzone-left,
+body.has-dallas-today .fanzone-right{
+  border-color: rgba(255,204,102,.32) !important;
+  animation: fzPulse 2.2s ease-in-out infinite;
+}
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce){
+  body.has-dallas-today .fanzone-left,
+  body.has-dallas-today .fanzone-right{ animation:none !important; }
+}
+
 </style>
 </head>
 <body>
