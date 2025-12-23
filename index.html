@@ -2174,8 +2174,21 @@ body.kiosk-mode *::-webkit-scrollbar{
 /* =======================
    VIP TABLE HOLD (UI-only) — sleek + luxury
    ======================= */
+.vip-gap{
+  height: 14px;
+  margin-top: 10px;
+}
+.vip-gap::after{
+  content:"";
+  display:block;
+  height:1px;
+  width:100%;
+  background: linear-gradient(90deg, transparent, rgba(255,204,102,.35), transparent);
+}
+
+
 .vip-hold{
-  margin-top: 16px;              /* space from Fan Zone card above */
+  margin-top: 18px;              /* space from Fan Zone card above */
   padding: 10px 10px 11px;
   border-radius: 18px;
   background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(0,0,0,.12));
@@ -2281,6 +2294,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 
   <!-- VIP Table Hold (UI-only) — inside Fan Zone LEFT rail -->
+  <div class="vip-gap" aria-hidden="true"></div>
   <div class="fz-card vip-hold" id="vipHoldCard">
     <h3>⭐ VIP Table Hold</h3>
     <div class="fz-muted">One-tap VIP hold request. Starts the reservation flow and tags your message as VIP (UI-only).</div>
