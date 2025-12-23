@@ -1649,6 +1649,76 @@ html, body{ overflow-x: hidden !important; }
 /* Last-resort: never allow a horizontal scrollbar anywhere */
 body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
 
+
+/* =======================
+   BANNER REFRESH (luxury + stadium energy, UI-only)
+   ======================= */
+.hero{
+  border-radius:18px;
+  box-shadow:
+    0 18px 45px rgba(0,0,0,.35),
+    0 0 0 1px rgba(255,255,255,.10) inset;
+}
+
+/* Dark vignette for "cinematic" focus */
+.hero::after{
+  /* keep existing glow animation if present by layering a vignette on top */
+  box-shadow: inset 0 0 0 9999px rgba(0,0,0,0); /* noop to preserve structure */
+}
+.heroVignette{
+  position:absolute; inset:0;
+  background:
+    radial-gradient(900px 340px at 22% 38%, rgba(0,0,0,.18), transparent 58%),
+    radial-gradient(900px 340px at 78% 42%, rgba(0,0,0,.22), transparent 62%),
+    linear-gradient(180deg, rgba(0,0,0,.22), rgba(0,0,0,.06) 42%, rgba(0,0,0,.30));
+  z-index:2;
+  pointer-events:none;
+}
+
+/* Typography: tighter + premium */
+.heroKicker{
+  font-size:10.5px;
+  opacity:.92;
+}
+.heroTitle{
+  font-size:23px;
+  letter-spacing:.14em;
+}
+.compact .heroTitle{ font-size:18px; }
+.heroSub{
+  font-size:12px;
+  opacity:.92;
+  max-width: 460px;
+}
+
+/* Keep text safe from the 3-up cards */
+.heroOverlay{
+  max-width: 54%;
+}
+@media (max-width: 900px){
+  .heroOverlay{ max-width: 100%; }
+  .heroTriWrap{ display:none; } /* avoid overlap on smaller screens */
+}
+
+/* Scoreboard pill inside banner */
+.heroScore{
+  margin-top:10px;
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding:8px 10px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.22);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 14px 30px rgba(0,0,0,.22);
+  max-width: 100%;
+}
+.heroScore b{ color: var(--gold); }
+.heroScore span{ color: rgba(234,240,255,.86); font-weight:800; font-size:12px; }
+.heroScore small{ color: rgba(234,240,255,.70); font-size:11px; }
+
 </style>
 </head>
 <body>
@@ -1945,7 +2015,9 @@ if (compactToggleBtn){
     compactMode = !compactMode;
     localStorage.setItem("compact_mode", compactMode ? "1" : "0");
     applyCompactMode();
-  });
+  
+  try{ renderHeroScore(); }catch(e){}
+});
 }
 
 const STRINGS = {
@@ -2230,6 +2302,34 @@ document.addEventListener("DOMContentLoaded", buildHero);
 // -----------------------
 // Fetchers (match app.py)
 // -----------------------
+
+  // -----------------------
+  // Hero scoreboard (Next Dallas match) — UI-only
+  // -----------------------
+  function renderHeroScore(){
+    const el = document.getElementById("heroScore");
+    if(!el) return;
+
+    const nm = (scheduleData && (scheduleData.next_dallas_match || scheduleData.next_match)) ? (scheduleData.next_dallas_match || scheduleData.next_match) : null;
+    if(!nm || !nm.home || !nm.away || !nm.date){
+      el.style.display = "none";
+      return;
+    }
+
+    // Safe, short formatting so it never overflows
+    const when = `${nm.date}${nm.time ? " • " + formatKickoffTime(nm.time) : ""}`;
+    const venue = nm.venue ? nm.venue : "";
+    el.innerHTML = `
+      <span>Next Dallas:</span>
+      <b>${nm.home}</b>
+      <span>vs</span>
+      <b>${nm.away}</b>
+      <small>${when}${venue ? " • " + venue : ""}</small>
+    `;
+    el.style.display = "inline-flex";
+  }
+
+
 async function loadSchedule(){
   const res = await fetch(`/schedule.json?scope=${encodeURIComponent(scope)}&q=${encodeURIComponent(scheduleQuery)}`, {cache:"no-store"});
   scheduleData = await res.json();
