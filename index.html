@@ -23,7 +23,7 @@
       background: radial-gradient(1200px 600px at 20% 10%, #132a5b 0%, var(--bg) 55%);
       color:var(--text);
     }
-    .wrap{max-width:1050px; width:100%; margin:0 auto; display:flex; flex-direction:column; height:100%;}
+    .wrap{max-width:1050px; width:100%; margin:0 auto; display:flex; flex-direction:column; height:100%; min-height:100vh;}
     header{
       padding:16px 18px;
       background: linear-gradient(90deg, #0b1733 0%, #0f1b33 55%, #102246 100%);
@@ -54,6 +54,9 @@
     .grid{
       display:grid;
       grid-template-columns: 1.45fr .55fr;
+      grid-template-rows: auto 1fr; /* hero row + main row */
+      align-content: stretch;
+      height: 100%;
       gap:14px;
       padding:14px;
       flex:1;
