@@ -1063,28 +1063,10 @@
    MATCH DAY MODE (Step 1)
    Visual amplify only (UI-only)
    ========================= */
-@keyframes matchdayPulse{
-  0%, 100% { transform: translateZ(0) scale(1); filter: drop-shadow(0 0 0 rgba(212,175,55,0)); }
-  50%      { transform: translateZ(0) scale(1.015); filter: drop-shadow(0 0 16px rgba(212,175,55,.35)); }
+50%      { transform: translateZ(0) scale(1.015); filter: drop-shadow(0 0 16px rgba(212,175,55,.35)); }
 }
-body.matchday .hero-title{
-  animation: matchdayPulse 1.6s ease-in-out infinite;
-}
-
 /* Banner takeover text styling when matchday */
-body.matchday #matchBanner.show{
-  border-color: rgba(212,175,55,.55);
-  box-shadow: 0 0 18px rgba(212,175,55,.20);
-}
-
 /* Highlight the next match card in gold */
-body.matchday .match.next{
-  border-color: rgba(212,175,55,.55) !important;
-  box-shadow: 0 10px 26px rgba(212,175,55,.14);
-}
-body.matchday .match.next::before{
-  opacity: .9;
-}
 
 </style>
 </head>
@@ -1155,8 +1137,6 @@ body.matchday .match.next::before{
 </div>
 </div>
 <!-- HERO: Cinematic rotating banner (UI-only; no backend impact) -->
-
-<div class="banner" id="matchBanner"></div>
 <div id="chat"></div>
 <div class="composer">
 <textarea id="msg" placeholder="Type here..."></textarea>
@@ -1184,7 +1164,6 @@ body.matchday .match.next::before{
 <span><b id="s">0</b>s</span>
 </div>
 </div>
-<div class="matchday" id="matchdayBox"></div>
 <div class="sidepad" style="padding-top:10px; padding-bottom:0;">
 <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
 <div class="pill" style="padding:6px 10px;">Schedule</div>
@@ -1924,23 +1903,14 @@ function formatKickoffIn(ms){
 }
 
 function updateMatchDayMode(){
-  const isMatchDay = !!(scheduleData && scheduleData.is_match_day);
-
-  if (isMatchDay){
-    document.body.classList.add("matchday");
-    pillMode.textContent = "Mode: Match-day";
-    const banner = (scheduleData && scheduleData.match_day_banner) ? scheduleData.match_day_banner : "🏟️ MATCH DAY — DOORS OPEN EARLY";
-    matchBanner.textContent = banner;
-    matchBanner.classList.add("show");
-
-    matchdayBox.textContent = "🏟️ Match-day mode is ON today. Expect higher traffic — reserve early!";
-    matchdayBox.classList.add("show");
-  } else {
-    document.body.classList.remove("matchday");
-    pillMode.textContent = "Mode: Standard";
-    matchBanner.classList.remove("show");
-    matchdayBox.classList.remove("show");
-  }
+  // Match Day mode temporarily disabled (UI-only removal).
+  try{ /* matchday disabled */ }catch(_e){}
+  try{
+    const pillMode = document.getElementById("pillMode");
+    if(pillMode) pillMode.textContent = "Mode: Standard";
+  }catch(_e){}
+  try{ document.getElementById("matchBanner")?.classList.remove("show"); }catch(_e){}
+  try{ document.getElementById("matchdayBox")?.classList.remove("show"); }catch(_e){}
 }
 
 // -----------------------
@@ -2198,153 +2168,5 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
   slides.forEach(s => mo.observe(s, { attributes:true, attributeFilter:['class'] }));
 })();
 </script>
-
-
-<script>
-/* Match Day countdown label fallback (UI-only) */
-(function(){
-  const cd = document.getElementById("countdown");
-  if(!cd) return;
-  function tick(){
-    if(!document.body.classList.contains("matchday")) return;
-    if(typeof window.__nextKickoffAt !== "number") return;
-    const ms = window.__nextKickoffAt - Date.now();
-    cd.textContent = `Kickoff in ${formatKickoffIn(ms)}`;
-  }
-  setInterval(tick, 15000);
-})();
-
-
-/* -----------------------
-MATCH DAY TEST CONTROLS (safe, UI-only)
-
-DevTools console:
-  MatchDayTest.enable({ kickoffInMinutes: 134 }); // matchday ON + simulate kickoff in 2h14m
-  MatchDayTest.disable();                         // back to normal
-  MatchDayTest.toggle();
-
-Notes:
-- Does NOT touch backend.
-- Does NOT inject anything into the Dallas schedule list.
-- Uses the existing banner (#matchBanner) + countdown label (#countLabel).
------------------------- */
-(function(){
-  // Store original label so we can restore it.
-  const labelEl = document.getElementById("countLabel");
-  const subEl   = document.getElementById("countSub");
-  const banner  = document.getElementById("matchBanner");
-  const originalLabel = labelEl ? (labelEl.textContent || "World Cup countdown") : "World Cup countdown";
-  const originalSub   = subEl ? (subEl.textContent || "") : "";
-
-  function isMatchdayOn(){
-    return document.body.classList.contains("matchday") || window.__matchdayForced === true;
-  }
-
-  function setBanner(on){
-    if(!banner) return;
-    if(on){
-      banner.textContent = "🏟️ MATCH DAY — DOORS OPEN EARLY • Expect higher traffic — reserve early!";
-      banner.classList.add("show");
-    }else{
-      banner.classList.remove("show");
-      banner.textContent = "";
-    }
-  }
-
-  function updateCountdownLabel(){
-    if(!labelEl) return;
-    if(isMatchdayOn()){
-      labelEl.textContent = "Kickoff in";
-      if(subEl) subEl.textContent = "Dallas match day";
-    }else{
-      labelEl.textContent = originalLabel;
-      if(subEl) subEl.textContent = originalSub;
-    }
-  }
-
-  function oneTimeChatNote(){
-    if(window.__matchdayNoteShown) return;
-    window.__matchdayNoteShown = true;
-
-    // Add a single bubble without breaking the chat flow.
-    // Works whether addBubble exists now or is defined later.
-    function tryAdd(){
-      try{
-        if(typeof addBubble === "function"){
-          addBubble("bot", "🏟️ MATCH DAY — DOORS OPEN EARLY. Expect higher traffic — reserve early!");
-          return true;
-        }
-      }catch(_e){}
-      return false;
-    }
-    if(tryAdd()) return;
-    // If chat boots a bit later, retry a few times quickly.
-    let tries = 0;
-    const t = setInterval(() => {
-      tries++;
-      if(tryAdd() || tries >= 10) clearInterval(t);
-    }, 200);
-  }
-
-  // Patch chooseCountdownTarget to honor a simulated kickoff time when matchday is forced.
-  if(typeof chooseCountdownTarget === "function" && !window.__chooseCountdownTargetPatched){
-    window.__chooseCountdownTargetPatched = true;
-    const __origChoose = chooseCountdownTarget;
-    chooseCountdownTarget = function(){
-      try{
-        if(isMatchdayOn() && window.__nextKickoffAt){
-          return new Date(window.__nextKickoffAt);
-        }
-      }catch(_e){}
-      return __origChoose();
-    };
-  }
-
-  // Patch restartCountdown so the label updates every time it runs.
-  if(typeof restartCountdown === "function" && !window.__restartCountdownPatched){
-    window.__restartCountdownPatched = true;
-    const __origRestart = restartCountdown;
-    restartCountdown = function(){
-      const out = __origRestart();
-      updateCountdownLabel();
-      return out;
-    };
-  }
-
-  function apply(on){
-    window.__matchdayForced = !!on;
-    document.body.classList.toggle("matchday", !!on);
-
-    setBanner(!!on);
-    updateCountdownLabel();
-
-    // Refresh countdown + schedule highlights using existing functions, safely.
-    try{ if(typeof restartCountdown === "function") restartCountdown(); }catch(_e){}
-    try{ if(typeof renderSchedule === "function") renderSchedule(); }catch(_e){}
-
-    if(on) oneTimeChatNote();
-  }
-
-  window.MatchDayTest = {
-    enable(opts){
-      const minutes = Math.max(1, Number(opts && opts.kickoffInMinutes != null ? opts.kickoffInMinutes : 134));
-      window.__nextKickoffAt = Date.now() + minutes*60*1000;
-      apply(true);
-      return { matchday:true, kickoffInMinutes: minutes };
-    },
-    disable(){
-      window.__nextKickoffAt = undefined;
-      apply(false);
-      return { matchday:false };
-    },
-    toggle(){
-      const on = !isMatchdayOn();
-      return on ? this.enable({ kickoffInMinutes: 134 }) : this.disable();
-    }
-  };
-})();
-
-</script>
-
 </body>
 </html>
