@@ -1528,6 +1528,24 @@ body.has-dallas-today .fanzone-right{
   word-break: break-word;
 }
 
+
+/* =======================
+   FAN ZONE RIGHT: overflow hardening (no horizontal scroll)
+   ======================= */
+.fanzone-right{ overflow-x:hidden; }
+.fanzone-right *{ max-width:100%; box-sizing:border-box; }
+.fanzone-right h3,
+.fanzone-right .fz-muted,
+.fanzone-right #drinkHighlight,
+.fanzone-right #drinkHighlight *{
+  overflow-wrap:anywhere;
+  word-break:break-word;
+  hyphens:auto;
+}
+.fanzone-right .qrWrap{ flex-direction:column; align-items:flex-start; }
+.fanzone-right #qrCanvas{ width:96px; height:96px; }
+.fanzone-right .qrText a{ display:block; overflow-wrap:anywhere; word-break:break-all; }
+
 </style>
 </head>
 <body>
@@ -1594,20 +1612,20 @@ body.has-dallas-today .fanzone-right{
   </div>
 
   <div class="fz-card" id="drinkCard" style="margin-top:10px;">
-    <h3>🍹 Country-themed drink highlights</h3>
-    <div class="fz-muted">Based on who you’re supporting (or pick a country). Great upsell before kickoff.</div>
+    <h3>🍹 Drink highlights</h3>
+    <div class="fz-muted">Based on who you’re supporting (or pick a country).</div>
     <div id="drinkHighlight" style="margin-top:10px;"></div>
   </div>
 
   <div class="fz-card" id="qrCard" style="display:none; margin-top:10px;">
-    <h3>📱 QR poster → opens app</h3>
-    <div class="fz-muted">Print or display at the venue entrance. Scanning opens this app link.</div>
+    <h3>📱 QR poster</h3>
+    <div class="fz-muted">Print/display at the entrance. Scan to open the app.</div>
     <div class="qrWrap" style="margin-top:10px;">
-      <canvas id="qrCanvas" width="160" height="160" aria-label="QR code"></canvas>
+      <canvas id="qrCanvas" width="120" height="120" aria-label="QR code"></canvas>
       <div class="qrText">
         <div class="fz-muted" style="margin-bottom:6px;">Link:</div>
         <div><a id="qrLink" href="#" target="_blank" rel="noopener">Open app</a></div>
-        <div class="fz-muted" style="margin-top:10px;">Tip: host this page publicly for real in‑venue scanning.</div>
+        <div class="fz-muted" style="margin-top:10px;">Tip: host publicly for in‑venue scanning.</div>
       </div>
     </div>
   </div>
