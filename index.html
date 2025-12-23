@@ -2202,6 +2202,7 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 </script>
 
 
+<script>
 /* -----------------------
    MATCH DAY TEST CONTROLS (safe, UI-only)
    Usage in DevTools console:
@@ -2236,7 +2237,7 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
     window.__matchdayNoteShown = true;
     try{
       if(typeof addBubble === "function"){
-        addBubble("bot", "🏟️ MATCH DAY — DOORS OPEN EARLY. Expect higher traffic — reserve early!");
+        addBubble("assistant", "🏟️ MATCH DAY — DOORS OPEN EARLY. Expect higher traffic — reserve early!");
       }
     }catch(_e){}
   }
@@ -2277,6 +2278,8 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
     }
   };
 })();
+</script>
+;
 
 
 <script>
