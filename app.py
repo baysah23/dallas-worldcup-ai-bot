@@ -976,6 +976,260 @@ def schedule_json():
 # - Returns the teams that have qualified *so far* (qualification is ongoing).
 # - Source: Wikipedia qualified teams table (updates over time).
 # ============================================================
+# --- Default country list (no external deps) ---
+DEFAULT_COUNTRY_LIST = [
+  "United States",
+  "Canada",
+  "Mexico",
+  "Afghanistan",
+  "Aland Islands",
+  "Albania",
+  "Algeria",
+  "American Samoa",
+  "Andorra",
+  "Angola",
+  "Anguilla",
+  "Antarctica",
+  "Antigua and Barbuda",
+  "Argentina",
+  "Armenia",
+  "Aruba",
+  "Australia",
+  "Austria",
+  "Azerbaijan",
+  "Bahamas",
+  "Bahrain",
+  "Bangladesh",
+  "Barbados",
+  "Belarus",
+  "Belgium",
+  "Belize",
+  "Benin",
+  "Bermuda",
+  "Bhutan",
+  "Bolivia",
+  "Bonaire, Sint Eustatius and Saba",
+  "Bosnia and Herzegovina",
+  "Botswana",
+  "Bouvet Island",
+  "Brazil",
+  "British Indian Ocean Territory",
+  "Brunei",
+  "Bulgaria",
+  "Burkina Faso",
+  "Burundi",
+  "Cambodia",
+  "Cameroon",
+  "Cape Verde",
+  "Cayman Islands",
+  "Central African Republic",
+  "Chad",
+  "Chile",
+  "China",
+  "Christmas Island",
+  "Cocos (Keeling) Islands",
+  "Colombia",
+  "Comoros",
+  "Congo",
+  "Cook Islands",
+  "Costa Rica",
+  "Croatia",
+  "Cuba",
+  "Curaçao",
+  "Cyprus",
+  "Czech Republic",
+  "Côte d'Ivoire",
+  "Denmark",
+  "Djibouti",
+  "Dominica",
+  "Dominican Republic",
+  "DR Congo",
+  "East Timor",
+  "Ecuador",
+  "Egypt",
+  "El Salvador",
+  "Equatorial Guinea",
+  "Eritrea",
+  "Estonia",
+  "Ethiopia",
+  "Falkland Islands (Malvinas)",
+  "Faroe Islands",
+  "Fiji",
+  "Finland",
+  "France",
+  "French Guiana",
+  "French Polynesia",
+  "French Southern Territories",
+  "Gabon",
+  "Gambia",
+  "Georgia",
+  "Germany",
+  "Ghana",
+  "Gibraltar",
+  "Greece",
+  "Greenland",
+  "Grenada",
+  "Guadeloupe",
+  "Guam",
+  "Guatemala",
+  "Guernsey",
+  "Guinea",
+  "Guinea-Bissau",
+  "Guyana",
+  "Haiti",
+  "Heard Island and McDonald Islands",
+  "Holy See (Vatican City State)",
+  "Honduras",
+  "Hong Kong",
+  "Hungary",
+  "Iceland",
+  "India",
+  "Indonesia",
+  "Iran",
+  "Iraq",
+  "Ireland",
+  "Isle of Man",
+  "Israel",
+  "Italy",
+  "Jamaica",
+  "Japan",
+  "Jersey",
+  "Jordan",
+  "Kazakhstan",
+  "Kenya",
+  "Kiribati",
+  "Kuwait",
+  "Kyrgyzstan",
+  "Laos",
+  "Latvia",
+  "Lebanon",
+  "Lesotho",
+  "Liberia",
+  "Libya",
+  "Liechtenstein",
+  "Lithuania",
+  "Luxembourg",
+  "Macao",
+  "Madagascar",
+  "Malawi",
+  "Malaysia",
+  "Maldives",
+  "Mali",
+  "Malta",
+  "Marshall Islands",
+  "Martinique",
+  "Mauritania",
+  "Mauritius",
+  "Mayotte",
+  "Micronesia",
+  "Moldova",
+  "Monaco",
+  "Mongolia",
+  "Montenegro",
+  "Montserrat",
+  "Morocco",
+  "Mozambique",
+  "Myanmar",
+  "Namibia",
+  "Nauru",
+  "Nepal",
+  "Netherlands",
+  "New Caledonia",
+  "New Zealand",
+  "Nicaragua",
+  "Niger",
+  "Nigeria",
+  "Niue",
+  "Norfolk Island",
+  "North Korea",
+  "North Macedonia",
+  "Northern Mariana Islands",
+  "Norway",
+  "Oman",
+  "Pakistan",
+  "Palau",
+  "Palestine",
+  "Panama",
+  "Papua New Guinea",
+  "Paraguay",
+  "Peru",
+  "Philippines",
+  "Pitcairn",
+  "Poland",
+  "Portugal",
+  "Puerto Rico",
+  "Qatar",
+  "Reunion",
+  "Romania",
+  "Russia",
+  "Rwanda",
+  "Saint Barthélemy",
+  "Saint Helena, Ascension and Tristan da Cunha",
+  "Saint Kitts and Nevis",
+  "Saint Lucia",
+  "Saint Martin",
+  "Saint Pierre and Miquelon",
+  "Saint Vincent and the Grenadines",
+  "Samoa",
+  "San Marino",
+  "Sao Tome and Principe",
+  "Saudi Arabia",
+  "Senegal",
+  "Serbia",
+  "Seychelles",
+  "Sierra Leone",
+  "Singapore",
+  "Sint Maarten (Dutch part)",
+  "Slovakia",
+  "Slovenia",
+  "Solomon Islands",
+  "Somalia",
+  "South Africa",
+  "South Georgia and the South Sandwich Islands",
+  "South Korea",
+  "South Sudan",
+  "Spain",
+  "Sri Lanka",
+  "Sudan",
+  "Suriname",
+  "Svalbard and Jan Mayen",
+  "Swaziland",
+  "Sweden",
+  "Switzerland",
+  "Syria",
+  "Taiwan",
+  "Tajikistan",
+  "Tanzania",
+  "Thailand",
+  "Togo",
+  "Tokelau",
+  "Tonga",
+  "Trinidad and Tobago",
+  "Tunisia",
+  "Turkey",
+  "Turkmenistan",
+  "Turks and Caicos Islands",
+  "Tuvalu",
+  "Uganda",
+  "Ukraine",
+  "United Arab Emirates",
+  "United Kingdom",
+  "United States Minor Outlying Islands",
+  "Uruguay",
+  "Uzbekistan",
+  "Vanuatu",
+  "Venezuela",
+  "Vietnam",
+  "Virgin Islands, British",
+  "Virgin Islands, U.S.",
+  "Wallis and Futuna",
+  "Western Sahara",
+  "Yemen",
+  "Zambia",
+  "Zimbabwe"
+]
+
+
 _qualified_cache: Dict[str, Any] = {"loaded_at": 0, "teams": []}
 
 # NOTE:
@@ -992,23 +1246,26 @@ QUALIFIED_SOURCE_URL = os.environ.get(
 )
 
 def _local_country_list() -> List[str]:
-    """Return a stable, reasonably complete country list (no network)."""
+    """Return a stable, reasonably complete country list (no network, no extra deps).
+
+    Render (and some hosts) may not have optional libs like `pycountry` installed.
+    We therefore ship a baked-in default list and *optionally* refine it if `pycountry`
+    is available at runtime.
+    """
+    # Start from baked-in list (always available)
+    base = list(DEFAULT_COUNTRY_LIST)
+
+    # Optional refinement / normalization if pycountry happens to exist
     try:
-        import pycountry
-        names = []
+        import pycountry  # type: ignore
+        names: List[str] = []
         for c in pycountry.countries:
-            # Prefer common name if present, else official/name
             n = getattr(c, "common_name", None) or getattr(c, "name", None) or getattr(c, "official_name", None)
             if not n:
                 continue
             n = str(n).strip()
-            # Exclude very odd historical entries; keep modern sovereigns + standard names
-            if n.lower() in {"occupied palestinian territory", "bolivia, plurinational state of", "venezuela, bolivarian republic of"}:
-                # We'll normalize these below
-                pass
             names.append(n)
 
-        # Normalize a few common display names
         normalize = {
             "United States of America": "United States",
             "Russian Federation": "Russia",
@@ -1023,26 +1280,37 @@ def _local_country_list() -> List[str]:
             "Venezuela, Bolivarian Republic of": "Venezuela",
             "Moldova, Republic of": "Moldova",
             "Congo, The Democratic Republic of the": "DR Congo",
-            "Congo": "Congo",
             "Czechia": "Czech Republic",
             "Türkiye": "Turkey",
             "Cabo Verde": "Cape Verde",
         }
-        cleaned = []
-        for n in names:
-            cleaned.append(normalize.get(n, n))
-
-        # Deduplicate + sort
+        cleaned = [normalize.get(x, x) for x in names]
         uniq = sorted(set(cleaned), key=lambda x: x.lower())
-
-        # Pin hosts to the top
         for host in ["Canada", "Mexico", "United States"]:
             if host in uniq:
                 uniq.remove(host)
-        return ["United States", "Canada", "Mexico"] + uniq
+        base = ["United States", "Canada", "Mexico"] + uniq
     except Exception:
-        # Absolute fallback (never empty)
-        return ["United States", "Canada", "Mexico"]
+        pass
+
+    # Final: de-dupe + keep hosts pinned on top
+    seen = set()
+    final: List[str] = []
+    for n in base:
+        if not n or not isinstance(n, str):
+            continue
+        n2 = n.strip()
+        if not n2:
+            continue
+        if n2.lower() in seen:
+            continue
+        seen.add(n2.lower())
+        final.append(n2)
+
+    # Ensure hosts are first
+    hosts = ["United States", "Canada", "Mexico"]
+    remainder = [c for c in final if c not in hosts]
+    return hosts + remainder
 
 def _fetch_qualified_teams_remote() -> List[str]:
     """Optional remote fetch. Not required for core functionality."""
@@ -1117,6 +1385,33 @@ def qualified_json_alias():
     # Alias for compatibility with older front-ends/tests
     return qualified_json()
 
+
+
+@app.route("/api/qr.png")
+def qr_png():
+    """Serve a QR code image from *our* domain (avoids client-side blockers/CSP).
+
+    Uses Google Charts QR endpoint as an upstream (no extra Python deps).
+    """
+    try:
+        text = (request.args.get("text") or "").strip()
+        if not text:
+            return ("", 204)
+        # keep it reasonably bounded
+        if len(text) > 2048:
+            text = text[:2048]
+        import requests
+        url = "https://chart.googleapis.com/chart"
+        params = {"cht":"qr","chs":"220x220","chl":text}
+        r = requests.get(url, params=params, timeout=6)
+        if r.status_code != 200 or not r.content:
+            return ("", 204)
+        resp = make_response(r.content)
+        resp.headers["Content-Type"] = "image/png"
+        resp.headers["Cache-Control"] = "public, max-age=86400"
+        return resp
+    except Exception:
+        return ("", 204)
 
 @app.route("/test-sheet")
 def test_sheet():

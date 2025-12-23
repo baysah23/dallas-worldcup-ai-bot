@@ -1220,7 +1220,7 @@ body.phase-finals{ background: var(--phaseF); }
 /* Prevent fan zone popouts from pushing content off-screen */
 #pollCard{ max-height: 55vh; overflow:auto; }
 (max-width: 1199px){
-  #pollCard{ position:fixed; left:10px; right:10px; top:110px; margin:0 auto; width:min(460px, 92vw); z-index:10000; }
+  #pollCard{ position:fixed; left:10px; right:10px; top:90px; bottom:10px; margin:0 auto; width:min(460px, 92vw); z-index:10000; max-height:calc(100vh - 110px); overflow:auto; }
 }
 
 #countryModal .panel{ max-height: 80vh; overflow:auto; }
@@ -2417,6 +2417,8 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 }
 
+
+body.fz-modal-open{ overflow:hidden; }
 </style>
 </head>
 <body>
@@ -3939,8 +3941,25 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
    ======================= */
 (function(){
   const el = (id)=>document.getElementById(id);
-  const show = (node)=>{ if(node) node.style.display="block"; };
-  const hide = (node)=>{ if(node) node.style.display="none"; };
+
+  const _syncModalOpen = ()=>{
+    try{
+      const cm = document.getElementById("countryModal");
+      const pc = document.getElementById("pollCard");
+      const dc = document.getElementById("drinksCard");
+      const qc = document.getElementById("qrCard");
+      const open =
+        (cm && cm.style.display==="block") ||
+        (pc && pc.style.display==="block") ||
+        (dc && dc.style.display==="block") ||
+        (qc && qc.style.display==="block");
+      document.body.classList.toggle("fz-modal-open", !!open);
+    }catch(e){}
+  };
+
+  const show = (node)=>{ if(node) node.style.display="block"; _syncModalOpen(); };
+  const hide = (node)=>{ if(node) node.style.display="none"; _syncModalOpen(); };
+
   const toggle = (node)=>{ if(!node) return; node.style.display = (node.style.display==="none" || node.style.display==="") ? "block" : "none"; };
 
   // Elements
@@ -4175,7 +4194,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
 
     // Fallback: render as an <img> via Google Charts (no extra dependencies)
     if(qrImg){
-      const src = "https://chart.googleapis.com/chart?cht=qr&chs=180x180&chl=" + encodeURIComponent(target);
+      const src = "/api/qr.png?text=" + encodeURIComponent(target);
       qrImg.src = src;
       // Safety: if the image is blocked but doesn't trigger onerror (some blockers),
       // detect "blank" loads and show fallback text.
