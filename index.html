@@ -2124,6 +2124,37 @@ body.kiosk-mode *::-webkit-scrollbar{
   padding-bottom: calc(var(--pagerH) + var(--pagerGap) + 48px) !important;
 }
 
+
+/* =======================
+   SCHEDULE CARD FLEX FIX
+   (scroll happens inside #schedule, pager never overlaps)
+   ======================= */
+
+/* The right column schedule card is the .card that is a direct child of .grid (excluding .hero) */
+.grid > .card{
+  display:flex !important;
+  flex-direction:column !important;
+  min-height:0 !important;
+}
+
+/* Make the schedule list take all remaining space */
+#schedule{
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow:auto !important;
+  padding-bottom: 16px !important; /* no need for huge bottom padding now */
+}
+
+/* Pager sits below the scroll area (no sticky overlay) */
+#pager{
+  position: relative !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  width: auto !important;
+  border-radius: 0 0 16px 16px !important;
+  box-shadow: none !important;
+}
+
 </style>
 </head>
 <body>
