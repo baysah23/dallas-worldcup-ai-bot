@@ -2170,6 +2170,63 @@ body.kiosk-mode *::-webkit-scrollbar{
   box-shadow: none !important;
 }
 
+
+/* =======================
+   VIP TABLE HOLD (UI-only) — sleek + luxury
+   ======================= */
+.vip-hold{
+  margin-top: 16px;              /* space from Fan Zone card above */
+  padding: 10px 10px 11px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(0,0,0,.12));
+  border: 1px solid rgba(255,204,102,.28);
+  box-shadow:
+    0 18px 40px rgba(0,0,0,.28),
+    0 0 0 1px rgba(255,204,102,.10) inset;
+  position: relative;
+  overflow: hidden;
+}
+.vip-hold::before{
+  content:"";
+  position:absolute; inset:-2px;
+  background:
+    radial-gradient(220px 120px at 18% 18%, rgba(255,204,102,.22), transparent 60%),
+    radial-gradient(260px 160px at 85% 65%, rgba(31,111,235,.12), transparent 62%),
+    linear-gradient(135deg, rgba(255,204,102,.10), rgba(0,0,0,0) 45%);
+  pointer-events:none;
+}
+.vip-hold h3{
+  margin: 0 0 6px 0;
+  font-size: 12.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.vip-hold .fz-muted{
+  font-size: 11px;
+  line-height: 1.25;
+  color: rgba(234,240,255,.78);
+}
+.vip-hold .fz-actions{
+  margin-top: 8px !important;
+  gap: 6px;
+  justify-content: flex-start;
+}
+.vip-hold .fz-btn{
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 999px;
+  border: 1px solid rgba(255,204,102,.22);
+  background: rgba(255,255,255,.035);
+}
+.vip-hold .fz-btn:hover{
+  outline: 1px solid rgba(255,204,102,.30);
+}
+.vip-hold .fz-btn#vipHoldBtn{
+  background: linear-gradient(135deg, rgba(255,204,102,.22), rgba(46,160,67,.10));
+  border-color: rgba(255,204,102,.30);
+}
+
 </style>
 </head>
 <body>
@@ -2224,7 +2281,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 
   <!-- VIP Table Hold (UI-only) — inside Fan Zone LEFT rail -->
-  <div class="fz-card" id="vipHoldCard" style="margin-top:10px;">
+  <div class="fz-card vip-hold" id="vipHoldCard">
     <h3>⭐ VIP Table Hold</h3>
     <div class="fz-muted">One-tap VIP hold request. Starts the reservation flow and tags your message as VIP (UI-only).</div>
     <div class="fz-actions" style="margin-top:10px; justify-content:flex-start;">
