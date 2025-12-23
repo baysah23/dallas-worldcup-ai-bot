@@ -388,7 +388,7 @@
     .nums span{color:var(--text);}
     .nums b{color:#f5d76e;}
 
-    .schedule{flex:1; min-height:0; overflow:auto; padding-bottom:78px;}
+    .schedule{flex:1; min-height:0; overflow:auto; padding-bottom: 52px;}
     .match{
       display:flex;
       justify-content:space-between;
@@ -1782,7 +1782,7 @@ header{ flex:0 0 auto; }
 /* HERO fixed, then app grid fills remaining space */
 .hero{
   flex:0 0 auto;
-  height: 210px !important;
+  height: 195px !important;
   margin: 12px 12px 10px 12px !important;
 }
 .compact .hero{ height: 150px !important; }
@@ -1850,6 +1850,53 @@ header{ flex:0 0 auto; }
 /* On large screens, emphasize schedule even more */
 @media (min-height: 800px){
   .schedule{ min-height: 380px !important; }
+}
+
+
+/* =======================
+   DALLAS SCHEDULE: guaranteed visible area
+   (fixes grid row sizing so sidebar gets real height)
+   ======================= */
+.grid{
+  grid-template-rows: auto minmax(0, 1fr) !important; /* hero row + content row */
+  align-items: stretch !important;
+}
+.grid > :not(.hero){
+  min-height: 0 !important;
+}
+.hero{ grid-row: 1 !important; }
+.leftcol{ grid-row: 2 !important; min-height:0 !important; }
+.grid > .card{ grid-row: 2 !important; min-height:0 !important; height:100% !important; }
+
+/* Make the schedule area take remaining height inside the sidebar card */
+#schedule{
+  flex: 1 1 auto !important;
+  min-height: 240px !important;
+}
+@media (min-height: 820px){
+  #schedule{ min-height: 360px !important; }
+}
+
+
+/* =======================
+   PAGER MINI (doesn't block schedule)
+   ======================= */
+#pager{
+  padding: 8px 10px !important;
+  border-top: 1px solid rgba(255,255,255,.10) !important;
+}
+#pager button{
+  padding: 7px 10px !important;
+  min-width: 66px !important;
+  border-radius: 10px !important;
+  font-size: 12px !important;
+}
+#pager .secondary{
+  padding: 7px 10px !important;
+}
+#pager .pill, #pager .pageLabel, #pager #pageIndicator{
+  font-size: 11px !important;
+  padding: 4px 8px !important;
 }
 
 </style>
