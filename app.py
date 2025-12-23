@@ -5,10 +5,12 @@ import os
 import json
 import re
 import time
+import io
+import qrcode
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from openai import OpenAI
 
 import gspread
@@ -18,6 +20,27 @@ from google.oauth2.service_account import Credentials
 # App + cache-busting (helps Render show latest index.html)
 # ============================================================
 app = Flask(__name__)
+
+# ============================================================
+# QR code helper (real QR PNG for posters)
+# ============================================================
+@app.get("/qr.png")
+def qr_png():
+    """Return a PNG QR code for the given text/url.
+
+    Usage: /qr.png?data=<urlencoded>
+
+    Safe default: current page URL if omitted.
+    """
+    data = request.args.get("data") or (request.host_url.rstrip("/") + request.path.replace("/qr.png", "/"))
+    # Keep it short; QR libs can handle long but poster use should be a URL.
+    if len(data) > 2048:
+        data = data[:2048]
+    img = qrcode.make(data)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    buf.seek(0)
+    return send_file(buf, mimetype="image/png")
 client = OpenAI()
 
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
@@ -1998,7 +2021,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
     html.append("</head><body><div class='wrap'>")
 
     html.append("<div class='topbar'>")
-    html.append(f"<div><div class='h1'>Fan Zone Admin — {_hesc(SHEET_TITLE or 'World Cup')}</div><div class='sub'>Poll controls (Sponsor text + Match of the Day) • Key required</div></div>")
+    html.append(f"<div><div class='h1'>Fan Zone Admin — {_hesc(SHEET_NAME or 'World Cup')}</div><div class='sub'>Poll controls (Sponsor text + Match of the Day) • Key required</div></div>")
     html.append("<div style='display:flex;gap:10px;align-items:center;flex-wrap:wrap'>")
     html.append(f"<a class='btn' href='/admin?key={key}' style='text-decoration:none;display:inline-block'>Leads</a>")
     html.append("</div></div>")

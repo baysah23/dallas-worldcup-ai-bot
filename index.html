@@ -2347,6 +2347,36 @@ body.kiosk-mode *::-webkit-scrollbar{
   border-radius: 999px;
 }
 .fanzone-left .fanzone{ margin-top: 14px; } /* ensures visible gap even if VIP collapses */
+
+
+/* === Fan Zone rail usability fixes === */
+@media(min-width:1200px){
+  #fzLeftStack{
+    overflow-y:auto;
+    padding-right:6px;
+    scrollbar-width: thin;
+  }
+  /* Avoid double-fixed rails (prevents overlap/covering) */
+  #vipHoldRail, #fanZoneLeft{
+    position: static !important;
+    top: auto !important;
+    left: auto !important;
+    width: auto !important;
+    z-index: auto !important;
+  }
+  /* Right rail scroll within viewport */
+  #fanZoneRight{
+    max-height: calc(100vh - 110px);
+    overflow-y:auto;
+    scrollbar-width: thin;
+  }
+  /* Keep the VIP hold button visible */
+  .vip-card{ position: sticky; top: 0; z-index: 2; }
+}
+@media(max-width:1199px){
+  /* On mobile, prevent rail content from pushing past viewport */
+  .fanzone{ max-height: 70vh; overflow:auto; }
+}
 </style>
 </head>
 <body>
@@ -2419,7 +2449,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <h3>📱 QR poster</h3>
 <div class="fz-muted">Print/display at the entrance. Scan to open the app.</div>
 <div class="qrWrap" style="margin-top:10px;">
-<canvas aria-label="QR code" height="120" id="qrCanvas" width="120"></canvas>
+<img id="qrImg" alt="QR code" width="120" height="120" style="border-radius:12px;border:1px solid rgba(255,255,255,.12);background:#fff" />
 <div class="qrText">
 <div class="fz-muted" style="margin-bottom:6px;">Link:</div>
 <div><a href="#" id="qrLink" rel="noopener" target="_blank">Open app</a></div>
@@ -3886,6 +3916,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   const drinkDesc = el("drinkDesc");
   const qrModal = el("qrModal") || el("qrCard"); // fallback to inline card if modal not present
 const qrCanvas = el("qrCanvas");
+const qrImg = el("qrImg");
 const qrLink = el("qrLink");
 
 // Buttons (support both legacy + current Fan Zone markup)
@@ -4074,191 +4105,16 @@ function closeQR(){
     qrModal.classList.remove("show");
   }
   function drawQR(text){
-    // lightweight pseudo-QR (not a real QR) for UI-only poster feel
-    if(!qrCanvas) return;
-    const ctx = qrCanvas.getContext("2d");
-    const w = qrCanvas.width, h = qrCanvas.height;
-    ctx.clearRect(0,0,w,h);
-    ctx.fillStyle = "rgba(255,255,255,.06)";
-    ctx.fillRect(0,0,w,h);
-    const seed = Array.from(text).reduce((a,c)=>a+c.charCodeAt(0),0);
-    const n = 21;
-    const cell = Math.floor(w / n);
-    for(let y=0;y<n;y++){
-      for(let x=0;x<n;x++){
-        const v = (seed + x*97 + y*131 + (x*y*7)) % 17;
-        if(v < 6){
-          ctx.fillStyle = "rgba(255,255,255,.85)";
-          ctx.fillRect(x*cell, y*cell, cell-1, cell-1);
-        }
-      }
-    }
-  }
-
-  // ----- Poll (server-backed) -----
-  let pollOpen = false;
-  let pollTimer = null;
-  let lastState = null;
-
-  function pctBar(p){
-    const v = Math.max(0, Math.min(100, Number(p||0)));
-    return `<div style="flex:1;border:1px solid rgba(255,255,255,.12);border-radius:999px;overflow:hidden;height:10px;background:rgba(255,255,255,.04)">
-      <div style="height:100%;width:${v}%;background:rgba(46,160,67,.75)"></div>
-    </div>`;
-  }
-
-  function renderPoll(state){
-    if(!pollList || !pollCard) return;
-    if(!state || !state.ok){
-      pollList.innerHTML = `<div class="fz-muted">Poll unavailable right now.</div>`;
-      return;
-    }
-    lastState = state;
-    const m = state.match || {};
-    const teams = [m.home, m.away];
-    const counts = state.counts || {};
-    const pct = state.percentages || {};
-    const locked = !!state.locked;
-    const post = !!state.post_match;
-    const winner = state.winner || "";
-    const sponsor = state.sponsor_text || "Fan Pick presented by …";
-    const total = state.total_votes || 0;
-
-    const votedKey = "poll_voted_" + (m.id || "");
-    let votedFor = "";
-    try{ votedFor = localStorage.getItem(votedKey) || ""; }catch(e){}
-
-    const header = `
-      <div class="fz-muted" style="margin-bottom:8px">
-        <b>${escapeHtml(sponsor)}</b><br/>
-        ${escapeHtml(m.home)} vs ${escapeHtml(m.away)} • ${escapeHtml(m.date||"")} ${escapeHtml(m.time||"")} • ${escapeHtml(m.venue||"")}<br/>
-        ${locked ? "🔒 Locked at kickoff" : "🟢 Live"} • Total votes: ${total}
-      </div>
-    `;
-
-    const rows = teams.map(t=>{
-      const isWinner = post && winner && winner === t;
-      const isVoted = votedFor && votedFor === t;
-      const disabled = locked || !!votedFor;
-      return `
-        <div class="fz-row" style="align-items:center;gap:10px">
-          <button class="fz-btn" data-team="${escapeHtml(t)}" style="flex:0 0 220px; text-align:left; ${isWinner ? "border-color: rgba(255,204,102,.75); box-shadow: 0 0 22px rgba(255,204,102,.25);" : ""}" ${disabled ? "disabled" : ""}>
-            ${escapeHtml(t)} ${isWinner ? "🏆" : ""} ${isVoted ? "✅" : ""}
-          </button>
-          ${pctBar(pct[t]||0)}
-          <div class="fz-muted" style="width:110px;text-align:right">${Number(pct[t]||0).toFixed(1)}% • ${(counts[t]||0)}</div></div>
-      `;
-    }).join("");
-
-    pollList.innerHTML = header + rows;
-
-    pollList.querySelectorAll("[data-team]").forEach(btn=>{
-      btn.addEventListener("click", async ()=>{
-        const team = btn.getAttribute("data-team") || "";
-        if(!team) return;
-        try{
-          const res = await fetch("/api/poll/vote",{
-            method:"POST",
-            headers:{ "Content-Type":"application/json" },
-            body: JSON.stringify({ client_id: getClientId(), team })
-          });
-          const out = await res.json();
-          if(out && out.ok){
-            try{ localStorage.setItem(votedKey, team); }catch(e){}
-            renderPoll(out);
-          } else {
-            // if already voted or locked, refresh
-            await refreshPoll();
-          }
-        }catch(e){
-          await refreshPoll();
-        }
-      });
-    });
-  }
-
-  async function refreshPoll(){
+    // Real QR via backend endpoint (/qr.png)
     try{
-      const res = await fetch("/api/poll/state", {cache:"no-store"});
-      const st = await res.json();
-      renderPoll(st);
-      return st;
-    }catch(e){
-      renderPoll(null);
-      return null;
-    }
-  }
-
-  function startPollTicker(){
-    stopPollTicker();
-    pollTimer = setInterval(refreshPoll, 5000);
-  }
-  function stopPollTicker(){
-    if(pollTimer){ clearInterval(pollTimer); pollTimer = null; }
-  }
-
-  // ----- Bindings -----
-  function bind(){
-    btnPickCountry?.addEventListener("click", async ()=>{
-      document.body.classList.remove("fz-hidden");
-      openCountryModal();
-      if(!COUNTRIES.length){
-        await loadQualifiedCountries();
-        buildCountryGrid();
+      const url = "/qr.png?data=" + encodeURIComponent(text);
+      if(qrImg){
+        qrImg.src = url;
+        qrImg.style.display = "block";
       }
-    });
-    el("btnCloseCountry")?.addEventListener("click", closeCountryModal);
-    el("btnClearCountry")?.addEventListener("click", ()=>{
-      clearSupport(); renderSupporter(); renderDrink(); closeCountryModal();
-    });
-
-    btnOpenPoll?.addEventListener("click", async ()=>{
-      if(!pollCard) return;
-      pollOpen = !(pollCard.style.display !== "none" && pollCard.style.display !== "");
-      pollCard.style.display = pollOpen ? "block" : "none";
-      if(pollOpen){
-        await refreshPoll();
-        startPollTicker();
-      } else {
-        stopPollTicker();
-      }
-    });
-
-    btnOpenDrinks?.addEventListener("click", ()=>{
-      document.body.classList.remove("fz-hidden");
-      drinkCard?.scrollIntoView({behavior:"smooth", block:"nearest"});
-    });
-
-    btnOpenQR?.addEventListener("click", openQR);
-    el("btnCloseQR")?.addEventListener("click", closeQR);
-
-    // close modals on backdrop click
-    modal?.addEventListener("click", (e)=>{ if(e.target===modal) closeCountryModal(); });
-    if(qrModal && qrModal.id!=="qrCard"){
-      qrModal.addEventListener("click", (e)=>{ if(e.target===qrModal) closeQR(); });
-    }
-
-    window.addEventListener("keydown", (e)=>{
-      if(e.key==="Escape"){ closeCountryModal(); closeQR(); }
-    });
-  }
-
-  async function init(){
-    // Bind FIRST so buttons always respond even if fetches fail
-    bind();
-    renderSupporter();
-    renderDrink();
-
-    // Preload countries (non-blocking)
-    loadQualifiedCountries().then(()=>{ buildCountryGrid(); });
-
-    // Preload poll state (non-blocking)
-    refreshPoll();
-  }
-
-  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
-  else init();
-})();
+      if(qrCanvas) qrCanvas.style.display = "none";
+    }catch(e){}
+  })();
 </script>
 <script>
 /* =======================
