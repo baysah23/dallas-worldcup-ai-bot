@@ -1475,6 +1475,59 @@ body.has-dallas-today .fanzone-right{
   body.has-dallas-today .fanzone-right{ animation:none !important; }
 }
 
+
+/* =======================
+   FAN ZONE (RIGHT RAIL) — fit + no overflow
+   ======================= */
+.fanzone-left, .fanzone-right,
+.fanzone-left *, .fanzone-right *{
+  box-sizing: border-box;
+}
+
+.fanzone-left, .fanzone-right{
+  overflow-x: hidden;
+}
+
+.fanzone-left .fz-card, .fanzone-right .fz-card{
+  width: 100%;
+  max-width: 100%;
+}
+
+.fanzone-left .fz-grid, .fanzone-right .fz-grid{
+  width: 100%;
+}
+
+/* Stack QR + text so it never spills outside the rail */
+.fanzone-right .qrWrap{
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.fanzone-right #qrCanvas{
+  width: 92px;
+  height: 92px;
+  max-width: 100%;
+}
+
+.fanzone-right .qrText{
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.fanzone-right .qrText a{
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* If any long labels appear, wrap them cleanly */
+.fanzone-right, .fanzone-right .fz-muted{
+  word-break: break-word;
+}
+
 </style>
 </head>
 <body>
