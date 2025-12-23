@@ -2483,6 +2483,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="qrWrap" style="margin-top:10px;">
 <img id="qrImg" alt="QR code" width="120" height="120" style="border-radius:12px;border:1px solid rgba(255,255,255,.12);background:#fff" />
 <canvas id="qrCanvas" width="128" height="128" style="display:none; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#fff; padding:8px;"></canvas>
+<div id="qrFallbackText" class="fz-muted" style="display:none; padding:10px 12px; border:1px dashed rgba(255,255,255,.25); border-radius:12px;">QR image blocked on this network. Use the link on the right.</div>
 <div class="qrText">
 <div class="fz-muted" style="margin-bottom:6px;">Link:</div>
 <div><a href="#" id="qrLink" rel="noopener" target="_blank">Open app</a></div>
@@ -4012,8 +4013,9 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
       cache:"no-store",
       signal: ctrl ? ctrl.signal : undefined
     });
+    if(!r.ok) throw new Error("countries_http_"+r.status);
     const j = await r.json();
-    const list = (j?.qualified || j?.countries || j || []);
+    const list = (j?.qualified || j?.countries || j?.teams || (Array.isArray(j) ? j : []) || []);
     COUNTRIES = list.map(x=>{
       if(typeof x === "string") return {name:x, flag:"🏳️"};
       return {name:x.name||x.country||"", flag:x.flag||x.emoji||"🏳️"};
@@ -4168,6 +4170,16 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
       const src = "https://chart.googleapis.com/chart?cht=qr&chs=180x180&chl=" + encodeURIComponent(target);
       qrImg.src = src;
       qrImg.alt = "QR code";
+      qrImg.onerror = ()=>{
+        // If external QR image is blocked, keep UX usable
+        qrImg.removeAttribute("src");
+        qrImg.alt = "QR unavailable";
+        qrImg.style.display = "none";
+        const ph = document.getElementById("qrFallbackText");
+        if(ph){ ph.style.display = "block"; }
+      };
+      const ph = document.getElementById("qrFallbackText");
+      if(ph){ ph.style.display = "none"; }
       qrImg.style.display = "block";
     }
     if(qrCanvas) qrCanvas.style.display = "none";

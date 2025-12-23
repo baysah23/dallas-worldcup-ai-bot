@@ -1084,6 +1084,8 @@ def qualified_json():
         "updated_at": int(_qualified_cache.get("loaded_at") or 0),
         "count": len(teams),
         "teams": teams,
+        "countries": teams,   # alias for front-end compatibility
+        "qualified": teams,   # alias for front-end compatibility
         "note": "Qualification is ongoing; this list reflects teams qualified so far.",
     })
 
