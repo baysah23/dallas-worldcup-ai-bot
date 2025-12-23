@@ -1067,28 +1067,43 @@
   0%, 100% { transform: translateZ(0) scale(1); filter: drop-shadow(0 0 0 rgba(212,175,55,0)); }
   50%      { transform: translateZ(0) scale(1.015); filter: drop-shadow(0 0 16px rgba(212,175,55,.35)); }
 }
-body.matchday .hero-title{
+body.matchday-mode .hero-title{
   animation: matchdayPulse 1.6s ease-in-out infinite;
 }
 
 /* Banner takeover text styling when matchday */
-body.matchday #matchBanner.show{
+body.matchday-mode #matchBanner.show{
   border-color: rgba(212,175,55,.55);
   box-shadow: 0 0 18px rgba(212,175,55,.20);
 }
 
 /* Highlight the next match card in gold */
-body.matchday .match.next{
+body.matchday-mode .match.next{
   border-color: rgba(212,175,55,.55) !important;
   box-shadow: 0 10px 26px rgba(212,175,55,.14);
 }
-body.matchday .match.next::before{
+body.matchday-mode .match.next::before{
   opacity: .9;
 }
 
 </style>
 </head>
 <body>
+
+<script>
+/* Safety guard: if someone accidentally adds class="matchday" to <body>,
+   it would match the generic ".matchday{display:none}" rule (used for the matchday note box)
+   and make the whole page disappear. We never use that class on <body>. */
+(function(){
+  try{
+    if(document.body && document.body.classList && document.body.classList.contains('matchday')){
+      console.warn('[Match Day] Removing accidental body.matchday class (would hide the page). Use body.matchday-mode instead.');
+      document.body.classList.remove('matchday');
+    }
+  }catch(e){}
+})();
+</script>
+
 <div class="wrap">
 <header>
 <div class="toprow">
@@ -1923,13 +1938,49 @@ function formatKickoffIn(ms){
   return `${h}h ${m}m`;
 }
 
+
+// -----------------------
+// Match Day countdown label (UI-only)
+// -----------------------
+let __wc_defaultCountLabel = null;
+let __wc_kickoffLabelTimer = null;
+
+function __wc_updateKickoffLabel(){
+  const labelEl = document.getElementById("countLabel");
+  if(!labelEl) return;
+
+  if(__wc_defaultCountLabel === null){
+    __wc_defaultCountLabel = labelEl.textContent || "World Cup countdown";
+  }
+
+  const isMatchDay = document.body.classList.contains("matchday-mode");
+  if(!isMatchDay){
+    labelEl.textContent = __wc_defaultCountLabel;
+    return;
+  }
+
+  // Match Day: switch label to "Kickoff in Xh Ym" when we have a kickoff time
+  if(typeof window.__nextKickoffAt === "number" && Number.isFinite(window.__nextKickoffAt)){
+    const ms = window.__nextKickoffAt - Date.now();
+    const pretty = (typeof formatKickoffIn === "function") ? formatKickoffIn(ms) : "";
+    labelEl.textContent = pretty ? `Kickoff in ${pretty}` : "Kickoff in";
+  } else {
+    labelEl.textContent = "Kickoff in";
+  }
+}
+
+function __wc_startKickoffLabelTimer(){
+  if(__wc_kickoffLabelTimer) return;
+  __wc_kickoffLabelTimer = setInterval(__wc_updateKickoffLabel, 1000);
+}
+
 function updateMatchDayMode(){
   const isMatchDay = (window.__WC_MATCHDAY_OVERRIDE__ !== undefined)
     ? !!window.__WC_MATCHDAY_OVERRIDE__
     : !!(scheduleData && scheduleData.is_match_day);
 
   if (isMatchDay){
-    try{ document.body.classList.add("matchday"); } catch(e){}
+    try{ document.body.classList.add("matchday-mode"); } catch(e){}
 
     if (pillMode) pillMode.textContent = "Mode: Match-day";
 
@@ -1944,7 +1995,9 @@ function updateMatchDayMode(){
       matchBanner.classList.add("show");
     }
 
-    // Keep the schedule area clean; do NOT show the long note here
+    
+    try{ __wc_startKickoffLabelTimer(); __wc_updateKickoffLabel(); } catch(e){}
+// Keep the schedule area clean; do NOT show the long note here
     if (matchdayBox){
       matchdayBox.classList.remove("show");
       matchdayBox.textContent = "";
@@ -1975,8 +2028,10 @@ function updateMatchDayMode(){
     } catch(e){ /* ignore */ }
 
   } else {
-    try{ document.body.classList.remove("matchday"); } catch(e){}
-    if (pillMode) pillMode.textContent = "Mode: Standard";
+    try{ document.body.classList.remove("matchday-mode"); } catch(e){}
+    
+    try{ __wc_updateKickoffLabel(); } catch(e){}
+if (pillMode) pillMode.textContent = "Mode: Standard";
     if (matchBanner) matchBanner.classList.remove("show");
     if (matchdayBox){
       matchdayBox.classList.remove("show");
@@ -2003,6 +2058,21 @@ window.WC.clearMatchDayTest = function(){
   try{ updateMatchDayMode(); } catch(e){}
   try{ if (typeof restartCountdown === "function") restartCountdown(); } catch(e){}
 };
+
+window.WC.setNextKickoffTest = function(msFromNow){
+  const ms = Number(msFromNow);
+  if(!Number.isFinite(ms)) return;
+  window.__nextKickoffAt = Date.now() + ms;
+  try{ __wc_updateKickoffLabel(); } catch(e){}
+};
+window.WC.clearNextKickoffTest = function(){
+  try{ delete window.__nextKickoffAt; } catch(e){ window.__nextKickoffAt = undefined; }
+  try{ __wc_updateKickoffLabel(); } catch(e){}
+};
+window.WC.resetMatchDayNote = function(){
+  try{ sessionStorage.removeItem("wc_matchday_note_shown"); } catch(e){}
+};
+
 
 
 
@@ -2263,19 +2333,36 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 </script>
 
 
+
 <script>
-/* Match Day countdown label fallback (UI-only) */
-(function(){
-  const cd = document.getElementById("countdown");
-  if(!cd) return;
-  function tick(){
-    if(!document.body.classList.contains("matchday")) return;
-    if(typeof window.__nextKickoffAt !== "number") return;
-    const ms = window.__nextKickoffAt - Date.now();
-    cd.textContent = `Kickoff in ${formatKickoffIn(ms)}`;
+/* DevTools helper (safe):
+   __wcTestMatchday(true)  -> turns match day mode ON (and sets kickoff to +2h14m unless you pass minutes)
+   __wcTestMatchday(false) -> turns it OFF
+   __wcTestMatchday(true, 134) -> kickoff in 2h14m (134 minutes)
+*/
+window.__wcTestMatchday = function(on, kickoffMinutes){
+  try{
+    const mins = (typeof kickoffMinutes === 'number' && isFinite(kickoffMinutes)) ? kickoffMinutes : 134;
+    if(on){
+      window.__WC_MATCHDAY_OVERRIDE = true;
+      window.__nextKickoffAt = Date.now() + Math.max(1, mins) * 60 * 1000;
+      document.body.classList.add('matchday-mode');
+    }else{
+      window.__WC_MATCHDAY_OVERRIDE = false;
+      document.body.classList.remove('matchday-mode');
+      // restore banner text
+      try{
+        const mb = document.getElementById('matchBanner');
+        if(mb){ mb.classList.remove('show'); }
+      }catch(e){}
+    }
+    // re-run UI update hooks if present
+    if(typeof window.updateMatchDayMode === 'function') window.updateMatchDayMode();
+    if(typeof window.__wc_updateKickoffLabel === 'function') window.__wc_updateKickoffLabel();
+  }catch(e){
+    console.error('[Match Day] __wcTestMatchday error:', e);
   }
-  setInterval(tick, 15000);
-})();
+};
 </script>
 
 </body>
