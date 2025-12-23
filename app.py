@@ -5,10 +5,10 @@ import os
 import json
 import re
 import time
-from datetime import datetime, date, timezone, timedelta
+from datetime import datetime, date, timezone
 from typing import Dict, Any, Optional, List, Tuple
 
-from flask import Flask, request, jsonify, send_from_directory, send_file
+from flask import Flask, request, jsonify, send_from_directory
 from openai import OpenAI
 
 import gspread
@@ -18,7 +18,6 @@ from google.oauth2.service_account import Credentials
 # App + cache-busting (helps Render show latest index.html)
 # ============================================================
 app = Flask(__name__)
-
 client = OpenAI()
 
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
@@ -58,55 +57,6 @@ with open(BUSINESS_PROFILE_PATH, "r", encoding="utf-8") as f:
 
 # ============================================================
 # Business Rules (edit here)
-
-# Countries currently qualified for the 2026 World Cup (used by Fan Zone country selector)
-QUALIFIED_TEAMS_2026 = [
-    "Canada",
-    "Mexico",
-    "United States",
-    "Japan",
-    "New Zealand",
-    "Iran",
-    "Argentina",
-    "Uzbekistan",
-    "South Korea",
-    "Jordan",
-    "Australia",
-    "Brazil",
-    "Ecuador",
-    "Uruguay",
-    "Colombia",
-    "Paraguay",
-    "Morocco",
-    "Tunisia",
-    "Egypt",
-    "Algeria",
-    "Ghana",
-    "Cape Verde",
-    "South Africa",
-    "Qatar",
-    "England",
-    "Saudi Arabia",
-    "Ivory Coast",
-    "Senegal",
-    "France",
-    "Croatia",
-    "Portugal",
-    "Norway",
-    "Germany",
-    "Netherlands",
-    "Belgium",
-    "Austria",
-    "Switzerland",
-    "Spain",
-    "Scotland",
-    "Panama",
-    "Haiti",
-    "Curaçao",
-]
-
-# NOTE: Full 48-team field is not finalized yet; this list is the countries that have
-# qualified for the 2026 World Cup so far (plus hosts). Update this list as more teams qualify.
 # ============================================================
 BUSINESS_RULES = {
     # hours in 24h local time; for simplicity we only enforce "open/closed" by day
@@ -189,7 +139,7 @@ def _fetch_fixture_feed() -> List[Dict[str, Any]]:
         headers={"User-Agent": "worldcup-concierge/1.0"},
         method="GET",
     )
-    with urllib.request.urlopen(req, timeout=3) as resp:
+    with urllib.request.urlopen(req, timeout=15) as resp:
         raw = resp.read().decode("utf-8", errors="replace")
     payload = json.loads(raw)
     if not isinstance(payload, list):
@@ -1025,433 +975,151 @@ def schedule_json():
 # - Returns the teams that have qualified *so far* (qualification is ongoing).
 # - Source: Wikipedia qualified teams table (updates over time).
 # ============================================================
-# --- Default country list (no external deps) ---
-DEFAULT_COUNTRY_LIST = [
-  "United States",
-  "Canada",
-  "Mexico",
-  "Afghanistan",
-  "Aland Islands",
-  "Albania",
-  "Algeria",
-  "American Samoa",
-  "Andorra",
-  "Angola",
-  "Anguilla",
-  "Antarctica",
-  "Antigua and Barbuda",
-  "Argentina",
-  "Armenia",
-  "Aruba",
-  "Australia",
-  "Austria",
-  "Azerbaijan",
-  "Bahamas",
-  "Bahrain",
-  "Bangladesh",
-  "Barbados",
-  "Belarus",
-  "Belgium",
-  "Belize",
-  "Benin",
-  "Bermuda",
-  "Bhutan",
-  "Bolivia",
-  "Bonaire, Sint Eustatius and Saba",
-  "Bosnia and Herzegovina",
-  "Botswana",
-  "Bouvet Island",
-  "Brazil",
-  "British Indian Ocean Territory",
-  "Brunei",
-  "Bulgaria",
-  "Burkina Faso",
-  "Burundi",
-  "Cambodia",
-  "Cameroon",
-  "Cape Verde",
-  "Cayman Islands",
-  "Central African Republic",
-  "Chad",
-  "Chile",
-  "China",
-  "Christmas Island",
-  "Cocos (Keeling) Islands",
-  "Colombia",
-  "Comoros",
-  "Congo",
-  "Cook Islands",
-  "Costa Rica",
-  "Croatia",
-  "Cuba",
-  "Curaçao",
-  "Cyprus",
-  "Czech Republic",
-  "Côte d'Ivoire",
-  "Denmark",
-  "Djibouti",
-  "Dominica",
-  "Dominican Republic",
-  "DR Congo",
-  "East Timor",
-  "Ecuador",
-  "Egypt",
-  "El Salvador",
-  "Equatorial Guinea",
-  "Eritrea",
-  "Estonia",
-  "Ethiopia",
-  "Falkland Islands (Malvinas)",
-  "Faroe Islands",
-  "Fiji",
-  "Finland",
-  "France",
-  "French Guiana",
-  "French Polynesia",
-  "French Southern Territories",
-  "Gabon",
-  "Gambia",
-  "Georgia",
-  "Germany",
-  "Ghana",
-  "Gibraltar",
-  "Greece",
-  "Greenland",
-  "Grenada",
-  "Guadeloupe",
-  "Guam",
-  "Guatemala",
-  "Guernsey",
-  "Guinea",
-  "Guinea-Bissau",
-  "Guyana",
-  "Haiti",
-  "Heard Island and McDonald Islands",
-  "Holy See (Vatican City State)",
-  "Honduras",
-  "Hong Kong",
-  "Hungary",
-  "Iceland",
-  "India",
-  "Indonesia",
-  "Iran",
-  "Iraq",
-  "Ireland",
-  "Isle of Man",
-  "Israel",
-  "Italy",
-  "Jamaica",
-  "Japan",
-  "Jersey",
-  "Jordan",
-  "Kazakhstan",
-  "Kenya",
-  "Kiribati",
-  "Kuwait",
-  "Kyrgyzstan",
-  "Laos",
-  "Latvia",
-  "Lebanon",
-  "Lesotho",
-  "Liberia",
-  "Libya",
-  "Liechtenstein",
-  "Lithuania",
-  "Luxembourg",
-  "Macao",
-  "Madagascar",
-  "Malawi",
-  "Malaysia",
-  "Maldives",
-  "Mali",
-  "Malta",
-  "Marshall Islands",
-  "Martinique",
-  "Mauritania",
-  "Mauritius",
-  "Mayotte",
-  "Micronesia",
-  "Moldova",
-  "Monaco",
-  "Mongolia",
-  "Montenegro",
-  "Montserrat",
-  "Morocco",
-  "Mozambique",
-  "Myanmar",
-  "Namibia",
-  "Nauru",
-  "Nepal",
-  "Netherlands",
-  "New Caledonia",
-  "New Zealand",
-  "Nicaragua",
-  "Niger",
-  "Nigeria",
-  "Niue",
-  "Norfolk Island",
-  "North Korea",
-  "North Macedonia",
-  "Northern Mariana Islands",
-  "Norway",
-  "Oman",
-  "Pakistan",
-  "Palau",
-  "Palestine",
-  "Panama",
-  "Papua New Guinea",
-  "Paraguay",
-  "Peru",
-  "Philippines",
-  "Pitcairn",
-  "Poland",
-  "Portugal",
-  "Puerto Rico",
-  "Qatar",
-  "Reunion",
-  "Romania",
-  "Russia",
-  "Rwanda",
-  "Saint Barthélemy",
-  "Saint Helena, Ascension and Tristan da Cunha",
-  "Saint Kitts and Nevis",
-  "Saint Lucia",
-  "Saint Martin",
-  "Saint Pierre and Miquelon",
-  "Saint Vincent and the Grenadines",
-  "Samoa",
-  "San Marino",
-  "Sao Tome and Principe",
-  "Saudi Arabia",
-  "Senegal",
-  "Serbia",
-  "Seychelles",
-  "Sierra Leone",
-  "Singapore",
-  "Sint Maarten (Dutch part)",
-  "Slovakia",
-  "Slovenia",
-  "Solomon Islands",
-  "Somalia",
-  "South Africa",
-  "South Georgia and the South Sandwich Islands",
-  "South Korea",
-  "South Sudan",
-  "Spain",
-  "Sri Lanka",
-  "Sudan",
-  "Suriname",
-  "Svalbard and Jan Mayen",
-  "Swaziland",
-  "Sweden",
-  "Switzerland",
-  "Syria",
-  "Taiwan",
-  "Tajikistan",
-  "Tanzania",
-  "Thailand",
-  "Togo",
-  "Tokelau",
-  "Tonga",
-  "Trinidad and Tobago",
-  "Tunisia",
-  "Turkey",
-  "Turkmenistan",
-  "Turks and Caicos Islands",
-  "Tuvalu",
-  "Uganda",
-  "Ukraine",
-  "United Arab Emirates",
-  "United Kingdom",
-  "United States Minor Outlying Islands",
-  "Uruguay",
-  "Uzbekistan",
-  "Vanuatu",
-  "Venezuela",
-  "Vietnam",
-  "Virgin Islands, British",
-  "Virgin Islands, U.S.",
-  "Wallis and Futuna",
-  "Western Sahara",
-  "Yemen",
-  "Zambia",
-  "Zimbabwe"
-]
-
-
 _qualified_cache: Dict[str, Any] = {"loaded_at": 0, "teams": []}
-
-# NOTE:
-# The full 48-team field for the 2026 World Cup is not known until qualification completes.
-# For the Fan Zone country selector we want a fast, reliable list that never blocks the UI.
-# We therefore default to an "eligible countries" list derived from pycountry (local data),
-# with hosts pinned to the top. If you want to switch back to a remote "qualified so far"
-# source, set USE_REMOTE_QUALIFIED=1 and provide QUALIFIED_SOURCE_URL.
-USE_REMOTE_QUALIFIED = os.environ.get("USE_REMOTE_QUALIFIED", "0") == "1"
 QUALIFIED_CACHE_SECONDS = int(os.environ.get("QUALIFIED_CACHE_SECONDS", str(12 * 60 * 60)))  # 12h
 QUALIFIED_SOURCE_URL = os.environ.get(
     "QUALIFIED_SOURCE_URL",
     "https://en.wikipedia.org/api/rest_v1/page/html/2026_FIFA_World_Cup_qualification",
 )
 
-def _local_country_list() -> List[str]:
-    """Return a stable, reasonably complete country list (no network, no extra deps).
-
-    Render (and some hosts) may not have optional libs like `pycountry` installed.
-    We therefore ship a baked-in default list and *optionally* refine it if `pycountry`
-    is available at runtime.
+def _fetch_qualified_teams() -> List[str]:
     """
-    # Start from baked-in list (always available)
-    base = list(DEFAULT_COUNTRY_LIST)
+    Fetch the *currently qualified* teams for the 2026 FIFA World Cup.
 
-    # Optional refinement / normalization if pycountry happens to exist
-    try:
-        import pycountry  # type: ignore
-        names: List[str] = []
-        for c in pycountry.countries:
-            n = getattr(c, "common_name", None) or getattr(c, "name", None) or getattr(c, "official_name", None)
-            if not n:
-                continue
-            n = str(n).strip()
-            names.append(n)
-
-        normalize = {
-            "United States of America": "United States",
-            "Russian Federation": "Russia",
-            "Iran, Islamic Republic of": "Iran",
-            "Korea, Republic of": "South Korea",
-            "Korea, Democratic People's Republic of": "North Korea",
-            "Viet Nam": "Vietnam",
-            "Lao People's Democratic Republic": "Laos",
-            "Syrian Arab Republic": "Syria",
-            "Tanzania, United Republic of": "Tanzania",
-            "Bolivia, Plurinational State of": "Bolivia",
-            "Venezuela, Bolivarian Republic of": "Venezuela",
-            "Moldova, Republic of": "Moldova",
-            "Congo, The Democratic Republic of the": "DR Congo",
-            "Czechia": "Czech Republic",
-            "Türkiye": "Turkey",
-            "Cabo Verde": "Cape Verde",
-        }
-        cleaned = [normalize.get(x, x) for x in names]
-        uniq = sorted(set(cleaned), key=lambda x: x.lower())
-        for host in ["Canada", "Mexico", "United States"]:
-            if host in uniq:
-                uniq.remove(host)
-        base = ["United States", "Canada", "Mexico"] + uniq
-    except Exception:
-        pass
-
-    # Final: de-dupe + keep hosts pinned on top
-    seen = set()
-    final: List[str] = []
-    for n in base:
-        if not n or not isinstance(n, str):
-            continue
-        n2 = n.strip()
-        if not n2:
-            continue
-        if n2.lower() in seen:
-            continue
-        seen.add(n2.lower())
-        final.append(n2)
-
-    # Ensure hosts are first
-    hosts = ["United States", "Canada", "Mexico"]
-    remainder = [c for c in final if c not in hosts]
-    return hosts + remainder
-
-def _fetch_qualified_teams_remote() -> List[str]:
-    """Optional remote fetch. Not required for core functionality."""
+    Design goals:
+    - No third‑party deps (Render-friendly).
+    - Fast + resilient parsing (Wikipedia markup changes over time).
+    - Returns at least the 3 hosts on any failure.
+    """
     import urllib.request
-    req = urllib.request.Request(
-        QUALIFIED_SOURCE_URL,
-        headers={"User-Agent": "worldcup-concierge/1.0"},
-        method="GET",
-    )
-    with urllib.request.urlopen(req, timeout=8) as resp:
-        html = resp.read().decode("utf-8", errors="ignore")
+    from html import unescape
 
-    # Very lightweight parsing (best-effort)
+    def _http_get(url: str) -> str:
+        req = urllib.request.Request(
+            url,
+            headers={
+                # Wikipedia is happier with a UA
+                "User-Agent": "WorldCupDallasConcierge/1.0 (+https://example.invalid)",
+                "Accept": "text/html",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return resp.read().decode("utf-8", errors="ignore")
+
+    html_doc = ""
+    # Try a couple of stable sources. The REST HTML can change; the normal page is usually stable.
+    sources = [
+        QUALIFIED_SOURCE_URL,
+        "https://en.wikipedia.org/api/rest_v1/page/html/2026_FIFA_World_Cup_qualification",
+    ]
+    last_err = None
+    for url in sources:
+        try:
+            html_doc = _http_get(url)
+            if html_doc:
+                break
+        except Exception as e:
+            last_err = e
+            continue
+
+    if not html_doc:
+        return ["Canada", "Mexico", "United States"]
+
+    html_doc = unescape(html_doc)
+
+    # Helper: extract the qualified teams table HTML chunk.
+    # Strategy:
+    # 1) Prefer a table whose caption contains "Qualified teams"
+    # 2) Otherwise, fall back to the first wikitable after a "Qualified teams" heading
+    table_html = ""
+
+    # (1) caption search
+    cap_m = re.search(
+        r'(<table[^>]*class="[^"]*wikitable[^"]*"[^>]*>.*?<caption[^>]*>\s*Qualified teams\s*</caption>.*?</table>)',
+        html_doc,
+        flags=re.S | re.I,
+    )
+    if cap_m:
+        table_html = cap_m.group(1)
+    else:
+        # (2) heading search then first table
+        h_m = re.search(r'Qualified teams', html_doc, flags=re.I)
+        if h_m:
+            sub = html_doc[h_m.start():]
+            t_m = re.search(r'(<table[^>]*class="[^"]*wikitable[^"]*"[^>]*>.*?</table>)', sub, flags=re.S | re.I)
+            if t_m:
+                table_html = t_m.group(1)
+
+    if not table_html:
+        # As a final fallback, try ANY table containing the hosts list row format.
+        t_m = re.search(r'(<table[^>]*>.*?Canada.*?Mexico.*?United States.*?</table>)', html_doc, flags=re.S | re.I)
+        if t_m:
+            table_html = t_m.group(1)
+
+    if not table_html:
+        return ["Canada", "Mexico", "United States"]
+
+    # Parse rows and pull team names from first column.
     teams: List[str] = []
-    for name in re.findall(r">\s*([A-Za-z][A-Za-z .\-']{2,})\s*<", html):
+    for row in re.findall(r"<tr[^>]*>(.*?)</tr>", table_html, flags=re.S | re.I):
+        # First cell can be <th> or <td>
+        cell_m = re.search(r"<t[hd][^>]*>(.*?)</t[hd]>", row, flags=re.S | re.I)
+        if not cell_m:
+            continue
+        cell = cell_m.group(1)
+
+        # Prefer the first <a> anchor text that isn't empty.
+        a_m = re.search(r"<a[^>]*>([^<]+)</a>", cell, flags=re.S | re.I)
+        name = a_m.group(1) if a_m else re.sub(r"<[^>]+>", " ", cell)
+        name = re.sub(r"\s+", " ", name).strip()
         name = re.sub(r"\[[0-9]+\]", "", name).strip()
-        if name and name not in teams:
+
+        # Skip header-like values and non-team markers.
+        if not name:
+            continue
+        if name.lower() in {"team", "qualified teams"}:
+            continue
+        # Some rows may start with "Hosts" in the first column on certain renders; skip it.
+        if name.lower() == "hosts":
+            continue
+
+        # De-dup
+        if name not in teams:
             teams.append(name)
 
+    # Always ensure hosts are present at the top
     for host in ["Canada", "Mexico", "United States"]:
         if host not in teams:
             teams.insert(0, host)
+
+    # If parsing still only returned hosts, keep it (better than freezing UI).
     return teams
 
 def get_qualified_teams(force: bool = False) -> List[str]:
-    """Return countries for the Fan Zone selector.
+    now = int(time.time())
+    if (not force and _qualified_cache["teams"]
+        and (now - int(_qualified_cache["loaded_at"] or 0) < QUALIFIED_CACHE_SECONDS)):
+        return _qualified_cache["teams"]
 
-    This must be fast + reliable (no network dependency) to avoid UI freezes.
-    We intentionally return the list of countries that have qualified for the
-    2026 World Cup so far (plus hosts). Update QUALIFIED_TEAMS_2026 as needed.
-    """
-    return list(QUALIFIED_TEAMS_2026)
+    try:
+        teams = _fetch_qualified_teams()
+    except Exception:
+        teams = ["Canada", "Mexico", "United States"]
 
+    _qualified_cache["loaded_at"] = now
+    _qualified_cache["teams"] = teams
+    return teams
 
-    fresh = (now - int(_qualified_cache.get("loaded_at") or 0) < QUALIFIED_CACHE_SECONDS)
-    if force or not fresh:
-        try:
-            teams = _fetch_qualified_teams_remote()
-            if teams:
-                _qualified_cache["teams"] = teams
-                _qualified_cache["loaded_at"] = now
-        except Exception:
-            # Keep existing cache on failure
-            pass
-
-    return list(_qualified_cache["teams"])
 @app.route("/worldcup/qualified.json")
+@app.route("/countries/qualified.json")
 def qualified_json():
     teams = get_qualified_teams()
     return jsonify({
         "updated_at": int(_qualified_cache.get("loaded_at") or 0),
         "count": len(teams),
         "teams": teams,
-        "countries": teams,   # alias for front-end compatibility
-        "qualified": teams,   # alias for front-end compatibility
-        "note": "Countries list for Fan Zone selector. If qualification is ongoing, this may include countries not yet qualified.",
+        "note": "Qualification is ongoing; this list reflects teams qualified so far.",
     })
-
-
-
-@app.route("/countries/qualified.json")
-def qualified_json_alias():
-    # Alias for compatibility with older front-ends/tests
-    return qualified_json()
-
-
-
-@app.route("/api/qr.png")
-def qr_png():
-    """Serve a QR code image from *our* domain (avoids client-side blockers/CSP).
-
-    Uses Google Charts QR endpoint as an upstream (no extra Python deps).
-    """
-    try:
-        text = (request.args.get("text") or "").strip()
-        if not text:
-            return ("", 204)
-        # keep it reasonably bounded
-        if len(text) > 2048:
-            text = text[:2048]
-        import requests
-        url = "https://chart.googleapis.com/chart"
-        params = {"cht":"qr","chs":"220x220","chl":text}
-        r = requests.get(url, params=params, timeout=6)
-        if r.status_code != 200 or not r.content:
-            return ("", 204)
-        resp = make_response(r.content)
-        resp.headers["Content-Type"] = "image/png"
-        resp.headers["Cache-Control"] = "public, max-age=86400"
-        return resp
-    except Exception:
-        return ("", 204)
 
 @app.route("/test-sheet")
 def test_sheet():
@@ -1634,386 +1302,6 @@ def _hesc(s: Any) -> str:
              .replace(">", "&gt;")
              .replace('"', "&quot;")
              .replace("'", "&#39;"))
-
-
-# ============================================================
-# Fan Poll + Admin-config (Sponsor label, Match of the Day)
-# - Persists votes in Google Sheet (worksheet "PollVotes") when available.
-# - Stores admin-editable config in Google Sheet (worksheet "Config") when available.
-# - Falls back to local JSON file if Sheets isn't configured.
-# ============================================================
-
-DATA_DIR = os.environ.get("DATA_DIR", os.path.join("/tmp", "worldcup_app_data"))
-# Store small JSON state in a writable directory (Render slug is read-only)
-os.makedirs(DATA_DIR, exist_ok=True)
-CONFIG_FILE = os.path.join(DATA_DIR, "app_config.json")
-
-def _safe_read_json(path: str) -> dict:
-    try:
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                return json.load(f) or {}
-    except Exception:
-        pass
-    return {}
-
-def _safe_write_json(path: str, data: dict) -> None:
-    try:
-        tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, sort_keys=True)
-        os.replace(tmp, path)
-    except Exception:
-        pass
-
-def _ensure_ws(gc, title: str):
-    sh = gc.open(SHEET_NAME)
-    try:
-        return sh.worksheet(title)
-    except Exception:
-        return sh.add_worksheet(title=title, rows=2000, cols=20)
-
-def get_config() -> Dict[str, str]:
-    # Defaults
-    cfg = {
-        "poll_sponsor_text": "Fan Pick presented by World Cup Dallas HQ",
-        "match_of_day_id": "",
-    }
-
-    # Try Sheets first
-    try:
-        gc = get_gspread_client()
-        ws = _ensure_ws(gc, "Config")
-        rows = ws.get_all_values()
-        for r in rows[1:]:
-            if len(r) >= 2 and r[0]:
-                cfg[r[0]] = r[1]
-        return cfg
-    except Exception:
-        pass
-
-    # Fallback to local file
-    local = _safe_read_json(CONFIG_FILE)
-    if isinstance(local, dict):
-        cfg.update({k: str(v) for k, v in local.items() if v is not None})
-    return cfg
-
-def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
-    # Sheets
-    try:
-        gc = get_gspread_client()
-        ws = _ensure_ws(gc, "Config")
-        # Ensure header
-        rows = ws.get_all_values()
-        if not rows:
-            ws.append_row(["key", "value"])
-            rows = ws.get_all_values()
-
-        existing = {r[0]: (i + 1) for i, r in enumerate(rows) if len(r) >= 1 and r[0]}
-        for k, v in pairs.items():
-            if not k:
-                continue
-            v = "" if v is None else str(v)
-            if k in existing:
-                ws.update_cell(existing[k], 2, v)
-            else:
-                ws.append_row([k, v])
-        return get_config()
-    except Exception:
-        pass
-
-    # Fallback local file
-    local = _safe_read_json(CONFIG_FILE)
-    if not isinstance(local, dict):
-        local = {}
-    for k, v in pairs.items():
-        if not k:
-            continue
-        local[k] = "" if v is None else str(v)
-    _safe_write_json(CONFIG_FILE, local)
-    return get_config()
-
-def _match_id(m: Dict[str, Any]) -> str:
-    # Stable-ish id: datetime_utc + home + away (safe for URL/storage)
-    dt = (m.get("datetime_utc") or "").strip()
-    home = (m.get("home") or "").strip()
-    away = (m.get("away") or "").strip()
-    base = f"{dt}|{home}|{away}"
-    base = re.sub(r"[^A-Za-z0-9|:_-]+", "_", base)
-    return base[:180]
-
-def _get_match_of_day() -> Optional[Dict[str, Any]]:
-    cfg = get_config()
-    override_id = (cfg.get("match_of_day_id") or "").strip()
-
-    try:
-        matches = load_all_matches()
-    except Exception:
-        matches = []
-
-    if override_id:
-        for m in matches:
-            if _match_id(m) == override_id:
-                return m
-
-    # Default: next upcoming match globally (all matches is already sorted by datetime_utc)
-    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    for m in matches:
-        if (m.get("datetime_utc") or "") >= now_utc:
-            return m
-    return matches[0] if matches else None
-
-def _poll_is_locked(match: Optional[Dict[str, Any]]) -> bool:
-    if not match:
-        return False
-    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    kickoff = (match.get("datetime_utc") or "").strip()
-    return bool(kickoff and now_utc >= kickoff)
-
-def _poll_is_post_match(match: Optional[Dict[str, Any]]) -> bool:
-    # Best-effort: assume 2h match duration, then post-match highlight
-    try:
-        kickoff = (match.get("datetime_utc") or "").strip()
-        if not kickoff:
-            return False
-        k = datetime.strptime(kickoff, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
-        return datetime.now(timezone.utc) >= (k + timedelta(hours=2))
-    except Exception:
-        return False
-
-def _poll_counts(match_id: str) -> Dict[str, int]:
-    counts: Dict[str, int] = {}
-    # Sheets
-    try:
-        gc = get_gspread_client()
-        ws = _ensure_ws(gc, "PollVotes")
-        rows = ws.get_all_values()
-        # header: ts, match_id, client_id, team
-        for r in rows[1:]:
-            if len(r) < 4:
-                continue
-            if r[1] != match_id:
-                continue
-            team = r[3] or ""
-            if not team:
-                continue
-            counts[team] = counts.get(team, 0) + 1
-        return counts
-    except Exception:
-        pass
-
-    # local fallback (in config file under key "poll_votes")
-    local = _safe_read_json(CONFIG_FILE)
-    votes = local.get("poll_votes", [])
-    if isinstance(votes, list):
-        for v in votes:
-            try:
-                if v.get("match_id") != match_id:
-                    continue
-                team = v.get("team") or ""
-                if team:
-                    counts[team] = counts.get(team, 0) + 1
-            except Exception:
-                continue
-    return counts
-
-def _poll_has_voted(match_id: str, client_id: str) -> Optional[str]:
-    # return team if already voted, else None
-    if not client_id:
-        return None
-    # Sheets
-    try:
-        gc = get_gspread_client()
-        ws = _ensure_ws(gc, "PollVotes")
-        rows = ws.get_all_values()
-        for r in rows[1:]:
-            if len(r) < 4:
-                continue
-            if r[1] == match_id and r[2] == client_id:
-                return r[3] or ""
-    except Exception:
-        pass
-
-    local = _safe_read_json(CONFIG_FILE)
-    votes = local.get("poll_votes", [])
-    if isinstance(votes, list):
-        for v in votes:
-            try:
-                if v.get("match_id") == match_id and v.get("client_id") == client_id:
-                    return v.get("team") or ""
-            except Exception:
-                continue
-    return None
-
-def _poll_record_vote(match_id: str, client_id: str, team: str) -> bool:
-    if not (match_id and client_id and team):
-        return False
-    # Sheets
-    try:
-        gc = get_gspread_client()
-        ws = _ensure_ws(gc, "PollVotes")
-        rows = ws.get_all_values()
-        if not rows:
-            ws.append_row(["ts", "match_id", "client_id", "team"])
-        # prevent duplicates
-        existing = _poll_has_voted(match_id, client_id)
-        if existing:
-            return False
-        ws.append_row([datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), match_id, client_id, team])
-        return True
-    except Exception:
-        pass
-
-    # local fallback
-    local = _safe_read_json(CONFIG_FILE)
-    if not isinstance(local, dict):
-        local = {}
-    votes = local.get("poll_votes", [])
-    if not isinstance(votes, list):
-        votes = []
-    # prevent duplicates
-    for v in votes:
-        try:
-            if v.get("match_id") == match_id and v.get("client_id") == client_id:
-                return False
-        except Exception:
-            continue
-    votes.append({"ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "match_id": match_id, "client_id": client_id, "team": team})
-    local["poll_votes"] = votes
-    _safe_write_json(CONFIG_FILE, local)
-    return True
-
-@app.route("/api/config")
-def api_config():
-    cfg = get_config()
-    public = {
-        "poll_sponsor_text": cfg.get("poll_sponsor_text", ""),
-        "match_of_day_id": cfg.get("match_of_day_id", ""),
-    }
-    return jsonify(public)
-
-@app.route("/api/poll/state")
-def api_poll_state():
-    motd = _get_match_of_day()
-    if not motd:
-        # Keep the UI responsive even if matches failed to load.
-        cfg = get_config()
-        return jsonify({
-            "ok": True,
-            "locked": True,
-            "post_match": False,
-            "winner": None,
-            "sponsor_text": cfg.get("poll_sponsor_text", ""),
-            "match": {"id": "", "home": "Team A", "away": "Team B", "kickoff": ""},
-            "counts": {"Team A": 0, "Team B": 0},
-            "percent": {"Team A": 0.0, "Team B": 0.0},
-            "total": 0,
-            "note": "Matches not available yet."
-        }), 200
-
-    mid = _match_id(motd)
-    locked = _poll_is_locked(motd)
-    post_match = _poll_is_post_match(motd)
-
-    teams = [motd.get("home") or "Team A", motd.get("away") or "Team B"]
-    counts = _poll_counts(mid)
-    total = sum(counts.get(t, 0) for t in teams)
-    pct = {}
-    for t in teams:
-        pct[t] = (counts.get(t, 0) / total * 100.0) if total > 0 else 0.0
-
-    winner = None
-    if post_match and total > 0:
-        winner = max(teams, key=lambda t: counts.get(t, 0))
-
-    cfg = get_config()
-    return jsonify({
-        "ok": True,
-        "match": {
-            "id": mid,
-            "date": motd.get("date"),
-            "time": motd.get("time"),
-            "datetime_utc": motd.get("datetime_utc"),
-            "home": teams[0],
-            "away": teams[1],
-            "stage": motd.get("stage"),
-            "venue": motd.get("venue"),
-        },
-        "locked": locked,
-        "post_match": post_match,
-        "winner": winner,
-        "counts": {t: int(counts.get(t, 0)) for t in teams},
-        "percentages": {t: round(pct[t], 1) for t in teams},
-        "total_votes": int(total),
-        "sponsor_text": cfg.get("poll_sponsor_text", ""),
-    })
-
-@app.route("/api/poll/vote", methods=["POST"])
-def api_poll_vote():
-    data = request.get_json(silent=True) or {}
-    client_id = (data.get("client_id") or "").strip()
-    team = (data.get("team") or "").strip()
-
-    motd = _get_match_of_day()
-    if not motd:
-        # Keep the UI responsive even if matches failed to load.
-        cfg = get_config()
-        return jsonify({
-            "ok": True,
-            "locked": True,
-            "post_match": False,
-            "winner": None,
-            "sponsor_text": cfg.get("poll_sponsor_text", ""),
-            "match": {"id": "", "home": "Team A", "away": "Team B", "kickoff": ""},
-            "counts": {"Team A": 0, "Team B": 0},
-            "percent": {"Team A": 0.0, "Team B": 0.0},
-            "total": 0,
-            "note": "Matches not available yet."
-        }), 200
-
-    mid = _match_id(motd)
-    if _poll_is_locked(motd):
-        return jsonify({"ok": False, "error": "Poll locked at kickoff"}), 423
-
-    teams = [motd.get("home") or "Team A", motd.get("away") or "Team B"]
-    if team not in teams:
-        return jsonify({"ok": False, "error": "Invalid team"}), 400
-
-    already = _poll_has_voted(mid, client_id)
-    if already:
-        return jsonify({"ok": False, "error": "Already voted", "voted_for": already}), 409
-
-    ok = _poll_record_vote(mid, client_id, team)
-    if not ok:
-        return jsonify({"ok": False, "error": "Could not record vote"}), 500
-
-    # return updated state
-    return api_poll_state()
-
-@app.route("/admin/update-config", methods=["POST"])
-def admin_update_config():
-    key = request.args.get("key", "")
-    if not ADMIN_KEY or key != ADMIN_KEY:
-        return jsonify({"ok": False, "error": "Unauthorized"}), 401
-
-    data = request.get_json(silent=True) or {}
-    sponsor = (data.get("poll_sponsor_text") or "").strip()
-    match_id = (data.get("match_of_day_id") or "").strip()
-
-    pairs = {}
-    if sponsor:
-        pairs["poll_sponsor_text"] = sponsor
-    if match_id is not None:
-        pairs["match_of_day_id"] = match_id
-
-    cfg = set_config(pairs)
-    return jsonify({"ok": True, "config": {
-        "poll_sponsor_text": cfg.get("poll_sponsor_text",""),
-        "match_of_day_id": cfg.get("match_of_day_id",""),
-    }})
-
-
-
 
 
 @app.route("/admin/update-lead", methods=["POST"])
@@ -2213,10 +1501,6 @@ tr:hover td{background:rgba(255,255,255,.03)}
     html.append(f"<a class='btn' href='/admin/export.csv?key={_hesc(key)}'>Export CSV</a>")
     html.append(f"<button class='btn' onclick='location.reload()'>Refresh</button>")
     html.append("</div>")
-    html.append(f"<div style=\"display:flex;gap:8px;margin:10px 0 14px 0;flex-wrap:wrap;\"><a href=\"/admin?key={key}\" style=\"text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);font-weight:800\">Leads</a><a href=\"/admin/fanzone?key={key}\" style=\"text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid rgba(212,175,55,.35);border-radius:999px;background:rgba(212,175,55,.10);font-weight:900\">Fan Zone</a></div>")
-
-    # Fan Zone controls moved to /admin/fanzone
-
 
     html.append("<div class='tablewrap'><table id='tbl'><thead><tr>")
     # Show a clean set of columns (not every raw column), but keep the raw order if indices missing
@@ -2360,217 +1644,6 @@ fVip.addEventListener('change', applyFilters);
 </script>
 """.replace("__ADMIN_KEY__", json.dumps(key)))
 
-
-    html.append("</div></body></html>")
-    return "".join(html)
-
-
-
-
-
-@app.route("/admin/fanzone")
-def admin_fanzone():
-    key = request.args.get("key", "")
-    if not ADMIN_KEY or key != ADMIN_KEY:
-        return "Unauthorized", 401
-
-    html = []
-    html.append("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'/>")
-    html.append("<title>Fan Zone Admin</title>")
-    html.append("""<style>
-:root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
-body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(1200px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);color:var(--text);}
-.wrap{max-width:1200px;margin:0 auto;padding:18px;}
-.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
-.h1{font-size:18px;font-weight:800;letter-spacing:.3px}
-.sub{color:var(--muted);font-size:12px}
-.pills{display:flex;gap:8px;flex-wrap:wrap}
-.pill{border:1px solid var(--line);background:rgba(255,255,255,.03);padding:8px 10px;border-radius:999px;font-size:12px}
-.pill b{color:var(--gold)}
-.controls{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
-.inp, select{background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px 10px;font-size:12px;outline:none}
-.btn{cursor:pointer;background:linear-gradient(180deg, rgba(212,175,55,.18), rgba(212,175,55,.06));border:1px solid rgba(212,175,55,.35);color:var(--text);border-radius:12px;padding:9px 12px;font-size:12px}
-.btn:active{transform:translateY(1px)}
-.tablewrap{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:rgba(255,255,255,.03);box-shadow:0 10px 35px rgba(0,0,0,.35)}
-table{border-collapse:collapse;width:100%}
-thead th{position:sticky;top:0;background:rgba(10,16,34,.95);backdrop-filter: blur(6px);z-index:2}
-th,td{border-bottom:1px solid var(--line);padding:10px 10px;font-size:12px;vertical-align:top}
-th{color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:11px}
-tr:hover td{background:rgba(255,255,255,.03)}
-.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:11px}
-.badge.vip{border-color:rgba(212,175,55,.5);box-shadow:0 0 0 1px rgba(212,175,55,.18) inset}
-.dot{width:7px;height:7px;border-radius:999px;background:var(--muted);display:inline-block}
-.dot.new{background:var(--warn)}
-.dot.confirmed{background:var(--good)}
-.dot.seated{background:#7aa7ff}
-.dot.noshow{background:var(--bad)}
-.small{font-size:11px;color:var(--muted)}
-.right{text-align:right}
-.tel{color:var(--text);text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
-.toast{position:fixed;right:14px;bottom:14px;background:rgba(0,0,0,.55);border:1px solid var(--line);padding:10px 12px;border-radius:12px;font-size:12px;display:none}
-</style>""")
-    html.append("</head><body><div class='wrap'>")
-
-    html.append("<div class='topbar'>")
-    html.append(f"<div><div class='h1'>Fan Zone Admin — {_hesc(SHEET_NAME or 'World Cup')}</div><div class='sub'>Poll controls (Sponsor text + Match of the Day) • Key required</div></div>")
-    html.append("<div style='display:flex;gap:10px;align-items:center;flex-wrap:wrap'>")
-    html.append(f"<a class='btn' href='/admin?key={key}' style='text-decoration:none;display:inline-block'>Leads</a>")
-    html.append("</div></div>")
-
-    html.append(f"<div style='display:flex;gap:8px;margin:10px 0 14px 0;flex-wrap:wrap;'>"
-                f"<a href='/admin?key={key}' style='text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);font-weight:800'>Leads</a>"
-                f"<a href='/admin/fanzone?key={key}' style='text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid rgba(212,175,55,.35);border-radius:999px;background:rgba(212,175,55,.10);font-weight:900'>Fan Zone</a>"
-                f"</div>")
-
-    html.append(r"""
-<div class="panelcard" style="margin:14px 0;border:1px solid var(--line);border-radius:16px;padding:12px;background:rgba(255,255,255,.03);box-shadow:0 10px 35px rgba(0,0,0,.25)">
-  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
-    <div>
-      <div style="font-weight:800;letter-spacing:.02em">Fan Zone • Poll Controls</div>
-      <div class="sub">Edit sponsor text + set Match of the Day (no redeploy). Also shows live poll status.</div>
-    </div>
-    <button class="btn" id="btnSaveConfig">Save settings</button>
-  </div>
-
-  <div class="controls" style="margin:12px 0 0 0">
-    <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
-      <div class="sub">Sponsor label (“Presented by …”)</div>
-      <input class="inp" id="pollSponsorText" placeholder="Fan Pick presented by …" />
-    </div>
-    <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
-      <div class="sub">Match of the Day</div>
-      <select id="motdSelect"></select>
-    </div>
-  </div>
-
-  <div id="pollStatus" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
-    <div class="sub">Loading poll status…</div>
-  </div>
-</div>
-<script>
-(function(){
-  const ADMIN_KEY = (new URLSearchParams(location.search)).get("key") || "";
-
-  const $ = (id)=>document.getElementById(id);
-
-  function esc(s){ return (s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
-
-  async function loadScheduleOptions(selected){
-    const sel = $("motdSelect");
-    if(!sel) return;
-    sel.innerHTML = "<option value=''>Auto (next upcoming match)</option>";
-    try{
-      const res = await fetch("/schedule.json?scope=all&q=", {cache:"no-store"});
-      const data = await res.json();
-      const matches = (data && data.matches) ? data.matches : [];
-      let added = 0;
-      for(const m of matches){
-        if(added > 180) break;
-        const id = (m.datetime_utc || "") + "|" + (m.home||"") + "|" + (m.away||"");
-        const safeId = id.replace(/[^A-Za-z0-9|:_-]+/g,"_").slice(0,180);
-        const label = `${m.date||""} ${m.time||""} • ${m.home||""} vs ${m.away||""} • ${m.venue||""}`;
-        const opt = document.createElement("option");
-        opt.value = safeId;
-        opt.textContent = label;
-        if(selected && selected === safeId) opt.selected = true;
-        sel.appendChild(opt);
-        added++;
-      }
-    }catch(e){}
-  }
-
-  async function loadConfig(){
-    try{
-      const res = await fetch("/api/config", {cache:"no-store"});
-      const cfg = await res.json();
-      if($("pollSponsorText")) $("pollSponsorText").value = (cfg.poll_sponsor_text || "");
-      await loadScheduleOptions(cfg.match_of_day_id || "");
-    }catch(e){
-      await loadScheduleOptions("");
-    }
-  }
-
-  function renderPollStatus(state){
-    const wrap = $("pollStatus");
-    if(!wrap) return;
-    if(!state || !state.ok){
-      wrap.innerHTML = "<div class='sub'>Poll status unavailable.</div>";
-      return;
-    }
-    const m = state.match || {};
-    const teams = [m.home, m.away];
-    const counts = state.counts || {};
-    const pct = state.percentages || {};
-    const locked = !!state.locked;
-    const post = !!state.post_match;
-    const winner = state.winner || "";
-    const sponsor = state.sponsor_text || "";
-    const total = state.total_votes || 0;
-
-    const rows = teams.map(t=>{
-      const isWin = post && winner && winner === t;
-      return `
-        <div style="display:flex;align-items:center;gap:10px;margin:8px 0">
-          <div style="flex:0 0 160px;font-weight:700">${esc(t)} ${isWin ? "🏆" : ""}</div>
-          <div style="flex:1;border:1px solid rgba(255,255,255,.12);border-radius:999px;overflow:hidden;height:10px;background:rgba(255,255,255,.04)">
-            <div style="height:100%;width:${Number(pct[t]||0)}%;background:${isWin ? "rgba(212,175,55,.85)" : "rgba(46,160,67,.75)"}"></div>
-          </div>
-          <div style="flex:0 0 120px;text-align:right;color:var(--muted)">${Number(pct[t]||0).toFixed(1)}% • ${counts[t]||0}</div>
-        </div>
-      `;
-    }).join("");
-
-    wrap.innerHTML = `
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
-        <div>
-          <div style="font-weight:800">${esc(m.home)} vs ${esc(m.away)}</div>
-          <div class="sub">${esc(m.date||"")} • ${esc(m.time||"")} • ${esc(m.venue||"")}</div>
-          <div class="sub">${esc(sponsor)} • Total votes: <b style="color:var(--gold)">${total}</b></div>
-        </div>
-        <div class="pill"><b>Status</b> ${locked ? (post ? "Post-match" : "Locked (kickoff)") : "Open"}</div>
-      </div>
-      <div style="margin-top:6px">${rows}</div>
-    `;
-  }
-
-  async function loadPoll(){
-    try{
-      const res = await fetch("/api/poll/state", {cache:"no-store"});
-      const st = await res.json();
-      renderPollStatus(st);
-    }catch(e){
-      renderPollStatus(null);
-    }
-  }
-
-  async function saveConfig(){
-    const sponsor = ($("pollSponsorText")?.value || "").trim();
-    const matchId = ($("motdSelect")?.value || "").trim();
-    try{
-      const res = await fetch(`/admin/update-config?key=${encodeURIComponent(ADMIN_KEY)}`,{
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ poll_sponsor_text: sponsor, match_of_day_id: matchId })
-      });
-      const out = await res.json();
-      if(out && out.ok){
-        await loadConfig();
-        await loadPoll();
-      } else {
-        alert("Save failed: " + (out.error || "unknown"));
-      }
-    }catch(e){
-      alert("Save failed.");
-    }
-  }
-
-  $("btnSaveConfig")?.addEventListener("click", saveConfig);
-
-  loadConfig().then(loadPoll);
-  setInterval(loadPoll, 5000);
-})();
-</script>
-""".replace("__ADMIN_KEY__", json.dumps(key)))
 
     html.append("</div></body></html>")
     return "".join(html)
