@@ -2543,6 +2543,185 @@ function setSending(isSending){
 // -----------------------
 // Language toggle
 // -----------------------
+
+  // =======================
+  // GLOBAL i18n (entire app follows selected language)
+  // =======================
+  const I18N = {
+    en: {
+      app_title: "World Cup 2026 • Dallas Match-Day Concierge",
+      app_sub: "Reserve tables, see Dallas match schedule, and chat in English • Español • Português • Français",
+      menu_title: "Menu",
+      chat_title: "Chat",
+      schedule_title: "Dallas Schedule",
+      allmatches_title: "All Matches",
+      scope_dallas: "Dallas",
+      scope_all: "All",
+      search_ph: "Search team…",
+      clear: "Clear",
+      prev: "Prev",
+      next: "Next",
+      page: "Page",
+      of: "of",
+      support_q: "Which country are you supporting?",
+      poll_title: "Fan Poll (live)",
+      drink_title: "Drink Highlight",
+      drink_label: "${t("drink_label")}",
+      qr_title: "Scan QR → Open App",
+      qr_hint: "Put this poster in-venue (UI-only)",
+      wc_label: "WORLD CUP KICKOFF IN",
+      wc_live: "WORLD CUP IS LIVE"
+    },
+    es: {
+      app_title: "Copa Mundial 2026 • Concierge de Día de Partido (Dallas)",
+      app_sub: "Reserva mesas, mira el calendario de Dallas y chatea en English • Español • Português • Français",
+      menu_title: "Menú",
+      chat_title: "Chat",
+      schedule_title: "Calendario Dallas",
+      allmatches_title: "Todos los Partidos",
+      scope_dallas: "Dallas",
+      scope_all: "Todos",
+      search_ph: "Buscar equipo…",
+      clear: "Borrar",
+      prev: "Anterior",
+      next: "Siguiente",
+      page: "Página",
+      of: "de",
+      support_q: "¿Qué país apoyas?",
+      poll_title: "Encuesta (en vivo)",
+      drink_title: "Bebida Destacada",
+      drink_label: "Bebida del día",
+      qr_title: "Escanear QR → Abrir App",
+      qr_hint: "Póster para el estadio (solo UI)",
+      wc_label: "INICIO DEL MUNDIAL EN",
+      wc_live: "EL MUNDIAL ESTÁ EN VIVO"
+    },
+    pt: {
+      app_title: "Copa do Mundo 2026 • Concierge do Dia do Jogo (Dallas)",
+      app_sub: "Reserve mesas, veja a agenda de Dallas e converse em English • Español • Português • Français",
+      menu_title: "Cardápio",
+      chat_title: "Chat",
+      schedule_title: "Agenda Dallas",
+      allmatches_title: "Todos os Jogos",
+      scope_dallas: "Dallas",
+      scope_all: "Todos",
+      search_ph: "Buscar time…",
+      clear: "Limpar",
+      prev: "Anterior",
+      next: "Próximo",
+      page: "Página",
+      of: "de",
+      support_q: "Qual país você está torcendo?",
+      poll_title: "Enquete (ao vivo)",
+      drink_title: "Drink Destaque",
+      drink_label: "Drink do dia",
+      qr_title: "Escanear QR → Abrir App",
+      qr_hint: "Pôster no local (somente UI)",
+      wc_label: "A COPA COMEÇA EM",
+      wc_live: "A COPA ESTÁ AO VIVO"
+    },
+    fr: {
+      app_title: "Coupe du Monde 2026 • Concierge Jour de Match (Dallas)",
+      app_sub: "Réservez des tables, voyez le planning de Dallas et discutez en English • Español • Português • Français",
+      menu_title: "Menu",
+      chat_title: "Chat",
+      schedule_title: "Programme Dallas",
+      allmatches_title: "Tous les Matchs",
+      scope_dallas: "Dallas",
+      scope_all: "Tous",
+      search_ph: "Rechercher une équipe…",
+      clear: "Effacer",
+      prev: "Préc.",
+      next: "Suiv.",
+      page: "Page",
+      of: "sur",
+      support_q: "Quel pays soutenez-vous ?",
+      poll_title: "Sondage (en direct)",
+      drink_title: "Boisson à l'honneur",
+      drink_label: "Boisson du jour",
+      qr_title: "Scanner QR → Ouvrir l’app",
+      qr_hint: "Affiche sur place (UI uniquement)",
+      wc_label: "COUP D’ENVOI DANS",
+      wc_live: "LA COUPE DU MONDE EST EN COURS"
+    }
+  };
+
+  function getLang(){
+    return (window.currentLang || localStorage.getItem("lang") || "en").toLowerCase();
+  }
+  function t(key){
+    const lang = getLang();
+    return (I18N[lang] && I18N[lang][key]) || I18N.en[key] || key;
+  }
+
+  // Apply language to ALL visible UI chrome (not just chat/menu/schedule)
+  function applyGlobalLanguage(){
+    // Header
+    const h1 = document.querySelector("header h1");
+    if(h1) h1.textContent = t("app_title");
+    const sub = document.querySelector("header .sub");
+    if(sub) sub.textContent = t("app_sub");
+
+    // Card headers (best-effort by IDs/classes if present)
+    const menuTitle = document.querySelector(".menucard .cardhead .title");
+    if(menuTitle) menuTitle.textContent = t("menu_title");
+    const chatTitle = document.querySelector(".chatcard .cardhead .title");
+    if(chatTitle) chatTitle.textContent = t("chat_title");
+
+    // Right schedule panel title
+    const schedTitle = document.querySelector(".grid > .card:not(.hero) .cardhead .title");
+    if(schedTitle){
+      // If there is a scope toggle, set to generic title
+      schedTitle.textContent = t("schedule_title");
+    }
+
+    // Search placeholder + clear
+    const search = document.querySelector("#teamSearch, input[type='search'], input[placeholder*='Search']");
+    if(search) search.setAttribute("placeholder", t("search_ph"));
+    const clearBtn = document.querySelector("#clearSearch, button[data-action='clear'], button.secondary#clearBtn");
+    if(clearBtn) clearBtn.textContent = t("clear");
+
+    // Pager buttons + label
+    const prevBtn = document.getElementById("prevBtn") || document.getElementById("prev") || document.querySelector("#pager button:first-child");
+    const nextBtn = document.getElementById("nextBtn") || document.getElementById("next") || document.querySelector("#pager button:last-child");
+    if(prevBtn) prevBtn.textContent = t("prev");
+    if(nextBtn) nextBtn.textContent = t("next");
+
+    // Page indicator (if it's like "Page X of Y")
+    const pi = document.getElementById("pageIndicator");
+    if(pi){
+      // Keep numbers already present; just swap labels if we can detect them
+      // Example formats: "Page 1 of 11" or "1 / 11"
+      const txt = pi.textContent || "";
+      const m = txt.match(/(\d+)\s*(?:\/|of|sur|de)\s*(\d+)/i);
+      if(m){
+        pi.textContent = `${t("page")} ${m[1]} ${t("of")} ${m[2]}`;
+      }
+    }
+
+    // Fan zone labels (right/left rails)
+    const supportQ = document.querySelector("#supporterChip b, #supporterChip .label, .supporterQ");
+    if(supportQ && supportQ.tagName.toLowerCase() === "b") supportQ.textContent = t("support_q");
+
+    const pollH = document.querySelector("#fanPoll h3, .fz-card.poll h3");
+    if(pollH) pollH.textContent = t("poll_title");
+
+    const drinkH = document.querySelector("#drinkHighlightTitle, #drinkCard h3, #drinkHighlight").closest?.(".fz-card")?.querySelector("h3");
+    if(drinkH) drinkH.textContent = t("drink_title");
+
+    const qrH = document.querySelector("#qrTitle") || (document.getElementById("qrCanvas") ? document.getElementById("qrCanvas").closest('.fz-card')?.querySelector('h3') : null);
+  }
+
+    if(qrH) qrH.textContent = t("qr_title");
+
+    // World Cup countdown label
+    const wcLabel = document.querySelector("#wcCount .wcLabel");
+    if(wcLabel){
+      const isLive = (wcLabel.textContent || "").toUpperCase().includes("LIVE");
+      wcLabel.textContent = isLive ? t("wc_live") : t("wc_label");
+    }
+  }
+
 function applyLanguageToUI(){
   pillLang.textContent = lang.toUpperCase();
         // apply schedule scope UI
@@ -2568,7 +2747,11 @@ function applyLanguageToUI(){
 async function setLanguage(newLang){
   lang = newLang;
   localStorage.setItem("lang", lang);
-  applyLanguageToUI();
+  
+      try{ applyGlobalLanguage(); }catch(e){}
+applyLanguageToUI();
+
+    try{ applyGlobalLanguage(); }catch(e){}
 applyCompactMode();
 
   // reload menu in the chosen language
@@ -3348,7 +3531,9 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 (async function init(){
   applyLanguageToUI();
 
-  // Restore schedule scope UI
+  
+    try{ applyGlobalLanguage(); }catch(e){}
+// Restore schedule scope UI
   if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
   if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
 
@@ -3399,10 +3584,7 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
     sEl.textContent = pad2(secs);
 
     // When countdown hits zero, switch label
-    if(diff <= 0){
-      const label = box.querySelector(".wcLabel");
-      if(label) label.textContent = "WORLD CUP IS LIVE";
-    }
+    if(diff <= 0){ const label = box.querySelector(".wcLabel"); if(label) label.textContent = t("wc_live"); }
   }
 
   // Start timer
@@ -3645,7 +3827,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
           <span class="fz-flag">${c.flag}</span><b>${c.name}</b>
         </div>
 
-        <div class="fz-muted" style="margin-top:6px;">Featured drink</div>
+        <div class="fz-muted" style="margin-top:6px;">${t("drink_label")}</div>
         <div style="color:var(--text); font-weight:800; line-height:1.25;">${c.drink}</div>
 
       </div>
