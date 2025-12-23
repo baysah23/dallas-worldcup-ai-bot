@@ -1173,6 +1173,21 @@ body.phase-finals{ background: var(--phaseF); }
   background: rgba(0,0,0,.15);
 }
 .fz-chip b{ font-weight:700; }
+
+/* Ensure supporter chip handles long country names gracefully */
+#supporterChip{ max-width:100%; min-width:0; flex-wrap:wrap; }
+#supporterChip b#supporterLabel{
+  display:inline-block;
+  max-width: 180px;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.1;
+}
+@media (max-width: 420px){
+  #supporterChip b#supporterLabel{ max-width: 140px; }
+}
 .fz-actions{ display:flex; gap:8px; flex-wrap:wrap; }
 .fz-btn{
   border:1px solid var(--line);
@@ -2252,18 +2267,7 @@ body.kiosk-mode *::-webkit-scrollbar{
     </div>
   </div>
 </div>
-<!-- Modal -->
-<div class="fz-modal" id="countryModal" role="dialog" aria-modal="true" aria-labelledby="countryModalTitle">
-  <div class="panel">
-    <h2 id="countryModalTitle">Which country are you supporting?</h2>
-    <div class="fz-muted" style="margin-bottom:10px;">Pick one. We’ll personalize the experience (stored locally).</div>
-    <div class="fz-country-grid" id="countryGrid"></div>
-    <div class="fz-footer">
-      <button class="fz-btn" id="btnCloseCountry">Close</button>
-      <button class="fz-btn" id="btnClearCountry">Clear selection</button>
-    </div>
-  </div>
-</div>
+
 
 <div class="grid"><div aria-label="World Cup 2026 hero banner" class="hero" id="heroBanner">
 <div aria-hidden="true" class="heroSlides" id="heroSlides"></div>
@@ -3729,21 +3733,48 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   const LS_KEY = "wc26_support_country";
   const POLL_KEY = "wc26_fan_poll";
   const COUNTRIES = [
-    { code:"USA", name:"USA", flag:"🇺🇸", drink:"Stars & Citrus Spritz (citrus + soda + mint)" },
+    { code:"CAN", name:"Canada", flag:"🇨🇦", drink:"Maple Ginger Cooler (ginger + lime + hint of maple)" },
     { code:"MEX", name:"Mexico", flag:"🇲🇽", drink:"Paloma Fresca (grapefruit + lime + salt rim)" },
-    { code:"BRA", name:"Brazil", flag:"🇧🇷", drink:"Caipirinha Twist (lime + sugar + crushed ice)" },
+    { code:"USA", name:"United States", flag:"🇺🇸", drink:"Stars & Citrus Spritz (citrus + soda + mint)" },
+    { code:"JPN", name:"Japan", flag:"🇯🇵", drink:"Yuzu Spark (yuzu + soda + mint)" },
+    { code:"NZL", name:"New Zealand", flag:"🇳🇿", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"IRN", name:"Iran", flag:"🇮🇷", drink:"Fan Fizz (citrus + soda + mint)" },
     { code:"ARG", name:"Argentina", flag:"🇦🇷", drink:"Mate Cooler (mint + citrus over iced tea)" },
+    { code:"UZB", name:"Uzbekistan", flag:"🇺🇿", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"KOR", name:"South Korea", flag:"🇰🇷", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"JOR", name:"Jordan", flag:"🇯🇴", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"AUS", name:"Australia", flag:"🇦🇺", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"BRA", name:"Brazil", flag:"🇧🇷", drink:"Caipirinha Twist (lime + sugar + crushed ice)" },
+    { code:"ECU", name:"Ecuador", flag:"🇪🇨", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"URU", name:"Uruguay", flag:"🇺🇾", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"COL", name:"Colombia", flag:"🇨🇴", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"PAR", name:"Paraguay", flag:"🇵🇾", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"MAR", name:"Morocco", flag:"🇲🇦", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"TUN", name:"Tunisia", flag:"🇹🇳", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"EGY", name:"Egypt", flag:"🇪🇬", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"ALG", name:"Algeria", flag:"🇩🇿", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"GHA", name:"Ghana", flag:"🇬🇭", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"CPV", name:"Cape Verde", flag:"🇨🇻", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"RSA", name:"South Africa", flag:"🇿🇦", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"QAT", name:"Qatar", flag:"🇶🇦", drink:"Fan Fizz (citrus + soda + mint)" },
     { code:"ENG", name:"England", flag:"🏴", drink:"Ginger Shandy (ginger + lemon + soda)" },
+    { code:"KSA", name:"Saudi Arabia", flag:"🇸🇦", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"CIV", name:"Ivory Coast", flag:"🇨🇮", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"SEN", name:"Senegal", flag:"🇸🇳", drink:"Fan Fizz (citrus + soda + mint)" },
     { code:"FRA", name:"France", flag:"🇫🇷", drink:"Lavender Lemonade (lavender + lemon + soda)" },
-    { code:"ESP", name:"Spain", flag:"🇪🇸", drink:"Citrus Sangria (orange + berry + sparkling)" },
+    { code:"CRO", name:"Croatia", flag:"🇭🇷", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"POR", name:"Portugal", flag:"🇵🇹", drink:"Passionfruit Fizz (passionfruit + lime + soda)" },
+    { code:"NOR", name:"Norway", flag:"🇳🇴", drink:"Fan Fizz (citrus + soda + mint)" },
     { code:"GER", name:"Germany", flag:"🇩🇪", drink:"Apple Fizz (apple + ginger + soda)" },
     { code:"NED", name:"Netherlands", flag:"🇳🇱", drink:"Orange Burst (orange + lime + soda)" },
-    { code:"JPN", name:"Japan", flag:"🇯🇵", drink:"Yuzu Spark (yuzu/lemon + soda)" },
-    { code:"KOR", name:"Korea", flag:"🇰🇷", drink:"Ginger Pear Cooler (pear + ginger + ice)" },
-    { code:"NGA", name:"Nigeria", flag:"🇳🇬", drink:"Zobo Chill (hibiscus + pineapple + ice)" },
-    { code:"SEN", name:"Senegal", flag:"🇸🇳", drink:"Bissap Breeze (hibiscus + mint + lime)" },
-    { code:"MAR", name:"Morocco", flag:"🇲🇦", drink:"Mint Tea Cooler (mint + lemon over ice)" },
-    { code:"AUS", name:"Australia", flag:"🇦🇺", drink:"Lime Surf Spritz (lime + soda + mint)" }
+    { code:"BEL", name:"Belgium", flag:"🇧🇪", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"AUT", name:"Austria", flag:"🇦🇹", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"SUI", name:"Switzerland", flag:"🇨🇭", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"ESP", name:"Spain", flag:"🇪🇸", drink:"Citrus Sangria (orange + berry + sparkling)" },
+    { code:"SCO", name:"Scotland", flag:"🏴", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"PAN", name:"Panama", flag:"🇵🇦", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"HAI", name:"Haiti", flag:"🇭🇹", drink:"Fan Fizz (citrus + soda + mint)" },
+    { code:"CUW", name:"Curaçao", flag:"🇨🇼", drink:"Fan Fizz (citrus + soda + mint)" },
   ];
 
   const el = (id)=>document.getElementById(id);
