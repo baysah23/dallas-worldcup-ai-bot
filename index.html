@@ -3922,26 +3922,56 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
 
   // NOTE: Keep your existing list if you already curated it.
   // (If you want the FULL 2026 participant list auto-loaded, we can wire it to a JSON file or endpoint.)
-  const COUNTRIES = (window.WC26_COUNTRIES && Array.isArray(window.WC26_COUNTRIES) && window.WC26_COUNTRIES.length)
-    ? window.WC26_COUNTRIES
-    : [
-      { code:"USA", name:"United States", flag:"🇺🇸", drink:"Stars & Citrus Spritz", desc:"citrus + soda + mint" },
-      { code:"MEX", name:"Mexico", flag:"🇲🇽", drink:"Paloma Fresca", desc:"grapefruit + lime + salt rim" },
-      { code:"CAN", name:"Canada", flag:"🇨🇦", drink:"Maple Ginger Cooler", desc:"ginger + lime + hint of maple" },
-      { code:"BRA", name:"Brazil", flag:"🇧🇷", drink:"Açaí Lime Fizz", desc:"lime + soda + berry" },
-      { code:"ARG", name:"Argentina", flag:"🇦🇷", drink:"Mate Citrus Cooler", desc:"citrus + mint" },
-      { code:"ENG", name:"England", flag:"🏴", drink:"Royal Ginger Mule", desc:"ginger + lime + bitters" },
-      { code:"FRA", name:"France", flag:"🇫🇷", drink:"Blue Blanc Spritz", desc:"citrus + soda" },
-      { code:"GER", name:"Germany", flag:"🇩🇪", drink:"Black Forest Fizz", desc:"cherry + soda" },
-      { code:"ESP", name:"Spain", flag:"🇪🇸", drink:"Sangria Zero", desc:"citrus + berry + spice" },
-      { code:"POR", name:"Portugal", flag:"🇵🇹", drink:"Lisbon Lemonade", desc:"lemon + mint" },
-      { code:"NED", name:"Netherlands", flag:"🇳🇱", drink:"Orange Kick", desc:"orange + soda" },
-      { code:"KOR", name:"Korea Republic", flag:"🇰🇷", drink:"Seoul Citrus Tea", desc:"citrus + ginger" },
-      { code:"JPN", name:"Japan", flag:"🇯🇵", drink:"Yuzu Spark", desc:"yuzu + soda" },
-      { code:"NGA", name:"Nigeria", flag:"🇳🇬", drink:"Naija Zobo Spritz", desc:"hibiscus + ginger" },
-      { code:"SEN", name:"Senegal", flag:"🇸🇳", drink:"Dakar Ginger Lime", desc:"ginger + lime" },
-      { code:"MAR", name:"Morocco", flag:"🇲🇦", drink:"Atlas Mint Cooler", desc:"mint + lime" },
-    ];
+    // ----- Countries for "Supporter" picker -----
+  // We pull the list of teams that have qualified *so far* for WC 2026 from the server.
+  // (Qualification is ongoing; this will grow over time automatically.)
+  let COUNTRIES = [];
+
+  // Minimal meta for nicer UI + drink tie-ins (fallbacks for others)
+  const COUNTRY_META = {
+    "United States": { code:"USA", flag:"🇺🇸", drink:"Stars & Stripes Spritz", desc:"citrus + soda + mint" },
+    "Mexico": { code:"MEX", flag:"🇲🇽", drink:"Mexico City Michelada", desc:"lime + spice + cerveza vibe (NA option available)" },
+    "Canada": { code:"CAN", flag:"🇨🇦", drink:"Maple Ginger Cooler", desc:"ginger + lime + soda" },
+    "Japan": { code:"JPN", flag:"🇯🇵", drink:"Tokyo Yuzu Fizz", desc:"yuzu + soda + light syrup" },
+    "New Zealand": { code:"NZL", flag:"🇳🇿", drink:"Kiwi Lime Smash", desc:"lime + mint + soda" },
+    "IR Iran": { code:"IRN", flag:"🇮🇷", drink:"Persian Rose Lemonade", desc:"rose + lemon + soda" },
+    "Argentina": { code:"ARG", flag:"🇦🇷", drink:"Buenos Aires Mate Cooler", desc:"mint + citrus + iced tea" },
+    "Uzbekistan": { code:"UZB", flag:"🇺🇿", drink:"Silk Road Citrus Soda", desc:"citrus + ginger + soda" },
+  };
+
+  function _fallbackCode(name){
+    return String(name||"").toUpperCase().replace(/[^A-Z]/g,"").slice(0,3) || "WC";
+  }
+
+  async function loadQualifiedCountries(){
+    try{
+      const resp = await fetch("/worldcup/qualified.json", { cache: "no-store" });
+      const data = await resp.json();
+      const names = Array.isArray(data.teams) ? data.teams : [];
+      COUNTRIES = names.map((name) => {
+        const meta = COUNTRY_META[name];
+        if(meta) return meta;
+        return {
+          code: _fallbackCode(name),
+          name,
+          flag: "🏳️",
+          drink: "Stadium Spritz",
+          desc: "ask the bartender for a country-inspired twist"
+        };
+      });
+      // Rebuild UI after load
+      try{ buildCountryGrid(); }catch(e){}
+      try{ renderSupporter(); }catch(e){}
+      try{ renderDrink(); }catch(e){}
+    }catch(e){
+      // If fetch fails, fall back to the known set so the Fan Zone stays usable.
+      COUNTRIES = Object.values(COUNTRY_META);
+      try{ buildCountryGrid(); }catch(e){}
+      try{ renderSupporter(); }catch(e){}
+      try{ renderDrink(); }catch(e){}
+    }
+  }
+
 
   // ----- Helpers -----
   function escapeHtml(s){
@@ -3960,6 +3990,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   // ----- Country modal -----
   function openCountryModal(){
     if(!modal) return;
+    if(!Array.isArray(COUNTRIES) || !COUNTRIES.length){ loadQualifiedCountries(); }
     modal.classList.add("show");
   }
   function closeCountryModal(){

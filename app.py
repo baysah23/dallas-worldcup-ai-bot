@@ -969,6 +969,105 @@ def schedule_json():
 
 
 
+
+# ============================================================
+# Qualified teams (World Cup 2026) — server-side fetch
+# - Returns the teams that have qualified *so far* (qualification is ongoing).
+# - Source: Wikipedia qualified teams table (updates over time).
+# ============================================================
+_qualified_cache: Dict[str, Any] = {"loaded_at": 0, "teams": []}
+QUALIFIED_CACHE_SECONDS = int(os.environ.get("QUALIFIED_CACHE_SECONDS", str(12 * 60 * 60)))  # 12h
+QUALIFIED_SOURCE_URL = os.environ.get(
+    "QUALIFIED_SOURCE_URL",
+    "https://en.wikipedia.org/api/rest_v1/page/html/2026_FIFA_World_Cup_qualification",
+)
+
+def _fetch_qualified_teams() -> List[str]:
+    import urllib.request
+    req = urllib.request.Request(
+        QUALIFIED_SOURCE_URL,
+        headers={"User-Agent": "worldcup-concierge/1.0"},
+        method="GET",
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        html = resp.read().decode("utf-8", errors="replace")
+
+    # Find the "Qualified teams" section and the first wikitable following it
+    # then extract the first column team names.
+    # This is a best-effort parser that avoids heavy HTML deps.
+    anchor = 'id="Qualified_teams"'
+    i = html.find(anchor)
+    if i == -1:
+        anchor = 'id="Qualified_teams"'
+    i = html.find(anchor)
+    if i == -1:
+        # fallback: just return hosts (always in WC)
+        return ["Canada", "Mexico", "United States"]
+
+    sub = html[i:]
+    # find first <table ...> ... </table>
+    t0 = sub.find("<table")
+    t1 = sub.find("</table>")
+    if t0 == -1 or t1 == -1:
+        return ["Canada", "Mexico", "United States"]
+    table = sub[t0:t1+8]
+
+    # rows
+    teams: List[str] = []
+    for row in re.findall(r"<tr[^>]*>(.*?)</tr>", table, flags=re.S):
+        # first <th> or <td>
+        cell_m = re.search(r"<t[hd][^>]*>(.*?)</t[hd]>", row, flags=re.S)
+        if not cell_m:
+            continue
+        cell = cell_m.group(1)
+
+        # Take the first visible link/text within the cell
+        # Prefer <a> text, fallback to stripped text.
+        a_m = re.search(r"<a[^>]*>([^<]+)</a>", cell)
+        name = (a_m.group(1) if a_m else re.sub(r"<[^>]+>", " ", cell))
+        name = re.sub(r"\s+", " ", name).strip()
+
+        # Skip header rows
+        if not name or name.lower() in {"team", "qualified teams"}:
+            continue
+
+        # Basic cleanup (Wikipedia sometimes includes footnote markers)
+        name = re.sub(r"\[[0-9]+\]", "", name).strip()
+        if name and name not in teams:
+            teams.append(name)
+
+    # Always ensure hosts are present
+    for host in ["Canada", "Mexico", "United States"]:
+        if host not in teams:
+            teams.insert(0, host)
+
+    return teams
+
+def get_qualified_teams(force: bool = False) -> List[str]:
+    now = int(time.time())
+    if (not force and _qualified_cache["teams"]
+        and (now - int(_qualified_cache["loaded_at"] or 0) < QUALIFIED_CACHE_SECONDS)):
+        return _qualified_cache["teams"]
+
+    try:
+        teams = _fetch_qualified_teams()
+    except Exception:
+        teams = ["Canada", "Mexico", "United States"]
+
+    _qualified_cache["loaded_at"] = now
+    _qualified_cache["teams"] = teams
+    return teams
+
+@app.route("/worldcup/qualified.json")
+def qualified_json():
+    teams = get_qualified_teams()
+    return jsonify({
+        "updated_at": int(_qualified_cache.get("loaded_at") or 0),
+        "count": len(teams),
+        "teams": teams,
+        "note": "Qualification is ongoing; this list reflects teams qualified so far.",
+    })
+
 @app.route("/test-sheet")
 def test_sheet():
     try:
