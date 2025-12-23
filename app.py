@@ -442,10 +442,16 @@ def get_gspread_client():
 
 def ensure_sheet_header(ws):
     """Ensure the sheet has headers in row 1 (and remove a duplicated header at the bottom if present)."""
-    expected = ['timestamp', 'name', 'phone', 'date', 'time', 'party_size', 'language']
+    expected = ['timestamp', 'name', 'phone', 'date', 'time', 'party_size', 'language', 'status', 'vip']
 
     # Read first row
     first = ws.row_values(1)
+
+    # If the sheet already has the older 7-column header, upgrade it in place.
+    old_expected = ['timestamp', 'name', 'phone', 'date', 'time', 'party_size', 'language']
+    if first == old_expected:
+        ws.update("A1:I1", [expected])
+        return
     if first == expected:
         return
 
@@ -462,7 +468,7 @@ def ensure_sheet_header(ws):
     # If row 1 is empty, just set it. Otherwise, insert a new row at top.
     first_now = ws.row_values(1)
     if not any((c or "").strip() for c in first_now):
-        ws.update("A1:G1", [expected])
+        ws.update("A1:I1", [expected])
     else:
         ws.insert_row(expected, index=1)
 
@@ -478,8 +484,9 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
         lead.get("time", ""),
         int(lead.get("party_size") or 0),
         lead.get("language", "en"),
+        lead.get("status", "New"),
+        "VIP" if lead.get("vip") else "",
     ])
-
 
 def read_leads(limit: int = 200) -> List[List[str]]:
     gc = get_gspread_client()
@@ -518,7 +525,7 @@ def get_session(sid: str) -> Dict[str, Any]:
         s = {
             "mode": "idle",         # idle | reserving
             "lang": "en",
-            "lead": {"name": "", "phone": "", "date": "", "time": "", "party_size": 0, "language": "en"},
+            "lead": {"name": "", "phone": "", "date": "", "time": "", "party_size": 0, "language": "en", "status": "New", "vip": False},
             "updated_at": time.time(),
         }
         _sessions[sid] = s
@@ -817,6 +824,7 @@ def recall_text(sess: Dict[str, Any]) -> str:
             f"Date: {lead.get('date') or '—'}",
             f"Time: {lead.get('time') or '—'}",
             f"Party size: {lead.get('party_size') or '—'}",
+            f"VIP: {'Yes' if lead.get('vip') else 'No'}",
             f"Name: {lead.get('name') or '—'}",
             f"Phone: {lead.get('phone') or '—'}",
         ]
@@ -1004,6 +1012,12 @@ def chat():
     # update session language if user toggled
     sess["lang"] = lang
     sess["lead"]["language"] = lang
+
+    # VIP tagging (ties to the VIP Table Hold button in the Fan Zone UI)
+    msg_l = msg.lower()
+    if "vip" in msg_l:
+        sess["lead"]["vip"] = True
+
 
     if not msg:
         return jsonify({"reply": "Please type a message.", "rate_limit_remaining": remaining})
