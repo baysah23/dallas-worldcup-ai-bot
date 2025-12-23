@@ -1232,6 +1232,31 @@ body.phase-finals{ background: var(--phaseF); }
 #qrCanvas{ width:128px; height:128px; background:#fff; border-radius:12px; padding:8px; }
 .qrText a{ color: var(--warn); text-decoration:none; }
 
+
+/* --- Fan Zone side rails (desktop) --- */
+.fanzone-left, .fanzone-right{ width: 320px; }
+@media(min-width: 1200px){
+  /* Keep header + core app centered while side rails stay visible */
+  body{ padding-left: 360px; padding-right: 360px; }
+  .fanzone-left, .fanzone-right{
+    position: fixed;
+    top: 92px; /* below header */
+    max-height: calc(100vh - 110px);
+    overflow: auto;
+    z-index: 50;
+  }
+  .fanzone-left{ left: 16px; }
+  .fanzone-right{ right: 16px; }
+}
+@media(max-width: 1199px){
+  body{ padding-left: 0; padding-right: 0; }
+  .fanzone-left, .fanzone-right{
+    width: auto;
+    position: static;
+    margin-top: 12px;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -1253,49 +1278,68 @@ body.phase-finals{ background: var(--phaseF); }
 </div>
 </div>
 </header>
+
 <!-- =======================
-     FAN ZONE (UI-only)
+     FAN ZONE (UI-only) — SIDE PANELS
+     Desktop: left + right rails so the main page never shifts off-screen.
      ======================= -->
-<section class="fanzone" id="fanZone">
-  <div class="fz-row">
+<aside class="fanzone fanzone-left" id="fanZoneLeft" aria-label="Fan Zone Left Panel">
+  <div class="fz-row" style="justify-content:flex-start;">
     <div class="fz-chip" id="supporterChip" title="Personalization stored on this device only">
       <span>🏁</span><span>Supporting:</span> <b id="supporterLabel">Not set</b>
     </div>
-    <div class="fz-actions">
-      <button class="fz-btn" id="btnPickCountry">Which country are you supporting?</button>
-      <button class="fz-btn" id="btnOpenPoll">Fan poll (live)</button>
-      <button class="fz-btn" id="btnSharePoster">QR poster</button>
-    </div>
+  </div>
+  <div class="fz-actions" style="margin-top:10px;">
+    <button class="fz-btn" id="btnPickCountry">Which country are you supporting?</button>
+    <button class="fz-btn" id="btnOpenPoll">Fan poll (live)</button>
   </div>
 
-  <div class="fz-grid">
-    <div class="fz-card half" id="pollCard" style="display:none;">
-      <h3>📊 Fan Poll (live)</h3>
-      <div class="fz-muted">Tap your country to vote. Counts are simulated “live” on this device (UI-only).</div>
-      <div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
-    </div>
+  <div class="fz-card" id="pollCard" style="display:none; margin-top:10px;">
+    <h3>📊 Fan Poll (live)</h3>
+    <div class="fz-muted">Tap your country to vote. Counts are simulated “live” on this device (UI-only).</div>
+    <div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
+  </div>
 
-    <div class="fz-card half" id="drinkCard">
-      <h3>🍹 Country-themed drink highlights</h3>
-      <div class="fz-muted">Based on who you’re supporting (or pick a country). Great upsell before kickoff.</div>
-      <div id="drinkHighlight" style="margin-top:10px;"></div>
-    </div>
+  <div class="fz-muted" style="margin-top:10px;">Tip: set your country first for a more personalized vibe.</div>
+</aside>
 
-    <div class="fz-card" id="qrCard" style="display:none;">
-      <h3>📱 QR poster → opens app</h3>
-      <div class="fz-muted">Print or display at the venue entrance. Scanning opens this app link.</div>
-      <div class="qrWrap" style="margin-top:10px;">
-        <canvas id="qrCanvas" width="160" height="160" aria-label="QR code"></canvas>
-        <div class="qrText">
-          <div class="fz-muted" style="margin-bottom:6px;">Link:</div>
-          <div><a id="qrLink" href="#" target="_blank" rel="noopener">Open app</a></div>
-          <div class="fz-muted" style="margin-top:10px;">Tip: host this page publicly for real in‑venue scanning.</div>
-        </div>
+<aside class="fanzone fanzone-right" id="fanZoneRight" aria-label="Fan Zone Right Panel">
+  <div class="fz-actions" style="justify-content:flex-end;">
+    <button class="fz-btn" id="btnSharePoster">QR poster</button>
+  </div>
+
+  <div class="fz-card" id="drinkCard" style="margin-top:10px;">
+    <h3>🍹 Country-themed drink highlights</h3>
+    <div class="fz-muted">Based on who you’re supporting (or pick a country). Great upsell before kickoff.</div>
+    <div id="drinkHighlight" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="fz-card" id="qrCard" style="display:none; margin-top:10px;">
+    <h3>📱 QR poster → opens app</h3>
+    <div class="fz-muted">Print or display at the venue entrance. Scanning opens this app link.</div>
+    <div class="qrWrap" style="margin-top:10px;">
+      <canvas id="qrCanvas" width="160" height="160" aria-label="QR code"></canvas>
+      <div class="qrText">
+        <div class="fz-muted" style="margin-bottom:6px;">Link:</div>
+        <div><a id="qrLink" href="#" target="_blank" rel="noopener">Open app</a></div>
+        <div class="fz-muted" style="margin-top:10px;">Tip: host this page publicly for real in‑venue scanning.</div>
       </div>
     </div>
   </div>
-</section>
+</aside>
 
+<!-- Modal -->
+<div class="fz-modal" id="countryModal" role="dialog" aria-modal="true" aria-labelledby="countryModalTitle">
+  <div class="panel">
+    <h2 id="countryModalTitle">Which country are you supporting?</h2>
+    <div class="fz-muted" style="margin-bottom:10px;">Pick one. We’ll personalize the experience (stored locally).</div>
+    <div class="fz-country-grid" id="countryGrid"></div>
+    <div class="fz-footer">
+      <button class="fz-btn" id="btnCloseCountry">Close</button>
+      <button class="fz-btn" id="btnClearCountry">Clear selection</button>
+    </div>
+  </div>
+</div>
 <!-- Modal -->
 <div class="fz-modal" id="countryModal" role="dialog" aria-modal="true" aria-labelledby="countryModalTitle">
   <div class="panel">
