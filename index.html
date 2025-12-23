@@ -1581,6 +1581,58 @@ body.has-dallas-today .fanzone-right{
   height: 92px;
 }
 
+
+/* =======================
+   GLOBAL OVERFLOW GUARD (prevents any horizontal scroll)
+   ======================= */
+*, *::before, *::after{ box-sizing: border-box; }
+html, body{ overflow-x: hidden !important; }
+.wrap{ overflow-x: hidden; }
+
+/* Right rail: stack content vertically to avoid cramped horizontal layouts */
+.fanzone-right .fz-row{ flex-direction: column; align-items: stretch; gap: 8px; }
+.fanzone-right .fz-actions{ width:100%; justify-content: flex-start; }
+.fanzone-right .fz-grid{ grid-template-columns: 1fr !important; }
+.fanzone-right .fz-card{ width:100%; }
+.fanzone-right .fz-card *{ max-width:100%; min-width:0; }
+
+/* Drink highlight: always vertical */
+.fz-drink{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  width:100%;
+}
+.fz-drinkTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+.fz-drinkName{
+  font-weight:900;
+  letter-spacing:.02em;
+}
+.fz-drinkMeta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.fz-miniPill{
+  font-size:10.5px;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.14);
+  color: var(--muted);
+}
+
+/* Any long strings must break rather than create scroll */
+.fanzone-right, .fanzone-right *{
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+
 </style>
 </head>
 <body>
