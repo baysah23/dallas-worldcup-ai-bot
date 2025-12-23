@@ -2221,6 +2221,18 @@ body.kiosk-mode *::-webkit-scrollbar{
   </div>
 
   <div class="fz-muted" style="margin-top:10px;">Tip: set your country first for a more personalized vibe.</div>
+
+
+  <!-- VIP Table Hold (UI-only) — inside Fan Zone LEFT rail -->
+  <div class="fz-card" id="vipHoldCard" style="margin-top:10px;">
+    <h3>⭐ VIP Table Hold</h3>
+    <div class="fz-muted">One-tap VIP hold request. Starts the reservation flow and tags your message as VIP (UI-only).</div>
+    <div class="fz-actions" style="margin-top:10px; justify-content:flex-start;">
+      <button class="fz-btn" id="vipHoldBtn">Hold VIP table</button>
+      <button class="fz-btn" id="vipHoldInfoBtn">How it works</button>
+    </div>
+  </div>
+
 </aside>
 
 <aside class="fanzone fanzone-right" id="fanZoneRight" aria-label="Fan Zone Right Panel">
@@ -2267,30 +2279,6 @@ body.kiosk-mode *::-webkit-scrollbar{
     </div>
   </div>
 </div>
-
-<!-- VIP Table Hold (UI-only) — below Fan Zone (does not move Menu/Chat/Dallas schedule) -->
-<div class="vipHoldWrap" style="max-width:1050px; width:100%; margin:12px auto 0; padding:0 12px;">
-  <div class="card" id="vipHoldCard">
-    <div class="cardhead">
-      <div class="title">VIP Table Hold</div>
-      <div class="pill" style="background:rgba(212,175,55,.14); border-color:rgba(212,175,55,.28); color:rgba(255,235,185,.95);">VIP</div>
-    </div>
-    <div class="sidepad" style="padding-top:10px;">
-      <div class="muted" style="line-height:1.35;">
-        One-tap VIP hold request. This simply starts the reservation flow and tags your message as VIP (UI-only).
-      </div>
-    </div>
-    <div class="sidepad" style="padding-top:0; display:flex; gap:10px; flex-wrap:wrap;">
-      <button class="secondary" id="vipHoldBtn" style="border-color:rgba(212,175,55,.38);">
-        Hold a VIP table
-      </button>
-      <button class="secondary" id="vipHoldInfoBtn">
-        How it works
-      </button>
-    </div>
-  </div>
-</div>
-
 
 
 <div class="grid"><div aria-label="World Cup 2026 hero banner" class="hero" id="heroBanner">
