@@ -2092,6 +2092,30 @@ body.kiosk-mode *::-webkit-scrollbar{
   height: 0 !important;
 }
 
+
+/* =======================
+   PAGER OVERLAP FIX (last match always visible)
+   ======================= */
+:root{
+  --pagerH: 40px; /* visual height */
+  --pagerGap: 14px; /* safety gap */
+}
+
+/* Make sticky pager take no overlay space inside scrollable area by reserving padding */
+.schedule{
+  padding-bottom: calc(var(--pagerH) + var(--pagerGap) + 18px) !important;
+}
+
+/* Keep pager slightly above bottom so it doesn't sit on scrollbar edge */
+#pager{
+  bottom: 10px !important;
+}
+
+/* In compact screens, increase padding a touch */
+@media (max-width: 520px){
+  :root{ --pagerH: 42px; --pagerGap: 16px; }
+}
+
 </style>
 </head>
 <body>
