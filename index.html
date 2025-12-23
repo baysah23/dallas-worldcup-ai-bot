@@ -2401,7 +2401,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 </div>
 <div class="fz-card" id="pollCard" style="display:none; margin-top:10px;">
 <h3>⚔️ Match of the Day Poll</h3>
-<div class="fz-muted">Vote who wins today’s match. Counts are simulated “live” on this device (UI-only).</div>
+<div class="fz-muted">Vote who wins today’s Match of the Day. Live percentages update instantly and votes persist.</div>
 <div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
 </div>
 </aside></div>
@@ -4035,119 +4035,120 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   }
 
   // ----- Match of the day + poll -----
+  
   let motdMatch = null;
+  let motdPollState = null;
+  let pollRefreshTimer = null;
 
-  function motdPollKey(){
-    if(!motdMatch) return LS_POLL_BASE + ":none";
-    const a = (motdMatch.home||"").trim();
-    const b = (motdMatch.away||"").trim();
-    const d = (motdMatch.date||"").trim();
-    return `${LS_POLL_BASE}:${d}:${a}__${b}`;
-  }
-  function getPoll(){
-    try{ return JSON.parse(localStorage.getItem(motdPollKey()) || "{}"); }catch(e){ return {}; }
-  }
-  function setPoll(p){
-    try{ localStorage.setItem(motdPollKey(), JSON.stringify(p||{})); }catch(e){}
-  }
-
-  function vote(team){
-    if(!motdMatch) return;
-    const home = motdMatch.home || "Home";
-    const away = motdMatch.away || "Away";
-    const t = (team === away) ? away : home;
-
-    const poll = getPoll();
-    poll[t] = (poll[t] || 0) + 1;
-    setPoll(poll);
-    renderPoll(true);
-  }
-  window.__fanVote = vote; // used by inline onclick if any
-
-  async function loadMatchOfDay(){
+  async function fetchMOTD(){
     try{
-      // Pull "all matches" and pick the first match happening today; otherwise next upcoming.
-      const res = await fetch(`/schedule.json?scope=all&q=${encodeURIComponent("")}`, {cache:"no-store"});
-      if(!res.ok) return;
-      const matches = await res.json();
-      if(!Array.isArray(matches) || !matches.length) return;
+      const res = await fetch(`/api/motd`, {cache:"no-store"});
+      if(!res.ok) return null;
+      const data = await res.json();
+      motdPollState = data;
+      motdMatch = data.match || null;
+      return data;
+    }catch(e){ return null; }
+  }
 
-      const now = new Date();
-      const todayISO = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().slice(0,10);
-
-      // matches are already sorted by app.py kickoff UTC (then formatted); treat "date" as ISO yyyy-mm-dd.
-      let pick = matches.find(m => (m.date === todayISO)) || null;
-      if(!pick){
-        pick = matches.find(m => m.date && m.date >= todayISO) || matches[0];
-      }
-      if(pick){
-        motdMatch = { date: pick.date, time: pick.time, home: pick.home, away: pick.away, stage: pick.stage, venue: pick.venue };
-      }
+  async function voteMOTD(team){
+    if(!motdMatch) return;
+    try{
+      const res = await fetch(`/api/poll/vote`, {
+        method:"POST",
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({match_id: motdMatch.id, team})
+      });
+      const data = await res.json();
+      motdPollState = data;
+      motdMatch = data.match || motdMatch;
+      renderPollUI(data);
     }catch(e){
-      // best-effort; leave motdMatch null
+      // ignore
     }
   }
 
-  function renderPoll(bumpLive){
+  function pct(v){ return `${Math.max(0, Math.min(100, v||0))}%`; }
+
+  function renderPollUI(state){
     if(!pollList) return;
-    if(!motdMatch){
-      pollList.innerHTML = `<div class="fz-muted">No match loaded yet.</div>`;
+    if(!state || !state.match){
+      pollList.innerHTML = `<div class="fz-muted">Poll unavailable right now.</div>`;
       return;
     }
-    const home = motdMatch.home || "Home";
-    const away = motdMatch.away || "Away";
+    const m = state.match;
+    const sponsor = (state.sponsor_text || "").trim();
+    const locked = !!state.locked;
+    const phase = state.phase || "pre";
+    const winner = (state.winner || "").trim();
 
-    const poll = getPoll();
+    const home = m.home || "";
+    const away = m.away || "";
+    const votes = state.votes || {};
+    const pcts = state.percentages || {};
+    const hv = votes[home] ?? 0;
+    const av = votes[away] ?? 0;
+    const hp = pcts[home] ?? 0;
+    const ap = pcts[away] ?? 0;
 
-    // Device-only “live” bumps
-    if(bumpLive && Math.random() < 0.18){
-      const pick = (Math.random() < 0.5) ? home : away;
-      poll[pick] = (poll[pick] || 0) + 1;
-      setPoll(poll);
-    }
+    const line = `${escapeHtml(home)} vs ${escapeHtml(away)} • ${escapeHtml(m.date||"")} • ${escapeHtml(m.time||"")}`;
+    const statusLine = locked
+      ? (phase === "post" ? "Final • Poll closed" : "Kickoff lock • Poll closed")
+      : "Open • vote now";
 
-    const h = poll[home] || 0;
-    const a = poll[away] || 0;
-    const total = (h + a) || 1;
-    const hPct = Math.round((h/total)*100);
-    const aPct = 100 - hPct;
-
-    const line = `${escapeHtml(home)} vs ${escapeHtml(away)} • ${escapeHtml(motdMatch.date||"")} • ${escapeHtml(motdMatch.time||"")}`;
+    const homeWin = winner && winner === home;
+    const awayWin = winner && winner === away;
 
     pollList.innerHTML = `
+      ${sponsor ? `<div class="fz-muted" style="margin-bottom:6px; letter-spacing:.2px; text-transform:uppercase; opacity:.9">${escapeHtml(sponsor)}</div>` : ``}
       <div class="fz-muted" style="margin-bottom:8px;">${line}</div>
+      <div class="fz-muted" style="margin-bottom:10px;">${escapeHtml(statusLine)}${locked && state.lock_reason ? ` • ${escapeHtml(state.lock_reason)}` : ""}</div>
 
-      <div style="display:grid; grid-template-columns: 1fr 74px; gap:10px; align-items:center;">
-        <button class="fz-chip" type="button" style="justify-content:space-between; width:100%; cursor:pointer;" onclick="window.__fanVote && window.__fanVote('${escapeHtml(home).replace(/'/g,'&#39;')}')">
-          <span style="display:flex; gap:8px; align-items:center;">
-            <span style="width:10px; height:10px; border-radius:999px; background:rgba(255,204,102,.85); display:inline-block;"></span>
-            <b>${escapeHtml(home)}</b>
-          </span>
-          <span class="fz-muted" style="font-size:11px">${h}</span>
-        </button>
-        <div class="fz-muted" style="text-align:right; font-weight:900;">${hPct}%</div>
-      </div>
-      <div style="height:8px; border-radius:999px; background:rgba(255,255,255,.10); overflow:hidden; border:1px solid rgba(255,255,255,.12); margin-top:6px;">
-        <div style="height:100%; width:${hPct}%; background:linear-gradient(90deg, rgba(255,204,102,.75), rgba(46,160,67,.55));"></div>
-      </div>
+      <div style="display:grid; gap:10px;">
+        <div style="border:1px solid rgba(255,255,255,.12); border-radius:14px; padding:10px; background:rgba(0,0,0,.12);">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+            <div style="font-weight:900">${escapeHtml(home)} ${homeWin ? "✅" : ""}</div>
+            <div class="fz-muted">${hp}% • ${hv} votes</div>
+          </div>
+          <div style="height:10px; border-radius:999px; border:1px solid rgba(255,255,255,.12); overflow:hidden; margin-top:8px; background:rgba(0,0,0,.18);">
+            <div style="height:100%; width:${pct(hp)}; background:linear-gradient(90deg, rgba(46,160,67,.72), rgba(0,0,0,.25));"></div>
+          </div>
+          <div style="margin-top:10px; display:flex; gap:8px;">
+            <button class="fz-btn" ${locked ? "disabled" : ""} onclick="voteMOTD(${JSON.stringify(home)})">Vote ${escapeHtml(home)}</button>
+          </div>
+        </div>
 
-      <div style="height:10px"></div>
-
-      <div style="display:grid; grid-template-columns: 1fr 74px; gap:10px; align-items:center;">
-        <button class="fz-chip" type="button" style="justify-content:space-between; width:100%; cursor:pointer;" onclick="window.__fanVote && window.__fanVote('${escapeHtml(away).replace(/'/g,'&#39;')}')">
-          <span style="display:flex; gap:8px; align-items:center;">
-            <span style="width:10px; height:10px; border-radius:999px; background:rgba(31,111,235,.85); display:inline-block;"></span>
-            <b>${escapeHtml(away)}</b>
-          </span>
-          <span class="fz-muted" style="font-size:11px">${a}</span>
-        </button>
-        <div class="fz-muted" style="text-align:right; font-weight:900;">${aPct}%</div>
-      </div>
-      <div style="height:8px; border-radius:999px; background:rgba(255,255,255,.10); overflow:hidden; border:1px solid rgba(255,255,255,.12); margin-top:6px;">
-        <div style="height:100%; width:${aPct}%; background:linear-gradient(90deg, rgba(31,111,235,.70), rgba(0,0,0,.25));"></div>
+        <div style="border:1px solid rgba(255,255,255,.12); border-radius:14px; padding:10px; background:rgba(0,0,0,.12);">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px;">
+            <div style="font-weight:900">${escapeHtml(away)} ${awayWin ? "✅" : ""}</div>
+            <div class="fz-muted">${ap}% • ${av} votes</div>
+          </div>
+          <div style="height:10px; border-radius:999px; border:1px solid rgba(255,255,255,.12); overflow:hidden; margin-top:8px; background:rgba(0,0,0,.18);">
+            <div style="height:100%; width:${pct(ap)}; background:linear-gradient(90deg, rgba(31,111,235,.72), rgba(0,0,0,.25));"></div>
+          </div>
+          <div style="margin-top:10px; display:flex; gap:8px;">
+            <button class="fz-btn" ${locked ? "disabled" : ""} onclick="voteMOTD(${JSON.stringify(away)})">Vote ${escapeHtml(away)}</button>
+          </div>
+        </div>
       </div>
     `;
   }
+  // expose for inline onclick
+  window.voteMOTD = voteMOTD;
+
+  async function renderPoll(bumpLive){
+    if(!pollList) return;
+    // Ensure poll card is visible if bumpLive is requested and currently hidden
+    const state = await fetchMOTD();
+    renderPollUI(state);
+
+    if(pollRefreshTimer) clearInterval(pollRefreshTimer);
+    pollRefreshTimer = setInterval(async ()=>{
+      const st = await fetchMOTD();
+      renderPollUI(st);
+    }, 8000);
+  }
+
 
   // ----- QR poster -----
   function openQR(){
