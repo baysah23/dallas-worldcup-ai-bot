@@ -1068,6 +1068,60 @@
 /* Banner takeover text styling when matchday */
 /* Highlight the next match card in gold */
 
+
+/* =======================
+   GLOBAL FAN ZONE IDENTITY (UI-only)
+   - Slightly sport-modern typography
+   - Gold reserved for Dallas matches + Knockouts + Finals
+   - Background gradient shifts by stage (Group → Knockouts → Finals)
+======================= */
+:root{
+  --font-sport: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+  --font-sport-condensed: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  --gold: #ffcc66; /* existing warn-like gold */
+  --goldSoft: rgba(255,204,102,.18);
+}
+
+/* Slightly more sport-modern typography without external fonts */
+body{
+  font-family: var(--font-sport);
+  letter-spacing: .1px;
+}
+h1,h2,h3,.brand, .pill, .tabs button{
+  font-family: var(--font-sport-condensed);
+  letter-spacing: .2px;
+}
+
+/* Gold accents reserved */
+.match.is-dallas b,
+.match.is-knockout b,
+.match.is-final b{
+  color: var(--gold);
+}
+.match.is-dallas{
+  border-color: rgba(255,204,102,.35);
+  box-shadow: 0 0 0 1px rgba(255,204,102,.12) inset;
+}
+.match.is-knockout,
+.match.is-final{
+  background: linear-gradient(180deg, rgba(255,204,102,.10), rgba(255,204,102,.03));
+  border-color: rgba(255,204,102,.30);
+}
+.match.is-final{
+  box-shadow: 0 8px 22px rgba(0,0,0,.25);
+}
+
+/* Stage-based background gradient shift */
+body.stage-group{
+  background: radial-gradient(1200px 600px at 20% 10%, #132a5b 0%, var(--bg) 55%);
+}
+body.stage-knockout{
+  background: radial-gradient(1200px 600px at 80% 10%, #2a1a55 0%, var(--bg) 58%);
+}
+body.stage-finals{
+  background: radial-gradient(1200px 600px at 50% 8%, #3b2a10 0%, var(--bg) 60%);
+}
+
 </style>
 </head>
 <body>
@@ -1772,6 +1826,28 @@ function getFlag(teamName){
 function flagBadge(teamName){
   return `<span class="flag-badge" title="${escapeHtml(String(teamName||""))}">${getFlag(teamName)}</span>`;
 }
+
+/* =======================
+   Fan Zone helpers (UI-only)
+======================= */
+function classifyStageLabel(stageRaw){
+  const s = String(stageRaw||"").toLowerCase();
+  if (!s) return "group";
+  if (s.includes("final") && !s.includes("semi")) return "final";
+  if (s.includes("semi")) return "knockout";
+  if (s.includes("quarter")) return "knockout";
+  if (s.includes("round of") || s.includes("knockout")) return "knockout";
+  // default group stage
+  return "group";
+}
+function applyStageTheme(stageLabel){
+  const body = document.body;
+  body.classList.remove("stage-group","stage-knockout","stage-finals");
+  if(stageLabel === "final") body.classList.add("stage-finals");
+  else if(stageLabel === "knockout") body.classList.add("stage-knockout");
+  else body.classList.add("stage-group");
+}
+
 function buildTeamsHtml(teamsTxt){
   const raw = String(teamsTxt||"").trim();
   const parts = raw.split(" vs ");
@@ -1847,6 +1923,10 @@ function renderSchedule(){
   const upcoming = enriched.filter(m => m.ts >= now);
   const nextId = upcoming.length ? upcoming[0].id : null;
 
+  // Fan Zone background shift based on upcoming match stage (UI-only)
+  try{ applyStageTheme(upcoming.length ? classifyStageLabel(upcoming[0].stage) : "group"); }catch(_e){ }
+
+
   // Pagination (Dallas + All Matches)
 let pageMatches = enriched;
 
@@ -1873,6 +1953,14 @@ if (totalPages <= 1){
   pageMatches.forEach(m => {
     const row = document.createElement("div");
     row.className = "match" + (m.id === nextId ? " next" : "");
+    // Gold accents reserved: Dallas scope + Knockouts + Finals (UI-only)
+    try{
+      if(scope === "dallas") row.classList.add("is-dallas");
+      const st = classifyStageLabel(m.stage);
+      if(st === "knockout") row.classList.add("is-knockout");
+      if(st === "final") row.classList.add("is-final");
+    }catch(_e){}
+
 
     const timeTxt = formatKickoffTime(m.time);
     const teamsTxt = (m.teams && String(m.teams).trim())
