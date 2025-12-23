@@ -58,6 +58,55 @@ with open(BUSINESS_PROFILE_PATH, "r", encoding="utf-8") as f:
 
 # ============================================================
 # Business Rules (edit here)
+
+# Countries currently qualified for the 2026 World Cup (used by Fan Zone country selector)
+QUALIFIED_TEAMS_2026 = [
+    "Canada",
+    "Mexico",
+    "United States",
+    "Japan",
+    "New Zealand",
+    "Iran",
+    "Argentina",
+    "Uzbekistan",
+    "South Korea",
+    "Jordan",
+    "Australia",
+    "Brazil",
+    "Ecuador",
+    "Uruguay",
+    "Colombia",
+    "Paraguay",
+    "Morocco",
+    "Tunisia",
+    "Egypt",
+    "Algeria",
+    "Ghana",
+    "Cape Verde",
+    "South Africa",
+    "Qatar",
+    "England",
+    "Saudi Arabia",
+    "Ivory Coast",
+    "Senegal",
+    "France",
+    "Croatia",
+    "Portugal",
+    "Norway",
+    "Germany",
+    "Netherlands",
+    "Belgium",
+    "Austria",
+    "Switzerland",
+    "Spain",
+    "Scotland",
+    "Panama",
+    "Haiti",
+    "Curaçao",
+]
+
+# NOTE: Full 48-team field is not finalized yet; this list is the countries that have
+# qualified for the 2026 World Cup so far (plus hosts). Update this list as more teams qualify.
 # ============================================================
 BUSINESS_RULES = {
     # hours in 24h local time; for simplicity we only enforce "open/closed" by day
@@ -1336,23 +1385,14 @@ def _fetch_qualified_teams_remote() -> List[str]:
     return teams
 
 def get_qualified_teams(force: bool = False) -> List[str]:
-    """Return countries for the Fan Zone selector (fast + reliable).
+    """Return countries for the Fan Zone selector.
 
-    Default behavior (no network):
-      - Return a stable list of countries from local pycountry data.
-
-    Optional (network):
-      - If USE_REMOTE_QUALIFIED=1, we refresh from QUALIFIED_SOURCE_URL on a TTL.
+    This must be fast + reliable (no network dependency) to avoid UI freezes.
+    We intentionally return the list of countries that have qualified for the
+    2026 World Cup so far (plus hosts). Update QUALIFIED_TEAMS_2026 as needed.
     """
-    now = int(time.time())
+    return list(QUALIFIED_TEAMS_2026)
 
-    # Ensure we always have something usable
-    if not _qualified_cache.get("teams"):
-        _qualified_cache["teams"] = _local_country_list()
-        _qualified_cache["loaded_at"] = now
-
-    if not USE_REMOTE_QUALIFIED:
-        return list(_qualified_cache["teams"])
 
     fresh = (now - int(_qualified_cache.get("loaded_at") or 0) < QUALIFIED_CACHE_SECONDS)
     if force or not fresh:
