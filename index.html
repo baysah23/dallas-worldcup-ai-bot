@@ -18,12 +18,14 @@
       --warn:#ffcc66;
     }
     body{
-      margin:0; height:100vh; display:flex; flex-direction:column;
+      overflow-y: auto;
+
+      margin:0; min-height:100vh; height:auto; display:flex; flex-direction:column;
       font-family: Arial, sans-serif;
       background: radial-gradient(1200px 600px at 20% 10%, #132a5b 0%, var(--bg) 55%);
       color:var(--text);
     }
-    .wrap{max-width:1050px; width:100%; margin:0 auto; display:flex; flex-direction:column; height:100%; min-height:100vh;}
+    .wrap{max-width:1050px; width:100%; margin:0 auto; display:flex; flex-direction:column; min-height:100vh; height:auto; min-height:100vh;}
     header{
       padding:16px 18px;
       background: linear-gradient(90deg, #0b1733 0%, #0f1b33 55%, #102246 100%);
@@ -59,7 +61,7 @@
       height: 100%;
       gap:14px;
       padding:14px;
-      flex:1;
+      flex: 0 0 auto; min-height: 520px;
       min-height:0;
     }
     @media (max-width: 950px){
@@ -1740,6 +1742,19 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
   .wcNums{ gap:8px; }
   .wcNums b{ font-size: 16px; }
 }
+
+
+/* =======================
+   SCHEDULE VISIBILITY FIX
+   (ensures schedule is always visible in non-compact mode)
+   ======================= */
+@media (min-height: 650px){
+  .grid{ min-height: calc(100vh - 92px); } /* subtract header-ish area */
+}
+@media (max-height: 649px){
+  .grid{ min-height: 560px; }
+}
+.schedule{ min-height: 220px; }
 
 </style>
 </head>
