@@ -1815,7 +1815,7 @@ def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
     if not isinstance(local, dict):
         local = {}
     local.update(clean)
-    local["_updated_at"] = datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    local["_updated_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     _safe_write_json(CONFIG_FILE, local)
 
     try:
