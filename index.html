@@ -2435,6 +2435,18 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="fz-footer">
 <button class="fz-btn" id="btnCloseCountry">Close</button>
 <button class="fz-btn" id="btnClearCountry">Clear selection</button></div>
+
+<!-- Poll Modal -->
+<div aria-labelledby="pollModalTitle" aria-modal="true" class="fz-modal" id="pollModal" role="dialog">
+  <div class="panel">
+    <h2 id="pollModalTitle">Match poll (live)</h2>
+    <div class="fz-muted" id="pollModalSub" style="margin-bottom:10px;">Vote for who you think will win.</div>
+    <div id="pollModalList" style="margin-top:10px; display:grid; gap:8px;"></div>
+    <div class="fz-footer">
+      <button class="fz-btn" id="btnClosePoll">Close</button>
+    </div>
+  </div>
+</div>
 </div></div>
 <div class="grid"><div aria-label="World Cup 2026 hero banner" class="hero" id="heroBanner">
 <div aria-hidden="true" class="heroSlides" id="heroSlides"></div>
@@ -3878,11 +3890,13 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
 
     // ----- Elements -----
     const modal = el("countryModal");
+    const pollModal = el("pollModal");
+    const btnClosePoll = el("btnClosePoll");
     const countryGrid = el("countryGrid");
     const supporterLabel = el("supporterLabel");
 
     const pollCard = el("pollCard");
-    const pollList = el("pollList");
+    const pollList = el("pollModalList") || el("pollList");
 
     const drinkName = el("drinkName");
     const drinkDesc = el("drinkDesc");
@@ -4204,17 +4218,19 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
       }
     }
 
-    function togglePoll(){
-      if(!pollCard) return;
-      const isOpen = (pollCard.style.display !== "none" && pollCard.style.display !== "");
-      pollCard.style.display = isOpen ? "none" : "block";
-      if(!isOpen){
-        // keep scroll inside left rail (avoid page jump)
-        try{
-          const rail = document.getElementById("fanZoneLeft");
-          if(rail && rail.scrollHeight > rail.clientHeight){
-            rail.scrollTop = Math.max(0, pollCard.offsetTop - 8);
-          }
+    
+    function openPollModal(){
+      if(!pollModal) return;
+      pollModal.classList.add("show");
+      document.body.style.overflow = "hidden";
+      // load live state each open
+      fetchPollState().then(renderPoll).catch(()=>renderPoll(null));
+    }
+    function closePollModal(){
+      if(!pollModal) return;
+      pollModal.classList.remove("show");
+      document.body.style.overflow = "";
+    }
         }catch(e){}
         // load live state
         fetchPollState().then(renderPoll).catch(()=>renderPoll(null));
@@ -4226,7 +4242,13 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     el("btnCloseCountry")?.addEventListener("click", (e)=>{ e.preventDefault(); closeCountryModal(); });
     el("btnClearCountry")?.addEventListener("click", (e)=>{ e.preventDefault(); clearSupport(); renderSupporter(); renderDrink(); closeCountryModal(); });
 
-    btnOpenPoll?.addEventListener("click", (e)=>{ e.preventDefault(); togglePoll(); });
+    // Poll modal close
+    btnClosePoll?.addEventListener("click", (e)=>{ e.preventDefault(); closePollModal(); });
+    pollModal?.addEventListener("click", (e)=>{ if(e.target === pollModal) closePollModal(); });
+    document.addEventListener("keydown", (e)=>{ if(e.key === "Escape" && pollModal?.classList.contains("show")) closePollModal(); });
+
+
+    btnOpenPoll?.addEventListener("click", (e)=>{ e.preventDefault(); openPollModal(); });
 
     // Drinks panel is always visible; clicking should just ensure it's in view (within rail)
     el("fzIconDrinks")?.addEventListener("click", ()=>{
