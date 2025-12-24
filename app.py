@@ -5,6 +5,7 @@ import os
 import json
 import re
 import time
+import datetime
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
@@ -520,22 +521,43 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
 
 
 def read_leads(limit: int = 200) -> List[List[str]]:
-    gc = get_gspread_client()
-    ws = gc.open(SHEET_NAME).sheet1
-    rows = ws.get_all_values()
-    if not rows:
-        return []
-    header = rows[0]
-    body = rows[1:]
-    body = body[-limit:]
-    return [header] + body
+    """Read leads from Google Sheets with a small cache.
 
+    Switching between Admin tabs can trigger repeated reads; caching avoids
+    Sheets 429 quota errors. If Sheets errors, we fall back to cached rows.
+    """
+    now = time.time()
 
-# ============================================================
-# Reservation state machine (in-memory sessions)
-# ============================================================
-_sessions: Dict[str, Dict[str, Any]] = {}
+    rows_cached = _LEADS_CACHE.get("rows")
+    if isinstance(rows_cached, list) and (now - float(_LEADS_CACHE.get("ts", 0.0)) < 30.0):
+        if not rows_cached:
+            return []
+        header = rows_cached[0]
+        body = rows_cached[1:]
+        body = body[-limit:]
+        return [header] + body
 
+    try:
+        gc = get_gspread_client()
+        ws = gc.open(SHEET_NAME).sheet1
+        rows = ws.get_all_values() or []
+        _LEADS_CACHE["ts"] = now
+        _LEADS_CACHE["rows"] = rows
+
+        if not rows:
+            return []
+        header = rows[0]
+        body = rows[1:]
+        body = body[-limit:]
+        return [header] + body
+    except Exception:
+        rows = _LEADS_CACHE.get("rows") or []
+        if rows:
+            header = rows[0]
+            body = rows[1:]
+            body = body[-limit:]
+            return [header] + body
+        raise
 
 def get_session_id() -> str:
     """
@@ -1699,6 +1721,14 @@ DATA_DIR = os.environ.get("DATA_DIR", os.path.join("/tmp", "worldcup_app_data"))
 os.makedirs(DATA_DIR, exist_ok=True)
 CONFIG_FILE = os.path.join(DATA_DIR, "app_config.json")
 
+# -----------------------------
+# Lightweight in-process caches
+# (reduces Google Sheets quota hits)
+# -----------------------------
+_CONFIG_CACHE: Dict[str, Any] = {"ts": 0.0, "cfg": None}   # ttl ~5s
+_LEADS_CACHE: Dict[str, Any] = {"ts": 0.0, "rows": None}  # ttl ~30s
+
+
 def _safe_read_json(path: str) -> dict:
     try:
         if os.path.exists(path):
@@ -1725,64 +1755,91 @@ def _ensure_ws(gc, title: str):
         return sh.add_worksheet(title=title, rows=2000, cols=20)
 
 def get_config() -> Dict[str, str]:
-    # Defaults
-    cfg = {
+    """Config is authoritative in local CONFIG_FILE.
+
+    We still *attempt* to read the Google Sheet (Config tab) for compatibility,
+    but local values always win. This prevents 'saved but not reflected' when
+    Sheets write fails (quota) and later reads return older data.
+    """
+    now = time.time()
+    cached = _CONFIG_CACHE.get("cfg")
+    if isinstance(cached, dict) and (now - float(_CONFIG_CACHE.get("ts", 0.0)) < 5.0):
+        return dict(cached)
+
+    cfg: Dict[str, str] = {
         "poll_sponsor_text": "Fan Pick presented by World Cup Dallas HQ",
         "match_of_day_id": "",
+        "motd_home": "",
+        "motd_away": "",
+        "motd_datetime_utc": "",
+        "poll_lock_mode": "auto",
     }
 
-    # Try Sheets first
+    local = _safe_read_json(CONFIG_FILE)
+    if isinstance(local, dict):
+        for k, v in local.items():
+            if str(k).startswith("_"):
+                continue
+            cfg[str(k)] = "" if v is None else str(v)
+
     try:
         gc = get_gspread_client()
         ws = _ensure_ws(gc, "Config")
         rows = ws.get_all_values()
         for r in rows[1:]:
             if len(r) >= 2 and r[0]:
-                cfg[r[0]] = r[1]
-        return cfg
+                k = r[0]
+                v = r[1]
+                if (k not in cfg) or (cfg.get(k, "") == ""):
+                    cfg[k] = v
     except Exception:
         pass
 
-    # Fallback to local file
-    local = _safe_read_json(CONFIG_FILE)
-    if isinstance(local, dict):
-        cfg.update({k: str(v) for k, v in local.items() if v is not None})
+    _CONFIG_CACHE["ts"] = now
+    _CONFIG_CACHE["cfg"] = dict(cfg)
     return cfg
 
 def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
-    # Sheets
+    """Persist config.
+
+    1) Write to local CONFIG_FILE (authoritative + works on Render).
+    2) Best-effort sync to Google Sheet (Config tab) for visibility/back-compat.
+    """
+    clean: Dict[str, str] = {}
+    for k, v in (pairs or {}).items():
+        if not k:
+            continue
+        clean[str(k)] = "" if v is None else str(v)
+
+    local = _safe_read_json(CONFIG_FILE)
+    if not isinstance(local, dict):
+        local = {}
+    local.update(clean)
+    local["_updated_at"] = datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"
+    _safe_write_json(CONFIG_FILE, local)
+
     try:
         gc = get_gspread_client()
         ws = _ensure_ws(gc, "Config")
-        # Ensure header
+
         rows = ws.get_all_values()
         if not rows:
             ws.append_row(["key", "value"])
             rows = ws.get_all_values()
 
         existing = {r[0]: (i + 1) for i, r in enumerate(rows) if len(r) >= 1 and r[0]}
-        for k, v in pairs.items():
-            if not k:
-                continue
-            v = "" if v is None else str(v)
+        for k, v in clean.items():
             if k in existing:
                 ws.update_cell(existing[k], 2, v)
             else:
                 ws.append_row([k, v])
-        return get_config()
     except Exception:
         pass
 
-    # Fallback local file
-    local = _safe_read_json(CONFIG_FILE)
-    if not isinstance(local, dict):
-        local = {}
-    for k, v in pairs.items():
-        if not k:
-            continue
-        local[k] = "" if v is None else str(v)
-    _safe_write_json(CONFIG_FILE, local)
-    return get_config()
+    merged = get_config()
+    _CONFIG_CACHE["ts"] = time.time()
+    _CONFIG_CACHE["cfg"] = dict(merged)
+    return merged
 
 def _match_id(m: Dict[str, Any]) -> str:
     # Stable-ish id: datetime_utc + home + away (safe for URL/storage)
