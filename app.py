@@ -529,7 +529,7 @@ def read_leads(limit: int = 200) -> List[List[str]]:
     now = time.time()
 
     rows_cached = _LEADS_CACHE.get("rows")
-    if isinstance(rows_cached, list) and (now - float(_LEADS_CACHE.get("ts", 0.0)) < 30.0):
+    if isinstance(rows_cached, list) and (now - float(_LEADS_CACHE.get("ts", 0.0)) < 90.0):
         if not rows_cached:
             return []
         header = rows_cached[0]
@@ -557,7 +557,7 @@ def read_leads(limit: int = 200) -> List[List[str]]:
             body = rows[1:]
             body = body[-limit:]
             return [header] + body
-        raise
+        return []
 
 def get_session_id() -> str:
     """
@@ -2153,37 +2153,41 @@ def admin_update_config():
 
     data = request.get_json(silent=True) or {}
 
-    # Allow clearing values by sending empty strings.
-    sponsor = (data.get("poll_sponsor_text") if data.get("poll_sponsor_text") is not None else "")
-    match_id = (data.get("match_of_day_id") if data.get("match_of_day_id") is not None else "")
+    try:
 
-    motd_home = (data.get("motd_home") if data.get("motd_home") is not None else "")
-    motd_away = (data.get("motd_away") if data.get("motd_away") is not None else "")
-    motd_datetime_utc = (data.get("motd_datetime_utc") if data.get("motd_datetime_utc") is not None else "")
+        # Allow clearing values by sending empty strings.
+        sponsor = (data.get("poll_sponsor_text") if data.get("poll_sponsor_text") is not None else "")
+        match_id = (data.get("match_of_day_id") if data.get("match_of_day_id") is not None else "")
 
-    poll_lock_mode = (data.get("poll_lock_mode") if data.get("poll_lock_mode") is not None else "auto")
+        motd_home = (data.get("motd_home") if data.get("motd_home") is not None else "")
+        motd_away = (data.get("motd_away") if data.get("motd_away") is not None else "")
+        motd_datetime_utc = (data.get("motd_datetime_utc") if data.get("motd_datetime_utc") is not None else "")
 
-    pairs = {
-        "poll_sponsor_text": str(sponsor).strip(),
-        "match_of_day_id": str(match_id).strip(),
-        "motd_home": str(motd_home).strip(),
-        "motd_away": str(motd_away).strip(),
-        "motd_datetime_utc": str(motd_datetime_utc).strip(),
-        "poll_lock_mode": (str(poll_lock_mode).strip() or "auto"),
-    }
+        poll_lock_mode = (data.get("poll_lock_mode") if data.get("poll_lock_mode") is not None else "auto")
 
-    cfg = set_config(pairs)
-    return jsonify({"ok": True, "config": {
-        "poll_sponsor_text": cfg.get("poll_sponsor_text",""),
-        "match_of_day_id": cfg.get("match_of_day_id",""),
-        "motd_home": cfg.get("motd_home",""),
-        "motd_away": cfg.get("motd_away",""),
-        "motd_datetime_utc": cfg.get("motd_datetime_utc",""),
-    }})
+        pairs = {
+            "poll_sponsor_text": str(sponsor).strip(),
+            "match_of_day_id": str(match_id).strip(),
+            "motd_home": str(motd_home).strip(),
+            "motd_away": str(motd_away).strip(),
+            "motd_datetime_utc": str(motd_datetime_utc).strip(),
+            "poll_lock_mode": (str(poll_lock_mode).strip() or "auto"),
+        }
+
+        cfg = set_config(pairs)
+        return jsonify({"ok": True, "config": {
+            "poll_sponsor_text": cfg.get("poll_sponsor_text",""),
+            "match_of_day_id": cfg.get("match_of_day_id",""),
+            "motd_home": cfg.get("motd_home",""),
+            "motd_away": cfg.get("motd_away",""),
+            "motd_datetime_utc": cfg.get("motd_datetime_utc",""),
+        }})
 
 
 
 
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route("/admin/update-lead", methods=["POST"])
 def admin_update_lead():
@@ -2790,6 +2794,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
       if(btn){ btn.disabled = true; btn.textContent = "Saving…"; }
       const res = await fetch(`/admin/update-config?key=${encodeURIComponent(ADMIN_KEY)}`,{
         method:"POST",
+        cache:"no-store",
         headers:{ "Content-Type":"application/json" },
         body: JSON.stringify({
           poll_sponsor_text: sponsor,
@@ -2800,7 +2805,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
           poll_lock_mode: lockMode
         })
       });
-      const out = await res.json();
+      let out=null; try{ out = await res.json(); }catch(e){ const t = await res.text(); out={ok:false,error:(t||'Non-JSON response')}; }
       if(out && out.ok){
         await loadConfig();
         await loadPoll();
