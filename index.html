@@ -1223,36 +1223,42 @@ body.phase-finals{ background: var(--phaseF); }
   position:fixed; inset:0;
   display:flex; align-items:center; justify-content:center;
   background: rgba(0,0,0,.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   z-index: 9999;
 
-  /* animated open */
+  /* premium open/close */
   opacity:0;
   visibility:hidden;
   pointer-events:none;
-  transition: opacity 180ms ease;
+  transition: opacity 260ms cubic-bezier(.2,.9,.2,1), visibility 0s linear 260ms;
 }
 .fz-modal.show{
   opacity:1;
   visibility:visible;
   pointer-events:auto;
+  transition: opacity 260ms cubic-bezier(.2,.9,.2,1);
 }
+
+/* panel slide + fade (shared by Country + Match Poll) */
 .fz-modal .panel{
   width:min(720px, 92vw);
   border:1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 18px;
   background: rgba(10,18,40,.92);
   padding: 14px;
-  box-shadow: 0 20px 60px rgba(0,0,0,.55);
+  box-shadow: 0 22px 70px rgba(0,0,0,.60);
 
-  /* premium slide+fade */
-  transform: translateY(14px) scale(.99);
+  transform: translateY(22px) scale(.985);
   opacity:0;
-  transition: transform 220ms ease, opacity 220ms ease;
-  will-change: transform, opacity;
+  filter: blur(2px);
+  transition: transform 320ms cubic-bezier(.2,.9,.2,1), opacity 320ms cubic-bezier(.2,.9,.2,1), filter 320ms cubic-bezier(.2,.9,.2,1);
+  will-change: transform, opacity, filter;
 }
 .fz-modal.show .panel{
   transform: translateY(0) scale(1);
   opacity:1;
+  filter: blur(0);
 }
 .fz-modal .panel:focus{ outline:none; }
 .fz-modal .panel h2{ margin:0 0 10px 0; font-size: 16px; }
@@ -1400,8 +1406,16 @@ body.fz-hidden .fanzone-right{ transform: translateX(110%); opacity:0; pointer-e
 
 /* Tiny live pulse/glow (used for Match Poll + Country buttons when a match is live) */
 @keyframes fzLivePulse{
-  0%, 100% { transform: translateZ(0) scale(1); box-shadow: 0 0 0 rgba(255,255,255,0); }
-  50% { transform: translateZ(0) scale(1.02); box-shadow: 0 0 16px rgba(255,255,255,.12); }
+  0%, 100% {
+    transform: translateZ(0) scale(1);
+    box-shadow: 0 0 0 rgba(255,255,255,0);
+    filter: saturate(1);
+  }
+  50% {
+    transform: translateZ(0) scale(1.03);
+    box-shadow: 0 0 0 1px rgba(255,255,255,.10), 0 0 18px rgba(255,204,102,.18);
+    filter: saturate(1.15);
+  }
 }
 .fz-livepulse{
   animation: fzLivePulse 1.6s ease-in-out infinite;
@@ -4212,11 +4226,14 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
       }
 
       const m = state.match || {};
-      setFzLivePulse(computeIsLiveFromMatch(m));
+      // pulse set after lock status computed
       const teams = [m.home, m.away].filter(Boolean);
       const counts = state.counts || {};
       const pcts = state.percentages || state.percent || {};
       const locked = !!state.locked;
+      const reason = String(state.lock_reason || state.locked_reason || state.reason || "");
+      const isLive = computeIsLiveFromMatch(m) || (locked && /kickoff/i.test(reason));
+      setFzLivePulse(isLive);
       const post = !!state.post_match;
       const winner = state.winner || "";
       const sponsor = (state.sponsor_text || "").trim();
