@@ -1944,63 +1944,90 @@ def api_config():
 
 @app.route("/api/poll/state")
 def api_poll_state():
-    motd = _get_match_of_day()
-    if not motd:
-        # Keep the UI responsive even if matches failed to load.
+    """Return match poll state.
+
+    This endpoint must *always* return JSON so the Fan Zone UI never breaks.
+    If anything goes wrong (fixtures/config/poll store), we fall back to a safe placeholder.
+    """
+    try:
+        motd = _get_match_of_day()
+        if not motd:
+            # Keep the UI responsive even if matches failed to load.
+            cfg = get_config()
+            return jsonify({
+                "ok": True,
+                "locked": True,
+                "post_match": False,
+                "winner": None,
+                "sponsor_text": cfg.get("poll_sponsor_text", ""),
+                "match": {"id": "placeholder", "home": "Team A", "away": "Team B", "kickoff": ""},
+                "counts": {"Team A": 0, "Team B": 0},
+                "percent": {"Team A": 0.0, "Team B": 0.0},
+                "percentages": {"Team A": 0.0, "Team B": 0.0},
+                "total": 0,
+                "total_votes": 0,
+                "note": "Matches not available yet."
+            }), 200
+
+        mid = _match_id(motd)
+        locked = _poll_is_locked(motd)
+        post_match = _poll_is_post_match(motd)
+
+        teams = [motd.get("home") or "Team A", motd.get("away") or "Team B"]
+        counts = _poll_counts(mid)
+        total = sum(counts.get(t, 0) for t in teams)
+        pct = {}
+        for t in teams:
+            pct[t] = (counts.get(t, 0) / total * 100.0) if total > 0 else 0.0
+
+        # Winner is purely UI-only: leader when locked, or after match.
+        winner = None
+        if total > 0:
+            winner = max(teams, key=lambda t: counts.get(t, 0))
         cfg = get_config()
+        return jsonify({
+            "ok": True,
+            "match": {
+                "id": mid,
+                "date": motd.get("date"),
+                "time": motd.get("time"),
+                "datetime_utc": motd.get("datetime_utc"),
+                "home": teams[0],
+                "away": teams[1],
+                "stage": motd.get("stage"),
+                "venue": motd.get("venue"),
+            },
+            "locked": locked,
+            "post_match": post_match,
+            "winner": winner,
+            "counts": {t: int(counts.get(t, 0)) for t in teams},
+            "percentages": {t: round(pct[t], 1) for t in teams},
+            "percent": {t: round(pct[t], 1) for t in teams},
+            "total_votes": int(total),
+            "total": int(total),
+            "sponsor_text": cfg.get("poll_sponsor_text", ""),
+        })
+    except Exception:
+        # Absolute last resort: return a safe placeholder instead of 500/HTML.
+        cfg = {}
+        try:
+            cfg = get_config()
+        except Exception:
+            cfg = {}
         return jsonify({
             "ok": True,
             "locked": True,
             "post_match": False,
             "winner": None,
-            "sponsor_text": cfg.get("poll_sponsor_text", ""),
+            "sponsor_text": cfg.get("poll_sponsor_text", "") if isinstance(cfg, dict) else "",
             "match": {"id": "placeholder", "home": "Team A", "away": "Team B", "kickoff": ""},
             "counts": {"Team A": 0, "Team B": 0},
             "percent": {"Team A": 0.0, "Team B": 0.0},
             "percentages": {"Team A": 0.0, "Team B": 0.0},
             "total": 0,
             "total_votes": 0,
-            "note": "Matches not available yet."
+            "note": "Poll temporarily unavailable."
         }), 200
-
-    mid = _match_id(motd)
-    locked = _poll_is_locked(motd)
-    post_match = _poll_is_post_match(motd)
-
-    teams = [motd.get("home") or "Team A", motd.get("away") or "Team B"]
-    counts = _poll_counts(mid)
-    total = sum(counts.get(t, 0) for t in teams)
-    pct = {}
-    for t in teams:
-        pct[t] = (counts.get(t, 0) / total * 100.0) if total > 0 else 0.0
-
-    winner = None
-    if post_match and total > 0:
-        winner = max(teams, key=lambda t: counts.get(t, 0))
-
-    cfg = get_config()
-    return jsonify({
-        "ok": True,
-        "match": {
-            "id": mid,
-            "date": motd.get("date"),
-            "time": motd.get("time"),
-            "datetime_utc": motd.get("datetime_utc"),
-            "home": teams[0],
-            "away": teams[1],
-            "stage": motd.get("stage"),
-            "venue": motd.get("venue"),
-        },
-        "locked": locked,
-        "post_match": post_match,
-        "winner": winner,
-        "counts": {t: int(counts.get(t, 0)) for t in teams},
-        "percentages": {t: round(pct[t], 1) for t in teams},
-        "percent": {t: round(pct[t], 1) for t in teams},
-        "total_votes": int(total),
-        "total": int(total),
-        "sponsor_text": cfg.get("poll_sponsor_text", ""),
-    })
 
 @app.route("/api/poll/vote", methods=["POST"])
 def api_poll_vote():
