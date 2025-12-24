@@ -1874,9 +1874,9 @@ def _get_match_of_day() -> Optional[Dict[str, Any]]:
         }
 
     override_id = (cfg.get("match_of_day_id") or "").strip()
-    # If no Match of the Day is configured, do not attempt to load fixtures here (keeps /api/poll/state fast).
-    if not override_id:
-        return None
+    # If no explicit Match of the Day is configured, fall back to the next upcoming match
+    # from your fixtures. This keeps the poll usable "out of the box" and ensures it stays
+    # in sync whenever your fixtures data is updated.
 
     try:
         matches = load_all_matches()
@@ -2163,6 +2163,11 @@ def admin_update_config():
         sponsor = (data.get("poll_sponsor_text") if data.get("poll_sponsor_text") is not None else "")
         match_id = (data.get("match_of_day_id") if data.get("match_of_day_id") is not None else "")
 
+        # Normalize to the same safe/stable format used by fixtures + _match_id()
+        match_id_norm = str(match_id).strip()
+        if match_id_norm:
+            match_id_norm = re.sub(r"[^A-Za-z0-9|:_-]+", "_", match_id_norm)[:180]
+
         motd_home = (data.get("motd_home") if data.get("motd_home") is not None else "")
         motd_away = (data.get("motd_away") if data.get("motd_away") is not None else "")
         motd_datetime_utc = (data.get("motd_datetime_utc") if data.get("motd_datetime_utc") is not None else "")
@@ -2171,7 +2176,7 @@ def admin_update_config():
 
         pairs = {
             "poll_sponsor_text": str(sponsor).strip(),
-            "match_of_day_id": str(match_id).strip(),
+            "match_of_day_id": match_id_norm,
             "motd_home": str(motd_home).strip(),
             "motd_away": str(motd_away).strip(),
             "motd_datetime_utc": str(motd_datetime_utc).strip(),
