@@ -2826,6 +2826,41 @@ body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
   }
 }
 
+
+/* =========================
+   MOBILE TOUCH FIX (critical)
+   - Removes fixed overlays that can block taps/typing on iOS
+   - Keeps all core UI interactive
+   ========================= */
+@media (max-width: 950px){
+  /* Disable the floating device bar (it can overlap inputs on iOS) */
+  .devicebar, .kioskToggle{ display:none !important; }
+
+  /* Remove any sticky/fixed layers that might sit above inputs */
+  #pager{ position: static !important; }
+
+  /* Ensure hero visual layers never intercept touches */
+  .hero, .heroSlides, .heroFX, .heroOverlay,
+  .heroSlide::before, .heroSlide::after, .hero::before, .hero::after{
+    pointer-events: none !important;
+  }
+
+  /* Ensure the interactive app surfaces are on top */
+  .card, .leftcol, .chatcard, .composer, textarea, button,
+  #chat, #msg, #sendBtn, #clearBtn{
+    pointer-events: auto !important;
+  }
+
+  /* Prevent any side-rail container from becoming a full-screen layer */
+  .fz-left-stack, .fanzone-left, .fanzone-right, #vipHoldRail{
+    position: static !important;
+    inset: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    pointer-events: auto !important;
+  }
+}
+
 </style>
 </head>
 <body>
