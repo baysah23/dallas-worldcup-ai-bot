@@ -1249,7 +1249,7 @@ body.phase-finals{ background: var(--phaseF); }
 
 /* QR box */
 .qrWrap{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-#qrImg{ width:128px; height:128px; background:#fff; border-radius:12px; padding:8px; }
+#qrCanvas{ width:128px; height:128px; background:#fff; border-radius:12px; padding:8px; }
 .qrText a{ color: var(--warn); text-decoration:none; }
 
 
@@ -1327,7 +1327,7 @@ body.phase-finals{ background: var(--phaseF); }
 .fz-card h3{
   font-size: 13px;
 }
-#qrImg{
+#qrCanvas{
   width: 96px;
   height: 96px;
 }
@@ -1355,7 +1355,7 @@ body.phase-finals{ background: var(--phaseF); }
 .fz-actions{ gap:6px; }
 .fz-chip{ border-radius: 999px; background: rgba(0,0,0,.10); }
 .qrWrap{ gap:10px; }
-#qrImg{ width:84px; height:84px; border-radius: 12px; padding:6px; }
+#qrCanvas{ width:84px; height:84px; border-radius: 12px; padding:6px; }
 @media(min-width:1200px){
   body{ padding-left: 260px; padding-right: 260px; }
   .fanzone-left, .fanzone-right{ top: 84px; }
@@ -1476,7 +1476,7 @@ body.has-dallas-today .fanzone-right{
 .fz-iconbtn:hover{ transform: translateY(-1px); }
 
 /* QR: keep compact */
-#qrImg{ width: 78px !important; height: 78px !important; border-radius: 12px !important; }
+#qrCanvas{ width: 78px !important; height: 78px !important; border-radius: 12px !important; }
 
 /* Auto-hide rails on scroll: smoother */
 body.fz-hidden .fanzone-left{ transform: translateX(-120%) !important; opacity:0 !important; pointer-events:none !important; }
@@ -1553,7 +1553,7 @@ body.has-dallas-today .fanzone-right{
   align-items: flex-start;
 }
 
-.fanzone-right #qrImg{
+.fanzone-right #qrCanvas{
   width: 92px;
   height: 92px;
   max-width: 100%;
@@ -1593,7 +1593,7 @@ body.has-dallas-today .fanzone-right{
   hyphens:auto;
 }
 .fanzone-right .qrWrap{ flex-direction:column; align-items:flex-start; }
-.fanzone-right #qrImg{ width:96px; height:96px; }
+.fanzone-right #qrCanvas{ width:96px; height:96px; }
 .fanzone-right .qrText a{ display:block; overflow-wrap:anywhere; word-break:break-all; }
 
 
@@ -1626,7 +1626,7 @@ body.has-dallas-today .fanzone-right{
   flex-direction: column;
   align-items: flex-start;
 }
-.fanzone-right #qrImg{
+.fanzone-right #qrCanvas{
   width: 92px;
   height: 92px;
 }
@@ -2357,13 +2357,15 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div aria-hidden="true" class="badge"></div>
 <div>
 <h1>World Cup 2026 • Dallas Match-Day Concierge</h1>
-<div class="sub">Reserve tables, see Dallas match schedule, and chat in English • Español • Português • Français</div></div>
+<div class="sub">Reserve tables, see Dallas match schedule, and chat in English • Español • Português • Français</div>
+</div>
 </div>
 <div aria-label="Language toggle" class="langbar">
 <div class="langbtn active" data-lang="en">English</div>
 <div class="langbtn" data-lang="es">Español</div>
 <div class="langbtn" data-lang="pt">Português</div>
-<div class="langbtn" data-lang="fr">Français</div></div>
+<div class="langbtn" data-lang="fr">Français</div>
+</div>
 </div>
 </header>
 <!-- =======================
@@ -2378,53 +2380,63 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="fz-muted" style="margin-top:6px;">Fast-track your best tables for big matches.</div>
 <div class="vip-actions" style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
   <button class="fz-btn" id="vipHoldBtn">Hold VIP table</button>
-  <button class="fz-btn" id="vipHoldInfoBtn">How it works</button></div>
+  <button class="fz-btn" id="vipHoldInfoBtn">How it works</button>
+</div>
 </div></aside>
 <aside aria-label="Fan Zone Left Panel" class="fanzone fanzone-left" id="fanZoneLeft">
 <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
 <span class="fz-muted fz-rail-title">Fan Zone</span>
-<button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button></div>
+<button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button>
+</div>
 <div class="fz-row" style="justify-content:flex-start;">
 <div class="fz-chip" id="supporterChip" title="Personalization stored on this device only">
-<span>🏁</span><span>Supporting:</span> <b id="supporterLabel">Not set</b></div>
+<span>🏁</span><span>Supporting:</span> <b id="supporterLabel">Not set</b>
+</div>
 </div>
 <div class="fz-actions" style="margin-top:10px;">
 <button class="fz-iconbtn" id="fzIconCountry" title="Pick country">🏁</button>
 <button class="fz-iconbtn" id="fzIconPoll" title="Fan poll">📊</button>
 <button class="fz-btn" id="btnPickCountry">Which country are you supporting?</button>
-<button class="fz-btn" id="btnOpenPoll">Match poll</button></div>
-<div class="fz-card" id="pollCard" style="display:none; margin-top:10px; max-height:52vh; overflow:auto;">
+<button class="fz-btn" id="btnOpenPoll">Match poll (live)</button>
+</div>
+<div class="fz-card" id="pollCard" style="display:none; margin-top:10px;">
 <h3>⚔️ Match of the Day Poll</h3>
-<div class="fz-muted">Vote for who you think will win.</div>
+<div class="fz-muted">Vote who wins today’s match. Counts are simulated “live” on this device (UI-only).</div>
 <div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
 </div>
 </aside></div>
 <aside aria-label="Fan Zone Right Panel" class="fanzone fanzone-right" id="fanZoneRight">
 <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
 <span class="fz-muted fz-rail-title">Extras</span>
-<button class="fz-iconbtn" id="fzCollapseToggle2" title="Collapse / expand">⫶</button></div>
+<button class="fz-iconbtn" id="fzCollapseToggle2" title="Collapse / expand">⫶</button>
+</div>
 <div class="fz-actions" style="justify-content:flex-end;">
 <button class="fz-iconbtn" id="fzIconDrinks" title="Drink highlight">🍹</button>
 <button class="fz-iconbtn" id="fzIconQR" title="QR poster">📱</button>
-<button class="fz-btn" id="btnSharePoster">QR poster</button></div>
+<button class="fz-btn" id="btnSharePoster">QR poster</button>
+</div>
 <div class="fz-card" id="drinkCard" style="margin-top:10px;">
 <h3>🍹 Drink highlights</h3>
+<div class="fz-muted">Based on who you’re supporting (or pick a country).</div>
 <div id="drinkHighlight" style="margin-top:10px;">
       <div style="border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:10px; background: rgba(0,0,0,.10);">
         <div id="drinkName" style="font-weight:900;">Country-themed drink</div>
-        <div id="drinkDesc" class="fz-muted" style="margin-top:4px;"></div>
-      </div></div>
+        <div id="drinkDesc" class="fz-muted" style="margin-top:4px;">Based on who you’re supporting (or pick a country).</div>
+      </div>
+    </div>
 </div>
 <div class="fz-card" id="qrCard" style="display:none; margin-top:10px;">
 <h3>📱 QR poster</h3>
 <div class="fz-muted">Print/display at the entrance. Scan to open the app.</div>
 <div class="qrWrap" style="margin-top:10px;">
-<img id="qrImg" alt="QR code" style="width:220px;height:220px;border-radius:12px;background:#fff;padding:10px;display:block;margin:0 auto;" />
+<canvas aria-label="QR code" height="120" id="qrCanvas" width="120"></canvas>
 <div class="qrText">
 <div class="fz-muted" style="margin-bottom:6px;">Link:</div>
 <div><a href="#" id="qrLink" rel="noopener" target="_blank">Open app</a></div>
-<div class="fz-muted" style="margin-top:10px;">Tip: host publicly for in‑venue scanning.</div></div>
-</div></div>
+<div class="fz-muted" style="margin-top:10px;">Tip: host publicly for in‑venue scanning.</div>
+</div>
+</div>
+</div>
 </aside>
 <!-- Modal -->
 <div aria-labelledby="countryModalTitle" aria-modal="true" class="fz-modal" id="countryModal" role="dialog">
@@ -2434,8 +2446,10 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="fz-country-grid" id="countryGrid"></div>
 <div class="fz-footer">
 <button class="fz-btn" id="btnCloseCountry">Close</button>
-<button class="fz-btn" id="btnClearCountry">Clear selection</button></div>
-</div></div>
+<button class="fz-btn" id="btnClearCountry">Clear selection</button>
+</div>
+</div>
+</div>
 <div class="grid"><div aria-label="World Cup 2026 hero banner" class="hero" id="heroBanner">
 <div aria-hidden="true" class="heroSlides" id="heroSlides"></div>
 <div aria-hidden="true" class="heroFX">
@@ -2449,7 +2463,8 @@ body.kiosk-mode *::-webkit-scrollbar{
 <span class="hero-flag" data-country="ENG">🏴</span>
 <span class="hero-flag" data-country="BRA">🇧🇷</span>
 <span class="hero-flag" data-country="CAN">🇨🇦</span>
-<span class="hero-flag" data-country="KOR">🇰🇷</span></div>
+<span class="hero-flag" data-country="KOR">🇰🇷</span>
+</div>
 </div>
 <div class="heroGlow"></div>
 <div class="heroSweep"></div>
@@ -2464,7 +2479,8 @@ body.kiosk-mode *::-webkit-scrollbar{
 <span><b id="wcD">--</b><small>d</small></span>
 <span><b id="wcH">--</b><small>h</small></span>
 <span><b id="wcM">--</b><small>m</small></span>
-<span><b id="wcS">--</b><small>s</small></span></div>
+<span><b id="wcS">--</b><small>s</small></span>
+</div>
 </div>
 <div aria-hidden="true" class="heroRoster" id="heroRoster"></div>
 </div>
@@ -2476,7 +2492,8 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="card menucard" style="display:flex;flex-direction:column;min-height:0; max-width:190px;">
 <div class="cardhead">
 <div class="title" id="menuTitle">Menu</div>
-<div class="pill" id="menuPill">4 languages</div></div>
+<div class="pill" id="menuPill">4 languages</div>
+</div>
 <div class="menu" id="menu"></div>
 </div>
 <!-- Chat / Reservations -->
@@ -2485,52 +2502,63 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="title" id="chatTitle">Chat</div>
 <div style="display:flex; gap:8px; align-items:center;">
 <div class="pill" id="pillMode">Live</div>
-<button class="secondary" id="compactToggle" style="min-width:auto; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:800;">Compact</button></div>
+<button class="secondary" id="compactToggle" style="min-width:auto; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:800;">Compact</button>
+</div>
 </div>
 <!-- HERO: Cinematic rotating banner (UI-only; no backend impact) -->
 <div id="chat"></div>
 <div class="composer">
 <textarea id="msg" placeholder="Type here..."></textarea>
 <button id="sendBtn">Send</button>
-<button class="secondary" id="clearBtn">Clear</button></div>
+<button class="secondary" id="clearBtn">Clear</button>
+</div>
 <div class="hint" id="helperHint"></div>
-</div></div>
+</div>
+</div>
 <!-- Sidebar -->
 <div class="card" style="display:flex;flex-direction:column;min-height:0;">
 <div class="cardhead">
 <div class="title" id="sideTitle">Dallas Schedule</div>
-<div class="pill" id="pillLang">EN</div></div>
+<div class="pill" id="pillLang">EN</div>
+</div>
 <div class="countdown">
 <div>
 <div class="label" id="countLabel">World Cup countdown</div>
-<div class="sub" id="countSub" style="margin:4px 0 0;">Dallas / Arlington match days</div></div>
+<div class="sub" id="countSub" style="margin:4px 0 0;">Dallas / Arlington match days</div>
+</div>
 <div class="nums" id="countNums">
 <span><b id="d">0</b>d</span>
 <span><b id="h">0</b>h</span>
 <span><b id="m">0</b>m</span>
-<span><b id="s">0</b>s</span></div>
+<span><b id="s">0</b>s</span>
+</div>
 </div>
 <div class="sidepad" style="padding-top:10px; padding-bottom:0;">
 <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
 <div class="pill" style="padding:6px 10px;">Schedule</div>
 <div class="langbar" style="gap:6px;">
 <div class="langbtn active" id="scopeDallas">Dallas</div>
-<div class="langbtn" id="scopeAll">All Matches</div></div>
+<div class="langbtn" id="scopeAll">All Matches</div>
+</div>
 </div>
 <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
 <input id="teamSearch" list="teamSuggestions" placeholder="Search team / venue / date (e.g., June 13 or 2026-06-13)..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;"/>
 <datalist id="teamSuggestions"></datalist>
-<div class="pill" id="matchCount">0</div></div>
+<div class="pill" id="matchCount">0</div>
+</div>
 </div>
 <div class="sidepad" style="padding-bottom:0;">
-<div class="pill" id="nextHint" style="display:inline-block;">Next upcoming match is highlighted</div></div>
+<div class="pill" id="nextHint" style="display:inline-block;">Next upcoming match is highlighted</div>
+</div>
 <div class="schedule" id="schedule"></div>
 <div class="sidepad" id="pager" style="display:none; padding-top:10px;">
 <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
 <button class="secondary" id="prevPage" style="min-width:88px;">Prev</button>
 <div class="pill" id="pageIndicator">Page 1 of 1</div>
-<button class="secondary" id="nextPage" style="min-width:88px;">Next</button></div>
-</div></div>
+<button class="secondary" id="nextPage" style="min-width:88px;">Next</button>
+</div>
+</div>
+</div>
 </div>
 
 <script>
@@ -3346,7 +3374,8 @@ function renderSchedule(){
     empty.innerHTML = `
       <div class="left">
         <div><b>Notice</b></div>
-        <div class="when">${L().schedule_empty}</div></div>
+        <div class="when">${L().schedule_empty}</div>
+      </div>
       <div class="pill">—</div>
     `;
     el.appendChild(empty);
@@ -3409,7 +3438,8 @@ if (totalPages <= 1){
     row.innerHTML = `
       <div class="left">
         <div><b>${escapeHtml(m.stage || "Match")}</b> • ${buildTeamsHtml(teamsTxt)}</div>
-        <div class="when">${escapeHtml(m.date || "")} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div></div>
+        <div class="when">${escapeHtml(m.date || "")} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div>
+      </div>
       <div class="pill">${escapeHtml(m.id || "")}</div>
     `;
     el.appendChild(row);
@@ -3452,8 +3482,10 @@ function renderMenu(items){
       <div class="menuTop">
         <div>
           <div class="name">⚽ —</div>
-          <div class="desc">Menu not available.</div></div>
-        <div class="menuBadge">—</div></div>
+          <div class="desc">Menu not available.</div>
+        </div>
+        <div class="menuBadge">—</div>
+      </div>
     `;
     el.appendChild(d);
     return;
@@ -3483,8 +3515,10 @@ function renderMenu(items){
           <div class="desc">${desc}</div>
           <div class="menuMeta">
             ${tags.map(t => `<span class="menuTag">${escapeHtml(t)}</span>`).join("")}
-          </div></div>
-        <div class="menuBadge">${price || "—"}</div></div>
+          </div>
+        </div>
+        <div class="menuBadge">${price || "—"}</div>
+      </div>
     `;
     el.appendChild(d);
   });
@@ -3860,412 +3894,361 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   slides.forEach(s => mo.observe(s, { attributes:true, attributeFilter:['class'] }));
 })();
 </script>
-<script>
-/* =======================
-   FAN ZONE FEATURES (Backend + Local UX)
+<script>/* =======================
+   FAN ZONE FEATURES (UI-only)
    - Country support personalization (localStorage)
-   - Live Match-of-the-Day poll (server-persisted)
-     * shows live % + counts
-     * persists votes (per device client_id)
-     * locks automatically at kickoff (server)
-     * highlights winner post-match (best-effort)
+   - Match-of-the-day fan poll (device-only “live”)
    - Drink highlight
    - QR poster generator (no external deps)
    ======================= */
 (function(){
-  try{
-    const el = (id)=>document.getElementById(id);
+  const el = (id)=>document.getElementById(id);
 
-    // ----- Elements -----
-    const modal = el("countryModal");
-    const countryGrid = el("countryGrid");
-    const supporterLabel = el("supporterLabel");
+  // ----- Elements -----
+  const modal = el("countryModal");
+  const countryGrid = el("countryGrid");
+  const supporterLabel = el("supporterLabel");
+  const pollCard = el("pollCard");
+  const pollList = el("pollList");
+  const drinkName = el("drinkName");
+  const drinkDesc = el("drinkDesc");
+  const qrModal = el("qrCard");
+  const qrCanvas = el("qrCanvas");
+  const qrLink = el("qrLink");
 
-    const pollCard = el("pollCard");
-    const pollList = el("pollList");
+  // ----- Storage keys -----
+  const LS_SUPPORT = "wc26_support_country";
+  const LS_POLL_BASE = "wc26_motd_poll_v1";
 
-    const drinkName = el("drinkName");
-    const drinkDesc = el("drinkDesc");
+  // NOTE: Keep your existing list if you already curated it.
+  // (If you want the FULL 2026 participant list auto-loaded, we can wire it to a JSON file or endpoint.)
+    // ----- Countries for "Supporter" picker -----
+  // We pull the list of teams that have qualified *so far* for WC 2026 from the server.
+  // (Qualification is ongoing; this will grow over time automatically.)
+  let COUNTRIES = [];
 
-    const qrCard = el("qrCard");
-    const qrImg = el("qrImg");
-    const qrLink = el("qrLink");
+  // Minimal meta for nicer UI + drink tie-ins (fallbacks for others)
+  const COUNTRY_META = {
+    "United States": { code:"USA", flag:"🇺🇸", drink:"Stars & Stripes Spritz", desc:"citrus + soda + mint" },
+    "Mexico": { code:"MEX", flag:"🇲🇽", drink:"Mexico City Michelada", desc:"lime + spice + cerveza vibe (NA option available)" },
+    "Canada": { code:"CAN", flag:"🇨🇦", drink:"Maple Ginger Cooler", desc:"ginger + lime + soda" },
+    "Japan": { code:"JPN", flag:"🇯🇵", drink:"Tokyo Yuzu Fizz", desc:"yuzu + soda + light syrup" },
+    "New Zealand": { code:"NZL", flag:"🇳🇿", drink:"Kiwi Lime Smash", desc:"lime + mint + soda" },
+    "IR Iran": { code:"IRN", flag:"🇮🇷", drink:"Persian Rose Lemonade", desc:"rose + lemon + soda" },
+    "Argentina": { code:"ARG", flag:"🇦🇷", drink:"Buenos Aires Mate Cooler", desc:"mint + citrus + iced tea" },
+    "Uzbekistan": { code:"UZB", flag:"🇺🇿", drink:"Silk Road Citrus Soda", desc:"citrus + ginger + soda" },
+  };
 
-    // Buttons (support both legacy + current Fan Zone markup)
-    const btnPickCountry = el("btnPickCountry") || el("fzIconCountry");
-    const btnOpenPoll    = el("btnOpenPoll")    || el("fzIconPoll");
-    const btnOpenQR      = el("btnOpenQR")      || el("btnSharePoster") || el("fzIconQR");
-
-    // LocalStorage keys
-    const LS_SUPPORT = "fz_support_country";
-    const LS_CLIENT  = "fz_client_id";
-    const LS_VOTE    = "fz_poll_vote"; // {match_id, team}
-
-    // Client id (used for one-vote-per-device on server)
-    function getClientId(){
-      let id = "";
-      try{ id = localStorage.getItem(LS_CLIENT) || ""; }catch(e){}
-      if(!id){
-        id = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("cid_" + Math.random().toString(16).slice(2) + Date.now());
-        try{ localStorage.setItem(LS_CLIENT, id); }catch(e){}
-      }
-      return id;
-    }
-
-    // ----- Countries -----
-    let COUNTRIES = [];
-    const COUNTRY_META = {
-      "United States": { code:"USA", flag:"🇺🇸", drink:"Stars & Stripes Spritz", desc:"citrus + mint + sparkle" },
-      "United States of America": { code:"USA", flag:"🇺🇸", drink:"Stars & Stripes Spritz", desc:"citrus + mint + sparkle" },
-      "Mexico": { code:"MEX", flag:"🇲🇽", drink:"Azteca Paloma", desc:"grapefruit + lime + salt rim" },
-      "Canada": { code:"CAN", flag:"🇨🇦", drink:"Maple Old Fashioned", desc:"bourbon + maple + bitters" },
-      "Brazil": { code:"BRA", flag:"🇧🇷", drink:"Rio Caipirinha", desc:"lime + sugar + cachaça" },
-      "Argentina": { code:"ARG", flag:"🇦🇷", drink:"La Albiceleste Spritz", desc:"citrus + bubbles" },
-      "France": { code:"FRA", flag:"🇫🇷", drink:"Bleu Royale", desc:"berries + champagne vibe" },
-      "England": { code:"ENG", flag:"🏴", drink:"London Gin Fizz", desc:"gin + lemon + foam" },
-      "Spain": { code:"ESP", flag:"🇪🇸", drink:"Iberian Sangria", desc:"fruit + spice" },
-      "Portugal": { code:"POR", flag:"🇵🇹", drink:"Lisbon Lemonade", desc:"lemon + herb" },
-      "Germany": { code:"GER", flag:"🇩🇪", drink:"Bavarian Mule", desc:"ginger + lime" },
-      "Japan": { code:"JPN", flag:"🇯🇵", drink:"Tokyo Highball", desc:"clean + crisp" },
-      "Nigeria": { code:"NGA", flag:"🇳🇬", drink:"Naija Zobo Cooler", desc:"hibiscus + ginger" },
-      "Morocco": { code:"MAR", flag:"🇲🇦", drink:"Atlas Mint Tea", desc:"mint + honey" },
-      "Senegal": { code:"SEN", flag:"🇸🇳", drink:"Dakar Ginger Punch", desc:"ginger + citrus" },
-      "Ghana": { code:"GHA", flag:"🇬🇭", drink:"Accra Pineapple Twist", desc:"pineapple + lime" }
-    };
-
-    function escapeHtml(s){
-      return (s || "").toString().replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-    }
-
-    function normalizeCountryRows(raw){
-      const out = [];
-      for(const item of (raw || [])){
-        if(!item) continue;
-        if(typeof item === "string"){
-          const name = item.trim();
-          if(!name) continue;
-          const meta = COUNTRY_META[name] || {};
-          out.push({ name, code: meta.code || name.slice(0,3).toUpperCase(), flag: meta.flag || "🏳️" });
-        } else {
-          const name = (item.name || item.country || "").trim();
-          if(!name) continue;
-          const meta = COUNTRY_META[name] || {};
-          out.push({
-            name,
-            code: (item.code || item.fifa_code || item.fifa || "").trim() || meta.code || name.slice(0,3).toUpperCase(),
-            flag: (item.flag || "").trim() || meta.flag || "🏳️"
-          });
-        }
-      }
-      const seen = new Set();
-      return out.filter(c => (seen.has(c.name.toLowerCase()) ? false : (seen.add(c.name.toLowerCase()), true)));
-    }
-
-    async function loadQualifiedCountries(){
-      // Try both endpoints (per requirement)
-      const urls = ["/countries/qualified.json", "/worldcup/qualified.json"];
-      for(const u of urls){
-        try{
-          const res = await fetch(u, {cache:"no-store"});
-          if(!res.ok) continue;
-          const data = await res.json();
-          let list = normalizeCountryRows(data.countries || data.teams || data.qualified || data || []);
-          // Safety: prevent huge lists from freezing the UI
-          if(list && list.length > 60) list = list.slice(0,60);
-          if(list && list.length){
-            COUNTRIES = list;
-            return;
-          }
-        }catch(e){}
-      }
-      // fallback to known meta only (never blocks UI)
-      COUNTRIES = normalizeCountryRows(Object.keys(COUNTRY_META));
-    }
-
-    // ----- Country support -----
-    function getSupport(){
-      try{
-        const raw = localStorage.getItem(LS_SUPPORT);
-        if(raw) return JSON.parse(raw);
-      }catch(e){}
-      return null;
-    }
-    function setSupport(country){
-      try{ localStorage.setItem(LS_SUPPORT, JSON.stringify(country)); }catch(e){}
-    }
-    function clearSupport(){
-      try{ localStorage.removeItem(LS_SUPPORT); }catch(e){}
-    }
-    function renderSupporter(){
-      const c = getSupport();
-      if(!supporterLabel) return;
-      supporterLabel.textContent = c?.name || "Not set";
-    }
-
-    function openCountryModal(){
-      if(!modal) return;
-      modal.classList.add("show");
-      // prevent page scroll while modal open
-      document.body.style.overflow = "hidden";
-    }
-    function closeCountryModal(){
-      if(!modal) return;
-      modal.classList.remove("show");
-      document.body.style.overflow = "";
-    }
-
-    function buildCountryGrid(){
-      if(!countryGrid) return;
-      if(!COUNTRIES || !COUNTRIES.length){
-        countryGrid.innerHTML = `<div class="fz-muted">Countries unavailable.</div>`;
-        return;
-      }
-      countryGrid.innerHTML = (COUNTRIES || []).map(c => `
-        <button class="fz-country" type="button" data-name="${escapeHtml(c.name)}" title="${escapeHtml(c.name)}">
-          <span class="fz-flag">${escapeHtml(c.flag)}</span>
-          <span>${escapeHtml(c.name)}</span>
-        </button>
-      `).join("");
-      countryGrid.querySelectorAll("[data-name]").forEach(btn=>{
-        btn.addEventListener("click", ()=>{
-          const name = btn.getAttribute("data-name");
-          const c = (COUNTRIES || []).find(x=>x.name===name);
-          if(c){
-            setSupport(c);
-            renderSupporter();
-            renderDrink();
-            closeCountryModal();
-          }
-        });
-      });
-    }
-
-    // ----- Drinks (based on supporter selection) -----
-    function renderDrink(){
-      const c = getSupport();
-      const name = c?.name || "";
-      const meta = COUNTRY_META[name] || null;
-      if(!drinkName || !drinkDesc) return;
-      if(!name){
-        drinkName.textContent = "Country-themed drink";
-        drinkDesc.textContent = "Pick a country to unlock a themed highlight.";
-        return;
-      }
-      const drink = meta?.drink || (name + " Matchday Mocktail");
-      const desc  = meta?.desc || "Ask the bar for a signature special — or tap for ideas.";
-      drinkName.textContent = drink;
-      drinkDesc.textContent = desc;
-    }
-
-    // ----- QR poster -----
-    function drawQR(text){
-  // Real QR code via lightweight external image (no Python deps).
-  const img = document.getElementById("qrImg");
-  if(!img) return;
-  const url = (text || "").trim();
-  if(!url){
-    img.removeAttribute("src");
-    return;
+  function _fallbackCode(name){
+    return String(name||"").toUpperCase().replace(/[^A-Z]/g,"").slice(0,3) || "WC";
   }
-  // qrserver.com is simple and fast; encode data safely.
-  const encoded = encodeURIComponent(url);
-  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=2&data=${encoded}`;
-  img.alt = "QR code";
-}
 
-    function toggleQR(){
-      if(!qrCard) return;
-      const isOpen = (qrCard.style.display !== "none" && qrCard.style.display !== "");
-      qrCard.style.display = isOpen ? "none" : "block";
-      if(!isOpen){
-        const url = location.origin + location.pathname;
-        if(qrLink){
-          qrLink.textContent = url;
-          qrLink.setAttribute("href", url);
-        }
-        requestAnimationFrame(()=>drawQR(url));
-        // Keep scroll inside right rail (avoid page jump)
-        try{
-          const rail = document.getElementById("fanZoneRight");
-          if(rail && rail.scrollHeight > rail.clientHeight){
-            rail.scrollTop = Math.max(0, qrCard.offsetTop - 8);
-          }
-        }catch(e){}
-      }
-    }
-
-    // ----- Match poll (backend) -----
-    function loadLocalVote(){
-      try{
-        const raw = localStorage.getItem(LS_VOTE);
-        if(!raw) return null;
-        return JSON.parse(raw);
-      }catch(e){ return null; }
-    }
-    function saveLocalVote(match_id, team){
-      try{ localStorage.setItem(LS_VOTE, JSON.stringify({match_id, team})); }catch(e){}
-    }
-
-    function pct(n){ return Number.isFinite(n) ? n : 0; }
-
-    function renderPoll(state){
-      if(!pollCard || !pollList) return;
-
-      // Ensure card is open/visible when rendering
-      pollCard.style.display = "block";
-
-      const ok = !!(state && state.ok);
-      if(!ok){
-        pollList.innerHTML = `<div class="fz-muted">Poll unavailable.</div>`;
-        return;
-      }
-
-      const m = state.match || {};
-      const teams = [m.home, m.away].filter(Boolean);
-      const counts = state.counts || {};
-      const pcts = state.percentages || state.percent || {};
-      const locked = !!state.locked;
-      const post = !!state.post_match;
-      const winner = state.winner || "";
-      const sponsor = (state.sponsor_text || "").trim();
-      const matchId = m.id || "";
-
-      const localVote = loadLocalVote();
-      const votedTeam = (localVote && localVote.match_id === matchId) ? localVote.team : null;
-
-      const headerBits = [];
-      if(sponsor) headerBits.push(`<div class="fz-muted" style="margin:6px 0 0 0">${escapeHtml(sponsor)}</div>`);
-      if(locked && !post) headerBits.push(`<div class="fz-muted" style="margin:6px 0 0 0">Poll locked at kickoff.</div>`);
-      if(post && winner) headerBits.push(`<div class="fz-muted" style="margin:6px 0 0 0">Winner: <b style="color:var(--warn)">${escapeHtml(winner)}</b></div>`);
-
-      const teamRows = teams.map(team=>{
-        const c = counts[team] || 0;
-        const p = pct(pcts[team] || 0);
-        const isWin = post && winner && winner === team;
-        const isVoted = votedTeam === team;
-
-        return `
-          <div class="fz-vote-row" style="border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:10px;background:rgba(0,0,0,.10)">
-            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-              <div style="font-weight:900">${escapeHtml(team)} ${isWin ? "🏆" : ""}</div>
-              <div style="display:flex;align-items:center;gap:8px">
-                <div class="fz-muted">${p.toFixed(1)}%</div>
-                <div class="fz-muted">•</div>
-                <div class="fz-muted">${c}</div>
-              </div>
-            </div>
-            <div style="margin-top:8px;border:1px solid rgba(255,255,255,.10);border-radius:999px;overflow:hidden;height:10px;background:rgba(255,255,255,.04)">
-              <div style="height:100%;width:${Math.min(100, Math.max(0,p))}%;background:${isWin ? "rgba(212,175,55,.85)" : "rgba(46,160,67,.75)"}"></div>
-            </div>
-            <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
-              <button class="fz-btn voteBtn" data-team="${escapeHtml(team)}" ${locked ? "disabled" : ""} style="opacity:${locked ? .6 : 1}">
-                ${locked ? (isVoted ? "Voted" : "Closed") : (isVoted ? "Voted" : "Vote")}
-              </button>
-            </div>
-          </div>
-        `;
-      }).join("");
-
-      pollList.innerHTML = `
-        ${headerBits.join("")}
-        <div style="margin-top:10px;display:grid;gap:10px">
-          ${teamRows || `<div class="fz-muted">No match loaded yet.</div>`}
-        </div>
-      `;
-
-      pollList.querySelectorAll(".voteBtn").forEach(b=>{
-        b.addEventListener("click", async ()=>{
-          const team = b.getAttribute("data-team") || "";
-          if(!team) return;
-          await submitVote(team);
-        });
+  async function loadQualifiedCountries(){
+    try{
+      const resp = await fetch("/worldcup/qualified.json", { cache: "no-store" });
+      const data = await resp.json();
+      const names = Array.isArray(data.teams) ? data.teams : [];
+      COUNTRIES = names.map((name) => {
+        const meta = COUNTRY_META[name];
+        if(meta) return meta;
+        return {
+          code: _fallbackCode(name),
+          name,
+          flag: "🏳️",
+          drink: "Stadium Spritz",
+          desc: "ask the bartender for a country-inspired twist"
+        };
       });
+      // Rebuild UI after load
+      try{ buildCountryGrid(); }catch(e){}
+      try{ renderSupporter(); }catch(e){}
+      try{ renderDrink(); }catch(e){}
+    }catch(e){
+      // If fetch fails, fall back to the known set so the Fan Zone stays usable.
+      COUNTRIES = Object.values(COUNTRY_META);
+      try{ buildCountryGrid(); }catch(e){}
+      try{ renderSupporter(); }catch(e){}
+      try{ renderDrink(); }catch(e){}
     }
+  }
 
-    async function fetchPollState(){
-      const res = await fetch("/api/poll/state", {cache:"no-store"});
-      return await res.json();
-    }
 
-    async function submitVote(team){
-      try{
-        const client_id = getClientId();
-        const res = await fetch("/api/poll/vote", {
-          method:"POST",
-          headers: { "Content-Type":"application/json" },
-          body: JSON.stringify({ team, client_id })
-        });
-        const state = await res.json();
-        const mid = state?.match?.id || "";
-        if(mid) saveLocalVote(mid, team);
-        renderPoll(state);
-      }catch(e){
-        // show error but keep UI usable
-        if(pollList) pollList.innerHTML = `<div class="fz-muted">Vote failed. Please try again.</div>`;
-      }
-    }
+  // ----- Helpers -----
+  function escapeHtml(s){
+    return String(s||"").replace(/[&<>"']/g, (c)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+  }
+  function getSupport(){
+    try{ return JSON.parse(localStorage.getItem(LS_SUPPORT) || "null"); }catch(e){ return null; }
+  }
+  function setSupport(obj){
+    try{ localStorage.setItem(LS_SUPPORT, JSON.stringify(obj)); }catch(e){}
+  }
+  function clearSupport(){
+    try{ localStorage.removeItem(LS_SUPPORT); }catch(e){}
+  }
 
-    function togglePoll(){
-      if(!pollCard) return;
-      const isOpen = (pollCard.style.display !== "none" && pollCard.style.display !== "");
-      pollCard.style.display = isOpen ? "none" : "block";
-      if(!isOpen){
-        // keep scroll inside left rail (avoid page jump)
-        try{
-          const rail = document.getElementById("fanZoneLeft");
-          if(rail && rail.scrollHeight > rail.clientHeight){
-            rail.scrollTop = Math.max(0, pollCard.offsetTop - 8);
-          }
-        }catch(e){}
-        // load live state
-        fetchPollState().then(renderPoll).catch(()=>renderPoll(null));
-      }
-    }
+  // ----- Country modal -----
+  function openCountryModal(){
+    if(!modal) return;
+    if(!Array.isArray(COUNTRIES) || !COUNTRIES.length){ loadQualifiedCountries(); }
+    modal.classList.add("show");
+  }
+  function closeCountryModal(){
+    if(!modal) return;
+    modal.classList.remove("show");
+  }
 
-    // ----- Wire up -----
-    btnPickCountry?.addEventListener("click", (e)=>{ e.preventDefault(); openCountryModal(); });
-    el("btnCloseCountry")?.addEventListener("click", (e)=>{ e.preventDefault(); closeCountryModal(); });
-    el("btnClearCountry")?.addEventListener("click", (e)=>{ e.preventDefault(); clearSupport(); renderSupporter(); renderDrink(); closeCountryModal(); });
-
-    btnOpenPoll?.addEventListener("click", (e)=>{ e.preventDefault(); togglePoll(); });
-
-    // Drinks panel is always visible; clicking should just ensure it's in view (within rail)
-    el("fzIconDrinks")?.addEventListener("click", ()=>{
-      try{
-        const rail = document.getElementById("fanZoneRight");
-        const card = document.getElementById("drinkCard");
-        if(rail && card && rail.scrollHeight > rail.clientHeight){
-          rail.scrollTop = Math.max(0, card.offsetTop - 8);
+  function buildCountryGrid(){
+    if(!countryGrid) return;
+    countryGrid.innerHTML = COUNTRIES.map(c => `
+      <button class="fz-country" type="button" data-code="${escapeHtml(c.code)}" title="${escapeHtml(c.name)}">
+        <span class="fz-flag">${escapeHtml(c.flag)}</span>
+        <span>${escapeHtml(c.name)}</span>
+      </button>
+    `).join("");
+    countryGrid.querySelectorAll("[data-code]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const code = btn.getAttribute("data-code");
+        const country = COUNTRIES.find(x=>x.code===code);
+        if(country){
+          setSupport(country);
+          renderSupporter();
+          renderDrink();
+          closeCountryModal();
         }
-      }catch(e){}
+      });
+    });
+  }
+
+  function renderSupporter(){
+    const s = getSupport();
+    if(supporterLabel){
+      supporterLabel.textContent = s ? s.name : "Not set";
+    }
+  }
+
+  function renderDrink(){
+    const s = getSupport();
+    const pick = s || COUNTRIES[Math.floor(Math.random()*COUNTRIES.length)];
+    if(drinkName) drinkName.textContent = pick?.drink || "Country-themed drink";
+    if(drinkDesc) drinkDesc.textContent = pick?.desc || pick?.drink || "";
+  }
+
+  // ----- Match of the day + poll -----
+  let motdMatch = null;
+
+  function motdPollKey(){
+    if(!motdMatch) return LS_POLL_BASE + ":none";
+    const a = (motdMatch.home||"").trim();
+    const b = (motdMatch.away||"").trim();
+    const d = (motdMatch.date||"").trim();
+    return `${LS_POLL_BASE}:${d}:${a}__${b}`;
+  }
+  function getPoll(){
+    try{ return JSON.parse(localStorage.getItem(motdPollKey()) || "{}"); }catch(e){ return {}; }
+  }
+  function setPoll(p){
+    try{ localStorage.setItem(motdPollKey(), JSON.stringify(p||{})); }catch(e){}
+  }
+
+  function vote(team){
+    if(!motdMatch) return;
+    const home = motdMatch.home || "Home";
+    const away = motdMatch.away || "Away";
+    const t = (team === away) ? away : home;
+
+    const poll = getPoll();
+    poll[t] = (poll[t] || 0) + 1;
+    setPoll(poll);
+    renderPoll(true);
+  }
+  window.__fanVote = vote; // used by inline onclick if any
+
+  async function loadMatchOfDay(){
+    try{
+      // Pull "all matches" and pick the first match happening today; otherwise next upcoming.
+      const res = await fetch(`/schedule.json?scope=all&q=${encodeURIComponent("")}`, {cache:"no-store"});
+      if(!res.ok) return;
+      const matches = await res.json();
+      if(!Array.isArray(matches) || !matches.length) return;
+
+      const now = new Date();
+      const todayISO = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().slice(0,10);
+
+      // matches are already sorted by app.py kickoff UTC (then formatted); treat "date" as ISO yyyy-mm-dd.
+      let pick = matches.find(m => (m.date === todayISO)) || null;
+      if(!pick){
+        pick = matches.find(m => m.date && m.date >= todayISO) || matches[0];
+      }
+      if(pick){
+        motdMatch = { date: pick.date, time: pick.time, home: pick.home, away: pick.away, stage: pick.stage, venue: pick.venue };
+      }
+    }catch(e){
+      // best-effort; leave motdMatch null
+    }
+  }
+
+  function renderPoll(bumpLive){
+    if(!pollList) return;
+    if(!motdMatch){
+      pollList.innerHTML = `<div class="fz-muted">No match loaded yet.</div>`;
+      return;
+    }
+    const home = motdMatch.home || "Home";
+    const away = motdMatch.away || "Away";
+
+    const poll = getPoll();
+
+    // Device-only “live” bumps
+    if(bumpLive && Math.random() < 0.18){
+      const pick = (Math.random() < 0.5) ? home : away;
+      poll[pick] = (poll[pick] || 0) + 1;
+      setPoll(poll);
+    }
+
+    const h = poll[home] || 0;
+    const a = poll[away] || 0;
+    const total = (h + a) || 1;
+    const hPct = Math.round((h/total)*100);
+    const aPct = 100 - hPct;
+
+    const line = `${escapeHtml(home)} vs ${escapeHtml(away)} • ${escapeHtml(motdMatch.date||"")} • ${escapeHtml(motdMatch.time||"")}`;
+
+    pollList.innerHTML = `
+      <div class="fz-muted" style="margin-bottom:8px;">${line}</div>
+
+      <div style="display:grid; grid-template-columns: 1fr 74px; gap:10px; align-items:center;">
+        <button class="fz-chip" type="button" style="justify-content:space-between; width:100%; cursor:pointer;" onclick="window.__fanVote && window.__fanVote('${escapeHtml(home).replace(/'/g,'&#39;')}')">
+          <span style="display:flex; gap:8px; align-items:center;">
+            <span style="width:10px; height:10px; border-radius:999px; background:rgba(255,204,102,.85); display:inline-block;"></span>
+            <b>${escapeHtml(home)}</b>
+          </span>
+          <span class="fz-muted" style="font-size:11px">${h}</span>
+        </button>
+        <div class="fz-muted" style="text-align:right; font-weight:900;">${hPct}%</div>
+      </div>
+      <div style="height:8px; border-radius:999px; background:rgba(255,255,255,.10); overflow:hidden; border:1px solid rgba(255,255,255,.12); margin-top:6px;">
+        <div style="height:100%; width:${hPct}%; background:linear-gradient(90deg, rgba(255,204,102,.75), rgba(46,160,67,.55));"></div>
+      </div>
+
+      <div style="height:10px"></div>
+
+      <div style="display:grid; grid-template-columns: 1fr 74px; gap:10px; align-items:center;">
+        <button class="fz-chip" type="button" style="justify-content:space-between; width:100%; cursor:pointer;" onclick="window.__fanVote && window.__fanVote('${escapeHtml(away).replace(/'/g,'&#39;')}')">
+          <span style="display:flex; gap:8px; align-items:center;">
+            <span style="width:10px; height:10px; border-radius:999px; background:rgba(31,111,235,.85); display:inline-block;"></span>
+            <b>${escapeHtml(away)}</b>
+          </span>
+          <span class="fz-muted" style="font-size:11px">${a}</span>
+        </button>
+        <div class="fz-muted" style="text-align:right; font-weight:900;">${aPct}%</div>
+      </div>
+      <div style="height:8px; border-radius:999px; background:rgba(255,255,255,.10); overflow:hidden; border:1px solid rgba(255,255,255,.12); margin-top:6px;">
+        <div style="height:100%; width:${aPct}%; background:linear-gradient(90deg, rgba(31,111,235,.70), rgba(0,0,0,.25));"></div>
+      </div>
+    `;
+  }
+
+  // ----- QR poster -----
+  function openQR(){
+    if(!qrModal) return;
+    // Toggle the inline QR card (not a modal overlay)
+    const isHidden = (qrModal.style.display === "none" || !qrModal.style.display);
+    if(!isHidden){
+      qrModal.style.display = "none";
+      return;
+    }
+    const url = window.location.href;
+    if(qrLink) { qrLink.textContent = url; qrLink.href = url; }
+    qrModal.style.display = "block";
+    // best-effort draw
+    try{ drawPseudoQR(url); }catch(e){}
+  }
+  function closeQR(){
+    if(!qrModal) return;
+    qrModal.style.display = "none";
+  }
+
+function drawPseudoQR(text){
+    if(!qrCanvas) return;
+    const ctx = qrCanvas.getContext("2d");
+    const size = qrCanvas.width;
+    ctx.clearRect(0,0,size,size);
+    ctx.fillStyle="#fff"; ctx.fillRect(0,0,size,size);
+    ctx.fillStyle="#000";
+
+    const cells=33, pad=6;
+    const cell=Math.floor((size - pad*2)/cells);
+
+    // hash
+    let h=2166136261;
+    for(let i=0;i<text.length;i++){
+      h ^= text.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    function bit(x,y){
+      const v = Math.imul((x+1)*2654435761, (y+1)*1597334677) ^ h;
+      return (v>>>0) & 1;
+    }
+    function finder(x0,y0){
+      for(let y=0;y<7;y++){
+        for(let x=0;x<7;x++){
+          const on = (x===0||y===0||x===6||y===6|| (x>=2&&x<=4&&y>=2&&y<=4));
+          if(on) ctx.fillRect(pad+(x0+x)*cell, pad+(y0+y)*cell, cell, cell);
+        }
+      }
+    }
+    finder(0,0); finder(cells-7,0); finder(0,cells-7);
+
+    for(let y=0;y<cells;y++){
+      for(let x=0;x<cells;x++){
+        // keep quiet areas around finders
+        const inTL = x<8 && y<8;
+        const inTR = x>(cells-9) && y<8;
+        const inBL = x<8 && y>(cells-9);
+        if(inTL||inTR||inBL) continue;
+        if(bit(x,y)) ctx.fillRect(pad+x*cell, pad+y*cell, cell, cell);
+      }
+    }
+  }
+
+  // ----- Wire buttons -----
+  function bind(){
+    el("btnPickCountry")?.addEventListener("click", openCountryModal);
+    el("btnCloseCountry")?.addEventListener("click", closeCountryModal);
+    el("btnClearCountry")?.addEventListener("click", ()=>{ clearSupport(); renderSupporter(); renderDrink(); closeCountryModal(); });
+
+    el("btnOpenPoll")?.addEventListener("click", ()=>{
+      if(!pollCard) return;
+      pollCard.style.display = (pollCard.style.display === "none" || !pollCard.style.display) ? "block" : "none";
+      renderPoll(true);
     });
 
-    btnOpenQR?.addEventListener("click", (e)=>{ e.preventDefault(); toggleQR(); });
+    el("btnSharePoster")?.addEventListener("click", openQR);
+    el("btnCloseQR")?.addEventListener("click", closeQR);
 
-    // close modal on backdrop click
-    modal?.addEventListener("click", (e)=>{
-      if(e.target === modal) closeCountryModal();
+    // close modals on backdrop click
+    modal?.addEventListener("click", (e)=>{ if(e.target===modal) closeCountryModal(); });
+    qrModal?.addEventListener("click", (e)=>{ if(e.target===qrModal) closeQR(); });
+
+    window.addEventListener("keydown", (e)=>{
+      if(e.key==="Escape"){ closeCountryModal(); closeQR(); }
     });
+  }
 
-    // ----- Init (never blocks UI) -----
+  async function init(){
+    buildCountryGrid();
     renderSupporter();
     renderDrink();
-
-    // Load countries async; rebuild grid when done
-    buildCountryGrid(); // initial (may show unavailable/loading)
-    loadQualifiedCountries()
-      .then(()=>{ buildCountryGrid(); })
-      .catch(()=>{ buildCountryGrid(); });
-
-    // Preload poll state quietly (so opening is instant)
-    fetchPollState().then(()=>{}).catch(()=>{});
-
-  }catch(e){
-    // If anything goes wrong, don't block the rest of the app.
-    console && console.warn && console.warn("Fan Zone init failed", e);
+    await loadMatchOfDay();
+    renderPoll(false);
+    setInterval(async ()=>{ await loadMatchOfDay(); renderPoll(true); }, 60*1000);
+    bind();
   }
+
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
 })();
-</script>
 </script>
 <script>
 /* =======================
