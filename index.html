@@ -2832,18 +2832,7 @@ body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
    - Removes fixed overlays that can block taps/typing on iOS
    - Keeps all core UI interactive
    ========================= */
-@media (max-width: 950px){
-  /* Disable the floating device bar (it can overlap inputs on iOS) */
-  .devicebar, .kioskToggle{ display:none !important; }
 
-  /* Remove any sticky/fixed layers that might sit above inputs */
-  #pager{ position: static !important; }
-
-  /* Ensure hero visual layers never intercept touches */
-  .hero, .heroSlides, .heroFX, .heroOverlay,
-  .heroSlide::before, .heroSlide::after, .hero::before, .hero::after{
-    pointer-events: none !important;
-  }
 
   /* Ensure the interactive app surfaces are on top */
   .card, .leftcol, .chatcard, .composer, textarea, button,
@@ -2859,6 +2848,20 @@ body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
     max-height: none !important;
     pointer-events: auto !important;
   }
+}
+
+
+/* =========================
+   MOBILE FIX PATCH (runtime + conflicts)
+   ========================= */
+@media (max-width: 950px){
+  /* Ensure devicebar can show on mode-mobile (override any blanket hides) */
+  body.mode-mobile .devicebar { display: flex !important; }
+  body.mode-mobile .kioskToggle { display: none !important; } /* kiosk button not needed on phones */
+
+  /* Stable chat sizing for column flow */
+  .chatcard { height: auto !important; min-height: 520px !important; }
+  #chat { height: 360px !important; max-height: 360px !important; overflow-y: auto !important; }
 }
 
 </style>
@@ -3126,7 +3129,7 @@ body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
     // Kiosk behavior: suppress inputs by default (but reversible)
     if(mode === "kiosk"){
       body.classList.add("kiosk-inputs-off");
-      const btn = document.getElementById("kioskToggle");
+      const btn = document.getElementById("kioskToggle") || document.querySelector(".kioskToggle");
       if(btn){
         btn.onclick = () => {
           body.classList.remove("kiosk-inputs-off");
@@ -3142,6 +3145,8 @@ body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
   // Wire quick actions safely (no backend changes)
   
   // On mobile/tablet: move VIP + Fan Zone into the main grid so users see HERO + CHAT + FAN ZONE like desktop
+  
+  // On mobile/tablet: move VIP + Fan Zone into the main grid so users see HERO + CHAT + FAN ZONE like desktop
   function reflowForSmallDevices(){
     const body = document.body;
     if(!body) return;
@@ -3149,37 +3154,38 @@ body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
     const isTablet = body.classList.contains("mode-tablet");
     if(!isMobile && !isTablet) return;
 
-    // Target insertion: right after the left column (menu+chat)
-    const leftcol = document.querySelector(".leftcol");
     const grid = document.querySelector(".grid");
     if(!grid) return;
 
-    // Prefer placing after leftcol; otherwise, append near top (after hero)
-    const anchor = leftcol && leftcol.parentElement === grid ? leftcol : null;
+    const leftcol = document.querySelector(".leftcol");
+    const anchor = (leftcol && leftcol.parentElement === grid) ? leftcol : null;
 
-    const vip = document.getElementById("vipHoldRail");
-    const fz = document.getElementById("fanZoneLeft") || document.querySelector(".fanzone-left");
+    // Use let so we can null-out safely
+    let vip = document.getElementById("vipHoldRail") || document.querySelector("#vipHoldRail") || document.querySelector(".vipHoldRail");
+    let fz  = document.getElementById("fanZoneLeft") || document.querySelector(".fanzone-left") || document.querySelector("#fanZoneLeft");
 
-    // Avoid duplicates if already moved
+    // If already moved, skip moving that node
     if(vip && vip.dataset && vip.dataset.moved === "1") vip = null;
-    if(fz && fz.dataset && fz.dataset.moved === "1") fz = null;
+    if(fz  && fz.dataset  && fz.dataset.moved === "1")  fz = null;
 
     // Insert order: VIP then Fan Zone (both full width)
     if(anchor){
       if(vip){ vip.dataset.moved = "1"; anchor.insertAdjacentElement("afterend", vip); }
-      if(fz){ fz.dataset.moved = "1"; (vip ? vip : anchor).insertAdjacentElement("afterend", fz); }
+      if(fz){  fz.dataset.moved = "1"; (vip ? vip : anchor).insertAdjacentElement("afterend", fz); }
     }else{
-      // If structure differs, place after hero
       const hero = document.getElementById("heroBanner") || document.querySelector(".hero");
       if(hero){
         if(vip){ vip.dataset.moved = "1"; hero.insertAdjacentElement("afterend", vip); }
-        if(fz){ fz.dataset.moved = "1"; (vip ? vip : hero).insertAdjacentElement("afterend", fz); }
+        if(fz){  fz.dataset.moved = "1"; (vip ? vip : hero).insertAdjacentElement("afterend", fz); }
       }
     }
   }
 
+    }
+  }
+
 function wireActions(){
-    const bar = document.getElementById("deviceBar");
+    const bar = document.getElementById("deviceBar") || document.querySelector(".devicebar");
     if(!bar) return;
     bar.addEventListener("click", (e) => {
       const btn = e.target.closest("button[data-action]");
@@ -3227,124 +3233,6 @@ function wireActions(){
   window.addEventListener("resize", () => {
     clearTimeout(t);
     t = setTimeout(() => { applyMode(); reflowForSmallDevices(); }, 160);
-  });
-})();
-</script>
-
-<script>
-/* MOBILE PARITY REFLOW (UI-only)
-   Ensures HERO + CHAT + VIP + FAN ZONE are visible in a clean order on phones/tablets. */
-(function(){
-  function isSmall(){
-    return (window.innerWidth || 0) <= 950;
-  }
-  
-  
-  function moveIntoGrid(){
-    if(!isSmall()) return;
-
-    const grid = document.querySelector(".grid");
-    const leftcol = document.querySelector(".leftcol");
-    if(!grid || !leftcol) return;
-
-    const hero = document.getElementById("heroBanner") || document.querySelector(".hero");
-    const vip  = document.getElementById("vipHoldRail");
-    const fzL  = document.getElementById("fanZoneLeft");
-    const fzR  = document.getElementById("fanZoneRight");
-
-    // 1) HERO first
-    if(hero && hero.parentElement === grid){
-      if(grid.firstElementChild !== hero){
-        grid.insertBefore(hero, grid.firstElementChild);
-      }
-    }
-
-    // 2) LEFTCOL immediately after HERO
-    if(hero && hero.parentElement === grid){
-      grid.insertBefore(leftcol, hero.nextElementSibling);
-    }else{
-      // If hero missing, ensure leftcol is first
-      if(grid.firstElementChild !== leftcol){
-        grid.insertBefore(leftcol, grid.firstElementChild);
-      }
-    }
-
-    // Helper to place node right after a reference
-    const placeAfter = (node, ref) => {
-      if(!node || !ref) return ref;
-      const next = ref.nextElementSibling;
-      if(node.parentElement !== grid) grid.insertBefore(node, next);
-      else grid.insertBefore(node, next);
-      return node;
-    };
-
-    // 3) VIP under LEFTCOL (optional)
-    let cursor = placeAfter(vip, leftcol);
-
-    // 4) Extras (right panel) next (keeps phone clean and avoids hiding chat)
-    cursor = placeAfter(fzR, cursor);
-
-    // 5) Fan Zone (left panel) next
-    cursor = placeAfter(fzL, cursor);
-  }
-
-    // Ensure LEFTCOL (menu+chat) is immediately after hero
-    if(hero && hero.parentElement === grid){
-      const desired = hero.nextElementSibling;
-      if(desired !== leftcol){
-        grid.insertBefore(leftcol, hero.nextElementSibling);
-      }
-    }
-
-    // Pull VIP + both Fan Zone panels into the grid, right under LEFTCOL
-    const vip = document.getElementById("vipHoldRail");
-    const fzL = document.getElementById("fanZoneLeft");
-    const fzR = document.getElementById("fanZoneRight");
-
-    const anchor = leftcol.nextElementSibling;
-
-    const insertAfter = (node, afterNode) => {
-      if(!node) return afterNode;
-      // If it's already inside grid, we'll still re-position it for correct order
-      if(node.parentElement !== grid) grid.insertBefore(node, afterNode);
-      else grid.insertBefore(node, afterNode);
-      return node.nextElementSibling;
-    };
-
-    let cursor = anchor;
-    cursor = insertAfter(vip, cursor);
-    cursor = insertAfter(fzL, cursor);
-    cursor = insertAfter(fzR, cursor);
-  }
-
-    // Place VIP and Fan Zone right AFTER leftcol (chat/menu)
-    const afterLeft = leftcol.nextElementSibling;
-    if(vip && vip.parentElement !== grid){
-      // If VIP is nested elsewhere, pull it into grid
-      grid.insertBefore(vip, afterLeft);
-    }else if(vip && vip.parentElement === grid){
-      grid.insertBefore(vip, afterLeft);
-    }
-
-    const afterVip = vip ? vip.nextElementSibling : afterLeft;
-    if(fz && fz.parentElement !== grid){
-      grid.insertBefore(fz, afterVip);
-    }else if(fz && fz.parentElement === grid){
-      grid.insertBefore(fz, afterVip);
-    }
-  }
-
-  function run(){
-    try{ moveIntoGrid(); }catch(e){}
-  }
-
-  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
-  else run();
-
-  let t=null;
-  window.addEventListener("resize", () => {
-    clearTimeout(t);
-    t = setTimeout(run, 140);
   });
 })();
 </script>
