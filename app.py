@@ -1240,7 +1240,7 @@ _qualified_cache: Dict[str, Any] = {"loaded_at": 0, "teams": []}
 # with hosts pinned to the top. If you want to switch back to a remote "qualified so far"
 # source, set USE_REMOTE_QUALIFIED=1 and provide QUALIFIED_SOURCE_URL.
 USE_REMOTE_QUALIFIED = os.environ.get("USE_REMOTE_QUALIFIED", "1") == "1"
-QUALIFIED_CACHE_SECONDS = int(os.environ.get("QUALIFIED_CACHE_SECONDS", str(12 * 60 * 60)))  # 12h
+QUALIFIED_CACHE_SECONDS = int(os.environ.get("QUALIFIED_CACHE_SECONDS", str(3 * 60 * 60)))  # 3h
 QUALIFIED_SOURCE_URL = os.environ.get(
     "QUALIFIED_SOURCE_URL",
     # Prefer the main tournament page's "Qualified teams" table.
@@ -1294,24 +1294,45 @@ def _fetch_qualified_teams_remote() -> List[str]:
         return []
 
     # 2) Find the "Qualified teams" section and then choose the most likely table.
+    # Wikipedia renderings vary: sometimes there is an element id like "Qualified_teams",
+    # other times only the visible heading text exists. We therefore:
+    #   (a) try id-based anchors, then
+    #   (b) fall back to a plain-text search for the heading.
+    #
     # We do NOT assume the first table is the right one (Wikipedia pages often have
     # navigation/other tables near section headers).
     anchor_pos = -1
+
+    # Common id markers across MediaWiki/REST renderings
     for anchor in (
         'id="Qualified_teams"',
+        "id='Qualified_teams'",
         'id="Qualified_teams_and_rankings"',
-        'id="Qualified_teams_and_rankings"',
-        'id="Qualified_teams_and_rankings"',
+        "id='Qualified_teams_and_rankings'",
+        '<span class="mw-headline" id="Qualified_teams"',
+        "<span class='mw-headline' id='Qualified_teams'",
     ):
         anchor_pos = html_blob.find(anchor)
         if anchor_pos != -1:
             break
+
+    # Some renderings use a <span id="Qualified_teams"> marker.
     if anchor_pos == -1:
-        # Some renderings use a <span id="Qualified_teams"> marker.
-        anchor_pos = html_blob.find('<span id="Qualified_teams"')
+        m_anchor = re.search(r'<span[^>]+id=["\']Qualified_teams["\'][^>]*>', html_blob, flags=re.I)
+        if m_anchor:
+            anchor_pos = m_anchor.start()
+
+    # Final fallback: look for the visible heading text.
+    if anchor_pos == -1:
+        m_text = re.search(r">\s*Qualified\s+teams\s*<", html_blob, flags=re.I)
+        if not m_text:
+            # Even looser: anywhere the phrase appears (still safe because we hard-guard the row count).
+            m_text = re.search(r"Qualified\s+teams", html_blob, flags=re.I)
+        if m_text:
+            anchor_pos = m_text.start()
+
     if anchor_pos == -1:
         return []
-
     sub = html_blob[anchor_pos:]
 
     # Grab a few candidate wikitables and pick the first one that looks like a
