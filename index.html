@@ -2580,6 +2580,77 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 }
 
+
+/* =========================
+   MOBILE: SECTION NAV (desktop parity without clutter)
+   - One-tap switch between Chat / Fan Zone / Extras / Schedule / Menu
+   ========================= */
+@media (max-width: 950px){
+  .mnav{
+    display:flex;
+    gap:8px;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 10px 0 10px;
+  }
+  .mnav .mnav-btn{
+    flex: 1 1 auto;
+    min-width: 0;
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.06);
+    color: var(--text);
+    padding: 9px 10px;
+    border-radius: 14px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    user-select:none;
+  }
+  .mnav .mnav-btn.on{
+    border-color: rgba(212,175,55,.30);
+    background: linear-gradient(135deg, rgba(212,175,55,.18), rgba(255,255,255,.06));
+  }
+
+  /* Default: show Chat section */
+  body[data-msec="chat"] .chatcard{ display:block !important; }
+  body[data-msec="chat"] .menucard,
+  body[data-msec="chat"] #fanZoneLeft,
+  body[data-msec="chat"] #fanZoneRight,
+  body[data-msec="chat"] #scheduleCard,
+  body[data-msec="chat"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="menu"] .menucard{ display:block !important; }
+  body[data-msec="menu"] .chatcard,
+  body[data-msec="menu"] #fanZoneLeft,
+  body[data-msec="menu"] #fanZoneRight,
+  body[data-msec="menu"] #scheduleCard,
+  body[data-msec="menu"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="fan"] #fanZoneLeft{ display:block !important; }
+  body[data-msec="fan"] .chatcard,
+  body[data-msec="fan"] .menucard,
+  body[data-msec="fan"] #fanZoneRight,
+  body[data-msec="fan"] #scheduleCard{ display:none !important; }
+
+  body[data-msec="extras"] #fanZoneRight{ display:block !important; }
+  body[data-msec="extras"] .chatcard,
+  body[data-msec="extras"] .menucard,
+  body[data-msec="extras"] #fanZoneLeft,
+  body[data-msec="extras"] #scheduleCard{ display:none !important; }
+
+  body[data-msec="schedule"] #scheduleCard{ display:block !important; }
+  body[data-msec="schedule"] .chatcard,
+  body[data-msec="schedule"] .menucard,
+  body[data-msec="schedule"] #fanZoneLeft,
+  body[data-msec="schedule"] #fanZoneRight{ display:none !important; }
+
+  /* VIP shown alongside Fan Zone (if you want it there) */
+  body[data-msec="fan"] #vipHoldRail{ display:block !important; }
+  body[data-msec="extras"] #vipHoldRail{ display:none !important; }
+}
+
 </style>
 </head>
 <body>
@@ -4792,6 +4863,104 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     wire(); applyDefault();
   }
   window.addEventListener("resize", ()=>{ setTimeout(applyDefault, 150); });
+})();
+</script>
+
+
+<script>
+/* MOBILE SECTION NAV (UI-only, safe)
+   Gives phone users full access to desktop features without clutter/overlap. */
+(function(){
+  function isSmall(){ return (window.innerWidth||0) <= 950; }
+
+  function ensureScheduleId(){
+    const sideTitle = document.getElementById("sideTitle");
+    if(sideTitle){
+      const card = sideTitle.closest(".card");
+      if(card && !card.id) card.id = "scheduleCard";
+    }
+  }
+
+  function injectNav(){
+    if(!isSmall()) return;
+    const hero = document.getElementById("heroBanner") || document.querySelector(".hero");
+    if(!hero) return;
+
+    // Avoid duplicates
+    if(document.getElementById("mnav")) return;
+
+    const nav = document.createElement("div");
+    nav.className = "mnav";
+    nav.id = "mnav";
+    nav.innerHTML = `
+      <button class="mnav-btn" data-sec="chat">Chat</button>
+      <button class="mnav-btn" data-sec="fan">Fan Zone</button>
+      <button class="mnav-btn" data-sec="extras">Extras</button>
+      <button class="mnav-btn" data-sec="schedule">Schedule</button>
+      <button class="mnav-btn" data-sec="menu">Menu</button>
+    `;
+
+    hero.insertAdjacentElement("afterend", nav);
+
+    nav.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-sec]");
+      if(!b) return;
+      const sec = b.getAttribute("data-sec");
+      setSection(sec, true);
+    });
+  }
+
+  function setSection(sec, persist){
+    if(!isSmall()) return;
+    document.body.setAttribute("data-msec", sec || "chat");
+    // button states
+    const nav = document.getElementById("mnav");
+    if(nav){
+      nav.querySelectorAll(".mnav-btn").forEach(btn => {
+        btn.classList.toggle("on", btn.getAttribute("data-sec") === sec);
+      });
+    }
+    if(persist){
+      try{ localStorage.setItem("wc_mobile_section", sec); }catch(e){}
+    }
+
+    // When showing chat, focus input for quick use
+    if(sec === "chat"){
+      try{
+        const t = document.getElementById("msg");
+        if(t){ t.focus({preventScroll:true}); }
+      }catch(e){}
+    }
+
+    // Scroll to top of section (keeps premium feel)
+    try{ window.scrollTo({top: 0, behavior: "smooth"}); }catch(e){}
+  }
+
+  function apply(){
+    ensureScheduleId();
+    if(isSmall()){
+      injectNav();
+      const pref = (localStorage.getItem("wc_mobile_section") || "chat");
+      setSection(pref, false);
+    }else{
+      // desktop: remove attribute so everything shows
+      document.body.removeAttribute("data-msec");
+      const nav = document.getElementById("mnav");
+      if(nav) nav.remove();
+    }
+  }
+
+  if(document.readyState==="loading"){
+    document.addEventListener("DOMContentLoaded", apply);
+  }else{
+    apply();
+  }
+
+  let t=null;
+  window.addEventListener("resize", () => {
+    clearTimeout(t);
+    t = setTimeout(apply, 160);
+  });
 })();
 </script>
 
