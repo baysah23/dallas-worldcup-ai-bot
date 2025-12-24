@@ -2417,11 +2417,10 @@ body.kiosk-mode *::-webkit-scrollbar{
 </div>
 <div class="fz-card" id="drinkCard" style="margin-top:10px;">
 <h3>🍹 Drink highlights</h3>
-<div class="fz-muted">Based on who you’re supporting (or pick a country).</div>
 <div id="drinkHighlight" style="margin-top:10px;">
       <div style="border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:10px; background: rgba(0,0,0,.10);">
         <div id="drinkName" style="font-weight:900;">Country-themed drink</div>
-        <div id="drinkDesc" class="fz-muted" style="margin-top:4px;">Based on who you’re supporting (or pick a country).</div>
+        <div id="drinkDesc" class="fz-muted" style="margin-top:4px;"></div>
       </div>
     </div>
 </div>
@@ -4069,8 +4068,9 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
       // Pull "all matches" and pick the first match happening today; otherwise next upcoming.
       const res = await fetch(`/schedule.json?scope=all&q=${encodeURIComponent("")}`, {cache:"no-store"});
       if(!res.ok) return;
-      const matches = await res.json();
-      if(!Array.isArray(matches) || !matches.length) return;
+      const data = await res.json();
+      const matches = Array.isArray(data) ? data : (data && Array.isArray(data.matches) ? data.matches : []);
+      if(!matches.length) return;
 
       const now = new Date();
       const todayISO = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().slice(0,10);
@@ -4162,11 +4162,52 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     if(qrLink) { qrLink.textContent = url; qrLink.href = url; }
     qrModal.style.display = "block";
     // best-effort draw
-    try{ drawPseudoQR(url); }catch(e){}
+    try{ drawQR(url); }catch(e){}
   }
   function closeQR(){
     if(!qrModal) return;
     qrModal.style.display = "none";
+  }
+
+
+  // ----- QR: real scannable code (frontend-only). Falls back to pseudo pattern if CDN blocked.
+  let __qrLibPromise = null;
+  function loadQRLib(){
+    if(window.QRCode && typeof window.QRCode.toCanvas === "function") return Promise.resolve(true);
+    if(__qrLibPromise) return __qrLibPromise;
+    __qrLibPromise = new Promise((resolve)=>{
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js";
+      s.async = true;
+      s.onload = ()=>resolve(true);
+      s.onerror = ()=>resolve(false);
+      document.head.appendChild(s);
+    });
+    return __qrLibPromise;
+  }
+  function qrToCanvas(canvas, text, opts){
+    return new Promise((resolve, reject)=>{
+      try{
+        // qrcode lib uses callback signature: QRCode.toCanvas(canvas, text, opts, cb)
+        window.QRCode.toCanvas(canvas, text, opts || {}, (err)=>{
+          if(err) reject(err); else resolve();
+        });
+      }catch(e){ reject(e); }
+    });
+  }
+  async function drawQR(text){
+    if(!qrCanvas) return;
+    const ok = await loadQRLib();
+    if(ok && window.QRCode && typeof window.QRCode.toCanvas === "function"){
+      // Make it bigger + crisp for venue scanning
+      const px = 200;
+      qrCanvas.width = px;
+      qrCanvas.height = px;
+      await qrToCanvas(qrCanvas, text, { width: px, margin: 1 });
+      return;
+    }
+    // Fallback (non-scannable) if offline/CDN blocked
+    drawPseudoQR(text);
   }
 
 function drawPseudoQR(text){

@@ -139,7 +139,7 @@ def _fetch_fixture_feed() -> List[Dict[str, Any]]:
         headers={"User-Agent": "worldcup-concierge/1.0"},
         method="GET",
     )
-    with urllib.request.urlopen(req, timeout=8) as resp:
+    with urllib.request.urlopen(req, timeout=15) as resp:
         raw = resp.read().decode("utf-8", errors="replace")
     payload = json.loads(raw)
     if not isinstance(payload, list):
@@ -979,7 +979,7 @@ _qualified_cache: Dict[str, Any] = {"loaded_at": 0, "teams": []}
 QUALIFIED_CACHE_SECONDS = int(os.environ.get("QUALIFIED_CACHE_SECONDS", str(12 * 60 * 60)))  # 12h
 QUALIFIED_SOURCE_URL = os.environ.get(
     "QUALIFIED_SOURCE_URL",
-    "https://en.wikipedia.org/api/rest_v1/page/html/2026_FIFA_World_Cup",
+    "https://en.wikipedia.org/api/rest_v1/page/html/2026_FIFA_World_Cup_qualification",
 )
 
 def _fetch_qualified_teams() -> List[str]:
@@ -999,32 +999,17 @@ def _fetch_qualified_teams() -> List[str]:
         headers={"User-Agent": "worldcup-concierge/1.0"},
         method="GET",
     )
-    with urllib.request.urlopen(req, timeout=8) as resp:
+    with urllib.request.urlopen(req, timeout=15) as resp:
         html = resp.read().decode("utf-8", errors="replace")
 
-    # Try to jump to the 'Qualified teams' section. Parsoid HTML varies by page.
-    # We accept multiple anchor patterns and also fall back to the first textual occurrence.
-    anchor_patterns = [
-        r'id="Qualified_teams"',
-        r'id="Qualified_teams_and_venues"',
-        r'id="Qualified_teams_and_qualification"',
-        r'>\s*Qualified teams\s*<',
-        r'>\s*Qualified teams and\s*<',
-    ]
-
-    i = -1
-    for ap in anchor_patterns:
-        mm = re.search(ap, html, flags=re.I)
-        if mm:
-            i = mm.start()
-            break
-
+    # Parsoid uses stable IDs like id="Qualified_teams"
+    anchor = 'id="Qualified_teams"'
+    i = html.find(anchor)
     if i == -1:
         # fallback: just return hosts (always in WC)
         return ["Canada", "Mexico", "United States"]
 
     sub = html[i:]
-
 
     # Parsoid pages often have a small legend table BEFORE the real wikitable.
     # So: collect *all* tables after the anchor and pick the one that looks like
@@ -1100,28 +1085,21 @@ def _fetch_qualified_teams() -> List[str]:
     return out
 
 def get_qualified_teams(force: bool = False) -> List[str]:
-    """Return cached qualified teams; refresh from source when cache expires.
-
-    On fetch failure, we keep the last good cache (do not regress to hosts-only).
-    """
     now = int(time.time())
-    if (not force and _qualified_cache.get("teams")
-        and (now - int(_qualified_cache.get("loaded_at") or 0) < QUALIFIED_CACHE_SECONDS)):
+    if (not force and _qualified_cache["teams"]
+        and (now - int(_qualified_cache["loaded_at"] or 0) < QUALIFIED_CACHE_SECONDS)):
         return _qualified_cache["teams"]
 
     try:
         teams = _fetch_qualified_teams()
-        _qualified_cache["loaded_at"] = now
-        _qualified_cache["teams"] = teams
-        return teams
     except Exception:
-        if _qualified_cache.get("teams"):
-            return _qualified_cache["teams"]
-        return ["Canada", "Mexico", "United States"]
+        teams = ["Canada", "Mexico", "United States"]
 
+    _qualified_cache["loaded_at"] = now
+    _qualified_cache["teams"] = teams
+    return teams
 
 @app.route("/worldcup/qualified.json")
-
 def qualified_json():
     teams = get_qualified_teams()
     return jsonify({
@@ -1130,13 +1108,6 @@ def qualified_json():
         "teams": teams,
         "note": "Qualification is ongoing; this list reflects teams qualified so far.",
     })
-
-
-
-# Back-compat alias (some frontends call this path)
-@app.route("/countries/qualified.json")
-def qualified_countries_alias():
-    return qualified_json()
 
 @app.route("/test-sheet")
 def test_sheet():
