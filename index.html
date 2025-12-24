@@ -264,20 +264,7 @@
       0%{ transform: translateX(-50%) rotate(18deg); }
       100%{ transform: translateX(220%) rotate(18deg); }
     }
-    .heroDots{
-      position:absolute; left:14px; bottom:12px;
-      z-index:4;
-      display:flex; gap:6px;
-      opacity:.92;
-    }
-    .heroDot{
-      width:7px; height:7px; border-radius:999px;
-      background: rgba(234,240,255,.35);
-      border:1px solid rgba(255,255,255,.20);
-    }
-    .heroDot.active{
-      background: rgba(234,240,255,.90);
-    }
+    
 
     .banner{
       padding:10px 14px;
@@ -2542,7 +2529,6 @@ body.kiosk-mode *::-webkit-scrollbar{
 </div>
 <div aria-hidden="true" class="heroRoster" id="heroRoster"></div>
 </div>
-<div aria-hidden="true" class="heroDots" id="heroDots"></div>
 </div>
 <!-- Left column: Menu (left) + Chat/Reservations (right) -->
 <div class="leftcol">
@@ -2652,7 +2638,6 @@ const pillLang = document.getElementById("pillLang");
 const pillMode = document.getElementById("pillMode");
 const heroBanner = document.getElementById("heroBanner");
 const heroSlidesEl = document.getElementById("heroSlides");
-const heroDotsEl = document.getElementById("heroDots");
 const matchBanner = document.getElementById("matchBanner");
 const matchdayBox = document.getElementById("matchdayBox");
 
@@ -3039,11 +3024,9 @@ const heroPlayers = [
 function buildHero(){
   const hero = document.getElementById("heroBanner");
   const slides = document.getElementById("heroSlides");
-  const dots = document.getElementById("heroDots");
   if(!hero || !slides) return;
 
   slides.innerHTML = "";
-  if(dots) dots.innerHTML = "";
 
   heroPlayers.forEach((p, idx) => {
     const s = document.createElement("div");
@@ -3075,17 +3058,6 @@ function buildHero(){
     s.appendChild(cap);
 
     slides.appendChild(s);
-
-    if(dots){
-      const d = document.createElement("div");
-      d.className = "heroDot" + (idx===0 ? " on" : "");
-      d.title = p.name;
-      d.addEventListener("click", () => {
-        showHero(idx);
-        restartHero();
-      });
-      dots.appendChild(d);
-    }
   });
 
   // pause on hover (banner only)
@@ -3097,17 +3069,12 @@ function buildHero(){
 
 function showHero(i){
   const slides = Array.from(document.querySelectorAll("#heroSlides .heroSlide"));
-  const dots = Array.from(document.querySelectorAll("#heroDots .heroDot"));
   if(!slides.length) return;
   _heroIndex = (i + slides.length) % slides.length;
 
   slides.forEach((s, idx) => {
     if(idx === _heroIndex) s.classList.add("active");
     else s.classList.remove("active");
-  });
-  dots.forEach((d, idx) => {
-    if(idx === _heroIndex) d.classList.add("on");
-    else d.classList.remove("on");
   });
 }
 
