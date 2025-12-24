@@ -1836,6 +1836,10 @@ def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
     except Exception:
         pass
 
+
+    # Invalidate cache so changes are visible immediately after saving (even within the cache window).
+    _CONFIG_CACHE["ts"] = 0.0
+    _CONFIG_CACHE["cfg"] = None
     merged = get_config()
     _CONFIG_CACHE["ts"] = time.time()
     _CONFIG_CACHE["cfg"] = dict(merged)
