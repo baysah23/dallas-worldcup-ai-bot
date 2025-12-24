@@ -2395,6 +2395,50 @@ body.kiosk-mode *::-webkit-scrollbar{
   border-radius: 999px;
 }
 .fanzone-left .fanzone{ margin-top: 14px; } /* ensures visible gap even if VIP collapses */
+
+/* =========================
+   HERO 3D POP (SAFE, UI-only)
+   - Adds subtle depth to rotating star images
+   - No JS changes; respects reduced-motion
+   ========================= */
+.hero{
+  perspective: 900px;
+  perspective-origin: 50% 45%;
+}
+.heroSlide img,
+.heroCardImg img{
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  will-change: transform, filter;
+}
+
+/* Combined KenBurns + 3D tilt in ONE animation (transform-safe) */
+@keyframes heroKenBurns3D{
+  0%   { transform: translateZ(0) scale(1.00) rotateX(0deg) rotateY(-1.8deg); }
+  50%  { transform: translateZ(14px) scale(1.02) rotateX(1.2deg) rotateY(1.8deg); }
+  100% { transform: translateZ(0) scale(1.035) rotateX(0deg) rotateY(-1.2deg); }
+}
+
+/* Late override to win all earlier heroSlide.active img rules */
+.hero .heroSlide.active img{
+  animation: heroKenBurns3D 5s ease-in-out forwards;
+  filter: brightness(1.04) contrast(1.04);
+}
+
+/* Extra micro-depth on the 3-up cards (if enabled) */
+.hero .heroCard.heroCardTri .heroCardImg img{
+  transform: translateZ(8px) scale(1.04);
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce){
+  .hero{ perspective: none; }
+  .hero .heroSlide.active img{
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
 </style>
 </head>
 <body>
