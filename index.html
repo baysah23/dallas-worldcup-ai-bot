@@ -2439,6 +2439,67 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 }
 
+
+/* =========================
+   HERO RIM-LIGHT SWEEP (Premium, noticeable)
+   - Adds a soft edge highlight that makes depth read instantly
+   - Synced to the 3D animation duration (5s)
+   ========================= */
+
+/* Rim sweep overlay sits above image but below text */
+.heroSlide::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:2; /* heroOverlay uses 3, FX 2-3; this stays safe */
+  pointer-events:none;
+  opacity:0; /* only active slide shows */
+  background:
+    radial-gradient(520px 260px at 25% 35%, rgba(255,255,255,.16), transparent 62%),
+    linear-gradient(115deg,
+      transparent 0%,
+      rgba(255,255,255,.10) 26%,
+      rgba(255,255,255,.22) 38%,
+      rgba(212,175,55,.12) 46%,
+      rgba(255,255,255,.10) 56%,
+      transparent 72%);
+  mix-blend-mode: screen;
+  filter: blur(0.4px);
+  transform: translateX(-12%) translateY(0) skewX(-8deg);
+}
+
+@keyframes heroRimSweep{
+  0%   { opacity:0; transform: translateX(-18%) skewX(-10deg); }
+  12%  { opacity:.85; }
+  50%  { opacity:.55; transform: translateX(10%) skewX(-6deg); }
+  88%  { opacity:.80; }
+  100% { opacity:0; transform: translateX(28%) skewX(-4deg); }
+}
+
+/* Only on active slide, synced to 3D motion */
+.heroSlide.active::after{
+  opacity:1;
+  animation: heroRimSweep 5s ease-in-out forwards;
+}
+
+/* Subtle premium rim lift on active image edges */
+.hero .heroSlide.active img{
+  filter:
+    brightness(1.05)
+    contrast(1.05)
+    drop-shadow(0 22px 34px rgba(0,0,0,.40))
+    drop-shadow(0 0 22px rgba(212,175,55,.12));
+}
+
+/* Reduced motion: keep a static soft highlight */
+@media (prefers-reduced-motion: reduce){
+  .heroSlide.active::after{
+    animation: none !important;
+    opacity: .45 !important;
+    transform: none !important;
+  }
+}
+
 </style>
 </head>
 <body>
