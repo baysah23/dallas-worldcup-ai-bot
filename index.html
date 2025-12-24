@@ -201,6 +201,7 @@
     .heroOverlay{
       position:absolute; inset:0;
       z-index:3;
+      pointer-events:none;
       display:flex;
       flex-direction:column;
       justify-content:center;
@@ -1198,6 +1199,25 @@ body.phase-finals{ background: var(--phaseF); }
   cursor:pointer;
 }
 .fz-btn:hover{ transform: translateY(-1px); }
+
+/* Live pulse (UI-only): subtle premium glow when poll is live */
+@keyframes fzLivePulse{
+  0%   { box-shadow: 0 0 0 rgba(212,175,55,0); }
+  55%  { box-shadow: 0 0 18px rgba(212,175,55,.22); }
+  100% { box-shadow: 0 0 0 rgba(212,175,55,0); }
+}
+#btnOpenPoll.is-live{
+  animation: fzLivePulse 2.2s ease-in-out infinite;
+  border-color: rgba(212,175,55,.35);
+}
+#fzIconPoll.is-live{
+  animation: fzLivePulse 2.2s ease-in-out infinite;
+  border-color: rgba(212,175,55,.35);
+}
+@media (prefers-reduced-motion: reduce){
+  #btnOpenPoll.is-live, #fzIconPoll.is-live{ animation:none !important; }
+}
+
 .fz-grid{
   display:grid;
   grid-template-columns: repeat(12, 1fr);
@@ -1221,47 +1241,59 @@ body.phase-finals{ background: var(--phaseF); }
 /* Modal */
 .fz-modal{
   position:fixed; inset:0;
-  display:flex; align-items:center; justify-content:center;
+  display:flex;
+  align-items:center; justify-content:center;
   background: rgba(0,0,0,.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
   z-index: 9999;
 
-  /* premium open/close */
-  opacity:0;
-  visibility:hidden;
-  pointer-events:none;
-  transition: opacity 260ms cubic-bezier(.2,.9,.2,1), visibility 0s linear 260ms;
+  /* Hidden by default, but still transitionable */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 220ms ease;
 }
 .fz-modal.show{
-  opacity:1;
-  visibility:visible;
-  pointer-events:auto;
-  transition: opacity 260ms cubic-bezier(.2,.9,.2,1);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
-
-/* panel slide + fade (shared by Country + Match Poll) */
 .fz-modal .panel{
   width:min(720px, 92vw);
   border:1px solid var(--line);
-  border-radius: 18px;
+  border-radius: 16px;
   background: rgba(10,18,40,.92);
   padding: 14px;
-  box-shadow: 0 22px 70px rgba(0,0,0,.60);
+  box-shadow: 0 20px 60px rgba(0,0,0,.55);
 
-  transform: translateY(22px) scale(.985);
-  opacity:0;
-  filter: blur(2px);
-  transition: transform 320ms cubic-bezier(.2,.9,.2,1), opacity 320ms cubic-bezier(.2,.9,.2,1), filter 320ms cubic-bezier(.2,.9,.2,1);
-  will-change: transform, opacity, filter;
+  /* Premium open motion */
+  transform: translateY(12px) scale(.99);
+  opacity: 0;
+  transition: transform 240ms cubic-bezier(.2,.9,.2,1), opacity 240ms ease;
 }
 .fz-modal.show .panel{
   transform: translateY(0) scale(1);
-  opacity:1;
-  filter: blur(0);
+  opacity: 1;
 }
-.fz-modal .panel:focus{ outline:none; }
+
+/* --- Premium modal motion (enhanced) --- */
+@keyframes fzModalIn{
+  0%   { transform: translateY(18px) scale(.985); opacity: 0; filter: blur(2px); }
+  60%  { transform: translateY(-2px) scale(1.002); opacity: 1; filter: blur(0); }
+  100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0); }
+}
+.fz-modal.show{
+  backdrop-filter: blur(2px);
+}
+.fz-modal.show .panel{
+  animation: fzModalIn 420ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+
+@media (prefers-reduced-motion: reduce){
+  .fz-modal, .fz-modal .panel{ transition: none !important; transform:none !important; }
+}
 .fz-modal .panel h2{ margin:0 0 10px 0; font-size: 16px; }
+
 .fz-country-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; }
 @media(min-width: 900px){ .fz-country-grid{ grid-template-columns: repeat(5, 1fr); } }
 .fz-country{
@@ -1403,25 +1435,6 @@ body.fz-hidden .fanzone-right{ transform: translateX(110%); opacity:0; pointer-e
   cursor:pointer;
   display:inline-flex; align-items:center; justify-content:center;
 }
-
-/* Tiny live pulse/glow (used for Match Poll + Country buttons when a match is live) */
-@keyframes fzLivePulse{
-  0%, 100% {
-    transform: translateZ(0) scale(1);
-    box-shadow: 0 0 0 rgba(255,255,255,0);
-    filter: saturate(1);
-  }
-  50% {
-    transform: translateZ(0) scale(1.03);
-    box-shadow: 0 0 0 1px rgba(255,255,255,.10), 0 0 18px rgba(255,204,102,.18);
-    filter: saturate(1.15);
-  }
-}
-.fz-livepulse{
-  animation: fzLivePulse 1.6s ease-in-out infinite;
-}
-.fz-livepulse:hover{ animation-play-state: paused; }
-
 .fz-iconbtn:hover{ transform: translateY(-1px); }
 .fz-minirow{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
 
@@ -2395,16 +2408,6 @@ body.kiosk-mode *::-webkit-scrollbar{
   border-radius: 999px;
 }
 .fanzone-left .fanzone{ margin-top: 14px; } /* ensures visible gap even if VIP collapses */
-
-/* === Fan Zone click-safety override (prevents any invisible layers from blocking) === */
-@media(min-width:1200px){
-  .fz-left-stack{ z-index: 220 !important; pointer-events: auto !important; }
-  .vip-rail{ z-index: 230 !important; pointer-events: auto !important; }
-  .fanzone-left, .fanzone-right{ z-index: 210 !important; pointer-events: auto !important; }
-}
-/* Non-interactive decorative overlays should never capture clicks */
-.heroOverlay, .scrollGlow{ pointer-events: none !important; }
-
 </style>
 </head>
 <body>
@@ -2486,27 +2489,27 @@ body.kiosk-mode *::-webkit-scrollbar{
 </aside>
 <!-- Modal -->
 <div aria-labelledby="countryModalTitle" aria-modal="true" class="fz-modal" id="countryModal" role="dialog">
-<div class="panel" tabindex="-1">
+<div class="panel">
 <h2 id="countryModalTitle">Which country are you supporting?</h2>
 <div class="fz-muted" style="margin-bottom:10px;">Pick one. We’ll personalize the experience (stored locally).</div>
 <div class="fz-country-grid" id="countryGrid"></div>
 <div class="fz-footer">
 <button class="fz-btn" id="btnCloseCountry">Close</button>
 <button class="fz-btn" id="btnClearCountry">Clear selection</button></div>
+</div></div>
 
-<!-- Modal: Match Poll -->
+<!-- Match Poll Modal -->
 <div aria-labelledby="pollModalTitle" aria-modal="true" class="fz-modal" id="pollModal" role="dialog">
-  <div class="panel" tabindex="-1">
+  <div class="panel">
     <h2 id="pollModalTitle">⚔️ Match of the Day Poll</h2>
     <div class="fz-muted" style="margin-bottom:10px;">Vote for who you think will win.</div>
-    <div id="pollListModal" style="margin-top:10px; display:grid; gap:8px;"></div>
+    <div id="pollListModal" style="display:grid; gap:8px; max-height:60vh; overflow:auto;"></div>
     <div class="fz-footer">
       <button class="fz-btn" id="btnClosePoll">Close</button>
     </div>
   </div>
 </div>
 
-</div></div>
 <div class="grid"><div aria-label="World Cup 2026 hero banner" class="hero" id="heroBanner">
 <div aria-hidden="true" class="heroSlides" id="heroSlides"></div>
 <div aria-hidden="true" class="heroFX">
@@ -3506,9 +3509,6 @@ function updateMatchDayMode(){
   }catch(_e){}
   try{ document.getElementById("matchBanner")?.classList.remove("show"); }catch(_e){}
   try{ document.getElementById("matchdayBox")?.classList.remove("show"); }catch(_e){}
-
-  // Fan Zone: pulse buttons when the next match is live (UI-only)
-  try{ if(window.__fzSetPulse && window.__fzComputeLive){ window.__fzSetPulse(window.__fzComputeLive(scheduleData && scheduleData.next_match)); } }catch(_e){}
 }
 
 // -----------------------
@@ -3955,9 +3955,8 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     const countryGrid = el("countryGrid");
     const supporterLabel = el("supporterLabel");
 
+    const pollCard = el("pollCard");
     const pollModal = el("pollModal");
-
-    const pollCard = el("pollCard"); // legacy (kept for backward compatibility)
     const pollList = el("pollListModal") || el("pollList");
 
     const drinkName = el("drinkName");
@@ -3972,36 +3971,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     const btnOpenPoll    = el("btnOpenPoll")    || el("fzIconPoll");
     const btnOpenQR      = el("btnOpenQR")      || el("btnSharePoster") || el("fzIconQR");
 
-    
-    // Live pulse on Fan Zone buttons when a match is live (UI-only)
-    function setFzLivePulse(on){
-      const targets = [
-        el("btnOpenPoll"), el("fzIconPoll"),
-        el("btnPickCountry"), el("fzIconCountry")
-      ].filter(Boolean);
-      targets.forEach(t=>{
-        if(on) t.classList.add("fz-livepulse");
-        else t.classList.remove("fz-livepulse");
-      });
-    }
-
-    function computeIsLiveFromMatch(match){
-      try{
-        if(!match) return false;
-        const ts = safeParseTimestamp(match.date, match.time);
-        if(!ts) return false;
-        const now = Date.now();
-        const pre = 15 * 60 * 1000;   // 15 minutes before kickoff
-        const post = 3 * 60 * 60 * 1000; // 3 hours after kickoff
-        return (now >= (ts - pre) && now <= (ts + post));
-      }catch(e){
-        return false;
-      }
-    }
-
-
-    try{ window.__fzSetPulse = setFzLivePulse; window.__fzComputeLive = computeIsLiveFromMatch; }catch(_e){}
-// LocalStorage keys
+    // LocalStorage keys
     const LS_SUPPORT = "fz_support_country";
     const LS_CLIENT  = "fz_client_id";
     const LS_VOTE    = "fz_poll_vote"; // {match_id, team}
@@ -4111,19 +4081,6 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
       modal.classList.add("show");
       // prevent page scroll while modal open
       document.body.style.overflow = "hidden";
-
-      // Auto-focus first selectable option (kiosk-friendly)
-      setTimeout(()=>{
-        const focusTarget =
-          modal.querySelector("[data-autofocus]") ||
-          modal.querySelector(".fz-country-grid button, .fz-country") ||
-          modal.querySelector("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])");
-        if(focusTarget && focusTarget.focus) focusTarget.focus({preventScroll:true});
-        else{
-          const panel = modal.querySelector(".panel");
-          if(panel && panel.focus) panel.focus({preventScroll:true});
-        }
-      }, 40);
     }
     function closeCountryModal(){
       if(!modal) return;
@@ -4226,24 +4183,22 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     function pct(n){ return Number.isFinite(n) ? n : 0; }
 
     function renderPoll(state){
-      if(!pollList) return;
+      if(!pollCard || !pollList) return;
+
+      // Ensure card is open/visible when rendering
+      pollCard.style.display = "block";
 
       const ok = !!(state && state.ok);
       if(!ok){
         pollList.innerHTML = `<div class="fz-muted">Poll unavailable.</div>`;
-        setFzLivePulse(false);
         return;
       }
 
       const m = state.match || {};
-      // pulse set after lock status computed
       const teams = [m.home, m.away].filter(Boolean);
       const counts = state.counts || {};
       const pcts = state.percentages || state.percent || {};
       const locked = !!state.locked;
-      const reason = String(state.lock_reason || state.locked_reason || state.reason || "");
-      const isLive = computeIsLiveFromMatch(m) || (locked && /kickoff/i.test(reason));
-      setFzLivePulse(isLive);
       const post = !!state.post_match;
       const winner = state.winner || "";
       const sponsor = (state.sponsor_text || "").trim();
@@ -4318,47 +4273,106 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
         const mid = state?.match?.id || "";
         if(mid) saveLocalVote(mid, team);
         renderPoll(state);
+        setPollLiveUI(state);
       }catch(e){
         // show error but keep UI usable
         if(pollList) pollList.innerHTML = `<div class="fz-muted">Vote failed. Please try again.</div>`;
       }
     }
 
-    function openPollModal(){
-      if(!pollModal) return;
-      pollModal.classList.add("show");
-      document.body.style.overflow = "hidden";
+    // --- Poll modal helpers (premium UX) ---
+    function setPollLiveUI(state){
+      // "Live" pulse is UI-only: show when voting is open OR we're inside a kickoff window.
+      // This keeps the premium pulse testable even when server auto-lock is enabled.
+      let live = false;
 
-      // Load live state, then autofocus first option (kiosk-friendly)
-      fetchPollState().then((s)=>{
-        renderPoll(s);
-        setTimeout(()=>{
-          const focusTarget =
-            pollModal.querySelector("[data-autofocus]") ||
-            pollModal.querySelector("#pollListModal button, #pollListModal [tabindex]:not([tabindex='-1']), button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])");
-          if(focusTarget && focusTarget.focus) focusTarget.focus({preventScroll:true});
-        }, 40);
-      }).catch(()=>{
-        renderPoll(null);
-        setTimeout(()=>{
-          const panel = pollModal.querySelector(".panel");
-          if(panel && panel.focus) panel.focus({preventScroll:true});
-        }, 40);
-      });
+      const lockedRaw = state && state.locked;
+      const locked = (lockedRaw === true) || (typeof lockedRaw === "string" && /locked/i.test(lockedRaw));
+      const postMatch = !!(state && state.post_match);
+
+      // If server says voting is open, it's live.
+      if(state && locked === false && !postMatch) live = true;
+
+      // Otherwise, consider it "live" within a kickoff time window (best-effort).
+      if(!live && state && state.match && !postMatch){
+        const dt = state.match.datetime_utc || state.match.kickoff || state.match.datetime || "";
+        if(dt){
+          const t = Date.parse(dt);
+          if(!Number.isNaN(t)){
+            const now = Date.now();
+            // Live window: 30 min before kickoff -> 2.5 hours after kickoff (typical match length + buffer)
+            if(now >= (t - 30*60*1000) && now <= (t + 150*60*1000)) live = true;
+          }
+        }
+      }
+
+      try{
+        document.getElementById("btnOpenPoll")?.classList.toggle("is-live", live);
+        document.getElementById("fzIconPoll")?.classList.toggle("is-live", live);
+      }catch(e){}
+    }
+
+    function focusPollModal(){
+      if(!pollModal) return;
+      // Prefer the first enabled vote button; otherwise fallback to Close.
+      const first = pollModal.querySelector(".voteBtn:not([disabled])")
+        || pollModal.querySelector("button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])");
+      if(first && typeof first.focus === "function"){
+        try{ first.focus({preventScroll:true}); }catch(e){ try{ first.focus(); }catch(_e){} }
+      }
+    }
+
+    let __fzLastFocus = null;
+
+    function openPollModal(){
+      // Always show rails when opening
+      document.body.classList.remove("fz-hidden");
+
+      __fzLastFocus = document.activeElement;
+
+      if(pollModal){
+        pollModal.classList.add("show");
+        // prevent page scroll while modal open
+        document.body.style.overflow = "hidden";
+      } else if(pollCard){
+        // Fallback (legacy): inline card
+        pollCard.style.display = "block";
+      }
+
+      // load live state
+      fetchPollState()
+        .then((state)=>{
+          renderPoll(state);
+          setPollLiveUI(state);
+          // autofocus after render (kiosk friendly)
+          requestAnimationFrame(()=>setTimeout(focusPollModal, 30));
+        })
+        .catch(()=>{
+          renderPoll(null);
+          setPollLiveUI(null);
+          requestAnimationFrame(()=>setTimeout(focusPollModal, 30));
+        });
     }
 
     function closePollModal(){
-      if(!pollModal) return;
-      pollModal.classList.remove("show");
-      document.body.style.overflow = "";
+      if(pollModal){
+        pollModal.classList.remove("show");
+        document.body.style.overflow = "";
+      }
+      if(pollCard) pollCard.style.display = "none";
+
+      // restore focus to where user came from (nice on kiosks/remotes)
+      if(__fzLastFocus && typeof __fzLastFocus.focus === "function"){
+        try{ __fzLastFocus.focus({preventScroll:true}); }catch(e){ try{ __fzLastFocus.focus(); }catch(_e){} }
+      }
+      __fzLastFocus = null;
     }
 
-    // legacy name kept so old handlers still work
-    function togglePoll(){ openPollModal(); }
-        }catch(e){}
-        // load live state
-        fetchPollState().then(renderPoll).catch(()=>renderPoll(null));
-      }
+    // Close when clicking backdrop (but not when clicking inside panel)
+    if(pollModal){
+      pollModal.addEventListener("click", (e)=>{
+        if(e.target === pollModal) closePollModal();
+      });
     }
 
     // ----- Wire up -----
@@ -4366,7 +4380,17 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     el("btnCloseCountry")?.addEventListener("click", (e)=>{ e.preventDefault(); closeCountryModal(); });
     el("btnClearCountry")?.addEventListener("click", (e)=>{ e.preventDefault(); clearSupport(); renderSupporter(); renderDrink(); closeCountryModal(); });
 
-    btnOpenPoll?.addEventListener("click", (e)=>{ e.preventDefault(); togglePoll(); });
+    // Keyboard: ESC closes open Fan Zone modals
+    document.addEventListener("keydown", (e)=>{
+      if(e.key === "Escape"){
+        closeCountryModal();
+        closePollModal();
+      }
+    });
+
+
+    btnOpenPoll?.addEventListener("click", (e)=>{ e.preventDefault(); openPollModal(); });
+    el("btnClosePoll")?.addEventListener("click", (e)=>{ e.preventDefault(); closePollModal(); });
 
     // Drinks panel is always visible; clicking should just ensure it's in view (within rail)
     el("fzIconDrinks")?.addEventListener("click", ()=>{
@@ -4386,20 +4410,6 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
       if(e.target === modal) closeCountryModal();
     });
 
-    // Poll modal close actions
-    el("btnClosePoll")?.addEventListener("click", (e)=>{ e.preventDefault(); closePollModal(); });
-    pollModal?.addEventListener("click", (e)=>{
-      if(e.target === pollModal) closePollModal();
-    });
-
-    // ESC closes whichever modal is open
-    document.addEventListener("keydown", (e)=>{
-      if(e.key === "Escape"){
-        if(pollModal?.classList.contains("show")) closePollModal();
-        if(modal?.classList.contains("show")) closeCountryModal();
-      }
-    });
-
     // ----- Init (never blocks UI) -----
     renderSupporter();
     renderDrink();
@@ -4411,7 +4421,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
       .catch(()=>{ buildCountryGrid(); });
 
     // Preload poll state quietly (so opening is instant)
-    fetchPollState().then(()=>{}).catch(()=>{});
+    fetchPollState().then(setPollLiveUI).catch(()=>{});
 
   }catch(e){
     // If anything goes wrong, don't block the rest of the app.
@@ -4438,12 +4448,24 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     ticking = true;
     requestAnimationFrame(()=>{
       const y = window.scrollY || 0;
-      const goingDown = y > lastY + 8;
-      const goingUp   = y < lastY - 8;
+
+      // Always keep rails interactive at the very top of the page
+      if(y < 40){
+        document.body.classList.remove("fz-hidden");
+        lastY = y;
+        ticking = false;
+        return;
+      }
+
+      const goingDown = y > lastY + 10;
+      const goingUp   = y < lastY - 10;
       lastY = y;
 
+      // Don’t auto-hide while the user is interacting with the rails
+      const hoverRail = document.body.classList.contains("fz-hovering");
+
       if(window.innerWidth >= 1200){
-        if(goingDown) document.body.classList.add("fz-hidden");
+        if(!hoverRail && goingDown && y > 120) document.body.classList.add("fz-hidden");
         if(goingUp) document.body.classList.remove("fz-hidden");
       } else {
         document.body.classList.remove("fz-hidden");
@@ -4453,6 +4475,20 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   }
   window.addEventListener("scroll", onScroll, {passive:true});
   window.addEventListener("resize", ()=>{ if(window.innerWidth < 1200) document.body.classList.remove("fz-hidden"); });
+  // If the user moves the mouse into the rails, keep them visible & clickable
+  const __fzLeft = document.getElementById("fanZoneLeft");
+  const __fzRight = document.getElementById("fanZoneRight");
+  [__fzLeft, __fzRight].forEach((rail)=>{
+    if(!rail) return;
+    rail.addEventListener("mouseenter", ()=>{
+      document.body.classList.add("fz-hovering");
+      document.body.classList.remove("fz-hidden");
+    });
+    rail.addEventListener("mouseleave", ()=>{
+      document.body.classList.remove("fz-hovering");
+    });
+  });
+
 
   // Collapse toggle
   function toggleCollapse(){ document.body.classList.toggle("fz-collapsed"); }
