@@ -2395,6 +2395,16 @@ body.kiosk-mode *::-webkit-scrollbar{
   border-radius: 999px;
 }
 .fanzone-left .fanzone{ margin-top: 14px; } /* ensures visible gap even if VIP collapses */
+
+/* === Fan Zone click-safety override (prevents any invisible layers from blocking) === */
+@media(min-width:1200px){
+  .fz-left-stack{ z-index: 220 !important; pointer-events: auto !important; }
+  .vip-rail{ z-index: 230 !important; pointer-events: auto !important; }
+  .fanzone-left, .fanzone-right{ z-index: 210 !important; pointer-events: auto !important; }
+}
+/* Non-interactive decorative overlays should never capture clicks */
+.heroOverlay, .scrollGlow{ pointer-events: none !important; }
+
 </style>
 </head>
 <body>
