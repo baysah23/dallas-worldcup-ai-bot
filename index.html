@@ -2502,320 +2502,49 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 
 /* =========================
-   DEVICE-INTELLIGENT UI (SAFE, UI-only)
-   - Mobile: quick actions
-   - Tablet: lounge mode spacing + touch targets
-   - TV/Kiosk: suppress inputs + amplify visuals
-   ========================= */
-.devicebar{
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  z-index: 9000;
-  display: none;
-  gap: 10px;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border-radius: 16px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(7,16,34,.78);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 18px 40px rgba(0,0,0,.35);
-}
-.devicebar .devicebar-row{
-  display:flex;
-  gap: 8px;
-  align-items:center;
-  justify-content:space-between;
-  width:100%;
-}
-.devicebar-btn{
-  flex: 1 1 auto;
-  min-width: 0;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(255,255,255,.06);
-  color: var(--text);
-  padding: 10px 12px;
-  border-radius: 14px;
-  font-size: 12px;
-  font-weight: 900;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  cursor: pointer;
-}
-.devicebar-btn.primary{
-  border-color: rgba(212,175,55,.28);
-  background: linear-gradient(135deg, rgba(212,175,55,.22), rgba(255,255,255,.06));
-}
-.devicebar-btn:active{ transform: translateY(1px); }
-.devicebar-btn .mini{ font-size: 10px; opacity:.85; font-weight:800; letter-spacing:.04em; }
-
-.kioskToggle{
-  position: fixed;
-  right: 14px;
-  bottom: 14px;
-  z-index: 9001;
-  display: none;
-  border-radius: 999px;
-  padding: 10px 12px;
-  border: 1px solid rgba(255,255,255,.16);
-  background: rgba(0,0,0,.22);
-  color: var(--text);
-  font-weight: 900;
-  cursor: pointer;
-  box-shadow: 0 14px 35px rgba(0,0,0,.35);
-}
-
-/* MOBILE: quick actions + extra bottom padding so content isn't hidden */
-body.mode-mobile .devicebar{ display:flex; }
-body.mode-mobile .wrap{ padding-bottom: 74px; }
-body.mode-mobile .grid{ padding-bottom: 86px; }
-body.mode-mobile .composer textarea{ height: 42px; }
-body.mode-mobile button{ min-width: 0; }
-
-/* TABLET: lounge mode — more breathing room, slightly larger controls */
-body.mode-tablet .devicebar{ display:flex; bottom: 14px; left: 18px; right: 18px; }
-body.mode-tablet .wrap{ padding-bottom: 76px; }
-body.mode-tablet .grid{ gap: 16px; padding: 16px; }
-body.mode-tablet .bubble{ font-size: 13.5px; }
-body.mode-tablet .composer textarea{ height: 46px; }
-body.mode-tablet button{ padding: 11px 14px; }
-
-/* KIOSK/TV: amplify visuals, suppress inputs (but reversible) */
-body.mode-kiosk .hero{ height: 240px; }
-body.mode-kiosk .grid{ grid-template-columns: 1.65fr .35fr; }
-body.mode-kiosk .pill{ font-size: 12px; padding: 7px 11px; }
-body.mode-kiosk .bubble{ font-size: 13px; }
-body.mode-kiosk.kiosk-inputs-off .composer,
-body.mode-kiosk.kiosk-inputs-off #helperHint{
-  opacity: 0;
-  pointer-events: none;
-  height: 0;
-  padding: 0 !important;
-  margin: 0 !important;
-  overflow: hidden;
-  border: 0;
-}
-body.mode-kiosk.kiosk-inputs-off .kioskToggle{ display: inline-flex; }
-body.mode-kiosk.kiosk-inputs-off .devicebar{ display:none; } /* keep screen clean */
-body.mode-kiosk .banner.show{ animation: none; } /* calmer on big screens */
-
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce){
-  .devicebar, .kioskToggle{ backdrop-filter:none; -webkit-backdrop-filter:none; }
-}
-
-
-/* =========================
-   MOBILE/TABLET: KEEP DESKTOP EXPERIENCE
-   - Inline the side rails into the main flow
-   - Ensure hero + chat are visible/usable
-   ========================= */
-body.mode-mobile, body.mode-tablet{
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-}
-
-/* Force side-rails + VIP into normal flow on small devices */
-body.mode-mobile .fanzone-left,
-body.mode-mobile .fanzone-right,
-body.mode-mobile #vipHoldRail,
-body.mode-tablet .fanzone-left,
-body.mode-tablet .fanzone-right,
-body.mode-tablet #vipHoldRail{
-  position: static !important;
-  top: auto !important;
-  left: auto !important;
-  right: auto !important;
-  width: auto !important;
-  max-height: none !important;
-  overflow: visible !important;
-  z-index: auto !important;
-  transform: none !important;
-}
-
-/* Make sure main grid/cards aren't hidden behind fixed UI */
-body.mode-mobile .wrap,
-body.mode-tablet .wrap{
-  padding-bottom: 86px; /* room for device bar */
-}
-
-/* In mobile/tablet, stack: HERO -> CHAT -> FAN ZONE/VIP -> SCHEDULE */
-body.mode-mobile .grid,
-body.mode-tablet .grid{
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-body.mode-mobile .hero,
-body.mode-tablet .hero{
-  order: 0;
-}
-
-body.mode-mobile .leftcol,
-body.mode-tablet .leftcol{
-  order: 1;
-}
-
-body.mode-mobile #fanZoneLeft,
-body.mode-mobile #vipHoldRail,
-body.mode-tablet #fanZoneLeft,
-body.mode-tablet #vipHoldRail{
-  order: 2;
-}
-
-/* Sidebar (schedule) last on mobile/tablet */
-body.mode-mobile .card[style*="flex-direction:column"][style*="min-height:0"],
-body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
-  order: 3;
-}
-
-/* Ensure hero isn't visually covered by any rail on mobile */
-@media (max-width: 950px){
-  .fanzone-left, .fanzone-right{
-    width: auto !important;
-    margin: 0 10px 10px 10px;
-  }
-}
-
-
-/* =========================
-   MOBILE CLEAN LAYOUT (Safari-friendly, parity)
-   - Forces single-column flow
-   - Disables fixed side rails
-   - Reduces blur/backdrop that can look "fuzzy" on iOS
+   MOBILE PREMIUM (NO-JS, SAFE)
+   - Keep same features as desktop, stacked cleanly
+   - Remove fixed rails/overlays that block touch
    ========================= */
 @media (max-width: 950px){
-  body{
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
+  body{ overflow-x:hidden; }
+  .wrap{ padding: 10px 0 18px 0 !important; }
 
-  /* Always show the hero on mobile */
-  .hero{ display:block !important; }
-
-  /* Make the entire app a clean single column */
+  /* Single-column stack: HERO -> CHAT/MENU -> FAN ZONE -> SCHEDULE */
   .grid{
     display:flex !important;
     flex-direction:column !important;
-    gap:14px !important;
-    padding:12px !important;
+    gap: 14px !important;
+    padding: 12px !important;
   }
+
+  /* Hero stays on top and fully visible */
+  .hero{
+    height: 190px !important;
+    margin: 0 !important;
+  }
+  .heroOverlay, .heroFX, .heroSlide::before, .heroSlide::after{
+    pointer-events:none !important;
+  }
+
+  /* Left column becomes normal flow */
   .leftcol{
     display:flex !important;
     flex-direction:column !important;
-    gap:14px !important;
+    gap: 14px !important;
   }
-
-  /* Menu becomes an expandable compact strip */
   .menucard{ max-width: none !important; }
-  .menu{ max-height: 180px !important; }
 
-  /* Ensure chat is front-and-center */
-  .chatcard{ min-height: 420px; }
-
-  /* Kill desktop rail positioning */
-  .fz-left-stack,
-  .fanzone-left,
-  .fanzone-right,
-  #vipHoldRail{
-    position: static !important;
-    top:auto !important; left:auto !important; right:auto !important;
-    width: auto !important;
-    max-height: none !important;
-    overflow: visible !important;
-    transform: none !important;
-    z-index: auto !important;
-  }
-
-  /* Give VIP + Fan Zone full width and consistent spacing */
-  #vipHoldRail, #fanZoneLeft{
-    margin: 0 !important;
-  }
-
-  /* Remove heavy blur effects that look fuzzy on iOS */
-  .devicebar,
-  #pager,
-  .heroCaption,
-  .fz-modal .panel{
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-  .devicebar{
-    background: rgba(7,16,34,.92) !important;
-    box-shadow: 0 14px 34px rgba(0,0,0,.35) !important;
-  }
-  #pager{
-    background: rgba(7,16,34,.95) !important;
-  }
-
-  /* Avoid tiny text looking soft */
-  .menu{ font-size: 10px !important; }
-  .pill{ font-size: 11px !important; }
-}
-
-
-/* =========================
-   MOBILE PARITY POLISH
-   - Put Chat back into the primary flow
-   - Move Fan Zone panels under Chat
-   - Reduce clutter + improve legibility
-   ========================= */
-@media (max-width: 950px){
-  /* Make hero fully readable on phones */
-  .hero{ height: 190px !important; margin: 10px 10px 6px 10px !important; }
-  .heroTitle{ font-size: 18px !important; }
-  .heroSub{ max-width: none !important; }
-
-  /* Chat should be obvious + usable */
-  .chatcard{ min-height: 520px !important; }
-  #chat{ max-height: 520px !important; }
-
-  /* Fan Zone rails become normal cards */
-  .fanzone{ border-radius: 16px !important; }
-  .fz-actions{ justify-content: flex-start !important; }
-
-  /* Reduce "fuzzy" blur effects on iOS */
-  .cardhead{ background: rgba(0,0,0,.10) !important; }
-  .heroCaption{ background: rgba(0,0,0,.40) !important; }
-
-  /* Keep device bar but don't let it obscure content */
-  .devicebar{ left: 10px !important; right: 10px !important; bottom: 10px !important; }
-  body{ padding-bottom: 96px !important; }
-}
-
-
-
-
-@media (max-width: 950px){
-  /* Chat container must have explicit height on mobile (100% can collapse in column flow) */
-  .chatcard{ height: auto !important; min-height: 0 !important; }
-  #chat{ height: 360px !important; max-height: 360px !important; }
-}
-
-
-/* Hide empty menu pill (removes "4 languages") */
-#menuPill:empty{ display:none !important; }
-
-
-/* =========================
-   MOBILE: MENU TITLE TOGGLE (single label)
-   - Click "Menu" header to expand/collapse
-   ========================= */
-@media (max-width: 950px){
+  /* Menu: default collapsed, tap title to expand */
   #menuTitle{
-    cursor: pointer;
+    cursor:pointer;
     padding: 7px 10px;
     border-radius: 999px;
     border: 1px solid rgba(255,255,255,.14);
     background: rgba(0,0,0,.14);
-    user-select: none;
-    letter-spacing: .08em;
-    text-transform: uppercase;
+    user-select:none;
+    letter-spacing:.08em;
+    text-transform:uppercase;
     font-size: 11px;
   }
   body.menu-collapsed .menucard .menu{ display:none !important; }
@@ -2824,44 +2553,31 @@ body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
     max-height: 260px !important;
     overflow:auto !important;
   }
-}
 
+  /* Chat: stable height + comfortable input */
+  .chatcard{ height:auto !important; min-height: 520px !important; }
+  #chat{ height: 360px !important; max-height: 360px !important; overflow-y:auto !important; }
+  .composer textarea{ min-height: 44px !important; }
 
-/* =========================
-   MOBILE TOUCH FIX (critical)
-   - Removes fixed overlays that can block taps/typing on iOS
-   - Keeps all core UI interactive
-   ========================= */
-
-
-  /* Ensure the interactive app surfaces are on top */
-  .card, .leftcol, .chatcard, .composer, textarea, button,
-  #chat, #msg, #sendBtn, #clearBtn{
-    pointer-events: auto !important;
-  }
-
-  /* Prevent any side-rail container from becoming a full-screen layer */
+  /* Fan Zone rails become normal cards (no fixed positioning) */
   .fz-left-stack, .fanzone-left, .fanzone-right, #vipHoldRail{
     position: static !important;
-    inset: auto !important;
-    height: auto !important;
+    top:auto !important; left:auto !important; right:auto !important;
+    width: auto !important;
     max-height: none !important;
-    pointer-events: auto !important;
+    overflow: visible !important;
+    transform:none !important;
+    z-index: auto !important;
   }
-}
 
+  /* Pager should not be fixed on mobile (can block taps) */
+  #pager{ position: static !important; }
 
-/* =========================
-   MOBILE FIX PATCH (runtime + conflicts)
-   ========================= */
-@media (max-width: 950px){
-  /* Ensure devicebar can show on mode-mobile (override any blanket hides) */
-  body.mode-mobile .devicebar { display: flex !important; }
-  body.mode-mobile .kioskToggle { display: none !important; } /* kiosk button not needed on phones */
-
-  /* Stable chat sizing for column flow */
-  .chatcard { height: auto !important; min-height: 520px !important; }
-  #chat { height: 360px !important; max-height: 360px !important; overflow-y: auto !important; }
+  /* Reduce blur that looks “fuzzy” on iOS */
+  .cardhead, .devicebar, #pager, .heroCaption{
+    backdrop-filter:none !important;
+    -webkit-backdrop-filter:none !important;
+  }
 }
 
 </style>
@@ -3005,8 +2721,7 @@ body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
 <div class="card menucard" style="display:flex;flex-direction:column;min-height:0; max-width:190px;">
 <div class="cardhead">
 <div class="title" id="menuTitle">Menu</div>
-<div class="pill" id="menuPill"></div>
-</div>
+<div class="pill" id="menuPill">4 languages</div></div>
 <div class="menu" id="menu"></div>
 </div>
 <!-- Chat / Reservations -->
@@ -3062,180 +2777,6 @@ body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
 <button class="secondary" id="nextPage" style="min-width:88px;">Next</button></div>
 </div></div>
 </div>
-
-
-<!-- DEVICE BAR (UI-only): mobile/tablet quick actions -->
-<div class="devicebar" id="deviceBar" aria-label="Quick actions">
-  <div class="devicebar-row">
-    <button class="devicebar-btn primary" data-action="reservation">Reserve</button>
-    <button class="devicebar-btn" data-action="dallas"><span class="mini">Dallas</span></button>
-    <button class="devicebar-btn" data-action="all"><span class="mini">All</span></button>
-    <button class="devicebar-btn" data-action="menu"><span class="mini">Menu</span></button>
-  </div>
-</div>
-
-<!-- KIOSK: temporary input re-enable (UI-only) -->
-<button class="kioskToggle" id="kioskToggle" type="button" aria-label="Enable chat input">Enable Chat</button>
-
-<!-- DEVICE MODE (UI-only) -->
-<script>
-(function(){
-  function getParam(name){
-    try{
-      const u = new URL(window.location.href);
-      return u.searchParams.get(name);
-    }catch(e){ return null; }
-  }
-
-  function detectMode(){
-    // Explicit overrides (safest)
-    const qp = (getParam("mode") || "").toLowerCase();
-    if(qp === "mobile" || qp === "tablet" || qp === "kiosk" || qp === "tv") return (qp === "tv" ? "kiosk" : qp);
-
-    const stored = (localStorage.getItem("wc_mode") || "").toLowerCase();
-    if(stored === "mobile" || stored === "tablet" || stored === "kiosk") return stored;
-
-    const w = window.innerWidth || 0;
-    const h = window.innerHeight || 0;
-    const ua = navigator.userAgent || "";
-    const isTouch = (navigator.maxTouchPoints || 0) > 0 || (window.matchMedia && matchMedia("(pointer: coarse)").matches);
-    const hasHover = (window.matchMedia && matchMedia("(hover: hover)").matches);
-
-    // TV/large display heuristics (conservative)
-    const looksLikeTV = /(SmartTV|Tizen|Web0S|CrKey|Android TV|GoogleTV|AppleTV|HbbTV)/i.test(ua);
-    if(looksLikeTV || (w >= 1500 && h >= 800 && !isTouch && !hasHover)) return "kiosk";
-
-    // Mobile first
-    if(w <= 680) return "mobile";
-
-    // Tablet
-    if(w <= 1120 || (isTouch && w <= 1280)) return "tablet";
-
-    // Desktop default (no special class)
-    return "desktop";
-  }
-
-  function applyMode(){
-    const body = document.body;
-    if(!body) return;
-
-    const mode = detectMode();
-    body.classList.remove("mode-mobile","mode-tablet","mode-kiosk");
-
-    if(mode === "mobile") body.classList.add("mode-mobile");
-    else if(mode === "tablet") body.classList.add("mode-tablet");
-    else if(mode === "kiosk") body.classList.add("mode-kiosk");
-
-    // Kiosk behavior: suppress inputs by default (but reversible)
-    if(mode === "kiosk"){
-      body.classList.add("kiosk-inputs-off");
-      const btn = document.getElementById("kioskToggle") || document.querySelector(".kioskToggle");
-      if(btn){
-        btn.onclick = () => {
-          body.classList.remove("kiosk-inputs-off");
-          localStorage.setItem("wc_mode", "kiosk"); // keep mode, inputs on for this device
-          try{ document.getElementById("msg")?.focus(); }catch(e){}
-        };
-      }
-    }else{
-      body.classList.remove("kiosk-inputs-off");
-    }
-  }
-
-  // Wire quick actions safely (no backend changes)
-  
-  // On mobile/tablet: move VIP + Fan Zone into the main grid so users see HERO + CHAT + FAN ZONE like desktop
-  
-  // On mobile/tablet: move VIP + Fan Zone into the main grid so users see HERO + CHAT + FAN ZONE like desktop
-  function reflowForSmallDevices(){
-    const body = document.body;
-    if(!body) return;
-    const isMobile = body.classList.contains("mode-mobile");
-    const isTablet = body.classList.contains("mode-tablet");
-    if(!isMobile && !isTablet) return;
-
-    const grid = document.querySelector(".grid");
-    if(!grid) return;
-
-    const leftcol = document.querySelector(".leftcol");
-    const anchor = (leftcol && leftcol.parentElement === grid) ? leftcol : null;
-
-    // Use let so we can null-out safely
-    let vip = document.getElementById("vipHoldRail") || document.querySelector("#vipHoldRail") || document.querySelector(".vipHoldRail");
-    let fz  = document.getElementById("fanZoneLeft") || document.querySelector(".fanzone-left") || document.querySelector("#fanZoneLeft");
-
-    // If already moved, skip moving that node
-    if(vip && vip.dataset && vip.dataset.moved === "1") vip = null;
-    if(fz  && fz.dataset  && fz.dataset.moved === "1")  fz = null;
-
-    // Insert order: VIP then Fan Zone (both full width)
-    if(anchor){
-      if(vip){ vip.dataset.moved = "1"; anchor.insertAdjacentElement("afterend", vip); }
-      if(fz){  fz.dataset.moved = "1"; (vip ? vip : anchor).insertAdjacentElement("afterend", fz); }
-    }else{
-      const hero = document.getElementById("heroBanner") || document.querySelector(".hero");
-      if(hero){
-        if(vip){ vip.dataset.moved = "1"; hero.insertAdjacentElement("afterend", vip); }
-        if(fz){  fz.dataset.moved = "1"; (vip ? vip : hero).insertAdjacentElement("afterend", fz); }
-      }
-    }
-  }
-
-    }
-  }
-
-function wireActions(){
-    const bar = document.getElementById("deviceBar") || document.querySelector(".devicebar");
-    if(!bar) return;
-    bar.addEventListener("click", (e) => {
-      const btn = e.target.closest("button[data-action]");
-      if(!btn) return;
-      const action = btn.getAttribute("data-action");
-
-      // helpers if your existing functions exist
-      const setMsg = (v) => { const t = document.getElementById("msg"); if(t){ t.value = v; t.focus(); } };
-      const clickId = (id) => { const el = document.getElementById(id); if(el){ el.click(); return true; } return false; };
-
-      if(action === "reservation"){
-        // your app already responds to "reservation"
-        setMsg("reservation");
-        // prefer existing send handler
-        if(!clickId("sendBtn")){
-          try{ window.sendMessage && window.sendMessage(); }catch(e){}
-        }
-      }
-      if(action === "dallas"){
-        // scope toggle buttons exist in most versions; fall back to API var
-        if(!clickId("scopeDallasBtn") && !clickId("btnDallas")){ try{ window.setScope && window.setScope("dallas"); }catch(e){} }
-        // scroll schedule into view
-        try{ document.getElementById("scheduleList")?.scrollIntoView({behavior:"smooth", block:"start"}); }catch(e){}
-      }
-      if(action === "all"){
-        if(!clickId("scopeAllBtn") && !clickId("btnAll")){ try{ window.setScope && window.setScope("all"); }catch(e){} }
-        try{ document.getElementById("scheduleList")?.scrollIntoView({behavior:"smooth", block:"start"}); }catch(e){}
-      }
-      if(action === "menu"){
-        // Menu panel is already visible; scroll to it on small screens
-        try{ document.getElementById("menuTitle")?.scrollIntoView({behavior:"smooth", block:"start"}); }catch(e){}
-      }
-    });
-  }
-
-  // Run
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", () => { applyMode(); reflowForSmallDevices(); wireActions(); });
-  }else{
-    applyMode(); reflowForSmallDevices(); wireActions();
-  }
-
-  // Re-evaluate on resize (debounced)
-  let t=null;
-  window.addEventListener("resize", () => {
-    clearTimeout(t);
-    t = setTimeout(() => { applyMode(); reflowForSmallDevices(); }, 160);
-  });
-})();
-</script>
 
 <script>
 /**
@@ -5212,77 +4753,45 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
 </script>
 
 <script>
-/* MOBILE: start Extras collapsed for cleanliness (UI-only) */
+/* MOBILE MENU TOGGLE (UI-only, safe) */
 (function(){
   function isSmall(){ return (window.innerWidth||0) <= 950; }
-  function collapseExtras(){
-    if(!isSmall()) return;
-    const right = document.getElementById("fanZoneRight");
-    const btn = document.getElementById("fzCollapseToggle2");
-    if(right && btn){
-      // If your existing toggle handler uses "collapsed" class, apply it.
-      right.classList.add("collapsed");
-    }
+  function setLabel(){
+    const t = document.getElementById("menuTitle");
+    if(!t) return;
+    const base = "Menu";
+    if(!isSmall()){ t.textContent = base; return; }
+    t.textContent = document.body.classList.contains("menu-expanded") ? (base + " ▾") : (base + " ▸");
   }
-  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", collapseExtras);
-  else collapseExtras();
-})();
-</script>
-
-
-
-<script>
-/* MOBILE MENU via title toggle (UI-only) */
-(function(){
-  function isSmall(){ return (window.innerWidth||0) <= 950; }
   function applyDefault(){
-    const body = document.body;
-    if(!body) return;
-
-    if(isSmall()){
-      const pref = localStorage.getItem("wc_menu_pref") || "collapsed";
-      body.classList.remove("menu-collapsed","menu-expanded");
-      body.classList.add(pref === "expanded" ? "menu-expanded" : "menu-collapsed");
-    }else{
-      body.classList.remove("menu-collapsed","menu-expanded");
+    if(!isSmall()){
+      document.body.classList.remove("menu-collapsed","menu-expanded");
+      setLabel();
+      return;
     }
+    const pref = localStorage.getItem("wc_menu_pref") || "collapsed";
+    document.body.classList.remove("menu-collapsed","menu-expanded");
+    document.body.classList.add(pref === "expanded" ? "menu-expanded" : "menu-collapsed");
+    setLabel();
   }
   function toggle(){
-    const body = document.body;
-    if(!body || !isSmall()) return;
-    const nowExpanded = !body.classList.contains("menu-expanded");
-    body.classList.toggle("menu-expanded", nowExpanded);
-    body.classList.toggle("menu-collapsed", !nowExpanded);
+    if(!isSmall()) return;
+    const nowExpanded = !document.body.classList.contains("menu-expanded");
+    document.body.classList.toggle("menu-expanded", nowExpanded);
+    document.body.classList.toggle("menu-collapsed", !nowExpanded);
     localStorage.setItem("wc_menu_pref", nowExpanded ? "expanded" : "collapsed");
+    setLabel();
   }
   function wire(){
-    const title = document.getElementById("menuTitle");
-    if(title){
-      // Add a subtle chevron indicator via text (no extra icons)
-      const base = title.textContent.trim() || "Menu";
-      const setLabel = () => {
-        const body = document.body;
-        if(!body || !isSmall()){ title.textContent = base; return; }
-        title.textContent = body.classList.contains("menu-expanded") ? (base + " ▾") : (base + " ▸");
-      };
-      title.addEventListener("click", () => { toggle(); setLabel(); });
-      // Update label on load/resize
-      setTimeout(setLabel, 0);
-      window.addEventListener("resize", () => setTimeout(setLabel, 0));
-      // Also update when default is applied
-      document.addEventListener("DOMContentLoaded", setLabel);
-    }
+    const t = document.getElementById("menuTitle");
+    if(t) t.addEventListener("click", toggle);
   }
   if(document.readyState==="loading"){
-    document.addEventListener("DOMContentLoaded", () => { applyDefault(); wire(); });
+    document.addEventListener("DOMContentLoaded", ()=>{ wire(); applyDefault(); });
   }else{
-    applyDefault(); wire();
+    wire(); applyDefault();
   }
-  let t=null;
-  window.addEventListener("resize", () => {
-    clearTimeout(t);
-    t=setTimeout(applyDefault, 140);
-  });
+  window.addEventListener("resize", ()=>{ setTimeout(applyDefault, 150); });
 })();
 </script>
 
