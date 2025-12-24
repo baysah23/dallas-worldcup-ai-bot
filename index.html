@@ -1199,6 +1199,25 @@ body.phase-finals{ background: var(--phaseF); }
   cursor:pointer;
 }
 .fz-btn:hover{ transform: translateY(-1px); }
+
+/* Live pulse (UI-only): subtle premium glow when poll is live */
+@keyframes fzLivePulse{
+  0%   { box-shadow: 0 0 0 rgba(212,175,55,0); }
+  55%  { box-shadow: 0 0 18px rgba(212,175,55,.22); }
+  100% { box-shadow: 0 0 0 rgba(212,175,55,0); }
+}
+#btnOpenPoll.is-live{
+  animation: fzLivePulse 2.2s ease-in-out infinite;
+  border-color: rgba(212,175,55,.35);
+}
+#fzIconPoll.is-live{
+  animation: fzLivePulse 2.2s ease-in-out infinite;
+  border-color: rgba(212,175,55,.35);
+}
+@media (prefers-reduced-motion: reduce){
+  #btnOpenPoll.is-live, #fzIconPoll.is-live{ animation:none !important; }
+}
+
 .fz-grid{
   display:grid;
   grid-template-columns: repeat(12, 1fr);
@@ -1221,10 +1240,23 @@ body.phase-finals{ background: var(--phaseF); }
 
 /* Modal */
 .fz-modal{
-  position:fixed; inset:0; display:none; align-items:center; justify-content:center;
-  background: rgba(0,0,0,.55); z-index: 9999;
+  position:fixed; inset:0;
+  display:flex;
+  align-items:center; justify-content:center;
+  background: rgba(0,0,0,.55);
+  z-index: 9999;
+
+  /* Hidden by default, but still transitionable */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 220ms ease;
 }
-.fz-modal.show{ display:flex; }
+.fz-modal.show{
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
 .fz-modal .panel{
   width:min(720px, 92vw);
   border:1px solid var(--line);
@@ -1232,8 +1264,21 @@ body.phase-finals{ background: var(--phaseF); }
   background: rgba(10,18,40,.92);
   padding: 14px;
   box-shadow: 0 20px 60px rgba(0,0,0,.55);
+
+  /* Premium open motion */
+  transform: translateY(12px) scale(.99);
+  opacity: 0;
+  transition: transform 240ms cubic-bezier(.2,.9,.2,1), opacity 240ms ease;
+}
+.fz-modal.show .panel{
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce){
+  .fz-modal, .fz-modal .panel{ transition: none !important; transform:none !important; }
 }
 .fz-modal .panel h2{ margin:0 0 10px 0; font-size: 16px; }
+
 .fz-country-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; }
 @media(min-width: 900px){ .fz-country-grid{ grid-template-columns: repeat(5, 1fr); } }
 .fz-country{
@@ -4213,28 +4258,76 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
         const mid = state?.match?.id || "";
         if(mid) saveLocalVote(mid, team);
         renderPoll(state);
+        setPollLiveUI(state);
       }catch(e){
         // show error but keep UI usable
         if(pollList) pollList.innerHTML = `<div class="fz-muted">Vote failed. Please try again.</div>`;
       }
     }
 
+    // --- Poll modal helpers (premium UX) ---
+    function setPollLiveUI(state){
+      const live = !!(state && state.locked === false && state.post_match !== true);
+      try{
+        document.getElementById("btnOpenPoll")?.classList.toggle("is-live", live);
+        document.getElementById("fzIconPoll")?.classList.toggle("is-live", live);
+      }catch(e){}
+    }
+
+    function focusPollModal(){
+      if(!pollModal) return;
+      // Prefer the first enabled vote button; otherwise fallback to Close.
+      const first = pollModal.querySelector(".voteBtn:not([disabled])")
+        || pollModal.querySelector("button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])");
+      if(first && typeof first.focus === "function"){
+        try{ first.focus({preventScroll:true}); }catch(e){ try{ first.focus(); }catch(_e){} }
+      }
+    }
+
+    let __fzLastFocus = null;
+
     function openPollModal(){
       // Always show rails when opening
       document.body.classList.remove("fz-hidden");
+
+      __fzLastFocus = document.activeElement;
+
       if(pollModal){
         pollModal.classList.add("show");
+        // prevent page scroll while modal open
+        document.body.style.overflow = "hidden";
       } else if(pollCard){
         // Fallback (legacy): inline card
         pollCard.style.display = "block";
       }
+
       // load live state
-      fetchPollState().then(renderPoll).catch(()=>renderPoll(null));
+      fetchPollState()
+        .then((state)=>{
+          renderPoll(state);
+          setPollLiveUI(state);
+          // autofocus after render (kiosk friendly)
+          requestAnimationFrame(()=>setTimeout(focusPollModal, 30));
+        })
+        .catch(()=>{
+          renderPoll(null);
+          setPollLiveUI(null);
+          requestAnimationFrame(()=>setTimeout(focusPollModal, 30));
+        });
     }
 
     function closePollModal(){
-      if(pollModal) pollModal.classList.remove("show");
+      if(pollModal){
+        pollModal.classList.remove("show");
+        document.body.style.overflow = "";
+      }
       if(pollCard) pollCard.style.display = "none";
+
+      // restore focus to where user came from (nice on kiosks/remotes)
+      if(__fzLastFocus && typeof __fzLastFocus.focus === "function"){
+        try{ __fzLastFocus.focus({preventScroll:true}); }catch(e){ try{ __fzLastFocus.focus(); }catch(_e){} }
+      }
+      __fzLastFocus = null;
     }
 
     // Close when clicking backdrop (but not when clicking inside panel)
@@ -4290,7 +4383,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
       .catch(()=>{ buildCountryGrid(); });
 
     // Preload poll state quietly (so opening is instant)
-    fetchPollState().then(()=>{}).catch(()=>{});
+    fetchPollState().then(setPollLiveUI).catch(()=>{});
 
   }catch(e){
     // If anything goes wrong, don't block the rest of the app.
