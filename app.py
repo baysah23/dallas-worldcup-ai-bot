@@ -4,7 +4,6 @@ load_dotenv()
 import os
 import json
 import re
-import html
 import time
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
@@ -1246,7 +1245,7 @@ QUALIFIED_SOURCE_URL = os.environ.get(
     "QUALIFIED_SOURCE_URL",
     # Prefer the main tournament page's "Qualified teams" table.
     # It updates as teams qualify and is less likely to include non-team rows.
-    "https://en.wikipedia.org/api/rest_v1/page/html/2026_FIFA_World_Cup_qualification",
+    "https://en.wikipedia.org/wiki/2026_FIFA_World_Cup",
 )
 
 def _local_country_list() -> List[str]:
@@ -1266,27 +1265,29 @@ def _fetch_qualified_teams_remote() -> List[str]:
     """
     Fetch the *currently qualified* 2026 World Cup teams from Wikipedia (best-effort).
 
-    We use the MediaWiki API for the "2026 FIFA World Cup qualification" page and
-    extract the "Qualified teams" table specifically. This avoids accidentally
-    returning hundreds of FIFA members.
+    This intentionally mirrors the older, proven logic in your last known working version:
+    - fetch the HTML page
+    - find the "Qualified teams" section
+    - parse the first wikitable that follows
+    - return the team names from the first column
+
+    If anything fails, return [] so callers can fall back to the cached/host list.
     """
-    url = QUALIFIED_SOURCE_URL
     import urllib.request
 
-    # 1) Fetch HTML (or MediaWiki parse JSON containing HTML)
     req = urllib.request.Request(
-        url,
+        QUALIFIED_SOURCE_URL,
         headers={"User-Agent": "worldcup-concierge/1.0"},
         method="GET",
     )
-    with urllib.request.urlopen(req, timeout=12) as resp:
-        raw = resp.read().decode("utf-8", errors="ignore")
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        html = resp.read().decode("utf-8", errors="replace")
 
-    html_blob = raw
-    # If user configured MediaWiki API JSON, extract the HTML blob.
-    if raw.lstrip().startswith("{"):
+    # Some endpoints can return JSON with an embedded HTML blob; unwrap if so.
+    html_blob = html
+    if html.lstrip().startswith("{"):
         try:
-            data = json.loads(raw)
+            data = json.loads(html)
             html_blob = (data.get("parse", {}).get("text", {}) or {}).get("*", "") or ""
         except Exception:
             html_blob = ""
@@ -1294,130 +1295,63 @@ def _fetch_qualified_teams_remote() -> List[str]:
     if not html_blob:
         return []
 
-    # 2) Find the "Qualified teams" section and then choose the most likely table.
-    # We do NOT assume the first table is the right one (Wikipedia pages often have
-    # navigation/other tables near section headers).
-    anchor_pos = -1
-    for anchor in (
-        'id="Qualified_teams"',
-        'id="Qualified_teams_and_rankings"',
-        'id="Qualified_teams_and_rankings"',
-        'id="Qualified_teams_and_rankings"',
-    ):
-        anchor_pos = html_blob.find(anchor)
-        if anchor_pos != -1:
-            break
-    if anchor_pos == -1:
-        # Some renderings use a <span id="Qualified_teams"> marker.
-        anchor_pos = html_blob.find('<span id="Qualified_teams"')
-    if anchor_pos == -1:
+    # Find the Qualified teams anchor (Wikipedia uses this id)
+    anchor = 'id="Qualified_teams"'
+    i = html_blob.find(anchor)
+    if i == -1:
+        # Sometimes the anchor can be present but with single quotes or other minor diffs;
+        # try a looser match.
+        m = re.search(r'id\s*=\s*["\']Qualified_teams["\']', html_blob)
+        i = m.start() if m else -1
+    if i == -1:
         return []
 
-    sub = html_blob[anchor_pos:]
+    sub = html_blob[i:]
 
-    # Grab a few candidate wikitables and pick the first one that looks like a
-    # qualified-teams table (must contain a "Team" header AND a "Method/Qualification"-ish header).
-    candidates = re.findall(
-        r"<table[^>]*class=\"[^\"]*wikitable[^\"]*\"[^>]*>.*?</table>",
-        sub,
-        flags=re.S | re.I,
-    )
-
-    def _looks_like_qualified_table(tbl: str) -> bool:
-        """Heuristic: pick the actual "Qualified teams" table, not nearby nav/summary tables."""
-        t = tbl.lower()
-        # Must have a "Team" header.
-        if not re.search(r">\s*team\s*<", t):
-            return False
-        # Must have at least one of the usual columns.
-        if not any(k in t for k in ["qualification", "qualified", "method", "date"]):
-            return False
-        # Should not be a navbox.
-        if "navbox" in t or "nowrap" in t and "navbox" in t:
-            return False
-        return True
-
-    table = ""
-    for cand in candidates[:6]:
-        if _looks_like_qualified_table(cand):
-            table = cand
-            break
-    if not table and candidates:
-        table = candidates[0]
-    if not table:
+    # Find the first <table> that follows the anchor and extract it.
+    t0 = sub.find("<table")
+    if t0 == -1:
         return []
+    t1 = sub.find("</table>", t0)
+    if t1 == -1:
+        return []
+    table = sub[t0:t1 + len("</table>")]
 
-    # 3) Extract team names from the first column of each row.
     teams: List[str] = []
-    skip_exact = {
-        "team",
-        "qualified teams",
-        "method of qualification",
-        "date of qualification",
-        "qualification",
-        "notes",
-    }
-    skip_contains = [
-        "confederation",
-        "afc",
-        "caf",
-        "concacaf",
-        "conmebol",
-        "uefa",
-        "ofc",
-        "tbd",
-        "to be determined",
-    ]
-
-    for row in re.findall(r"<tr[^>]*>(.*?)</tr>", table, flags=re.S | re.I):
-        # First cell in the row
-        cell_m = re.search(r"<t[hd][^>]*>(.*?)</t[hd]>", row, flags=re.S | re.I)
+    for row in re.findall(r"<tr[^>]*>(.*?)</tr>", table, flags=re.S):
+        cell_m = re.search(r"<t[hd][^>]*>(.*?)</t[hd]>", row, flags=re.S)
         if not cell_m:
             continue
         cell = cell_m.group(1)
 
-        # Prefer the first wiki link text that isn't a File:/Category:/Help: etc.
-        link_m = None
-        # Wikipedia REST HTML often nests spans inside <a>, so capture inner HTML and strip tags.
-        for m in re.finditer(r"<a[^>]+href=\"([^\"]+)\"[^>]*>(.*?)</a>", cell, flags=re.I | re.S):
-            href = (m.group(1) or "").strip()
-            inner = (m.group(2) or "").strip()
-            if not inner:
-                continue
-            if href.startswith("/wiki/") and ":" not in href:
-                link_m = m
-                break
-        raw_name = (link_m.group(2) if link_m else cell)
-        raw_name = re.sub(r"<[^>]+>", " ", raw_name)
-        name = html.unescape(raw_name)
+        # Prefer the first link text; otherwise strip tags.
+        a_m = re.search(r"<a[^>]*>([^<]+)</a>", cell)
+        name = (a_m.group(1) if a_m else re.sub(r"<[^>]+>", " ", cell))
         name = re.sub(r"\s+", " ", name).strip()
-        name = re.sub(r"\s*\[\d+\]\s*", " ", name).strip()
 
-        low = name.lower()
-        if not name or low in skip_exact:
+        if not name or name.lower() in {"team", "qualified teams"}:
             continue
-        if any(s in low for s in skip_contains):
+
+        # Remove footnote markers like [1]
+        name = re.sub(r"\[[0-9]+\]", "", name).strip()
+
+        # Defensive: ignore obvious non-team rows
+        if len(name) > 60:
             continue
-        if name not in teams:
+
+        if name and name not in teams:
             teams.append(name)
 
-    # If we somehow matched the wrong table, the result can explode. Guard hard:
-    # - today this should be small (qualification is ongoing)
-    # - even once complete it's 48.
-    if len(teams) > 80:
+    # Hosts must always be included.
+    for host in ["United States", "Canada", "Mexico"]:
+        if host not in teams:
+            teams.insert(0, host)
+
+    # Sanity: avoid exploding lists if parsing went sideways.
+    if len(teams) > 70:
         return []
 
-    # 4) Ensure hosts included and return.
-    for h in ["United States", "Canada", "Mexico"]:
-        if h not in teams:
-            teams.insert(0, h)
-
-    # Sanity guard: if parsing goes sideways and returns a giant list,
-    # treat it as a failure so we don't show non-World-Cup countries.
-    if len(teams) > 70:
-        return ["United States", "Canada", "Mexico"]
     return teams
-
 
 def get_qualified_teams(force: bool = False) -> List[str]:
     """Return countries for the Fan Zone selector (fast + reliable).
@@ -1450,66 +1384,18 @@ def get_qualified_teams(force: bool = False) -> List[str]:
             pass
 
     return list(_qualified_cache["teams"])
-def _iso2_to_flag(iso2: str) -> str:
-    iso2 = (iso2 or "").upper()
-    if len(iso2) != 2 or not iso2.isalpha():
-        return "🏳️"
-    # Regional indicator symbols
-    return chr(0x1F1E6 + (ord(iso2[0]) - ord('A'))) + chr(0x1F1E6 + (ord(iso2[1]) - ord('A')))
-
-_COUNTRY_NAME_OVERRIDES = {
-    # Common Wikipedia/FIFA naming variations
-    "United States": "US",
-    "USA": "US",
-    "Korea Republic": "KR",
-    "South Korea": "KR",
-    "IR Iran": "IR",
-    "Iran": "IR",
-    "Côte d’Ivoire": "CI",
-    "Cote d'Ivoire": "CI",
-    "Ivory Coast": "CI",
-    "Cape Verde": "CV",
-    "Curaçao": "CW",
-    "Curacao": "CW",
-    "Czechia": "CZ",
-    "Russia": "RU",
-    "China PR": "CN",
-    "China": "CN",
-    "Viet Nam": "VN",
-    "Vietnam": "VN",
-    "Türkiye": "TR",
-    "Turkey": "TR",
-}
-
-def _country_meta(name: str) -> Dict[str, str]:
-    """Best-effort ISO + flag for a country name."""
-    iso2 = _COUNTRY_NAME_OVERRIDES.get(name)
-    if not iso2:
-        try:
-            import pycountry
-            hit = pycountry.countries.lookup(name)
-            iso2 = getattr(hit, "alpha_2", None)
-        except Exception:
-            iso2 = None
-    return {
-        "name": name,
-        "code": (iso2 or "") if iso2 else "",
-        "flag": _iso2_to_flag(iso2) if iso2 else "🏳️",
-    }
-
 @app.route("/worldcup/qualified.json")
 def qualified_json():
     teams = get_qualified_teams()
-    enriched = [_country_meta(t) for t in teams]
     return jsonify({
         "updated_at": int(_qualified_cache.get("loaded_at") or 0),
-        "count": len(enriched),
-        "teams": enriched,
-        "countries": enriched,   # alias for front-end compatibility
-        "qualified": enriched,   # alias for front-end compatibility
+        "count": len(teams),
+        "teams": teams,
+        "countries": teams,   # alias for front-end compatibility
+        "qualified": teams,   # alias for front-end compatibility
         "note": "Teams qualified so far for World Cup 2026 (hosts always included).",
-        "source": QUALIFIED_SOURCE_URL,
     })
+
 
 
 @app.route("/countries/qualified.json")
