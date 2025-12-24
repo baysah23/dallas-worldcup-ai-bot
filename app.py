@@ -2275,6 +2275,8 @@ body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(
 .pill b{color:var(--gold)}
 .controls{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
 .inp, select{background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px 10px;font-size:12px;outline:none}
+select option{background:rgba(15,27,51,1);color:var(--text)}
+select option:hover{background:rgba(255,255,255,.12)}
 .btn{cursor:pointer;background:linear-gradient(180deg, rgba(212,175,55,.18), rgba(212,175,55,.06));border:1px solid rgba(212,175,55,.35);color:var(--text);border-radius:12px;padding:9px 12px;font-size:12px}
 .btn:active{transform:translateY(1px)}
 .tablewrap{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:rgba(255,255,255,.03);box-shadow:0 10px 35px rgba(0,0,0,.35)}
@@ -2501,6 +2503,8 @@ body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(
 .pill b{color:var(--gold)}
 .controls{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
 .inp, select{background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px 10px;font-size:12px;outline:none}
+select option{background:rgba(15,27,51,1);color:var(--text)}
+select option:hover{background:rgba(255,255,255,.12)}
 .btn{cursor:pointer;background:linear-gradient(180deg, rgba(212,175,55,.18), rgba(212,175,55,.06));border:1px solid rgba(212,175,55,.35);color:var(--text);border-radius:12px;padding:9px 12px;font-size:12px}
 .btn:active{transform:translateY(1px)}
 .tablewrap{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:rgba(255,255,255,.03);box-shadow:0 10px 35px rgba(0,0,0,.35)}
@@ -2656,12 +2660,14 @@ tr:hover td{background:rgba(255,255,255,.03)}
   function renderPollStatus(state){
     const wrap = $("pollStatus");
     if(!wrap) return;
+
     if(!state || !state.ok){
       wrap.innerHTML = "<div class='sub'>Poll status unavailable.</div>";
       return;
     }
+
     const m = state.match || {};
-    const teams = [m.home, m.away];
+    const teams = [m.home, m.away].filter(Boolean);
     const counts = state.counts || {};
     const pct = state.percentages || {};
     const locked = !!state.locked;
@@ -2672,26 +2678,34 @@ tr:hover td{background:rgba(255,255,255,.03)}
 
     const rows = teams.map(t=>{
       const isWin = post && winner && winner === t;
+      const p = Number(pct[t] || 0);
+      const c = Number(counts[t] || 0);
+      const barColor = isWin ? "rgba(212,175,55,.85)" : "rgba(46,160,67,.75)";
       return `
         <div style="display:flex;align-items:center;gap:10px;margin:8px 0">
           <div style="flex:0 0 160px;font-weight:700">${esc(t)} ${isWin ? "🏆" : ""}</div>
           <div style="flex:1;border:1px solid rgba(255,255,255,.12);border-radius:999px;overflow:hidden;height:10px;background:rgba(255,255,255,.04)">
-            <div style="height:100%;width:${Number(pct[t]||0)}%;background:${isWin ? "rgba(212,175,55,.85)" : "rgba(46,160,67,.75)"}"></div>
+            <div style="height:100%;width:${p}%;background:${barColor}"></div>
           </div>
-          <div style="flex:0 0 120px;text-align:right;color:var(--muted)">${Number(pct[t]||0).toFixed(1)}% • ${counts[t]||0}</div>
+          <div style="flex:0 0 120px;text-align:right;color:var(--muted)">${p.toFixed(1)}% • ${c}</div>
         </div>
       `;
     }).join("");
 
     wrap.innerHTML = `
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap">
         <div>
-          <div style="font-weight:800">${esc(m.home)} vs ${esc(m.away)}</div>
-          <div class="sub">${esc(m.date||"")} • ${esc(m.time||"")} • ${esc(m.venue||"")}</div>
-          <div class="sub">${esc(sponsor)} • Total votes: <b style="color:var(--gold)">${total}</b></div>
+          <div class="sub">Current match</div>
+          <div style="font-weight:800">${esc(m.home || "")} vs ${esc(m.away || "")}</div>
+          <div class="small">${esc(m.date || "")} ${esc(m.time || "")} • ${esc(m.venue || "")}</div>
         </div>
-        <div class="pill"><b>Status</b> ${locked ? (post ? "Post-match" : "Locked (kickoff)") : "Open"}</div>
+        <div style="text-align:right">
+          <div class="sub">Status</div>
+          <div style="font-weight:800">${locked ? (post ? "Post-match" : "Locked (kickoff)") : "Open"}</div>
+        </div>
       </div>
+      ${sponsor ? `<div class="small" style="margin-top:8px">Sponsor: <b>${esc(sponsor)}</b></div>` : ""}
+      <div class="small" style="margin-top:6px">Total votes: <b>${total}</b></div>
       <div style="margin-top:6px">${rows}</div>
     `;
   }
@@ -2744,7 +2758,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
     }
   }
 
-  $("btnSaveConfig")?.$("btnSaveConfig")?.addEventListener("click", saveConfig);
+  $("btnSaveConfig")?.addEventListener("click", saveConfig);
 
   loadConfig().then(loadPoll);
   setInterval(loadPoll, 5000);
