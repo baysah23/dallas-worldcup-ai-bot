@@ -1243,7 +1243,9 @@ USE_REMOTE_QUALIFIED = os.environ.get("USE_REMOTE_QUALIFIED", "1") == "1"
 QUALIFIED_CACHE_SECONDS = int(os.environ.get("QUALIFIED_CACHE_SECONDS", str(12 * 60 * 60)))  # 12h
 QUALIFIED_SOURCE_URL = os.environ.get(
     "QUALIFIED_SOURCE_URL",
-    "https://en.wikipedia.org/w/api.php?action=parse&page=2026_FIFA_World_Cup_qualification&prop=text&format=json&redirects=1",
+    # Prefer the main tournament page's "Qualified teams" table.
+    # It updates as teams qualify and is less likely to include non-team rows.
+    "https://en.wikipedia.org/api/rest_v1/page/html/2026_FIFA_World_Cup",
 )
 
 def _local_country_list() -> List[str]:
@@ -1269,121 +1271,147 @@ def _fetch_qualified_teams_remote() -> List[str]:
     """
     url = QUALIFIED_SOURCE_URL
     import urllib.request
-    from html.parser import HTMLParser
 
-    # 1) Fetch JSON from MediaWiki API
+    # 1) Fetch HTML (or MediaWiki parse JSON containing HTML)
     req = urllib.request.Request(
         url,
         headers={"User-Agent": "worldcup-concierge/1.0"},
         method="GET",
     )
-    with urllib.request.urlopen(req, timeout=10) as resp:
+    with urllib.request.urlopen(req, timeout=12) as resp:
         raw = resp.read().decode("utf-8", errors="ignore")
-    try:
-        data = json.loads(raw)
-        html_blob = (data.get("parse", {}).get("text", {}) or {}).get("*", "") or ""
-    except Exception:
-        html_blob = ""
+
+    html_blob = raw
+    # If user configured MediaWiki API JSON, extract the HTML blob.
+    if raw.lstrip().startswith("{"):
+        try:
+            data = json.loads(raw)
+            html_blob = (data.get("parse", {}).get("text", {}) or {}).get("*", "") or ""
+        except Exception:
+            html_blob = ""
 
     if not html_blob:
         return []
 
-    # 2) Parse HTML and grab first-column team names from the table that appears after
-    # the heading anchor id="Qualified_teams".
-    class _QualifiedTableParser(HTMLParser):
-        def __init__(self):
-            super().__init__()
-            self.in_qualified_section = False
-            self.in_table = False
-            self.in_tr = False
-            self.in_td = False
-            self.td_index = -1
-            self.cur_cell = []
-            self.teams = []
-            self._seen_table = False
-
-        def handle_starttag(self, tag, attrs):
-            attrs = dict(attrs or [])
-            if tag == "span":
-                # Wikipedia anchors often use underscores.
-                sid = (attrs.get("id") or "").strip()
-                if sid == "Qualified_teams" or sid == "Qualified_teams_and_rankings":
-                    self.in_qualified_section = True
-
-            if self.in_qualified_section and tag == "table" and not self._seen_table:
-                cls = (attrs.get("class") or "")
-                # Only start on the first wikitable after the heading.
-                if "wikitable" in cls:
-                    self.in_table = True
-                    self._seen_table = True
-
-            if self.in_table and tag == "tr":
-                self.in_tr = True
-                self.td_index = -1
-                self.cur_cell = []
-
-            if self.in_tr and tag in ("td", "th"):
-                # Count cells in this row
-                self.td_index += 1
-                self.in_td = True
-                self.cur_cell = []
-
-        def handle_endtag(self, tag):
-            if self.in_td and tag in ("td", "th"):
-                self.in_td = False
-                text = "".join(self.cur_cell).strip()
-                # First column = team name, but skip header row and blanks.
-                if self.in_tr and self.td_index == 0:
-                    # Clean footnotes like [1]
-                    text = re.sub(r"\s*\[\d+\]\s*", " ", text).strip()
-                    # Basic guards
-                    if text and text.lower() not in ("team", "qualified teams"):
-                        # Normalize whitespace
-                        text = re.sub(r"\s+", " ", text).strip()
-                        # Drop obvious non-teams
-                        bad = ("method of qualification", "date of qualification", "total times")
-                        if not any(b in text.lower() for b in bad):
-                            self.teams.append(text)
-                self.cur_cell = []
-
-            if self.in_tr and tag == "tr":
-                self.in_tr = False
-                self.td_index = -1
-                self.cur_cell = []
-
-            if self.in_table and tag == "table":
-                self.in_table = False
-
-        def handle_data(self, data):
-            if self.in_td and data:
-                self.cur_cell.append(data)
-
-    p = _QualifiedTableParser()
-    try:
-        p.feed(html_blob)
-    except Exception:
+    # 2) Find the "Qualified teams" section and then choose the most likely table.
+    # We do NOT assume the first table is the right one (Wikipedia pages often have
+    # navigation/other tables near section headers).
+    anchor_pos = -1
+    for anchor in (
+        'id="Qualified_teams"',
+        'id="Qualified_teams_and_rankings"',
+        'id="Qualified_teams_and_rankings"',
+        'id="Qualified_teams_and_rankings"',
+    ):
+        anchor_pos = html_blob.find(anchor)
+        if anchor_pos != -1:
+            break
+    if anchor_pos == -1:
+        # Some renderings use a <span id="Qualified_teams"> marker.
+        anchor_pos = html_blob.find('<span id="Qualified_teams"')
+    if anchor_pos == -1:
         return []
 
-    # 3) De-dup + ensure hosts included
-    teams = []
-    seen = set()
-    for t in p.teams:
-        key = t.lower()
-        if key in seen:
+    sub = html_blob[anchor_pos:]
+
+    # Grab a few candidate wikitables and pick the first one that looks like a
+    # qualified-teams table (must contain a "Team" header AND a "Method/Qualification"-ish header).
+    candidates = re.findall(
+        r"<table[^>]*class=\"[^\"]*wikitable[^\"]*\"[^>]*>.*?</table>",
+        sub,
+        flags=re.S | re.I,
+    )
+
+    def _looks_like_qualified_table(tbl: str) -> bool:
+        """Heuristic: pick the actual "Qualified teams" table, not nearby nav/summary tables."""
+        t = tbl.lower()
+        # Must have a "Team" header.
+        if not re.search(r">\s*team\s*<", t):
+            return False
+        # Must have at least one of the usual columns.
+        if not any(k in t for k in ["qualification", "qualified", "method", "date"]):
+            return False
+        # Should not be a navbox.
+        if "navbox" in t or "nowrap" in t and "navbox" in t:
+            return False
+        return True
+
+    table = ""
+    for cand in candidates[:6]:
+        if _looks_like_qualified_table(cand):
+            table = cand
+            break
+    if not table and candidates:
+        table = candidates[0]
+    if not table:
+        return []
+
+    # 3) Extract team names from the first column of each row.
+    teams: List[str] = []
+    skip_exact = {
+        "team",
+        "qualified teams",
+        "method of qualification",
+        "date of qualification",
+        "qualification",
+        "notes",
+    }
+    skip_contains = [
+        "confederation",
+        "afc",
+        "caf",
+        "concacaf",
+        "conmebol",
+        "uefa",
+        "ofc",
+        "tbd",
+        "to be determined",
+    ]
+
+    for row in re.findall(r"<tr[^>]*>(.*?)</tr>", table, flags=re.S | re.I):
+        # First cell in the row
+        cell_m = re.search(r"<t[hd][^>]*>(.*?)</t[hd]>", row, flags=re.S | re.I)
+        if not cell_m:
             continue
-        seen.add(key)
-        teams.append(t)
+        cell = cell_m.group(1)
 
-    # Hosts should always be present
+        # Prefer the first wiki link text that isn't a File:/Category:/Help: etc.
+        link_m = None
+        for m in re.finditer(r"<a[^>]+href=\"([^\"]+)\"[^>]*>([^<]+)</a>", cell, flags=re.I):
+            href = (m.group(1) or "").strip()
+            txt = (m.group(2) or "").strip()
+            if not txt:
+                continue
+            if href.startswith("/wiki/") and ":" not in href:
+                link_m = m
+                break
+        name = (link_m.group(2) if link_m else re.sub(r"<[^>]+>", " ", cell))
+        name = re.sub(r"\s+", " ", name).strip()
+        name = re.sub(r"\s*\[\d+\]\s*", " ", name).strip()
+
+        low = name.lower()
+        if not name or low in skip_exact:
+            continue
+        if any(s in low for s in skip_contains):
+            continue
+        if name not in teams:
+            teams.append(name)
+
+    # If we somehow matched the wrong table, the result can explode. Guard hard:
+    # - today this should be small (qualification is ongoing)
+    # - even once complete it's 48.
+    if len(teams) > 80:
+        return []
+
+    # 4) Ensure hosts included and return.
     for h in ["United States", "Canada", "Mexico"]:
-        if h.lower() not in seen:
+        if h not in teams:
             teams.insert(0, h)
-            seen.add(h.lower())
 
-    # Final guard: if something went wrong, never return a giant list
-    if len(teams) > 60:
-        teams = teams[:60]
-
+    # Sanity guard: if parsing goes sideways and returns a giant list,
+    # treat it as a failure so we don't show non-World-Cup countries.
+    if len(teams) > 70:
+        return ["United States", "Canada", "Mexico"]
     return teams
 
 
@@ -1427,7 +1455,7 @@ def qualified_json():
         "teams": teams,
         "countries": teams,   # alias for front-end compatibility
         "qualified": teams,   # alias for front-end compatibility
-        "note": "Countries list for Fan Zone selector. If qualification is ongoing, this may include countries not yet qualified.",
+        "note": "Teams qualified so far for World Cup 2026 (hosts always included).",
     })
 
 
