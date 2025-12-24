@@ -1249,7 +1249,7 @@ body.phase-finals{ background: var(--phaseF); }
 
 /* QR box */
 .qrWrap{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-#qrCanvas{ width:128px; height:128px; background:#fff; border-radius:12px; padding:8px; }
+#qrCanvas{ width:220px; height:220px; background:#fff; border-radius:12px; padding:10px; }
 .qrText a{ color: var(--warn); text-decoration:none; }
 
 
@@ -2401,7 +2401,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 </div>
 <div class="fz-card" id="pollCard" style="display:none; margin-top:10px;">
 <h3>⚔️ Match of the Day Poll</h3>
-<div class="fz-muted">Vote who wins today’s match. Counts are simulated “live” on this device (UI-only).</div>
+<div class="fz-muted"></div>
 <div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
 </div>
 </aside></div>
@@ -2428,11 +2428,12 @@ body.kiosk-mode *::-webkit-scrollbar{
 <h3>📱 QR poster</h3>
 <div class="fz-muted">Print/display at the entrance. Scan to open the app.</div>
 <div class="qrWrap" style="margin-top:10px;">
-<canvas aria-label="QR code" height="120" id="qrCanvas" width="120"></canvas>
+<canvas aria-label="QR code" id="qrCanvas" width="220" height="220"></canvas>
+<img id="qrImg" alt="QR code" style="display:none; width:220px; height:220px; border-radius:12px; background:#fff; padding:10px;" />
 <div class="qrText">
 <div class="fz-muted" style="margin-bottom:6px;">Link:</div>
 <div><a href="#" id="qrLink" rel="noopener" target="_blank">Open app</a></div>
-<div class="fz-muted" style="margin-top:10px;">Tip: host publicly for in‑venue scanning.</div>
+<div class="fz-muted" style="margin-top:10px;"></div>
 </div>
 </div>
 </div>
@@ -3913,6 +3914,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   const drinkDesc = el("drinkDesc");
   const qrModal = el("qrCard");
   const qrCanvas = el("qrCanvas");
+  const qrImg = el("qrImg");
   const qrLink = el("qrLink");
 
   // ----- Storage keys -----
@@ -4198,15 +4200,32 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   async function drawQR(text){
     if(!qrCanvas) return;
     const ok = await loadQRLib();
+    const px = 220;
+
+    // Prefer local canvas render (best quality) when QR library is available
     if(ok && window.QRCode && typeof window.QRCode.toCanvas === "function"){
-      // Make it bigger + crisp for venue scanning
-      const px = 200;
+      if(qrImg) qrImg.style.display = "none";
+      if(qrCanvas) qrCanvas.style.display = "block";
       qrCanvas.width = px;
       qrCanvas.height = px;
-      await qrToCanvas(qrCanvas, text, { width: px, margin: 1 });
+
+      await qrToCanvas(qrCanvas, text, {
+        width: px,
+        margin: 2, // quiet zone for reliable scanning
+        color: { dark: "#000000", light: "#ffffff" }
+      });
       return;
     }
-    // Fallback (non-scannable) if offline/CDN blocked
+
+    // Fallback: generate a real QR image via a public QR service (still scannable)
+    if(qrImg){
+      if(qrCanvas) qrCanvas.style.display = "none";
+      qrImg.style.display = "block";
+      qrImg.src = "https://api.qrserver.com/v1/create-qr-code/?size="+px+"x"+px+"&data=" + encodeURIComponent(text);
+      return;
+    }
+
+    // Last-resort fallback (non-scannable) if everything else fails
     drawPseudoQR(text);
   }
 
