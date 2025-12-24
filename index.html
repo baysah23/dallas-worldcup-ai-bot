@@ -2500,6 +2500,114 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 }
 
+
+/* =========================
+   DEVICE-INTELLIGENT UI (SAFE, UI-only)
+   - Mobile: quick actions
+   - Tablet: lounge mode spacing + touch targets
+   - TV/Kiosk: suppress inputs + amplify visuals
+   ========================= */
+.devicebar{
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 9000;
+  display: none;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(7,16,34,.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 18px 40px rgba(0,0,0,.35);
+}
+.devicebar .devicebar-row{
+  display:flex;
+  gap: 8px;
+  align-items:center;
+  justify-content:space-between;
+  width:100%;
+}
+.devicebar-btn{
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  color: var(--text);
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.devicebar-btn.primary{
+  border-color: rgba(212,175,55,.28);
+  background: linear-gradient(135deg, rgba(212,175,55,.22), rgba(255,255,255,.06));
+}
+.devicebar-btn:active{ transform: translateY(1px); }
+.devicebar-btn .mini{ font-size: 10px; opacity:.85; font-weight:800; letter-spacing:.04em; }
+
+.kioskToggle{
+  position: fixed;
+  right: 14px;
+  bottom: 14px;
+  z-index: 9001;
+  display: none;
+  border-radius: 999px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(0,0,0,.22);
+  color: var(--text);
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 14px 35px rgba(0,0,0,.35);
+}
+
+/* MOBILE: quick actions + extra bottom padding so content isn't hidden */
+body.mode-mobile .devicebar{ display:flex; }
+body.mode-mobile .wrap{ padding-bottom: 74px; }
+body.mode-mobile .grid{ padding-bottom: 86px; }
+body.mode-mobile .composer textarea{ height: 42px; }
+body.mode-mobile button{ min-width: 0; }
+
+/* TABLET: lounge mode — more breathing room, slightly larger controls */
+body.mode-tablet .devicebar{ display:flex; bottom: 14px; left: 18px; right: 18px; }
+body.mode-tablet .wrap{ padding-bottom: 76px; }
+body.mode-tablet .grid{ gap: 16px; padding: 16px; }
+body.mode-tablet .bubble{ font-size: 13.5px; }
+body.mode-tablet .composer textarea{ height: 46px; }
+body.mode-tablet button{ padding: 11px 14px; }
+
+/* KIOSK/TV: amplify visuals, suppress inputs (but reversible) */
+body.mode-kiosk .hero{ height: 240px; }
+body.mode-kiosk .grid{ grid-template-columns: 1.65fr .35fr; }
+body.mode-kiosk .pill{ font-size: 12px; padding: 7px 11px; }
+body.mode-kiosk .bubble{ font-size: 13px; }
+body.mode-kiosk.kiosk-inputs-off .composer,
+body.mode-kiosk.kiosk-inputs-off #helperHint{
+  opacity: 0;
+  pointer-events: none;
+  height: 0;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden;
+  border: 0;
+}
+body.mode-kiosk.kiosk-inputs-off .kioskToggle{ display: inline-flex; }
+body.mode-kiosk.kiosk-inputs-off .devicebar{ display:none; } /* keep screen clean */
+body.mode-kiosk .banner.show{ animation: none; } /* calmer on big screens */
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce){
+  .devicebar, .kioskToggle{ backdrop-filter:none; -webkit-backdrop-filter:none; }
+}
+
 </style>
 </head>
 <body>
@@ -2698,6 +2806,138 @@ body.kiosk-mode *::-webkit-scrollbar{
 </div></div>
 </div>
 
+
+<!-- DEVICE BAR (UI-only): mobile/tablet quick actions -->
+<div class="devicebar" id="deviceBar" aria-label="Quick actions">
+  <div class="devicebar-row">
+    <button class="devicebar-btn primary" data-action="reservation">Reserve</button>
+    <button class="devicebar-btn" data-action="dallas"><span class="mini">Dallas</span></button>
+    <button class="devicebar-btn" data-action="all"><span class="mini">All</span></button>
+    <button class="devicebar-btn" data-action="menu"><span class="mini">Menu</span></button>
+  </div>
+</div>
+
+<!-- KIOSK: temporary input re-enable (UI-only) -->
+<button class="kioskToggle" id="kioskToggle" type="button" aria-label="Enable chat input">Enable Chat</button>
+
+<!-- DEVICE MODE (UI-only) -->
+<script>
+(function(){
+  function getParam(name){
+    try{
+      const u = new URL(window.location.href);
+      return u.searchParams.get(name);
+    }catch(e){ return null; }
+  }
+
+  function detectMode(){
+    // Explicit overrides (safest)
+    const qp = (getParam("mode") || "").toLowerCase();
+    if(qp === "mobile" || qp === "tablet" || qp === "kiosk" || qp === "tv") return (qp === "tv" ? "kiosk" : qp);
+
+    const stored = (localStorage.getItem("wc_mode") || "").toLowerCase();
+    if(stored === "mobile" || stored === "tablet" || stored === "kiosk") return stored;
+
+    const w = window.innerWidth || 0;
+    const h = window.innerHeight || 0;
+    const ua = navigator.userAgent || "";
+    const isTouch = (navigator.maxTouchPoints || 0) > 0 || (window.matchMedia && matchMedia("(pointer: coarse)").matches);
+    const hasHover = (window.matchMedia && matchMedia("(hover: hover)").matches);
+
+    // TV/large display heuristics (conservative)
+    const looksLikeTV = /(SmartTV|Tizen|Web0S|CrKey|Android TV|GoogleTV|AppleTV|HbbTV)/i.test(ua);
+    if(looksLikeTV || (w >= 1500 && h >= 800 && !isTouch && !hasHover)) return "kiosk";
+
+    // Mobile first
+    if(w <= 680) return "mobile";
+
+    // Tablet
+    if(w <= 1120 || (isTouch && w <= 1280)) return "tablet";
+
+    // Desktop default (no special class)
+    return "desktop";
+  }
+
+  function applyMode(){
+    const body = document.body;
+    if(!body) return;
+
+    const mode = detectMode();
+    body.classList.remove("mode-mobile","mode-tablet","mode-kiosk");
+
+    if(mode === "mobile") body.classList.add("mode-mobile");
+    else if(mode === "tablet") body.classList.add("mode-tablet");
+    else if(mode === "kiosk") body.classList.add("mode-kiosk");
+
+    // Kiosk behavior: suppress inputs by default (but reversible)
+    if(mode === "kiosk"){
+      body.classList.add("kiosk-inputs-off");
+      const btn = document.getElementById("kioskToggle");
+      if(btn){
+        btn.onclick = () => {
+          body.classList.remove("kiosk-inputs-off");
+          localStorage.setItem("wc_mode", "kiosk"); // keep mode, inputs on for this device
+          try{ document.getElementById("msg")?.focus(); }catch(e){}
+        };
+      }
+    }else{
+      body.classList.remove("kiosk-inputs-off");
+    }
+  }
+
+  // Wire quick actions safely (no backend changes)
+  function wireActions(){
+    const bar = document.getElementById("deviceBar");
+    if(!bar) return;
+    bar.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-action]");
+      if(!btn) return;
+      const action = btn.getAttribute("data-action");
+
+      // helpers if your existing functions exist
+      const setMsg = (v) => { const t = document.getElementById("msg"); if(t){ t.value = v; t.focus(); } };
+      const clickId = (id) => { const el = document.getElementById(id); if(el){ el.click(); return true; } return false; };
+
+      if(action === "reservation"){
+        // your app already responds to "reservation"
+        setMsg("reservation");
+        // prefer existing send handler
+        if(!clickId("sendBtn")){
+          try{ window.sendMessage && window.sendMessage(); }catch(e){}
+        }
+      }
+      if(action === "dallas"){
+        // scope toggle buttons exist in most versions; fall back to API var
+        if(!clickId("scopeDallasBtn") && !clickId("btnDallas")){ try{ window.setScope && window.setScope("dallas"); }catch(e){} }
+        // scroll schedule into view
+        try{ document.getElementById("scheduleList")?.scrollIntoView({behavior:"smooth", block:"start"}); }catch(e){}
+      }
+      if(action === "all"){
+        if(!clickId("scopeAllBtn") && !clickId("btnAll")){ try{ window.setScope && window.setScope("all"); }catch(e){} }
+        try{ document.getElementById("scheduleList")?.scrollIntoView({behavior:"smooth", block:"start"}); }catch(e){}
+      }
+      if(action === "menu"){
+        // Menu panel is already visible; scroll to it on small screens
+        try{ document.getElementById("menuTitle")?.scrollIntoView({behavior:"smooth", block:"start"}); }catch(e){}
+      }
+    });
+  }
+
+  // Run
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", () => { applyMode(); wireActions(); });
+  }else{
+    applyMode(); wireActions();
+  }
+
+  // Re-evaluate on resize (debounced)
+  let t=null;
+  window.addEventListener("resize", () => {
+    clearTimeout(t);
+    t = setTimeout(applyMode, 160);
+  });
+})();
+</script>
 <script>
 /**
  * This frontend matches your current app.py endpoints:
