@@ -1243,7 +1243,7 @@ USE_REMOTE_QUALIFIED = os.environ.get("USE_REMOTE_QUALIFIED", "1") == "1"
 QUALIFIED_CACHE_SECONDS = int(os.environ.get("QUALIFIED_CACHE_SECONDS", str(12 * 60 * 60)))  # 12h
 QUALIFIED_SOURCE_URL = os.environ.get(
     "QUALIFIED_SOURCE_URL",
-    "https://en.wikipedia.org/api/rest_v1/page/html/2026_FIFA_World_Cup_qualification",
+    "https://en.wikipedia.org/api/rest_v1/page/html/2026_FIFA_World_Cup",
 )
 
 def _local_country_list() -> List[str]:
@@ -1315,98 +1315,81 @@ def _local_country_list() -> List[str]:
 
 def _fetch_qualified_teams_remote() -> List[str]:
     """
-    Fetch the list of *qualified* teams for the 2026 World Cup and return it as a list of country names.
+    Best-effort fetch of *qualified* teams (not all FIFA members) from Wikipedia.
 
-    Source: Wikipedia "2026 FIFA World Cup qualification" → section "Qualified teams".
-    We use the MediaWiki API to fetch only that section, then parse the table rows.
-    This is best-effort and cached by get_qualified_teams() to keep the app fast.
+    We intentionally point to the main "2026 FIFA World Cup" page (not the qualification
+    page) and extract only the "Qualified teams" table to avoid returning hundreds of
+    countries and freezing the front-end.
+
+    Network failures should never break the app; callers must handle empty results.
     """
-    import urllib.parse
-    import urllib.request
+    url = QUALIFIED_SOURCE_URL
 
-    def _http_get_json(url: str, timeout: int = 8) -> Dict[str, Any]:
-        req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "worldcup-concierge/1.0"},
-            method="GET",
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = resp.read().decode("utf-8", errors="ignore")
-        return json.loads(data)
+    # 1) Fetch HTML (REST v1 returns HTML body directly)
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "worldcup-concierge/1.0"},
+        method="GET",
+    )
+    with urllib.request.urlopen(req, timeout=8) as resp:
+        html = resp.read().decode("utf-8", errors="ignore")
 
-    # 1) Find section index for "Qualified teams"
-    base = "https://en.wikipedia.org/w/api.php"
-    qs_sections = urllib.parse.urlencode({
-        "action": "parse",
-        "page": "2026_FIFA_World_Cup_qualification",
-        "prop": "sections",
-        "format": "json",
-        "formatversion": "2",
-        "origin": "*",
-    })
-    sec = _http_get_json(f"{base}?{qs_sections}", timeout=8)
-    sections = (((sec or {}).get("parse") or {}).get("sections") or [])
+    if not html:
+        return []
 
-    section_index = None
-    for s in sections:
-        # "line" is the title of the section
-        if (s.get("line") or "").strip().lower() == "qualified teams":
-            section_index = s.get("index")
-            break
+    # 2) Isolate the "Qualified teams" section (reduces false positives).
+    lower = html.lower()
+    anchor_idx = lower.find('id="qualified_teams"')
+    if anchor_idx == -1:
+        anchor_idx = lower.find('id="qualified teams"')
+    if anchor_idx == -1:
+        anchor_idx = lower.find('qualified teams')
+    section = html[anchor_idx:] if anchor_idx != -1 else html
 
-    # If we can't find the section, fall back to the full HTML endpoint (still try to be precise)
-    html = ""
-    if section_index:
-        qs_text = urllib.parse.urlencode({
-            "action": "parse",
-            "page": "2026_FIFA_World_Cup_qualification",
-            "prop": "text",
-            "section": str(section_index),
-            "format": "json",
-            "formatversion": "2",
-            "origin": "*",
-        })
-        txt = _http_get_json(f"{base}?{qs_text}", timeout=8)
-        html = (((txt or {}).get("parse") or {}).get("text") or "")
-    else:
-        req = urllib.request.Request(
-            QUALIFIED_SOURCE_URL,
-            headers={"User-Agent": "worldcup-concierge/1.0"},
-            method="GET",
-        )
-        with urllib.request.urlopen(req, timeout=8) as resp:
-            html = resp.read().decode("utf-8", errors="ignore")
+    # Stop at next major header to keep parsing tight.
+    m_h2 = re.search(r"<h2\b", section, flags=re.I)
+    if m_h2 and m_h2.start() > 0:
+        section = section[: m_h2.start()]
 
-    # 2) Parse team names from the first column of the "Qualified teams" wikitable.
-    # In the qualified-teams table, the team name is typically in a <th scope="row"> cell.
+    # 3) Grab the first wikitable from that section.
+    m_table = re.search(r"<table[^>]*class=\"[^\"]*wikitable[^\"]*\"[^>]*>.*?</table>", section, flags=re.I | re.S)
+    table_html = m_table.group(0) if m_table else section
+
+    # 4) Extract team names from row headers (<th scope="row">Team</th>)
     teams: List[str] = []
-    for name in re.findall(r'<th[^>]*scope="row"[^>]*>\s*(?:<span[^>]*>\s*)*<a[^>]*>([^<]+)</a>', html, flags=re.I):
+    for name in re.findall(r'<th[^>]*scope="row"[^>]*>\s*(?:<span[^>]*>\s*)*<a[^>]*>([^<]+)</a>', table_html, flags=re.I):
         nm = re.sub(r"\[[0-9]+\]", "", name).strip()
-        if nm and len(nm) <= 40:
+        if nm and len(nm) <= 60:
             teams.append(nm)
 
-    # Backup pattern in case markup differs:
+    # Backup: sometimes team appears in <td><a title="Team">...</a>
     if not teams:
-        for name in re.findall(r'title="([^"]+)"[^>]*>\s*<img[^>]*class="mw-file-element"', html, flags=re.I):
+        for name in re.findall(r'<a[^>]+title="([^"]+)"[^>]*>', table_html, flags=re.I):
             nm = re.sub(r"\[[0-9]+\]", "", name).strip()
-            if nm and len(nm) <= 40:
+            if nm and 2 <= len(nm) <= 60 and "qualification" not in nm.lower():
                 teams.append(nm)
 
-    # De-dup, preserve order
+    # 5) De-dupe, cap size, ensure hosts are present.
+    hosts = ["United States", "Canada", "Mexico"]
     seen = set()
     out: List[str] = []
-    for t in teams:
-        if t not in seen:
-            seen.add(t)
-            out.append(t)
+    for h in hosts:
+        out.append(h)
+        seen.add(h.lower())
 
-    # sanity filter: remove common non-team words that could sneak in
-    blacklist = {
-        "Qualified teams", "Team", "Method of qualification", "Date of qualification",
-        "Total times qualified", "Last time qualified", "Current consecutive appearances",
-        "Previous best performance", "Hosts",
-    }
-    out = [t for t in out if t not in blacklist]
+    for t in teams:
+        key = t.lower()
+        if key in seen:
+            continue
+        # Guard against "FIFA", "CONCACAF", etc.
+        if any(bad in key for bad in ["fifa", "uefa", "conmebol", "caf", "afc", "ofc", "confederation", "qualification"]):
+            continue
+        out.append(t)
+        seen.add(key)
+
+    # If parsing went wrong and we got a giant list, cap it (front-end safety).
+    if len(out) > 60:
+        out = out[:60]
 
     return out
 
