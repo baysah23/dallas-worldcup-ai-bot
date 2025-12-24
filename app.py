@@ -1251,13 +1251,28 @@ QUALIFIED_SOURCE_URL = os.environ.get(
 def _local_country_list() -> List[str]:
     """Fallback list used only if remote qualified-team fetch fails.
 
-    IMPORTANT: This must *not* return "all countries", because the Fan Zone selector
-    must only show 2026 World Cup participants. When qualification is still ongoing,
-    the only universally correct participants are the hosts.
+    The Fan Zone selector must only show World Cup 2026 participants.
+    If we can't fetch an up-to-date qualified list remotely, we derive the
+    participant set from the match fixtures already loaded by the app.
+    This keeps the selector automatically in sync whenever your fixtures
+    data is updated (e.g., when additional teams are added).
 
-    We therefore default to the 3 host nations and rely on the remote fetch (Wikipedia)
-    for the up-to-date qualified list.
+    If fixtures are unavailable for any reason, we fall back to the 3 host nations.
     """
+    try:
+        teams = set()
+        for m in load_all_matches():
+            h = (m.get("home") or "").strip()
+            a = (m.get("away") or "").strip()
+            if h:
+                teams.add(h)
+            if a:
+                teams.add(a)
+        if teams:
+            return sorted(teams)
+    except Exception:
+        pass
+
     return ["United States", "Canada", "Mexico"]
 
 
