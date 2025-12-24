@@ -1249,7 +1249,7 @@ body.phase-finals{ background: var(--phaseF); }
 
 /* QR box */
 .qrWrap{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
-#qrCanvas{ width:128px; height:128px; background:#fff; border-radius:12px; padding:8px; }
+#qrImg{ width:128px; height:128px; background:#fff; border-radius:12px; padding:8px; }
 .qrText a{ color: var(--warn); text-decoration:none; }
 
 
@@ -1327,7 +1327,7 @@ body.phase-finals{ background: var(--phaseF); }
 .fz-card h3{
   font-size: 13px;
 }
-#qrCanvas{
+#qrImg{
   width: 96px;
   height: 96px;
 }
@@ -1355,7 +1355,7 @@ body.phase-finals{ background: var(--phaseF); }
 .fz-actions{ gap:6px; }
 .fz-chip{ border-radius: 999px; background: rgba(0,0,0,.10); }
 .qrWrap{ gap:10px; }
-#qrCanvas{ width:84px; height:84px; border-radius: 12px; padding:6px; }
+#qrImg{ width:84px; height:84px; border-radius: 12px; padding:6px; }
 @media(min-width:1200px){
   body{ padding-left: 260px; padding-right: 260px; }
   .fanzone-left, .fanzone-right{ top: 84px; }
@@ -1476,7 +1476,7 @@ body.has-dallas-today .fanzone-right{
 .fz-iconbtn:hover{ transform: translateY(-1px); }
 
 /* QR: keep compact */
-#qrCanvas{ width: 78px !important; height: 78px !important; border-radius: 12px !important; }
+#qrImg{ width: 78px !important; height: 78px !important; border-radius: 12px !important; }
 
 /* Auto-hide rails on scroll: smoother */
 body.fz-hidden .fanzone-left{ transform: translateX(-120%) !important; opacity:0 !important; pointer-events:none !important; }
@@ -1553,7 +1553,7 @@ body.has-dallas-today .fanzone-right{
   align-items: flex-start;
 }
 
-.fanzone-right #qrCanvas{
+.fanzone-right #qrImg{
   width: 92px;
   height: 92px;
   max-width: 100%;
@@ -1593,7 +1593,7 @@ body.has-dallas-today .fanzone-right{
   hyphens:auto;
 }
 .fanzone-right .qrWrap{ flex-direction:column; align-items:flex-start; }
-.fanzone-right #qrCanvas{ width:96px; height:96px; }
+.fanzone-right #qrImg{ width:96px; height:96px; }
 .fanzone-right .qrText a{ display:block; overflow-wrap:anywhere; word-break:break-all; }
 
 
@@ -1626,7 +1626,7 @@ body.has-dallas-today .fanzone-right{
   flex-direction: column;
   align-items: flex-start;
 }
-.fanzone-right #qrCanvas{
+.fanzone-right #qrImg{
   width: 92px;
   height: 92px;
 }
@@ -2419,7 +2419,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <h3>📱 QR poster</h3>
 <div class="fz-muted">Print/display at the entrance. Scan to open the app.</div>
 <div class="qrWrap" style="margin-top:10px;">
-<canvas aria-label="QR code" height="120" id="qrCanvas" width="120"></canvas>
+<img id="qrImg" alt="QR code" style="width:220px;height:220px;border-radius:12px;background:#fff;padding:10px;display:block;margin:0 auto;" />
 <div class="qrText">
 <div class="fz-muted" style="margin-bottom:6px;">Link:</div>
 <div><a href="#" id="qrLink" rel="noopener" target="_blank">Open app</a></div>
@@ -3888,7 +3888,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     const drinkDesc = el("drinkDesc");
 
     const qrCard = el("qrCard");
-    const qrCanvas = el("qrCanvas");
+    const qrImg = el("qrImg");
     const qrLink = el("qrLink");
 
     // Buttons (support both legacy + current Fan Zone markup)
@@ -4056,53 +4056,19 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
 
     // ----- QR poster -----
     function drawQR(text){
-      // Deterministic, high-contrast QR-style pattern (visual poster). Not a standards-compliant QR.
-      if(!qrCanvas) return;
-      const ctx = qrCanvas.getContext("2d");
-      if(!ctx) return;
-      const w = qrCanvas.width, h = qrCanvas.height;
-      ctx.clearRect(0,0,w,h);
-
-      // white background
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0,0,w,h);
-
-      // simple hash seed
-      let seed = 0;
-      for(const ch of (text||"")) seed = (seed*31 + ch.charCodeAt(0)) >>> 0;
-
-      const n = 29;
-      const cell = Math.max(1, Math.floor(Math.min(w,h) / n));
-      const ox = Math.floor((w - cell*n)/2);
-      const oy = Math.floor((h - cell*n)/2);
-
-      function finder(x,y){
-        ctx.fillStyle = "#000";
-        ctx.fillRect(ox + x*cell, oy + y*cell, cell*7, cell*7);
-        ctx.fillStyle = "#fff";
-        ctx.fillRect(ox + (x+1)*cell, oy + (y+1)*cell, cell*5, cell*5);
-        ctx.fillStyle = "#000";
-        ctx.fillRect(ox + (x+2)*cell, oy + (y+2)*cell, cell*3, cell*3);
-      }
-      finder(0,0); finder(n-7,0); finder(0,n-7);
-
-      for(let y=0;y<n;y++){
-        for(let x=0;x<n;x++){
-          const inTL = (x<7 && y<7);
-          const inTR = (x>=n-7 && y<7);
-          const inBL = (x<7 && y>=n-7);
-          if(inTL||inTR||inBL) continue;
-
-          const v = (seed ^ (x*2654435761) ^ (y*1597334677) ^ (x+y)*97) >>> 0;
-          if(v & 1){
-            ctx.fillStyle = "#000";
-            ctx.fillRect(ox + x*cell, oy + y*cell, cell, cell);
-          }
-        }
-      }
-      ctx.strokeStyle = "rgba(0,0,0,.15)";
-      ctx.strokeRect(ox-1, oy-1, cell*n+2, cell*n+2);
-    }
+  // Real QR code via lightweight external image (no Python deps).
+  const img = document.getElementById("qrImg");
+  if(!img) return;
+  const url = (text || "").trim();
+  if(!url){
+    img.removeAttribute("src");
+    return;
+  }
+  // qrserver.com is simple and fast; encode data safely.
+  const encoded = encodeURIComponent(url);
+  img.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=2&data=${encoded}`;
+  img.alt = "QR code";
+}
 
     function toggleQR(){
       if(!qrCard) return;
@@ -4114,7 +4080,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
           qrLink.textContent = url;
           qrLink.setAttribute("href", url);
         }
-        drawQR(url);
+        requestAnimationFrame(()=>drawQR(url));
         // Keep scroll inside right rail (avoid page jump)
         try{
           const rail = document.getElementById("fanZoneRight");

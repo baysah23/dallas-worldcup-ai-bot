@@ -1239,7 +1239,7 @@ _qualified_cache: Dict[str, Any] = {"loaded_at": 0, "teams": []}
 # We therefore default to an "eligible countries" list derived from pycountry (local data),
 # with hosts pinned to the top. If you want to switch back to a remote "qualified so far"
 # source, set USE_REMOTE_QUALIFIED=1 and provide QUALIFIED_SOURCE_URL.
-USE_REMOTE_QUALIFIED = os.environ.get("USE_REMOTE_QUALIFIED", "0") == "1"
+USE_REMOTE_QUALIFIED = os.environ.get("USE_REMOTE_QUALIFIED", "1") == "1"
 QUALIFIED_CACHE_SECONDS = int(os.environ.get("QUALIFIED_CACHE_SECONDS", str(12 * 60 * 60)))  # 12h
 QUALIFIED_SOURCE_URL = os.environ.get(
     "QUALIFIED_SOURCE_URL",
@@ -1314,27 +1314,101 @@ def _local_country_list() -> List[str]:
     return hosts + remainder
 
 def _fetch_qualified_teams_remote() -> List[str]:
-    """Optional remote fetch. Not required for core functionality."""
+    """
+    Fetch the list of *qualified* teams for the 2026 World Cup and return it as a list of country names.
+
+    Source: Wikipedia "2026 FIFA World Cup qualification" → section "Qualified teams".
+    We use the MediaWiki API to fetch only that section, then parse the table rows.
+    This is best-effort and cached by get_qualified_teams() to keep the app fast.
+    """
+    import urllib.parse
     import urllib.request
-    req = urllib.request.Request(
-        QUALIFIED_SOURCE_URL,
-        headers={"User-Agent": "worldcup-concierge/1.0"},
-        method="GET",
-    )
-    with urllib.request.urlopen(req, timeout=8) as resp:
-        html = resp.read().decode("utf-8", errors="ignore")
 
-    # Very lightweight parsing (best-effort)
+    def _http_get_json(url: str, timeout: int = 8) -> Dict[str, Any]:
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "worldcup-concierge/1.0"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            data = resp.read().decode("utf-8", errors="ignore")
+        return json.loads(data)
+
+    # 1) Find section index for "Qualified teams"
+    base = "https://en.wikipedia.org/w/api.php"
+    qs_sections = urllib.parse.urlencode({
+        "action": "parse",
+        "page": "2026_FIFA_World_Cup_qualification",
+        "prop": "sections",
+        "format": "json",
+        "formatversion": "2",
+        "origin": "*",
+    })
+    sec = _http_get_json(f"{base}?{qs_sections}", timeout=8)
+    sections = (((sec or {}).get("parse") or {}).get("sections") or [])
+
+    section_index = None
+    for s in sections:
+        # "line" is the title of the section
+        if (s.get("line") or "").strip().lower() == "qualified teams":
+            section_index = s.get("index")
+            break
+
+    # If we can't find the section, fall back to the full HTML endpoint (still try to be precise)
+    html = ""
+    if section_index:
+        qs_text = urllib.parse.urlencode({
+            "action": "parse",
+            "page": "2026_FIFA_World_Cup_qualification",
+            "prop": "text",
+            "section": str(section_index),
+            "format": "json",
+            "formatversion": "2",
+            "origin": "*",
+        })
+        txt = _http_get_json(f"{base}?{qs_text}", timeout=8)
+        html = (((txt or {}).get("parse") or {}).get("text") or "")
+    else:
+        req = urllib.request.Request(
+            QUALIFIED_SOURCE_URL,
+            headers={"User-Agent": "worldcup-concierge/1.0"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            html = resp.read().decode("utf-8", errors="ignore")
+
+    # 2) Parse team names from the first column of the "Qualified teams" wikitable.
+    # In the qualified-teams table, the team name is typically in a <th scope="row"> cell.
     teams: List[str] = []
-    for name in re.findall(r">\s*([A-Za-z][A-Za-z .\-']{2,})\s*<", html):
-        name = re.sub(r"\[[0-9]+\]", "", name).strip()
-        if name and name not in teams:
-            teams.append(name)
+    for name in re.findall(r'<th[^>]*scope="row"[^>]*>\s*(?:<span[^>]*>\s*)*<a[^>]*>([^<]+)</a>', html, flags=re.I):
+        nm = re.sub(r"\[[0-9]+\]", "", name).strip()
+        if nm and len(nm) <= 40:
+            teams.append(nm)
 
-    for host in ["Canada", "Mexico", "United States"]:
-        if host not in teams:
-            teams.insert(0, host)
-    return teams
+    # Backup pattern in case markup differs:
+    if not teams:
+        for name in re.findall(r'title="([^"]+)"[^>]*>\s*<img[^>]*class="mw-file-element"', html, flags=re.I):
+            nm = re.sub(r"\[[0-9]+\]", "", name).strip()
+            if nm and len(nm) <= 40:
+                teams.append(nm)
+
+    # De-dup, preserve order
+    seen = set()
+    out: List[str] = []
+    for t in teams:
+        if t not in seen:
+            seen.add(t)
+            out.append(t)
+
+    # sanity filter: remove common non-team words that could sneak in
+    blacklist = {
+        "Qualified teams", "Team", "Method of qualification", "Date of qualification",
+        "Total times qualified", "Last time qualified", "Current consecutive appearances",
+        "Previous best performance", "Hosts",
+    }
+    out = [t for t in out if t not in blacklist]
+
+    return out
 
 def get_qualified_teams(force: bool = False) -> List[str]:
     """Return countries for the Fan Zone selector (fast + reliable).
@@ -1696,6 +1770,9 @@ def _get_match_of_day() -> Optional[Dict[str, Any]]:
         }
 
     override_id = (cfg.get("match_of_day_id") or "").strip()
+    # If no Match of the Day is configured, do not attempt to load fixtures here (keeps /api/poll/state fast).
+    if not override_id:
+        return None
 
     try:
         matches = load_all_matches()
@@ -1834,7 +1911,7 @@ def api_poll_state():
             "post_match": False,
             "winner": None,
             "sponsor_text": cfg.get("poll_sponsor_text", ""),
-            "match": {"id": "", "home": "Team A", "away": "Team B", "kickoff": ""},
+            "match": {"id": "placeholder", "home": "Team A", "away": "Team B", "kickoff": ""},
             "counts": {"Team A": 0, "Team B": 0},
             "percent": {"Team A": 0.0, "Team B": 0.0},
             "percentages": {"Team A": 0.0, "Team B": 0.0},
@@ -1898,7 +1975,7 @@ def api_poll_vote():
             "post_match": False,
             "winner": None,
             "sponsor_text": cfg.get("poll_sponsor_text", ""),
-            "match": {"id": "", "home": "Team A", "away": "Team B", "kickoff": ""},
+            "match": {"id": "placeholder", "home": "Team A", "away": "Team B", "kickoff": ""},
             "counts": {"Team A": 0, "Team B": 0},
             "percent": {"Team A": 0.0, "Team B": 0.0},
             "percentages": {"Team A": 0.0, "Team B": 0.0},
