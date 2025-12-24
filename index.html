@@ -2788,6 +2788,50 @@ body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
   body{ padding-bottom: 96px !important; }
 }
 
+
+/* =========================
+   MOBILE: COLLAPSIBLE MENU (chat-first)
+   - Default collapsed on phones
+   - "Menu" chip toggles expansion
+   ========================= */
+@media (max-width: 950px){
+  .menucard{ max-height: none !important; }
+  .menucard .cardhead{ position: sticky; top: 0; z-index: 2; }
+  .menuToggleChip{
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(0,0,0,.16);
+    color: var(--text);
+    padding: 7px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .menuToggleChip.active{
+    border-color: rgba(212,175,55,.28);
+    background: rgba(212,175,55,.10);
+  }
+
+  /* Default collapsed state */
+  body.menu-collapsed .menucard .menu{ 
+    display: none !important;
+  }
+  body.menu-collapsed .menucard{
+    padding-bottom: 0;
+  }
+
+  /* Expanded: show scrollable menu panel */
+  body.menu-expanded .menucard .menu{
+    display: flex !important;
+    max-height: 260px !important;
+    overflow: auto !important;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -2929,7 +2973,8 @@ body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
 <div class="card menucard" style="display:flex;flex-direction:column;min-height:0; max-width:190px;">
 <div class="cardhead">
 <div class="title" id="menuTitle">Menu</div>
-<div class="pill" id="menuPill">4 languages</div></div>
+<div class="pill" id="menuPill">4 languages</div>
+<button class="menuToggleChip" id="menuToggleChip" type="button">Menu</button></div>
 <div class="menu" id="menu"></div>
 </div>
 <!-- Chat / Reservations -->
@@ -5229,6 +5274,75 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   }
   if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", collapseExtras);
   else collapseExtras();
+})();
+</script>
+
+
+<script>
+/* MOBILE MENU COLLAPSE (UI-only): chat-first layout */
+(function(){
+  function isSmall(){ return (window.innerWidth||0) <= 950; }
+  function applyDefault(){
+    const body = document.body;
+    if(!body) return;
+
+    // Only enforce default on small screens
+    if(isSmall()){
+      // If user previously expanded, keep it; otherwise collapse
+      const pref = localStorage.getItem("wc_menu_pref") || "collapsed";
+      body.classList.remove("menu-collapsed","menu-expanded");
+      body.classList.add(pref === "expanded" ? "menu-expanded" : "menu-collapsed");
+
+      const chip = document.getElementById("menuToggleChip");
+      if(chip){
+        chip.classList.toggle("active", body.classList.contains("menu-expanded"));
+      }
+    }else{
+      // Desktop: always show menu normally
+      body.classList.remove("menu-collapsed","menu-expanded");
+      const chip = document.getElementById("menuToggleChip");
+      if(chip) chip.classList.remove("active");
+    }
+  }
+
+  function toggle(){
+    const body = document.body;
+    if(!body) return;
+    if(!isSmall()) return;
+
+    const nowExpanded = !body.classList.contains("menu-expanded");
+    body.classList.toggle("menu-expanded", nowExpanded);
+    body.classList.toggle("menu-collapsed", !nowExpanded);
+
+    localStorage.setItem("wc_menu_pref", nowExpanded ? "expanded" : "collapsed");
+
+    const chip = document.getElementById("menuToggleChip");
+    if(chip) chip.classList.toggle("active", nowExpanded);
+
+    // If expanding, scroll the menu card into view a bit
+    if(nowExpanded){
+      try{ document.querySelector(".menucard")?.scrollIntoView({behavior:"smooth", block:"start"}); }catch(e){}
+    }
+  }
+
+  function wire(){
+    const chip = document.getElementById("menuToggleChip");
+    if(chip){
+      chip.addEventListener("click", toggle);
+    }
+  }
+
+  if(document.readyState==="loading"){
+    document.addEventListener("DOMContentLoaded", () => { wire(); applyDefault(); });
+  }else{
+    wire(); applyDefault();
+  }
+
+  let t=null;
+  window.addEventListener("resize", () => {
+    clearTimeout(t);
+    t=setTimeout(applyDefault, 140);
+  });
 })();
 </script>
 
