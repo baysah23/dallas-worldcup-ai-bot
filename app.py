@@ -2181,6 +2181,7 @@ def admin_update_config():
             "motd_home": cfg.get("motd_home",""),
             "motd_away": cfg.get("motd_away",""),
             "motd_datetime_utc": cfg.get("motd_datetime_utc",""),
+            "poll_lock_mode": cfg.get("poll_lock_mode","auto"),
         }})
 
 
