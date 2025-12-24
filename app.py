@@ -2104,15 +2104,15 @@ def admin_update_config():
     motd_away = (data.get("motd_away") if data.get("motd_away") is not None else "")
     motd_datetime_utc = (data.get("motd_datetime_utc") if data.get("motd_datetime_utc") is not None else "")
 
-    poll_lock_mode = (data.get(\"poll_lock_mode\") if data.get(\"poll_lock_mode\") is not None else \"auto\")
+    poll_lock_mode = (data.get("poll_lock_mode") if data.get("poll_lock_mode") is not None else "auto")
 
     pairs = {
         "poll_sponsor_text": str(sponsor).strip(),
         "match_of_day_id": str(match_id).strip(),
         "motd_home": str(motd_home).strip(),
         "motd_away": str(motd_away).strip(),
-        \"motd_datetime_utc\": str(motd_datetime_utc).strip(),
-        \"poll_lock_mode\": (str(poll_lock_mode).strip() or \"auto\"),
+        "motd_datetime_utc": str(motd_datetime_utc).strip(),
+        "poll_lock_mode": (str(poll_lock_mode).strip() or "auto"),
     }
 
     cfg = set_config(pairs)
