@@ -2758,6 +2758,36 @@ body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
   .pill{ font-size: 11px !important; }
 }
 
+
+/* =========================
+   MOBILE PARITY POLISH
+   - Put Chat back into the primary flow
+   - Move Fan Zone panels under Chat
+   - Reduce clutter + improve legibility
+   ========================= */
+@media (max-width: 950px){
+  /* Make hero fully readable on phones */
+  .hero{ height: 190px !important; margin: 10px 10px 6px 10px !important; }
+  .heroTitle{ font-size: 18px !important; }
+  .heroSub{ max-width: none !important; }
+
+  /* Chat should be obvious + usable */
+  .chatcard{ min-height: 520px !important; }
+  #chat{ max-height: 520px !important; }
+
+  /* Fan Zone rails become normal cards */
+  .fanzone{ border-radius: 16px !important; }
+  .fz-actions{ justify-content: flex-start !important; }
+
+  /* Reduce "fuzzy" blur effects on iOS */
+  .cardhead{ background: rgba(0,0,0,.10) !important; }
+  .heroCaption{ background: rgba(0,0,0,.40) !important; }
+
+  /* Keep device bar but don't let it obscure content */
+  .devicebar{ left: 10px !important; right: 10px !important; bottom: 10px !important; }
+  body{ padding-bottom: 96px !important; }
+}
+
 </style>
 </head>
 <body>
@@ -3134,6 +3164,7 @@ function wireActions(){
   function isSmall(){
     return (window.innerWidth || 0) <= 950;
   }
+  
   function moveIntoGrid(){
     if(!isSmall()) return;
 
@@ -3142,13 +3173,40 @@ function wireActions(){
     if(!grid || !leftcol) return;
 
     const hero = document.getElementById("heroBanner") || document.querySelector(".hero");
-    const vip = document.getElementById("vipHoldRail");
-    const fz  = document.getElementById("fanZoneLeft") || document.querySelector(".fanzone-left");
 
-    // Ensure hero is the first child within grid
-    if(hero && hero.parentElement === grid){
-      if(grid.firstElementChild !== hero) grid.insertBefore(hero, grid.firstElementChild);
+    // Ensure HERO is the first element inside grid
+    if(hero && hero.parentElement === grid && grid.firstElementChild !== hero){
+      grid.insertBefore(hero, grid.firstElementChild);
     }
+
+    // Ensure LEFTCOL (menu+chat) is immediately after hero
+    if(hero && hero.parentElement === grid){
+      const desired = hero.nextElementSibling;
+      if(desired !== leftcol){
+        grid.insertBefore(leftcol, hero.nextElementSibling);
+      }
+    }
+
+    // Pull VIP + both Fan Zone panels into the grid, right under LEFTCOL
+    const vip = document.getElementById("vipHoldRail");
+    const fzL = document.getElementById("fanZoneLeft");
+    const fzR = document.getElementById("fanZoneRight");
+
+    const anchor = leftcol.nextElementSibling;
+
+    const insertAfter = (node, afterNode) => {
+      if(!node) return afterNode;
+      // If it's already inside grid, we'll still re-position it for correct order
+      if(node.parentElement !== grid) grid.insertBefore(node, afterNode);
+      else grid.insertBefore(node, afterNode);
+      return node.nextElementSibling;
+    };
+
+    let cursor = anchor;
+    cursor = insertAfter(vip, cursor);
+    cursor = insertAfter(fzL, cursor);
+    cursor = insertAfter(fzR, cursor);
+  }
 
     // Place VIP and Fan Zone right AFTER leftcol (chat/menu)
     const afterLeft = leftcol.nextElementSibling;
@@ -5155,5 +5213,24 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   });
 })();
 </script>
+
+<script>
+/* MOBILE: start Extras collapsed for cleanliness (UI-only) */
+(function(){
+  function isSmall(){ return (window.innerWidth||0) <= 950; }
+  function collapseExtras(){
+    if(!isSmall()) return;
+    const right = document.getElementById("fanZoneRight");
+    const btn = document.getElementById("fzCollapseToggle2");
+    if(right && btn){
+      // If your existing toggle handler uses "collapsed" class, apply it.
+      right.classList.add("collapsed");
+    }
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded", collapseExtras);
+  else collapseExtras();
+})();
+</script>
+
 </body>
 </html>
