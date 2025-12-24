@@ -2682,6 +2682,82 @@ body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
   }
 }
 
+
+/* =========================
+   MOBILE CLEAN LAYOUT (Safari-friendly, parity)
+   - Forces single-column flow
+   - Disables fixed side rails
+   - Reduces blur/backdrop that can look "fuzzy" on iOS
+   ========================= */
+@media (max-width: 950px){
+  body{
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  /* Always show the hero on mobile */
+  .hero{ display:block !important; }
+
+  /* Make the entire app a clean single column */
+  .grid{
+    display:flex !important;
+    flex-direction:column !important;
+    gap:14px !important;
+    padding:12px !important;
+  }
+  .leftcol{
+    display:flex !important;
+    flex-direction:column !important;
+    gap:14px !important;
+  }
+
+  /* Menu becomes an expandable compact strip */
+  .menucard{ max-width: none !important; }
+  .menu{ max-height: 180px !important; }
+
+  /* Ensure chat is front-and-center */
+  .chatcard{ min-height: 420px; }
+
+  /* Kill desktop rail positioning */
+  .fz-left-stack,
+  .fanzone-left,
+  .fanzone-right,
+  #vipHoldRail{
+    position: static !important;
+    top:auto !important; left:auto !important; right:auto !important;
+    width: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    transform: none !important;
+    z-index: auto !important;
+  }
+
+  /* Give VIP + Fan Zone full width and consistent spacing */
+  #vipHoldRail, #fanZoneLeft{
+    margin: 0 !important;
+  }
+
+  /* Remove heavy blur effects that look fuzzy on iOS */
+  .devicebar,
+  #pager,
+  .heroCaption,
+  .fz-modal .panel{
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .devicebar{
+    background: rgba(7,16,34,.92) !important;
+    box-shadow: 0 14px 34px rgba(0,0,0,.35) !important;
+  }
+  #pager{
+    background: rgba(7,16,34,.95) !important;
+  }
+
+  /* Avoid tiny text looking soft */
+  .menu{ font-size: 10px !important; }
+  .pill{ font-size: 11px !important; }
+}
+
 </style>
 </head>
 <body>
@@ -3050,6 +3126,62 @@ function wireActions(){
   });
 })();
 </script>
+
+<script>
+/* MOBILE PARITY REFLOW (UI-only)
+   Ensures HERO + CHAT + VIP + FAN ZONE are visible in a clean order on phones/tablets. */
+(function(){
+  function isSmall(){
+    return (window.innerWidth || 0) <= 950;
+  }
+  function moveIntoGrid(){
+    if(!isSmall()) return;
+
+    const grid = document.querySelector(".grid");
+    const leftcol = document.querySelector(".leftcol");
+    if(!grid || !leftcol) return;
+
+    const hero = document.getElementById("heroBanner") || document.querySelector(".hero");
+    const vip = document.getElementById("vipHoldRail");
+    const fz  = document.getElementById("fanZoneLeft") || document.querySelector(".fanzone-left");
+
+    // Ensure hero is the first child within grid
+    if(hero && hero.parentElement === grid){
+      if(grid.firstElementChild !== hero) grid.insertBefore(hero, grid.firstElementChild);
+    }
+
+    // Place VIP and Fan Zone right AFTER leftcol (chat/menu)
+    const afterLeft = leftcol.nextElementSibling;
+    if(vip && vip.parentElement !== grid){
+      // If VIP is nested elsewhere, pull it into grid
+      grid.insertBefore(vip, afterLeft);
+    }else if(vip && vip.parentElement === grid){
+      grid.insertBefore(vip, afterLeft);
+    }
+
+    const afterVip = vip ? vip.nextElementSibling : afterLeft;
+    if(fz && fz.parentElement !== grid){
+      grid.insertBefore(fz, afterVip);
+    }else if(fz && fz.parentElement === grid){
+      grid.insertBefore(fz, afterVip);
+    }
+  }
+
+  function run(){
+    try{ moveIntoGrid(); }catch(e){}
+  }
+
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", run);
+  else run();
+
+  let t=null;
+  window.addEventListener("resize", () => {
+    clearTimeout(t);
+    t = setTimeout(run, 140);
+  });
+})();
+</script>
+
 <script>
 /**
  * This frontend matches your current app.py endpoints:
