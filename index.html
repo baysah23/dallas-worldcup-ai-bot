@@ -3873,260 +3873,430 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
    - QR poster generator (no external deps)
    ======================= */
 (function(){
-  const el = (id)=>document.getElementById(id);
-
-  // ----- Elements -----
-  const modal = el("countryModal");
-  const countryGrid = el("countryGrid");
-  const supporterLabel = el("supporterLabel");
-  const pollCard = el("pollCard");
-  const pollList = el("pollList");
-  const drinkCard = el("drinkCard");
-  const drinkName = el("drinkName");
-  const drinkDesc = el("drinkDesc");
-  const qrModal = el("qrModal") || el("qrCard"); // fallback to inline card if modal not present
-const qrCanvas = el("qrCanvas");
-const qrLink = el("qrLink");
-
-// Buttons (support both legacy + current Fan Zone markup)
-const btnPickCountry = el("btnPickCountry") || el("fzIconCountry");
-const btnOpenPoll = el("btnOpenPoll") || el("fzIconPoll");
-const btnOpenDrinks = el("btnOpenDrinks") || el("fzIconDrinks");
-const btnOpenQR = el("btnOpenQR") || el("btnSharePoster") || el("fzIconQR");
-
-  // LocalStorage keys
-  const LS_SUPPORT = "fz_support_country";
-  const LS_CLIENT  = "fz_client_id";
-
-  // Client id (used for one-vote-per-device on server)
-  function getClientId(){
-    let id = "";
-    try{ id = localStorage.getItem(LS_CLIENT) || ""; }catch(e){}
-    if(!id){
-      id = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("cid_" + Math.random().toString(16).slice(2) + Date.now());
-      try{ localStorage.setItem(LS_CLIENT, id); }catch(e){}
-    }
-    return id;
-  }
-
-  // ----- Countries for "Supporter" picker -----
-  let COUNTRIES = [];
-  const COUNTRY_META = {
-    "United States": { code:"USA", flag:"🇺🇸", drink:"Stars & Stripes Spritz", desc:"citrus + mint + sparkle" },
-    "Mexico": { code:"MEX", flag:"🇲🇽", drink:"Azteca Paloma", desc:"grapefruit + lime + salt rim" },
-    "Canada": { code:"CAN", flag:"🇨🇦", drink:"Maple Old Fashioned", desc:"bourbon + maple + bitters" },
-    "Brazil": { code:"BRA", flag:"🇧🇷", drink:"Rio Caipirinha", desc:"lime + sugar + cachaça" },
-    "Argentina": { code:"ARG", flag:"🇦🇷", drink:"La Albiceleste Spritz", desc:"citrus + bubbles" },
-    "France": { code:"FRA", flag:"🇫🇷", drink:"Bleu Royale", desc:"berries + champagne vibe" },
-    "England": { code:"ENG", flag:"🏴", drink:"London Gin Fizz", desc:"gin + lemon + foam" },
-    "Spain": { code:"ESP", flag:"🇪🇸", drink:"Iberian Sangria", desc:"fruit + spice" },
-    "Portugal": { code:"POR", flag:"🇵🇹", drink:"Lisbon Lemonade", desc:"lemon + herb" },
-    "Germany": { code:"GER", flag:"🇩🇪", drink:"Bavarian Mule", desc:"ginger + lime" },
-    "Japan": { code:"JPN", flag:"🇯🇵", drink:"Tokyo Highball", desc:"clean + crisp" },
-    "Nigeria": { code:"NGA", flag:"🇳🇬", drink:"Naija Zobo Cooler", desc:"hibiscus + ginger" },
-    "Morocco": { code:"MAR", flag:"🇲🇦", drink:"Atlas Mint Tea", desc:"mint + honey" },
-    "Senegal": { code:"SEN", flag:"🇸🇳", drink:"Dakar Ginger Punch", desc:"ginger + citrus" },
-    "Ghana": { code:"GHA", flag:"🇬🇭", drink:"Accra Pineapple Twist", desc:"pineapple + lime" }
-  };
-
-  function escapeHtml(s){
-    return (s || "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
-  }
-
-  function normalizeCountryRows(raw){
-    // raw can be list of strings or objects
-    const out = [];
-    for(const item of (raw || [])){
-      if(!item) continue;
-      if(typeof item === "string"){
-        const name = item.trim();
-        if(!name) continue;
-        const meta = COUNTRY_META[name] || {};
-        out.push({ name, code: meta.code || name.slice(0,3).toUpperCase(), flag: meta.flag || "🏳️" });
-      } else {
-        const name = (item.name || item.country || "").trim();
-        if(!name) continue;
-        out.push({ name, code: (item.code || item.fifa_code || item.fifa || "").trim() || (COUNTRY_META[name]?.code || name.slice(0,3).toUpperCase()), flag: (item.flag || "").trim() || (COUNTRY_META[name]?.flag || "🏳️") });
-      }
-    }
-    // unique by name
-    const seen = new Set();
-    return out.filter(c => (seen.has(c.name) ? false : (seen.add(c.name), true)));
-  }
-
-  async function loadQualifiedCountries(){
-    // Try both endpoints (per requirement)
-    const urls = ["/countries/qualified.json", "/worldcup/qualified.json"];
-    for(const u of urls){
-      try{
-        const res = await fetch(u, {cache:"no-store"});
-        if(!res.ok) continue;
-        const data = await res.json();
-        const list = normalizeCountryRows(data.countries || data.teams || data || []);
-        if(list.length){
-          COUNTRIES = list;
-          return;
-        }
-      }catch(e){}
-    }
-    // fallback to meta keys
-    COUNTRIES = normalizeCountryRows(Object.keys(COUNTRY_META));
-  }
-
-  // ----- Country support -----
-  function getSupport(){
-    try{
-      const raw = localStorage.getItem(LS_SUPPORT);
-      if(raw) return JSON.parse(raw);
-    }catch(e){}
-    return null;
-  }
-  function setSupport(country){
-    try{ localStorage.setItem(LS_SUPPORT, JSON.stringify(country)); }catch(e){}
-  }
-  function clearSupport(){
-    try{ localStorage.removeItem(LS_SUPPORT); }catch(e){}
-  }
-  function renderSupporter(){
-    const c = getSupport();
-    if(!supporterLabel) return;
-    supporterLabel.textContent = c?.name || "Not set";
-  }
-
-  function openCountryModal(){
-    if(!modal) return;
-    modal.classList.add("show");
-  }
-  function closeCountryModal(){
-    if(!modal) return;
-    modal.classList.remove("show");
-  }
-
-  function buildCountryGrid(){
-    if(!countryGrid) return;
-    countryGrid.innerHTML = (COUNTRIES || []).map(c => `
-      <button class="fz-country" type="button" data-name="${escapeHtml(c.name)}" title="${escapeHtml(c.name)}">
-        <span class="fz-flag">${escapeHtml(c.flag)}</span>
-        <span>${escapeHtml(c.name)}</span>
-      </button>
-    `).join("") || `<div class="fz-muted">Loading…</div>`;
-    countryGrid.querySelectorAll("[data-name]").forEach(btn=>{
-      btn.addEventListener("click", ()=>{
-        const name = btn.getAttribute("data-name");
-        const c = (COUNTRIES || []).find(x=>x.name===name);
-        if(c){
-          setSupport(c);
-          renderSupporter();
-          renderDrink();
-          closeCountryModal();
-        }
-      });
-    });
-  }
-
-  // ----- Drinks (based on supporter selection) -----
-  function renderDrink(){
-    const c = getSupport();
-    const name = c?.name || "";
-    const meta = COUNTRY_META[name] || null;
-    if(!drinkName || !drinkDesc) return;
-    if(!name){
-      drinkName.textContent = "Country-themed drink";
-      drinkDesc.textContent = "Pick a country to unlock a themed highlight.";
-      return;
-    }
-    const drink = meta?.drink || (name + " Matchday Mocktail");
-    const desc  = meta?.desc || "Ask the bar for a signature special — or tap for ideas.";
-    drinkName.textContent = drink;
-    drinkDesc.textContent = desc;
-  }
-
-  // ----- QR poster -----
-function openQR(){
-  if(!qrModal) return;
-
-  // If we are using the inline rail card (#qrCard), toggle display.
-  if(qrModal.id === "qrCard"){
-    const isOpen = (qrModal.style.display !== "none" && qrModal.style.display !== "");
-    qrModal.style.display = isOpen ? "none" : "block";
-    if(!isOpen){
-      try{
-        const url = location.origin + location.pathname;
-        if(qrLink) qrLink.textContent = url;
-        drawQR(url);
-      }catch(e){}
-      try{ qrModal.scrollIntoView({behavior:"smooth", block:"nearest"}); }catch(e){}
-    }
-    return;
-  }
-
-  // Otherwise, treat as modal overlay
-  qrModal.classList.add("show");
   try{
-    const url = location.origin + location.pathname;
-    if(qrLink) qrLink.textContent = url;
-    drawQR(url);
-  }catch(e){}
-}
-function closeQR(){
-    if(!qrModal) return;
-    if(qrModal.id==="qrCard"){ qrModal.style.display="none"; return; }
-    qrModal.classList.remove("show");
-  }
-  function drawQR(text){
-    // Deterministic, high-contrast QR-style pattern (visual poster). Not a standards-compliant QR.
-    if(!qrCanvas) return;
-    const ctx = qrCanvas.getContext("2d");
-    const w = qrCanvas.width, h = qrCanvas.height;
-    ctx.clearRect(0,0,w,h);
+    const el = (id)=>document.getElementById(id);
 
-    // white background
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0,0,w,h);
+    // ----- Elements -----
+    const modal = el("countryModal");
+    const countryGrid = el("countryGrid");
+    const supporterLabel = el("supporterLabel");
 
-    // simple hash seed
-    let seed = 0;
-    for(const ch of (text||"")) seed = (seed*31 + ch.charCodeAt(0)) >>> 0;
+    const pollCard = el("pollCard");
+    const pollList = el("pollList");
 
-    const n = 29;
-    const cell = Math.floor(Math.min(w,h) / n);
-    const ox = Math.floor((w - cell*n)/2);
-    const oy = Math.floor((h - cell*n)/2);
+    const drinkName = el("drinkName");
+    const drinkDesc = el("drinkDesc");
 
-    // finder patterns (corners)
-    function finder(x,y){
-      ctx.fillStyle = "#000";
-      ctx.fillRect(ox + x*cell, oy + y*cell, cell*7, cell*7);
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(ox + (x+1)*cell, oy + (y+1)*cell, cell*5, cell*5);
-      ctx.fillStyle = "#000";
-      ctx.fillRect(ox + (x+2)*cell, oy + (y+2)*cell, cell*3, cell*3);
+    const qrCard = el("qrCard");
+    const qrCanvas = el("qrCanvas");
+    const qrLink = el("qrLink");
+
+    // Buttons (support both legacy + current Fan Zone markup)
+    const btnPickCountry = el("btnPickCountry") || el("fzIconCountry");
+    const btnOpenPoll    = el("btnOpenPoll")    || el("fzIconPoll");
+    const btnOpenQR      = el("btnOpenQR")      || el("btnSharePoster") || el("fzIconQR");
+
+    // LocalStorage keys
+    const LS_SUPPORT = "fz_support_country";
+    const LS_CLIENT  = "fz_client_id";
+    const LS_VOTE    = "fz_poll_vote"; // {match_id, team}
+
+    // Client id (used for one-vote-per-device on server)
+    function getClientId(){
+      let id = "";
+      try{ id = localStorage.getItem(LS_CLIENT) || ""; }catch(e){}
+      if(!id){
+        id = (self.crypto && crypto.randomUUID) ? crypto.randomUUID() : ("cid_" + Math.random().toString(16).slice(2) + Date.now());
+        try{ localStorage.setItem(LS_CLIENT, id); }catch(e){}
+      }
+      return id;
     }
-    finder(0,0); finder(n-7,0); finder(0,n-7);
 
-    // data modules
-    for(let y=0;y<n;y++){
-      for(let x=0;x<n;x++){
-        // keep clear around finder patterns
-        const inTL = (x<7 && y<7);
-        const inTR = (x>=n-7 && y<7);
-        const inBL = (x<7 && y>=n-7);
-        if(inTL||inTR||inBL) continue;
+    // ----- Countries -----
+    let COUNTRIES = [];
+    const COUNTRY_META = {
+      "United States": { code:"USA", flag:"🇺🇸", drink:"Stars & Stripes Spritz", desc:"citrus + mint + sparkle" },
+      "Mexico": { code:"MEX", flag:"🇲🇽", drink:"Azteca Paloma", desc:"grapefruit + lime + salt rim" },
+      "Canada": { code:"CAN", flag:"🇨🇦", drink:"Maple Old Fashioned", desc:"bourbon + maple + bitters" },
+      "Brazil": { code:"BRA", flag:"🇧🇷", drink:"Rio Caipirinha", desc:"lime + sugar + cachaça" },
+      "Argentina": { code:"ARG", flag:"🇦🇷", drink:"La Albiceleste Spritz", desc:"citrus + bubbles" },
+      "France": { code:"FRA", flag:"🇫🇷", drink:"Bleu Royale", desc:"berries + champagne vibe" },
+      "England": { code:"ENG", flag:"🏴", drink:"London Gin Fizz", desc:"gin + lemon + foam" },
+      "Spain": { code:"ESP", flag:"🇪🇸", drink:"Iberian Sangria", desc:"fruit + spice" },
+      "Portugal": { code:"POR", flag:"🇵🇹", drink:"Lisbon Lemonade", desc:"lemon + herb" },
+      "Germany": { code:"GER", flag:"🇩🇪", drink:"Bavarian Mule", desc:"ginger + lime" },
+      "Japan": { code:"JPN", flag:"🇯🇵", drink:"Tokyo Highball", desc:"clean + crisp" },
+      "Nigeria": { code:"NGA", flag:"🇳🇬", drink:"Naija Zobo Cooler", desc:"hibiscus + ginger" },
+      "Morocco": { code:"MAR", flag:"🇲🇦", drink:"Atlas Mint Tea", desc:"mint + honey" },
+      "Senegal": { code:"SEN", flag:"🇸🇳", drink:"Dakar Ginger Punch", desc:"ginger + citrus" },
+      "Ghana": { code:"GHA", flag:"🇬🇭", drink:"Accra Pineapple Twist", desc:"pineapple + lime" }
+    };
 
-        // pseudo-random bit
-        const v = (seed ^ (x*2654435761) ^ (y*1597334677) ^ (x+y)*97) >>> 0;
-        const bit = (v & 1);
-        if(bit){
-          ctx.fillStyle = "#000";
-          ctx.fillRect(ox + x*cell, oy + y*cell, cell, cell);
+    function escapeHtml(s){
+      return (s || "").toString().replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
+
+    function normalizeCountryRows(raw){
+      const out = [];
+      for(const item of (raw || [])){
+        if(!item) continue;
+        if(typeof item === "string"){
+          const name = item.trim();
+          if(!name) continue;
+          const meta = COUNTRY_META[name] || {};
+          out.push({ name, code: meta.code || name.slice(0,3).toUpperCase(), flag: meta.flag || "🏳️" });
+        } else {
+          const name = (item.name || item.country || "").trim();
+          if(!name) continue;
+          const meta = COUNTRY_META[name] || {};
+          out.push({
+            name,
+            code: (item.code || item.fifa_code || item.fifa || "").trim() || meta.code || name.slice(0,3).toUpperCase(),
+            flag: (item.flag || "").trim() || meta.flag || "🏳️"
+          });
         }
+      }
+      const seen = new Set();
+      return out.filter(c => (seen.has(c.name.toLowerCase()) ? false : (seen.add(c.name.toLowerCase()), true)));
+    }
+
+    async function loadQualifiedCountries(){
+      // Try both endpoints (per requirement)
+      const urls = ["/countries/qualified.json", "/worldcup/qualified.json"];
+      for(const u of urls){
+        try{
+          const res = await fetch(u, {cache:"no-store"});
+          if(!res.ok) continue;
+          const data = await res.json();
+          const list = normalizeCountryRows(data.countries || data.teams || data.qualified || data || []);
+          if(list && list.length){
+            COUNTRIES = list;
+            return;
+          }
+        }catch(e){}
+      }
+      // fallback to known meta only (never blocks UI)
+      COUNTRIES = normalizeCountryRows(Object.keys(COUNTRY_META));
+    }
+
+    // ----- Country support -----
+    function getSupport(){
+      try{
+        const raw = localStorage.getItem(LS_SUPPORT);
+        if(raw) return JSON.parse(raw);
+      }catch(e){}
+      return null;
+    }
+    function setSupport(country){
+      try{ localStorage.setItem(LS_SUPPORT, JSON.stringify(country)); }catch(e){}
+    }
+    function clearSupport(){
+      try{ localStorage.removeItem(LS_SUPPORT); }catch(e){}
+    }
+    function renderSupporter(){
+      const c = getSupport();
+      if(!supporterLabel) return;
+      supporterLabel.textContent = c?.name || "Not set";
+    }
+
+    function openCountryModal(){
+      if(!modal) return;
+      modal.classList.add("show");
+      // prevent page scroll while modal open
+      document.body.style.overflow = "hidden";
+    }
+    function closeCountryModal(){
+      if(!modal) return;
+      modal.classList.remove("show");
+      document.body.style.overflow = "";
+    }
+
+    function buildCountryGrid(){
+      if(!countryGrid) return;
+      if(!COUNTRIES || !COUNTRIES.length){
+        countryGrid.innerHTML = `<div class="fz-muted">Countries unavailable.</div>`;
+        return;
+      }
+      countryGrid.innerHTML = (COUNTRIES || []).map(c => `
+        <button class="fz-country" type="button" data-name="${escapeHtml(c.name)}" title="${escapeHtml(c.name)}">
+          <span class="fz-flag">${escapeHtml(c.flag)}</span>
+          <span>${escapeHtml(c.name)}</span>
+        </button>
+      `).join("");
+      countryGrid.querySelectorAll("[data-name]").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const name = btn.getAttribute("data-name");
+          const c = (COUNTRIES || []).find(x=>x.name===name);
+          if(c){
+            setSupport(c);
+            renderSupporter();
+            renderDrink();
+            closeCountryModal();
+          }
+        });
+      });
+    }
+
+    // ----- Drinks (based on supporter selection) -----
+    function renderDrink(){
+      const c = getSupport();
+      const name = c?.name || "";
+      const meta = COUNTRY_META[name] || null;
+      if(!drinkName || !drinkDesc) return;
+      if(!name){
+        drinkName.textContent = "Country-themed drink";
+        drinkDesc.textContent = "Pick a country to unlock a themed highlight.";
+        return;
+      }
+      const drink = meta?.drink || (name + " Matchday Mocktail");
+      const desc  = meta?.desc || "Ask the bar for a signature special — or tap for ideas.";
+      drinkName.textContent = drink;
+      drinkDesc.textContent = desc;
+    }
+
+    // ----- QR poster -----
+    function drawQR(text){
+      // Deterministic, high-contrast QR-style pattern (visual poster). Not a standards-compliant QR.
+      if(!qrCanvas) return;
+      const ctx = qrCanvas.getContext("2d");
+      if(!ctx) return;
+      const w = qrCanvas.width, h = qrCanvas.height;
+      ctx.clearRect(0,0,w,h);
+
+      // white background
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0,0,w,h);
+
+      // simple hash seed
+      let seed = 0;
+      for(const ch of (text||"")) seed = (seed*31 + ch.charCodeAt(0)) >>> 0;
+
+      const n = 29;
+      const cell = Math.max(1, Math.floor(Math.min(w,h) / n));
+      const ox = Math.floor((w - cell*n)/2);
+      const oy = Math.floor((h - cell*n)/2);
+
+      function finder(x,y){
+        ctx.fillStyle = "#000";
+        ctx.fillRect(ox + x*cell, oy + y*cell, cell*7, cell*7);
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(ox + (x+1)*cell, oy + (y+1)*cell, cell*5, cell*5);
+        ctx.fillStyle = "#000";
+        ctx.fillRect(ox + (x+2)*cell, oy + (y+2)*cell, cell*3, cell*3);
+      }
+      finder(0,0); finder(n-7,0); finder(0,n-7);
+
+      for(let y=0;y<n;y++){
+        for(let x=0;x<n;x++){
+          const inTL = (x<7 && y<7);
+          const inTR = (x>=n-7 && y<7);
+          const inBL = (x<7 && y>=n-7);
+          if(inTL||inTR||inBL) continue;
+
+          const v = (seed ^ (x*2654435761) ^ (y*1597334677) ^ (x+y)*97) >>> 0;
+          if(v & 1){
+            ctx.fillStyle = "#000";
+            ctx.fillRect(ox + x*cell, oy + y*cell, cell, cell);
+          }
+        }
+      }
+      ctx.strokeStyle = "rgba(0,0,0,.15)";
+      ctx.strokeRect(ox-1, oy-1, cell*n+2, cell*n+2);
+    }
+
+    function toggleQR(){
+      if(!qrCard) return;
+      const isOpen = (qrCard.style.display !== "none" && qrCard.style.display !== "");
+      qrCard.style.display = isOpen ? "none" : "block";
+      if(!isOpen){
+        const url = location.origin + location.pathname;
+        if(qrLink){
+          qrLink.textContent = url;
+          qrLink.setAttribute("href", url);
+        }
+        drawQR(url);
+        // Keep scroll inside right rail (avoid page jump)
+        try{
+          const rail = document.getElementById("fanZoneRight");
+          if(rail && rail.scrollHeight > rail.clientHeight){
+            rail.scrollTop = Math.max(0, qrCard.offsetTop - 8);
+          }
+        }catch(e){}
       }
     }
 
-    // quiet zone border
-    ctx.strokeStyle = "rgba(0,0,0,.15)";
-    ctx.strokeRect(ox-1, oy-1, cell*n+2, cell*n+2);
-  })();
+    // ----- Match poll (backend) -----
+    function loadLocalVote(){
+      try{
+        const raw = localStorage.getItem(LS_VOTE);
+        if(!raw) return null;
+        return JSON.parse(raw);
+      }catch(e){ return null; }
+    }
+    function saveLocalVote(match_id, team){
+      try{ localStorage.setItem(LS_VOTE, JSON.stringify({match_id, team})); }catch(e){}
+    }
+
+    function pct(n){ return Number.isFinite(n) ? n : 0; }
+
+    function renderPoll(state){
+      if(!pollCard || !pollList) return;
+
+      // Ensure card is open/visible when rendering
+      pollCard.style.display = "block";
+
+      const ok = !!(state && state.ok);
+      if(!ok){
+        pollList.innerHTML = `<div class="fz-muted">Poll unavailable.</div>`;
+        return;
+      }
+
+      const m = state.match || {};
+      const teams = [m.home, m.away].filter(Boolean);
+      const counts = state.counts || {};
+      const pcts = state.percentages || state.percent || {};
+      const locked = !!state.locked;
+      const post = !!state.post_match;
+      const winner = state.winner || "";
+      const sponsor = (state.sponsor_text || "").trim();
+      const matchId = m.id || "";
+
+      const localVote = loadLocalVote();
+      const votedTeam = (localVote && localVote.match_id === matchId) ? localVote.team : null;
+
+      const headerBits = [];
+      if(sponsor) headerBits.push(`<div class="fz-muted" style="margin:6px 0 0 0">${escapeHtml(sponsor)}</div>`);
+      if(locked && !post) headerBits.push(`<div class="fz-muted" style="margin:6px 0 0 0">Poll locked at kickoff.</div>`);
+      if(post && winner) headerBits.push(`<div class="fz-muted" style="margin:6px 0 0 0">Winner: <b style="color:var(--warn)">${escapeHtml(winner)}</b></div>`);
+
+      const teamRows = teams.map(team=>{
+        const c = counts[team] || 0;
+        const p = pct(pcts[team] || 0);
+        const isWin = post && winner && winner === team;
+        const isVoted = votedTeam === team;
+
+        return `
+          <div class="fz-vote-row" style="border:1px solid rgba(255,255,255,.12);border-radius:14px;padding:10px;background:rgba(0,0,0,.10)">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+              <div style="font-weight:900">${escapeHtml(team)} ${isWin ? "🏆" : ""}</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <div class="fz-muted">${p.toFixed(1)}%</div>
+                <div class="fz-muted">•</div>
+                <div class="fz-muted">${c}</div>
+              </div>
+            </div>
+            <div style="margin-top:8px;border:1px solid rgba(255,255,255,.10);border-radius:999px;overflow:hidden;height:10px;background:rgba(255,255,255,.04)">
+              <div style="height:100%;width:${Math.min(100, Math.max(0,p))}%;background:${isWin ? "rgba(212,175,55,.85)" : "rgba(46,160,67,.75)"}"></div>
+            </div>
+            <div style="margin-top:10px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+              <button class="fz-btn voteBtn" data-team="${escapeHtml(team)}" ${locked ? "disabled" : ""} style="opacity:${locked ? .6 : 1}">
+                ${locked ? (isVoted ? "Voted" : "Closed") : (isVoted ? "Voted" : "Vote")}
+              </button>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      pollList.innerHTML = `
+        ${headerBits.join("")}
+        <div style="margin-top:10px;display:grid;gap:10px">
+          ${teamRows || `<div class="fz-muted">No match loaded yet.</div>`}
+        </div>
+      `;
+
+      pollList.querySelectorAll(".voteBtn").forEach(b=>{
+        b.addEventListener("click", async ()=>{
+          const team = b.getAttribute("data-team") || "";
+          if(!team) return;
+          await submitVote(team);
+        });
+      });
+    }
+
+    async function fetchPollState(){
+      const res = await fetch("/api/poll/state", {cache:"no-store"});
+      return await res.json();
+    }
+
+    async function submitVote(team){
+      try{
+        const client_id = getClientId();
+        const res = await fetch("/api/poll/vote", {
+          method:"POST",
+          headers: { "Content-Type":"application/json" },
+          body: JSON.stringify({ team, client_id })
+        });
+        const state = await res.json();
+        const mid = state?.match?.id || "";
+        if(mid) saveLocalVote(mid, team);
+        renderPoll(state);
+      }catch(e){
+        // show error but keep UI usable
+        if(pollList) pollList.innerHTML = `<div class="fz-muted">Vote failed. Please try again.</div>`;
+      }
+    }
+
+    function togglePoll(){
+      if(!pollCard) return;
+      const isOpen = (pollCard.style.display !== "none" && pollCard.style.display !== "");
+      pollCard.style.display = isOpen ? "none" : "block";
+      if(!isOpen){
+        // keep scroll inside left rail (avoid page jump)
+        try{
+          const rail = document.getElementById("fanZoneLeft");
+          if(rail && rail.scrollHeight > rail.clientHeight){
+            rail.scrollTop = Math.max(0, pollCard.offsetTop - 8);
+          }
+        }catch(e){}
+        // load live state
+        fetchPollState().then(renderPoll).catch(()=>renderPoll(null));
+      }
+    }
+
+    // ----- Wire up -----
+    btnPickCountry?.addEventListener("click", (e)=>{ e.preventDefault(); openCountryModal(); });
+    el("btnCloseCountry")?.addEventListener("click", (e)=>{ e.preventDefault(); closeCountryModal(); });
+    el("btnClearCountry")?.addEventListener("click", (e)=>{ e.preventDefault(); clearSupport(); renderSupporter(); renderDrink(); closeCountryModal(); });
+
+    btnOpenPoll?.addEventListener("click", (e)=>{ e.preventDefault(); togglePoll(); });
+
+    // Drinks panel is always visible; clicking should just ensure it's in view (within rail)
+    el("fzIconDrinks")?.addEventListener("click", ()=>{
+      try{
+        const rail = document.getElementById("fanZoneRight");
+        const card = document.getElementById("drinkCard");
+        if(rail && card && rail.scrollHeight > rail.clientHeight){
+          rail.scrollTop = Math.max(0, card.offsetTop - 8);
+        }
+      }catch(e){}
+    });
+
+    btnOpenQR?.addEventListener("click", (e)=>{ e.preventDefault(); toggleQR(); });
+
+    // close modal on backdrop click
+    modal?.addEventListener("click", (e)=>{
+      if(e.target === modal) closeCountryModal();
+    });
+
+    // ----- Init (never blocks UI) -----
+    renderSupporter();
+    renderDrink();
+
+    // Load countries async; rebuild grid when done
+    buildCountryGrid(); // initial (may show unavailable/loading)
+    loadQualifiedCountries()
+      .then(()=>{ buildCountryGrid(); })
+      .catch(()=>{ buildCountryGrid(); });
+
+    // Preload poll state quietly (so opening is instant)
+    fetchPollState().then(()=>{}).catch(()=>{});
+
+  }catch(e){
+    // If anything goes wrong, don't block the rest of the app.
+    console && console.warn && console.warn("Fan Zone init failed", e);
+  }
+})();
+</script>
 </script>
 <script>
 /* =======================
