@@ -2651,6 +2651,63 @@ body.kiosk-mode *::-webkit-scrollbar{
   body[data-msec="extras"] #vipHoldRail{ display:none !important; }
 }
 
+
+/* =========================
+   MOBILE FIT + SCHEDULE SAFETY
+   ========================= */
+@media (max-width: 950px){
+  html, body{ width:100%; max-width:100%; overflow-x:hidden; }
+  .wrap{ max-width: 100% !important; width: 100% !important; }
+  .card{ width: 100% !important; }
+  #scheduleList, .schedule, .list{ max-width:100% !important; }
+  .row{ flex-wrap: wrap !important; }
+  .row .muted{ word-break: break-word; }
+  #pager{ position: static !important; }
+}
+
+
+@media (max-width: 950px){
+  .mnav{
+    position: sticky;
+    top: 0;
+    z-index: 6000;
+    padding: 10px;
+    background: rgba(7,16,34,.92);
+    border-bottom: 1px solid rgba(255,255,255,.10);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .mchatfab{
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    z-index: 6500;
+    border-radius: 999px;
+    padding: 10px 12px;
+    border: 1px solid rgba(212,175,55,.28);
+    background: rgba(7,16,34,.92);
+    color: var(--text);
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    font-size: 11px;
+    display: none;
+    box-shadow: 0 16px 40px rgba(0,0,0,.35);
+  }
+  body[data-msec]:not([data-msec="chat"]) .mchatfab{ display: inline-flex; }
+}
+
+
+@media (max-width: 950px){
+  body[data-msec="vip"] #vipHoldRail{ display:block !important; }
+  body[data-msec="vip"] .chatcard,
+  body[data-msec="vip"] .menucard,
+  body[data-msec="vip"] #fanZoneLeft,
+  body[data-msec="vip"] #fanZoneRight,
+  body[data-msec="vip"] #scheduleCard{ display:none !important; }
+  body[data-msec="fan"] #vipHoldRail{ display:block !important; }
+}
+
 </style>
 </head>
 <body>
@@ -3814,19 +3871,43 @@ async function sendMessage(){
   setSending(true);
 
   try{
-    const res = await fetch("/chat", {
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body: JSON.stringify({
-        message: text,
-        session_id: sessionId,
-        language: lang,
-        history // kept as a feature; server will safely ignore
-      })
-    });
+    
+    const controller = (window.AbortController ? new AbortController() : null);
+    const timeoutMs = (window.innerWidth && window.innerWidth <= 950) ? 20000 : 12000;
+    let timeoutId = null;
+    if(controller){
+      timeoutId = setTimeout(() => { try{ controller.abort(); }catch(e){} }, timeoutMs);
+    }
 
-    const data = await res.json().catch(() => ({}));
-    const reply = (data && data.reply) ? data.reply : "Sorry — no reply received.";
+    // lighter payload for mobile reliability (server can ignore extra fields)
+    const payload = { message: text, session_id: sessionId, language: lang };
+
+    let res;
+    try{
+      res = await fetch("/chat", {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify(payload),
+        signal: controller ? controller.signal : undefined
+      });
+    } finally {
+      if(timeoutId) clearTimeout(timeoutId);
+    }
+
+    let data = {};
+    let reply = "Sorry — no reply received.";
+    if(res && res.ok){
+      data = await res.json().catch(() => ({}));
+      reply = (data && data.reply) ? data.reply : reply;
+    }else{
+      // Try to extract text for debugging without breaking UI
+      const status = res ? (res.status + " " + res.statusText) : "No response";
+      const txt = res ? await res.text().catch(()=> "") : "";
+      reply = `Server issue (${status}). Try again.`;
+      if(txt && txt.length < 180){
+        reply += " " + txt;
+      }
+    }
 
     addBubble("assistant", reply);
     history.push({role:"assistant", content: reply});
@@ -4895,6 +4976,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     nav.innerHTML = `
       <button class="mnav-btn" data-sec="chat">Chat</button>
       <button class="mnav-btn" data-sec="fan">Fan Zone</button>
+      <button class="mnav-btn" data-sec="vip">VIP</button>
       <button class="mnav-btn" data-sec="extras">Extras</button>
       <button class="mnav-btn" data-sec="schedule">Schedule</button>
       <button class="mnav-btn" data-sec="menu">Menu</button>
@@ -4936,7 +5018,17 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     try{ window.scrollTo({top: 0, behavior: "smooth"}); }catch(e){}
   }
 
-  function apply(){
+  
+// Back gesture: if on another section and user hits browser back (popstate), return to chat without leaving
+window.addEventListener("popstate", () => {
+  try{
+    if(isSmall()){
+      setSection("chat", true);
+    }
+  }catch(e){}
+});
+
+function apply(){
     ensureScheduleId();
     if(isSmall()){
       injectNav();
