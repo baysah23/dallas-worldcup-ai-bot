@@ -1249,32 +1249,55 @@ QUALIFIED_SOURCE_URL = os.environ.get(
 )
 
 def _local_country_list() -> List[str]:
-    """Fallback list used only if remote qualified-team fetch fails.
+    """Return World Cup 2026 participant list derived from fixtures (no network).
 
-    The Fan Zone selector must only show World Cup 2026 participants.
-    If we can't fetch an up-to-date qualified list remotely, we derive the
-    participant set from the match fixtures already loaded by the app.
-    This keeps the selector automatically in sync whenever your fixtures
-    data is updated (e.g., when additional teams are added).
+    We derive the participant set from the match fixtures already loaded by the app
+    (load_all_matches), extracting unique home + away team names.
 
-    If fixtures are unavailable for any reason, we fall back to the 3 host nations.
+    Some fixture sources include *placeholders* during qualification or bracket setup
+    (e.g., "1A", "2B", "DEN/MKD/CZE/IRL"). We intentionally filter those out so the
+    Fan Zone selector only shows real teams.
     """
+    def _is_real_team(name: str) -> bool:
+        n = (name or "").strip()
+        if not n:
+            return False
+        # Common placeholders / undecided tokens
+        if n.lower() in {"tbd", "to be decided", "to be determined", "winner", "loser", "n/a"}:
+            return False
+        # Group/slot placeholders like "1A", "2B", "3ABCDF" etc.
+        if re.fullmatch(r"\d+[A-Za-z]{1,10}", n):
+            return False
+        # Any remaining digits usually indicate placeholders ("Match 12", "3rd Place", etc.)
+        if any(ch.isdigit() for ch in n):
+            return False
+        # Slash-delimited options are not a single participant (e.g., "BOL/SUR/IRQ")
+        if "/" in n:
+            return False
+        return True
+
     try:
         teams = set()
-        for m in load_all_matches():
-            h = (m.get("home") or "").strip()
-            a = (m.get("away") or "").strip()
-            if h:
+        for match in load_all_matches() or []:
+            h = (match.get("home") or "").strip()
+            a = (match.get("away") or "").strip()
+            if _is_real_team(h):
                 teams.add(h)
-            if a:
+            if _is_real_team(a):
                 teams.add(a)
-        if teams:
+
+        # If we got a sensible participant count, return it.
+        # (Final tournament = 48; allow some slack for different fixture sources.)
+        if 10 <= len(teams) <= 70:
+            # Ensure hosts present even if a fixture source omits them.
+            for host in ["United States", "Canada", "Mexico"]:
+                teams.add(host)
             return sorted(teams)
     except Exception:
         pass
 
+    # Hard fallback
     return ["United States", "Canada", "Mexico"]
-
 
 def _fetch_qualified_teams_remote() -> List[str]:
     """
