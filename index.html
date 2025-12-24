@@ -2832,6 +2832,17 @@ body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
   }
 }
 
+
+@media (max-width: 950px){
+  /* Chat container must have explicit height on mobile (100% can collapse in column flow) */
+  .chatcard{ height: auto !important; min-height: 0 !important; }
+  #chat{ height: 360px !important; max-height: 360px !important; }
+}
+
+
+/* Hide empty menu pill (removes "4 languages") */
+#menuPill:empty{ display:none !important; }
+
 </style>
 </head>
 <body>
@@ -2973,7 +2984,7 @@ body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
 <div class="card menucard" style="display:flex;flex-direction:column;min-height:0; max-width:190px;">
 <div class="cardhead">
 <div class="title" id="menuTitle">Menu</div>
-<div class="pill" id="menuPill">4 languages</div>
+<div class="pill" id="menuPill"></div>
 <button class="menuToggleChip" id="menuToggleChip" type="button">Menu</button></div>
 <div class="menu" id="menu"></div>
 </div>
@@ -3210,6 +3221,7 @@ function wireActions(){
     return (window.innerWidth || 0) <= 950;
   }
   
+  
   function moveIntoGrid(){
     if(!isSmall()) return;
 
@@ -3218,11 +3230,45 @@ function wireActions(){
     if(!grid || !leftcol) return;
 
     const hero = document.getElementById("heroBanner") || document.querySelector(".hero");
+    const vip  = document.getElementById("vipHoldRail");
+    const fzL  = document.getElementById("fanZoneLeft");
+    const fzR  = document.getElementById("fanZoneRight");
 
-    // Ensure HERO is the first element inside grid
-    if(hero && hero.parentElement === grid && grid.firstElementChild !== hero){
-      grid.insertBefore(hero, grid.firstElementChild);
+    // 1) HERO first
+    if(hero && hero.parentElement === grid){
+      if(grid.firstElementChild !== hero){
+        grid.insertBefore(hero, grid.firstElementChild);
+      }
     }
+
+    // 2) LEFTCOL immediately after HERO
+    if(hero && hero.parentElement === grid){
+      grid.insertBefore(leftcol, hero.nextElementSibling);
+    }else{
+      // If hero missing, ensure leftcol is first
+      if(grid.firstElementChild !== leftcol){
+        grid.insertBefore(leftcol, grid.firstElementChild);
+      }
+    }
+
+    // Helper to place node right after a reference
+    const placeAfter = (node, ref) => {
+      if(!node || !ref) return ref;
+      const next = ref.nextElementSibling;
+      if(node.parentElement !== grid) grid.insertBefore(node, next);
+      else grid.insertBefore(node, next);
+      return node;
+    };
+
+    // 3) VIP under LEFTCOL (optional)
+    let cursor = placeAfter(vip, leftcol);
+
+    // 4) Extras (right panel) next (keeps phone clean and avoids hiding chat)
+    cursor = placeAfter(fzR, cursor);
+
+    // 5) Fan Zone (left panel) next
+    cursor = placeAfter(fzL, cursor);
+  }
 
     // Ensure LEFTCOL (menu+chat) is immediately after hero
     if(hero && hero.parentElement === grid){
