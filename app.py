@@ -1243,155 +1243,149 @@ USE_REMOTE_QUALIFIED = os.environ.get("USE_REMOTE_QUALIFIED", "1") == "1"
 QUALIFIED_CACHE_SECONDS = int(os.environ.get("QUALIFIED_CACHE_SECONDS", str(12 * 60 * 60)))  # 12h
 QUALIFIED_SOURCE_URL = os.environ.get(
     "QUALIFIED_SOURCE_URL",
-    "https://en.wikipedia.org/api/rest_v1/page/html/2026_FIFA_World_Cup",
+    "https://en.wikipedia.org/w/api.php?action=parse&page=2026_FIFA_World_Cup_qualification&prop=text&format=json&redirects=1",
 )
 
 def _local_country_list() -> List[str]:
-    """Return a stable, reasonably complete country list (no network, no extra deps).
+    """Fallback list used only if remote qualified-team fetch fails.
 
-    Render (and some hosts) may not have optional libs like `pycountry` installed.
-    We therefore ship a baked-in default list and *optionally* refine it if `pycountry`
-    is available at runtime.
+    IMPORTANT: This must *not* return "all countries", because the Fan Zone selector
+    must only show 2026 World Cup participants. When qualification is still ongoing,
+    the only universally correct participants are the hosts.
+
+    We therefore default to the 3 host nations and rely on the remote fetch (Wikipedia)
+    for the up-to-date qualified list.
     """
-    # Start from baked-in list (always available)
-    base = list(DEFAULT_COUNTRY_LIST)
+    return ["United States", "Canada", "Mexico"]
 
-    # Optional refinement / normalization if pycountry happens to exist
-    try:
-        import pycountry  # type: ignore
-        names: List[str] = []
-        for c in pycountry.countries:
-            n = getattr(c, "common_name", None) or getattr(c, "name", None) or getattr(c, "official_name", None)
-            if not n:
-                continue
-            n = str(n).strip()
-            names.append(n)
-
-        normalize = {
-            "United States of America": "United States",
-            "Russian Federation": "Russia",
-            "Iran, Islamic Republic of": "Iran",
-            "Korea, Republic of": "South Korea",
-            "Korea, Democratic People's Republic of": "North Korea",
-            "Viet Nam": "Vietnam",
-            "Lao People's Democratic Republic": "Laos",
-            "Syrian Arab Republic": "Syria",
-            "Tanzania, United Republic of": "Tanzania",
-            "Bolivia, Plurinational State of": "Bolivia",
-            "Venezuela, Bolivarian Republic of": "Venezuela",
-            "Moldova, Republic of": "Moldova",
-            "Congo, The Democratic Republic of the": "DR Congo",
-            "Czechia": "Czech Republic",
-            "Türkiye": "Turkey",
-            "Cabo Verde": "Cape Verde",
-        }
-        cleaned = [normalize.get(x, x) for x in names]
-        uniq = sorted(set(cleaned), key=lambda x: x.lower())
-        for host in ["Canada", "Mexico", "United States"]:
-            if host in uniq:
-                uniq.remove(host)
-        base = ["United States", "Canada", "Mexico"] + uniq
-    except Exception:
-        pass
-
-    # Final: de-dupe + keep hosts pinned on top
-    seen = set()
-    final: List[str] = []
-    for n in base:
-        if not n or not isinstance(n, str):
-            continue
-        n2 = n.strip()
-        if not n2:
-            continue
-        if n2.lower() in seen:
-            continue
-        seen.add(n2.lower())
-        final.append(n2)
-
-    # Ensure hosts are first
-    hosts = ["United States", "Canada", "Mexico"]
-    remainder = [c for c in final if c not in hosts]
-    return hosts + remainder
 
 def _fetch_qualified_teams_remote() -> List[str]:
     """
-    Best-effort fetch of *qualified* teams (not all FIFA members) from Wikipedia.
+    Fetch the *currently qualified* 2026 World Cup teams from Wikipedia (best-effort).
 
-    We intentionally point to the main "2026 FIFA World Cup" page (not the qualification
-    page) and extract only the "Qualified teams" table to avoid returning hundreds of
-    countries and freezing the front-end.
-
-    Network failures should never break the app; callers must handle empty results.
+    We use the MediaWiki API for the "2026 FIFA World Cup qualification" page and
+    extract the "Qualified teams" table specifically. This avoids accidentally
+    returning hundreds of FIFA members.
     """
     url = QUALIFIED_SOURCE_URL
+    import urllib.request
+    from html.parser import HTMLParser
 
-    # 1) Fetch HTML (REST v1 returns HTML body directly)
+    # 1) Fetch JSON from MediaWiki API
     req = urllib.request.Request(
         url,
         headers={"User-Agent": "worldcup-concierge/1.0"},
         method="GET",
     )
-    with urllib.request.urlopen(req, timeout=8) as resp:
-        html = resp.read().decode("utf-8", errors="ignore")
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        raw = resp.read().decode("utf-8", errors="ignore")
+    try:
+        data = json.loads(raw)
+        html_blob = (data.get("parse", {}).get("text", {}) or {}).get("*", "") or ""
+    except Exception:
+        html_blob = ""
 
-    if not html:
+    if not html_blob:
         return []
 
-    # 2) Isolate the "Qualified teams" section (reduces false positives).
-    lower = html.lower()
-    anchor_idx = lower.find('id="qualified_teams"')
-    if anchor_idx == -1:
-        anchor_idx = lower.find('id="qualified teams"')
-    if anchor_idx == -1:
-        anchor_idx = lower.find('qualified teams')
-    section = html[anchor_idx:] if anchor_idx != -1 else html
+    # 2) Parse HTML and grab first-column team names from the table that appears after
+    # the heading anchor id="Qualified_teams".
+    class _QualifiedTableParser(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.in_qualified_section = False
+            self.in_table = False
+            self.in_tr = False
+            self.in_td = False
+            self.td_index = -1
+            self.cur_cell = []
+            self.teams = []
+            self._seen_table = False
 
-    # Stop at next major header to keep parsing tight.
-    m_h2 = re.search(r"<h2\b", section, flags=re.I)
-    if m_h2 and m_h2.start() > 0:
-        section = section[: m_h2.start()]
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs or [])
+            if tag == "span":
+                # Wikipedia anchors often use underscores.
+                sid = (attrs.get("id") or "").strip()
+                if sid == "Qualified_teams" or sid == "Qualified_teams_and_rankings":
+                    self.in_qualified_section = True
 
-    # 3) Grab the first wikitable from that section.
-    m_table = re.search(r"<table[^>]*class=\"[^\"]*wikitable[^\"]*\"[^>]*>.*?</table>", section, flags=re.I | re.S)
-    table_html = m_table.group(0) if m_table else section
+            if self.in_qualified_section and tag == "table" and not self._seen_table:
+                cls = (attrs.get("class") or "")
+                # Only start on the first wikitable after the heading.
+                if "wikitable" in cls:
+                    self.in_table = True
+                    self._seen_table = True
 
-    # 4) Extract team names from row headers (<th scope="row">Team</th>)
-    teams: List[str] = []
-    for name in re.findall(r'<th[^>]*scope="row"[^>]*>\s*(?:<span[^>]*>\s*)*<a[^>]*>([^<]+)</a>', table_html, flags=re.I):
-        nm = re.sub(r"\[[0-9]+\]", "", name).strip()
-        if nm and len(nm) <= 60:
-            teams.append(nm)
+            if self.in_table and tag == "tr":
+                self.in_tr = True
+                self.td_index = -1
+                self.cur_cell = []
 
-    # Backup: sometimes team appears in <td><a title="Team">...</a>
-    if not teams:
-        for name in re.findall(r'<a[^>]+title="([^"]+)"[^>]*>', table_html, flags=re.I):
-            nm = re.sub(r"\[[0-9]+\]", "", name).strip()
-            if nm and 2 <= len(nm) <= 60 and "qualification" not in nm.lower():
-                teams.append(nm)
+            if self.in_tr and tag in ("td", "th"):
+                # Count cells in this row
+                self.td_index += 1
+                self.in_td = True
+                self.cur_cell = []
 
-    # 5) De-dupe, cap size, ensure hosts are present.
-    hosts = ["United States", "Canada", "Mexico"]
+        def handle_endtag(self, tag):
+            if self.in_td and tag in ("td", "th"):
+                self.in_td = False
+                text = "".join(self.cur_cell).strip()
+                # First column = team name, but skip header row and blanks.
+                if self.in_tr and self.td_index == 0:
+                    # Clean footnotes like [1]
+                    text = re.sub(r"\s*\[\d+\]\s*", " ", text).strip()
+                    # Basic guards
+                    if text and text.lower() not in ("team", "qualified teams"):
+                        # Normalize whitespace
+                        text = re.sub(r"\s+", " ", text).strip()
+                        # Drop obvious non-teams
+                        bad = ("method of qualification", "date of qualification", "total times")
+                        if not any(b in text.lower() for b in bad):
+                            self.teams.append(text)
+                self.cur_cell = []
+
+            if self.in_tr and tag == "tr":
+                self.in_tr = False
+                self.td_index = -1
+                self.cur_cell = []
+
+            if self.in_table and tag == "table":
+                self.in_table = False
+
+        def handle_data(self, data):
+            if self.in_td and data:
+                self.cur_cell.append(data)
+
+    p = _QualifiedTableParser()
+    try:
+        p.feed(html_blob)
+    except Exception:
+        return []
+
+    # 3) De-dup + ensure hosts included
+    teams = []
     seen = set()
-    out: List[str] = []
-    for h in hosts:
-        out.append(h)
-        seen.add(h.lower())
-
-    for t in teams:
+    for t in p.teams:
         key = t.lower()
         if key in seen:
             continue
-        # Guard against "FIFA", "CONCACAF", etc.
-        if any(bad in key for bad in ["fifa", "uefa", "conmebol", "caf", "afc", "ofc", "confederation", "qualification"]):
-            continue
-        out.append(t)
         seen.add(key)
+        teams.append(t)
 
-    # If parsing went wrong and we got a giant list, cap it (front-end safety).
-    if len(out) > 60:
-        out = out[:60]
+    # Hosts should always be present
+    for h in ["United States", "Canada", "Mexico"]:
+        if h.lower() not in seen:
+            teams.insert(0, h)
+            seen.add(h.lower())
 
-    return out
+    # Final guard: if something went wrong, never return a giant list
+    if len(teams) > 60:
+        teams = teams[:60]
+
+    return teams
+
 
 def get_qualified_teams(force: bool = False) -> List[str]:
     """Return countries for the Fan Zone selector (fast + reliable).
