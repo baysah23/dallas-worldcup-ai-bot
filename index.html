@@ -2608,6 +2608,80 @@ body.mode-kiosk .banner.show{ animation: none; } /* calmer on big screens */
   .devicebar, .kioskToggle{ backdrop-filter:none; -webkit-backdrop-filter:none; }
 }
 
+
+/* =========================
+   MOBILE/TABLET: KEEP DESKTOP EXPERIENCE
+   - Inline the side rails into the main flow
+   - Ensure hero + chat are visible/usable
+   ========================= */
+body.mode-mobile, body.mode-tablet{
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Force side-rails + VIP into normal flow on small devices */
+body.mode-mobile .fanzone-left,
+body.mode-mobile .fanzone-right,
+body.mode-mobile #vipHoldRail,
+body.mode-tablet .fanzone-left,
+body.mode-tablet .fanzone-right,
+body.mode-tablet #vipHoldRail{
+  position: static !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  width: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  z-index: auto !important;
+  transform: none !important;
+}
+
+/* Make sure main grid/cards aren't hidden behind fixed UI */
+body.mode-mobile .wrap,
+body.mode-tablet .wrap{
+  padding-bottom: 86px; /* room for device bar */
+}
+
+/* In mobile/tablet, stack: HERO -> CHAT -> FAN ZONE/VIP -> SCHEDULE */
+body.mode-mobile .grid,
+body.mode-tablet .grid{
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+body.mode-mobile .hero,
+body.mode-tablet .hero{
+  order: 0;
+}
+
+body.mode-mobile .leftcol,
+body.mode-tablet .leftcol{
+  order: 1;
+}
+
+body.mode-mobile #fanZoneLeft,
+body.mode-mobile #vipHoldRail,
+body.mode-tablet #fanZoneLeft,
+body.mode-tablet #vipHoldRail{
+  order: 2;
+}
+
+/* Sidebar (schedule) last on mobile/tablet */
+body.mode-mobile .card[style*="flex-direction:column"][style*="min-height:0"],
+body.mode-tablet .card[style*="flex-direction:column"][style*="min-height:0"]{
+  order: 3;
+}
+
+/* Ensure hero isn't visually covered by any rail on mobile */
+@media (max-width: 950px){
+  .fanzone-left, .fanzone-right{
+    width: auto !important;
+    margin: 0 10px 10px 10px;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -2886,7 +2960,45 @@ body.mode-kiosk .banner.show{ animation: none; } /* calmer on big screens */
   }
 
   // Wire quick actions safely (no backend changes)
-  function wireActions(){
+  
+  // On mobile/tablet: move VIP + Fan Zone into the main grid so users see HERO + CHAT + FAN ZONE like desktop
+  function reflowForSmallDevices(){
+    const body = document.body;
+    if(!body) return;
+    const isMobile = body.classList.contains("mode-mobile");
+    const isTablet = body.classList.contains("mode-tablet");
+    if(!isMobile && !isTablet) return;
+
+    // Target insertion: right after the left column (menu+chat)
+    const leftcol = document.querySelector(".leftcol");
+    const grid = document.querySelector(".grid");
+    if(!grid) return;
+
+    // Prefer placing after leftcol; otherwise, append near top (after hero)
+    const anchor = leftcol && leftcol.parentElement === grid ? leftcol : null;
+
+    const vip = document.getElementById("vipHoldRail");
+    const fz = document.getElementById("fanZoneLeft") || document.querySelector(".fanzone-left");
+
+    // Avoid duplicates if already moved
+    if(vip && vip.dataset && vip.dataset.moved === "1") vip = null;
+    if(fz && fz.dataset && fz.dataset.moved === "1") fz = null;
+
+    // Insert order: VIP then Fan Zone (both full width)
+    if(anchor){
+      if(vip){ vip.dataset.moved = "1"; anchor.insertAdjacentElement("afterend", vip); }
+      if(fz){ fz.dataset.moved = "1"; (vip ? vip : anchor).insertAdjacentElement("afterend", fz); }
+    }else{
+      // If structure differs, place after hero
+      const hero = document.getElementById("heroBanner") || document.querySelector(".hero");
+      if(hero){
+        if(vip){ vip.dataset.moved = "1"; hero.insertAdjacentElement("afterend", vip); }
+        if(fz){ fz.dataset.moved = "1"; (vip ? vip : hero).insertAdjacentElement("afterend", fz); }
+      }
+    }
+  }
+
+function wireActions(){
     const bar = document.getElementById("deviceBar");
     if(!bar) return;
     bar.addEventListener("click", (e) => {
@@ -2925,16 +3037,16 @@ body.mode-kiosk .banner.show{ animation: none; } /* calmer on big screens */
 
   // Run
   if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", () => { applyMode(); wireActions(); });
+    document.addEventListener("DOMContentLoaded", () => { applyMode(); reflowForSmallDevices(); wireActions(); });
   }else{
-    applyMode(); wireActions();
+    applyMode(); reflowForSmallDevices(); wireActions();
   }
 
   // Re-evaluate on resize (debounced)
   let t=null;
   window.addEventListener("resize", () => {
     clearTimeout(t);
-    t = setTimeout(applyMode, 160);
+    t = setTimeout(() => { applyMode(); reflowForSmallDevices(); }, 160);
   });
 })();
 </script>
