@@ -4,6 +4,7 @@ load_dotenv()
 import os
 import json
 import re
+import html
 import time
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
@@ -1240,12 +1241,12 @@ _qualified_cache: Dict[str, Any] = {"loaded_at": 0, "teams": []}
 # with hosts pinned to the top. If you want to switch back to a remote "qualified so far"
 # source, set USE_REMOTE_QUALIFIED=1 and provide QUALIFIED_SOURCE_URL.
 USE_REMOTE_QUALIFIED = os.environ.get("USE_REMOTE_QUALIFIED", "1") == "1"
-QUALIFIED_CACHE_SECONDS = int(os.environ.get("QUALIFIED_CACHE_SECONDS", str(3 * 60 * 60)))  # 3h
+QUALIFIED_CACHE_SECONDS = int(os.environ.get("QUALIFIED_CACHE_SECONDS", str(12 * 60 * 60)))  # 12h
 QUALIFIED_SOURCE_URL = os.environ.get(
     "QUALIFIED_SOURCE_URL",
     # Prefer the main tournament page's "Qualified teams" table.
     # It updates as teams qualify and is less likely to include non-team rows.
-    "https://en.wikipedia.org/api/rest_v1/page/html/2026_FIFA_World_Cup",
+    "https://en.wikipedia.org/api/rest_v1/page/html/2026_FIFA_World_Cup_qualification",
 )
 
 def _local_country_list() -> List[str]:
@@ -1294,45 +1295,24 @@ def _fetch_qualified_teams_remote() -> List[str]:
         return []
 
     # 2) Find the "Qualified teams" section and then choose the most likely table.
-    # Wikipedia renderings vary: sometimes there is an element id like "Qualified_teams",
-    # other times only the visible heading text exists. We therefore:
-    #   (a) try id-based anchors, then
-    #   (b) fall back to a plain-text search for the heading.
-    #
     # We do NOT assume the first table is the right one (Wikipedia pages often have
     # navigation/other tables near section headers).
     anchor_pos = -1
-
-    # Common id markers across MediaWiki/REST renderings
     for anchor in (
         'id="Qualified_teams"',
-        "id='Qualified_teams'",
         'id="Qualified_teams_and_rankings"',
-        "id='Qualified_teams_and_rankings'",
-        '<span class="mw-headline" id="Qualified_teams"',
-        "<span class='mw-headline' id='Qualified_teams'",
+        'id="Qualified_teams_and_rankings"',
+        'id="Qualified_teams_and_rankings"',
     ):
         anchor_pos = html_blob.find(anchor)
         if anchor_pos != -1:
             break
-
-    # Some renderings use a <span id="Qualified_teams"> marker.
     if anchor_pos == -1:
-        m_anchor = re.search(r'<span[^>]+id=["\']Qualified_teams["\'][^>]*>', html_blob, flags=re.I)
-        if m_anchor:
-            anchor_pos = m_anchor.start()
-
-    # Final fallback: look for the visible heading text.
-    if anchor_pos == -1:
-        m_text = re.search(r">\s*Qualified\s+teams\s*<", html_blob, flags=re.I)
-        if not m_text:
-            # Even looser: anywhere the phrase appears (still safe because we hard-guard the row count).
-            m_text = re.search(r"Qualified\s+teams", html_blob, flags=re.I)
-        if m_text:
-            anchor_pos = m_text.start()
-
+        # Some renderings use a <span id="Qualified_teams"> marker.
+        anchor_pos = html_blob.find('<span id="Qualified_teams"')
     if anchor_pos == -1:
         return []
+
     sub = html_blob[anchor_pos:]
 
     # Grab a few candidate wikitables and pick the first one that looks like a
@@ -1398,15 +1378,18 @@ def _fetch_qualified_teams_remote() -> List[str]:
 
         # Prefer the first wiki link text that isn't a File:/Category:/Help: etc.
         link_m = None
-        for m in re.finditer(r"<a[^>]+href=\"([^\"]+)\"[^>]*>([^<]+)</a>", cell, flags=re.I):
+        # Wikipedia REST HTML often nests spans inside <a>, so capture inner HTML and strip tags.
+        for m in re.finditer(r"<a[^>]+href=\"([^\"]+)\"[^>]*>(.*?)</a>", cell, flags=re.I | re.S):
             href = (m.group(1) or "").strip()
-            txt = (m.group(2) or "").strip()
-            if not txt:
+            inner = (m.group(2) or "").strip()
+            if not inner:
                 continue
             if href.startswith("/wiki/") and ":" not in href:
                 link_m = m
                 break
-        name = (link_m.group(2) if link_m else re.sub(r"<[^>]+>", " ", cell))
+        raw_name = (link_m.group(2) if link_m else cell)
+        raw_name = re.sub(r"<[^>]+>", " ", raw_name)
+        name = html.unescape(raw_name)
         name = re.sub(r"\s+", " ", name).strip()
         name = re.sub(r"\s*\[\d+\]\s*", " ", name).strip()
 
@@ -1467,18 +1450,66 @@ def get_qualified_teams(force: bool = False) -> List[str]:
             pass
 
     return list(_qualified_cache["teams"])
+def _iso2_to_flag(iso2: str) -> str:
+    iso2 = (iso2 or "").upper()
+    if len(iso2) != 2 or not iso2.isalpha():
+        return "🏳️"
+    # Regional indicator symbols
+    return chr(0x1F1E6 + (ord(iso2[0]) - ord('A'))) + chr(0x1F1E6 + (ord(iso2[1]) - ord('A')))
+
+_COUNTRY_NAME_OVERRIDES = {
+    # Common Wikipedia/FIFA naming variations
+    "United States": "US",
+    "USA": "US",
+    "Korea Republic": "KR",
+    "South Korea": "KR",
+    "IR Iran": "IR",
+    "Iran": "IR",
+    "Côte d’Ivoire": "CI",
+    "Cote d'Ivoire": "CI",
+    "Ivory Coast": "CI",
+    "Cape Verde": "CV",
+    "Curaçao": "CW",
+    "Curacao": "CW",
+    "Czechia": "CZ",
+    "Russia": "RU",
+    "China PR": "CN",
+    "China": "CN",
+    "Viet Nam": "VN",
+    "Vietnam": "VN",
+    "Türkiye": "TR",
+    "Turkey": "TR",
+}
+
+def _country_meta(name: str) -> Dict[str, str]:
+    """Best-effort ISO + flag for a country name."""
+    iso2 = _COUNTRY_NAME_OVERRIDES.get(name)
+    if not iso2:
+        try:
+            import pycountry
+            hit = pycountry.countries.lookup(name)
+            iso2 = getattr(hit, "alpha_2", None)
+        except Exception:
+            iso2 = None
+    return {
+        "name": name,
+        "code": (iso2 or "") if iso2 else "",
+        "flag": _iso2_to_flag(iso2) if iso2 else "🏳️",
+    }
+
 @app.route("/worldcup/qualified.json")
 def qualified_json():
     teams = get_qualified_teams()
+    enriched = [_country_meta(t) for t in teams]
     return jsonify({
         "updated_at": int(_qualified_cache.get("loaded_at") or 0),
-        "count": len(teams),
-        "teams": teams,
-        "countries": teams,   # alias for front-end compatibility
-        "qualified": teams,   # alias for front-end compatibility
+        "count": len(enriched),
+        "teams": enriched,
+        "countries": enriched,   # alias for front-end compatibility
+        "qualified": enriched,   # alias for front-end compatibility
         "note": "Teams qualified so far for World Cup 2026 (hosts always included).",
+        "source": QUALIFIED_SOURCE_URL,
     })
-
 
 
 @app.route("/countries/qualified.json")

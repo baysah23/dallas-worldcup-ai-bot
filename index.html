@@ -3970,7 +3970,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
           const data = await res.json();
           let list = normalizeCountryRows(data.countries || data.teams || data.qualified || data || []);
           // Safety: prevent huge lists from freezing the UI
-          if(list && list.length > 60) list = list.slice(0,60);
+          if(list && list.length > 80) list = list.slice(0,80);
           if(list && list.length){
             COUNTRIES = list;
             return;
