@@ -1836,8 +1836,22 @@ def _get_match_of_day() -> Optional[Dict[str, Any]]:
 
 
 def _poll_is_locked(match: Optional[Dict[str, Any]]) -> bool:
+    """Return whether the poll is locked.
+
+    Default behavior is auto-lock at kickoff.
+    Admin can override via config key poll_lock_mode: auto | locked | unlocked.
+    """
     if not match:
         return False
+    try:
+        mode = (get_config().get("poll_lock_mode") or "auto").strip().lower()
+    except Exception:
+        mode = "auto"
+    if mode == "locked":
+        return True
+    if mode == "unlocked":
+        return False
+    # auto
     now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     kickoff = (match.get("datetime_utc") or "").strip()
     return bool(kickoff and now_utc >= kickoff)
@@ -1938,6 +1952,7 @@ def api_config():
         "motd_home": cfg.get("motd_home", ""),
         "motd_away": cfg.get("motd_away", ""),
         "motd_datetime_utc": cfg.get("motd_datetime_utc", ""),
+        "poll_lock_mode": cfg.get("poll_lock_mode", "auto"),
     }
     return jsonify(public)
 
@@ -2089,12 +2104,15 @@ def admin_update_config():
     motd_away = (data.get("motd_away") if data.get("motd_away") is not None else "")
     motd_datetime_utc = (data.get("motd_datetime_utc") if data.get("motd_datetime_utc") is not None else "")
 
+    poll_lock_mode = (data.get(\"poll_lock_mode\") if data.get(\"poll_lock_mode\") is not None else \"auto\")
+
     pairs = {
         "poll_sponsor_text": str(sponsor).strip(),
         "match_of_day_id": str(match_id).strip(),
         "motd_home": str(motd_home).strip(),
         "motd_away": str(motd_away).strip(),
-        "motd_datetime_utc": str(motd_datetime_utc).strip(),
+        \"motd_datetime_utc\": str(motd_datetime_utc).strip(),
+        \"poll_lock_mode\": (str(poll_lock_mode).strip() or \"auto\"),
     }
 
     cfg = set_config(pairs)
@@ -2544,6 +2562,15 @@ tr:hover td{background:rgba(255,255,255,.03)}
         <div class="sub">Kickoff (UTC, ISO 8601, e.g. 2026-06-11T19:00:00Z) — used to lock poll at kickoff</div>
         <input id="motdKickoff" placeholder="2026-06-11T19:00:00Z"/>
       </div>
+      <div style="margin-top:10px">
+        <div class="sub">Poll lock</div>
+        <select id="pollLockMode" class="inp">
+          <option value="auto">Auto (lock at kickoff)</option>
+          <option value="unlocked">Force Unlocked (admin override)</option>
+          <option value="locked">Force Locked</option>
+        </select>
+        <div class="small">If you need to reopen voting after kickoff, set <b>Force Unlocked</b>.</div>
+      </div>
     </div>
   </div>
 
@@ -2594,6 +2621,13 @@ tr:hover td{background:rgba(255,255,255,.03)}
       try{
         const opt = sel.options[sel.selectedIndex];
         if(!opt) return;
+        // IMPORTANT: don't erase a manual override when switching back to Auto.
+        if((opt.value||"") === ""){
+          const curHome = ($("motdHome")?.value || "").trim();
+          const curAway = ($("motdAway")?.value || "").trim();
+          const curKick = ($("motdKickoff")?.value || "").trim();
+          if(curHome || curAway || curKick) return;
+        }
         if($("motdHome")) $("motdHome").value = opt.getAttribute("data-home") || "";
         if($("motdAway")) $("motdAway").value = opt.getAttribute("data-away") || "";
         if($("motdKickoff")) $("motdKickoff").value = opt.getAttribute("data-dt") || "";
@@ -2612,6 +2646,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
       if($("motdHome")) $("motdHome").value = (cfg.motd_home || "");
       if($("motdAway")) $("motdAway").value = (cfg.motd_away || "");
       if($("motdKickoff")) $("motdKickoff").value = (cfg.motd_datetime_utc || "");
+      if($("pollLockMode")) $("pollLockMode").value = (cfg.poll_lock_mode || "auto");
       await loadScheduleOptions(cfg.match_of_day_id || "");
     }catch(e){
       await loadScheduleOptions("");
@@ -2674,11 +2709,25 @@ tr:hover td{background:rgba(255,255,255,.03)}
   async function saveConfig(){
     const sponsor = ($("pollSponsorText")?.value || "").trim();
     const matchId = ($("motdSelect")?.value || "").trim();
+    const home = ($("motdHome")?.value || "").trim();
+    const away = ($("motdAway")?.value || "").trim();
+    const kickoff = ($("motdKickoff")?.value || "").trim();
+    const lockMode = ($("pollLockMode")?.value || "auto").trim();
     try{
+      // Disable button briefly to prevent double-click race with the 5s poll refresh.
+      const btn = $("btnSaveConfig");
+      if(btn){ btn.disabled = true; btn.textContent = "Saving…"; }
       const res = await fetch(`/admin/update-config?key=${encodeURIComponent(ADMIN_KEY)}`,{
         method:"POST",
         headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ poll_sponsor_text: sponsor, match_of_day_id: matchId, motd_home: ($("motdHome")?.value||"").trim(), motd_away: ($("motdAway")?.value||"").trim(), motd_datetime_utc: ($("motdKickoff")?.value||"").trim() })
+        body: JSON.stringify({
+          poll_sponsor_text: sponsor,
+          match_of_day_id: matchId,
+          motd_home: home,
+          motd_away: away,
+          motd_datetime_utc: kickoff,
+          poll_lock_mode: lockMode
+        })
       });
       const out = await res.json();
       if(out && out.ok){
@@ -2689,10 +2738,13 @@ tr:hover td{background:rgba(255,255,255,.03)}
       }
     }catch(e){
       alert("Save failed.");
+    }finally{
+      const btn = $("btnSaveConfig");
+      if(btn){ btn.disabled = false; btn.textContent = "Save settings"; }
     }
   }
 
-  $("btnSaveConfig")?.addEventListener("click", saveConfig);
+  $("btnSaveConfig")?.$("btnSaveConfig")?.addEventListener("click", saveConfig);
 
   loadConfig().then(loadPoll);
   setInterval(loadPoll, 5000);
