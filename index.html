@@ -219,7 +219,10 @@
       text-transform:uppercase;
     }
     .heroTitle{
-      font-size:22px;
+      font-size:clamp(16px, 4.6vw, 22px);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
       font-weight:900;
       line-height:1.05;
       text-transform:uppercase;
@@ -2617,6 +2620,13 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 
   /* Default: show Chat section */
+  body[data-msec="home"] .chatcard{ display:block !important; }
+  body[data-msec="home"] .menucard,
+  body[data-msec="home"] #fanZoneLeft,
+  body[data-msec="home"] #fanZoneRight,
+  body[data-msec="home"] #scheduleCard,
+  body[data-msec="home"] #vipHoldRail{ display:none !important; }
+
   body[data-msec="chat"] .chatcard{ display:block !important; }
   body[data-msec="chat"] .menucard,
   body[data-msec="chat"] #fanZoneLeft,
@@ -2960,7 +2970,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 </div>
 <div class="heroOverlay">
 <div class="heroKicker">WORLD CUP 2026</div>
-<div class="heroTitle">DALLAS MATCH DAY HQ</div>
+<div class="heroTitle">DALLAS WORLDCUP HQ</div>
 <div class="heroSub">Reserve tables • Live schedules • Concierge chat</div>
 <div class="wcCount" id="wcCount">
 <div class="wcLabel">WORLD CUP KICKOFF IN</div>
@@ -4369,7 +4379,12 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
 
   function setSection(sec){
     document.body.setAttribute('data-msec', sec);
-    // On mobile, expand the menu when you navigate to it (avoid “blank menu” feel)
+    
+    if(sec === 'home'){
+      // Home = top of app (hero + default state)
+      try{ window.scrollTo({ top: 0, behavior: 'smooth' }); }catch(_){ window.scrollTo(0,0); }
+    }
+// On mobile, expand the menu when you navigate to it (avoid “blank menu” feel)
     if(isMobile && isMobile()){ // safeguard
       if(sec === 'menu'){
         document.body.classList.add('menu-expanded');
@@ -4385,6 +4400,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     // When switching, scroll the relevant card into view for a “native app” feel.
     const map = {
       chat: document.querySelector('.chatcard'),
+      home: document.getElementById('heroBanner') || document.querySelector('.hero') || document.body,
       menu: document.querySelector('.menucard'),
       schedule: document.getElementById('scheduleCard'),
       fanzone: document.getElementById('fanZoneLeft'),
@@ -4409,7 +4425,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     });
     // Default section on mobile
     if(isMobile() && !document.body.getAttribute('data-msec')){
-      setSection('chat');
+      setSection('home');
     }
   }
 
