@@ -270,6 +270,8 @@
     }
     @keyframes smokeFloat{
       0%,100%{ transform: translate3d(0,0,0) scale(1.02); }
+      50%{ transform: translate3d(-8px, -6px, 0) scale(1.04); }
+    }
     .heroGlow{
       position:absolute; inset:0;
       background:
@@ -713,7 +715,7 @@
 
 /* =========================
    HERO (3-up fade rotation)
-/* ========================= */
+   ========================= */
 .heroTriWrap{
   position:absolute;
   top:14px; bottom:14px;
@@ -853,7 +855,7 @@
 
 /* =========================
    FINAL OVERRIDES (BANNER)
-/* ========================= */
+   ========================= */
 :root{ --gold:#d4af37; }
 
 /* Banner header gold */
@@ -882,8 +884,6 @@
 
 /* =========================
    BANNER POLISH: ZOOM + GLOW
-   (Notes below are comments only)
-/* ========================= */
 
 /* === RECOMMENDED TRANSITION UPGRADE ===
    - Smoother crossfade: 1100ms ease-in-out (container opacity)
@@ -902,7 +902,7 @@
 .hero:hover .heroSlide.active img{
   animation-play-state: paused;
 }
-/* ========================= */
+   ========================= */
 
 /* Subtle, safer zoom */
 .heroSlide.active img,
@@ -931,7 +931,7 @@
 
 /* =========================
    FLAGS (tasteful, UI-only)
-/* ========================= */
+   ========================= */
 .flag-badge{
   display:inline-flex;
   align-items:center;
@@ -954,7 +954,7 @@
 
 /* =========================
    HERO MINI FLAG BADGES
-/* ========================= */
+   ========================= */
 .hero-flags{
   position:absolute;
   top:18px;
@@ -1084,6 +1084,8 @@
    MATCH DAY MODE (Step 1)
    Visual amplify only (UI-only)
    ========================= */
+50%      { transform: translateZ(0) scale(1.015); filter: drop-shadow(0 0 16px rgba(212,175,55,.35)); }
+}
 /* Banner takeover text styling when matchday */
 /* Highlight the next match card in gold */
 
@@ -2431,7 +2433,7 @@ body.kiosk-mode *::-webkit-scrollbar{
    HERO 3D POP (SAFE, UI-only)
    - Adds subtle depth to rotating star images
    - No JS changes; respects reduced-motion
-/* ========================= */
+   ========================= */
 .hero{
   perspective: 900px;
   perspective-origin: 50% 45%;
@@ -2475,7 +2477,7 @@ body.kiosk-mode *::-webkit-scrollbar{
    HERO RIM-LIGHT SWEEP (Premium, noticeable)
    - Adds a soft edge highlight that makes depth read instantly
    - Synced to the 3D animation duration (5s)
-/* ========================= */
+   ========================= */
 
 /* Rim sweep overlay sits above image but below text */
 .heroSlide::after{
@@ -2536,7 +2538,7 @@ body.kiosk-mode *::-webkit-scrollbar{
    MOBILE PREMIUM (NO-JS, SAFE)
    - Keep same features as desktop, stacked cleanly
    - Remove fixed rails/overlays that block touch
-/* ========================= */
+   ========================= */
 @media (max-width: 950px){
   body{ overflow-x:hidden; }
   .wrap{ padding: 10px 0 18px 0 !important; }
@@ -2615,7 +2617,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 /* =========================
    MOBILE: SECTION NAV (desktop parity without clutter)
    - One-tap switch between Chat / Fan Zone / Extras / Schedule / Menu
-/* ========================= */
+   ========================= */
 @media (max-width: 950px){
   .mnav{
     display:flex;
@@ -2693,7 +2695,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 /* =========================
    MOBILE FIT + SCHEDULE SAFETY
-/* ========================= */
+   ========================= */
 @media (max-width: 950px){
   html, body{ width:100%; max-width:100%; overflow-x:hidden; }
   .wrap{ max-width: 100% !important; width: 100% !important; }
@@ -3066,23 +3068,6 @@ body.kiosk-mode *::-webkit-scrollbar{
   #heroBanner .heroCard.heroCardTri{ height: 92px !important; }
   #heroBanner .heroCardName{ font-size: 10px !important; }
   #heroBanner .heroCardCountry{ font-size: 9px !important; }
-}
-
-
-/* =========================
-   DESKTOP RESTORE (DO NOT SHIFT LAYOUT)
-   Goal: restore the previously-working desktop experience by preventing
-   Fan Zone side rails from altering the desktop layout (no huge body padding).
-   ========================= */
-@media (min-width: 1200px){
-  /* Never let rails change global page geometry */
-  body{ padding-left: 0 !important; padding-right: 0 !important; }
-
-  /* If rails are causing desktop breakage, disable them on desktop.
-     Mobile remains unchanged. */
-  .fanzone-left, .fanzone-right, .fz-left-stack, #vipHoldRail{
-    display: none !important;
-  }
 }
 
 </style>
