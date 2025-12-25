@@ -142,8 +142,19 @@ def _fetch_fixture_feed() -> List[Dict[str, Any]]:
         headers={"User-Agent": "worldcup-concierge/1.0"},
         method="GET",
     )
-    with urllib.request.urlopen(req, timeout=3) as resp:
-        raw = resp.read().decode("utf-8", errors="replace")
+        # Network can be slow/unreliable on some hosts. Use a safer timeout + small retry.
+    last_err = None
+    for _attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                raw = resp.read().decode("utf-8", errors="replace")
+            last_err = None
+            break
+        except Exception as _e:
+            last_err = _e
+    if last_err is not None:
+        raise last_err
+
     payload = json.loads(raw)
     if not isinstance(payload, list):
         raise ValueError("Fixture feed response was not a list")
@@ -214,8 +225,16 @@ def load_all_matches(force: bool = False) -> List[Dict[str, Any]]:
             _fixtures_cache["matches"] = disk["matches"]
             return _fixtures_cache["matches"]
 
-    # Fetch fresh
-    raw_matches = _fetch_fixture_feed()
+    # Fetch fresh (but fall back to any cache if the network times out)
+    try:
+        raw_matches = _fetch_fixture_feed()
+    except Exception:
+        # If we have ANY disk cache (even stale), use it instead of breaking the UI
+        disk2 = _safe_read_json_file(FIXTURE_CACHE_FILE)
+        if disk2 and isinstance(disk2, dict) and isinstance(disk2.get("matches"), list) and disk2["matches"]:
+            return disk2["matches"]
+        # Otherwise fall back to in-memory cache (may be empty)
+        return _fixtures_cache.get("matches") or []
 
     norm: List[Dict[str, Any]] = []
     for m in raw_matches:
