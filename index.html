@@ -3070,19 +3070,19 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 
 /* =========================
-   DESKTOP FIX (SAFE)
-   Problem: desktop gets "ruined" because side-rail CSS adds huge body padding-left/right
-            (e.g., 360px/300px/260px) which compresses the centered app and breaks layout.
-   Fix: keep rails fixed, but NEVER pad the body on desktop.
+   DESKTOP RESTORE (DO NOT SHIFT LAYOUT)
+   Goal: restore the previously-working desktop experience by preventing
+   Fan Zone side rails from altering the desktop layout (no huge body padding).
    ========================= */
 @media (min-width: 1200px){
-  body{
-    padding-left: 0 !important;
-    padding-right: 0 !important;
+  /* Never let rails change global page geometry */
+  body{ padding-left: 0 !important; padding-right: 0 !important; }
+
+  /* If rails are causing desktop breakage, disable them on desktop.
+     Mobile remains unchanged. */
+  .fanzone-left, .fanzone-right, .fz-left-stack, #vipHoldRail{
+    display: none !important;
   }
-  /* Rails stay fixed at edges without affecting layout flow */
-  .fanzone-left{ left: 16px !important; }
-  .fanzone-right{ right: 16px !important; }
 }
 
 </style>
