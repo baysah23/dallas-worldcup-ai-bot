@@ -2791,7 +2791,25 @@ body.kiosk-mode *::-webkit-scrollbar{
     background: rgba(255,255,255,.08);
   }
 
-  /* Give the page a bottom safe area for the fixed nav */
+  
+  /* Mobile micro animations */
+  @media (max-width: 950px){
+    .mnavBtn{ transition: transform .12s ease, background .18s ease, color .18s ease, filter .18s ease; }
+    .mnavBtn:active{ transform: scale(.96); }
+    body.msec-anim .chatcard,
+    body.msec-anim .menucard,
+    body.msec-anim #scheduleCard,
+    body.msec-anim #fanZoneLeft,
+    body.msec-anim #vipHoldRail{
+      animation: msecFade .18s ease both;
+      will-change: transform, opacity;
+    }
+    @keyframes msecFade{
+      from{ opacity: .92; transform: translateY(2px); }
+      to{ opacity: 1; transform: translateY(0); }
+    }
+  }
+/* Give the page a bottom safe area for the fixed nav */
   body{ padding-bottom: 96px !important; }
 
   /* Rails: remove fixed/absolute positioning so they don't overlay and block taps */
@@ -3098,6 +3116,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 <!-- Mobile bottom navigation (mobile-first, does not affect desktop) -->
 <nav class="mobileNav" id="mobileNav" aria-label="Mobile navigation">
+  <button class="mnavBtn" data-msec="home" type="button" aria-label="Home">🏠<span>Home</span></button>
   <button class="mnavBtn active" data-msec="chat" type="button" aria-label="Chat">💬<span>Chat</span></button>
   <button class="mnavBtn" data-msec="menu" type="button" aria-label="Menu">🍽️<span>Menu</span></button>
   <button class="mnavBtn" data-msec="schedule" type="button" aria-label="Schedule">📅<span>Schedule</span></button>
@@ -4426,8 +4445,33 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
 (function(){
   function isMobile(){ return window.matchMedia && window.matchMedia('(max-width: 950px)').matches; }
 
-  function setSection(sec){
+  
+// Cached section elements to avoid repeated DOM queries (mobile perf)
+const __sectionEls = {
+  chat: document.querySelector('.chatcard'),
+  home: (document.getElementById('heroBanner') || document.querySelector('.hero') || document.body),
+  menu: document.querySelector('.menucard'),
+  schedule: document.getElementById('scheduleCard'),
+  fanzone: document.getElementById('fanZoneLeft'),
+  vip: document.getElementById('vipHoldRail')
+};
+
+// Mobile section order for swipe navigation
+const __sectionOrder = ['home','chat','menu','schedule','fanzone','vip'];
+
+function __currentSection(){
+  return (document.body.getAttribute('data-msec') || 'chat');
+}
+
+function setSection(sec){
     document.body.setAttribute('data-msec', sec);
+
+    // Mobile-only micro animation on section change
+    if(isMobile && isMobile() && !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+      document.body.classList.add('msec-anim');
+      window.clearTimeout(window.__msecAnimT);
+      window.__msecAnimT = window.setTimeout(()=>document.body.classList.remove('msec-anim'), 220);
+    }
     
     if(sec === 'home'){
       // Home = top of app (hero + default state)
@@ -4447,15 +4491,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
       });
     }
     // When switching, scroll the relevant card into view for a “native app” feel.
-    const map = {
-      chat: document.querySelector('.chatcard'),
-      home: document.getElementById('heroBanner') || document.querySelector('.hero') || document.body,
-      menu: document.querySelector('.menucard'),
-      schedule: document.getElementById('scheduleCard'),
-      fanzone: document.getElementById('fanZoneLeft'),
-      vip: document.getElementById('vipHoldRail')
-    };
-    const el = map[sec];
+    const el = __sectionEls[sec];
     if(isMobile()){
       const target = (sec === 'chat') ? document.getElementById('heroBanner') : el;
       if(target){
@@ -4463,6 +4499,60 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
       }
     }
   }
+
+/* Mobile swipe navigation (between sections) */
+(function(){
+  function enabled(){
+    return (typeof isMobile === 'function') && isMobile() && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+  let startX=0, startY=0, tracking=false, lastSec=null;
+  const THRESH=42;         // px
+  const VERTICAL_GUARD=28; // px
+  const EDGE_GUARD=18;     // px: ignore gesture from OS edge areas
+
+  function onStart(e){
+    if(!enabled()) return;
+    const t = (e.touches && e.touches[0]) ? e.touches[0] : e;
+    if(t.clientX < EDGE_GUARD || t.clientX > (window.innerWidth-EDGE_GUARD)) return;
+    startX = t.clientX; startY = t.clientY;
+    tracking = true;
+    lastSec = __currentSection();
+  }
+  function onMove(e){
+    if(!tracking) return;
+    const t = (e.touches && e.touches[0]) ? e.touches[0] : e;
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    if(Math.abs(dy) > VERTICAL_GUARD && Math.abs(dy) > Math.abs(dx)){
+      tracking = false;
+      return;
+    }
+    if(Math.abs(dx) > THRESH && Math.abs(dx) > Math.abs(dy)){
+      try{ e.preventDefault(); }catch(_){}
+    }
+  }
+  function onEnd(e){
+    if(!tracking) return;
+    tracking = false;
+    const t = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : e;
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    if(Math.abs(dx) < THRESH || Math.abs(dx) < Math.abs(dy)) return;
+
+    const cur = lastSec || __currentSection();
+    const i = Math.max(0, __sectionOrder.indexOf(cur));
+    const dir = (dx < 0) ? 1 : -1; // swipe left -> next
+    const next = __sectionOrder[Math.min(__sectionOrder.length-1, Math.max(0, i + dir))];
+    if(next && next !== cur){
+      setSection(next);
+    }
+  }
+
+  document.addEventListener('touchstart', onStart, {passive:true});
+  document.addEventListener('touchmove', onMove, {passive:false});
+  document.addEventListener('touchend', onEnd, {passive:true});
+})();
+
 
   function wireNav(){
     const nav = document.getElementById('mobileNav');
