@@ -25,6 +25,9 @@
       background: radial-gradient(1200px 600px at 20% 10%, #132a5b 0%, var(--bg) 55%);
       color:var(--text);
     }
+    /* Mobile bottom nav hidden by default (desktop) */
+    nav.mobileNav{display:none;}
+
     .wrap{max-width:1050px; width:100%; margin:0 auto; display:flex; flex-direction:column; min-height:100vh; height:auto; min-height:100vh;}
     header{
       padding:16px 18px;
@@ -2976,7 +2979,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="card menucard" style="display:flex;flex-direction:column;min-height:0; max-width:190px;">
 <div class="cardhead">
 <div class="title" id="menuTitle">Menu</div>
-<div class="pill" id="menuPill">4 languages</div></div>
+</div>
 <div class="menu" id="menu"></div>
 </div>
 <!-- Chat / Reservations -->
@@ -4366,6 +4369,13 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
 
   function setSection(sec){
     document.body.setAttribute('data-msec', sec);
+    // On mobile, expand the menu when you navigate to it (avoid “blank menu” feel)
+    if(isMobile && isMobile()){ // safeguard
+      if(sec === 'menu'){
+        document.body.classList.add('menu-expanded');
+        document.body.classList.remove('menu-collapsed');
+      }
+    }
     const nav = document.getElementById('mobileNav');
     if(nav){
       nav.querySelectorAll('.mnavBtn').forEach(b=>{
@@ -4381,8 +4391,11 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
       vip: document.getElementById('vipHoldRail')
     };
     const el = map[sec];
-    if(el && isMobile()){
-      try{ el.scrollIntoView({behavior:'smooth', block:'start'}); }catch(e){ el.scrollIntoView(); }
+    if(isMobile()){
+      const target = (sec === 'chat') ? document.getElementById('heroBanner') : el;
+      if(target){
+        try{ target.scrollIntoView({behavior:'smooth', block:'start'}); }catch(e){ target.scrollIntoView(); }
+      }
     }
   }
 
