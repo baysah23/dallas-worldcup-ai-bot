@@ -269,7 +269,9 @@
       mix-blend-mode: screen;
     }
     @keyframes smokeFloat{
-  0%,100%{ transform: translate3d(0,0,0) scale(1.02); }
+      0%,100%{ transform: translate3d(0,0,0) scale(1.02); }
+      50%{ transform: translate3d(-8px, -6px, 0) scale(1.04); }
+    }
     .heroGlow{
       position:absolute; inset:0;
       background:
@@ -882,7 +884,6 @@
 
 /* =========================
    BANNER POLISH: ZOOM + GLOW
-   ========================= */
 
 /* === RECOMMENDED TRANSITION UPGRADE ===
    - Smoother crossfade: 1100ms ease-in-out (container opacity)
@@ -3067,6 +3068,23 @@ body.kiosk-mode *::-webkit-scrollbar{
   #heroBanner .heroCard.heroCardTri{ height: 92px !important; }
   #heroBanner .heroCardName{ font-size: 10px !important; }
   #heroBanner .heroCardCountry{ font-size: 9px !important; }
+}
+
+
+/* =========================
+   DESKTOP RESTORE (SAFE)
+   Why desktop broke: multiple @media(min-width:1200px) rules add large body padding (260–360px),
+   compressing the app and throwing off the original desktop alignment.
+   This override keeps side rails fixed/visible but prevents them from shifting the whole page.
+   ========================= */
+@media (min-width: 1200px){
+  body{
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+  /* Keep rails on the edges; they should not affect layout flow */
+  .fanzone-left{ left: 16px !important; }
+  .fanzone-right{ right: 16px !important; }
 }
 
 </style>
