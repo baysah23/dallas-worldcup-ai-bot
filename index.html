@@ -3011,9 +3011,29 @@ body.kiosk-mode *::-webkit-scrollbar{
   /* Ensure FX never covers text */
   #heroBanner .heroFX{ pointer-events:none; }
 
+
+  /* Hero stacking fix (v7): keep overlay/text visible and roster rendered */
+  #heroBanner{ position:relative !important; }
+  #heroBanner .heroSlides{ position:absolute !important; inset:0 !important; z-index:1 !important; }
+  #heroBanner .heroFX{ position:absolute !important; inset:0 !important; z-index:2 !important; }
+  #heroBanner .heroOverlay{ position:absolute !important; inset:0 !important; z-index:5 !important; display:flex !important; }
+  #heroBanner .heroKicker,
+  #heroBanner .heroTitle,
+  #heroBanner .heroSub,
+  #heroBanner .wcCount{ position:relative !important; z-index:6 !important; }
+  #heroBanner .heroRoster{ position:relative !important; z-index:4 !important; display:block !important; }
+
+  /* Undo overly-broad descendant positioning rule if present */
+  #heroBanner *{ position:initial; }
+  #heroBanner .heroSlides, #heroBanner .heroFX, #heroBanner .heroOverlay,
+  #heroBanner .heroKicker, #heroBanner .heroTitle, #heroBanner .heroSub, #heroBanner .wcCount, #heroBanner .heroRoster{
+    position:relative;
+  }
+  #heroBanner .heroSlides, #heroBanner .heroFX, #heroBanner .heroOverlay{ position:absolute !important; }
+
   /* Hero: keep stars behind header/countdown */
   .hero{ position:relative; overflow:hidden; }
-  .hero *{ position:relative; }
+  /* (v7) Avoid forcing position on all hero descendants */
   .hero .stars, .hero .starRow, .hero .playersRow, .hero .heroStars{ z-index:1 !important; }
   .hero header, .hero .heroTop, .hero .heroHdr, .hero .heroHeader, .hero .heroMeta, .hero .countdown, .hero #countdown, .hero .bannerTitle{ z-index:10 !important; }
   .hero .heroOverlay, .hero::before{ z-index:2 !important; }
