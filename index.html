@@ -2991,6 +2991,56 @@ body.kiosk-mode *::-webkit-scrollbar{
   #schedule{ overflow:auto !important; -webkit-overflow-scrolling:touch; max-height: calc(100vh - 240px) !important; }
   #pager, .pager{ position:sticky; bottom:0; z-index:5; }
   /* Mobile hero sizing (v6): restore original hero height + fit text/roster */
+
+  /* Hero roster restore (v8): smaller typography + visible roster pushed right */
+  #heroBanner .heroKicker{ font-size:7.5px !important; opacity:.9; }
+  #heroBanner .heroTitle{ font-size:13px !important; }
+  #heroBanner .heroSub{ font-size:9.5px !important; }
+  #heroBanner .wcCount{ padding:5px 7px !important; margin-top:5px !important; }
+  #heroBanner .wcLabel{ font-size:7.5px !important; }
+  #heroBanner .wcNums b{ font-size:11px !important; }
+  #heroBanner .wcNums small{ font-size:8px !important; }
+
+  /* Layout split: left text block + right roster strip */
+  #heroBanner .heroOverlay{
+    display:grid !important;
+    grid-template-columns: 1fr 132px !important;
+    grid-template-rows: auto;
+    column-gap:10px !important;
+    align-items:start !important;
+  }
+  #heroBanner .heroOverlay > :not(.heroRoster){ grid-column:1; }
+  #heroBanner .heroRoster{
+    grid-column:2;
+    justify-self:end;
+    align-self:stretch;
+    margin-top:0 !important;
+    max-height: 150px !important;
+    height: 100% !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:center !important;
+    background: rgba(0,0,0,.10) !important;
+    border:1px solid rgba(255,255,255,.10) !important;
+    border-radius: 14px !important;
+    padding: 6px 6px !important;
+    overflow:hidden !important;
+  }
+  #heroBanner .heroRosterTrack{
+    display:flex !important;
+    gap:6px !important;
+    align-items:center !important;
+    white-space:nowrap !important;
+    animation: rosterScroll 18s linear infinite !important;
+  }
+  #heroBanner .heroRoster img{
+    height:34px !important;
+    width:auto !important;
+    object-fit:contain !important;
+    border-radius: 10px !important;
+    filter: drop-shadow(0 10px 16px rgba(0,0,0,.45));
+  }
+
   #heroBanner{
     height:170px !important;
     min-height:170px !important;
@@ -5604,6 +5654,41 @@ function apply(){
     nav.querySelectorAll('.mnavBtn').forEach(b=>b.classList.toggle('active', b===btn));
   }
   nav.addEventListener('click', onClick, {passive:true});
+})();
+</script>
+
+
+<script>
+/* Hero roster fallback (v8): if roster not populated, build it from HERO_PLAYERS list (no backend). */
+(function(){
+  const roster = document.getElementById('heroRoster');
+  if(!roster) return;
+  // If already has content, do nothing
+  if(roster.children && roster.children.length>0) return;
+
+  // Try to reuse global HERO_PLAYERS if present
+  const players = (window.HERO_PLAYERS && Array.isArray(window.HERO_PLAYERS)) ? window.HERO_PLAYERS : null;
+  if(!players || players.length===0) return;
+
+  const track = document.createElement('div');
+  track.className = 'heroRosterTrack';
+
+  // Use imgUrl fields if present; otherwise try ".img" or ".image"
+  const imgs = players.map(p => p.imgUrl || p.img || p.image).filter(Boolean);
+  if(imgs.length===0) return;
+
+  // Duplicate to allow smooth scroll
+  const list = imgs.concat(imgs);
+  list.forEach(src=>{
+    const img = document.createElement('img');
+    img.loading = 'lazy';
+    img.decoding = 'async';
+    img.alt = 'Star player';
+    img.src = src;
+    track.appendChild(img);
+  });
+
+  roster.appendChild(track);
 })();
 </script>
 
