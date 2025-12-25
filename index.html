@@ -2665,11 +2665,11 @@ body.kiosk-mode *::-webkit-scrollbar{
   body[data-msec="menu"] #scheduleCard,
   body[data-msec="menu"] #vipHoldRail{ display:none !important; }
 
-  body[data-msec="fan"] #fanZoneLeft{ display:block !important; }
-  body[data-msec="fan"] .chatcard,
-  body[data-msec="fan"] .menucard,
-  body[data-msec="fan"] #fanZoneRight,
-  body[data-msec="fan"] #scheduleCard{ display:none !important; }
+  body[data-msec="fanzone"] #fanZoneLeft{ display:block !important; }
+  body[data-msec="fanzone"] .chatcard,
+  body[data-msec="fanzone"] .menucard,
+  body[data-msec="fanzone"] #fanZoneRight,
+  body[data-msec="fanzone"] #scheduleCard{ display:none !important; }
 
   body[data-msec="extras"] #fanZoneRight{ display:block !important; }
   body[data-msec="extras"] .chatcard,
@@ -2684,7 +2684,7 @@ body.kiosk-mode *::-webkit-scrollbar{
   body[data-msec="schedule"] #fanZoneRight{ display:none !important; }
 
   /* VIP shown alongside Fan Zone (if you want it there) */
-  body[data-msec="fan"] #vipHoldRail{ display:block !important; }
+  body[data-msec="fanzone"] #vipHoldRail{ display:block !important; }
   body[data-msec="extras"] #vipHoldRail{ display:none !important; }
 }
 
@@ -2700,6 +2700,13 @@ body.kiosk-mode *::-webkit-scrollbar{
   .row{ flex-wrap: wrap !important; }
   .row .muted{ word-break: break-word; }
   #pager{ position: static !important; }
+
+  .schedule{ overflow-x:hidden !important; }
+  .match{ flex-wrap:wrap !important; align-items:flex-start !important; }
+  .match .left{ min-width:0 !important; flex:1 1 auto !important; }
+  .match .left div{ word-break:break-word; overflow-wrap:anywhere; }
+  .match .pill{ margin-top:6px; }
+
 }
 
 
@@ -2742,7 +2749,7 @@ body.kiosk-mode *::-webkit-scrollbar{
   body[data-msec="vip"] #fanZoneLeft,
   body[data-msec="vip"] #fanZoneRight,
   body[data-msec="vip"] #scheduleCard{ display:none !important; }
-  body[data-msec="fan"] #vipHoldRail{ display:block !important; }
+  body[data-msec="fanzone"] #vipHoldRail{ display:block !important; }
 }
 
 
@@ -2913,6 +2920,13 @@ body.kiosk-mode *::-webkit-scrollbar{
     max-width:100% !important;
     line-height:1.25 !important;
   }
+}
+
+
+@media (max-width: 420px){
+  .mobileNav{ gap:6px; }
+  .mobileNav .mnavBtn{ padding:10px 0; }
+  .mobileNav .mnavBtn span{ display:none; }
 }
 
 </style>
@@ -4460,13 +4474,16 @@ const __sectionEls = {
 const __sectionOrder = ['home','chat','menu','schedule','fanzone','vip'];
 
 function __currentSection(){
-  return (document.body.getAttribute('data-msec') || 'chat');
+  return (document.body.getAttribute('data-msec') || 'home');
 }
 
 function setSection(sec){
-    document.body.setAttribute('data-msec', sec);
-
-    // Mobile-only micro animation on section change
+    if(sec === 'home'){
+      document.body.removeAttribute('data-msec');
+    }else{
+      document.body.setAttribute('data-msec', sec);
+    }
+// Mobile-only micro animation on section change
     if(isMobile && isMobile() && !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
       document.body.classList.add('msec-anim');
       window.clearTimeout(window.__msecAnimT);
@@ -5404,7 +5421,7 @@ function setSection(sec){
 window.addEventListener("popstate", () => {
   try{
     if(isSmall()){
-      setSection("chat", true);
+      /* bottom nav controls section; no forced section */
     }
   }catch(e){}
 });
@@ -5412,9 +5429,9 @@ window.addEventListener("popstate", () => {
 function apply(){
     ensureScheduleId();
     if(isSmall()){
-      injectNav();
+      /* injectNav disabled: using bottom icon nav */
       const pref = (localStorage.getItem("wc_mobile_section") || "chat");
-      setSection(pref, false);
+      /* section pref handled by bottom nav */
     }else{
       // desktop: remove attribute so everything shows
       document.body.removeAttribute("data-msec");
