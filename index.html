@@ -70,12 +70,8 @@
     }
     @media (max-width: 950px){
   /* Mobile hero alignment */
-  .heroTitle{ font-size: clamp(12px, 1.8vw, 16px) !important; line-height: 1.1; letter-spacing:.04em; }
-  .heroSub{ font-size: clamp(10px, 1.4vw, 12px) !important; margin-top: 6px !important; line-height: 1.2; }
-  /* Mobile countdown sizing */
-  .countdown{ padding: 8px 10px !important; }
-  .countdown .label{ font-size: 10px !important; }
-  .countdown .nums{ font-size: 11px !important; gap: 8px !important; }
+  .heroTitle{ font-size: clamp(14px, 2.0vw, 18px) !important; line-height: 1.1; letter-spacing:.04em; }
+  .heroSub{ font-size: clamp(11px, 1.6vw, 13px) !important; margin-top: 6px !important; line-height: 1.2; }
 /* Hero shrink-on-scroll (desktop & mobile) */
 #heroBanner.is-shrunk{
   padding-top: 10px !important;
@@ -3001,57 +2997,23 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-/* --- STEP 1B HOTFIX (mobile only): ensure hero header/sub/countdown are visible above slides/FX --- */
-@media (max-width: 950px){
-  #heroBanner{ position:relative; }
-  #heroBanner .heroSlides,
-  #heroBanner .heroFX{
-    position:absolute !important;
-    inset:0 !important;
-  }
-  #heroBanner .heroOverlay{
-    position:absolute !important;
-    inset:0 !important;
-    z-index: 20 !important;
-    display:flex !important;
-  }
-  /* Keep text/countdown above any pseudo overlays */
+/* ===== Mobile-only surgical: make banner text block narrower so roster has room (does NOT affect desktop) ===== */
+@media (max-width: 680px){
+  /* Keep text readable but constrain its horizontal footprint */
   #heroBanner .heroKicker,
   #heroBanner .heroTitle,
   #heroBanner .heroSub,
-  #heroBanner #wcCount{
-    position:relative !important;
-    z-index: 21 !important;
+  #heroBanner .wcCount{
+    max-width: 56vw;
+    width: fit-content;
   }
-}
-
-
-/* =========================
-   MOBILE ONLY: Banner text compact (surgical)
-   - Keeps desktop unchanged
-   - Reduces overlay padding + typography so text doesn't eat the banner
-   ========================= */
-@media (max-width: 720px){
-  /* Make overlay take less vertical space */
-  .heroOverlay{
-    padding: 10px 12px !important;
-    gap: 4px !important;
+  /* Allow subtitle to wrap within the narrower block */
+  #heroBanner .heroSub{
+    white-space: normal;
   }
-  /* Slightly smaller kicker and title on mobile */
-  .heroKicker{
-    font-size: 9px !important;
-    letter-spacing: .14em !important;
-  }
-  .heroTitle{
-    font-size: clamp(13px, 4.2vw, 16px) !important;
-    line-height: 1.08 !important;
-    letter-spacing: .08em !important;
-  }
-  .heroSub{
-    font-size: 11px !important;
-    line-height: 1.18 !important;
-    margin-top: 2px !important;
-    max-width: min(62vw, 360px) !important; /* leave room for player visuals */
+  /* Make countdown chip compact without shrinking numbers too much */
+  #heroBanner .wcCount{
+    padding: 8px 10px;
   }
 }
 
