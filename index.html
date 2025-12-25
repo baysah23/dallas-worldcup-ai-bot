@@ -695,6 +695,8 @@
   0%{ transform: translateX(0); }
   100%{ transform: translateX(-50%); }
 }
+
+#heroRoster .heroChip img{width:18px;height:18px;border-radius:50%;object-fit:cover;margin-right:6px;border:1px solid rgba(255,255,255,.18);}
 .heroChip{
   display:inline-flex;
   align-items:center;
@@ -803,24 +805,8 @@
     }
     @media (max-width:720px){
       .heroCaption .heroName{ font-size:12px; }
-
-      /* Mobile: ensure star roster is visible + usable (no impact on desktop) */
-      .heroRoster{ display:block; margin-top:8px; }
-      .heroRosterTrack{
-        display:flex;
-        gap:8px;
-        padding:6px 8px;
-        white-space:nowrap;
-        overflow-x:auto;
-        -webkit-overflow-scrolling:touch;
-        animation:none;
-      }
-      .heroRosterTrack::-webkit-scrollbar{ height:4px; }
-      .heroRosterTrack::-webkit-scrollbar-thumb{ background: rgba(255,255,255,.15); border-radius:999px; }
-      .heroChip{ flex:0 0 auto; }
-      .heroChip img{ width:22px; height:22px; border-radius:999px; object-fit:cover; }
-      .heroChip span{ font-size:10px; }
     }
+    .heroRoster{ display:none !important; }
     .heroKicker, .heroTitle{ color: var(--gold); }
 
 
@@ -3009,7 +2995,6 @@ body.kiosk-mode *::-webkit-scrollbar{
   .hero *{ position:relative; }
   .hero .stars, .hero .starRow, .hero .playersRow, .hero .heroStars{ z-index:1 !important; }
   .hero header, .hero .heroTop, .hero .heroHdr, .hero .heroHeader, .hero .heroMeta, .hero .countdown, .hero #countdown, .hero .bannerTitle{ z-index:10 !important; }
-  .hero .heroOverlay, .hero::before{ z-index:2 !important; }
 }
 
 </style>
@@ -3652,41 +3637,48 @@ const heroPlayers = [
 
 
 function ensureHeroRosterMobile(players){
-  // Mobile-only: populate the roster strip if it is empty
-  if(!window.matchMedia || !window.matchMedia("(max-width:720px)").matches) return;
-  const host = document.getElementById("heroRoster");
-  if(!host) return;
-  if(host.dataset.built === "1") return;
+  // Mobile-only: populate the roster strip if it is empty.
+  // Safe no-op on desktop.
+  try{
+    if(!window.matchMedia || !window.matchMedia("(max-width: 950px)").matches) return;
+    const host = document.getElementById("heroRoster");
+    if(!host) return;
+    if(host.dataset && host.dataset.built === "1") return;
 
-  // If the element already has content, respect it.
-  if(host.children && host.children.length > 0){
+    // If server/other script already populated it, keep it.
+    if(host.children && host.children.length > 0){
+      host.dataset.built = "1";
+      return;
+    }
+
+    // Build a looping track of chips: [players] + [players] to allow seamless scroll.
+    const list = Array.isArray(players) ? players : [];
+    if(!list.length) return;
+
+    const track = document.createElement("div");
+    track.className = "heroRosterTrack";
+
+    const buildChip = (p) => {
+      const chip = document.createElement("div");
+      chip.className = "heroChip";
+      const img = document.createElement("img");
+      img.alt = p && p.name ? p.name : "Star";
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.src = (p && p.img) ? p.img : "";
+      const name = document.createElement("span");
+      name.textContent = (p && p.name) ? p.name : "Star";
+      chip.appendChild(img);
+      chip.appendChild(name);
+      return chip;
+    };
+
+    list.concat(list).forEach(p => track.appendChild(buildChip(p)));
+    host.appendChild(track);
     host.dataset.built = "1";
-    return;
+  }catch(e){
+    // swallow (never break app)
   }
-
-  const track = document.createElement("div");
-  track.className = "heroRosterTrack";
-
-  (players || []).forEach(p => {
-    const chip = document.createElement("span");
-    chip.className = "heroChip";
-
-    // thumbnail
-    const img = document.createElement("img");
-    img.loading = "lazy";
-    img.alt = p?.name ? `${p.name}` : "Star player";
-    if(p?.img) img.src = p.img;
-
-    const name = document.createElement("span");
-    name.textContent = p?.name || "";
-
-    chip.appendChild(img);
-    chip.appendChild(name);
-    track.appendChild(chip);
-  });
-
-  host.appendChild(track);
-  host.dataset.built = "1";
 }
 
 function buildHero(){
@@ -3696,8 +3688,9 @@ function buildHero(){
 
   slides.innerHTML = "";
 
-  // Mobile-only roster population (safe no-op on desktop)
-  try{ ensureHeroRosterMobile(heroPlayers); }catch(e){}
+  // Mobile-only: ensure roster strip exists even if other code didn't populate it
+  ensureHeroRosterMobile(heroPlayers);
+
   heroPlayers.forEach((p, idx) => {
     const s = document.createElement("div");
     s.className = "heroSlide" + (idx===0 ? " active" : "");
