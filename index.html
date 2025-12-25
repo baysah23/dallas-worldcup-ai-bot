@@ -2997,58 +2997,61 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-/* === Mobile-only: keep hero banner text visible + narrower + smaller (safe) === */
-@media (max-width: 950px){
-  /* Ensure overlay sits above slides/FX on mobile */
+/* === MOBILE ONLY: Hero banner text compact + always visible (does not affect desktop) === */
+@media (max-width: 520px){
+  /* Force visibility in case any earlier mobile rule accidentally hides it */
   #heroBanner .heroOverlay{
     display:flex !important;
-    opacity:1 !important;
-    visibility:visible !important;
-    z-index: 50 !important;
-    pointer-events:none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
 
-    /* Narrow the text column to leave space for stars/roster strip */
-    max-width: calc(100% - 170px) !important;
-    padding: 10px 10px 12px !important;
-    gap: 4px !important;
+    /* Narrower left strip so stars can live on the right */
+    left: 12px !important;
+    right: auto !important;
+    width: min(58vw, 320px) !important;
+    padding: 12px 12px 10px !important;
+    gap: 5px !important;
+    z-index: 10 !important;
+  }
+  #heroBanner .heroOverlay .heroKicker,
+  #heroBanner .heroOverlay .heroTitle,
+  #heroBanner .heroOverlay .heroSub,
+  #heroBanner .heroOverlay #wcCount{
+    display:block !important;
+    opacity: 1 !important;
+    visibility: visible !important;
   }
 
   #heroBanner .heroKicker{
-    font-size: 9px !important;
+    font-size: 10px !important;
     letter-spacing: .16em !important;
   }
-
   #heroBanner .heroTitle{
-    font-size: clamp(14px, 4.1vw, 18px) !important;
-    line-height: 1.08 !important;
-    letter-spacing: .10em !important;
+    font-size: clamp(15px, 4.4vw, 18px) !important;
+    line-height: 1.10 !important;
+    letter-spacing: .08em !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
   }
-
   #heroBanner .heroSub{
-    font-size: clamp(10px, 3.1vw, 12px) !important;
-    line-height: 1.15 !important;
+    font-size: 11px !important;
+    line-height: 1.18 !important;
+    margin-top: 0 !important;
     max-width: 100% !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
   }
-
-  /* Countdown: keep label on ONE line + reduce size */
-  #heroBanner .wcCount{ margin-top: 2px !important; gap: 4px !important; }
-  #heroBanner .wcLabel{
-    font-size: 10px !important;
-    letter-spacing: .12em !important;
+  #heroBanner #wcCount{
+    margin-top: 6px !important;
+    padding: 8px 10px !important;
+  }
+  #heroBanner #wcCount .wcLabel{
+    font-size: 9px !important;
+    letter-spacing: .14em !important;
     white-space: nowrap !important;
   }
-  #heroBanner .wcNums{
-    font-size: 12px !important;
-    line-height: 1 !important;
-    white-space: nowrap !important;
-  }
-  #heroBanner .wcNums span{ margin-right: 6px !important; }
+  #heroBanner #wcCount .wcNums{ gap: 6px !important; }
+  #heroBanner #wcCount .wcNums b{ font-size: 12px !important; min-width: 18px !important; }
+  #heroBanner #wcCount .wcNums small{ font-size: 9px !important; }
 }
 
 </style>
