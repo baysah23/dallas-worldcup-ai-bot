@@ -72,26 +72,6 @@
   /* Mobile hero alignment */
   .heroTitle{ font-size: clamp(14px, 2.0vw, 18px) !important; line-height: 1.1; letter-spacing:.04em; }
   .heroSub{ font-size: clamp(11px, 1.6vw, 13px) !important; margin-top: 6px !important; line-height: 1.2; }
-
-  /* /* Step (mobile-only): make banner text narrower + smaller so it never collides with the star strip */
-  .heroOverlay{
-    padding: 14px 12px !important;
-    padding-right: 178px !important; /* reserve space on the right for the star roster strip */
-  }
-  .heroKicker{ font-size: 10px !important; letter-spacing: .14em !important; }
-  .heroTitle{ font-size: clamp(13px, 4.1vw, 17px) !important; }
-  .heroSub{
-    font-size: clamp(10px, 3.0vw, 12px) !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    max-width: 100% !important;
-  }
-  #wcCount{
-    font-size: 10px !important;
-    transform: scale(.92);
-    transform-origin: left top;
-  }
 /* Hero shrink-on-scroll (desktop & mobile) */
 #heroBanner.is-shrunk{
   padding-top: 10px !important;
@@ -1100,8 +1080,7 @@
    MATCH DAY MODE (Step 1)
    Visual amplify only (UI-only)
    ========================= */
-50%      { transform: translateZ(0) scale(1.015); filter: drop-shadow(0 0 16px rgba(212,175,55,.35)); }
-}
+/* (patched) removed stray keyframe fragment that broke CSS parsing on some mobile browsers */
 /* Banner takeover text styling when matchday */
 /* Highlight the next match card in gold */
 
