@@ -70,8 +70,12 @@
     }
     @media (max-width: 950px){
   /* Mobile hero alignment */
-  .heroTitle{ font-size: clamp(14px, 2.0vw, 18px) !important; line-height: 1.1; letter-spacing:.04em; }
-  .heroSub{ font-size: clamp(11px, 1.6vw, 13px) !important; margin-top: 6px !important; line-height: 1.2; }
+  .heroTitle{ font-size: clamp(12px, 1.8vw, 16px) !important; line-height: 1.1; letter-spacing:.04em; }
+  .heroSub{ font-size: clamp(10px, 1.4vw, 12px) !important; margin-top: 6px !important; line-height: 1.2; }
+  /* Mobile countdown sizing */
+  .countdown{ padding: 8px 10px !important; }
+  .countdown .label{ font-size: 10px !important; }
+  .countdown .nums{ font-size: 11px !important; gap: 8px !important; }
 /* Hero shrink-on-scroll (desktop & mobile) */
 #heroBanner.is-shrunk{
   padding-top: 10px !important;
@@ -2990,49 +2994,35 @@ body.kiosk-mode *::-webkit-scrollbar{
 
   /* Hero: keep stars behind header/countdown */
   .hero{ position:relative; overflow:hidden; }
-  .hero *{ position:relative; }
+  /* MOBILE-SAFE: removed broad `.hero * { position:relative; }` which broke hero layers */
   .hero .stars, .hero .starRow, .hero .playersRow, .hero .heroStars{ z-index:1 !important; }
   .hero header, .hero .heroTop, .hero .heroHdr, .hero .heroHeader, .hero .heroMeta, .hero .countdown, .hero #countdown, .hero .bannerTitle{ z-index:10 !important; }
   .hero .heroOverlay, .hero::before{ z-index:2 !important; }
 }
 
 
-/* === MOBILE-ONLY: Ensure hero banner text stays visible & compact (no desktop impact) === */
-@media (max-width: 520px){
-  #heroBanner .heroOverlay{
-    display:flex !important;
-    opacity:1 !important;
-    visibility:visible !important;
-    z-index: 8 !important;
-    padding: 10px 10px 12px !important;
-    gap: 4px !important;
-    max-width: 66vw !important; /* reserve space for star strip on right */
+/* --- STEP 1B HOTFIX (mobile only): ensure hero header/sub/countdown are visible above slides/FX --- */
+@media (max-width: 950px){
+  #heroBanner{ position:relative; }
+  #heroBanner .heroSlides,
+  #heroBanner .heroFX{
+    position:absolute !important;
+    inset:0 !important;
   }
+  #heroBanner .heroOverlay{
+    position:absolute !important;
+    inset:0 !important;
+    z-index: 20 !important;
+    display:flex !important;
+  }
+  /* Keep text/countdown above any pseudo overlays */
   #heroBanner .heroKicker,
   #heroBanner .heroTitle,
   #heroBanner .heroSub,
   #heroBanner #wcCount{
-    display:block !important;
-    opacity:1 !important;
-    visibility:visible !important;
+    position:relative !important;
+    z-index: 21 !important;
   }
-  #heroBanner .heroKicker{ font-size: 9px !important; letter-spacing: .14em !important; }
-  #heroBanner .heroTitle{ font-size: 14px !important; }
-  #heroBanner .heroSub{
-    font-size: 9.5px !important;
-    max-width: 66vw !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-  }
-  #heroBanner #wcCount{ margin-top: 4px !important; }
-  #heroBanner #wcCount .wcLabel{
-    font-size: 8px !important;
-    letter-spacing: .12em !important;
-    white-space: nowrap !important;
-  }
-  #heroBanner #wcCount .wcNums b{ font-size: 12px !important; }
-  #heroBanner #wcCount .wcNums small{ font-size: 8px !important; }
 }
 
 </style>
