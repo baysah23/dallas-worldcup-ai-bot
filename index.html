@@ -2997,30 +2997,24 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-
-/* === MOBILE SURGICAL FIX: keep hero subtitle on ONE line + reduce banner text width (no desktop impact) === */
+/* ===== Mobile Step: subtitle one-line + narrower (surgical, no desktop impact) ===== */
 @media (max-width: 950px){
-  /* Constrain the text column so there's room for the star strip (next steps) */
-  #heroBanner .heroKicker,
-  #heroBanner .heroTitle,
-  #heroBanner .heroSub,
-  #heroBanner .wcCount{
-    max-width: 64vw !important;
-  }
-
-  /* Keep subtitle on one line and aligned (no wrapping) */
   #heroBanner .heroSub{
+    /* keep subtitle on one line; reduce width so stars have room */
     white-space: nowrap !important;
     overflow: hidden !important;
-    text-overflow: ellipsis !important; /* safety if ultra-narrow devices */
-    letter-spacing: .02em !important;
+    text-overflow: ellipsis !important;
+    max-width: 320px !important;
   }
-
-  /* Slightly smaller + tighter to fit premium, compact look */
-  #heroBanner .heroKicker{ font-size: 10px !important; letter-spacing: .14em !important; }
-  #heroBanner .heroTitle{ font-size: clamp(14px, 4.2vw, 18px) !important; }
-  #heroBanner .wcCount{ transform: scale(.92); transform-origin: left top; }
 }
+@media (max-width: 520px){
+  #heroBanner .heroSub{
+    max-width: 240px !important;
+    font-size: clamp(10px, 2.8vw, 12px) !important;
+    line-height: 1.15 !important;
+  }
+}
+
 </style>
 </head>
 <body>
