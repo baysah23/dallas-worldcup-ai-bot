@@ -804,8 +804,8 @@
     @media (max-width:720px){
       .heroCaption .heroName{ font-size:12px; }
     }
-    /* heroRoster hide removed */
-.heroKicker, .heroTitle{ color: var(--gold); }
+    .heroRoster{ display:none !important; }
+    .heroKicker, .heroTitle{ color: var(--gold); }
 
 
 /* === STAR PLAYER IMAGE NORMALIZATION (Ronaldo reference) === */
@@ -2600,7 +2600,17 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 
   /* Pager should not be fixed on mobile (can block taps) */
-  #pager{ position: static !important; }
+  #pager{
+    position: sticky !important;
+    bottom: 0;
+    z-index: 1200;
+    background: rgba(7,16,34,.92);
+    border-top: 1px solid rgba(255,255,255,.10);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  /* leave room so last match isn't covered by sticky pager */
+  #scheduleList{ padding-bottom: 84px !important; }
 
   /* Reduce blur that looks “fuzzy” on iOS */
   .cardhead, .devicebar, #pager, .heroCaption{
@@ -2642,6 +2652,10 @@ body.kiosk-mode *::-webkit-scrollbar{
     border-color: rgba(212,175,55,.30);
     background: linear-gradient(135deg, rgba(212,175,55,.18), rgba(255,255,255,.06));
   }
+
+
+  /* Hide legacy bottom nav (we use the sticky top mnav for mobile) */
+  #mobileNav, nav.mobileNav{ display:none !important; }
 
   /* Default: show Chat section */
   body[data-msec="home"] .chatcard{ display:block !important; }
@@ -2915,69 +2929,25 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 }
 
-
-
-/* ===== MOBILE HERO FIX (only affects mobile) ===== */
-@media (max-width: 950px){
-  #heroBanner{ height:170px !important; }
-
-  #heroBanner .heroOverlay{
-    display:grid !important;
-    grid-template-columns: 1fr 148px !important;
-    column-gap: 10px !important;
-    align-items: start !important;
-    padding: 10px 10px !important;
-  }
-  #heroBanner .heroContent{ grid-column:1; min-width:0; }
-
-  #heroBanner .heroKicker{ font-size: 8px !important; letter-spacing:.14em !important; margin-bottom:2px !important; }
-  #heroBanner .heroTitle{ font-size: 13px !important; line-height: 1.06 !important; letter-spacing:.08em !important; }
-  #heroBanner .heroSub{ font-size: 9.5px !important; line-height:1.18 !important; margin-top:3px !important; }
-  #heroBanner .wcCount{ margin-top: 6px !important; padding: 6px 8px !important; border-radius: 12px !important; }
-  #heroBanner .wcLabel{ font-size: 8px !important; letter-spacing:.12em !important; }
-  #heroBanner .wcNums{ gap:6px !important; }
-  #heroBanner .wcNums b{ font-size: 11px !important; }
-  #heroBanner .wcNums small{ font-size: 8px !important; }
-
-  #heroBanner #heroRoster{
-    grid-column:2;
-    display:flex !important;
-    align-items:center !important;
-    justify-content:flex-end !important;
-    height: 100% !important;
-    max-height: 170px !important;
-    padding: 6px 6px !important;
-    border-radius: 14px !important;
-    background: rgba(0,0,0,.10) !important;
-    border: 1px solid rgba(255,255,255,.12) !important;
-    overflow: hidden !important;
-    pointer-events: auto !important;
-  }
-
-  #heroBanner .heroRosterTrack{
-    display:flex !important;
-    gap: 8px !important;
-    padding: 0 !important;
-    white-space: nowrap !important;
-    animation: none !important;
-    overflow-x:auto !important;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-  }
-  #heroBanner .heroRosterTrack::-webkit-scrollbar{ display:none; }
-
-  #heroBanner .heroRosterTrack img,
-  #heroBanner .heroRoster .star{
-    width: 40px !important;
-    height: 40px !important;
-    border-radius: 50% !important;
-    object-fit: cover !important;
-    border: 2px solid rgba(255,255,255,.55) !important;
-    flex: 0 0 auto !important;
-  }
-}
-
 </style>
+
+<style>
+/* MOBILE-HARDENING v1 */
+/* Prevent horizontal drift on mobile */
+html, body { width:100%; max-width:100%; overflow-x:hidden; }
+/* Make tap targets reliable; avoid 300ms delay / accidental scroll-capture */
+button, a, [role="button"] { touch-action: manipulation; }
+/* Ensure any scrolling panels don't push layout wider than viewport */
+* { max-width: 100%; }
+/* iOS safe-area padding for sticky bars */
+:root { --safe-bottom: env(safe-area-inset-bottom, 0px); }
+/* Guard against off-screen transforms */
+@media (max-width: 768px) {
+  .container, .app, #app, .main, main { width:100%; max-width:100%; }
+  .sticky, .stickyBar, .pager, .bottomBar { padding-bottom: calc(8px + var(--safe-bottom)); }
+}
+</style>
+
 </head>
 <body>
 <div class="wrap">
@@ -3098,7 +3068,6 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="heroSweep"></div>
 </div>
 <div class="heroOverlay">
-<div class="heroContent">
 <div class="heroKicker">WORLD CUP 2026</div>
 <div class="heroTitle">DALLAS WORLD CUP HQ</div>
 <div class="heroSub">Reserve tables • Live schedules • Concierge chat</div>
@@ -3109,7 +3078,6 @@ body.kiosk-mode *::-webkit-scrollbar{
 <span><b id="wcH">--</b><small>h</small></span>
 <span><b id="wcM">--</b><small>m</small></span>
 <span><b id="wcS">--</b><small>s</small></span></div>
-</div>
 </div>
 <div aria-hidden="true" class="heroRoster" id="heroRoster"></div>
 </div>
@@ -5438,7 +5406,13 @@ function setSection(sec){
       sec = "chat";
       document.body.removeAttribute("data-msec");
     }
-    if(!isSmall()) return;
+        // Normalize any legacy section names
+    const map = {fanzone:"fan","fan-zone":"fan","fanZone":"fan"};
+    if(sec && map[sec]) sec = map[sec];
+    const allowed = new Set(["chat","fan","vip","extras","schedule","menu"]);
+    if(!sec || !allowed.has(sec)) sec = "chat";
+
+if(!isSmall()) return;
     document.body.setAttribute("data-msec", sec || "chat");
     // button states
     const nav = document.getElementById("mnav");
@@ -5522,71 +5496,6 @@ function apply(){
   window.addEventListener("scroll", onScroll, {passive:true});
   window.addEventListener("resize", apply, {passive:true});
   apply();
-})();
-</script>
-
-
-
-<script>
-/* Hero roster fallback (mobile-safe) */
-(function(){
-  const roster = document.getElementById('heroRoster');
-  const slides = document.getElementById('heroSlides');
-  if (!roster || !slides) return;
-
-  const MAX_STARS = 7;
-  const RETRY_INTERVAL = 150;
-  const MAX_TRIES = 40;
-
-  function hasRoster(){
-    return roster.querySelector('img, .heroRosterTrack, .star, [data-roster-item]') !== null;
-  }
-
-  function extractImgs(){
-    return Array.from(slides.querySelectorAll('img'))
-      .map(i => ({ src: i.getAttribute('data-roster-src') || i.src, name: i.getAttribute('data-player-name') || i.alt || '' }))
-      .filter(x => x.src);
-  }
-
-  function build(items){
-    if (!items || !items.length) return false;
-    const track = document.createElement('div');
-    track.className = 'heroRosterTrack';
-    items.slice(0, MAX_STARS).forEach(it => {
-      const img = document.createElement('img');
-      img.loading = 'lazy';
-      img.decoding = 'async';
-      img.alt = it.name || 'Star player';
-      img.src = it.src;
-      img.setAttribute('data-roster-item','true');
-      track.appendChild(img);
-    });
-    roster.innerHTML = '';
-    roster.appendChild(track);
-    return true;
-  }
-
-  function makeVisible(){
-    roster.removeAttribute('aria-hidden');
-    roster.style.setProperty('display','flex','important');
-    roster.style.setProperty('pointer-events','auto','important');
-  }
-
-  function tryBuild(){
-    if (hasRoster()) return true;
-    const imgs = extractImgs();
-    if (imgs.length) return build(imgs);
-    return false;
-  }
-
-  makeVisible();
-  if (tryBuild()) return;
-
-  let tries = 0;
-  const t = setInterval(() => {
-    tries++;
-    if (tryBuild() || tries >= MAX_TRIES) clearInterval(t);
-  }, RETRY_INTERVAL);
 })();
 </script>
 
