@@ -2945,34 +2945,6 @@ body.kiosk-mode *::-webkit-scrollbar{
     gap:8px !important;
     padding:14px 14px 18px !important;
   }
-
-  /* Mobile: keep banner text compact/narrow so star strip has room */
-  .heroOverlay .heroKicker,
-  .heroOverlay .heroTitle,
-  .heroOverlay .heroSub,
-  .heroOverlay #wcCount{
-    max-width: 56vw !important;
-  }
-  .heroOverlay .heroTitle{
-    font-size: clamp(15px, 4.3vw, 18px) !important;
-    letter-spacing: .08em !important;
-  }
-  .heroOverlay .heroSub{
-    font-size: clamp(11px, 3.2vw, 12.5px) !important;
-  }
-  .heroOverlay #wcCount{
-    transform: scale(.92);
-    transform-origin: left top;
-  }
-  /* Ensure text never disappears under effects */
-  .heroOverlay{ z-index: 8 !important; }
-  .heroOverlay .heroKicker,
-  .heroOverlay .heroTitle,
-  .heroOverlay .heroSub,
-  .heroOverlay #wcCount{ opacity: 1 !important; visibility: visible !important; }
-  .heroOverlay .heroTitle,
-  .heroOverlay .heroSub{ text-shadow: 0 6px 18px rgba(0,0,0,.45); }
-
   .heroTitle{
     /* allow wrapping so "DALLAS WORLD CUP HQ" is fully visible */
     white-space:normal !important;
@@ -3022,6 +2994,50 @@ body.kiosk-mode *::-webkit-scrollbar{
   .hero .stars, .hero .starRow, .hero .playersRow, .hero .heroStars{ z-index:1 !important; }
   .hero header, .hero .heroTop, .hero .heroHdr, .hero .heroHeader, .hero .heroMeta, .hero .countdown, .hero #countdown, .hero .bannerTitle{ z-index:10 !important; }
   .hero .heroOverlay, .hero::before{ z-index:2 !important; }
+}
+
+
+/* === MOBILE ONLY: compact/narrow hero text strip (does not touch desktop) === */
+@media (max-width: 520px){
+  /* Ensure hero overlay text is always visible above effects/roster */
+  #heroBanner .heroOverlay{
+    z-index: 8 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: flex !important;
+
+    /* Make the text area narrower so the star strip has room */
+    max-width: 52vw !important;
+    padding: 10px 10px 12px !important;
+    gap: 5px !important;
+
+    /* Keep it tucked left and avoid accidental centering */
+    align-items: flex-start !important;
+  }
+
+  #heroBanner .heroKicker{
+    font-size: 9px !important;
+    letter-spacing: .16em !important;
+  }
+  #heroBanner .heroTitle{
+    font-size: clamp(14px, 4.4vw, 18px) !important;
+    letter-spacing: .09em !important;
+    line-height: 1.06 !important;
+    white-space: normal !important; /* allow wrap to avoid wide single-line */
+    max-width: 100% !important;
+  }
+  #heroBanner .heroSub{
+    font-size: clamp(10px, 3.2vw, 12px) !important;
+    line-height: 1.2 !important;
+    max-width: 100% !important;
+  }
+
+  /* Countdown: keep readable but compact */
+  #heroBanner #wcCount{
+    transform: scale(.86);
+    transform-origin: left top;
+    margin-top: 2px !important;
+  }
 }
 
 </style>
