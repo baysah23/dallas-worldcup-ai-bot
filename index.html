@@ -69,6 +69,9 @@
       min-height:0;
     }
     @media (max-width: 950px){
+  /* Force heroRoster visible on mobile */
+  .heroRoster{ display:block !important; }
+
   /* Mobile hero alignment */
   .heroTitle{ font-size: clamp(14px, 2.0vw, 18px) !important; line-height: 1.1; letter-spacing:.04em; }
   .heroSub{ font-size: clamp(11px, 1.6vw, 13px) !important; margin-top: 6px !important; line-height: 1.2; }
@@ -2987,28 +2990,24 @@ body.kiosk-mode *::-webkit-scrollbar{
   #scheduleCard, .menucard{ overflow:visible !important; }
   #schedule{ overflow:auto !important; -webkit-overflow-scrolling:touch; max-height: calc(100vh - 240px) !important; }
   #pager, .pager{ position:sticky; bottom:0; z-index:5; }
-
-
-  /* Mobile hero sizing (v5): keep all banner elements visible + readable */
+  /* Mobile hero sizing (v6): restore original hero height + fit text/roster */
   #heroBanner{
-    height:auto !important;
-    min-height: 220px !important;
-    padding: 12px 12px 10px !important;
-    overflow:hidden !important; /* keep FX contained */
-  }
-  #heroBanner .heroKicker{ font-size: 9px !important; line-height:1.15 !important; margin-bottom:4px !important; }
-  #heroBanner .heroTitle{ font-size: 16px !important; line-height:1.05 !important; letter-spacing:.06em !important; }
-  #heroBanner .heroSub{ font-size: 11px !important; line-height:1.2 !important; opacity:.92; }
-  #heroBanner .wcCount{ margin-top: 8px !important; padding: 8px 10px !important; border-radius: 14px !important; }
-  #heroBanner .wcLabel{ font-size: 9px !important; letter-spacing:.10em !important; }
-  #heroBanner .wcNums b{ font-size: 14px !important; }
-  #heroBanner .wcNums small{ font-size: 10px !important; }
-  /* Stars/roster row: keep it below header/countdown and prevent overlap */
-  #heroBanner .heroRoster{
-    margin-top: 10px !important;
-    max-height: 72px !important;
+    height:170px !important;
+    min-height:170px !important;
+    padding:10px 10px 8px !important;
     overflow:hidden !important;
   }
+  #heroBanner .heroKicker{ font-size:8px !important; line-height:1.1 !important; margin-bottom:3px !important; }
+  #heroBanner .heroTitle{ font-size:14px !important; line-height:1.05 !important; letter-spacing:.06em !important; }
+  #heroBanner .heroSub{ font-size:10px !important; line-height:1.15 !important; opacity:.92; }
+  #heroBanner .wcCount{ margin-top:6px !important; padding:6px 8px !important; border-radius: 12px !important; }
+  #heroBanner .wcLabel{ font-size:8px !important; letter-spacing:.10em !important; }
+  #heroBanner .wcNums b{ font-size:12px !important; }
+  #heroBanner .wcNums small{ font-size:9px !important; }
+  /* Force roster to show on mobile (it was hidden globally) */
+  #heroBanner .heroRoster{ display:block !important; margin-top:6px !important; max-height:52px !important; }
+  #heroBanner .heroRosterTrack{ animation-duration: 22s !important; padding:4px 8px !important; gap:6px !important; }
+  #heroBanner .heroRoster img{ height:28px !important; width:auto !important; }
   /* Ensure FX never covers text */
   #heroBanner .heroFX{ pointer-events:none; }
 
