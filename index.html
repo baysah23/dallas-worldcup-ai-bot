@@ -2945,6 +2945,34 @@ body.kiosk-mode *::-webkit-scrollbar{
     gap:8px !important;
     padding:14px 14px 18px !important;
   }
+
+  /* Mobile: keep banner text compact/narrow so star strip has room */
+  .heroOverlay .heroKicker,
+  .heroOverlay .heroTitle,
+  .heroOverlay .heroSub,
+  .heroOverlay #wcCount{
+    max-width: 56vw !important;
+  }
+  .heroOverlay .heroTitle{
+    font-size: clamp(15px, 4.3vw, 18px) !important;
+    letter-spacing: .08em !important;
+  }
+  .heroOverlay .heroSub{
+    font-size: clamp(11px, 3.2vw, 12.5px) !important;
+  }
+  .heroOverlay #wcCount{
+    transform: scale(.92);
+    transform-origin: left top;
+  }
+  /* Ensure text never disappears under effects */
+  .heroOverlay{ z-index: 8 !important; }
+  .heroOverlay .heroKicker,
+  .heroOverlay .heroTitle,
+  .heroOverlay .heroSub,
+  .heroOverlay #wcCount{ opacity: 1 !important; visibility: visible !important; }
+  .heroOverlay .heroTitle,
+  .heroOverlay .heroSub{ text-shadow: 0 6px 18px rgba(0,0,0,.45); }
+
   .heroTitle{
     /* allow wrapping so "DALLAS WORLD CUP HQ" is fully visible */
     white-space:normal !important;
@@ -2994,27 +3022,6 @@ body.kiosk-mode *::-webkit-scrollbar{
   .hero .stars, .hero .starRow, .hero .playersRow, .hero .heroStars{ z-index:1 !important; }
   .hero header, .hero .heroTop, .hero .heroHdr, .hero .heroHeader, .hero .heroMeta, .hero .countdown, .hero #countdown, .hero .bannerTitle{ z-index:10 !important; }
   .hero .heroOverlay, .hero::before{ z-index:2 !important; }
-}
-
-
-/* ===== Mobile-only surgical: make banner text block narrower so roster has room (does NOT affect desktop) ===== */
-@media (max-width: 680px){
-  /* Keep text readable but constrain its horizontal footprint */
-  #heroBanner .heroKicker,
-  #heroBanner .heroTitle,
-  #heroBanner .heroSub,
-  #heroBanner .wcCount{
-    max-width: 56vw;
-    width: fit-content;
-  }
-  /* Allow subtitle to wrap within the narrower block */
-  #heroBanner .heroSub{
-    white-space: normal;
-  }
-  /* Make countdown chip compact without shrinking numbers too much */
-  #heroBanner .wcCount{
-    padding: 8px 10px;
-  }
 }
 
 </style>
