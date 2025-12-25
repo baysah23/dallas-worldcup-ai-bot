@@ -70,8 +70,12 @@
     }
     @media (max-width: 950px){
   /* Mobile hero alignment */
-  .heroTitle{ font-size: clamp(14px, 2.0vw, 18px) !important; line-height: 1.1; letter-spacing:.04em; }
-  .heroSub{ font-size: clamp(11px, 1.6vw, 13px) !important; margin-top: 6px !important; line-height: 1.2; }
+  .heroTitle{ font-size: clamp(12px, 1.8vw, 16px) !important; line-height: 1.1; letter-spacing:.04em; }
+  .heroSub{ font-size: clamp(10px, 1.4vw, 12px) !important; margin-top: 6px !important; line-height: 1.2; }
+  /* Mobile countdown sizing */
+  .countdown{ padding: 8px 10px !important; }
+  .countdown .label{ font-size: 10px !important; }
+  .countdown .nums{ font-size: 11px !important; gap: 8px !important; }
 /* Hero shrink-on-scroll (desktop & mobile) */
 #heroBanner.is-shrunk{
   padding-top: 10px !important;
@@ -2997,50 +3001,65 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-/* === MOBILE ONLY: keep hero banner text visible + narrower so roster has room (surgical) === */
+/* --- STEP 1B HOTFIX (mobile only): ensure hero header/sub/countdown are visible above slides/FX --- */
 @media (max-width: 950px){
-  /* Force overlay/text above slides & FX */
+  #heroBanner{ position:relative; }
+  #heroBanner .heroSlides,
+  #heroBanner .heroFX{
+    position:absolute !important;
+    inset:0 !important;
+  }
   #heroBanner .heroOverlay{
     position:absolute !important;
     inset:0 !important;
-    z-index:50 !important;
+    z-index: 20 !important;
     display:flex !important;
-    opacity:1 !important;
-    visibility:visible !important;
-
-    /* Make text block narrower on mobile so star strip has room */
-    width: clamp(180px, 52vw, 320px) !important;
-    max-width: 62% !important;
-    padding: 12px 12px 14px !important;
-    gap: 6px !important;
   }
+  /* Keep text/countdown above any pseudo overlays */
   #heroBanner .heroKicker,
   #heroBanner .heroTitle,
   #heroBanner .heroSub,
   #heroBanner #wcCount{
-    display:block !important;
-    opacity:1 !important;
-    visibility:visible !important;
-    z-index: 51 !important;
+    position:relative !important;
+    z-index: 21 !important;
   }
-
-  /* Compact, still readable */
-  #heroBanner .heroKicker{ font-size: 10px !important; letter-spacing: .16em !important; }
-  #heroBanner .heroTitle{ font-size: clamp(16px, 4.6vw, 20px) !important; line-height: 1.08 !important; }
-  #heroBanner .heroSub{ font-size: 11px !important; line-height: 1.2 !important; max-width: 100% !important; }
-  #heroBanner #wcCount{ margin-top: 4px !important; }
-  #heroBanner #wcCount .wcLabel{ font-size: 10px !important; }
-  #heroBanner #wcCount .wcNums b{ font-size: 12px !important; }
 }
 
-/* Even narrower phones */
-@media (max-width: 520px){
-  #heroBanner .heroOverlay{
-    width: clamp(170px, 50vw, 280px) !important;
-    max-width: 60% !important;
-    padding: 11px 11px 13px !important;
+
+/* === MOBILE BANNER TEXT MICRO-COMPACT (SAFE OVERRIDE) === */
+@media (max-width: 520px) {
+
+  /* Keep banner text visible & narrow */
+  .heroOverlay {
+    max-width: 52vw;
+    padding: 10px 10px;
+    gap: 4px;
   }
-  #heroBanner .heroTitle{ font-size: clamp(15px, 4.8vw, 19px) !important; }
+
+  /* Header / subtitle smaller */
+  .heroKicker {
+    font-size: 11px;
+    letter-spacing: 0.6px;
+  }
+
+  .heroTitle {
+    font-size: 17px;
+    line-height: 1.15;
+  }
+
+  .heroSub {
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  /* Countdown: FORCE single line */
+  #wcCount,
+  .countdown {
+    font-size: 11px;
+    padding: 4px 8px;
+    white-space: nowrap;
+    line-height: 1.1;
+  }
 }
 
 </style>
