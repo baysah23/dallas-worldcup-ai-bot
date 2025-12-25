@@ -72,37 +72,6 @@
   /* Mobile hero alignment */
   .heroTitle{ font-size: clamp(14px, 2.0vw, 18px) !important; line-height: 1.1; letter-spacing:.04em; }
   .heroSub{ font-size: clamp(11px, 1.6vw, 13px) !important; margin-top: 6px !important; line-height: 1.2; }
-
-  /* MOBILE SAFETY: ensure hero text never disappears */
-  #heroBanner .heroOverlay{
-    display:flex !important;
-    visibility:visible !important;
-    opacity:1 !important;
-    z-index:6 !important;
-  }
-  #heroBanner .heroKicker,
-  #heroBanner .heroTitle,
-  #heroBanner .heroSub,
-  #heroBanner .wcCount{
-    visibility:visible !important;
-    opacity:1 !important;
-  }
-
-  /* Mobile subtitle: keep on ONE line, narrower, aligned, with ellipsis if needed */
-  #heroBanner .heroSub{
-    white-space:nowrap !important;
-    max-width:min(62vw, 330px) !important;
-    overflow:hidden !important;
-    text-overflow:ellipsis !important;
-  }
-
-  /* Make all hero text a touch smaller on mobile */
-  #heroBanner .heroKicker{ font-size:10px !important; letter-spacing:.16em !important; }
-  #heroBanner .heroTitle{ font-size: clamp(14px, 4.4vw, 17px) !important; }
-  #heroBanner .heroSub{ font-size: clamp(10px, 3.3vw, 12px) !important; }
-  #heroBanner .wcLabel{ font-size:10px !important; white-space:nowrap !important; }
-  #heroBanner .wcNums b{ font-size: clamp(13px, 4.0vw, 16px) !important; }
-  #heroBanner .wcNums small{ font-size: 10px !important; }
 /* Hero shrink-on-scroll (desktop & mobile) */
 #heroBanner.is-shrunk{
   padding-top: 10px !important;
@@ -3027,6 +2996,31 @@ body.kiosk-mode *::-webkit-scrollbar{
   .hero .heroOverlay, .hero::before{ z-index:2 !important; }
 }
 
+
+
+/* === MOBILE SURGICAL FIX: keep hero subtitle on ONE line + reduce banner text width (no desktop impact) === */
+@media (max-width: 950px){
+  /* Constrain the text column so there's room for the star strip (next steps) */
+  #heroBanner .heroKicker,
+  #heroBanner .heroTitle,
+  #heroBanner .heroSub,
+  #heroBanner .wcCount{
+    max-width: 64vw !important;
+  }
+
+  /* Keep subtitle on one line and aligned (no wrapping) */
+  #heroBanner .heroSub{
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important; /* safety if ultra-narrow devices */
+    letter-spacing: .02em !important;
+  }
+
+  /* Slightly smaller + tighter to fit premium, compact look */
+  #heroBanner .heroKicker{ font-size: 10px !important; letter-spacing: .14em !important; }
+  #heroBanner .heroTitle{ font-size: clamp(14px, 4.2vw, 18px) !important; }
+  #heroBanner .wcCount{ transform: scale(.92); transform-origin: left top; }
+}
 </style>
 </head>
 <body>
