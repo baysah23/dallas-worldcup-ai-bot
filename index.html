@@ -2708,6 +2708,133 @@ body.kiosk-mode *::-webkit-scrollbar{
   body[data-msec="fan"] #vipHoldRail{ display:block !important; }
 }
 
+
+
+/* =========================================================
+   MOBILE-FIRST NAV MODEL (desktop unchanged)
+   - Bottom nav sets body[data-msec]
+   - Rails become flow cards on mobile (no overlays / no tap-blocking)
+   - Schedule gets safe-area padding so pager never hides last item
+========================================================= */
+@media (max-width: 950px){
+  /* Bottom nav */
+  .mobileNav{
+    position: fixed;
+    left: 10px; right: 10px; bottom: 10px;
+    z-index: 9999;
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: rgba(10,18,35,.92);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 24px rgba(0,0,0,.35);
+  }
+  .mnavBtn{
+    flex: 1 1 0;
+    display: grid;
+    place-items: center;
+    gap: 2px;
+    padding: 8px 6px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--muted);
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 1.05;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mnavBtn span{ font-size: 10px; font-weight: 800; letter-spacing: .2px; }
+  .mnavBtn.active{
+    color: var(--text);
+    background: rgba(255,255,255,.08);
+  }
+
+  /* Give the page a bottom safe area for the fixed nav */
+  body{ padding-bottom: 96px !important; }
+
+  /* Rails: remove fixed/absolute positioning so they don't overlay and block taps */
+  .vip-rail, .fanzone, .fanzone-left, .fanzone-right, .fanzoneRail,
+  #vipHoldRail, #fanZoneLeft, #fanZoneRight{
+    position: static !important;
+    left: auto !important; right: auto !important; top: auto !important; bottom: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    transform: none !important;
+    margin: 10px 0 !important;
+    pointer-events: auto !important;
+  }
+
+  /* Make the grid a simple vertical flow on phones */
+  .grid{ display: block !important; }
+  .leftcol, .rightcol{ width: 100% !important; }
+  .rightcol{ margin-top: 10px; }
+
+  /* Schedule card: keep list scrollable in viewport and ensure last row visible */
+  #scheduleCard{ min-height: 0 !important; }
+  #schedule{
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch;
+    max-height: calc(100vh - 260px) !important; /* hero + headers + bottom nav */
+    padding-bottom: 18px !important;
+  }
+  #pager{
+    position: static !important;
+    margin-top: 10px !important;
+  }
+
+  /* Ensure section toggling never hides the whole app due to missing IDs */
+  body:not([data-msec]){ --msec: chat; }
+}
+
+/* Section visibility (mobile only): show one “primary” section at a time
+   - chat: chatcard
+   - menu: menucard
+   - schedule: scheduleCard
+   - fanzone: fanZoneLeft + fanZoneRight
+   - vip: vipHoldRail
+*/
+@media (max-width: 950px){
+  /* default: chat */
+  body[data-msec="chat"] .chatcard{ display:block !important; }
+  body[data-msec="chat"] .menucard,
+  body[data-msec="chat"] #scheduleCard,
+  body[data-msec="chat"] #fanZoneLeft,
+  body[data-msec="chat"] #fanZoneRight,
+  body[data-msec="chat"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="menu"] .menucard{ display:block !important; }
+  body[data-msec="menu"] .chatcard,
+  body[data-msec="menu"] #scheduleCard,
+  body[data-msec="menu"] #fanZoneLeft,
+  body[data-msec="menu"] #fanZoneRight,
+  body[data-msec="menu"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="schedule"] #scheduleCard{ display:block !important; }
+  body[data-msec="schedule"] .chatcard,
+  body[data-msec="schedule"] .menucard,
+  body[data-msec="schedule"] #fanZoneLeft,
+  body[data-msec="schedule"] #fanZoneRight,
+  body[data-msec="schedule"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="fanzone"] #fanZoneLeft,
+  body[data-msec="fanzone"] #fanZoneRight{ display:block !important; }
+  body[data-msec="fanzone"] .chatcard,
+  body[data-msec="fanzone"] .menucard,
+  body[data-msec="fanzone"] #scheduleCard,
+  body[data-msec="fanzone"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="vip"] #vipHoldRail{ display:block !important; }
+  body[data-msec="vip"] .chatcard,
+  body[data-msec="vip"] .menucard,
+  body[data-msec="vip"] #scheduleCard,
+  body[data-msec="vip"] #fanZoneLeft,
+  body[data-msec="vip"] #fanZoneRight{ display:none !important; }
+}
 </style>
 </head>
 <body>
@@ -2869,7 +2996,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="hint" id="helperHint"></div>
 </div></div>
 <!-- Sidebar -->
-<div class="card" style="display:flex;flex-direction:column;min-height:0;">
+<div class="card schedulecard" id="scheduleCard" style="display:flex;flex-direction:column;min-height:0;">
 <div class="cardhead">
 <div class="title" id="sideTitle">Dallas Schedule</div>
 <div class="pill" id="pillLang">EN</div></div>
@@ -2905,6 +3032,17 @@ body.kiosk-mode *::-webkit-scrollbar{
 <button class="secondary" id="nextPage" style="min-width:88px;">Next</button></div>
 </div></div>
 </div>
+
+
+<!-- Mobile bottom navigation (mobile-first, does not affect desktop) -->
+<nav class="mobileNav" id="mobileNav" aria-label="Mobile navigation">
+  <button class="mnavBtn active" data-msec="chat" type="button" aria-label="Chat">💬<span>Chat</span></button>
+  <button class="mnavBtn" data-msec="menu" type="button" aria-label="Menu">🍽️<span>Menu</span></button>
+  <button class="mnavBtn" data-msec="schedule" type="button" aria-label="Schedule">📅<span>Schedule</span></button>
+  <button class="mnavBtn" data-msec="fanzone" type="button" aria-label="Fan Zone">⚽<span>Fan Zone</span></button>
+  <button class="mnavBtn" data-msec="vip" type="button" aria-label="VIP">⭐<span>VIP</span></button>
+</nav>
+
 
 <script>
 /**
@@ -4216,6 +4354,74 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
 
   window.addEventListener("resize", adjustScheduleBottomPadding);
   window.addEventListener("load", ()=> setTimeout(adjustScheduleBottomPadding, 250));
+
+
+/* =========================
+   Mobile bottom-nav wiring
+   - sets body[data-msec] to control which section is visible on phones
+   - keeps desktop layout untouched
+========================= */
+(function(){
+  function isMobile(){ return window.matchMedia && window.matchMedia('(max-width: 950px)').matches; }
+
+  function setSection(sec){
+    document.body.setAttribute('data-msec', sec);
+    const nav = document.getElementById('mobileNav');
+    if(nav){
+      nav.querySelectorAll('.mnavBtn').forEach(b=>{
+        b.classList.toggle('active', b.dataset.msec === sec);
+      });
+    }
+    // When switching, scroll the relevant card into view for a “native app” feel.
+    const map = {
+      chat: document.querySelector('.chatcard'),
+      menu: document.querySelector('.menucard'),
+      schedule: document.getElementById('scheduleCard'),
+      fanzone: document.getElementById('fanZoneLeft'),
+      vip: document.getElementById('vipHoldRail')
+    };
+    const el = map[sec];
+    if(el && isMobile()){
+      try{ el.scrollIntoView({behavior:'smooth', block:'start'}); }catch(e){ el.scrollIntoView(); }
+    }
+  }
+
+  function wireNav(){
+    const nav = document.getElementById('mobileNav');
+    if(!nav) return;
+    nav.addEventListener('click', (e)=>{
+      const btn = e.target.closest('.mnavBtn');
+      if(!btn) return;
+      setSection(btn.dataset.msec || 'chat');
+    });
+    // Default section on mobile
+    if(isMobile() && !document.body.getAttribute('data-msec')){
+      setSection('chat');
+    }
+  }
+
+  // Schedule safe-area padding: ensure pager/bottom-nav never cover last schedule row
+  function adjustScheduleBottomPadding(){
+    const schedule = document.getElementById('schedule');
+    if(!schedule) return;
+    const nav = document.getElementById('mobileNav');
+    const navH = nav ? nav.getBoundingClientRect().height : 0;
+    // add a little extra breathing room
+    schedule.style.paddingBottom = (Math.ceil(navH) + 18) + 'px';
+  }
+
+  function runAll(){
+    wireNav();
+    adjustScheduleBottomPadding();
+  }
+
+  window.addEventListener('resize', ()=>setTimeout(runAll, 140));
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', runAll);
+  else runAll();
+
+  // If schedule renders async, call this after render.
+  window.adjustScheduleBottomPadding = adjustScheduleBottomPadding;
+})();
 
 </script>
 <script>
