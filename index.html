@@ -2964,6 +2964,10 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 /* ===== Mobile-only fixes (v3) ===== */
 @media (max-width: 950px){
+  /* Hide legacy mid-app nav; keep bottom nav only */
+  .mnav{ display:none !important; }
+  .mnavWrap, .midNav, .midButtons{ display:none !important; }
+
   /* Prevent horizontal drift / off-screen content */
   html, body{ overflow-x:hidden; }
   .wrap{ width:100%; max-width:100%; padding-left:10px; padding-right:10px; }
