@@ -2997,47 +2997,50 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-/* === MOBILE ONLY: compact/narrow hero text strip (does not touch desktop) === */
-@media (max-width: 520px){
-  /* Ensure hero overlay text is always visible above effects/roster */
+/* === MOBILE ONLY: keep hero banner text visible + narrower so roster has room (surgical) === */
+@media (max-width: 950px){
+  /* Force overlay/text above slides & FX */
   #heroBanner .heroOverlay{
-    z-index: 8 !important;
-    opacity: 1 !important;
-    visibility: visible !important;
-    display: flex !important;
+    position:absolute !important;
+    inset:0 !important;
+    z-index:50 !important;
+    display:flex !important;
+    opacity:1 !important;
+    visibility:visible !important;
 
-    /* Make the text area narrower so the star strip has room */
-    max-width: 52vw !important;
-    padding: 10px 10px 12px !important;
-    gap: 5px !important;
-
-    /* Keep it tucked left and avoid accidental centering */
-    align-items: flex-start !important;
+    /* Make text block narrower on mobile so star strip has room */
+    width: clamp(180px, 52vw, 320px) !important;
+    max-width: 62% !important;
+    padding: 12px 12px 14px !important;
+    gap: 6px !important;
   }
-
-  #heroBanner .heroKicker{
-    font-size: 9px !important;
-    letter-spacing: .16em !important;
-  }
-  #heroBanner .heroTitle{
-    font-size: clamp(14px, 4.4vw, 18px) !important;
-    letter-spacing: .09em !important;
-    line-height: 1.06 !important;
-    white-space: normal !important; /* allow wrap to avoid wide single-line */
-    max-width: 100% !important;
-  }
-  #heroBanner .heroSub{
-    font-size: clamp(10px, 3.2vw, 12px) !important;
-    line-height: 1.2 !important;
-    max-width: 100% !important;
-  }
-
-  /* Countdown: keep readable but compact */
+  #heroBanner .heroKicker,
+  #heroBanner .heroTitle,
+  #heroBanner .heroSub,
   #heroBanner #wcCount{
-    transform: scale(.86);
-    transform-origin: left top;
-    margin-top: 2px !important;
+    display:block !important;
+    opacity:1 !important;
+    visibility:visible !important;
+    z-index: 51 !important;
   }
+
+  /* Compact, still readable */
+  #heroBanner .heroKicker{ font-size: 10px !important; letter-spacing: .16em !important; }
+  #heroBanner .heroTitle{ font-size: clamp(16px, 4.6vw, 20px) !important; line-height: 1.08 !important; }
+  #heroBanner .heroSub{ font-size: 11px !important; line-height: 1.2 !important; max-width: 100% !important; }
+  #heroBanner #wcCount{ margin-top: 4px !important; }
+  #heroBanner #wcCount .wcLabel{ font-size: 10px !important; }
+  #heroBanner #wcCount .wcNums b{ font-size: 12px !important; }
+}
+
+/* Even narrower phones */
+@media (max-width: 520px){
+  #heroBanner .heroOverlay{
+    width: clamp(170px, 50vw, 280px) !important;
+    max-width: 60% !important;
+    padding: 11px 11px 13px !important;
+  }
+  #heroBanner .heroTitle{ font-size: clamp(15px, 4.8vw, 19px) !important; }
 }
 
 </style>
