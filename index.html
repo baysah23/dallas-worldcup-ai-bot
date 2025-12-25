@@ -1051,47 +1051,1919 @@
 
 /* 2) Mobile-only header spacing tweak */
 @media (max-width: 520px){
+  .hero-title{
+    top:14px !important;
+    font-size:18px !important;
+    letter-spacing:.10em !important;
+    padding:0 14px;
+    text-align:center;
+  }
+  .hero-title::after{
+    margin-top:8px;
+    width:min(420px, 86vw);
+  }
+  .hero-flags{
+    top:14px !important;
+    right:12px !important;
+    gap:6px !important;
+  }
+}
+
+/* 3) Match card hover elevation (very subtle) */
+.match{
+  transition: transform 160ms ease, box-shadow 160ms ease;
+  will-change: transform;
+}
+.match:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px rgba(0,0,0,.18);
+}
+
+
+/* =========================
+   MATCH DAY MODE (Step 1)
+   Visual amplify only (UI-only)
+   ========================= */
+50%      { transform: translateZ(0) scale(1.015); filter: drop-shadow(0 0 16px rgba(212,175,55,.35)); }
+}
+/* Banner takeover text styling when matchday */
+/* Highlight the next match card in gold */
+
+
+/* =======================
+   GLOBAL FAN ZONE IDENTITY (UI-only)
+   - Slightly sport-modern typography
+   - Gold reserved for Dallas matches + Knockouts + Finals
+   - Background gradient shifts by stage (Group → Knockouts → Finals)
+======================= */
+:root{
+  --font-sport: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+  --font-sport-condensed: ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  --gold: #ffcc66; /* existing warn-like gold */
+  --goldSoft: rgba(255,204,102,.18);
+}
+
+/* Slightly more sport-modern typography without external fonts */
+body{
+  font-family: var(--font-sport);
+  letter-spacing: .1px;
+}
+h1,h2,h3,.brand, .pill, .tabs button{
+  font-family: var(--font-sport-condensed);
+  letter-spacing: .2px;
+}
+
+/* Gold accents reserved */
+.match.is-dallas b,
+.match.is-knockout b,
+.match.is-final b{
+  color: var(--gold);
+}
+.match.is-dallas{
+  border-color: rgba(255,204,102,.35);
+  box-shadow: 0 0 0 1px rgba(255,204,102,.12) inset;
+}
+.match.is-knockout,
+.match.is-final{
+  background: linear-gradient(180deg, rgba(255,204,102,.10), rgba(255,204,102,.03));
+  border-color: rgba(255,204,102,.30);
+}
+.match.is-final{
+  box-shadow: 0 8px 22px rgba(0,0,0,.25);
+}
+
+/* Stage-based background gradient shift */
+body.stage-group{
+  background: radial-gradient(1200px 600px at 20% 10%, #132a5b 0%, var(--bg) 55%);
+}
+body.stage-knockout{
+  background: radial-gradient(1200px 600px at 80% 10%, #2a1a55 0%, var(--bg) 58%);
+}
+body.stage-finals{
+  background: radial-gradient(1200px 600px at 50% 8%, #3b2a10 0%, var(--bg) 60%);
+}
+
+
+/* =======================
+   FAN ZONE IDENTITY (UI-only)
+   ======================= */
+:root{
+  --sport-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+  --sport-font-alt: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  --gold: #ffcc66;
+  --gold2: rgba(255,204,102,.18);
+  --phaseA: radial-gradient(1200px 600px at 20% 10%, #132a5b 0%, var(--bg) 55%);
+  --phaseK: radial-gradient(1200px 700px at 80% 15%, #1a2f60 0%, #071022 55%);
+  --phaseF: radial-gradient(1200px 700px at 50% 10%, #2a1b4a 0%, #071022 60%);
+}
+body{
+  font-family: var(--sport-font);
+  letter-spacing: .2px;
+}
+h1,h2,h3,.title,.hero-title{ font-family: var(--sport-font-alt); letter-spacing:.3px; }
+
+/* Phase background rotation (subtle) */
+body.phase-group{ background: var(--phaseA); }
+body.phase-knockout{ background: var(--phaseK); }
+body.phase-finals{ background: var(--phaseF); }
+
+/* Gold accent rules */
+.match-card.dallas{ border:1px solid rgba(255,204,102,.55) !important; box-shadow: 0 0 0 1px rgba(255,204,102,.15) inset; }
+.match-card.knockout{ border:1px solid rgba(255,204,102,.35) !important; }
+.match-card.finals{ border:1px solid rgba(255,204,102,.65) !important; box-shadow: 0 0 0 1px rgba(255,204,102,.22) inset; }
+
+/* Fan Zone panel */
+.fanzone{
+  margin: 14px 0 0 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+  padding: 12px;
+}
+.fz-row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+.fz-chip{
+  display:inline-flex; align-items:center; gap:8px;
+  border:1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: rgba(0,0,0,.15);
+}
+.fz-chip b{ font-weight:700; }
+
+/* Ensure supporter chip handles long country names gracefully */
+#supporterChip{ max-width:100%; min-width:0; flex-wrap:wrap; }
+#supporterChip b#supporterLabel{
+  display:inline-block;
+  max-width: 180px;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.1;
+}
+@media (max-width: 420px){
+  #supporterChip b#supporterLabel{ max-width: 140px; }
+}
+.fz-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+.fz-btn{
+  border:1px solid var(--line);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor:pointer;
+}
+.fz-btn:hover{ transform: translateY(-1px); }
+
+/* Live pulse (UI-only): subtle premium glow when poll is live */
+@keyframes fzLivePulse{
+  0%   { box-shadow: 0 0 0 rgba(212,175,55,0); }
+  55%  { box-shadow: 0 0 18px rgba(212,175,55,.22); }
+  100% { box-shadow: 0 0 0 rgba(212,175,55,0); }
+}
+#btnOpenPoll.is-live{
+  animation: fzLivePulse 2.2s ease-in-out infinite;
+  border-color: rgba(212,175,55,.35);
+}
+#fzIconPoll.is-live{
+  animation: fzLivePulse 2.2s ease-in-out infinite;
+  border-color: rgba(212,175,55,.35);
+}
+@media (prefers-reduced-motion: reduce){
+  #btnOpenPoll.is-live, #fzIconPoll.is-live{ animation:none !important; }
+}
+
+.fz-grid{
+  display:grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 10px;
+  margin-top:10px;
+}
+.fz-card{
+  grid-column: span 12;
+  border:1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(0,0,0,.14);
+}
+@media(min-width: 900px){
+  .fz-card.half{ grid-column: span 6; }
+  .fz-card.third{ grid-column: span 4; }
+}
+.fz-card h3{ margin:0 0 8px 0; font-size: 14px; color: var(--text); }
+.fz-muted{ color: var(--muted); font-size: 12px; }
+
+/* Modal */
+.fz-modal{
+  position:fixed; inset:0;
+  display:flex;
+  align-items:center; justify-content:center;
+  background: rgba(0,0,0,.55);
+  z-index: 9999;
+
+  /* Hidden by default, but still transitionable */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+}
+.fz-modal.show{
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.fz-modal .panel{
+  width:min(720px, 92vw);
+  border:1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(10,18,40,.92);
+  padding: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.55);
+
+  /* Premium open motion */
+  transform: translateY(12px) scale(.99);
+  opacity: 0;
+  transition: transform 240ms cubic-bezier(.2,.9,.2,1), opacity 240ms ease;
+}
+.fz-modal.show .panel{
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+/* --- Premium modal motion (enhanced) --- */
+@keyframes fzModalIn{
+  0%   { transform: translateY(18px) scale(.985); opacity: 0; filter: blur(2px); }
+  60%  { transform: translateY(-2px) scale(1.002); opacity: 1; filter: blur(0); }
+  100% { transform: translateY(0) scale(1); opacity: 1; filter: blur(0); }
+}
+.fz-modal.show{
+  backdrop-filter: blur(2px);
+}
+.fz-modal.show .panel{
+  animation: fzModalIn 420ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+
+@media (prefers-reduced-motion: reduce){
+  .fz-modal, .fz-modal .panel{ transition: none !important; transform:none !important; }
+}
+.fz-modal .panel h2{ margin:0 0 10px 0; font-size: 16px; }
+
+.fz-country-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; }
+@media(min-width: 900px){ .fz-country-grid{ grid-template-columns: repeat(5, 1fr); } }
+.fz-country{
+  border:1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255,255,255,.04);
+  cursor:pointer;
+  display:flex; gap:8px; align-items:center; justify-content:center;
+}
+.fz-country:hover{ outline: 1px solid rgba(255,204,102,.35); }
+.fz-flag{ font-size: 18px; }
+.fz-footer{ display:flex; justify-content:space-between; gap:10px; margin-top:10px; flex-wrap:wrap; }
+
+/* QR box */
+.qrWrap{ display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+#qrImg{ width:128px; height:128px; background:#fff; border-radius:12px; padding:8px; }
+.qrText a{ color: var(--warn); text-decoration:none; }
+
+
+/* --- Fan Zone side rails (desktop) --- */
+/* --- Left rail stack (VIP above Fan Zone) --- */
+@media(min-width: 1200px){
+  .fz-left-stack{
+    position: fixed;
+    left: 16px;
+    top: 84px; /* below header */
+    width: 220px;
+    max-height: calc(100vh - 110px);
+    display: flex;
+    flex-direction: column;
+    gap: 12px; /* SPACE between VIP + Fan Zone */
+    z-index: 55;
+  }
+  /* Fan zone left becomes normal inside the stack */
+  #fanZoneLeft.fanzone-left{
+    position: static;
+    width: 100%;
+    max-height: none;
+    overflow: auto;
+  }
+  /* VIP rail matches width and never affects main layout */
+  #vipHoldRail{
+    position: static;
+    width: 100%;
+  }
+}
+@media(max-width: 1199px){
+  .fz-left-stack{ width: auto; position: static; display: block; }
+}
+
+.fanzone-left, .fanzone-right{ width: 320px; }
+@media(min-width: 1200px){
+  /* Keep header + core app centered while side rails stay visible */
+  body{ padding-left: 360px; padding-right: 360px; }
+  .fanzone-left, .fanzone-right{
+    position: fixed;
+    top: 92px; /* below header */
+    max-height: calc(100vh - 110px);
+    overflow: auto;
+    z-index: 50;
+  }
+  .fanzone-left{ left: 16px; }
+  .fanzone-right{ right: 16px; }
+}
+@media(max-width: 1199px){
+  body{ padding-left: 0; padding-right: 0; }
+  .fanzone-left, .fanzone-right{
+    width: auto;
+    position: static;
+    margin-top: 12px;
+  }
+}
+
+
+/* --- Fan Zone size reduction (compact rails) --- */
+.fanzone-left, .fanzone-right{
+  width: 260px;
+  font-size: 12px;
+}
+.fz-chip{
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.fz-btn{
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.fz-card{
+  padding: 8px;
+}
+.fz-card h3{
+  font-size: 13px;
+}
+#qrImg{
+  width: 96px;
+  height: 96px;
+}
+@media(min-width:1200px){
+  body{ padding-left: 300px; padding-right: 300px; }
+}
+
+
+/* =======================
+   FAN ZONE: ultra-compact + luxury rails
+   ======================= */
+.fanzone-left, .fanzone-right{
+  width: 220px;
+  font-size: 11px;
+  border-radius: 18px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.02));
+}
+.fz-card{ border-radius: 16px; background: rgba(0,0,0,.10); }
+.fz-btn{
+  border-radius: 999px;
+  background: rgba(255,255,255,.035);
+}
+.fz-actions{ gap:6px; }
+.fz-chip{ border-radius: 999px; background: rgba(0,0,0,.10); }
+.qrWrap{ gap:10px; }
+#qrImg{ width:84px; height:84px; border-radius: 12px; padding:6px; }
+@media(min-width:1200px){
+  body{ padding-left: 260px; padding-right: 260px; }
+  .fanzone-left, .fanzone-right{ top: 84px; }
+}
+/* Auto-hide rails on scroll */
+body.fz-hidden .fanzone-left{ transform: translateX(-110%); opacity:0; pointer-events:none; }
+body.fz-hidden .fanzone-right{ transform: translateX(110%); opacity:0; pointer-events:none; }
+.fanzone-left, .fanzone-right{ transition: transform .22s ease, opacity .22s ease, box-shadow .22s ease; }
+/* Collapse to icon-only mode */
+.fz-iconbtn{
+  width: 34px; height: 34px;
+  border-radius: 999px;
+  border:1px solid var(--line);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center;
+}
+.fz-iconbtn:hover{ transform: translateY(-1px); }
+.fz-minirow{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+
+body.fz-collapsed .fanzone-left,
+body.fz-collapsed .fanzone-right{ width: 56px; padding: 10px; }
+
+body.fz-collapsed .fanzone-left .fz-actions,
+body.fz-collapsed .fanzone-right .fz-actions{ justify-content:center; }
+
+body.fz-collapsed .fanzone-left .fz-btn,
+body.fz-collapsed .fanzone-right .fz-btn{ display:none; }
+
+body.fz-collapsed .fanzone-left .fz-card,
+body.fz-collapsed .fanzone-right .fz-card,
+body.fz-collapsed #supporterChip,
+body.fz-collapsed .fz-muted{ display:none !important; }
+
+body.fz-collapsed .fz-rail-title{ display:none; }
+body.fz-collapsed .fz-minirow{ justify-content:center; }
+
+/* Luxury glow ONLY when Dallas plays */
+body.has-dallas-today .fanzone-left,
+body.has-dallas-today .fanzone-right{
+  box-shadow: 0 0 0 1px rgba(255,204,102,.18) inset, 0 10px 35px rgba(255,204,102,.08);
+}
+
+
+
+/* =========================================================
+   FAN ZONE — PREMIUM STADIUM ENERGY (FINAL OVERRIDES)
+   Goal: ultra-slim rails that POP (luxury), without breaking app
+   ========================================================= */
+:root{
+  --fzW: 168px;            /* default rail width (desktop) */
+  --fzW2: 152px;           /* extra-slim (wide screens) */
+  --fzGlass: rgba(255,255,255,.055);
+  --fzGlass2: rgba(0,0,0,.28);
+  --fzEdge: rgba(255,255,255,.14);
+  --fzGlow: rgba(255,204,102,.28);
+}
+
+/* Rails: slimmer + glass + premium border */
+.fanzone-left, .fanzone-right{
+  width: var(--fzW) !important;
+  font-size: 11px !important;
+  border-radius: 18px !important;
+  background: linear-gradient(180deg, var(--fzGlass), rgba(255,255,255,.02)) !important;
+  border: 1px solid var(--fzEdge) !important;
+  box-shadow:
+    0 14px 38px rgba(0,0,0,.30),
+    0 0 0 1px rgba(255,255,255,.06) inset !important;
+  backdrop-filter: blur(12px) saturate(1.15);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  overflow: hidden;
+}
+
+/* Keep main app centered and visible */
+@media (min-width: 1200px){
+  body{ padding-left: calc(var(--fzW) + 92px) !important; padding-right: calc(var(--fzW) + 92px) !important; }
+  .fanzone-left, .fanzone-right{ top: 84px !important; }
+}
+@media (min-width: 1500px){
+  :root{ --fzW: var(--fzW2); }
+}
+
+/* Inner cards: tighter, more luxury */
+.fz-card{
+  border-radius: 16px !important;
+  padding: 8px !important;
+  background: linear-gradient(180deg, rgba(0,0,0,.30), rgba(0,0,0,.18)) !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+}
+.fz-card h3{ font-size: 12px !important; letter-spacing: .02em; }
+
+/* Buttons/chips: slimmer */
+.fz-actions{ gap: 6px !important; }
+.fz-btn{
+  padding: 6px 8px !important;
+  font-size: 11px !important;
+  border-radius: 999px !important;
+  background: rgba(255,255,255,.08) !important;
+  border: 1px solid rgba(255,255,255,.14) !important;
+}
+.fz-chip{
+  padding: 6px 8px !important;
+  font-size: 11px !important;
+  border-radius: 999px !important;
+  background: rgba(0,0,0,.22) !important;
+  border: 1px solid rgba(255,255,255,.12) !important;
+}
+
+/* Icon buttons: premium round + subtle shine */
+.fz-iconbtn{
+  width: 34px !important; height: 34px !important;
+  border-radius: 999px !important;
+  background: radial-gradient(120px 60px at 30% 20%, rgba(255,255,255,.14), rgba(255,255,255,.06)) !important;
+  border: 1px solid rgba(255,255,255,.16) !important;
+  box-shadow: 0 10px 22px rgba(0,0,0,.22) !important;
+}
+.fz-iconbtn:hover{ transform: translateY(-1px); }
+
+/* QR: keep compact */
+#qrImg{ width: 78px !important; height: 78px !important; border-radius: 12px !important; }
+
+/* Auto-hide rails on scroll: smoother */
+body.fz-hidden .fanzone-left{ transform: translateX(-120%) !important; opacity:0 !important; pointer-events:none !important; }
+body.fz-hidden .fanzone-right{ transform: translateX(120%) !important; opacity:0 !important; pointer-events:none !important; }
+.fanzone-left, .fanzone-right{ transition: transform .24s ease, opacity .24s ease, box-shadow .24s ease !important; }
+
+/* Collapsed: icon-only “luxury strip” */
+body.fz-collapsed .fanzone-left,
+body.fz-collapsed .fanzone-right{
+  width: 56px !important;
+  padding: 10px 8px !important;
+}
+body.fz-collapsed .fanzone-left .fz-btn,
+body.fz-collapsed .fanzone-right .fz-btn,
+body.fz-collapsed .fanzone-left .fz-chip,
+body.fz-collapsed .fanzone-right .fz-chip,
+body.fz-collapsed .fanzone-left .fz-muted,
+body.fz-collapsed .fanzone-right .fz-muted,
+body.fz-collapsed .fanzone-left #pollCard,
+body.fz-collapsed .fanzone-right #drinkCard{
+  display:none !important;
+}
+body.fz-collapsed .fanzone-left .fz-actions,
+body.fz-collapsed .fanzone-right .fz-actions{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:10px !important;
+  align-items:center !important;
+}
+
+/* ===== Premium “stadium energy” POP =====
+   Glow ONLY when Dallas plays (your JS adds body.has-dallas-today) */
+@keyframes fzPulse{
+  0%,100%{ box-shadow: 0 14px 38px rgba(0,0,0,.30), 0 0 0 1px rgba(255,255,255,.06) inset; }
+  50%{ box-shadow: 0 18px 46px rgba(0,0,0,.34), 0 0 0 1px rgba(255,255,255,.08) inset, 0 0 26px var(--fzGlow); }
+}
+body.has-dallas-today .fanzone-left,
+body.has-dallas-today .fanzone-right{
+  border-color: rgba(255,204,102,.32) !important;
+  animation: fzPulse 2.2s ease-in-out infinite;
+}
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce){
+  body.has-dallas-today .fanzone-left,
+  body.has-dallas-today .fanzone-right{ animation:none !important; }
+}
+
+
+/* =======================
+   FAN ZONE (RIGHT RAIL) — fit + no overflow
+   ======================= */
+.fanzone-left, .fanzone-right,
+.fanzone-left *, .fanzone-right *{
+  box-sizing: border-box;
+}
+
+.fanzone-left, .fanzone-right{
+  overflow-x: hidden;
+}
+
+.fanzone-left .fz-card, .fanzone-right .fz-card{
+  width: 100%;
+  max-width: 100%;
+}
+
+.fanzone-left .fz-grid, .fanzone-right .fz-grid{
+  width: 100%;
+}
+
+/* Stack QR + text so it never spills outside the rail */
+.fanzone-right .qrWrap{
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.fanzone-right #qrImg{
+  width: 92px;
+  height: 92px;
+  max-width: 100%;
+}
+
+.fanzone-right .qrText{
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.fanzone-right .qrText a{
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* If any long labels appear, wrap them cleanly */
+.fanzone-right, .fanzone-right .fz-muted{
+  word-break: break-word;
+}
+
+
+/* =======================
+   FAN ZONE RIGHT: overflow hardening (no horizontal scroll)
+   ======================= */
+.fanzone-right{ overflow-x:hidden; }
+.fanzone-right *{ max-width:100%; box-sizing:border-box; }
+.fanzone-right h3,
+.fanzone-right .fz-muted,
+.fanzone-right #drinkHighlight,
+.fanzone-right #drinkHighlight *{
+  overflow-wrap:anywhere;
+  word-break:break-word;
+  hyphens:auto;
+}
+.fanzone-right .qrWrap{ flex-direction:column; align-items:flex-start; }
+.fanzone-right #qrImg{ width:96px; height:96px; }
+.fanzone-right .qrText a{ display:block; overflow-wrap:anywhere; word-break:break-all; }
+
+
+/* =======================
+   FAN ZONE RIGHT RAIL — overflow hard-fix (no horizontal scroll)
+   ======================= */
+.fanzone-left, .fanzone-right{
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+}
+.fz-card, .fanzone, .fz-row, .fz-grid, .qrWrap{ max-width: 100%; }
+.fz-card{ overflow: hidden; }
+.fz-muted, .fz-card, .fz-chip, .fz-btn, .qrText{
+  min-width: 0;
+}
+.qrText{
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.qrText a{
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  display: inline-block;
+  max-width: 100%;
+}
+
+/* Make the right rail content "taller" instead of wider */
+.fanzone-right .fz-card{ padding-bottom: 12px; }
+.fanzone-right .qrWrap{
+  flex-direction: column;
+  align-items: flex-start;
+}
+.fanzone-right #qrImg{
+  width: 92px;
+  height: 92px;
+}
+
+
+/* =======================
+   GLOBAL OVERFLOW GUARD (prevents any horizontal scroll)
+   ======================= */
+*, *::before, *::after{ box-sizing: border-box; }
+html, body{ overflow-x: hidden !important; }
+.wrap{ overflow-x: hidden; }
+
+/* Right rail: stack content vertically to avoid cramped horizontal layouts */
+.fanzone-right .fz-row{ flex-direction: column; align-items: stretch; gap: 8px; }
+.fanzone-right .fz-actions{ width:100%; justify-content: flex-start; }
+.fanzone-right .fz-grid{ grid-template-columns: 1fr !important; }
+.fanzone-right .fz-card{ width:100%; }
+.fanzone-right .fz-card *{ max-width:100%; min-width:0; }
+
+/* Drink highlight: always vertical */
+.fz-drink{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  width:100%;
+}
+.fz-drinkTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+.fz-drinkName{
+  font-weight:900;
+  letter-spacing:.02em;
+}
+.fz-drinkMeta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+.fz-miniPill{
+  font-size:10.5px;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.14);
+  color: var(--muted);
+}
+
+/* Any long strings must break rather than create scroll */
+.fanzone-right, .fanzone-right *{
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+
+
+/* =======================
+   FAN ZONE: drink highlight (vertical stack, zero overflow)
+   ======================= */
+.fz-drinkStack{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:0;
+}
+#drinkHighlight, #drinkHighlight *{ min-width:0 !important; }
+
+
+/* Last-resort: never allow a horizontal scrollbar anywhere */
+body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
+
+
+/* =======================
+   BANNER POP (bigger + premium)
+   ======================= */
+.hero{
+  height: 220px !important;
+  margin: 14px 12px 12px 12px !important;
+  border-radius: 18px !important;
+  box-shadow: 0 18px 50px rgba(0,0,0,.38), 0 0 0 1px rgba(255,255,255,.10) inset !important;
+}
+.compact .hero{ height: 160px !important; }
+@media (max-width: 720px){
+  .hero{ height: 200px !important; margin: 12px 10px !important; }
+}
+.heroOverlay{
+  z-index: 6 !important;
+  padding: 20px 18px !important;
+}
+.heroTitle{
+  /* Responsive on desktop + mobile: prevents subtitle overlap */
+  font-size: clamp(16px, 2.0vw, 21px) !important;
+  line-height: 1.12 !important;
+  letter-spacing: .10em !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.compact .heroTitle{ font-size: 20px !important; }
+.heroSub{ max-width: 520px !important; }
+
+/* Subtle edge vignette to focus the center */
+.hero::before{
+  filter: saturate(1.28) contrast(1.12) !important;
+}
+.heroVignette{
+  position:absolute; inset:0;
+  background:
+    radial-gradient(1100px 420px at 50% 40%, rgba(0,0,0,.00), rgba(0,0,0,.18) 60%, rgba(0,0,0,.38)),
+    linear-gradient(180deg, rgba(0,0,0,.22), rgba(0,0,0,.06) 44%, rgba(0,0,0,.34));
+  z-index: 4;
+  pointer-events:none;
+}
+
+
+/* =======================
+   WORLD CUP COUNTDOWN (real timer)
+   ======================= */
+.wcCount{
+  margin-top: 12px;
+  width: fit-content;
+  border-radius: 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(0,0,0,.22);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 14px 32px rgba(0,0,0,.22);
+}
+.wcLabel{
+  font-size: 10px;
+  letter-spacing: .22em;
+  font-weight: 900;
+  color: rgba(234,240,255,.85);
+}
+.wcNums{
+  margin-top: 6px;
+  display:flex;
+  gap:10px;
+  align-items:baseline;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.wcNums span{
+  display:inline-flex;
+  align-items:baseline;
+  gap:4px;
+}
+.wcNums b{
+  color: var(--gold);
+  font-size: 18px;
+  line-height: 1;
+}
+.compact .wcNums b{ font-size: 16px; }
+.wcNums small{
+  color: rgba(234,240,255,.78);
+  font-size: 11px;
+  font-weight: 800;
+}
+@media (max-width: 520px){
+  .wcCount{ padding: 9px 11px; }
+  .wcNums{ gap:8px; }
+  .wcNums b{ font-size: 16px; }
+}
+
+
+/* =======================
+   SCHEDULE VISIBILITY FIX
+   (ensures schedule is always visible in non-compact mode)
+   ======================= */
+@media (min-height: 650px){
+  .grid{ min-height: calc(100vh - 92px); } /* subtract header-ish area */
+}
+@media (max-height: 649px){
+  .grid{ min-height: 560px; }
+}
+.schedule{ min-height: 220px; }
+
+
+/* =======================
+   ONE-PAGE LOCK (everything fits in viewport)
+   - No body scroll
+   - Internal panels scroll (chat + schedules + menus + rails)
+   ======================= */
+html, body{
+  height:100%;
+  overflow:hidden !important;
+}
+body{
+  height:100vh !important;
+  min-height:100vh !important;
+}
+.wrap{
+  height:100vh !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+  display:flex;
+  flex-direction:column;
+}
+header{ flex:0 0 auto; }
+
+/* HERO fixed, then app grid fills remaining space */
+.hero{
+  flex:0 0 auto;
+  height: 180px !important;
+  margin: 12px 12px 10px 12px !important;
+}
+.compact .hero{ height: 150px !important; }
+@media (max-width: 720px){
+  .hero{ height: 190px !important; margin: 10px 10px 8px 10px !important; }
+}
+
+/* Main grid consumes remaining height */
+.grid{
+  flex: 1 1 auto !important;
+  min-height:0 !important;
+  height: auto !important;
+  overflow:hidden !important;
+  padding: 10px !important;
+  margin: 0 !important;
+}
+
+/* Columns/panels must be allowed to shrink and scroll inside */
+.leftcol, .chatcard, .menucard, .card{
+  min-height:0 !important;
+  height:100% !important;
+}
+
+/* Chat/menu/schedule internal scroll areas */
+#chat{ min-height:0 !important; height:auto !important; flex:1 1 auto !important; overflow:auto !important; }
+.menu{ min-height:0 !important; overflow:auto !important; }
+.schedule{ min-height:0 !important; flex:1 1 auto !important; overflow:auto !important; padding-bottom:78px; }
+
+/* Sticky pager stays visible within schedule panel */
+#pager{ position: sticky; bottom: 0; }
+
+/* Fan zone rails: keep them within viewport and scroll internally */
+@media(min-width:1200px){
+  .fanzone-left, .fanzone-right{
+    max-height: calc(100vh - 110px) !important;
+    overflow: auto !important;
+  }
+}
+
+
+/* =======================
+   FINAL LAYOUT TUNING
+   - Bigger banner width
+   - Taller Dallas schedule
+   ======================= */
+
+/* Make banner wider (bleed closer to edges) */
+.hero{
+  margin-left: 6px !important;
+  margin-right: 6px !important;
+  width: calc(100% - 12px) !important;
+}
+
+/* Give Dallas schedule more vertical dominance */
+.schedule{
+  flex: 2 1 auto !important;      /* takes more space than chat/menu */
+  min-height: 320px !important;   /* guarantees visibility */
+}
+
+/* Slightly reduce chat dominance so schedule gains height */
+.chatcard{
+  flex: 1 1 auto !important;
+}
+
+/* On large screens, emphasize schedule even more */
+@media (min-height: 800px){
+  .schedule{ min-height: 380px !important; }
+}
+
+
+/* =======================
+   DALLAS SCHEDULE: guaranteed visible area
+   (fixes grid row sizing so sidebar gets real height)
+   ======================= */
+.grid{
+  grid-template-rows: auto minmax(0, 1fr) !important; /* hero row + content row */
+  align-items: stretch !important;
+}
+.grid > :not(.hero){
+  min-height: 0 !important;
+}
+.hero{ grid-row: 1 !important; }
+.leftcol{ grid-row: 2 !important; min-height:0 !important; }
+.grid > .card{ grid-row: 2 !important; min-height:0 !important; height:100% !important; }
+
+/* Make the schedule area take remaining height inside the sidebar card */
+#schedule{
+  flex: 1 1 auto !important;
+  min-height: 240px !important;
+}
+@media (min-height: 820px){
+  #schedule{ min-height: 360px !important; }
+}
+
+
+/* =======================
+   PAGER MINI (doesn't block schedule)
+   ======================= */
+#pager{
+  padding: 8px 10px !important;
+  border-top: 1px solid rgba(255,255,255,.10) !important;
+}
+#pager button{
+  padding: 7px 10px !important;
+  min-width: 66px !important;
+  border-radius: 10px !important;
+  font-size: 12px !important;
+}
+#pager .secondary{
+  padding: 7px 10px !important;
+}
+#pager .pill, #pager .pageLabel, #pager #pageIndicator{
+  font-size: 11px !important;
+  padding: 4px 8px !important;
+}
+
+
+/* =======================
+   ULTRA-SLEEK PAGER (icon-only, never blocks scrollbars)
+   ======================= */
+#pager{
+  position: sticky !important;
+  bottom: 6px !important;
+  margin: 0 8px 8px !important;
+  width: calc(100% - 16px) !important;
+  border-radius: 14px !important;
+  padding: 6px 8px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  background: rgba(7,16,34,.72) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  box-shadow: 0 10px 26px rgba(0,0,0,.22) !important;
+}
+
+/* Icon buttons */
+#pager button{
+  min-width: 34px !important;
+  width: 34px !important;
+  height: 30px !important;
+  padding: 0 !important;
+  border-radius: 12px !important;
+  font-size: 0 !important;            /* hide text */
+  line-height: 0 !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
+
+/* Prev / Next icons */
+#prevBtn::before{
+  content:"‹";
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 900;
+  color: var(--text);
+}
+#nextBtn::before{
+  content:"›";
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 900;
+  color: var(--text);
+}
+
+/* Page indicator compact */
+#pageIndicator, .pageLabel, #pager .pill{
+  font-size: 11px !important;
+  padding: 4px 8px !important;
+  border-radius: 999px !important;
+  white-space: nowrap !important;
+}
+#pager .pill{ margin: 0 !important; }
+
+/* Keep schedule scrollbar fully usable */
+.schedule{
+  padding-bottom: 58px !important; /* space for sticky pager */
+  scrollbar-gutter: stable both-edges;
+}
+
+
+/* =======================
+   COMPACT TEXT PAGER (Prev/Next visible, ultra-sleek)
+   ======================= */
+#pager{
+  position: sticky !important;
+  bottom: 6px !important;
+  margin: 0 10px 8px !important;
+  width: calc(100% - 20px) !important;
+  border-radius: 14px !important;
+  padding: 6px 8px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  background: rgba(7,16,34,.70) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  box-shadow: 0 10px 24px rgba(0,0,0,.20) !important;
+  pointer-events:auto;
+}
+
+/* Buttons: small, readable */
+#pager button{
+  min-width: 64px !important;
+  height: 28px !important;
+  padding: 0 10px !important;
+  border-radius: 12px !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  letter-spacing: .06em !important;
+  line-height: 1 !important;
+}
+
+/* Page indicator tiny */
+#pageIndicator, .pageLabel, #pager .pill{
+  font-size: 10.5px !important;
+  padding: 4px 8px !important;
+  border-radius: 999px !important;
+  white-space: nowrap !important;
+}
+
+/* Ensure scrollbar never gets covered */
+.schedule{
+  padding-bottom: 54px !important; /* space for pager */
+  padding-right: 10px !important;  /* keep scrollbar free */
+  scrollbar-gutter: stable both-edges;
+}
+
+
+/* =======================
+   MINI SCROLLBAR (luxury cue that more games exist)
+   ======================= */
+/* WebKit browsers */
+.schedule::-webkit-scrollbar{
+  width: 6px;
+}
+.schedule::-webkit-scrollbar-track{
+  background: transparent;
+}
+.schedule::-webkit-scrollbar-thumb{
+  background: rgba(255,255,255,.28);
+  border-radius: 999px;
+}
+.schedule::-webkit-scrollbar-thumb:hover{
+  background: rgba(255,204,102,.65); /* subtle gold on hover */
+}
+
+/* Firefox */
+.schedule{
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.35) transparent;
+}
+
+
+/* =======================
+   SCROLL DELIGHT PACK
+   - Gentle nudge on first load
+   - Match-day glow that tracks the scrollbar thumb
+   - Kiosk/TV mode scrollbar suppression
+   ======================= */
+
+/* Ensure schedule can host overlay glow */
+.schedule{ position: relative; }
+
+/* Subtle "nudge" hint (applied briefly via JS) */
+@keyframes scheduleNudge{
+  0%{ transform: translateY(0); }
+  35%{ transform: translateY(-6px); }
+  70%{ transform: translateY(4px); }
+  100%{ transform: translateY(0); }
+}
+.schedule.nudge{
+  animation: scheduleNudge 900ms ease-in-out 1;
+}
+
+/* Scrollbar-thumb-follow glow (overlay, not the real scrollbar) */
+.scrollGlow{
+  position:absolute;
+  right: 2px;
+  top: 10px;
+  width: 10px;
+  height: 26px;
+  border-radius: 999px;
+  background: rgba(255,204,102,.55);
+  filter: blur(6px);
+  opacity: 0;
+  transform: translateY(0);
+  transition: opacity 220ms ease;
+  pointer-events:none;
+}
+
+/* Show glow only on match day (you already toggle has-dallas-today / matchday-mode elsewhere) */
+body.has-dallas-today .schedule .scrollGlow,
+body.matchday-mode .schedule .scrollGlow{
+  opacity: .95;
+}
+
+/* Kiosk / TV mode: hide scrollbars but keep scroll working */
+body.kiosk-mode *{
+  scrollbar-width: none !important; /* Firefox */
+}
+body.kiosk-mode *::-webkit-scrollbar{
+  width: 0 !important;
+  height: 0 !important;
+}
+
+
+/* =======================
+   PAGER OVERLAP FIX (last match always visible)
+   ======================= */
+:root{
+  --pagerH: 40px; /* visual height */
+  --pagerGap: 14px; /* safety gap */
+}
+
+/* Make sticky pager take no overlay space inside scrollable area by reserving padding */
+.schedule{
+  padding-bottom: calc(var(--pagerH) + var(--pagerGap) + 18px) !important;
+}
+
+/* Keep pager slightly above bottom so it doesn't sit on scrollbar edge */
+#pager{
+  bottom: 10px !important;
+}
+
+/* In compact screens, increase padding a touch */
+@media (max-width: 520px){
+  :root{ --pagerH: 42px; --pagerGap: 16px; }
+}
+
+
+/* =======================
+   PAGER OVERLAP FIX v2 (extra-safe)
+   ======================= */
+.schedule{
+  padding-bottom: calc(var(--pagerH) + var(--pagerGap) + 48px) !important;
+}
+
+
+/* =======================
+   SCHEDULE CARD FLEX FIX
+   (scroll happens inside #schedule, pager never overlaps)
+   ======================= */
+
+/* The right column schedule card is the .card that is a direct child of .grid (excluding .hero) */
+.grid > .card{
+  display:flex !important;
+  flex-direction:column !important;
+  min-height:0 !important;
+}
+
+/* Make the schedule list take all remaining space */
+#schedule{
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow:auto !important;
+  padding-bottom: 16px !important; /* no need for huge bottom padding now */
+}
+
+/* Pager sits below the scroll area (no sticky overlay) */
+#pager{
+  position: relative !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  width: auto !important;
+  border-radius: 0 0 16px 16px !important;
+  box-shadow: none !important;
+}
+
+
+/* =======================
+   VIP TABLE HOLD (UI-only) — sleek + luxury
+   ======================= */
+.vip-gap{
+  height: 14px;
+  margin-top: 10px;
+}
+.vip-gap::after{
+  content:"";
+  display:block;
+  height:1px;
+  width:100%;
+  background: linear-gradient(90deg, transparent, rgba(255,204,102,.35), transparent);
+}
+
+.vip-rail{ width:220px; max-width:220px; }
+.vip-rail .vip-card{ width:100%; }
+
+
+.vip-hold{
+  margin-top: 18px;              /* space from Fan Zone card above */
+  padding: 10px 10px 11px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(0,0,0,.12));
+  border: 1px solid rgba(255,204,102,.28);
+  box-shadow:
+    0 18px 40px rgba(0,0,0,.28),
+    0 0 0 1px rgba(255,204,102,.10) inset;
+  position: relative;
+  overflow: hidden;
+}
+.vip-hold::before{
+  content:"";
+  position:absolute; inset:-2px;
+  background:
+    radial-gradient(220px 120px at 18% 18%, rgba(255,204,102,.22), transparent 60%),
+    radial-gradient(260px 160px at 85% 65%, rgba(31,111,235,.12), transparent 62%),
+    linear-gradient(135deg, rgba(255,204,102,.10), rgba(0,0,0,0) 45%);
+  pointer-events:none;
+}
+.vip-hold h3{
+  margin: 0 0 6px 0;
+  font-size: 12.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.vip-hold .fz-muted{
+  font-size: 11px;
+  line-height: 1.25;
+  color: rgba(234,240,255,.78);
+}
+.vip-hold .fz-actions{
+  margin-top: 8px !important;
+  gap: 6px;
+  justify-content: flex-start;
+}
+.vip-hold .fz-btn{
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 999px;
+  border: 1px solid rgba(255,204,102,.22);
+  background: rgba(255,255,255,.035);
+}
+.vip-hold .fz-btn:hover{
+  outline: 1px solid rgba(255,204,102,.30);
+}
+.vip-hold .fz-btn#vipHoldBtn{
+  background: linear-gradient(135deg, rgba(255,204,102,.22), rgba(46,160,67,.10));
+  border-color: rgba(255,204,102,.30);
+}
+
+
+/* =======================
+   VIP HOLD RAIL (separate from Fan Zone)
+   ======================= */
+.vip-rail{
+  margin-top: 12px;
+}
+.vip-rail .vip-hold{
+  border-radius: 16px;
+}
+.vip-rail .vip-hold h3{ font-size: 13px; margin:0 0 6px 0; }
+.vip-rail .fz-actions{ margin-top: 8px !important; gap:6px; }
+.vip-rail .fz-btn{ padding: 6px 10px; font-size: 12px; border-radius: 999px; }
+.vip-rail .fz-muted{ font-size: 11px; }
+
+/* Desktop: pin VIP rail above Fan Zone rails, then push Fan Zone down */
+@media(min-width: 1200px){
+  .vip-rail{
+    position: fixed;
+    top: 84px; /* below header */
+    left: 16px;
+    width: 220px;
+    z-index: 60;
+    max-height: 160px;
+    overflow: hidden;
+  }
+  /* Fan Zone rails start below VIP rail with clear separation */
+  .fanzone-left{ top: 264px !important; } /* 84px + 160px + 20px gap */
+}
+
+
+/* ===== VIP HOLD (layout-safe, luxury compact) ===== */
+.vip-rail{
+  margin: 0 0 14px 0; /* space below VIP, before Fan Zone */
+  width: 220px;
+}
+@media(max-width: 1199px){
+  .vip-rail{ width: auto; }
+}
+@media(min-width: 1200px){
+  /* keep VIP aligned with left rail fixed position */
+  .fanzone-left .vip-rail{ width: 220px; }
+}
+.vip-card{
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 18px;
+  padding: 10px 10px 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.02));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 18px 45px rgba(0,0,0,.25);
+}
+.vip-card h3{
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.vip-card .fz-muted{ font-size: 11px; line-height: 1.25; }
+.vip-card label{ font-size: 11px; color: var(--muted); }
+.vip-card input, .vip-card select, .vip-card textarea{
+  width: 100%;
+  font-size: 12px;
+  padding: 8px 9px;
+  border-radius: 12px;
+}
+.vip-card button, .vip-card .fz-btn{
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 12px;
+  border-radius: 999px;
+}
+.fanzone-left .fanzone{ margin-top: 14px; } /* ensures visible gap even if VIP collapses */
+
+/* =========================
+   HERO 3D POP (SAFE, UI-only)
+   - Adds subtle depth to rotating star images
+   - No JS changes; respects reduced-motion
+   ========================= */
+.hero{
+  perspective: 900px;
+  perspective-origin: 50% 45%;
+}
+.heroSlide img,
+.heroCardImg img{
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+  will-change: transform, filter;
+}
+
+/* Combined KenBurns + 3D tilt in ONE animation (transform-safe) */
+@keyframes heroKenBurns3D{
+  0%   { transform: translateZ(0) scale(1.00) rotateX(0deg) rotateY(-1.8deg); }
+  50%  { transform: translateZ(14px) scale(1.02) rotateX(1.2deg) rotateY(1.8deg); }
+  100% { transform: translateZ(0) scale(1.035) rotateX(0deg) rotateY(-1.2deg); }
+}
+
+/* Late override to win all earlier heroSlide.active img rules */
+.hero .heroSlide.active img{
+  animation: heroKenBurns3D 5s ease-in-out forwards;
+  filter: brightness(1.04) contrast(1.04);
+}
+
+/* Extra micro-depth on the 3-up cards (if enabled) */
+.hero .heroCard.heroCardTri .heroCardImg img{
+  transform: translateZ(8px) scale(1.04);
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce){
+  .hero{ perspective: none; }
+  .hero .heroSlide.active img{
+    animation: none !important;
+    transform: none !important;
+  }
+}
+
+
+/* =========================
+   HERO RIM-LIGHT SWEEP (Premium, noticeable)
+   - Adds a soft edge highlight that makes depth read instantly
+   - Synced to the 3D animation duration (5s)
+   ========================= */
+
+/* Rim sweep overlay sits above image but below text */
+.heroSlide::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  z-index:2; /* heroOverlay uses 3, FX 2-3; this stays safe */
+  pointer-events:none;
+  opacity:0; /* only active slide shows */
+  background:
+    radial-gradient(520px 260px at 25% 35%, rgba(255,255,255,.16), transparent 62%),
+    linear-gradient(115deg,
+      transparent 0%,
+      rgba(255,255,255,.10) 26%,
+      rgba(255,255,255,.22) 38%,
+      rgba(212,175,55,.12) 46%,
+      rgba(255,255,255,.10) 56%,
+      transparent 72%);
+  mix-blend-mode: screen;
+  filter: blur(0.4px);
+  transform: translateX(-12%) translateY(0) skewX(-8deg);
+}
+
+@keyframes heroRimSweep{
+  0%   { opacity:0; transform: translateX(-18%) skewX(-10deg); }
+  12%  { opacity:.85; }
+  50%  { opacity:.55; transform: translateX(10%) skewX(-6deg); }
+  88%  { opacity:.80; }
+  100% { opacity:0; transform: translateX(28%) skewX(-4deg); }
+}
+
+/* Only on active slide, synced to 3D motion */
+.heroSlide.active::after{
+  opacity:1;
+  animation: heroRimSweep 5s ease-in-out forwards;
+}
+
+/* Subtle premium rim lift on active image edges */
+.hero .heroSlide.active img{
+  filter:
+    brightness(1.05)
+    contrast(1.05)
+    drop-shadow(0 22px 34px rgba(0,0,0,.40))
+    drop-shadow(0 0 22px rgba(212,175,55,.12));
+}
+
+/* Reduced motion: keep a static soft highlight */
+@media (prefers-reduced-motion: reduce){
+  .heroSlide.active::after{
+    animation: none !important;
+    opacity: .45 !important;
+    transform: none !important;
+  }
+}
+
+
+/* =========================
+   MOBILE PREMIUM (NO-JS, SAFE)
+   - Keep same features as desktop, stacked cleanly
+   - Remove fixed rails/overlays that block touch
+   ========================= */
+@media (max-width: 950px){
+  body{ overflow-x:hidden; }
+  .wrap{ padding: 10px 0 18px 0 !important; }
+
+  /* Single-column stack: HERO -> CHAT/MENU -> FAN ZONE -> SCHEDULE */
+  .grid{
+    display:flex !important;
+    flex-direction:column !important;
+    gap: 14px !important;
+    padding: 12px !important;
+  }
+
+  /* Hero stays on top and fully visible */
+  .hero{
+    height: 190px !important;
+    margin: 0 !important;
+  }
+  .heroOverlay, .heroFX, .heroSlide::before, .heroSlide::after{
+    pointer-events:none !important;
+  }
+
+  /* Left column becomes normal flow */
+  .leftcol{
+    display:flex !important;
+    flex-direction:column !important;
+    gap: 14px !important;
+  }
+  .menucard{ max-width: none !important; }
+
+  /* Menu: default collapsed, tap title to expand */
+  #menuTitle{
+    cursor:pointer;
+    padding: 7px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(0,0,0,.14);
+    user-select:none;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+    font-size: 11px;
+  }
+  body.menu-collapsed .menucard .menu{ display:none !important; }
+  body.menu-expanded .menucard .menu{
+    display:flex !important;
+    max-height: 260px !important;
+    overflow:auto !important;
+  }
+
+  /* Chat: stable height + comfortable input */
+  .chatcard{ height:auto !important; min-height: 520px !important; }
+  #chat{ height: 360px !important; max-height: 360px !important; overflow-y:auto !important; }
+  .composer textarea{ min-height: 44px !important; }
+
+  /* Fan Zone rails become normal cards (no fixed positioning) */
+  .fz-left-stack, .fanzone-left, .fanzone-right, #vipHoldRail{
+    position: static !important;
+    top:auto !important; left:auto !important; right:auto !important;
+    width: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    transform:none !important;
+    z-index: auto !important;
+  }
+
+  /* Pager should not be fixed on mobile (can block taps) */
+  #pager{ position: static !important; }
+
+  /* Reduce blur that looks “fuzzy” on iOS */
+  .cardhead, .devicebar, #pager, .heroCaption{
+    backdrop-filter:none !important;
+    -webkit-backdrop-filter:none !important;
+  }
+}
+
+
+/* =========================
+   MOBILE: SECTION NAV (desktop parity without clutter)
+   - One-tap switch between Chat / Fan Zone / Extras / Schedule / Menu
+   ========================= */
+@media (max-width: 950px){
+  .mnav{
+    display:flex;
+    display:flex;
+    gap:8px;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 10px 0 10px;
+  }
+  .mnav .mnav-btn{
+    flex: 1 1 auto;
+    min-width: 0;
+    border: 1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.06);
+    color: var(--text);
+    padding: 9px 10px;
+    border-radius: 14px;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    user-select:none;
+  }
+  .mnav .mnav-btn.on{
+    border-color: rgba(212,175,55,.30);
+    background: linear-gradient(135deg, rgba(212,175,55,.18), rgba(255,255,255,.06));
+  }
+
+  /* Default: show Chat section */
+  body[data-msec="home"] .chatcard{ display:block !important; }
+  body[data-msec="home"] .menucard,
+  body[data-msec="home"] #fanZoneLeft,
+  body[data-msec="home"] #fanZoneRight,
+  body[data-msec="home"] #scheduleCard,
+  body[data-msec="home"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="chat"] .chatcard{ display:block !important; }
+  body[data-msec="chat"] .menucard,
+  body[data-msec="chat"] #fanZoneLeft,
+  body[data-msec="chat"] #fanZoneRight,
+  body[data-msec="chat"] #scheduleCard,
+  body[data-msec="chat"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="menu"] .menucard{ display:block !important; }
+  body[data-msec="menu"] .chatcard,
+  body[data-msec="menu"] #fanZoneLeft,
+  body[data-msec="menu"] #fanZoneRight,
+  body[data-msec="menu"] #scheduleCard,
+  body[data-msec="menu"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="fan"] #fanZoneLeft{ display:block !important; }
+  body[data-msec="fan"] .chatcard,
+  body[data-msec="fan"] .menucard,
+  body[data-msec="fan"] #fanZoneRight,
+  body[data-msec="fan"] #scheduleCard{ display:none !important; }
+
+  body[data-msec="extras"] #fanZoneRight{ display:block !important; }
+  body[data-msec="extras"] .chatcard,
+  body[data-msec="extras"] .menucard,
+  body[data-msec="extras"] #fanZoneLeft,
+  body[data-msec="extras"] #scheduleCard{ display:none !important; }
+
+  body[data-msec="schedule"] #scheduleCard{ display:block !important; }
+  body[data-msec="schedule"] .chatcard,
+  body[data-msec="schedule"] .menucard,
+  body[data-msec="schedule"] #fanZoneLeft,
+  body[data-msec="schedule"] #fanZoneRight{ display:none !important; }
+
+  /* VIP shown alongside Fan Zone (if you want it there) */
+  body[data-msec="fan"] #vipHoldRail{ display:block !important; }
+  body[data-msec="extras"] #vipHoldRail{ display:none !important; }
+}
+
+
+/* =========================
+   MOBILE FIT + SCHEDULE SAFETY
+   ========================= */
+@media (max-width: 950px){
+  html, body{ width:100%; max-width:100%; overflow-x:hidden; }
+  .wrap{ max-width: 100% !important; width: 100% !important; }
+  .card{ width: 100% !important; }
+  #scheduleList, .schedule, .list{ max-width:100% !important; }
+  .row{ flex-wrap: wrap !important; }
+  .row .muted{ word-break: break-word; }
+  #pager{ position: static !important; }
+}
+
+
+@media (max-width: 950px){
+  .mnav{
+    position: sticky;
+    top: 0;
+    z-index: 6000;
+    padding: 10px;
+    background: rgba(7,16,34,.92);
+    border-bottom: 1px solid rgba(255,255,255,.10);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .mchatfab{
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    z-index: 6500;
+    border-radius: 999px;
+    padding: 10px 12px;
+    border: 1px solid rgba(212,175,55,.28);
+    background: rgba(7,16,34,.92);
+    color: var(--text);
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    font-size: 11px;
+    display: none;
+    box-shadow: 0 16px 40px rgba(0,0,0,.35);
+  }
+  body[data-msec]:not([data-msec="chat"]) .mchatfab{ display: inline-flex; }
+}
+
+
+@media (max-width: 950px){
+  body[data-msec="vip"] #vipHoldRail{ display:block !important; }
+  body[data-msec="vip"] .chatcard,
+  body[data-msec="vip"] .menucard,
+  body[data-msec="vip"] #fanZoneLeft,
+  body[data-msec="vip"] #fanZoneRight,
+  body[data-msec="vip"] #scheduleCard{ display:none !important; }
+  body[data-msec="fan"] #vipHoldRail{ display:block !important; }
+}
+
+
+
+/* =========================================================
+   MOBILE-FIRST NAV MODEL (desktop unchanged)
+   - Bottom nav sets body[data-msec]
+   - Rails become flow cards on mobile (no overlays / no tap-blocking)
+   - Schedule gets safe-area padding so pager never hides last item
+========================================================= */
+@media (max-width: 950px){
+  /* Bottom nav */
+  nav.mobileNav{display:flex !important;}
+
+  .mobileNav{
+    position: fixed;
+    left: 10px; right: 10px; bottom: 10px;
+    z-index: 9999;
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: rgba(10,18,35,.92);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 24px rgba(0,0,0,.35);
+  }
+  .mnavBtn{
+    flex: 1 1 0;
+    display: grid;
+    place-items: center;
+    gap: 2px;
+    padding: 8px 6px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--muted);
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 1.05;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mnavBtn span{ font-size: 10px; font-weight: 800; letter-spacing: .2px; }
+  .mnavBtn.active{
+    color: var(--text);
+    background: rgba(255,255,255,.08);
+  }
+
+  
+  /* Mobile micro animations */
+  @media (max-width: 950px){
+    .mnavBtn{ transition: transform .12s ease, background .18s ease, color .18s ease, filter .18s ease; }
+    .mnavBtn:active{ transform: scale(.96); }
+    body.msec-anim .chatcard,
+    body.msec-anim .menucard,
+    body.msec-anim #scheduleCard,
+    body.msec-anim #fanZoneLeft,
+    body.msec-anim #vipHoldRail{
+      animation: msecFade .18s ease both;
+      will-change: transform, opacity;
+    }
+    @keyframes msecFade{
+      from{ opacity: .92; transform: translateY(2px); }
+      to{ opacity: 1; transform: translateY(0); }
+    }
+  }
+/* Give the page a bottom safe area for the fixed nav */
+  body{ padding-bottom: 96px !important; }
+
+  /* Rails: remove fixed/absolute positioning so they don't overlay and block taps */
+  .vip-rail, .fanzone, .fanzone-left, .fanzone-right, .fanzoneRail,
+  #vipHoldRail, #fanZoneLeft, #fanZoneRight{
+    position: static !important;
+    left: auto !important; right: auto !important; top: auto !important; bottom: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    transform: none !important;
+    margin: 10px 0 !important;
+    pointer-events: auto !important;
+  }
+
+  /* Make the grid a simple vertical flow on phones */
+  .grid{ display: block !important; }
+  .leftcol, .rightcol{ width: 100% !important; }
+  .rightcol{ margin-top: 10px; }
+
+  /* Schedule card: keep list scrollable in viewport and ensure last row visible */
+  #scheduleCard{ min-height: 0 !important; }
+  #schedule{
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch;
+    max-height: calc(100vh - 260px) !important; /* hero + headers + bottom nav */
+    padding-bottom: 18px !important;
+  }
+  #pager{
+    position: static !important;
+    margin-top: 10px !important;
+  }
+
+  /* Ensure section toggling never hides the whole app due to missing IDs */
+  body:not([data-msec]){ --msec: chat; }
+
+  /* --- Mobile polish & safety (does NOT affect desktop) --- */
+  body{ padding-bottom: 96px; } /* keep fixed bottom-nav from covering content */
+  .grid{ padding-bottom: 110px; }
+  .card{ scroll-margin-top: 10px; }
+  #scheduleCard, .menucard, .chatcard, #fanZoneLeft, #fanZoneRight, #vipHoldRail{ margin-bottom: 110px; }
+
+  /* Bottom-nav stays visible on mobile */
+
+  /* Bottom-nav: prevent label collisions / distortion */
+  .mobileNav{
+    left: 8px; right: 8px; bottom: 8px;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 16px;
+  }
+  .mnavBtn{
+    padding: 8px 4px;
+    font-size: 11px;
+    min-width: 0;
+  }
+  .mnavBtn span{
+    font-size: 9px;
+    font-weight: 800;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 52px;
+  }
+  @media (max-width: 420px){
+    .mnavBtn span{ display:none; }
+    .mobileNav{ gap: 4px; }
+  }
+
+  /* Schedule/Menu panels: ensure they stay on-screen and scroll properly */
+  #scheduleCard{ max-height: none !important; overflow: visible !important; }
+  #schedule{ max-height: none !important; overflow: auto; -webkit-overflow-scrolling: touch; }
+  .menu{ max-height: none !important; overflow: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Hero layering: keep stars/players BEHIND header + countdown on mobile */
+  #heroBanner{ overflow: hidden; }
+  #heroBanner .heroSlides{ z-index: 1; }
+  #heroBanner .heroFX{ z-index: 2; }
+  #heroBanner .heroOverlay{ z-index: 6; }
+}
+
+/* Section visibility (mobile only): show one “primary” section at a time
+   - chat: chatcard
+   - menu: menucard
+   - schedule: scheduleCard
+   - fanzone: fanZoneLeft + fanZoneRight
+   - vip: vipHoldRail
+*/
+@media (max-width: 950px){
+  /* default: chat */
+  body[data-msec="chat"] .chatcard{ display:block !important; }
+  body[data-msec="chat"] .menucard,
+  body[data-msec="chat"] #scheduleCard,
+  body[data-msec="chat"] #fanZoneLeft,
+  body[data-msec="chat"] #fanZoneRight,
+  body[data-msec="chat"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="menu"] .menucard{ display:block !important; }
+  body[data-msec="menu"] .chatcard,
+  body[data-msec="menu"] #scheduleCard,
+  body[data-msec="menu"] #fanZoneLeft,
+  body[data-msec="menu"] #fanZoneRight,
+  body[data-msec="menu"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="schedule"] #scheduleCard{ display:block !important; }
+  body[data-msec="schedule"] .chatcard,
+  body[data-msec="schedule"] .menucard,
+  body[data-msec="schedule"] #fanZoneLeft,
+  body[data-msec="schedule"] #fanZoneRight,
+  body[data-msec="schedule"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="fanzone"] #fanZoneLeft,
+  body[data-msec="fanzone"] #fanZoneRight{ display:block !important; }
+  body[data-msec="fanzone"] .chatcard,
+  body[data-msec="fanzone"] .menucard,
+  body[data-msec="fanzone"] #scheduleCard,
+  body[data-msec="fanzone"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="vip"] #vipHoldRail{ display:block !important; }
+  body[data-msec="vip"] .chatcard,
+  body[data-msec="vip"] .menucard,
+  body[data-msec="vip"] #scheduleCard,
+  body[data-msec="vip"] #fanZoneLeft,
+  body[data-msec="vip"] #fanZoneRight{ display:none !important; }
+}
+
+/* --- FIX: Mobile hero title/sub alignment + prevent overlap/truncation --- */
+@media (max-width: 520px){
   .heroOverlay{
     justify-content:flex-start !important;
     align-items:flex-start !important;
-    gap:6px !important;
-    /* smaller padding so banner text doesn't eat vertical space */
-    padding:10px 10px 12px !important;
+    gap:8px !important;
+    padding:14px 14px 18px !important;
   }
   .heroTitle{
-    /* keep fully visible, but compact on small screens */
+    /* allow wrapping so "DALLAS WORLD CUP HQ" is fully visible */
     white-space:normal !important;
     overflow:visible !important;
     text-overflow:clip !important;
-    line-height:1.08 !important;
-    font-size:clamp(12px, 4.2vw, 15px) !important;
-    letter-spacing:.06em !important;
+    line-height:1.12 !important;
+    font-size:clamp(18px, 5.2vw, 22px) !important;
+    letter-spacing:.10em !important;
   }
   .heroSub{
-    font-size:clamp(9px, 3.1vw, 11px) !important;
     margin-top:2px !important;
     max-width:100% !important;
-    line-height:1.22 !important;
+    line-height:1.25 !important;
   }
-
-  /* Countdown pill in the banner */
-  #wcCount{
-    margin-top:8px !important;
-    padding:6px 8px !important;
-    border-radius:14px !important;
-  }
-  .wcLabel{
-    font-size:8px !important;
-    letter-spacing:.18em !important;
-  }
-  .wcNums{
-    margin-top:4px !important;
-    gap:8px !important;
-  }
-  .wcNums b{ font-size:13px !important; }
-  .wcNums small{ font-size:9px !important; }
 }
-
 
 
 /* ===== Mobile-only fixes (v3) ===== */
