@@ -70,8 +70,12 @@
     }
     @media (max-width: 950px){
   /* Mobile hero alignment */
-  .heroTitle{ font-size: clamp(14px, 2.0vw, 18px) !important; line-height: 1.1; letter-spacing:.04em; }
-  .heroSub{ font-size: clamp(11px, 1.6vw, 13px) !important; margin-top: 6px !important; line-height: 1.2; }
+  .heroTitle{ font-size: clamp(12px, 1.8vw, 16px) !important; line-height: 1.1; letter-spacing:.04em; }
+  .heroSub{ font-size: clamp(10px, 1.4vw, 12px) !important; margin-top: 6px !important; line-height: 1.2; }
+  /* Mobile countdown sizing */
+  .countdown{ padding: 8px 10px !important; }
+  .countdown .label{ font-size: 10px !important; }
+  .countdown .nums{ font-size: 11px !important; gap: 8px !important; }
 /* Hero shrink-on-scroll (desktop & mobile) */
 #heroBanner.is-shrunk{
   padding-top: 10px !important;
@@ -683,9 +687,7 @@
   border-radius:999px;
   border:1px solid rgba(255,255,255,.10);
   background: rgba(0,0,0,.18);
-  min-height: 40px;
 }
-
 .heroRosterTrack{
   display:inline-flex;
   gap:8px;
@@ -806,7 +808,8 @@
     @media (max-width:720px){
       .heroCaption .heroName{ font-size:12px; }
     }
-.heroKicker, .heroTitle{ color: var(--gold); }
+    .heroRoster{ display:none !important; }
+    .heroKicker, .heroTitle{ color: var(--gold); }
 
 
 /* === STAR PLAYER IMAGE NORMALIZATION (Ronaldo reference) === */
@@ -2997,6 +3000,105 @@ body.kiosk-mode *::-webkit-scrollbar{
   .hero .heroOverlay, .hero::before{ z-index:2 !important; }
 }
 
+
+/* --- STEP 1B HOTFIX (mobile only): ensure hero header/sub/countdown are visible above slides/FX --- */
+@media (max-width: 950px){
+  #heroBanner{ position:relative; }
+  #heroBanner .heroSlides,
+  #heroBanner .heroFX{
+    position:absolute !important;
+    inset:0 !important;
+  }
+  #heroBanner .heroOverlay{
+    position:absolute !important;
+    inset:0 !important;
+    z-index: 20 !important;
+    display:flex !important;
+  }
+  /* Keep text/countdown above any pseudo overlays */
+  #heroBanner .heroKicker,
+  #heroBanner .heroTitle,
+  #heroBanner .heroSub,
+  #heroBanner #wcCount{
+    position:relative !important;
+    z-index: 21 !important;
+  }
+}
+
+
+/* --- STEP 1 (mobile only): compact hero text to free space for star roster; keep everything visible --- */
+@media (max-width: 950px){
+  /* Make the overlay text block narrower so the roster has room */
+  #heroBanner .heroOverlay{
+    padding: 10px 10px 10px 12px !important;
+    max-width: 62vw !important;
+  }
+
+  #heroBanner .heroKicker{
+    font-size: 10px !important;
+    line-height: 1.05 !important;
+    letter-spacing: .10em !important;
+    margin-bottom: 4px !important;
+  }
+  #heroBanner .heroTitle{
+    font-size: 14px !important;
+    line-height: 1.05 !important;
+    letter-spacing: .06em !important;
+    margin: 0 !important;
+  }
+  #heroBanner .heroSub{
+    font-size: 10px !important;
+    line-height: 1.15 !important;
+    margin-top: 4px !important;
+  }
+
+  #heroBanner #wcCount{
+    margin-top: 8px !important;
+    padding: 8px 10px !important;
+    border-radius: 12px !important;
+  }
+  #heroBanner #wcCount .wcLabel{
+    font-size: 9px !important;
+    letter-spacing: .10em !important;
+    white-space: nowrap !important; /* keep on one line */
+  }
+  #heroBanner #wcCount .wcNums{
+    gap: 8px !important;
+    font-size: 11px !important;
+  }
+  #heroBanner #wcCount .wcNums b{
+    font-size: 12px !important;
+  }
+}
+
+
+/* ===== Mobile-only: make HERO roster chips visible and compact (no desktop impact) ===== */
+@media (max-width: 950px){
+  #heroRoster{ display:block; }
+  #heroRoster .heroRosterInner{
+    display:flex;
+    gap:6px;
+    align-items:center;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    padding:6px 8px;
+    scrollbar-width:none;
+  }
+  #heroRoster .heroRosterInner::-webkit-scrollbar{ display:none; }
+  #heroRoster .heroChip{
+    display:inline-flex;
+    align-items:center;
+    padding:4px 8px;
+    border-radius:999px;
+    border:1px solid rgba(255,255,255,.10);
+    background: rgba(0,0,0,.22);
+    font-weight:800;
+    font-size:11px;
+    line-height:1;
+    white-space:nowrap;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -3635,6 +3737,39 @@ const heroPlayers = [
   },
 ];
 
+// -----------------------
+// HERO roster strip (mobile-only) — populate if empty
+// -----------------------
+function buildHeroRosterIfNeeded(){
+  // Only for mobile; desktop layout stays unchanged
+  if(!window.matchMedia || !window.matchMedia("(max-width: 950px)").matches) return;
+
+  const roster = document.getElementById("heroRoster");
+  if(!roster) return;
+
+  // If already populated, do nothing
+  if(roster.children && roster.children.length > 0) return;
+
+  // Build lightweight chips from heroPlayers list
+  try{
+    const inner = document.createElement("div");
+    inner.className = "heroRosterInner";
+    (heroPlayers || []).forEach(p=>{
+      const chip = document.createElement("span");
+      chip.className = "heroChip";
+      chip.textContent = p && p.name ? p.name : "";
+      inner.appendChild(chip);
+    });
+    roster.appendChild(inner);
+  }catch(e){
+    // fail silently; never break the app
+  }
+}
+
+document.addEventListener("DOMContentLoaded", buildHeroRosterIfNeeded);
+window.addEventListener("resize", buildHeroRosterIfNeeded);
+
+
 function buildHero(){
   const hero = document.getElementById("heroBanner");
   const slides = document.getElementById("heroSlides");
@@ -3682,69 +3817,7 @@ function buildHero(){
 }
 
 function showHero(i){
-  const slides = Array.f
-
-
-// --- Mobile safety: ensure the star roster renders (UI-only) ---
-function ensureHeroRoster(){
-  const host = document.getElementById("heroRoster");
-  if(!host) return;
-
-  // if already built, do nothing
-  if(host.querySelector(".heroRosterTrack")) return;
-
-  // Prefer heroPlayers data (same images as slides)
-  if(typeof heroPlayers === "undefined" || !Array.isArray(heroPlayers) || heroPlayers.length === 0) return;
-
-  const track = document.createElement("div");
-  track.className = "heroRosterTrack";
-
-  heroPlayers.forEach(p => {
-    const chip = document.createElement("span");
-    chip.style.display = "inline-flex";
-    chip.style.alignItems = "center";
-    chip.style.gap = "8px";
-    chip.style.padding = "3px 10px 3px 4px";
-    chip.style.borderRadius = "999px";
-    chip.style.border = "1px solid rgba(255,255,255,.12)";
-    chip.style.background = "rgba(0,0,0,.22)";
-    chip.style.backdropFilter = "blur(6px)";
-    chip.style.webkitBackdropFilter = "blur(6px)";
-
-    const img = document.createElement("img");
-    img.alt = p.name || "Star";
-    img.loading = "lazy";
-    img.decoding = "async";
-    img.src = p.img || "";
-    img.style.width = "26px";
-    img.style.height = "26px";
-    img.style.borderRadius = "999px";
-    img.style.objectFit = "cover";
-    img.style.border = "1px solid rgba(255,255,255,.18)";
-
-    const nm = document.createElement("span");
-    nm.textContent = p.name || "";
-    nm.style.fontSize = "11px";
-    nm.style.fontWeight = "800";
-    nm.style.letterSpacing = ".2px";
-    nm.style.opacity = ".95";
-    nm.style.whiteSpace = "nowrap";
-
-    chip.appendChild(img);
-    chip.appendChild(nm);
-    track.appendChild(chip);
-  });
-
-  host.innerHTML = "";
-  host.appendChild(track);
-
-  // If something still hides it, force visibility without touching desktop layout
-  host.style.display = "";
-  host.style.visibility = "visible";
-}
-
-
-rom(document.querySelectorAll("#heroSlides .heroSlide"));
+  const slides = Array.from(document.querySelectorAll("#heroSlides .heroSlide"));
   if(!slides.length) return;
   _heroIndex = (i + slides.length) % slides.length;
 
@@ -4394,7 +4467,6 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 
   // Init cinematic hero (UI-only)
   buildHero();
-  ensureHeroRoster();
 
   // Load sidebar data
   await loadSchedule();
