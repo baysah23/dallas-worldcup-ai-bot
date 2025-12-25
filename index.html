@@ -713,7 +713,7 @@
 
 /* =========================
    HERO (3-up fade rotation)
-   ========================= */
+/* ========================= */
 .heroTriWrap{
   position:absolute;
   top:14px; bottom:14px;
@@ -853,7 +853,7 @@
 
 /* =========================
    FINAL OVERRIDES (BANNER)
-   ========================= */
+/* ========================= */
 :root{ --gold:#d4af37; }
 
 /* Banner header gold */
@@ -882,7 +882,8 @@
 
 /* =========================
    BANNER POLISH: ZOOM + GLOW
-   ========================= */
+   (Notes below are comments only)
+/* ========================= */
 
 /* === RECOMMENDED TRANSITION UPGRADE ===
    - Smoother crossfade: 1100ms ease-in-out (container opacity)
@@ -901,7 +902,7 @@
 .hero:hover .heroSlide.active img{
   animation-play-state: paused;
 }
-   ========================= */
+/* ========================= */
 
 /* Subtle, safer zoom */
 .heroSlide.active img,
@@ -930,7 +931,7 @@
 
 /* =========================
    FLAGS (tasteful, UI-only)
-   ========================= */
+/* ========================= */
 .flag-badge{
   display:inline-flex;
   align-items:center;
@@ -953,7 +954,7 @@
 
 /* =========================
    HERO MINI FLAG BADGES
-   ========================= */
+/* ========================= */
 .hero-flags{
   position:absolute;
   top:18px;
@@ -1083,8 +1084,6 @@
    MATCH DAY MODE (Step 1)
    Visual amplify only (UI-only)
    ========================= */
-50%      { transform: translateZ(0) scale(1.015); filter: drop-shadow(0 0 16px rgba(212,175,55,.35)); }
-}
 /* Banner takeover text styling when matchday */
 /* Highlight the next match card in gold */
 
@@ -1362,7 +1361,7 @@ body.phase-finals{ background: var(--phaseF); }
 .fanzone-left, .fanzone-right{ width: 320px; }
 @media(min-width: 1200px){
   /* Keep header + core app centered while side rails stay visible */
-  body{ padding-left: 360px; padding-right: 360px; }
+  body{ padding-left: 0; padding-right: 0; }
   .fanzone-left, .fanzone-right{
     position: fixed;
     top: 92px; /* below header */
@@ -1407,7 +1406,7 @@ body.phase-finals{ background: var(--phaseF); }
   height: 96px;
 }
 @media(min-width:1200px){
-  body{ padding-left: 300px; padding-right: 300px; }
+  body{ padding-left: 0; padding-right: 0; }
 }
 
 
@@ -1432,7 +1431,7 @@ body.phase-finals{ background: var(--phaseF); }
 .qrWrap{ gap:10px; }
 #qrImg{ width:84px; height:84px; border-radius: 12px; padding:6px; }
 @media(min-width:1200px){
-  body{ padding-left: 260px; padding-right: 260px; }
+  body{ padding-left: 0; padding-right: 0; }
   .fanzone-left, .fanzone-right{ top: 84px; }
 }
 /* Auto-hide rails on scroll */
@@ -2432,7 +2431,7 @@ body.kiosk-mode *::-webkit-scrollbar{
    HERO 3D POP (SAFE, UI-only)
    - Adds subtle depth to rotating star images
    - No JS changes; respects reduced-motion
-   ========================= */
+/* ========================= */
 .hero{
   perspective: 900px;
   perspective-origin: 50% 45%;
@@ -2476,7 +2475,7 @@ body.kiosk-mode *::-webkit-scrollbar{
    HERO RIM-LIGHT SWEEP (Premium, noticeable)
    - Adds a soft edge highlight that makes depth read instantly
    - Synced to the 3D animation duration (5s)
-   ========================= */
+/* ========================= */
 
 /* Rim sweep overlay sits above image but below text */
 .heroSlide::after{
@@ -2616,7 +2615,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 /* =========================
    MOBILE: SECTION NAV (desktop parity without clutter)
    - One-tap switch between Chat / Fan Zone / Extras / Schedule / Menu
-   ========================= */
+/* ========================= */
 @media (max-width: 950px){
   .mnav{
     display:flex;
@@ -2694,7 +2693,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 /* =========================
    MOBILE FIT + SCHEDULE SAFETY
-   ========================= */
+/* ========================= */
 @media (max-width: 950px){
   html, body{ width:100%; max-width:100%; overflow-x:hidden; }
   .wrap{ max-width: 100% !important; width: 100% !important; }
@@ -3071,19 +3070,11 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 
 /* =========================
-   DESKTOP RESTORE (SAFE)
-   Why desktop broke: multiple @media(min-width:1200px) rules add large body padding (260–360px),
-   compressing the app and throwing off the original desktop alignment.
-   This override keeps side rails fixed/visible but prevents them from shifting the whole page.
+   DESKTOP SAFETY (LAST WINS)
+   Keep original desktop layout (no body padding shifts).
    ========================= */
 @media (min-width: 1200px){
-  body{
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-  /* Keep rails on the edges; they should not affect layout flow */
-  .fanzone-left{ left: 16px !important; }
-  .fanzone-right{ right: 16px !important; }
+  body{ padding-left: 0 !important; padding-right: 0 !important; }
 }
 
 </style>
