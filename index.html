@@ -2600,7 +2600,17 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 
   /* Pager should not be fixed on mobile (can block taps) */
-  #pager{ position: static !important; }
+  #pager{
+    position: sticky !important;
+    bottom: 0;
+    z-index: 1200;
+    background: rgba(7,16,34,.92);
+    border-top: 1px solid rgba(255,255,255,.10);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  /* leave room so last match isn't covered by sticky pager */
+  #scheduleList{ padding-bottom: 84px !important; }
 
   /* Reduce blur that looks “fuzzy” on iOS */
   .cardhead, .devicebar, #pager, .heroCaption{
@@ -2642,6 +2652,10 @@ body.kiosk-mode *::-webkit-scrollbar{
     border-color: rgba(212,175,55,.30);
     background: linear-gradient(135deg, rgba(212,175,55,.18), rgba(255,255,255,.06));
   }
+
+
+  /* Hide legacy bottom nav (we use the sticky top mnav for mobile) */
+  #mobileNav, nav.mobileNav{ display:none !important; }
 
   /* Default: show Chat section */
   body[data-msec="home"] .chatcard{ display:block !important; }
@@ -2916,6 +2930,24 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 </style>
+
+<style>
+/* MOBILE-HARDENING v1 */
+/* Prevent horizontal drift on mobile */
+html, body { width:100%; max-width:100%; overflow-x:hidden; }
+/* Make tap targets reliable; avoid 300ms delay / accidental scroll-capture */
+button, a, [role="button"] { touch-action: manipulation; }
+/* Ensure any scrolling panels don't push layout wider than viewport */
+* { max-width: 100%; }
+/* iOS safe-area padding for sticky bars */
+:root { --safe-bottom: env(safe-area-inset-bottom, 0px); }
+/* Guard against off-screen transforms */
+@media (max-width: 768px) {
+  .container, .app, #app, .main, main { width:100%; max-width:100%; }
+  .sticky, .stickyBar, .pager, .bottomBar { padding-bottom: calc(8px + var(--safe-bottom)); }
+}
+</style>
+
 </head>
 <body>
 <div class="wrap">
@@ -5374,7 +5406,13 @@ function setSection(sec){
       sec = "chat";
       document.body.removeAttribute("data-msec");
     }
-    if(!isSmall()) return;
+        // Normalize any legacy section names
+    const map = {fanzone:"fan","fan-zone":"fan","fanZone":"fan"};
+    if(sec && map[sec]) sec = map[sec];
+    const allowed = new Set(["chat","fan","vip","extras","schedule","menu"]);
+    if(!sec || !allowed.has(sec)) sec = "chat";
+
+if(!isSmall()) return;
     document.body.setAttribute("data-msec", sec || "chat");
     // button states
     const nav = document.getElementById("mnav");
