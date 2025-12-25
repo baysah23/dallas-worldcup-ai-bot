@@ -2600,17 +2600,7 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 
   /* Pager should not be fixed on mobile (can block taps) */
-  #pager{
-    position: sticky !important;
-    bottom: 0;
-    z-index: 1200;
-    background: rgba(7,16,34,.92);
-    border-top: 1px solid rgba(255,255,255,.10);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-  }
-  /* leave room so last match isn't covered by sticky pager */
-  #scheduleList{ padding-bottom: 84px !important; }
+  #pager{ position: static !important; }
 
   /* Reduce blur that looks “fuzzy” on iOS */
   .cardhead, .devicebar, #pager, .heroCaption{
@@ -2652,10 +2642,6 @@ body.kiosk-mode *::-webkit-scrollbar{
     border-color: rgba(212,175,55,.30);
     background: linear-gradient(135deg, rgba(212,175,55,.18), rgba(255,255,255,.06));
   }
-
-
-  /* Hide legacy bottom nav (we use the sticky top mnav for mobile) */
-  #mobileNav, nav.mobileNav{ display:none !important; }
 
   /* Default: show Chat section */
   body[data-msec="home"] .chatcard{ display:block !important; }
@@ -2769,6 +2755,8 @@ body.kiosk-mode *::-webkit-scrollbar{
 ========================================================= */
 @media (max-width: 950px){
   /* Bottom nav */
+  nav.mobileNav{display:flex !important;}
+
   .mobileNav{
     position: fixed;
     left: 10px; right: 10px; bottom: 10px;
@@ -2858,6 +2846,50 @@ body.kiosk-mode *::-webkit-scrollbar{
 
   /* Ensure section toggling never hides the whole app due to missing IDs */
   body:not([data-msec]){ --msec: chat; }
+
+  /* --- Mobile polish & safety (does NOT affect desktop) --- */
+  body{ padding-bottom: 96px; } /* keep fixed bottom-nav from covering content */
+  .grid{ padding-bottom: 110px; }
+  .card{ scroll-margin-top: 10px; }
+  #scheduleCard, .menucard, .chatcard, #fanZoneLeft, #fanZoneRight, #vipHoldRail{ margin-bottom: 110px; }
+
+  /* Bottom-nav stays visible on mobile */
+
+  /* Bottom-nav: prevent label collisions / distortion */
+  .mobileNav{
+    left: 8px; right: 8px; bottom: 8px;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 16px;
+  }
+  .mnavBtn{
+    padding: 8px 4px;
+    font-size: 11px;
+    min-width: 0;
+  }
+  .mnavBtn span{
+    font-size: 9px;
+    font-weight: 800;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 52px;
+  }
+  @media (max-width: 420px){
+    .mnavBtn span{ display:none; }
+    .mobileNav{ gap: 4px; }
+  }
+
+  /* Schedule/Menu panels: ensure they stay on-screen and scroll properly */
+  #scheduleCard{ max-height: none !important; overflow: visible !important; }
+  #schedule{ max-height: none !important; overflow: auto; -webkit-overflow-scrolling: touch; }
+  .menu{ max-height: none !important; overflow: auto; -webkit-overflow-scrolling: touch; }
+
+  /* Hero layering: keep stars/players BEHIND header + countdown on mobile */
+  #heroBanner{ overflow: hidden; }
+  #heroBanner .heroSlides{ z-index: 1; }
+  #heroBanner .heroFX{ z-index: 2; }
+  #heroBanner .heroOverlay{ z-index: 6; }
 }
 
 /* Section visibility (mobile only): show one “primary” section at a time
@@ -2929,25 +2961,42 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 }
 
-</style>
 
-<style>
-/* MOBILE-HARDENING v1 */
-/* Prevent horizontal drift on mobile */
-html, body { width:100%; max-width:100%; overflow-x:hidden; }
-/* Make tap targets reliable; avoid 300ms delay / accidental scroll-capture */
-button, a, [role="button"] { touch-action: manipulation; }
-/* Ensure any scrolling panels don't push layout wider than viewport */
-* { max-width: 100%; }
-/* iOS safe-area padding for sticky bars */
-:root { --safe-bottom: env(safe-area-inset-bottom, 0px); }
-/* Guard against off-screen transforms */
-@media (max-width: 768px) {
-  .container, .app, #app, .main, main { width:100%; max-width:100%; }
-  .sticky, .stickyBar, .pager, .bottomBar { padding-bottom: calc(8px + var(--safe-bottom)); }
+/* ===== Mobile-only fixes (v3) ===== */
+@media (max-width: 950px){
+  /* Hide legacy mid-app nav; keep bottom nav only */
+  .mnav{ display:none !important; }
+  .mnavWrap, .midNav, .midButtons{ display:none !important; }
+
+  /* Prevent horizontal drift / off-screen content */
+  html, body{ overflow-x:hidden; }
+  .wrap{ width:100%; max-width:100%; padding-left:10px; padding-right:10px; }
+  .grid{ grid-template-columns:1fr !important; gap:12px !important; }
+  .leftcol, .rightcol{ width:100% !important; min-width:0 !important; }
+  .card{ width:100% !important; min-width:0 !important; }
+
+  /* Bottom nav always visible; keep content above it */
+  nav.mobileNav{ position:fixed; left:8px; right:8px; bottom:8px; z-index:9999; }
+  .grid{ padding-bottom:110px !important; }
+
+  /* Make top row buttons (if present) wrap instead of colliding */
+  .tabs, .topTabs, .topBtns, .topButtons{ flex-wrap:wrap !important; gap:8px !important; }
+  .tabs .pill, .topTabs .pill{ white-space:nowrap; }
+
+  /* Schedule/Menu: ensure they don't render off-screen */
+  #scheduleCard, .menucard{ overflow:visible !important; }
+  #schedule{ overflow:auto !important; -webkit-overflow-scrolling:touch; max-height: calc(100vh - 240px) !important; }
+  #pager, .pager{ position:sticky; bottom:0; z-index:5; }
+
+  /* Hero: keep stars behind header/countdown */
+  .hero{ position:relative; overflow:hidden; }
+  .hero *{ position:relative; }
+  .hero .stars, .hero .starRow, .hero .playersRow, .hero .heroStars{ z-index:1 !important; }
+  .hero header, .hero .heroTop, .hero .heroHdr, .hero .heroHeader, .hero .heroMeta, .hero .countdown, .hero #countdown, .hero .bannerTitle{ z-index:10 !important; }
+  .hero .heroOverlay, .hero::before{ z-index:2 !important; }
 }
-</style>
 
+</style>
 </head>
 <body>
 <div class="wrap">
@@ -4514,6 +4563,10 @@ function setSection(sec){
       if(sec === 'menu'){
         document.body.classList.add('menu-expanded');
         document.body.classList.remove('menu-collapsed');
+        try{ if(typeof renderMenu==='function'){ renderMenu(window.menuDataList || []); } }catch(e){}
+      }
+      if(sec === 'schedule'){
+        try{ if(typeof renderSchedule==='function'){ renderSchedule(); } }catch(e){}
       }
     }
     const nav = document.getElementById('mobileNav');
@@ -4525,7 +4578,7 @@ function setSection(sec){
     // When switching, scroll the relevant card into view for a “native app” feel.
     const el = __sectionEls[sec];
     if(isMobile()){
-      const target = (sec === 'chat') ? document.getElementById('heroBanner') : el;
+      const target = (sec === 'home') ? document.getElementById('heroBanner') : (el || document.getElementById('heroBanner'));
       if(target){
         try{ target.scrollIntoView({behavior:'smooth', block:'start'}); }catch(e){ target.scrollIntoView(); }
       }
@@ -5406,13 +5459,7 @@ function setSection(sec){
       sec = "chat";
       document.body.removeAttribute("data-msec");
     }
-        // Normalize any legacy section names
-    const map = {fanzone:"fan","fan-zone":"fan","fanZone":"fan"};
-    if(sec && map[sec]) sec = map[sec];
-    const allowed = new Set(["chat","fan","vip","extras","schedule","menu"]);
-    if(!sec || !allowed.has(sec)) sec = "chat";
-
-if(!isSmall()) return;
+    if(!isSmall()) return;
     document.body.setAttribute("data-msec", sec || "chat");
     // button states
     const nav = document.getElementById("mnav");
@@ -5496,6 +5543,24 @@ function apply(){
   window.addEventListener("scroll", onScroll, {passive:true});
   window.addEventListener("resize", apply, {passive:true});
   apply();
+})();
+</script>
+
+
+<script>
+/* Mobile nav wiring (v3) */
+(function(){
+  const nav = document.getElementById('mobileNav');
+  if(!nav) return;
+  function onClick(e){
+    const btn = e.target.closest('.mnavBtn');
+    if(!btn) return;
+    const sec = btn.getAttribute('data-msec');
+    if(typeof window.setSection === 'function') window.setSection(sec);
+    // Active state
+    nav.querySelectorAll('.mnavBtn').forEach(b=>b.classList.toggle('active', b===btn));
+  }
+  nav.addEventListener('click', onClick, {passive:true});
 })();
 </script>
 
