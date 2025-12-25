@@ -3025,6 +3025,51 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 }
 
+
+
+/* === MOBILE STEP: prevent stars overlapping text (mobile-only, safe) === */
+@media (max-width: 720px){
+  /* Reserve left space for text, right space for stars */
+  #heroBanner .heroOverlay{
+    max-width: 52vw !important;
+    padding: 12px 10px 12px 12px !important;
+  }
+
+  #heroBanner .heroKicker{ font-size: 9px !important; letter-spacing:.12em !important; }
+  #heroBanner .heroTitle{ font-size: 13px !important; letter-spacing:.04em !important; }
+  #heroBanner .heroSub{
+    font-size: 9.5px !important;
+    max-width: 52vw !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+
+  /* Keep countdown compact and single-line label */
+  #heroBanner #wcCount .wcLabel,
+  #heroBanner .countdown .label{
+    font-size: 9px !important;
+    white-space: nowrap !important;
+  }
+  #heroBanner #wcCount .wcNums,
+  #heroBanner .countdown .nums{
+    font-size: 10.5px !important;
+    gap: 8px !important;
+  }
+
+  /* Star strip stays on the right and doesn't intrude */
+  #heroBanner .heroTriWrap{
+    right: 10px !important;
+    top: 12px !important;
+    bottom: 12px !important;
+    width: min(420px, 46%) !important;
+  }
+  #heroBanner .heroTri{ gap: 10px !important; }
+  #heroBanner .heroCard.heroCardTri{ height: 92px !important; }
+  #heroBanner .heroCardName{ font-size: 10px !important; }
+  #heroBanner .heroCardCountry{ font-size: 9px !important; }
+}
+
 </style>
 </head>
 <body>
