@@ -70,12 +70,8 @@
     }
     @media (max-width: 950px){
   /* Mobile hero alignment */
-  .heroTitle{ font-size: clamp(12px, 1.8vw, 16px) !important; line-height: 1.1; letter-spacing:.04em; }
-  .heroSub{ font-size: clamp(10px, 1.4vw, 12px) !important; margin-top: 6px !important; line-height: 1.2; }
-  /* Mobile countdown sizing */
-  .countdown{ padding: 8px 10px !important; }
-  .countdown .label{ font-size: 10px !important; }
-  .countdown .nums{ font-size: 11px !important; gap: 8px !important; }
+  .heroTitle{ font-size: clamp(14px, 2.0vw, 18px) !important; line-height: 1.1; letter-spacing:.04em; }
+  .heroSub{ font-size: clamp(11px, 1.6vw, 13px) !important; margin-top: 6px !important; line-height: 1.2; }
 /* Hero shrink-on-scroll (desktop & mobile) */
 #heroBanner.is-shrunk{
   padding-top: 10px !important;
@@ -222,7 +218,39 @@
       filter: drop-shadow(0 16px 26px rgba(0,0,0,.45));
       opacity:1;
     }
-    }
+    
+      /* Mobile-only: keep hero text compact and reserve space for the roster strip (no desktop impact) */
+      .hero{ --mobileRosterW: clamp(140px, 42vw, 180px); }
+      .heroOverlay{
+        /* prevent overlay from covering the roster strip */
+        max-width: calc(100% - var(--mobileRosterW) - 14px);
+        padding: 12px 10px;
+      }
+      .heroKicker{ font-size: 9px; letter-spacing: .16em; }
+      .heroTitle{ font-size: 15px; }
+      .heroSub{
+        font-size: 10px;
+        max-width: 100%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #wcCount .wcLabel{ font-size: 9px; letter-spacing: .14em; }
+      #wcCount .wcNums b{ font-size: 14px; }
+      #wcCount .wcNums small{ font-size: 9px; }
+
+      /* Roster strip pinned to the right, away from hero text */
+      .heroFX .heroRoster{
+        position: absolute;
+        right: 10px;
+        top: 12px;
+        width: var(--mobileRosterW);
+        margin-top: 0;
+        z-index: 4;
+      }
+      .heroRosterTrack{ padding: 5px 8px; gap: 6px; }
+      .heroChip{ font-size: 10px; padding: 3px 7px; }
+}
     .heroOverlay{
       position:absolute; inset:0;
       z-index:3;
@@ -2994,80 +3022,10 @@ body.kiosk-mode *::-webkit-scrollbar{
 
   /* Hero: keep stars behind header/countdown */
   .hero{ position:relative; overflow:hidden; }
-  /* MOBILE-SAFE: removed broad `.hero * { position:relative; }` which broke hero layers */
+  .hero *{ position:relative; }
   .hero .stars, .hero .starRow, .hero .playersRow, .hero .heroStars{ z-index:1 !important; }
   .hero header, .hero .heroTop, .hero .heroHdr, .hero .heroHeader, .hero .heroMeta, .hero .countdown, .hero #countdown, .hero .bannerTitle{ z-index:10 !important; }
   .hero .heroOverlay, .hero::before{ z-index:2 !important; }
-}
-
-
-/* --- STEP 1B HOTFIX (mobile only): ensure hero header/sub/countdown are visible above slides/FX --- */
-@media (max-width: 950px){
-  #heroBanner{ position:relative; }
-  #heroBanner .heroSlides,
-  #heroBanner .heroFX{
-    position:absolute !important;
-    inset:0 !important;
-  }
-  #heroBanner .heroOverlay{
-    position:absolute !important;
-    inset:0 !important;
-    z-index: 20 !important;
-    display:flex !important;
-  }
-  /* Keep text/countdown above any pseudo overlays */
-  #heroBanner .heroKicker,
-  #heroBanner .heroTitle,
-  #heroBanner .heroSub,
-  #heroBanner #wcCount{
-    position:relative !important;
-    z-index: 21 !important;
-  }
-}
-
-
-
-/* === MOBILE STEP: prevent stars overlapping text (mobile-only, safe) === */
-@media (max-width: 720px){
-  /* Reserve left space for text, right space for stars */
-  #heroBanner .heroOverlay{
-    max-width: 52vw !important;
-    padding: 12px 10px 12px 12px !important;
-  }
-
-  #heroBanner .heroKicker{ font-size: 9px !important; letter-spacing:.12em !important; }
-  #heroBanner .heroTitle{ font-size: 13px !important; letter-spacing:.04em !important; }
-  #heroBanner .heroSub{
-    font-size: 9.5px !important;
-    max-width: 52vw !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-  }
-
-  /* Keep countdown compact and single-line label */
-  #heroBanner #wcCount .wcLabel,
-  #heroBanner .countdown .label{
-    font-size: 9px !important;
-    white-space: nowrap !important;
-  }
-  #heroBanner #wcCount .wcNums,
-  #heroBanner .countdown .nums{
-    font-size: 10.5px !important;
-    gap: 8px !important;
-  }
-
-  /* Star strip stays on the right and doesn't intrude */
-  #heroBanner .heroTriWrap{
-    right: 10px !important;
-    top: 12px !important;
-    bottom: 12px !important;
-    width: min(420px, 46%) !important;
-  }
-  #heroBanner .heroTri{ gap: 10px !important; }
-  #heroBanner .heroCard.heroCardTri{ height: 92px !important; }
-  #heroBanner .heroCardName{ font-size: 10px !important; }
-  #heroBanner .heroCardCountry{ font-size: 9px !important; }
 }
 
 </style>
