@@ -225,7 +225,7 @@
       pointer-events:none;
       display:flex;
       flex-direction:column;
-      justify-content:center;
+      justify-content:flex-start;
       gap:6px;
       padding:18px 16px;
     }
@@ -1790,8 +1790,13 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
   padding: 20px 18px !important;
 }
 .heroTitle{
-  font-size: 26px !important;
-  letter-spacing: .14em !important;
+  /* Responsive on desktop + mobile: prevents subtitle overlap */
+  font-size: clamp(16px, 2.0vw, 21px) !important;
+  line-height: 1.12 !important;
+  letter-spacing: .10em !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
 }
 .compact .heroTitle{ font-size: 20px !important; }
 .heroSub{ max-width: 520px !important; }
