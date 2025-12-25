@@ -2997,16 +2997,42 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-/* === Mobile-only hero subtitle: keep on one line, narrow footprint (surgical) === */
-@media (max-width: 640px){
-  #heroBanner .heroSub{
-    max-width: 56vw;           /* reserve space for players strip */
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 10px;           /* slightly smaller on mobile */
-    letter-spacing: .02em;
+/* === MOBILE-ONLY: Ensure hero banner text stays visible & compact (no desktop impact) === */
+@media (max-width: 520px){
+  #heroBanner .heroOverlay{
+    display:flex !important;
+    opacity:1 !important;
+    visibility:visible !important;
+    z-index: 8 !important;
+    padding: 10px 10px 12px !important;
+    gap: 4px !important;
+    max-width: 66vw !important; /* reserve space for star strip on right */
   }
+  #heroBanner .heroKicker,
+  #heroBanner .heroTitle,
+  #heroBanner .heroSub,
+  #heroBanner #wcCount{
+    display:block !important;
+    opacity:1 !important;
+    visibility:visible !important;
+  }
+  #heroBanner .heroKicker{ font-size: 9px !important; letter-spacing: .14em !important; }
+  #heroBanner .heroTitle{ font-size: 14px !important; }
+  #heroBanner .heroSub{
+    font-size: 9.5px !important;
+    max-width: 66vw !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  #heroBanner #wcCount{ margin-top: 4px !important; }
+  #heroBanner #wcCount .wcLabel{
+    font-size: 8px !important;
+    letter-spacing: .12em !important;
+    white-space: nowrap !important;
+  }
+  #heroBanner #wcCount .wcNums b{ font-size: 12px !important; }
+  #heroBanner #wcCount .wcNums small{ font-size: 8px !important; }
 }
 
 </style>
