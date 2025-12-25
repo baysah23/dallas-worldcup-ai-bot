@@ -683,7 +683,9 @@
   border-radius:999px;
   border:1px solid rgba(255,255,255,.10);
   background: rgba(0,0,0,.18);
+  min-height: 40px;
 }
+
 .heroRosterTrack{
   display:inline-flex;
   gap:8px;
@@ -695,8 +697,6 @@
   0%{ transform: translateX(0); }
   100%{ transform: translateX(-50%); }
 }
-
-#heroRoster .heroChip img{width:18px;height:18px;border-radius:50%;object-fit:cover;margin-right:6px;border:1px solid rgba(255,255,255,.18);}
 .heroChip{
   display:inline-flex;
   align-items:center;
@@ -806,8 +806,7 @@
     @media (max-width:720px){
       .heroCaption .heroName{ font-size:12px; }
     }
-    .heroRoster{ display:none !important; }
-    .heroKicker, .heroTitle{ color: var(--gold); }
+.heroKicker, .heroTitle{ color: var(--gold); }
 
 
 /* === STAR PLAYER IMAGE NORMALIZATION (Ronaldo reference) === */
@@ -2995,6 +2994,7 @@ body.kiosk-mode *::-webkit-scrollbar{
   .hero *{ position:relative; }
   .hero .stars, .hero .starRow, .hero .playersRow, .hero .heroStars{ z-index:1 !important; }
   .hero header, .hero .heroTop, .hero .heroHdr, .hero .heroHeader, .hero .heroMeta, .hero .countdown, .hero #countdown, .hero .bannerTitle{ z-index:10 !important; }
+  .hero .heroOverlay, .hero::before{ z-index:2 !important; }
 }
 
 </style>
@@ -3635,61 +3635,12 @@ const heroPlayers = [
   },
 ];
 
-
-function ensureHeroRosterMobile(players){
-  // Mobile-only: populate the roster strip if it is empty.
-  // Safe no-op on desktop.
-  try{
-    if(!window.matchMedia || !window.matchMedia("(max-width: 950px)").matches) return;
-    const host = document.getElementById("heroRoster");
-    if(!host) return;
-    if(host.dataset && host.dataset.built === "1") return;
-
-    // If server/other script already populated it, keep it.
-    if(host.children && host.children.length > 0){
-      host.dataset.built = "1";
-      return;
-    }
-
-    // Build a looping track of chips: [players] + [players] to allow seamless scroll.
-    const list = Array.isArray(players) ? players : [];
-    if(!list.length) return;
-
-    const track = document.createElement("div");
-    track.className = "heroRosterTrack";
-
-    const buildChip = (p) => {
-      const chip = document.createElement("div");
-      chip.className = "heroChip";
-      const img = document.createElement("img");
-      img.alt = p && p.name ? p.name : "Star";
-      img.loading = "lazy";
-      img.decoding = "async";
-      img.src = (p && p.img) ? p.img : "";
-      const name = document.createElement("span");
-      name.textContent = (p && p.name) ? p.name : "Star";
-      chip.appendChild(img);
-      chip.appendChild(name);
-      return chip;
-    };
-
-    list.concat(list).forEach(p => track.appendChild(buildChip(p)));
-    host.appendChild(track);
-    host.dataset.built = "1";
-  }catch(e){
-    // swallow (never break app)
-  }
-}
-
 function buildHero(){
   const hero = document.getElementById("heroBanner");
   const slides = document.getElementById("heroSlides");
   if(!hero || !slides) return;
 
   slides.innerHTML = "";
-
-  // Mobile-only: ensure roster strip exists even if other code didn't populate it
-  ensureHeroRosterMobile(heroPlayers);
 
   heroPlayers.forEach((p, idx) => {
     const s = document.createElement("div");
@@ -3731,7 +3682,69 @@ function buildHero(){
 }
 
 function showHero(i){
-  const slides = Array.from(document.querySelectorAll("#heroSlides .heroSlide"));
+  const slides = Array.f
+
+
+// --- Mobile safety: ensure the star roster renders (UI-only) ---
+function ensureHeroRoster(){
+  const host = document.getElementById("heroRoster");
+  if(!host) return;
+
+  // if already built, do nothing
+  if(host.querySelector(".heroRosterTrack")) return;
+
+  // Prefer heroPlayers data (same images as slides)
+  if(typeof heroPlayers === "undefined" || !Array.isArray(heroPlayers) || heroPlayers.length === 0) return;
+
+  const track = document.createElement("div");
+  track.className = "heroRosterTrack";
+
+  heroPlayers.forEach(p => {
+    const chip = document.createElement("span");
+    chip.style.display = "inline-flex";
+    chip.style.alignItems = "center";
+    chip.style.gap = "8px";
+    chip.style.padding = "3px 10px 3px 4px";
+    chip.style.borderRadius = "999px";
+    chip.style.border = "1px solid rgba(255,255,255,.12)";
+    chip.style.background = "rgba(0,0,0,.22)";
+    chip.style.backdropFilter = "blur(6px)";
+    chip.style.webkitBackdropFilter = "blur(6px)";
+
+    const img = document.createElement("img");
+    img.alt = p.name || "Star";
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.src = p.img || "";
+    img.style.width = "26px";
+    img.style.height = "26px";
+    img.style.borderRadius = "999px";
+    img.style.objectFit = "cover";
+    img.style.border = "1px solid rgba(255,255,255,.18)";
+
+    const nm = document.createElement("span");
+    nm.textContent = p.name || "";
+    nm.style.fontSize = "11px";
+    nm.style.fontWeight = "800";
+    nm.style.letterSpacing = ".2px";
+    nm.style.opacity = ".95";
+    nm.style.whiteSpace = "nowrap";
+
+    chip.appendChild(img);
+    chip.appendChild(nm);
+    track.appendChild(chip);
+  });
+
+  host.innerHTML = "";
+  host.appendChild(track);
+
+  // If something still hides it, force visibility without touching desktop layout
+  host.style.display = "";
+  host.style.visibility = "visible";
+}
+
+
+rom(document.querySelectorAll("#heroSlides .heroSlide"));
   if(!slides.length) return;
   _heroIndex = (i + slides.length) % slides.length;
 
@@ -4381,6 +4394,7 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 
   // Init cinematic hero (UI-only)
   buildHero();
+  ensureHeroRoster();
 
   // Load sidebar data
   await loadSchedule();
