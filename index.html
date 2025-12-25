@@ -70,12 +70,8 @@
     }
     @media (max-width: 950px){
   /* Mobile hero alignment */
-  .heroTitle{ font-size: clamp(12px, 1.8vw, 16px) !important; line-height: 1.1; letter-spacing:.04em; }
-  .heroSub{ font-size: clamp(10px, 1.4vw, 12px) !important; margin-top: 6px !important; line-height: 1.2; }
-  /* Mobile countdown sizing */
-  .countdown{ padding: 8px 10px !important; }
-  .countdown .label{ font-size: 10px !important; }
-  .countdown .nums{ font-size: 11px !important; gap: 8px !important; }
+  .heroTitle{ font-size: clamp(14px, 2.0vw, 18px) !important; line-height: 1.1; letter-spacing:.04em; }
+  .heroSub{ font-size: clamp(11px, 1.6vw, 13px) !important; margin-top: 6px !important; line-height: 1.2; }
 /* Hero shrink-on-scroll (desktop & mobile) */
 #heroBanner.is-shrunk{
   padding-top: 10px !important;
@@ -807,8 +803,24 @@
     }
     @media (max-width:720px){
       .heroCaption .heroName{ font-size:12px; }
+
+      /* Mobile: ensure star roster is visible + usable (no impact on desktop) */
+      .heroRoster{ display:block; margin-top:8px; }
+      .heroRosterTrack{
+        display:flex;
+        gap:8px;
+        padding:6px 8px;
+        white-space:nowrap;
+        overflow-x:auto;
+        -webkit-overflow-scrolling:touch;
+        animation:none;
+      }
+      .heroRosterTrack::-webkit-scrollbar{ height:4px; }
+      .heroRosterTrack::-webkit-scrollbar-thumb{ background: rgba(255,255,255,.15); border-radius:999px; }
+      .heroChip{ flex:0 0 auto; }
+      .heroChip img{ width:22px; height:22px; border-radius:999px; object-fit:cover; }
+      .heroChip span{ font-size:10px; }
     }
-    .heroRoster{ display:none !important; }
     .heroKicker, .heroTitle{ color: var(--gold); }
 
 
@@ -3000,105 +3012,6 @@ body.kiosk-mode *::-webkit-scrollbar{
   .hero .heroOverlay, .hero::before{ z-index:2 !important; }
 }
 
-
-/* --- STEP 1B HOTFIX (mobile only): ensure hero header/sub/countdown are visible above slides/FX --- */
-@media (max-width: 950px){
-  #heroBanner{ position:relative; }
-  #heroBanner .heroSlides,
-  #heroBanner .heroFX{
-    position:absolute !important;
-    inset:0 !important;
-  }
-  #heroBanner .heroOverlay{
-    position:absolute !important;
-    inset:0 !important;
-    z-index: 20 !important;
-    display:flex !important;
-  }
-  /* Keep text/countdown above any pseudo overlays */
-  #heroBanner .heroKicker,
-  #heroBanner .heroTitle,
-  #heroBanner .heroSub,
-  #heroBanner #wcCount{
-    position:relative !important;
-    z-index: 21 !important;
-  }
-}
-
-
-/* --- STEP 1 (mobile only): compact hero text to free space for star roster; keep everything visible --- */
-@media (max-width: 950px){
-  /* Make the overlay text block narrower so the roster has room */
-  #heroBanner .heroOverlay{
-    padding: 10px 10px 10px 12px !important;
-    max-width: 62vw !important;
-  }
-
-  #heroBanner .heroKicker{
-    font-size: 10px !important;
-    line-height: 1.05 !important;
-    letter-spacing: .10em !important;
-    margin-bottom: 4px !important;
-  }
-  #heroBanner .heroTitle{
-    font-size: 14px !important;
-    line-height: 1.05 !important;
-    letter-spacing: .06em !important;
-    margin: 0 !important;
-  }
-  #heroBanner .heroSub{
-    font-size: 10px !important;
-    line-height: 1.15 !important;
-    margin-top: 4px !important;
-  }
-
-  #heroBanner #wcCount{
-    margin-top: 8px !important;
-    padding: 8px 10px !important;
-    border-radius: 12px !important;
-  }
-  #heroBanner #wcCount .wcLabel{
-    font-size: 9px !important;
-    letter-spacing: .10em !important;
-    white-space: nowrap !important; /* keep on one line */
-  }
-  #heroBanner #wcCount .wcNums{
-    gap: 8px !important;
-    font-size: 11px !important;
-  }
-  #heroBanner #wcCount .wcNums b{
-    font-size: 12px !important;
-  }
-}
-
-
-/* ===== Mobile-only: make HERO roster chips visible and compact (no desktop impact) ===== */
-@media (max-width: 950px){
-  #heroRoster{ display:block; }
-  #heroRoster .heroRosterInner{
-    display:flex;
-    gap:6px;
-    align-items:center;
-    overflow-x:auto;
-    -webkit-overflow-scrolling:touch;
-    padding:6px 8px;
-    scrollbar-width:none;
-  }
-  #heroRoster .heroRosterInner::-webkit-scrollbar{ display:none; }
-  #heroRoster .heroChip{
-    display:inline-flex;
-    align-items:center;
-    padding:4px 8px;
-    border-radius:999px;
-    border:1px solid rgba(255,255,255,.10);
-    background: rgba(0,0,0,.22);
-    font-weight:800;
-    font-size:11px;
-    line-height:1;
-    white-space:nowrap;
-  }
-}
-
 </style>
 </head>
 <body>
@@ -3737,38 +3650,44 @@ const heroPlayers = [
   },
 ];
 
-// -----------------------
-// HERO roster strip (mobile-only) — populate if empty
-// -----------------------
-function buildHeroRosterIfNeeded(){
-  // Only for mobile; desktop layout stays unchanged
-  if(!window.matchMedia || !window.matchMedia("(max-width: 950px)").matches) return;
 
-  const roster = document.getElementById("heroRoster");
-  if(!roster) return;
+function ensureHeroRosterMobile(players){
+  // Mobile-only: populate the roster strip if it is empty
+  if(!window.matchMedia || !window.matchMedia("(max-width:720px)").matches) return;
+  const host = document.getElementById("heroRoster");
+  if(!host) return;
+  if(host.dataset.built === "1") return;
 
-  // If already populated, do nothing
-  if(roster.children && roster.children.length > 0) return;
-
-  // Build lightweight chips from heroPlayers list
-  try{
-    const inner = document.createElement("div");
-    inner.className = "heroRosterInner";
-    (heroPlayers || []).forEach(p=>{
-      const chip = document.createElement("span");
-      chip.className = "heroChip";
-      chip.textContent = p && p.name ? p.name : "";
-      inner.appendChild(chip);
-    });
-    roster.appendChild(inner);
-  }catch(e){
-    // fail silently; never break the app
+  // If the element already has content, respect it.
+  if(host.children && host.children.length > 0){
+    host.dataset.built = "1";
+    return;
   }
+
+  const track = document.createElement("div");
+  track.className = "heroRosterTrack";
+
+  (players || []).forEach(p => {
+    const chip = document.createElement("span");
+    chip.className = "heroChip";
+
+    // thumbnail
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.alt = p?.name ? `${p.name}` : "Star player";
+    if(p?.img) img.src = p.img;
+
+    const name = document.createElement("span");
+    name.textContent = p?.name || "";
+
+    chip.appendChild(img);
+    chip.appendChild(name);
+    track.appendChild(chip);
+  });
+
+  host.appendChild(track);
+  host.dataset.built = "1";
 }
-
-document.addEventListener("DOMContentLoaded", buildHeroRosterIfNeeded);
-window.addEventListener("resize", buildHeroRosterIfNeeded);
-
 
 function buildHero(){
   const hero = document.getElementById("heroBanner");
@@ -3777,6 +3696,8 @@ function buildHero(){
 
   slides.innerHTML = "";
 
+  // Mobile-only roster population (safe no-op on desktop)
+  try{ ensureHeroRosterMobile(heroPlayers); }catch(e){}
   heroPlayers.forEach((p, idx) => {
     const s = document.createElement("div");
     s.className = "heroSlide" + (idx===0 ? " active" : "");
