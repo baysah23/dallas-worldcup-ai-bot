@@ -2755,6 +2755,8 @@ body.kiosk-mode *::-webkit-scrollbar{
 ========================================================= */
 @media (max-width: 950px){
   /* Bottom nav */
+  nav.mobileNav{display:flex !important;}
+
   .mobileNav{
     position: fixed;
     left: 10px; right: 10px; bottom: 10px;
@@ -2851,8 +2853,7 @@ body.kiosk-mode *::-webkit-scrollbar{
   .card{ scroll-margin-top: 10px; }
   #scheduleCard, .menucard, .chatcard, #fanZoneLeft, #fanZoneRight, #vipHoldRail{ margin-bottom: 110px; }
 
-  /* Prefer bottom-nav only (avoid double navs on mobile) */
-  .mnav{ display:none !important; }
+  /* Bottom-nav stays visible on mobile */
 
   /* Bottom-nav: prevent label collisions / distortion */
   .mobileNav{
@@ -2958,6 +2959,37 @@ body.kiosk-mode *::-webkit-scrollbar{
     max-width:100% !important;
     line-height:1.25 !important;
   }
+}
+
+
+/* ===== Mobile-only fixes (v3) ===== */
+@media (max-width: 950px){
+  /* Prevent horizontal drift / off-screen content */
+  html, body{ overflow-x:hidden; }
+  .wrap{ width:100%; max-width:100%; padding-left:10px; padding-right:10px; }
+  .grid{ grid-template-columns:1fr !important; gap:12px !important; }
+  .leftcol, .rightcol{ width:100% !important; min-width:0 !important; }
+  .card{ width:100% !important; min-width:0 !important; }
+
+  /* Bottom nav always visible; keep content above it */
+  nav.mobileNav{ position:fixed; left:8px; right:8px; bottom:8px; z-index:9999; }
+  .grid{ padding-bottom:110px !important; }
+
+  /* Make top row buttons (if present) wrap instead of colliding */
+  .tabs, .topTabs, .topBtns, .topButtons{ flex-wrap:wrap !important; gap:8px !important; }
+  .tabs .pill, .topTabs .pill{ white-space:nowrap; }
+
+  /* Schedule/Menu: ensure they don't render off-screen */
+  #scheduleCard, .menucard{ overflow:visible !important; }
+  #schedule{ overflow:auto !important; -webkit-overflow-scrolling:touch; max-height: calc(100vh - 240px) !important; }
+  #pager, .pager{ position:sticky; bottom:0; z-index:5; }
+
+  /* Hero: keep stars behind header/countdown */
+  .hero{ position:relative; overflow:hidden; }
+  .hero *{ position:relative; }
+  .hero .stars, .hero .starRow, .hero .playersRow, .hero .heroStars{ z-index:1 !important; }
+  .hero header, .hero .heroTop, .hero .heroHdr, .hero .heroHeader, .hero .heroMeta, .hero .countdown, .hero #countdown, .hero .bannerTitle{ z-index:10 !important; }
+  .hero .heroOverlay, .hero::before{ z-index:2 !important; }
 }
 
 </style>
@@ -5507,6 +5539,24 @@ function apply(){
   window.addEventListener("scroll", onScroll, {passive:true});
   window.addEventListener("resize", apply, {passive:true});
   apply();
+})();
+</script>
+
+
+<script>
+/* Mobile nav wiring (v3) */
+(function(){
+  const nav = document.getElementById('mobileNav');
+  if(!nav) return;
+  function onClick(e){
+    const btn = e.target.closest('.mnavBtn');
+    if(!btn) return;
+    const sec = btn.getAttribute('data-msec');
+    if(typeof window.setSection === 'function') window.setSection(sec);
+    // Active state
+    nav.querySelectorAll('.mnavBtn').forEach(b=>b.classList.toggle('active', b===btn));
+  }
+  nav.addEventListener('click', onClick, {passive:true});
 })();
 </script>
 
