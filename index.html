@@ -2929,6 +2929,48 @@ body.kiosk-mode *::-webkit-scrollbar{
   .mobileNav .mnavBtn span{ display:none; }
 }
 
+
+
+/* --- v8 mobile fixes: default section reliability + nav labels + schedule containment --- */
+@media (max-width: 950px){
+  /* Ensure the section system can constrain layout */
+  body{ overflow-x:hidden; }
+  #heroBanner, .hero, .heroTitle, .heroSub{ max-width:100%; }
+
+  /* Bottom nav label spacing / no collisions */
+  #mobileNav{ gap:6px; }
+  #mobileNav .mnavBtn{
+    min-width:0;
+    padding:10px 8px;
+  }
+  #mobileNav .mnavBtn span{
+    display:block;
+    font-size:10px;
+    line-height:1.05;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    letter-spacing:.15px;
+  }
+
+  /* Schedule stays inside viewport */
+  #scheduleCard{ max-width:100%; overflow:hidden; }
+  #scheduleList{
+    max-width:100%;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  #scheduleList *{ max-width:100%; }
+  #scheduleList table{ width:100%; }
+  #scheduleList .row, #scheduleList .matchRow, #scheduleList .matchCard{ max-width:100%; }
+}
+
+@media (max-width: 380px){
+  /* Ultra-small screens: icons only */
+  #mobileNav .mnavBtn span{ display:none; }
+  #mobileNav .mnavBtn{ padding:12px 0; }
+}
+
 </style>
 </head>
 <body>
@@ -3130,8 +3172,8 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 <!-- Mobile bottom navigation (mobile-first, does not affect desktop) -->
 <nav class="mobileNav" id="mobileNav" aria-label="Mobile navigation">
-  <button class="mnavBtn" data-msec="home" type="button" aria-label="Home">🏠<span>Home</span></button>
-  <button class="mnavBtn active" data-msec="chat" type="button" aria-label="Chat">💬<span>Chat</span></button>
+  <button class="mnavBtn active" data-msec="home" type="button" aria-label="Home">🏠<span>Home</span></button>
+  <button class="mnavBtn " data-msec="chat" type="button" aria-label="Chat">💬<span>Chat</span></button>
   <button class="mnavBtn" data-msec="menu" type="button" aria-label="Menu">🍽️<span>Menu</span></button>
   <button class="mnavBtn" data-msec="schedule" type="button" aria-label="Schedule">📅<span>Schedule</span></button>
   <button class="mnavBtn" data-msec="fanzone" type="button" aria-label="Fan Zone">⚽<span>Fan Zone</span></button>
@@ -4478,11 +4520,11 @@ function __currentSection(){
 }
 
 function setSection(sec){
-    if(sec === 'home'){
-      document.body.removeAttribute('data-msec');
-    }else{
-      document.body.setAttribute('data-msec', sec);
-    }
+    // Always set an explicit section on mobile so CSS can reliably hide rails.
+    // Treat both 'home' and empty as the same.
+    if(!sec) sec = 'home';
+    document.body.setAttribute('data-msec', sec);
+}
 // Mobile-only micro animation on section change
     if(isMobile && isMobile() && !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
       document.body.classList.add('msec-anim');
@@ -4577,11 +4619,14 @@ function setSection(sec){
     nav.addEventListener('click', (e)=>{
       const btn = e.target.closest('.mnavBtn');
       if(!btn) return;
-      setSection(btn.dataset.msec || 'chat');
+      setSection(btn.dataset.msec || 'home');
     });
     // Default section on mobile
-    if(isMobile() && !document.body.getAttribute('data-msec')){
+    if(isMobile()){
       setSection('home');
+      // Ensure rails/modals start closed on mobile
+      document.body.classList.remove('menu-expanded');
+      document.body.classList.add('menu-collapsed');
     }
   }
 
