@@ -3025,6 +3025,36 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 }
 
+
+/* =========================
+   MOBILE ONLY: Banner text compact (surgical)
+   - Keeps desktop unchanged
+   - Reduces overlay padding + typography so text doesn't eat the banner
+   ========================= */
+@media (max-width: 720px){
+  /* Make overlay take less vertical space */
+  .heroOverlay{
+    padding: 10px 12px !important;
+    gap: 4px !important;
+  }
+  /* Slightly smaller kicker and title on mobile */
+  .heroKicker{
+    font-size: 9px !important;
+    letter-spacing: .14em !important;
+  }
+  .heroTitle{
+    font-size: clamp(13px, 4.2vw, 16px) !important;
+    line-height: 1.08 !important;
+    letter-spacing: .08em !important;
+  }
+  .heroSub{
+    font-size: 11px !important;
+    line-height: 1.18 !important;
+    margin-top: 2px !important;
+    max-width: min(62vw, 360px) !important; /* leave room for player visuals */
+  }
+}
+
 </style>
 </head>
 <body>
