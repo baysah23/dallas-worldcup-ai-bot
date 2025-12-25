@@ -3000,6 +3000,31 @@ body.kiosk-mode *::-webkit-scrollbar{
   .hero .heroOverlay, .hero::before{ z-index:2 !important; }
 }
 
+
+/* --- STEP 1B HOTFIX (mobile only): ensure hero header/sub/countdown are visible above slides/FX --- */
+@media (max-width: 950px){
+  #heroBanner{ position:relative; }
+  #heroBanner .heroSlides,
+  #heroBanner .heroFX{
+    position:absolute !important;
+    inset:0 !important;
+  }
+  #heroBanner .heroOverlay{
+    position:absolute !important;
+    inset:0 !important;
+    z-index: 20 !important;
+    display:flex !important;
+  }
+  /* Keep text/countdown above any pseudo overlays */
+  #heroBanner .heroKicker,
+  #heroBanner .heroTitle,
+  #heroBanner .heroSub,
+  #heroBanner #wcCount{
+    position:relative !important;
+    z-index: 21 !important;
+  }
+}
+
 </style>
 </head>
 <body>
