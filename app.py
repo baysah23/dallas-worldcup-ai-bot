@@ -1549,145 +1549,151 @@ def test_sheet():
 # ============================================================
 @app.route("/chat", methods=["POST"])
 def chat():
-    ip = client_ip()
-    allowed, remaining = check_rate_limit(ip)
-    if not allowed:
-        return jsonify({
-            "reply": "⚠️ Too many requests. Please wait a minute and try again.",
-            "rate_limit_remaining": 0,
-        }), 429
-
-    data = request.get_json(force=True) or {}
-    msg = (data.get("message") or "").strip()
-    lang = norm_lang(data.get("language") or data.get("lang"))
-    sid = get_session_id()
-    sess = get_session(sid)
-
-    # Update session language if user toggled
-    sess["lang"] = lang
-    sess["lead"]["language"] = lang
-
-    if not msg:
-        return jsonify({"reply": "Please type a message.", "rate_limit_remaining": remaining})
-
-    # Recall support (all languages)
-    if want_recall(msg, lang):
-        return jsonify({"reply": recall_text(sess), "rate_limit_remaining": remaining})
-
-    # Start reservation flow if user indicates intent
-    if sess["mode"] == "idle" and want_reservation(msg):
-        sess["mode"] = "reserving"
-
-        # IMPORTANT: do NOT treat the word "reservation" as the name.
-        if msg.lower().strip() in ["reservation", "reserva", "réservation"]:
-            sess["lead"]["name"] = ""
-
-        q = next_question(sess)
-        return jsonify({"reply": q, "rate_limit_remaining": remaining})
-
-    # If reserving, keep collecting fields deterministically
-    if sess["mode"] == "reserving":
-        d_iso = extract_date(msg)
-        if d_iso:
-            if validate_date_iso(d_iso):
-                sess["lead"]["date"] = d_iso
-            else:
-                return jsonify({"reply": LANG[lang]["ask_date"], "rate_limit_remaining": remaining})
-
-        t = extract_time(msg)
-        if t:
-            sess["lead"]["time"] = t
-
-        ps = extract_party_size(msg)
-        if ps:
-            sess["lead"]["party_size"] = ps
-
-        ph = extract_phone(msg)
-        if ph:
-            sess["lead"]["phone"] = ph
-
-        # Name extraction
-        if not sess["lead"].get("name"):
-            cand = extract_name_candidate(msg)
-            if cand:
-                sess["lead"]["name"] = cand
-
-        # Apply business rules if we have enough to check
-        rule = apply_business_rules(sess["lead"])
-        if rule == "party":
-            sess["mode"] = "idle"
-            return jsonify({"reply": LANG[lang]["rule_party"], "rate_limit_remaining": remaining})
-        if rule == "closed":
-            sess["mode"] = "idle"
-            return jsonify({"reply": LANG[lang]["rule_closed"], "rate_limit_remaining": remaining})
-
-        # If complete, save + confirm
-        lead = sess["lead"]
-        if lead.get("date") and lead.get("time") and lead.get("party_size") and lead.get("name") and lead.get("phone"):
-            try:
-                append_lead_to_sheet(lead)
-                sess["mode"] = "idle"
-                saved_msg = LANG[lang]["saved"]
-                confirm = (
-                    f"{saved_msg}\n"
-                    f"Name: {lead['name']}\n"
-                    f"Phone: {lead['phone']}\n"
-                    f"Date: {lead['date']}\n"
-                    f"Time: {lead['time']}\n"
-                    f"Party size: {lead['party_size']}\n"
-                    f"Status: {lead.get('status','New')}\n"
-                    f"VIP: {lead.get('vip','No')}"
-                )
-                sess["lead"] = {
-                    "name": "",
-                    "phone": "",
-                    "date": "",
-                    "time": "",
-                    "party_size": 0,
-                    "language": lang,
-                    "status": "New",
-                    "vip": "No",
-                }
-                return jsonify({"reply": confirm, "rate_limit_remaining": remaining})
-            except Exception as e:
-                # Always return JSON so the UI never shows "no reply received".
-                return jsonify({"reply": f"⚠️ Could not save reservation: {repr(e)}", "rate_limit_remaining": remaining}), 500
-
-        # Otherwise ask next missing field
-        q = next_question(sess)
-        return jsonify({"reply": q, "rate_limit_remaining": remaining})
-
-    # Otherwise: normal Q&A using OpenAI (with language + business profile + menu)
-    system_msg = f"""
-You are a World Cup 2026 Dallas business concierge.
-
-Business profile (source of truth):
-{BUSINESS_PROFILE}
-
-Menu (source of truth, language={lang}):
-{json.dumps(MENU.get(lang, MENU['en']), ensure_ascii=False)}
-
-Rules:
-- Be friendly, fast, and concise.
-- Always respond in the user's chosen language: {lang}.
-- If user asks about the World Cup match schedule, tell them to use the schedule panel on the page.
-- If user asks to make a reservation, instruct them to type "reservation" (or equivalent) to start.
-"""
-
     try:
-        resp = client.responses.create(
-            model=os.environ.get("CHAT_MODEL", "gpt-4o-mini"),
-            input=[
-                {"role": "system", "content": system_msg},
-                {"role": "user", "content": msg},
-            ],
-        )
-        reply = (resp.output_text or "").strip() or "(No response)"
-        return jsonify({"reply": reply, "rate_limit_remaining": remaining})
+        ip = client_ip()
+        allowed, remaining = check_rate_limit(ip)
+        if not allowed:
+            return jsonify({
+                "reply": "⚠️ Too many requests. Please wait a minute and try again.",
+                "rate_limit_remaining": 0,
+            }), 429
+
+        data = request.get_json(force=True) or {}
+        msg = (data.get("message") or "").strip()
+        lang = norm_lang(data.get("language") or data.get("lang"))
+        sid = get_session_id()
+        sess = get_session(sid)
+
+        # Update session language if user toggled
+        sess["lang"] = lang
+        sess["lead"]["language"] = lang
+
+        if not msg:
+            return jsonify({"reply": "Please type a message.", "rate_limit_remaining": remaining})
+
+        # Recall support (all languages)
+        if want_recall(msg, lang):
+            return jsonify({"reply": recall_text(sess), "rate_limit_remaining": remaining})
+
+        # Start reservation flow if user indicates intent
+        if sess["mode"] == "idle" and want_reservation(msg):
+            sess["mode"] = "reserving"
+
+            # IMPORTANT: do NOT treat the word "reservation" as the name.
+            if msg.lower().strip() in ["reservation", "reserva", "réservation"]:
+                sess["lead"]["name"] = ""
+
+            q = next_question(sess)
+            return jsonify({"reply": q, "rate_limit_remaining": remaining})
+
+        # If reserving, keep collecting fields deterministically
+        if sess["mode"] == "reserving":
+            d_iso = extract_date(msg)
+            if d_iso:
+                if validate_date_iso(d_iso):
+                    sess["lead"]["date"] = d_iso
+                else:
+                    return jsonify({"reply": LANG[lang]["ask_date"], "rate_limit_remaining": remaining})
+
+            t = extract_time(msg)
+            if t:
+                sess["lead"]["time"] = t
+
+            ps = extract_party_size(msg)
+            if ps:
+                sess["lead"]["party_size"] = ps
+
+            ph = extract_phone(msg)
+            if ph:
+                sess["lead"]["phone"] = ph
+
+            # Name extraction
+            if not sess["lead"].get("name"):
+                cand = extract_name_candidate(msg)
+                if cand:
+                    sess["lead"]["name"] = cand
+
+            # Apply business rules if we have enough to check
+            rule = apply_business_rules(sess["lead"])
+            if rule == "party":
+                sess["mode"] = "idle"
+                return jsonify({"reply": LANG[lang]["rule_party"], "rate_limit_remaining": remaining})
+            if rule == "closed":
+                sess["mode"] = "idle"
+                return jsonify({"reply": LANG[lang]["rule_closed"], "rate_limit_remaining": remaining})
+
+            # If complete, save + confirm
+            lead = sess["lead"]
+            if lead.get("date") and lead.get("time") and lead.get("party_size") and lead.get("name") and lead.get("phone"):
+                try:
+                    append_lead_to_sheet(lead)
+                    sess["mode"] = "idle"
+                    saved_msg = LANG[lang]["saved"]
+                    confirm = (
+                        f"{saved_msg}\n"
+                        f"Name: {lead['name']}\n"
+                        f"Phone: {lead['phone']}\n"
+                        f"Date: {lead['date']}\n"
+                        f"Time: {lead['time']}\n"
+                        f"Party size: {lead['party_size']}\n"
+                        f"Status: {lead.get('status','New')}\n"
+                        f"VIP: {lead.get('vip','No')}"
+                    )
+                    sess["lead"] = {
+                        "name": "",
+                        "phone": "",
+                        "date": "",
+                        "time": "",
+                        "party_size": 0,
+                        "language": lang,
+                        "status": "New",
+                        "vip": "No",
+                    }
+                    return jsonify({"reply": confirm, "rate_limit_remaining": remaining})
+                except Exception as e:
+                    # Always return JSON so the UI never shows "no reply received".
+                    return jsonify({"reply": f"⚠️ Could not save reservation: {repr(e)}", "rate_limit_remaining": remaining}), 500
+
+            # Otherwise ask next missing field
+            q = next_question(sess)
+            return jsonify({"reply": q, "rate_limit_remaining": remaining})
+
+        # Otherwise: normal Q&A using OpenAI (with language + business profile + menu)
+        system_msg = f"""
+    You are a World Cup 2026 Dallas business concierge.
+
+    Business profile (source of truth):
+    {BUSINESS_PROFILE}
+
+    Menu (source of truth, language={lang}):
+    {json.dumps(MENU.get(lang, MENU['en']), ensure_ascii=False)}
+
+    Rules:
+    - Be friendly, fast, and concise.
+    - Always respond in the user's chosen language: {lang}.
+    - If user asks about the World Cup match schedule, tell them to use the schedule panel on the page.
+    - If user asks to make a reservation, instruct them to type "reservation" (or equivalent) to start.
+    """
+
+        try:
+            resp = client.responses.create(
+                model=os.environ.get("CHAT_MODEL", "gpt-4o-mini"),
+                input=[
+                    {"role": "system", "content": system_msg},
+                    {"role": "user", "content": msg},
+                ],
+            )
+            reply = (resp.output_text or "").strip() or "(No response)"
+            return jsonify({"reply": reply, "rate_limit_remaining": remaining})
+        except Exception as e:
+            # If OPENAI_API_KEY isn't set (or any API issue), fail gracefully.
+            fallback = "⚠️ Chat is temporarily unavailable. Please try again, or type 'reservation' to book a table."
+            return jsonify({"reply": f"{fallback}\n\nDebug: {type(e).__name__}", "rate_limit_remaining": remaining}), 200
+
     except Exception as e:
-        # If OPENAI_API_KEY isn't set (or any API issue), fail gracefully.
+        # Never break the UI: always return JSON.
         fallback = "⚠️ Chat is temporarily unavailable. Please try again, or type 'reservation' to book a table."
-        return jsonify({"reply": f"{fallback}\n\nDebug: {type(e).__name__}", "rate_limit_remaining": remaining}), 200
+        return jsonify({"reply": f"{fallback}\n\nDebug: {type(e).__name__}", "rate_limit_remaining": 0}), 200
 
 
 # ============================================================
@@ -1727,6 +1733,7 @@ CONFIG_FILE = os.path.join(DATA_DIR, "app_config.json")
 # -----------------------------
 _CONFIG_CACHE: Dict[str, Any] = {"ts": 0.0, "cfg": None}   # ttl ~5s
 _LEADS_CACHE: Dict[str, Any] = {"ts": 0.0, "rows": None}  # ttl ~30s
+_sessions: Dict[str, Dict[str, Any]] = {}  # in-memory chat/reservation sessions
 
 
 def _safe_read_json(path: str) -> dict:
