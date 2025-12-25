@@ -72,6 +72,13 @@
   /* Mobile hero alignment */
   .heroTitle{ font-size: clamp(12px, 1.8vw, 16px) !important; line-height: 1.1; letter-spacing:.04em; }
   .heroSub{ font-size: clamp(10px, 1.4vw, 12px) !important; margin-top: 6px !important; line-height: 1.2; }
+  /* Mobile subtitle: keep on one line + narrower so stars have room */
+  .heroSub{
+    max-width: 260px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
   /* Mobile countdown sizing */
   .countdown{ padding: 8px 10px !important; }
   .countdown .label{ font-size: 10px !important; }
