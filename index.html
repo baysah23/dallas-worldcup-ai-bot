@@ -27,6 +27,7 @@
     }
     /* Mobile bottom nav hidden by default (desktop) */
     nav.mobileNav{display:none;}
+    .mnav{display:none;}
 
     .wrap{max-width:1050px; width:100%; margin:0 auto; display:flex; flex-direction:column; min-height:100vh; height:auto; min-height:100vh;}
     header{
@@ -68,6 +69,10 @@
       min-height:0;
     }
     @media (max-width: 950px){
+  /* Mobile hero alignment */
+  .heroTitle{ font-size: 15px !important; letter-spacing:.04em; }
+  .heroSub{ font-size: 12px !important; margin-top: 6px !important; }
+
       .grid{grid-template-columns:1fr;}
     }
 
@@ -2594,6 +2599,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 @media (max-width: 950px){
   .mnav{
     display:flex;
+    display:flex;
     gap:8px;
     align-items:center;
     justify-content:space-between;
@@ -2848,6 +2854,31 @@ body.kiosk-mode *::-webkit-scrollbar{
   body[data-msec="vip"] #fanZoneLeft,
   body[data-msec="vip"] #fanZoneRight{ display:none !important; }
 }
+
+/* --- FIX: Mobile hero title/sub alignment + prevent overlap/truncation --- */
+@media (max-width: 520px){
+  .heroOverlay{
+    justify-content:flex-start !important;
+    align-items:flex-start !important;
+    gap:8px !important;
+    padding:14px 14px 18px !important;
+  }
+  .heroTitle{
+    /* allow wrapping so "DALLAS WORLD CUP HQ" is fully visible */
+    white-space:normal !important;
+    overflow:visible !important;
+    text-overflow:clip !important;
+    line-height:1.12 !important;
+    font-size:clamp(18px, 5.2vw, 22px) !important;
+    letter-spacing:.10em !important;
+  }
+  .heroSub{
+    margin-top:2px !important;
+    max-width:100% !important;
+    line-height:1.25 !important;
+  }
+}
+
 </style>
 </head>
 <body>
@@ -2970,7 +3001,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 </div>
 <div class="heroOverlay">
 <div class="heroKicker">WORLD CUP 2026</div>
-<div class="heroTitle">DALLAS WORLDCUP HQ</div>
+<div class="heroTitle">DALLAS WORLD CUP HQ</div>
 <div class="heroSub">Reserve tables • Live schedules • Concierge chat</div>
 <div class="wcCount" id="wcCount">
 <div class="wcLabel">WORLD CUP KICKOFF IN</div>
@@ -5209,6 +5240,7 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
     nav.className = "mnav";
     nav.id = "mnav";
     nav.innerHTML = `
+      <button class="mnav-btn" data-sec="home">Home</button>
       <button class="mnav-btn" data-sec="chat">Chat</button>
       <button class="mnav-btn" data-sec="fan">Fan Zone</button>
       <button class="mnav-btn" data-sec="vip">VIP</button>
@@ -5228,6 +5260,12 @@ try{ setTimeout(gentleScheduleNudgeOnce, 600); }catch(e){}
   }
 
   function setSection(sec, persist){
+  if(sec === "home"){
+      // Home = default experience (chat) + clear any persisted section
+      try{ localStorage.removeItem("wc_mobile_section"); }catch(e){}
+      sec = "chat";
+      document.body.removeAttribute("data-msec");
+    }
     if(!isSmall()) return;
     document.body.setAttribute("data-msec", sec || "chat");
     // button states
