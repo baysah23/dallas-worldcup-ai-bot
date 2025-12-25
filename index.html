@@ -70,12 +70,8 @@
     }
     @media (max-width: 950px){
   /* Mobile hero alignment */
-  .heroTitle{ font-size: clamp(12px, 1.8vw, 16px) !important; line-height: 1.1; letter-spacing:.04em; }
-  .heroSub{ font-size: clamp(10px, 1.4vw, 12px) !important; margin-top: 6px !important; line-height: 1.2; }
-  /* Mobile countdown sizing */
-  .countdown{ padding: 8px 10px !important; }
-  .countdown .label{ font-size: 10px !important; }
-  .countdown .nums{ font-size: 11px !important; gap: 8px !important; }
+  .heroTitle{ font-size: clamp(14px, 2.0vw, 18px) !important; line-height: 1.1; letter-spacing:.04em; }
+  .heroSub{ font-size: clamp(11px, 1.6vw, 13px) !important; margin-top: 6px !important; line-height: 1.2; }
 /* Hero shrink-on-scroll (desktop & mobile) */
 #heroBanner.is-shrunk{
   padding-top: 10px !important;
@@ -3001,64 +2997,50 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-/* --- STEP 1B HOTFIX (mobile only): ensure hero header/sub/countdown are visible above slides/FX --- */
+/* ===========================
+   Mobile-only: compact banner text (no desktop impact)
+   - Shrink header/subtitle/countdown slightly
+   - Keep "WORLD CUP KICKOFF IN" on one line
+   =========================== */
 @media (max-width: 950px){
-  #heroBanner{ position:relative; }
-  #heroBanner .heroSlides,
-  #heroBanner .heroFX{
-    position:absolute !important;
-    inset:0 !important;
+  /* Keep text readable but narrower so stars have room */
+  #heroBanner .heroTitle{
+    font-size: clamp(12px, 3.4vw, 15px) !important;
+    line-height: 1.08 !important;
+    max-width: 56vw !important;
+    margin: 0 !important;
   }
-  #heroBanner .heroOverlay{
-    position:absolute !important;
-    inset:0 !important;
-    z-index: 20 !important;
-    display:flex !important;
-  }
-  /* Keep text/countdown above any pseudo overlays */
-  #heroBanner .heroKicker,
-  #heroBanner .heroTitle,
-  #heroBanner .heroSub,
-  #heroBanner #wcCount{
-    position:relative !important;
-    z-index: 21 !important;
-  }
-}
-
-
-/* === MOBILE BANNER TEXT MICRO-COMPACT (SAFE OVERRIDE) === */
-@media (max-width: 520px) {
-
-  /* Keep banner text visible & narrow */
-  .heroOverlay {
-    max-width: 52vw;
-    padding: 10px 10px;
-    gap: 4px;
+  #heroBanner .heroSub{
+    font-size: clamp(10px, 2.8vw, 12px) !important;
+    line-height: 1.18 !important;
+    max-width: 56vw !important;
+    margin-top: 4px !important;
   }
 
-  /* Header / subtitle smaller */
-  .heroKicker {
-    font-size: 11px;
-    letter-spacing: 0.6px;
+  /* Countdown: smaller + single-line label */
+  #heroBanner .wcCount{
+    padding: 7px 9px !important;
+    border-radius: 14px !important;
+    margin-top: 8px !important;
   }
-
-  .heroTitle {
-    font-size: 17px;
-    line-height: 1.15;
+  #heroBanner .wcLabel{
+    font-size: 8px !important;
+    letter-spacing: .18em !important;
+    white-space: nowrap !important;
   }
-
-  .heroSub {
-    font-size: 12px;
-    line-height: 1.2;
+  #heroBanner .wcNums{
+    margin-top: 4px !important;
+    gap: 7px !important;
   }
-
-  /* Countdown: FORCE single line */
-  #wcCount,
-  .countdown {
-    font-size: 11px;
-    padding: 4px 8px;
-    white-space: nowrap;
-    line-height: 1.1;
+  #heroBanner .wcNums span{
+    min-width: 36px !important;
+  }
+  #heroBanner .wcNums b{
+    font-size: 14px !important;
+    line-height: 1.05 !important;
+  }
+  #heroBanner .wcNums i{
+    font-size: 9px !important;
   }
 }
 
