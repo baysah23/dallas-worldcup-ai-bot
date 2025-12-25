@@ -2997,21 +2997,15 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-/* ===== Mobile Step: subtitle one-line + narrower (surgical, no desktop impact) ===== */
-@media (max-width: 950px){
+/* === Mobile-only hero subtitle: keep on one line, narrow footprint (surgical) === */
+@media (max-width: 640px){
   #heroBanner .heroSub{
-    /* keep subtitle on one line; reduce width so stars have room */
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    max-width: 320px !important;
-  }
-}
-@media (max-width: 520px){
-  #heroBanner .heroSub{
-    max-width: 240px !important;
-    font-size: clamp(10px, 2.8vw, 12px) !important;
-    line-height: 1.15 !important;
+    max-width: 56vw;           /* reserve space for players strip */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 10px;           /* slightly smaller on mobile */
+    letter-spacing: .02em;
   }
 }
 
