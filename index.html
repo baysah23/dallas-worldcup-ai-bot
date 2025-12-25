@@ -807,8 +807,8 @@
     @media (max-width:720px){
       .heroCaption .heroName{ font-size:12px; }
     }
-    .heroRoster{ display:none !important; }
-    .heroKicker, .heroTitle{ color: var(--gold); }
+/* (v9) heroRoster hidden rule removed */
+.heroKicker, .heroTitle{ color: var(--gold); }
 
 
 /* === STAR PLAYER IMAGE NORMALIZATION (Ronaldo reference) === */
@@ -3087,6 +3087,36 @@ body.kiosk-mode *::-webkit-scrollbar{
   .hero .stars, .hero .starRow, .hero .playersRow, .hero .heroStars{ z-index:1 !important; }
   .hero header, .hero .heroTop, .hero .heroHdr, .hero .heroHeader, .hero .heroMeta, .hero .countdown, .hero #countdown, .hero .bannerTitle{ z-index:10 !important; }
   .hero .heroOverlay, .hero::before{ z-index:2 !important; }
+}
+
+
+/* ===== Mobile banner refinement (v9) ===== */
+@media (max-width: 950px){
+  /* Smaller but readable */
+  #heroBanner .heroKicker{ font-size:7px !important; }
+  #heroBanner .heroTitle{ font-size:12px !important; }
+  #heroBanner .heroSub{ font-size:9px !important; }
+  #heroBanner .wcLabel{ font-size:7px !important; }
+  #heroBanner .wcNums b{ font-size:10px !important; }
+  #heroBanner .wcNums small{ font-size:7.5px !important; }
+
+  /* Lock layout: left text + right roster strip */
+  #heroBanner .heroOverlay{
+    display:grid !important;
+    grid-template-columns: 1fr 140px !important;
+    column-gap:10px !important;
+    padding: 10px 10px !important;
+  }
+  #heroBanner .heroRoster{
+    display:flex !important;
+    align-items:center !important;
+    justify-content:flex-end !important;
+    max-height: 170px !important;
+    height: 100% !important;
+    padding: 8px 6px !important;
+  }
+  #heroBanner .heroRosterTrack{ display:flex !important; gap:6px !important; }
+  #heroBanner .heroRoster img{ height:34px !important; width:auto !important; }
 }
 
 </style>
@@ -5689,6 +5719,47 @@ function apply(){
   });
 
   roster.appendChild(track);
+})();
+</script>
+
+
+<script>
+/* Hero roster from slides (v9): build roster from slide images if missing. */
+(function(){
+  const roster = document.getElementById('heroRoster');
+  const slides = document.getElementById('heroSlides');
+  if(!roster || !slides) return;
+
+  function build(){
+    if(roster.querySelector('img')) return true;
+    const imgs = Array.from(slides.querySelectorAll('img')).map(i=>i.getAttribute('src')).filter(Boolean);
+    if(!imgs.length) return false;
+
+    const track = document.createElement('div');
+    track.className = 'heroRosterTrack';
+
+    // Duplicate for smooth scroll
+    const list = imgs.concat(imgs);
+    list.forEach(src=>{
+      const img = document.createElement('img');
+      img.loading='lazy'; img.decoding='async';
+      img.alt='Star player';
+      img.src = src;
+      track.appendChild(img);
+    });
+
+    roster.innerHTML = '';
+    roster.appendChild(track);
+    return true;
+  }
+
+  // Try immediately, then a few times as slides mount.
+  if(build()) return;
+  let tries = 0;
+  const t = setInterval(()=>{
+    tries++;
+    if(build() || tries>30) clearInterval(t);
+  }, 150);
 })();
 </script>
 
