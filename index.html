@@ -2988,6 +2988,30 @@ body.kiosk-mode *::-webkit-scrollbar{
   #schedule{ overflow:auto !important; -webkit-overflow-scrolling:touch; max-height: calc(100vh - 240px) !important; }
   #pager, .pager{ position:sticky; bottom:0; z-index:5; }
 
+
+  /* Mobile hero sizing (v5): keep all banner elements visible + readable */
+  #heroBanner{
+    height:auto !important;
+    min-height: 220px !important;
+    padding: 12px 12px 10px !important;
+    overflow:hidden !important; /* keep FX contained */
+  }
+  #heroBanner .heroKicker{ font-size: 9px !important; line-height:1.15 !important; margin-bottom:4px !important; }
+  #heroBanner .heroTitle{ font-size: 16px !important; line-height:1.05 !important; letter-spacing:.06em !important; }
+  #heroBanner .heroSub{ font-size: 11px !important; line-height:1.2 !important; opacity:.92; }
+  #heroBanner .wcCount{ margin-top: 8px !important; padding: 8px 10px !important; border-radius: 14px !important; }
+  #heroBanner .wcLabel{ font-size: 9px !important; letter-spacing:.10em !important; }
+  #heroBanner .wcNums b{ font-size: 14px !important; }
+  #heroBanner .wcNums small{ font-size: 10px !important; }
+  /* Stars/roster row: keep it below header/countdown and prevent overlap */
+  #heroBanner .heroRoster{
+    margin-top: 10px !important;
+    max-height: 72px !important;
+    overflow:hidden !important;
+  }
+  /* Ensure FX never covers text */
+  #heroBanner .heroFX{ pointer-events:none; }
+
   /* Hero: keep stars behind header/countdown */
   .hero{ position:relative; overflow:hidden; }
   .hero *{ position:relative; }
