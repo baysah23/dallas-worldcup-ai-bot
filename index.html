@@ -3151,6 +3151,29 @@ body.kiosk-mode *::-webkit-scrollbar{
   .fanzone-right{ right: 16px !important; }
 }
 
+
+/* =========================
+   ULTRA-MOBILE HERO (SAFEST NEXT STEP)
+   For very small phones, reduce star strip further so nothing overlaps.
+   ========================= */
+@media (max-width: 520px){
+  .heroOverlay{ max-width: 52% !important; }
+  .heroTriWrap{
+    width: 46% !important;
+    right: 8px !important;
+    bottom: 46px !important;
+  }
+  .heroTri{ gap: 8px !important; }
+  .heroCard.heroCardTri{ height: 78px !important; }
+  .heroCard.heroCardTri .heroCardName{ font-size: 10px !important; }
+  .heroCardCountry{ font-size: 9px !important; }
+}
+@media (max-width: 380px){
+  .heroOverlay{ max-width: 56% !important; }
+  .heroTriWrap{ width: 42% !important; }
+  .heroCard.heroCardTri{ height: 72px !important; }
+}
+
 </style>
 </head>
 <body>
