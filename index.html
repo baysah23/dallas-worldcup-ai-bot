@@ -3553,45 +3553,57 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-/* =======================
-   MOBILE HERO FIX (portrait + Safari/Chrome)
-   - Remove transform scaling that blurs images in iOS compositing
-   - Keep player visible (shift right) and keep text readable
-   - Keep desktop untouched (scoped to small widths)
-   ======================= */
-@media (max-width: 520px){
-  /* prevent compositing blur */
+/* ===== MOBILE HERO BANNER V3 OVERRIDES (mobile-only; desktop untouched) ===== */
+@media (max-width: 720px){
+  /* Make the stadium background actually visible behind the player */
+  #heroBanner::before{
+    opacity: .58 !important;
+    filter: saturate(1.28) contrast(1.14) !important;
+  }
+
+  /* Ensure layering is consistent: bg -> slides/fx -> overlay/roster */
+  #heroBanner .heroSlides,
+  #heroBanner .heroFX{ z-index: 1 !important; }
+  #heroBanner .heroOverlay{ z-index: 4 !important; }
+
+  /* Lighter per-slide dark wash so the stadium isn't "gone" */
+  #heroBanner .heroSlide::before{
+    background: linear-gradient(90deg,
+      rgba(0,0,0,.60) 0%,
+      rgba(0,0,0,.32) 46%,
+      rgba(0,0,0,.10) 78%,
+      rgba(0,0,0,0) 100%) !important;
+  }
+
+  /* Keep player sharp + within frame (Safari can blur transformed/scaled assets) */
   #heroBanner .heroSlide{ transform: none !important; }
-  #heroBanner .heroSlide.active{ transform: none !important; }
-
-  /* push player to the right so overlay text never covers the face */
-  #heroBanner .heroSlide .heroImg{ justify-content:flex-end; padding-left:130px; padding-right:10px; }
   #heroBanner .heroSlide img{
-    max-width:78%;
-    max-height:98%;
-    height:auto;
-    width:auto;
-    transform: translateZ(0); /* helps Safari keep it crisp */
-    -webkit-transform: translateZ(0);
-    image-rendering: -webkit-optimize-contrast;
+    transform: none !important;
+    max-height: 100% !important;
+    will-change: auto !important;
+    backface-visibility: hidden;
   }
 
-  /* keep caption anchored and readable */
-  #heroBanner .heroCaption{
-    left:auto;
-    right:10px;
-    bottom:10px;
+  /* Lock the roster strip to the bottom so it never drifts off-screen */
+  #heroBanner .heroRoster{
+    position: absolute !important;
+    left: 10px !important;
+    right: 10px !important;
+    bottom: 10px !important;
+    margin-top: 0 !important;
+    z-index: 4 !important;
   }
-
-  /* tighten text block */
-  #heroBanner .heroOverlay{ padding:14px 12px; gap:5px; }
-  #heroBanner .heroTitle{ font-size:18px !important; }
-  #heroBanner .heroSub{ font-size:11px; max-width: 210px; }
-
-  /* countdown stays fully in-frame */
-  #heroBanner .wcCount{ margin-top:8px; padding:8px 10px; border-radius:14px; }
-  #heroBanner .wcDigits{ font-size:16px; letter-spacing:.08em; }
+  #heroBanner .heroRosterTrack{ animation-duration: 26s !important; }
 }
+
+@media (max-width: 420px){
+  /* Slightly more left lane for text on very small phones */
+  #heroBanner .heroSlide .heroImg{
+    padding-left: clamp(150px, 54vw, 270px) !important;
+  }
+}
+/* ===== END MOBILE HERO BANNER V3 OVERRIDES ===== */
+
 </style>
 </head>
 <body>
