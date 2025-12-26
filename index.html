@@ -70,8 +70,8 @@
     }
     @media (max-width: 950px){
   /* Mobile hero alignment */
-  .heroTitle{ font-size: clamp(12px, 1.8vw, 16px) !important; line-height: 1.1; letter-spacing:.04em; }
-  .heroSub{ font-size: clamp(10px, 1.4vw, 12px) !important; margin-top: 6px !important; line-height: 1.2; }
+  .heroTitle{ font-size: clamp(12px, 1.8vw, 16px) ; line-height: 1.1; letter-spacing:.04em; }
+  .heroSub{ font-size: clamp(10px, 1.4vw, 12px) ; margin-top: 6px ; line-height: 1.2; }
   /* Mobile countdown sizing */
   .countdown{ padding: 8px 10px !important; }
   .countdown .label{ font-size: 10px !important; }
@@ -808,7 +808,7 @@
     @media (max-width:720px){
       .heroCaption .heroName{ font-size:12px; }
     }
-    @media (min-width: 951px){ .heroRoster{ display:none !important; } }
+    @media (min-width: 951px){ .heroRoster{ display:none ; } }
     .heroKicker, .heroTitle{ color: var(--gold); }
 
 
@@ -846,7 +846,7 @@
 }
 
 /* === FORCE GOLD BANNER HEADER === */
-.hero-title,
+.heroTitle,
 .banner-title,
 .hero h1{
   color:#d4af37 !important;
@@ -859,7 +859,7 @@
 :root{ --gold:#d4af37; }
 
 /* Banner header gold */
-.heroKicker, .heroTitle, .heroTitleRow, .heroTitleWrap, .hero-title, .hero-title *{
+.heroKicker, .heroTitle, .heroTitleRow, .heroTitleWrap, .heroTitle, .heroTitle *{
   color: var(--gold) !important;
 }
 
@@ -995,7 +995,7 @@
 }
 
 /* Header typography refinement */
-.hero-title,
+.heroTitle,
 .heroTitle,
 .heroTitleRow h1,
 .hero h1{
@@ -1011,7 +1011,7 @@
   100% { background-position: 200% 0; }
 }
 
-.hero-title{
+.heroTitle{
   background-image: linear-gradient(
     110deg,
     rgba(212,175,55,.75) 40%,
@@ -1027,7 +1027,7 @@
 
 /* Respect reduced motion preferences */
 @media (prefers-reduced-motion: reduce){
-  .hero-title{
+  .heroTitle{
     animation: none;
     background-image: none;
     color: var(--gold);
@@ -1040,7 +1040,7 @@
 /* ========================= */
 
 /* 1) Tiny accent underline under hero header (gold -> transparent fade) */
-.hero-title::after{
+.heroTitle::after{
   content:"";
   display:block;
   height:2px;
@@ -1053,14 +1053,14 @@
 
 /* 2) Mobile-only header spacing tweak */
 @media (max-width: 520px){
-  .hero-title{
+  .heroTitle{
     top:14px !important;
     font-size:18px !important;
     letter-spacing:.10em !important;
     padding:0 14px;
     text-align:center;
   }
-  .hero-title::after{
+  .heroTitle::after{
     margin-top:8px;
     width:min(420px, 86vw);
   }
@@ -1159,7 +1159,7 @@ body{
   font-family: var(--sport-font);
   letter-spacing: .2px;
 }
-h1,h2,h3,.title,.hero-title{ font-family: var(--sport-font-alt); letter-spacing:.3px; }
+h1,h2,h3,.title,.heroTitle{ font-family: var(--sport-font-alt); letter-spacing:.3px; }
 
 /* Phase background rotation (subtle) */
 body.phase-group{ background: var(--phaseA); }
@@ -1945,9 +1945,9 @@ header{ flex:0 0 auto; }
   height: 180px !important;
   margin: 12px 12px 10px 12px !important;
 }
-.compact .hero{ height: 150px !important; }
+.compact .hero{ height: 150px ; }
 @media (max-width: 720px){
-  .hero{ height: 190px !important; margin: 10px 10px 8px 10px !important; }
+  .hero{ height: 190px ; margin: 10px 10px 8px 10px ; }
 }
 
 /* Main grid consumes remaining height */
@@ -2018,13 +2018,13 @@ header{ flex:0 0 auto; }
    (fixes grid row sizing so sidebar gets real height)
    ======================= */
 .grid{
-  grid-template-rows: auto minmax(0, 1fr) !important; /* hero row + content row */
+  grid-template-rows: auto minmax(0, 1fr) ; /* hero row + content row */
   align-items: stretch !important;
 }
 .grid > :not(.hero){
   min-height: 0 !important;
 }
-.hero{ grid-row: 1 !important; }
+.hero{ grid-row: 1 ; }
 .leftcol{ grid-row: 2 !important; min-height:0 !important; }
 .grid > .card{ grid-row: 2 !important; min-height:0 !important; height:100% !important; }
 
@@ -2874,7 +2874,7 @@ body.kiosk-mode *::-webkit-scrollbar{
   #schedule{
     overflow: auto !important;
     -webkit-overflow-scrolling: touch;
-    max-height: calc(100vh - 260px) !important; /* hero + headers + bottom nav */
+    max-height: calc(100vh - 260px) ; /* hero + headers + bottom nav */
     padding-bottom: 18px !important;
   }
   #pager{
@@ -3029,9 +3029,9 @@ body.kiosk-mode *::-webkit-scrollbar{
   /* Hero: keep stars behind header/countdown */
   .hero{ position:relative; overflow:hidden; }
   /* MOBILE-SAFE: removed broad `.hero * { position:relative; }` which broke hero layers */
-  .hero .stars, .hero .starRow, .hero .playersRow, .hero .heroStars{ z-index:1 !important; }
-  .hero header, .hero .heroTop, .hero .heroHdr, .hero .heroHeader, .hero .heroMeta, .hero .countdown, .hero #countdown, .hero .bannerTitle{ z-index:10 !important; }
-  .hero .heroOverlay, .hero::before{ z-index:2 !important; }
+  .hero .stars, .hero .starRow, .hero .playersRow, .hero .heroStars{ z-index:1 ; }
+  .hero header, .hero .heroTop, .hero .heroHdr, .hero .heroHeader, .hero .heroMeta, .hero .countdown, .hero #countdown, .hero .bannerTitle{ z-index:10 ; }
+  .hero .heroOverlay, .hero::before{ z-index:2 ; }
 }
 
 
@@ -3069,8 +3069,8 @@ body.kiosk-mode *::-webkit-scrollbar{
     padding: 12px 10px 12px 12px !important;
   }
 
-  #heroBanner .heroKicker{ font-size: 9px !important; letter-spacing:.12em !important; }
-  #heroBanner .heroTitle{ font-size: 13px !important; letter-spacing:.04em !important; }
+  #heroBanner .heroKicker{ font-size: 9px ; letter-spacing:.12em ; }
+  #heroBanner .heroTitle{ font-size: 13px ; letter-spacing:.04em ; }
   #heroBanner .heroSub{
     font-size: 9.5px !important;
     max-width: 52vw !important;
@@ -3098,10 +3098,10 @@ body.kiosk-mode *::-webkit-scrollbar{
     bottom: 12px !important;
     width: min(420px, 46%) !important;
   }
-  #heroBanner .heroTri{ gap: 10px !important; }
-  #heroBanner .heroCard.heroCardTri{ height: 92px !important; }
-  #heroBanner .heroCardName{ font-size: 10px !important; }
-  #heroBanner .heroCardCountry{ font-size: 9px !important; }
+  #heroBanner .heroTri{ gap: 10px ; }
+  #heroBanner .heroCard.heroCardTri{ height: 92px ; }
+  #heroBanner .heroCardName{ font-size: 10px ; }
+  #heroBanner .heroCardCountry{ font-size: 9px ; }
 }
 
 
@@ -3109,7 +3109,7 @@ body.kiosk-mode *::-webkit-scrollbar{
    MOBILE ROSTER STABILIZE (SAFE)
    ========================= */
 @media (max-width: 950px){
-  .heroRoster{ display:block !important; }
+  .heroRoster{ display:block ; }
   .heroRosterTrack{
     animation: none !important;
     overflow-x: auto !important;
@@ -3147,7 +3147,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 */
 @media (max-width: 720px){
   /* Make the hero slightly taller for safe stacking */
-  .hero{ height: 168px !important; margin:10px !important; border-radius:16px !important; }
+  .hero{ height: 168px ; margin:10px ; border-radius:16px ; }
 
   /* Reserve left "text lane" by pushing the image container to the right */
   .heroSlide .heroImg{
@@ -3175,11 +3175,11 @@ body.kiosk-mode *::-webkit-scrollbar{
     pointer-events:none;
   }
   /* Ensure overlay sits above scrim */
-  #heroBanner .heroOverlay{ z-index:3 !important; }
+  #heroBanner .heroOverlay{ z-index:3 ; }
 
   /* Reduce text sizes + keep single line */
-  #heroBanner .heroKicker{ font-size: 9px !important; letter-spacing:.14em !important; }
-  #heroBanner .heroTitle{ font-size: 13px !important; letter-spacing:.05em !important; line-height:1.12 !important; }
+  #heroBanner .heroKicker{ font-size: 9px ; letter-spacing:.14em ; }
+  #heroBanner .heroTitle{ font-size: 13px ; letter-spacing:.05em ; line-height:1.12 ; }
   #heroBanner .heroSub{
     font-size: 9.5px !important;
     white-space: nowrap !important;
@@ -3189,9 +3189,9 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 
   /* Countdown tighter so it doesn't steal space */
-  #heroBanner .wcCount{ margin-top:6px !important; padding:8px 10px !important; width: fit-content !important; max-width: 58vw !important; }
-  #heroBanner .wcLabel{ font-size: 9px !important; }
-  #heroBanner .wcNums b{ font-size: 14px !important; }
+  #heroBanner .wcCount{ margin-top:6px ; padding:8px 10px ; width: fit-content ; max-width: 58vw ; }
+  #heroBanner .wcLabel{ font-size: 9px ; }
+  #heroBanner .wcNums b{ font-size: 14px ; }
 
   /* If roster exists, keep it as a subtle strip and avoid covering text lane */
   #heroBanner .heroRoster{
@@ -3203,12 +3203,12 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 /* Slightly different tuning for very small phones */
 @media (max-width: 420px){
-  .hero{ height: 162px !important; }
+  .hero{ height: 162px ; }
   .heroSlide .heroImg{
     padding-left: clamp(140px, 48vw, 260px) !important;
   }
-  #heroBanner .heroTitle{ font-size: 12.5px !important; }
-  #heroBanner .wcNums b{ font-size: 13px !important; }
+  #heroBanner .heroTitle{ font-size: 12.5px ; }
+  #heroBanner .wcNums b{ font-size: 13px ; }
 }
 
 
@@ -3245,20 +3245,20 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 
   /* Keep 3-up cards readable & non-blurry */
-  .heroTri{ gap: 10px !important; }
-  .heroCard.heroCardTri{ height: 98px !important; }
-  .heroCard.heroCardTri .heroCardName{ font-size: 11px !important; }
+  .heroTri{ gap: 10px ; }
+  .heroCard.heroCardTri{ height: 98px ; }
+  .heroCard.heroCardTri .heroCardName{ font-size: 11px ; }
 
   /* Ensure hero stays contained */
-  .hero{ overflow: hidden !important; }
+  .hero{ overflow: hidden ; }
 }
 
 /* Extra-small phones */
 @media (max-width: 420px){
-  .heroOverlay{ width: 56% !important; }
-  .heroTriWrap{ width: 44% !important; max-width: 250px !important; }
-  .heroCard.heroCardTri{ height: 92px !important; }
-  .heroTri{ gap: 8px !important; }
+  .heroOverlay{ width: 56% ; }
+  .heroTriWrap{ width: 44% ; max-width: 250px ; }
+  .heroCard.heroCardTri{ height: 92px ; }
+  .heroTri{ gap: 8px ; }
 }
 
 
@@ -3271,7 +3271,7 @@ body.kiosk-mode *::-webkit-scrollbar{
   margin: 12px 10px 10px 10px !important;
   border-radius: 16px !important;
 }
-.heroOverlay{ padding: 16px 14px !important; z-index: 6 !important; }
+.heroOverlay{ padding: 16px 14px ; z-index: 6 ; }
 .heroTitle{
   font-size: 16px !important;
   line-height: 1.12 !important;
@@ -3280,7 +3280,7 @@ body.kiosk-mode *::-webkit-scrollbar{
   overflow: visible !important;
   text-overflow: clip !important;
 }
-..heroSub{ font-size: 12px !important; line-height:1.2 !important; max-width:520px !important; }
+..heroSub{ font-size: 12px ; line-height:1.2 ; max-width:520px ; }
 .heroTriWrap{
   right: 8px !important;
   width: 44% !important;
@@ -3289,20 +3289,20 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 @media (max-width: 420px){
-  .hero{ height: 162px !important; margin: 10px !important; }
-  .heroOverlay{ padding: 14px 12px !important; }
-  .heroTitle{ font-size: 14px !important; letter-spacing: .06em !important; }
-  .heroSub{ font-size: 11px !important; }
-  .heroTriWrap{ width: 48% !important; max-width: 260px !important; right: 6px !important; }
+  .hero{ height: 162px ; margin: 10px ; }
+  .heroOverlay{ padding: 14px 12px ; }
+  .heroTitle{ font-size: 14px ; letter-spacing: .06em ; }
+  .heroSub{ font-size: 11px ; }
+  .heroTriWrap{ width: 48% ; max-width: 260px ; right: 6px ; }
 }
 
 @media (min-width: 521px){
-  .hero{ height: 190px !important; }
-  .heroTitle{ font-size: clamp(16px, 2.2vw, 20px) !important; }
+  .hero{ height: 190px ; }
+  .heroTitle{ font-size: clamp(16px, 2.2vw, 20px) ; }
 }
 
 @media (min-width: 721px){
-  .hero{ height: 220px !important; margin: 14px 12px 12px 12px !important; border-radius: 18px !important; }
+  .hero{ height: 220px ; margin: 14px 12px 12px 12px ; border-radius: 18px ; }
   .heroTitle{
     white-space: nowrap !important;
     overflow: hidden !important;
@@ -3311,7 +3311,6 @@ body.kiosk-mode *::-webkit-scrollbar{
     letter-spacing: .10em !important;
   }
 }
-
 </style>
 </head>
 <body>
