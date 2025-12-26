@@ -3552,6 +3552,46 @@ body.kiosk-mode *::-webkit-scrollbar{
   #heroBanner .heroCaption .heroName{ font-size: 11.5px !important; }
 }
 
+
+/* =======================
+   MOBILE HERO FIX (portrait + Safari/Chrome)
+   - Remove transform scaling that blurs images in iOS compositing
+   - Keep player visible (shift right) and keep text readable
+   - Keep desktop untouched (scoped to small widths)
+   ======================= */
+@media (max-width: 520px){
+  /* prevent compositing blur */
+  #heroBanner .heroSlide{ transform: none !important; }
+  #heroBanner .heroSlide.active{ transform: none !important; }
+
+  /* push player to the right so overlay text never covers the face */
+  #heroBanner .heroSlide .heroImg{ justify-content:flex-end; padding-left:130px; padding-right:10px; }
+  #heroBanner .heroSlide img{
+    max-width:78%;
+    max-height:98%;
+    height:auto;
+    width:auto;
+    transform: translateZ(0); /* helps Safari keep it crisp */
+    -webkit-transform: translateZ(0);
+    image-rendering: -webkit-optimize-contrast;
+  }
+
+  /* keep caption anchored and readable */
+  #heroBanner .heroCaption{
+    left:auto;
+    right:10px;
+    bottom:10px;
+  }
+
+  /* tighten text block */
+  #heroBanner .heroOverlay{ padding:14px 12px; gap:5px; }
+  #heroBanner .heroTitle{ font-size:18px !important; }
+  #heroBanner .heroSub{ font-size:11px; max-width: 210px; }
+
+  /* countdown stays fully in-frame */
+  #heroBanner .wcCount{ margin-top:8px; padding:8px 10px; border-radius:14px; }
+  #heroBanner .wcDigits{ font-size:16px; letter-spacing:.08em; }
+}
 </style>
 </head>
 <body>
@@ -4190,46 +4230,6 @@ const heroPlayers = [
   },
 ];
 
-
-function buildHeroRoster(){
-  const roster = document.getElementById("heroRoster");
-  if(!roster) return;
-
-  // Build a stable, mobile-friendly strip of mini cards (UI-only)
-  roster.innerHTML = "";
-  const track = document.createElement("div");
-  track.className = "heroRosterTrack";
-
-  heroPlayers.forEach((p) => {
-    const card = document.createElement("div");
-    card.className = "heroMiniCard";
-    card.setAttribute("aria-label", p.name);
-
-    const imgWrap = document.createElement("div");
-    imgWrap.className = "heroMiniImg";
-    const img = document.createElement("img");
-    img.loading = "lazy";
-    img.decoding = "async";
-    img.alt = p.name;
-    img.src = p.img;
-    imgWrap.appendChild(img);
-
-    const meta = document.createElement("div");
-    meta.className = "heroMiniMeta";
-    meta.innerHTML = `
-      <div class="heroMiniName">${p.name}</div>
-      <div class="heroMiniCountry">${p.country || ""}</div>
-    `;
-
-    card.appendChild(imgWrap);
-    card.appendChild(meta);
-    track.appendChild(card);
-  });
-
-  roster.appendChild(track);
-}
-
-
 function buildHero(){
   const hero = document.getElementById("heroBanner");
   const slides = document.getElementById("heroSlides");
@@ -4272,8 +4272,6 @@ function buildHero(){
   // pause on hover (banner only)
   hero.addEventListener("mouseenter", () => { _heroPaused = true; });
   hero.addEventListener("mouseleave", () => { _heroPaused = false; });
-
-  buildHeroRoster();
 
   restartHero();
 }
