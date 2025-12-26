@@ -3118,6 +3118,87 @@ body.kiosk-mode *::-webkit-scrollbar{
   #heroBanner .heroRoster{ margin-top: 8px !important; }
 }
 
+/* ===== MOBILE HERO FIX (banner) =====
+   Root cause: hero has fixed height + many overlay elements (title/sub/countdown/roster) + extra hero layers (tri cards/marquees)
+   On small screens that content exceeds the fixed height and gets clipped by .hero{overflow:hidden}, while extra layers can overlap.
+   These overrides only apply on mobile and do not change desktop. */
+@media (max-width: 720px){
+  /* Give the banner enough vertical room for text + countdown + roster (prevents clipping) */
+  #heroBanner.hero{
+    height: 205px !important;
+    margin: 10px !important;
+    border-radius: 14px !important;
+  }
+
+  /* Reduce overlay padding so we reclaim vertical space */
+  #heroBanner .heroOverlay{
+    padding: 12px 12px !important;
+    gap: 6px !important;
+  }
+
+  /* Tighten headline stack but keep single-line (no wrap) */
+  #heroBanner .heroKicker{
+    font-size: 10px !important;
+    letter-spacing: .14em !important;
+  }
+  #heroBanner .heroTitle{
+    font-size: clamp(14px, 4.4vw, 18px) !important;
+    line-height: 1.05 !important;
+    white-space: nowrap !important;
+  }
+  #heroBanner .heroSub{
+    font-size: 11px !important;
+    line-height: 1.15 !important;
+    max-width: 100% !important;
+  }
+
+  /* Countdown: make it compact so it doesn't push content off-canvas */
+  #heroBanner .wcCount{
+    margin-top: 2px !important;
+    padding: 8px 10px !important;
+    border-radius: 12px !important;
+    background: rgba(0,0,0,.22) !important;
+    border: 1px solid rgba(255,255,255,.12) !important;
+  }
+  #heroBanner .wcLabel{
+    font-size: 10px !important;
+    letter-spacing: .08em !important;
+    opacity: .9 !important;
+  }
+  #heroBanner .wcNums{
+    gap: 10px !important;
+    font-size: 12px !important;
+  }
+  #heroBanner .wcNums b{
+    font-size: 13px !important;
+  }
+
+  /* Roster: keep visible but smaller and prevent it from forcing extra height */
+  #heroBanner .heroRoster{
+    margin-top: 8px !important;
+    padding: 0 !important;
+    border-radius: 999px !important;
+  }
+  #heroBanner .heroRosterTrack{
+    padding: 6px 8px !important;
+    gap: 6px !important;
+  }
+  #heroBanner .heroChip{
+    font-size: 10px !important;
+    padding: 3px 7px !important;
+  }
+
+  /* IMPORTANT: Disable the extra hero “marquee” + “3-up tri cards” layers on mobile.
+     They can overlap the text on narrow screens even with pointer-events:none. */
+  #heroBanner .heroTriWrap,
+  #heroBanner .heroMarquee,
+  #heroBanner .heroMarqueeA,
+  #heroBanner .heroMarqueeB{
+    display: none !important;
+  }
+}
+/* ===== END MOBILE HERO FIX ===== */
+
 /* ===== MOBILE FINAL SAFETY OVERRIDES (desktop unchanged) ===== */
 @media (max-width: 950px){
   /* Never let global “one-page lock” rules break mobile scrolling */
