@@ -4190,6 +4190,46 @@ const heroPlayers = [
   },
 ];
 
+
+function buildHeroRoster(){
+  const roster = document.getElementById("heroRoster");
+  if(!roster) return;
+
+  // Build a stable, mobile-friendly strip of mini cards (UI-only)
+  roster.innerHTML = "";
+  const track = document.createElement("div");
+  track.className = "heroRosterTrack";
+
+  heroPlayers.forEach((p) => {
+    const card = document.createElement("div");
+    card.className = "heroMiniCard";
+    card.setAttribute("aria-label", p.name);
+
+    const imgWrap = document.createElement("div");
+    imgWrap.className = "heroMiniImg";
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.alt = p.name;
+    img.src = p.img;
+    imgWrap.appendChild(img);
+
+    const meta = document.createElement("div");
+    meta.className = "heroMiniMeta";
+    meta.innerHTML = `
+      <div class="heroMiniName">${p.name}</div>
+      <div class="heroMiniCountry">${p.country || ""}</div>
+    `;
+
+    card.appendChild(imgWrap);
+    card.appendChild(meta);
+    track.appendChild(card);
+  });
+
+  roster.appendChild(track);
+}
+
+
 function buildHero(){
   const hero = document.getElementById("heroBanner");
   const slides = document.getElementById("heroSlides");
@@ -4232,6 +4272,8 @@ function buildHero(){
   // pause on hover (banner only)
   hero.addEventListener("mouseenter", () => { _heroPaused = true; });
   hero.addEventListener("mouseleave", () => { _heroPaused = false; });
+
+  buildHeroRoster();
 
   restartHero();
 }
