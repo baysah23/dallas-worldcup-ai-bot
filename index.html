@@ -3026,18 +3026,6 @@ body.kiosk-mode *::-webkit-scrollbar{
   #schedule{ overflow:auto !important; -webkit-overflow-scrolling:touch; max-height: calc(100vh - 240px) !important; }
   #pager, .pager{ position:sticky; bottom:0; z-index:5; }
 
-  /* Hero: keep stars behind header/countdown */
-  .hero{ position:relative; overflow:hidden; }
-  /* MOBILE-SAFE: removed broad `.hero * { position:relative; }` which broke hero layers */
-  .hero .stars, .hero .starRow, .hero .playersRow, .hero .heroStars{ z-index:1 !important; }
-  .hero header, .hero .heroTop, .hero .heroHdr, .hero .heroHeader, .hero .heroMeta, .hero .countdown, .hero #countdown, .hero .bannerTitle{ z-index:10 !important; }
-  .hero .heroOverlay, .hero::before{ z-index:2 !important; }
-}
-
-
-/* --- STEP 1B HOTFIX (mobile only): ensure hero header/sub/countdown are visible above slides/FX --- */
-@media (max-width: 950px){
-  #heroBanner{ position:relative; }
   #heroBanner .heroSlides,
   #heroBanner .heroFX{
     position:absolute !important;
@@ -3169,54 +3157,6 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-/* =========================
-   MOBILE HERO BANNER FIX (surgical)
-   - Prevent text/player overlap by splitting hero into left (text) + right (roster/cards)
-   - Stabilize sizing without touching desktop
-   ========================= */
-@media (max-width: 720px){
-  /* Split hero into two non-overlapping zones */
-  .heroOverlay{
-    inset: 0 auto 0 0 !important;   /* top right bottom left */
-    width: 52% !important;         /* text zone */
-    padding: 14px 10px !important;
-  }
-  .heroTriWrap{
-    top: 10px !important;
-    bottom: 10px !important;
-    right: 10px !important;
-    left: auto !important;
-    width: 48% !important;         /* card zone */
-    max-width: 320px !important;
-  }
-
-  /* Allow title/subtitle to wrap on mobile */
-  .heroTitle{
-    white-space: normal !important;
-    overflow: visible !important;
-    text-overflow: clip !important;
-    line-height: 1.08 !important;
-  }
-  .heroSub{
-    max-width: 100% !important;
-  }
-
-  /* Keep 3-up cards readable & non-blurry */
-  .heroTri{ gap: 10px !important; }
-  .heroCard.heroCardTri{ height: 98px !important; }
-  .heroCard.heroCardTri .heroCardName{ font-size: 11px !important; }
-
-  /* Ensure hero stays contained */
-  .hero{ overflow: hidden !important; }
-}
-
-/* Extra-small phones */
-@media (max-width: 420px){
-  .heroOverlay{ width: 56% !important; }
-  .heroTriWrap{ width: 44% !important; max-width: 250px !important; }
-  .heroCard.heroCardTri{ height: 92px !important; }
-  .heroTri{ gap: 8px !important; }
-}
 
 
 /* =========================================================
@@ -3259,6 +3199,23 @@ body.kiosk-mode *::-webkit-scrollbar{
   max-width: 320px !important;
   z-index: 7 !important;      /* above overlay */
   pointer-events: none !important; /* never blocks taps on mobile */
+}
+
+/* Layering guarantee (mobile): overlay + roster above slides/FX */
+@media (max-width: 950px){
+  #heroBanner{ position: relative !important; }
+  #heroBanner .heroSlides,
+  #heroBanner .heroFX{
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 1 !important;
+  }
+  #heroBanner .heroOverlay{
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 5 !important;
+  }
+  #heroBanner .heroTriWrap{ z-index: 6 !important; }
 }
 
 /* IMPORTANT: reserve right space so text never sits under the star strip */
