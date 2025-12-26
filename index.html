@@ -3103,77 +3103,112 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-/* === MOBILE HERO BANNER ROOT FIX (v5) ===
-   Goals:
-   - Keep player image to the RIGHT on mobile so it never sits behind text
-   - Add left scrim for guaranteed text legibility (Chrome + Safari)
-   - Reduce mobile banner text sizes to prevent wrapping/overlap
-   - Boost player image clarity (less dull)
-*/
+/* =========================
+   MOBILE HERO BANNER FIX (v6)
+   - Prevent text/player overlap
+   - Sharpen player images + brighten
+   - Put names directly under mini player tiles
+   - Keep desktop unchanged
+========================= */
 @media (max-width: 720px){
-  /* Make the hero slightly taller for safe stacking */
-  .hero{ height: 168px !important; margin:10px !important; border-radius:16px !important; }
+  /* Give the hero a bit more vertical breathing room on phones */
+  #heroBanner.hero{ height: 176px !important; }
 
-  /* Reserve left "text lane" by pushing the image container to the right */
-  .heroSlide .heroImg{
-    justify-content: flex-end !important;
-    padding: 8px 10px 8px clamp(150px, 46vw, 290px) !important; /* left padding creates a no-image zone */
+  /* Make overlay a 2-column grid: left text, right roster */
+  #heroBanner .heroOverlay{
+    display:grid !important;
+    grid-template-columns: 1fr 118px;
+    grid-template-rows: auto auto auto auto 1fr;
+    gap:6px 10px;
+    align-items:start;
+    padding:12px 12px !important;
   }
-  .heroSlide img{
-    max-width: 100% !important;
-    max-height: 110% !important;
-    opacity: 1 !important;
-    filter: drop-shadow(0 16px 28px rgba(0,0,0,.50)) saturate(1.18) contrast(1.18) !important;
-    transform: translateX(2%) !important;
+  #heroBanner .heroKicker,
+  #heroBanner .heroTitle,
+  #heroBanner .heroSub,
+  #heroBanner #wcCount{
+    grid-column: 1 / 2;
+    max-width: 100%;
+  }
+  /* Smaller, no-wrap titles */
+  #heroBanner .heroKicker{ font-size:10px !important; letter-spacing:.16em !important; }
+  #heroBanner .heroTitle{ font-size:14px !important; line-height:1.05 !important; white-space:nowrap !important; }
+  #heroBanner .heroSub{ font-size:10px !important; opacity:.92 !important; white-space:nowrap !important; overflow:hidden !important; text-overflow:ellipsis !important; }
+
+  /* Compact countdown row */
+  #heroBanner #wcCount{ padding:6px 8px !important; border-radius:12px !important; }
+  #heroBanner .wcLabel{ font-size:9px !important; letter-spacing:.14em !important; }
+  #heroBanner .wcNums b{ font-size:14px !important; }
+  #heroBanner .wcNums small{ font-size:9px !important; }
+
+  /* Hide the big caption inside the slide; we'll show names under roster tiles instead */
+  #heroBanner .heroCaption{ display:none !important; }
+
+  /* Right-side roster strip */
+  #heroBanner #heroRoster{
+    grid-column: 2 / 3;
+    grid-row: 1 / -1;
+    align-self:stretch;
+    justify-self:end;
+    margin-top:0 !important;
+    overflow:hidden !important;
+    border-radius:16px !important;
+    background: rgba(0,0,0,.22) !important;
+    border: 1px solid rgba(255,255,255,.14) !important;
+  }
+  #heroBanner .heroRosterTrack{
+    display:flex !important;
+    flex-direction:column !important;
+    gap:8px !important;
+    padding:8px 8px !important;
+    white-space:normal !important;
+    animation: rosterScrollY 16s linear infinite !important;
+  }
+  @keyframes rosterScrollY{
+    0%{ transform: translateY(0); }
+    100%{ transform: translateY(-50%); }
+  }
+  #heroBanner .heroMini{
+    display:grid;
+    grid-template-rows: 44px auto;
+    justify-items:center;
+    gap:4px;
+    width: 96px;
+  }
+  #heroBanner .heroMini img{
+    width:44px; height:44px;
+    border-radius:999px;
+    object-fit:cover;
+    border:1px solid rgba(255,255,255,.18);
+    box-shadow: 0 10px 18px rgba(0,0,0,.35);
+    filter: saturate(1.18) contrast(1.08) brightness(1.03);
+    transform: translateZ(0);
+  }
+  #heroBanner .heroMini .heroMiniName{
+    font-size:9px;
+    font-weight:900;
+    line-height:1.05;
+    text-align:center;
+    max-width: 96px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    opacity:.95;
   }
 
-  /* Add a dedicated scrim ABOVE slides but BELOW text */
-  #heroBanner::before{
-    content:"";
-    position:absolute; inset:0;
-    z-index:2;
-    background: linear-gradient(90deg,
-      rgba(4,10,22,.92) 0%,
-      rgba(4,10,22,.80) 35%,
-      rgba(4,10,22,.40) 62%,
-      rgba(4,10,22,0) 85%);
-    pointer-events:none;
-  }
-  /* Ensure overlay sits above scrim */
-  #heroBanner .heroOverlay{ z-index:3 !important; }
-
-  /* Reduce text sizes + keep single line */
-  #heroBanner .heroKicker{ font-size: 9px !important; letter-spacing:.14em !important; }
-  #heroBanner .heroTitle{ font-size: 13px !important; letter-spacing:.05em !important; line-height:1.12 !important; }
-  #heroBanner .heroSub{
-    font-size: 9.5px !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    max-width: 56vw !important;
+  /* Make the main slide player pop a bit more (less dull) */
+  #heroBanner .heroSlide img{
+    max-height: 92% !important;
+    max-width: 86% !important;
+    filter: drop-shadow(0 14px 22px rgba(0,0,0,.45)) saturate(1.14) contrast(1.08) brightness(1.03) !important;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
   }
 
-  /* Countdown tighter so it doesn't steal space */
-  #heroBanner .wcCount{ margin-top:6px !important; padding:8px 10px !important; width: fit-content !important; max-width: 58vw !important; }
-  #heroBanner .wcLabel{ font-size: 9px !important; }
-  #heroBanner .wcNums b{ font-size: 14px !important; }
-
-  /* If roster exists, keep it as a subtle strip and avoid covering text lane */
-  #heroBanner .heroRoster{
-    margin-top:8px !important;
-    max-width: 58vw !important;
-    opacity: .92 !important;
-  }
-}
-
-/* Slightly different tuning for very small phones */
-@media (max-width: 420px){
-  .hero{ height: 162px !important; }
-  .heroSlide .heroImg{
-    padding-left: clamp(140px, 48vw, 260px) !important;
-  }
-  #heroBanner .heroTitle{ font-size: 12.5px !important; }
-  #heroBanner .wcNums b{ font-size: 13px !important; }
+  /* Ensure overlay stays above slides everywhere */
+  #heroBanner .heroOverlay{ z-index: 5 !important; }
+  #heroBanner .heroFX{ z-index: 4 !important; }
+  #heroBanner .heroSlides{ z-index: 1 !important; }
 }
 
 </style>
@@ -3857,7 +3892,53 @@ function buildHero(){
   hero.addEventListener("mouseenter", () => { _heroPaused = true; });
   hero.addEventListener("mouseleave", () => { _heroPaused = false; });
 
+  buildHeroRoster();
   restartHero();
+}
+
+
+// -----------------------
+// MOBILE HERO ROSTER (UI-only)
+// - Vertical mini tiles on the right (mobile only)
+// - Names directly under each mini portrait
+// -----------------------
+function buildHeroRoster(){
+  const roster = document.getElementById("heroRoster");
+  if(!roster) return;
+
+  // Only render on phones; keep desktop behavior untouched
+  if (window.matchMedia && !window.matchMedia("(max-width: 720px)").matches){
+    roster.innerHTML = "";
+    return;
+  }
+
+  // Build list (duplicate once for seamless vertical scroll)
+  const items = [...heroPlayers, ...heroPlayers];
+
+  const track = document.createElement("div");
+  track.className = "heroRosterTrack";
+
+  items.forEach(p => {
+    const tile = document.createElement("div");
+    tile.className = "heroMini";
+
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.decoding = "async";
+    img.src = p.img;
+    img.alt = p.name;
+
+    const nm = document.createElement("div");
+    nm.className = "heroMiniName";
+    nm.textContent = p.name;
+
+    tile.appendChild(img);
+    tile.appendChild(nm);
+    track.appendChild(tile);
+  });
+
+  roster.innerHTML = "";
+  roster.appendChild(track);
 }
 
 function showHero(i){
@@ -4511,6 +4592,9 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 
   // Init cinematic hero (UI-only)
   buildHero();
+  // Keep the mobile roster in sync with rotations/orientation changes
+  window.addEventListener('resize', () => { try{ buildHeroRoster(); }catch(e){} }, {passive:true});
+  window.addEventListener('orientationchange', () => { try{ buildHeroRoster(); }catch(e){} }, {passive:true});
 
   // Load sidebar data
   await loadSchedule();
