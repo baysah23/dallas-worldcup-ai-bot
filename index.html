@@ -3061,49 +3061,6 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 
 
-/* === MOBILE STEP: prevent stars overlapping text (mobile-only, safe) === */
-@media (max-width: 720px){
-  /* Reserve left space for text, right space for stars */
-  #heroBanner .heroOverlay{
-    max-width: 52vw !important;
-    padding: 12px 10px 12px 12px !important;
-  }
-
-  #heroBanner .heroKicker{ font-size: 9px !important; letter-spacing:.12em !important; }
-  #heroBanner .heroTitle{ font-size: 13px !important; letter-spacing:.04em !important; }
-  #heroBanner .heroSub{
-    font-size: 9.5px !important;
-    max-width: 52vw !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-  }
-
-  /* Keep countdown compact and single-line label */
-  #heroBanner #wcCount .wcLabel,
-  #heroBanner .countdown .label{
-    font-size: 9px !important;
-    white-space: nowrap !important;
-  }
-  #heroBanner #wcCount .wcNums,
-  #heroBanner .countdown .nums{
-    font-size: 10.5px !important;
-    gap: 8px !important;
-  }
-
-  /* Star strip stays on the right and doesn't intrude */
-  #heroBanner .heroTriWrap{
-    right: 10px !important;
-    top: 12px !important;
-    bottom: 12px !important;
-    width: min(420px, 46%) !important;
-  }
-  #heroBanner .heroTri{ gap: 10px !important; }
-  #heroBanner .heroCard.heroCardTri{ height: 92px !important; }
-  #heroBanner .heroCardName{ font-size: 10px !important; }
-  #heroBanner .heroCardCountry{ font-size: 9px !important; }
-}
-
 
 /* =========================
    MOBILE ROSTER STABILIZE (SAFE)
@@ -3262,72 +3219,20 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-/* =======================
-   PHASE 2 — HERO FINAL OVERRIDES
-   These sit at the END of the stylesheet to defeat older !important rules.
-   ======================= */
-.hero{
-  height: 168px !important;
-  margin: 12px 10px 10px 10px !important;
-  border-radius: 16px !important;
-}
-.heroOverlay{ padding: 16px 14px !important; z-index: 6 !important; }
-.heroTitle{
-  font-size: 16px !important;
-  line-height: 1.12 !important;
-  letter-spacing: .08em !important;
-  white-space: normal !important; /* wrap on mobile */
-  overflow: visible !important;
-  text-overflow: clip !important;
-}
-..heroSub{ font-size: 12px !important; line-height:1.2 !important; max-width:520px !important; }
-.heroTriWrap{
-  right: 8px !important;
-  width: 44% !important;
-  max-width: 320px !important;
-  min-width: 0 !important;
-}
-
-@media (max-width: 420px){
-  .hero{ height: 162px !important; margin: 10px !important; }
-  .heroOverlay{ padding: 14px 12px !important; }
-  .heroTitle{ font-size: 14px !important; letter-spacing: .06em !important; }
-  .heroSub{ font-size: 11px !important; }
-  .heroTriWrap{ width: 48% !important; max-width: 260px !important; right: 6px !important; }
-}
-
-@media (min-width: 521px){
-  .hero{ height: 190px !important; }
-  .heroTitle{ font-size: clamp(16px, 2.2vw, 20px) !important; }
-}
-
-@media (min-width: 721px){
-  .hero{ height: 220px !important; margin: 14px 12px 12px 12px !important; border-radius: 18px !important; }
-  .heroTitle{
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    font-size: clamp(16px, 2.0vw, 21px) !important;
-    letter-spacing: .10em !important;
-  }
-}
-
-
-
 /* =========================================================
-   Apply Step 1 + 2 only (recommended)
-   Mobile hero banner layout normalization
+   Apply Step 1 + 2 only (recommended) — CLEANED + ENHANCED
+   Purpose: stabilize MOBILE hero banner layout and stop text/stars collisions
    ========================================================= */
 
 /* Base */
-.hero {
+.hero{
   position: relative !important;
   height: 170px !important;
   overflow: hidden !important;
   border-radius: 16px !important;
 }
 
-.heroOverlay {
+.heroOverlay{
   position: absolute !important;
   inset: 0 !important;
   z-index: 6 !important;
@@ -3335,7 +3240,8 @@ body.kiosk-mode *::-webkit-scrollbar{
   pointer-events: auto !important;
 }
 
-.heroTitle {
+/* Title can wrap on mobile */
+.heroTitle{
   display: block !important;
   margin: 0 !important;
   font-size: 16px !important;
@@ -3343,58 +3249,68 @@ body.kiosk-mode *::-webkit-scrollbar{
   overflow-wrap: break-word !important;
 }
 
-/* Triangle / decorative element */
-.heroTriWrap {
+/* 3-up stars strip */
+.heroTriWrap{
   position: absolute !important;
   right: 8px !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
   width: 44% !important;
   max-width: 320px !important;
-  z-index: 7 !important; /* above the overlay */
+  z-index: 7 !important;      /* above overlay */
+  pointer-events: none !important; /* never blocks taps on mobile */
+}
+
+/* IMPORTANT: reserve right space so text never sits under the star strip */
+@media (max-width: 720px){
+  .heroOverlay{
+    padding-right: calc(14px + min(220px, 44vw) + 10px) !important;
+  }
+}
+@media (max-width: 420px){
+  .heroOverlay{
+    padding-right: calc(12px + min(180px, 48vw) + 10px) !important;
+  }
 }
 
 /* Desktop and larger tablets */
-@media (min-width: 721px) {
-  .hero {
-    height: 220px !important;
-  }
-  .heroTitle {
+@media (min-width: 721px){
+  .hero{ height: 220px !important; }
+  .heroTitle{
     white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
     font-size: 18px !important;
   }
 }
 
 /* Small tablets and phones */
-@media (max-width: 720px) {
-  .hero {
+@media (max-width: 720px){
+  .hero{
     height: 160px !important;
     margin: 10px !important;
   }
-  .heroTitle {
-    white-space: normal !important;
+  .heroTitle{
     font-size: 16px !important;
   }
-  .heroTriWrap {
+  .heroTriWrap{
     width: 44% !important;
     max-width: 220px !important;
   }
 }
 
 /* Very small phones */
-@media (max-width: 420px) {
-  .hero {
-    height: 150px !important;
-  }
-  .heroTitle {
-    font-size: 15px !important;
-  }
-  .heroTriWrap {
+@media (max-width: 420px){
+  .hero{ height: 150px !important; }
+  .heroTitle{ font-size: 15px !important; }
+  .heroTriWrap{
     width: 48% !important;
     right: 6px !important;
     max-width: 180px !important;
   }
 }
+
+
 
 </style>
 </head>
