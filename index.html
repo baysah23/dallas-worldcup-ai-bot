@@ -884,6 +884,7 @@
 
 /* =========================
    BANNER POLISH: ZOOM + GLOW
+   ========================= */
 
 /* === RECOMMENDED TRANSITION UPGRADE ===
    - Smoother crossfade: 1100ms ease-in-out (container opacity)
@@ -1084,8 +1085,6 @@
    MATCH DAY MODE (Step 1)
    Visual amplify only (UI-only)
    ========================= */
-50%      { transform: translateZ(0) scale(1.015); filter: drop-shadow(0 0 16px rgba(212,175,55,.35)); }
-}
 /* Banner takeover text styling when matchday */
 /* Highlight the next match card in gold */
 
@@ -3139,6 +3138,43 @@ body.kiosk-mode *::-webkit-scrollbar{
     padding: 4px 8px !important;
     white-space: nowrap !important;
   }
+}
+
+
+/* =========================
+   NEXT SAFE MOBILE MOVE
+   Fix: hero text + star players overlap on phones
+   - Keep all hero text on ONE line (no wrap)
+   - Shrink fonts slightly
+   - Push star players to the right lane
+   ========================= */
+@media (max-width: 950px){
+  .heroOverlay{
+    max-width: 46% !important;
+    padding: 14px 12px !important;
+  }
+  .heroTitle{
+    font-size: clamp(13px, 3.6vw, 16px) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  .heroSub{
+    font-size: 11px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  .heroTriWrap{
+    width: min(440px, 52%) !important;
+    right: 10px !important;
+    top: 12px !important;
+    bottom: 44px !important;
+    pointer-events: none !important;
+  }
+  .heroTri{ gap: 10px !important; }
+  .heroCard.heroCardTri{ height: 92px !important; border-radius: 14px !important; }
+  .heroCard.heroCardTri .heroCardName{ font-size: 11px !important; }
 }
 
 </style>
