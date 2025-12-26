@@ -710,48 +710,6 @@
   background: rgba(255,255,255,.08);
   border:1px solid rgba(255,255,255,.10);
 }
-
-/* Player meta label (kept above roster; mobile-friendly) */
-.heroNow{
-  position:absolute;
-  left:50%;
-  bottom:42px; /* sits above the roster strip */
-  transform:translateX(-50%);
-  z-index:7;
-  pointer-events:none;
-  text-align:center;
-  padding:6px 12px;
-  border-radius:999px;
-  background: rgba(0,0,0,.38);
-  border:1px solid rgba(255,255,255,.16);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  max-width: 92%;
-}
-.heroNowName{ font-weight:900; font-size:12px; line-height:1.05; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.heroNowCountry{ font-size:10px; opacity:.9; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-
-/* Mobile-only: guarantee roster is visible within fixed-height hero */
-@media (max-width: 520px){
-  #heroBanner{ height:190px !important; }
-  #heroBanner .heroOverlay{ padding:12px 12px 56px !important; }
-  #heroBanner .heroNow{ bottom:46px !important; }
-  #heroBanner .heroRoster{
-    position:absolute !important;
-    left:10px !important; right:10px !important; bottom:10px !important;
-    margin:0 !important;
-    z-index:7 !important;
-  }
-  #heroBanner .heroRosterTrack{
-    animation:none !important;
-    overflow-x:auto !important;
-    -webkit-overflow-scrolling: touch;
-    scroll-snap-type:x mandatory;
-  }
-  #heroBanner .heroChip{ scroll-snap-align:start; }
-  #heroBanner .heroRosterTrack::-webkit-scrollbar{ display:none; }
-}
-
 /* ===== END HERO UPGRADE ===== */
 
 
@@ -3725,10 +3683,6 @@ body.kiosk-mode *::-webkit-scrollbar{
 <span><b id="wcH">--</b><small>h</small></span>
 <span><b id="wcM">--</b><small>m</small></span>
 <span><b id="wcS">--</b><small>s</small></span></div>
-<div class="heroNow" aria-hidden="true">
-  <div class="heroNowName" id="heroNowName">—</div>
-  <div class="heroNowCountry" id="heroNowCountry">—</div>
-</div>
 </div></div>
 <div aria-hidden="true" class="heroRoster" id="heroRoster"></div>
 
@@ -4243,29 +4197,6 @@ function buildHero(){
 
   slides.innerHTML = "";
 
-  // meta + roster (mobile-safe)
-  const heroNowName = document.getElementById("heroNowName");
-  const heroNowCountry = document.getElementById("heroNowCountry");
-  const rosterWrap = document.getElementById("heroRoster");
-  function setHeroNow(p){
-    if(heroNowName) heroNowName.textContent = p?.name || "—";
-    if(heroNowCountry) heroNowCountry.textContent = p?.country || "—";
-  }
-  function buildHeroRoster(){
-    if(!rosterWrap) return;
-    const track = document.createElement("div");
-    track.className = "heroRosterTrack";
-    heroPlayers.forEach((p, i) => {
-      const chip = document.createElement("span");
-      chip.className = "heroChip" + (i===0 ? " active" : "");
-      chip.textContent = p.name;
-      chip.dataset.idx = String(i);
-      track.appendChild(chip);
-    });
-    rosterWrap.innerHTML = "";
-    rosterWrap.appendChild(track);
-  }
-
   heroPlayers.forEach((p, idx) => {
     const s = document.createElement("div");
     s.className = "heroSlide" + (idx===0 ? " active" : "");
@@ -4289,11 +4220,14 @@ function buildHero(){
 
     imgWrap.appendChild(img);
     s.appendChild(imgWrap);
+
+    const cap = document.createElement("div");
+    cap.className = "heroCaption";
+    cap.innerHTML = `<div class="heroName">${p.name}</div>`;
+    s.appendChild(cap);
+
     slides.appendChild(s);
   });
-
-  buildHeroRoster();
-  setHeroNow(heroPlayers[0]);
 
   // pause on hover (banner only)
   hero.addEventListener("mouseenter", () => { _heroPaused = true; });
@@ -4311,18 +4245,6 @@ function showHero(i){
     if(idx === _heroIndex) s.classList.add("active");
     else s.classList.remove("active");
   });
-
-  // update meta label + active roster chip
-  try{
-    const p = heroPlayers[_heroIndex];
-    const heroNowName = document.getElementById("heroNowName");
-    const heroNowCountry = document.getElementById("heroNowCountry");
-    if(heroNowName) heroNowName.textContent = p?.name || "—";
-    if(heroNowCountry) heroNowCountry.textContent = p?.country || "—";
-    document.querySelectorAll("#heroRoster .heroChip").forEach((chip) => {
-      chip.classList.toggle("active", Number(chip.dataset.idx) === _heroIndex);
-    });
-  }catch(e){}
 }
 
 function restartHero(){
