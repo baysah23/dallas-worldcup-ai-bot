@@ -3101,6 +3101,23 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
+
+
+/* ===== MOBILE HERO BANNER ROOT CAUSE FIX =====
+   Root cause: .heroTriWrap is z-index:4 and sits above .heroOverlay (z-index:3),
+   so on small screens the 3-up cards can cover/occlude the hero text/countdown.
+   Fix: on mobile, hide the 3-up cards and keep the cinematic slide + text + roster. */
+@media (max-width: 720px){
+  #heroBanner .heroOverlay{ z-index: 8 !important; padding: 12px 12px !important; }
+  #heroBanner .heroTriWrap{ display:none !important; }
+  #heroBanner .heroText{ max-width: 100% !important; }
+  #heroBanner .heroTitle{ font-size: clamp(14px, 5.0vw, 18px) !important; }
+  #heroBanner .heroSub{ font-size: 11px !important; max-width: 100% !important; }
+  #heroBanner .wcLabel{ font-size: 10px !important; }
+  #heroBanner .wcNums{ gap: 8px !important; font-size: 12px !important; }
+  #heroBanner .heroRoster{ margin-top: 8px !important; }
+}
+
 /* ===== MOBILE FINAL SAFETY OVERRIDES (desktop unchanged) ===== */
 @media (max-width: 950px){
   /* Never let global “one-page lock” rules break mobile scrolling */
