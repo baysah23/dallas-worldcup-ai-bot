@@ -3312,6 +3312,105 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 }
 
+
+
+/* =========================================================
+   MOBILE HERO BANNER FIX (FINAL OVERRIDE)
+   Implements your proposed "Base / 721px+ / 720px- / 420px-" rules
+   + adds safe spacing so text never collides with the 3-up star strip
+   ========================================================= */
+.hero{
+  position: relative !important;
+  height: 170px !important;
+  overflow: hidden !important;
+  border-radius: 16px !important;
+}
+
+/* Overlay sits above background FX, but below the star strip */
+.heroOverlay{
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 6 !important;
+  padding: 16px 14px !important;
+  pointer-events: auto !important;
+}
+
+/* Title can wrap on mobile */
+.heroTitle{
+  display: block !important;
+  margin: 0 !important;
+  font-size: 16px !important;
+  white-space: normal !important;
+  overflow-wrap: break-word !important;
+}
+
+/* Star strip (3-up) stays on right and never steals taps */
+.heroTriWrap{
+  position: absolute !important;
+  right: 8px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 44% !important;
+  max-width: 320px !important;
+  z-index: 7 !important;
+  pointer-events: none !important;
+}
+
+/* Reserve space on the right so text doesn't sit under the star strip */
+@media (max-width: 720px){
+  .heroOverlay{
+    padding-right: calc(14px + min(220px, 44vw) + 10px) !important;
+  }
+}
+@media (max-width: 420px){
+  .heroOverlay{
+    padding-right: calc(12px + min(180px, 48vw) + 10px) !important;
+  }
+}
+
+/* Desktop and larger tablets */
+@media (min-width: 721px){
+  .hero{ height: 220px !important; }
+  .heroTitle{
+    white-space: nowrap !important;
+    font-size: 18px !important;
+  }
+  .heroTriWrap{
+    width: 44% !important;
+    max-width: 320px !important;
+    right: 14px !important;
+  }
+  /* On desktop, keep the headline on one line; no extra right padding needed */
+  .heroOverlay{ padding-right: 14px !important; }
+}
+
+/* Small tablets and phones */
+@media (max-width: 720px){
+  .hero{
+    height: 160px !important;
+    margin: 10px !important;
+  }
+  .heroTitle{
+    white-space: normal !important;
+    font-size: 16px !important;
+  }
+  .heroTriWrap{
+    width: 44% !important;
+    max-width: 220px !important;
+  }
+}
+
+/* Very small phones */
+@media (max-width: 420px){
+  .hero{ height: 150px !important; }
+  .heroTitle{ font-size: 15px !important; }
+  .heroTriWrap{
+    width: 48% !important;
+    right: 6px !important;
+    max-width: 180px !important;
+  }
+}
+
 </style>
 </head>
 <body>
