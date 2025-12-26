@@ -3103,98 +3103,77 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-/* ===== MOBILE HERO FIX (banner readability + player visibility) =====
-   Root cause addressed:
-   - On small screens, the hero overlay (text + countdown + roster) consumes the full banner width
-     while the slide image is centered with object-fit:contain, so the player sits directly under the text
-     and looks washed out behind the dark overlay. Different browsers (Safari/Chrome) render the blend/gradients
-     slightly differently, making it feel inconsistent.
-   Fix:
-   - Make the slide image fill the banner (cover) and bias it to the RIGHT.
-   - Keep the LEFT side darker for text, but lighten the RIGHT side so players pop.
-   - Reduce mobile typography + spacing so everything stays on one line without crowding.
-   - Prevent bottom caption from colliding with the chat area on phones.
+/* === MOBILE HERO BANNER ROOT FIX (v5) ===
+   Goals:
+   - Keep player image to the RIGHT on mobile so it never sits behind text
+   - Add left scrim for guaranteed text legibility (Chrome + Safari)
+   - Reduce mobile banner text sizes to prevent wrapping/overlap
+   - Boost player image clarity (less dull)
 */
 @media (max-width: 720px){
-  /* Slightly shorter banner for phones */
-  #heroBanner.hero{ height: 150px !important; }
+  /* Make the hero slightly taller for safe stacking */
+  .hero{ height: 168px !important; margin:10px !important; border-radius:16px !important; }
 
-  /* Let the player image actually fill the banner and stay visible */
-  #heroBanner .heroSlide .heroImg{ padding: 0 !important; }
-  #heroBanner .heroSlide img{
-    width: 100% !important;
-    height: 100% !important;
-    max-width: none !important;
-    max-height: none !important;
-    object-fit: cover !important;
-    object-position: 78% 35% !important; /* keep the star on the right */
-    filter: saturate(1.35) contrast(1.15) brightness(1.08) drop-shadow(0 10px 18px rgba(0,0,0,.35)) !important;
-    transform: scale(1.03) !important;
+  /* Reserve left "text lane" by pushing the image container to the right */
+  .heroSlide .heroImg{
+    justify-content: flex-end !important;
+    padding: 8px 10px 8px clamp(150px, 46vw, 290px) !important; /* left padding creates a no-image zone */
   }
-
-  /* Darken LEFT for text, lighten RIGHT so the star doesn't look dull */
-  #heroBanner .heroSlide::before{
-    background:
-      radial-gradient(520px 220px at 25% 20%, rgba(255,255,255,.14), transparent 58%),
-      linear-gradient(90deg,
-        rgba(0,0,0,.80) 0%,
-        rgba(0,0,0,.58) 46%,
-        rgba(0,0,0,.22) 72%,
-        rgba(0,0,0,.06) 100%) !important;
-  }
-
-  /* Compact, readable text block that doesn't collide with the player */
-  #heroBanner .heroOverlay{
-    z-index: 10 !important;
-    max-width: 62% !important;
-    padding: 10px 10px 10px 12px !important;
-    gap: 5px !important;
-  }
-
-  #heroBanner .heroKicker{
-    font-size: 9px !important;
-    letter-spacing: .16em !important;
-    opacity: .95 !important;
-  }
-  #heroBanner .heroTitle{
-    font-size: 14px !important;
-    line-height: 1.05 !important;
-    white-space: nowrap !important;
-  }
-  #heroBanner .heroSub{
-    font-size: 10px !important;
-    line-height: 1.15 !important;
+  .heroSlide img{
     max-width: 100% !important;
-  }
-
-  /* Countdown: smaller but still readable */
-  #heroBanner .wcCount{ padding: 6px 8px !important; border-radius: 12px !important; }
-  #heroBanner .wcLabel{ font-size: 9px !important; letter-spacing: .12em !important; }
-  #heroBanner .wcNums b{ font-size: 12px !important; }
-  #heroBanner .wcNums small{ font-size: 9px !important; }
-
-  /* Roster strip: keep it from taking over the banner */
-  #heroBanner #heroRoster{
-    margin-top: 6px !important;
-    max-width: 100% !important;
+    max-height: 110% !important;
     opacity: 1 !important;
-  }
-  #heroBanner #heroRoster .heroRosterTrack{
-    padding: 5px 8px !important;
-    gap: 6px !important;
-    animation-duration: 22s !important;
-  }
-  #heroBanner #heroRoster .heroChip{
-    font-size: 10px !important;
-    padding: 3px 7px !important;
-    background: rgba(255,255,255,.10) !important;
-    border-color: rgba(255,255,255,.16) !important;
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    filter: drop-shadow(0 16px 28px rgba(0,0,0,.50)) saturate(1.18) contrast(1.18) !important;
+    transform: translateX(2%) !important;
   }
 
-  /* Prevent the bottom name caption from colliding with the chat card on phones */
-  #heroBanner .heroCaption{ display:none !important; }
+  /* Add a dedicated scrim ABOVE slides but BELOW text */
+  #heroBanner::before{
+    content:"";
+    position:absolute; inset:0;
+    z-index:2;
+    background: linear-gradient(90deg,
+      rgba(4,10,22,.92) 0%,
+      rgba(4,10,22,.80) 35%,
+      rgba(4,10,22,.40) 62%,
+      rgba(4,10,22,0) 85%);
+    pointer-events:none;
+  }
+  /* Ensure overlay sits above scrim */
+  #heroBanner .heroOverlay{ z-index:3 !important; }
+
+  /* Reduce text sizes + keep single line */
+  #heroBanner .heroKicker{ font-size: 9px !important; letter-spacing:.14em !important; }
+  #heroBanner .heroTitle{ font-size: 13px !important; letter-spacing:.05em !important; line-height:1.12 !important; }
+  #heroBanner .heroSub{
+    font-size: 9.5px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 56vw !important;
+  }
+
+  /* Countdown tighter so it doesn't steal space */
+  #heroBanner .wcCount{ margin-top:6px !important; padding:8px 10px !important; width: fit-content !important; max-width: 58vw !important; }
+  #heroBanner .wcLabel{ font-size: 9px !important; }
+  #heroBanner .wcNums b{ font-size: 14px !important; }
+
+  /* If roster exists, keep it as a subtle strip and avoid covering text lane */
+  #heroBanner .heroRoster{
+    margin-top:8px !important;
+    max-width: 58vw !important;
+    opacity: .92 !important;
+  }
+}
+
+/* Slightly different tuning for very small phones */
+@media (max-width: 420px){
+  .hero{ height: 162px !important; }
+  .heroSlide .heroImg{
+    padding-left: clamp(140px, 48vw, 260px) !important;
+  }
+  #heroBanner .heroTitle{ font-size: 12.5px !important; }
+  #heroBanner .wcNums b{ font-size: 13px !important; }
 }
 
 </style>
