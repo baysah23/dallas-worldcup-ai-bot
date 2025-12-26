@@ -3306,6 +3306,69 @@ body.kiosk-mode *::-webkit-scrollbar{
   #heroBanner #heroRoster .heroCard{ width: 110px; height: 72px; }
 }
 
+
+/* ===== MOBILE HERO BANNER ROOTFIX (Chrome + Safari) =====
+   Root cause: heroOverlay was absolute/inset with high z-index, so it covered the roster layer.
+   Fix: keep overlay as a grid (text left, roster right) and move #heroRoster inside the overlay.
+   Also shrink text on small screens + boost roster contrast. */
+@media (max-width: 950px){
+  #heroBanner{ position:relative; overflow:hidden; }
+  #heroBanner .heroOverlay{
+    width:100% !important;
+    max-width:none !important;
+    display:grid !important;
+    grid-template-columns: minmax(0,1fr) auto;
+    gap:10px;
+    align-items:start;
+    padding:12px 12px 12px 12px !important;
+    z-index:20 !important;
+    background: transparent !important; /* don't wash out the roster */
+  }
+  #heroBanner .heroText{
+    max-width: 62vw;
+    background: rgba(0,0,0,.38);
+    border:1px solid rgba(255,255,255,.14);
+    border-radius:16px;
+    padding:10px 10px 8px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  #heroBanner .heroRoster{
+    position:relative !important;
+    z-index:21 !important;
+    align-self:flex-end;
+    margin-top:0 !important;
+    opacity: 1 !important;
+    background: rgba(0,0,0,.30) !important;
+    border-color: rgba(255,255,255,.16) !important;
+  }
+  /* make the roster chips pop more */
+  #heroBanner .heroChip{
+    background: rgba(255,255,255,.12) !important;
+    border-color: rgba(255,255,255,.18) !important;
+    filter: saturate(1.22) contrast(1.08);
+  }
+}
+
+@media (max-width: 720px){
+  /* reduce text sizing so it stays 1-line and doesn't collide */
+  #heroBanner .heroKicker{ font-size:11px !important; }
+  #heroBanner .heroTitle{ font-size:20px !important; letter-spacing:.6px !important; }
+  #heroBanner .heroSub{ font-size:12px !important; }
+  #heroBanner #wcCount{ transform: scale(.92); transform-origin:left top; }
+  #heroBanner .heroText{ max-width: 58vw; }
+  #heroBanner .heroRoster{ max-width: 40vw; }
+}
+
+@media (max-width: 390px){
+  /* ultra-small phones */
+  #heroBanner .heroTitle{ font-size:18px !important; }
+  #heroBanner .heroSub{ font-size:11px !important; }
+  #heroBanner .heroText{ max-width: 56vw; }
+  #heroBanner .heroRoster{ max-width: 42vw; }
+}
+/* ===== END MOBILE HERO BANNER ROOTFIX ===== */
+
 </style>
 </head>
 <body>
@@ -3439,9 +3502,10 @@ body.kiosk-mode *::-webkit-scrollbar{
 <span><b id="wcM">--</b><small>m</small></span>
 <span><b id="wcS">--</b><small>s</small></span></div>
 </div>
-</div>
 
-<div aria-hidden="true" class="heroRoster" id="heroRoster"></div>
+
+  <div aria-hidden="true" class="heroRoster" id="heroRoster"></div>
+</div>
 </div>
 </div>
 <!-- Left column: Menu (left) + Chat/Reservations (right) -->
