@@ -1776,38 +1776,75 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
 
 
 /* =======================
-   BANNER POP (bigger + premium)
+   BANNER (PHASE 2 CLEANUP)
+   Goal: predictable mobile behavior (no conflicting !important blocks)
    ======================= */
-.hero{
-  height: 220px !important;
-  margin: 14px 12px 12px 12px !important;
-  border-radius: 18px !important;
-  box-shadow: 0 18px 50px rgba(0,0,0,.38), 0 0 0 1px rgba(255,255,255,.10) inset !important;
-}
-.compact .hero{ height: 160px !important; }
-@media (max-width: 720px){
-  .hero{ height: 200px !important; margin: 12px 10px !important; }
-}
-.heroOverlay{
-  z-index: 6 !important;
-  padding: 20px 18px !important;
-}
-.heroTitle{
-  /* Responsive on desktop + mobile: prevents subtitle overlap */
-  font-size: clamp(16px, 2.0vw, 21px) !important;
-  line-height: 1.12 !important;
-  letter-spacing: .10em !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-}
-.compact .heroTitle{ font-size: 20px !important; }
-.heroSub{ max-width: 520px !important; }
 
-/* Subtle edge vignette to focus the center */
-.hero::before{
-  filter: saturate(1.28) contrast(1.12) !important;
+/* Base = mobile-first */
+.hero{
+  height: 168px;
+  margin: 12px 10px 10px 10px;
+  border-radius: 16px;
+  box-shadow: 0 14px 40px rgba(0,0,0,.34), 0 0 0 1px rgba(255,255,255,.10) inset;
 }
+
+/* Overlay spacing */
+.heroOverlay{
+  z-index: 6;
+  padding: 16px 14px;
+}
+
+/* Title/subtitle: wrap on small screens (prevents text/player interference) */
+.heroTitle{
+  font-size: 16px;
+  line-height: 1.12;
+  letter-spacing: .08em;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+.heroSub{
+  max-width: 520px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+/* Star 3-up wrapper: responsive + never overflow */
+.heroTriWrap{
+  right: 8px;
+  width: 44%;
+  max-width: 320px;
+  min-width: 0;
+}
+
+/* Small phones */
+@media (max-width: 420px){
+  .hero{ height: 162px; margin: 10px; }
+  .heroOverlay{ padding: 14px 12px; }
+  .heroTitle{ font-size: 14px; letter-spacing: .06em; }
+  .heroSub{ font-size: 11px; }
+  .heroTriWrap{ width: 48%; max-width: 260px; right: 6px; }
+}
+
+/* Mid-size phones / small tablets */
+@media (min-width: 521px){
+  .hero{ height: 190px; }
+  .heroTitle{ font-size: clamp(16px, 2.2vw, 20px); }
+}
+
+/* Desktop: single-line headline with ellipsis is OK */
+@media (min-width: 721px){
+  .hero{ height: 220px; margin: 14px 12px 12px 12px; border-radius: 18px; }
+  .heroTitle{
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: clamp(16px, 2.0vw, 21px);
+    letter-spacing: .10em;
+  }
+}
+
+/* Optional vignette (visual only, no layout impact) */
 .heroVignette{
   position:absolute; inset:0;
   background:
@@ -1816,8 +1853,6 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
   z-index: 4;
   pointer-events:none;
 }
-
-
 /* =======================
    WORLD CUP COUNTDOWN (real timer)
    ======================= */
@@ -3224,6 +3259,57 @@ body.kiosk-mode *::-webkit-scrollbar{
   .heroTriWrap{ width: 44% !important; max-width: 250px !important; }
   .heroCard.heroCardTri{ height: 92px !important; }
   .heroTri{ gap: 8px !important; }
+}
+
+
+/* =======================
+   PHASE 2 — HERO FINAL OVERRIDES
+   These sit at the END of the stylesheet to defeat older !important rules.
+   ======================= */
+.hero{
+  height: 168px !important;
+  margin: 12px 10px 10px 10px !important;
+  border-radius: 16px !important;
+}
+.heroOverlay{ padding: 16px 14px !important; z-index: 6 !important; }
+.heroTitle{
+  font-size: 16px !important;
+  line-height: 1.12 !important;
+  letter-spacing: .08em !important;
+  white-space: normal !important; /* wrap on mobile */
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+..heroSub{ font-size: 12px !important; line-height:1.2 !important; max-width:520px !important; }
+.heroTriWrap{
+  right: 8px !important;
+  width: 44% !important;
+  max-width: 320px !important;
+  min-width: 0 !important;
+}
+
+@media (max-width: 420px){
+  .hero{ height: 162px !important; margin: 10px !important; }
+  .heroOverlay{ padding: 14px 12px !important; }
+  .heroTitle{ font-size: 14px !important; letter-spacing: .06em !important; }
+  .heroSub{ font-size: 11px !important; }
+  .heroTriWrap{ width: 48% !important; max-width: 260px !important; right: 6px !important; }
+}
+
+@media (min-width: 521px){
+  .hero{ height: 190px !important; }
+  .heroTitle{ font-size: clamp(16px, 2.2vw, 20px) !important; }
+}
+
+@media (min-width: 721px){
+  .hero{ height: 220px !important; margin: 14px 12px 12px 12px !important; border-radius: 18px !important; }
+  .heroTitle{
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    font-size: clamp(16px, 2.0vw, 21px) !important;
+    letter-spacing: .10em !important;
+  }
 }
 
 </style>
