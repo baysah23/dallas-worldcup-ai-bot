@@ -3338,6 +3338,119 @@ body.kiosk-mode *::-webkit-scrollbar{
   #heroBanner .heroSlide.active img{ opacity: 1 !important; filter: brightness(1.05) contrast(1.05) !important; }
 }
 
+
+
+/* =========================================================
+   MOBILE HERO BANNER v2
+   Fixes:
+   - Countdown stays fully on-screen on mobile
+   - Star player names sit directly under images (not floating/overlayed)
+   - Roster strip is NOT inside heroOverlay (prevents layout fighting)
+   Desktop remains untouched.
+   ========================================================= */
+
+@media (max-width: 720px){
+  /* Left zone (text + countdown) */
+  #heroBanner .heroOverlay{
+    display:flex !important;
+    flex-direction:column !important;
+    gap:6px !important;
+    padding: 14px 12px !important;
+    padding-right: calc(12px + min(220px, 44vw) + 10px) !important; /* reserve space for roster */
+  }
+
+  /* Keep countdown compact and never overflowing */
+  #heroBanner .wcCount{
+    max-width: 100% !important;
+    margin-top: 6px !important;
+  }
+  #heroBanner .wcLabel{
+    font-size: 10px !important;
+    letter-spacing: .06em !important;
+  }
+  #heroBanner .wcNums{
+    display:flex !important;
+    gap: 6px !important;
+    flex-wrap: nowrap !important;
+    overflow: hidden !important;
+  }
+  #heroBanner .wcNums b{ font-size: 15px !important; }
+  #heroBanner .wcNums small{ font-size: 10px !important; }
+
+  /* Right zone: roster cards */
+  #heroBanner .heroRoster{
+    position:absolute !important;
+    right: 10px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 44% !important;
+    max-width: 220px !important;
+    margin-top: 0 !important;
+    z-index: 7 !important;
+    border-radius: 16px !important; /* allow 3-up cards comfortably */
+    overflow: visible !important;
+    border: none !important;
+    background: transparent !important;
+    pointer-events: none !important;
+  }
+
+  /* If your JS builds `.heroTriWrap` / `.heroTri`, keep them in the same zone */
+  #heroBanner .heroTriWrap{
+    right: 10px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 44% !important;
+    max-width: 220px !important;
+    z-index: 7 !important;
+    pointer-events: none !important;
+  }
+
+  /* Names directly under players (no absolute overlay) */
+  #heroBanner .heroCard.heroCardTri{
+    height: 104px !important;
+    display:flex !important;
+    flex-direction:column !important;
+    overflow:hidden !important;
+  }
+  #heroBanner .heroCard.heroCardTri .heroCardMeta{
+    position: static !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    margin-top: auto !important;
+    padding: 6px 6px 7px !important;
+    text-align: center !important;
+    gap: 2px !important;
+  }
+  #heroBanner .heroCard.heroCardTri .heroCardMeta::after{
+    display:none !important;
+  }
+  #heroBanner .heroCard.heroCardTri .heroCardName{
+    font-size: 11px !important;
+    line-height: 1.1 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  #heroBanner .heroCard.heroCardTri .heroCardCountry{
+    font-size: 9.5px !important;
+  }
+}
+
+@media (max-width: 420px){
+  #heroBanner .heroOverlay{
+    padding-right: calc(10px + min(180px, 48vw) + 10px) !important;
+  }
+  #heroBanner .heroRoster,
+  #heroBanner .heroTriWrap{
+    width: 48% !important;
+    max-width: 180px !important;
+    right: 8px !important;
+  }
+  #heroBanner .heroCard.heroCardTri{ height: 98px !important; }
+  #heroBanner .wcNums b{ font-size: 14px !important; }
+}
+
 </style>
 </head>
 <body>
@@ -3469,9 +3582,9 @@ body.kiosk-mode *::-webkit-scrollbar{
 <span><b id="wcH">--</b><small>h</small></span>
 <span><b id="wcM">--</b><small>m</small></span>
 <span><b id="wcS">--</b><small>s</small></span></div>
-</div>
+</div></div>
 <div aria-hidden="true" class="heroRoster" id="heroRoster"></div>
-</div>
+
 </div>
 <!-- Left column: Menu (left) + Chat/Reservations (right) -->
 <div class="leftcol">
