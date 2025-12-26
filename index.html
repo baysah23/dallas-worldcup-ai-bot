@@ -715,7 +715,7 @@
 /* ===== END HERO UPGRADE ===== */
 
 
-========================= */
+/* =========================
    HERO (3-up fade rotation)
 /* ========================= */
 .heroTriWrap{
@@ -855,7 +855,7 @@
 }
 
 
-========================= */
+/* =========================
    FINAL OVERRIDES (BANNER)
 /* ========================= */
 :root{ --gold:#d4af37; }
@@ -884,7 +884,7 @@
 }
 
 
-========================= */
+/* =========================
    BANNER POLISH: ZOOM + GLOW
    (Notes below are comments only)
 /* ========================= */
@@ -933,7 +933,7 @@
 .heroSlide[data-country="KOR"] img{ filter: drop-shadow(0 0 18px rgba(205,46,58,.6)); }
 
 
-========================= */
+/* =========================
    FLAGS (tasteful, UI-only)
 /* ========================= */
 .flag-badge{
@@ -956,7 +956,7 @@
 }
 
 
-========================= */
+/* =========================
    HERO MINI FLAG BADGES
 /* ========================= */
 .hero-flags{
@@ -989,7 +989,7 @@
 }
 
 
-========================= */
+/* =========================
    HERO HEADER MICRO-POLISH
 /* ========================= */
 :root{
@@ -1037,7 +1037,7 @@
 }
 
 
-========================= */
+/* =========================
    MICRO UI TWEAKS
 /* ========================= */
 
@@ -1084,7 +1084,7 @@
 }
 
 
-========================= */
+/* =========================
    MATCH DAY MODE (Step 1)
    Visual amplify only (UI-only)
 /* ========================= */
@@ -1092,7 +1092,7 @@
 /* Highlight the next match card in gold */
 
 
-======================= */
+/* =======================
    GLOBAL FAN ZONE IDENTITY (UI-only)
    - Slightly sport-modern typography
    - Gold reserved for Dallas matches + Knockouts + Finals
@@ -1145,7 +1145,7 @@ body.stage-finals{
 }
 
 
-======================= */
+/* =======================
    FAN ZONE IDENTITY (UI-only)
    ======================= */
 :root{
@@ -1413,7 +1413,7 @@ body.phase-finals{ background: var(--phaseF); }
 }
 
 
-======================= */
+/* =======================
    FAN ZONE: ultra-compact + luxury rails
    ======================= */
 .fanzone-left, .fanzone-right{
@@ -1479,7 +1479,7 @@ body.has-dallas-today .fanzone-right{
 
 
 
-========================================================= */
+/* =========================================================
    FAN ZONE — PREMIUM STADIUM ENERGY (FINAL OVERRIDES)
    Goal: ultra-slim rails that POP (luxury), without breaking app
    ========================================================= */
@@ -1603,7 +1603,7 @@ body.has-dallas-today .fanzone-right{
 }
 
 
-======================= */
+/* =======================
    FAN ZONE (RIGHT RAIL) — fit + no overflow
    ======================= */
 .fanzone-left, .fanzone-right,
@@ -1656,7 +1656,7 @@ body.has-dallas-today .fanzone-right{
 }
 
 
-======================= */
+/* =======================
    FAN ZONE RIGHT: overflow hardening (no horizontal scroll)
    ======================= */
 .fanzone-right{ overflow-x:hidden; }
@@ -1674,7 +1674,7 @@ body.has-dallas-today .fanzone-right{
 .fanzone-right .qrText a{ display:block; overflow-wrap:anywhere; word-break:break-all; }
 
 
-======================= */
+/* =======================
    FAN ZONE RIGHT RAIL — overflow hard-fix (no horizontal scroll)
    ======================= */
 .fanzone-left, .fanzone-right{
@@ -1709,7 +1709,7 @@ body.has-dallas-today .fanzone-right{
 }
 
 
-======================= */
+/* =======================
    GLOBAL OVERFLOW GUARD (prevents any horizontal scroll)
    ======================= */
 *, *::before, *::after{ box-sizing: border-box; }
@@ -1761,7 +1761,7 @@ html, body{ overflow-x: hidden !important; }
 }
 
 
-======================= */
+/* =======================
    FAN ZONE: drink highlight (vertical stack, zero overflow)
    ======================= */
 .fz-drinkStack{
@@ -1777,7 +1777,7 @@ html, body{ overflow-x: hidden !important; }
 body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
 
 
-======================= */
+/* =======================
    BANNER POP (bigger + premium)
    ======================= */
 .hero{
@@ -1820,7 +1820,7 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
 }
 
 
-======================= */
+/* =======================
    WORLD CUP COUNTDOWN (real timer)
    ======================= */
 .wcCount{
@@ -1871,7 +1871,7 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
 }
 
 
-======================= */
+/* =======================
    SCHEDULE VISIBILITY FIX
    (ensures schedule is always visible in non-compact mode)
    ======================= */
@@ -1884,7 +1884,7 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
 .schedule{ min-height: 220px; }
 
 
-======================= */
+/* =======================
    ONE-PAGE LOCK (everything fits in viewport)
    - No body scroll
    - Internal panels scroll (chat + schedules + menus + rails)
@@ -1893,10 +1893,64 @@ html, body{
   height:100%;
   overflow:hidden !important;
 }
+body{
+  height:100vh !important;
+  min-height:100vh !important;
+}
+.wrap{
+  height:100vh !important;
+  min-height:0 !important;
+  overflow:hidden !important;
+  display:flex;
+  flex-direction:column;
+}
+header{ flex:0 0 auto; }
+
+/* HERO fixed, then app grid fills remaining space */
+.hero{
+  flex:0 0 auto;
+  height: 180px !important;
+  margin: 12px 12px 10px 12px !important;
+}
+.compact .hero{ height: 150px !important; }
+@media (max-width: 720px){
+  .hero{ height: 190px !important; margin: 10px 10px 8px 10px !important; }
+}
+
+/* Main grid consumes remaining height */
+.grid{
+  flex: 1 1 auto !important;
+  min-height:0 !important;
+  height: auto !important;
+  overflow:hidden !important;
+  padding: 10px !important;
+  margin: 0 !important;
+}
+
+/* Columns/panels must be allowed to shrink and scroll inside */
+.leftcol, .chatcard, .menucard, .card{
+  min-height:0 !important;
+  height:100% !important;
+}
+
+/* Chat/menu/schedule internal scroll areas */
+#chat{ min-height:0 !important; height:auto !important; flex:1 1 auto !important; overflow:auto !important; }
+.menu{ min-height:0 !important; overflow:auto !important; }
+.schedule{ min-height:0 !important; flex:1 1 auto !important; overflow:auto !important; padding-bottom:78px; }
+
+/* Sticky pager stays visible within schedule panel */
+#pager{ position: sticky; bottom: 0; }
+
+/* Fan zone rails: keep them within viewport and scroll internally */
+@media(min-width:1200px){
+  .fanzone-left, .fanzone-right{
+    max-height: calc(100vh - 110px) !important;
+    overflow: auto !important;
+  }
 }
 
 
-======================= */
+/* =======================
    FINAL LAYOUT TUNING
    - Bigger banner width
    - Taller Dallas schedule
@@ -1926,7 +1980,7 @@ html, body{
 }
 
 
-======================= */
+/* =======================
    DALLAS SCHEDULE: guaranteed visible area
    (fixes grid row sizing so sidebar gets real height)
    ======================= */
@@ -1951,7 +2005,7 @@ html, body{
 }
 
 
-======================= */
+/* =======================
    PAGER MINI (doesn't block schedule)
    ======================= */
 #pager{
@@ -1973,7 +2027,7 @@ html, body{
 }
 
 
-======================= */
+/* =======================
    ULTRA-SLEEK PAGER (icon-only, never blocks scrollbars)
    ======================= */
 #pager{
@@ -2039,7 +2093,7 @@ html, body{
 }
 
 
-======================= */
+/* =======================
    COMPACT TEXT PAGER (Prev/Next visible, ultra-sleek)
    ======================= */
 #pager{
@@ -2088,7 +2142,7 @@ html, body{
 }
 
 
-======================= */
+/* =======================
    MINI SCROLLBAR (luxury cue that more games exist)
    ======================= */
 /* WebKit browsers */
@@ -2113,7 +2167,7 @@ html, body{
 }
 
 
-======================= */
+/* =======================
    SCROLL DELIGHT PACK
    - Gentle nudge on first load
    - Match-day glow that tracks the scrollbar thumb
@@ -2166,7 +2220,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-======================= */
+/* =======================
    PAGER OVERLAP FIX (last match always visible)
    ======================= */
 :root{
@@ -2190,7 +2244,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-======================= */
+/* =======================
    PAGER OVERLAP FIX v2 (extra-safe)
    ======================= */
 .schedule{
@@ -2198,7 +2252,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-======================= */
+/* =======================
    SCHEDULE CARD FLEX FIX
    (scroll happens inside #schedule, pager never overlaps)
    ======================= */
@@ -2229,7 +2283,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-======================= */
+/* =======================
    VIP TABLE HOLD (UI-only) — sleek + luxury
    ======================= */
 .vip-gap{
@@ -2302,7 +2356,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-======================= */
+/* =======================
    VIP HOLD RAIL (separate from Fan Zone)
    ======================= */
 .vip-rail{
@@ -2376,7 +2430,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 .fanzone-left .fanzone{ margin-top: 14px; } /* ensures visible gap even if VIP collapses */
 
-========================= */
+/* =========================
    HERO 3D POP (SAFE, UI-only)
    - Adds subtle depth to rotating star images
    - No JS changes; respects reduced-motion
@@ -2420,7 +2474,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-========================= */
+/* =========================
    HERO RIM-LIGHT SWEEP (Premium, noticeable)
    - Adds a soft edge highlight that makes depth read instantly
    - Synced to the 3D animation duration (5s)
@@ -2481,7 +2535,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-========================= */
+/* =========================
    MOBILE PREMIUM (NO-JS, SAFE)
    - Keep same features as desktop, stacked cleanly
    - Remove fixed rails/overlays that block touch
@@ -2561,7 +2615,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-========================= */
+/* =========================
    MOBILE: SECTION NAV (desktop parity without clutter)
    - One-tap switch between Chat / Fan Zone / Extras / Schedule / Menu
 /* ========================= */
@@ -2640,7 +2694,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-========================= */
+/* =========================
    MOBILE FIT + SCHEDULE SAFETY
 /* ========================= */
 @media (max-width: 950px){
@@ -2698,7 +2752,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 
 
-========================================================= */
+/* =========================================================
    MOBILE-FIRST NAV MODEL (desktop unchanged)
    - Bottom nav sets body[data-msec]
    - Rails become flow cards on mobile (no overlays / no tap-blocking)
@@ -3064,7 +3118,7 @@ body.kiosk-mode *::-webkit-scrollbar{
   #heroBanner .heroCardCountry{ font-size: 9px !important; }
 
 
-========================= */
+/* =========================
    MOBILE ROSTER STABILIZE (SAFE)
    ========================= */
 @media (max-width: 950px){
@@ -3096,72 +3150,6 @@ body.kiosk-mode *::-webkit-scrollbar{
   .mnav{ display:none !important; pointer-events:none !important; }
 }
 
-/* =========================
-   MOBILE HERO BANNER FIX (scoped)
-   - Keeps desktop intact
-   - Prevents text/roster overlap on small screens
-   ========================= */
-@media (max-width: 720px){
-  #heroBanner{
-    height: 160px !important;
-    margin: 10px !important;
-    border-radius: 14px !important;
-  }
-  #heroBanner .heroOverlay{
-    display:flex !important;
-    flex-direction: row !important;
-    align-items: flex-start !important;
-    justify-content: space-between !important;
-    gap: 10px !important;
-    padding: 12px 12px 14px !important;
-  }
-  #heroBanner .heroText{
-    flex: 1 1 auto !important;
-    min-width: 0 !important;
-  }
-  #heroBanner .heroTitle{
-    font-size: 14px !important;
-    line-height: 1.1 !important;
-    letter-spacing: .10em !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    max-width: 100% !important;
-  }
-  #heroBanner .heroSub{
-    font-size: 10px !important;
-    line-height: 1.15 !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    max-width: 100% !important;
-    margin-top: 4px !important;
-  }
-  #heroBanner .wcCount{
-    margin-top: 8px !important;
-    padding: 8px 10px !important;
-    border-radius: 14px !important;
-  }
-  #heroBanner .wcLabel{ font-size: 10px !important; }
-  #heroBanner .wcNums b{ font-size: 14px !important; }
-
-  /* Roster: stays visible on the right, never behind text */
-  #heroBanner #heroRoster{
-    flex: 0 0 auto !important;
-    align-self: flex-start !important;
-    max-width: 44% !important;
-    min-width: 132px !important;
-  }
-  #heroBanner .heroRosterTrack{
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
-    -webkit-overflow-scrolling: touch;
-    scroll-snap-type: x mandatory;
-  }
-  #heroBanner .heroRosterItem{
-    scroll-snap-align: start;
-  }
-}
 </style>
 </head>
 <body>
