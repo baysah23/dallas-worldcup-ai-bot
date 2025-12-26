@@ -3103,111 +3103,120 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-/* =========================
-   MOBILE HERO BANNER FIX (v4)
-   Root causes addressed:
-   - hero was being built twice (DOMContentLoaded + init), causing inconsistent layout
-   - overlay layout defaulted to vertical stack on small screens, clipping roster
-   - roster had no thumbnail UI; add high-contrast thumbnails
-   ========================= */
-
+/* === MOBILE HERO BANNER ROOT FIX (Safari/Chrome) ===
+   Goal:
+   - Keep text readable without covering the player image
+   - Make player image brighter/crisper on mobile
+   - Prevent "stars behind text" by reserving a left text panel + right image zone
+*/
 #heroBanner{ position:relative; overflow:hidden; }
-#heroBanner .heroSlides{ position:absolute; inset:0; z-index:1; }
-#heroBanner .heroFX{ position:absolute; inset:0; z-index:2; pointer-events:none; }
-#heroBanner .heroOverlay{ position:absolute; inset:0; z-index:5; pointer-events:none; }
 
+/* Ensure overlay layer always sits above slides/FX */
+#heroBanner .heroOverlay{ z-index:3; position:absolute; inset:0; }
+
+/* Mobile: split banner visually into LEFT text panel and RIGHT image area */
 @media (max-width: 720px){
-  #heroBanner.hero, #heroBanner{ height: 176px !important; }
-
-  #heroBanner .heroOverlay{
-    display:grid !important;
-    grid-template-columns: 1fr 126px !important;
-    align-items:start !important;
-    gap:10px !important;
-    padding: 12px 12px 10px 12px !important;
+  #heroBanner{
+    height: 155px !important; /* keeps banner compact */
+    margin: 10px !important;
   }
-  #heroBanner .heroText{ min-width:0 !important; max-width:100% !important; }
 
-  #heroBanner .heroKicker{ font-size: 10px !important; letter-spacing:.22em !important; }
+  /* Build a safe text panel (left) so text never floats over the star image */
+  #heroBanner .heroOverlay{
+    padding: 12px 12px !important;
+    gap: 6px !important;
+  }
+  #heroBanner .heroOverlay::before{
+    content:"";
+    position:absolute;
+    inset: 8px auto 8px 8px; /* top right bottom left */
+    width: 62%;
+    border-radius: 14px;
+    background: linear-gradient(180deg, rgba(8,14,28,.70), rgba(8,14,28,.52));
+    border: 1px solid rgba(255,255,255,.10);
+    box-shadow: 0 10px 22px rgba(0,0,0,.35);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: -1;
+  }
+  #heroBanner .heroOverlay{ position:absolute; }
+  #heroBanner .heroOverlay > *{ position:relative; z-index:1; }
+
+  /* Smaller text, no wrap */
+  #heroBanner .heroKicker{ font-size: 10px !important; letter-spacing:.16em !important; }
   #heroBanner .heroTitle{
     font-size: 14px !important;
-    line-height: 1.05 !important;
+    line-height: 1.08 !important;
+    max-width: 60% !important;
     white-space: nowrap !important;
-    overflow:hidden !important;
+    overflow: hidden !important;
     text-overflow: ellipsis !important;
-    max-width: 100% !important;
   }
   #heroBanner .heroSub{
     font-size: 11px !important;
-    line-height: 1.15 !important;
+    max-width: 60% !important;
     white-space: nowrap !important;
-    overflow:hidden !important;
+    overflow: hidden !important;
     text-overflow: ellipsis !important;
-    max-width: 100% !important;
+    opacity: .90 !important;
   }
 
+  /* Countdown tighter */
   #heroBanner .wcCount{
-    margin-top: 8px !important;
+    max-width: 60% !important;
     padding: 8px 10px !important;
-    border-radius: 14px !important;
+    border-radius: 12px !important;
   }
-  #heroBanner .wcLabel{ font-size: 9px !important; }
-  #heroBanner .wcNums{ gap: 8px !important; font-size: 11px !important; }
+  #heroBanner .wcLabel{ font-size: 9px !important; letter-spacing:.14em !important; }
+  #heroBanner .wcNums b{ font-size: 14px !important; }
+  #heroBanner .wcNums small{ font-size: 10px !important; }
 
+  /* Put player image on the RIGHT and make it pop */
+  #heroBanner .heroSlide .heroImg{
+    justify-content: flex-end !important;
+    align-items: flex-end !important;
+    padding: 0 10px 8px 0 !important;
+  }
   #heroBanner .heroSlide img{
-    filter: drop-shadow(0 16px 26px rgba(0,0,0,.45)) brightness(1.12) contrast(1.10) saturate(1.12) !important;
+    max-width: 72% !important;
+    max-height: 110% !important;
+    filter:
+      drop-shadow(0 16px 26px rgba(0,0,0,.45))
+      brightness(1.18)
+      contrast(1.12)
+      saturate(1.18) !important;
   }
 
-  #heroRoster{
-    display:flex !important;
-    flex-direction:column !important;
-    gap:6px !important;
-    justify-content:center !important;
-    align-items:flex-end !important;
-    max-width: 126px !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: 0 !important;
-    background: transparent !important;
+  /* Lighten the dark overlay gradient on mobile so the player isn't dull */
+  #heroBanner .heroSlide::before{
+    background:
+      radial-gradient(800px 240px at 20% 0%, rgba(255,255,255,.14), transparent 60%),
+      radial-gradient(900px 260px at 80% 120%, rgba(255,255,255,.10), transparent 55%),
+      linear-gradient(90deg, rgba(0,0,0,.62) 0%, rgba(0,0,0,.34) 52%, rgba(0,0,0,.08) 85%, rgba(0,0,0,0) 100%) !important;
   }
-  #heroRoster .rosterItem{
-    display:flex;
-    align-items:center;
-    gap:6px;
-    width: 126px;
-    padding: 4px 6px;
-    border-radius: 14px;
-    background: rgba(0,0,0,.22);
-    border: 1px solid rgba(255,255,255,.14);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    box-shadow: 0 10px 22px rgba(0,0,0,.22);
+
+  /* Roster strip: keep visible, slightly stronger */
+  #heroBanner .heroRoster{
+    max-width: 60% !important;
+    background: rgba(0,0,0,.26) !important;
+    border-color: rgba(255,255,255,.14) !important;
   }
-  #heroRoster .rosterItem img{
-    width: 34px; height: 34px;
-    border-radius: 50%;
-    object-fit: cover;
-    filter: brightness(1.18) contrast(1.18) saturate(1.18);
-    box-shadow: 0 0 0 1px rgba(255,255,255,.14), 0 10px 18px rgba(0,0,0,.35);
-    flex: 0 0 auto;
-  }
-  #heroRoster .rosterItem span{
-    font-size: 10px;
-    font-weight: 900;
-    letter-spacing: .01em;
-    color: var(--text);
-    white-space: nowrap;
-    overflow:hidden;
-    text-overflow: ellipsis;
-    max-width: 78px;
+  #heroBanner .heroRoster .heroChip{
+    background: rgba(255,255,255,.10) !important;
+    border-color: rgba(255,255,255,.14) !important;
   }
 }
 
-@media (max-width: 390px){
-  #heroBanner .heroOverlay{ grid-template-columns: 1fr 118px !important; }
-  #heroRoster .rosterItem{ width: 118px; }
-  #heroRoster{ max-width:118px !important; }
+/* Ultra-small phones */
+@media (max-width: 420px){
+  #heroBanner{ height: 150px !important; }
+  #heroBanner .heroOverlay::before{ width: 66%; }
+  #heroBanner .heroTitle{ font-size: 13px !important; }
+  #heroBanner .heroSub{ font-size: 10px !important; }
+  #heroBanner .wcNums b{ font-size: 13px !important; }
+  #heroBanner .heroSlide img{ max-width: 70% !important; }
 }
+/* === END MOBILE HERO BANNER ROOT FIX === */
 
 </style>
 </head>
@@ -3786,7 +3795,6 @@ function stripHtml(html){
 // HERO banner (UI-only) — single centered player, 5s, fade
 // -----------------------
 const HERO_SLIDE_MS = 5000; // 5 seconds per player
-let __heroBuilt = false;
 let _heroTimer = null;
 let _heroIndex = 0;
 let _heroPaused = false;
@@ -3848,40 +3856,7 @@ const heroPlayers = [
   },
 ];
 
-function updateHeroRoster(){
-  const roster = document.getElementById('heroRoster');
-  if(!roster) return;
-  roster.innerHTML = '';
-
-  const n = heroPlayers.length || 0;
-  if(!n) return;
-
-  // Show 3 thumbnails (current + next 2)
-  for(let k=0;k<3;k++){
-    const idx = (_heroIndex + k) % n;
-    const p = heroPlayers[idx];
-
-    const item = document.createElement('div');
-    item.className = 'rosterItem';
-
-    const img = document.createElement('img');
-    img.alt = p.name;
-    img.loading = 'eager';
-    img.decoding = 'async';
-    img.src = p.img;
-
-    const label = document.createElement('span');
-    label.textContent = p.name;
-
-    item.appendChild(img);
-    item.appendChild(label);
-    roster.appendChild(item);
-  }
-}
-
 function buildHero(){
-  if(__heroBuilt) return;
-  __heroBuilt = true;
   const hero = document.getElementById("heroBanner");
   const slides = document.getElementById("heroSlides");
   if(!hero || !slides) return;
@@ -3920,9 +3895,6 @@ function buildHero(){
     slides.appendChild(s);
   });
 
-  // build visible roster thumbnails (mobile-safe)
-  updateHeroRoster();
-
   // pause on hover (banner only)
   hero.addEventListener("mouseenter", () => { _heroPaused = true; });
   hero.addEventListener("mouseleave", () => { _heroPaused = false; });
@@ -3939,8 +3911,6 @@ function showHero(i){
     if(idx === _heroIndex) s.classList.add("active");
     else s.classList.remove("active");
   });
-
-  updateHeroRoster();
 }
 
 function restartHero(){
