@@ -3174,6 +3174,23 @@ body.kiosk-mode *::-webkit-scrollbar{
   .heroCard.heroCardTri{ height: 72px !important; }
 }
 
+
+/* =========================
+   MOBILE SCHEDULE / PAGER (SAFE NEXT STEP)
+   Fix: last match getting blocked by sticky pager + iOS safe-area.
+   - Add extra bottom padding to scroll areas
+   - Make pager height predictable and safe-area aware
+   ========================= */
+:root{
+  --pagerH: 62px; /* approximate sticky pager height */
+}
+.schedule{
+  padding-bottom: calc(var(--pagerH) + 14px + env(safe-area-inset-bottom)) !important;
+}
+#pager{
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 </style>
 </head>
 <body>
