@@ -3014,7 +3014,11 @@ body.kiosk-mode *::-webkit-scrollbar{
     position:absolute !important;
     inset:0 !important;
     z-index: 20 !important;
-    display:flex !important;
+    display:grid !important;
+    grid-template-columns: minmax(0,1fr) auto;
+    align-items:start;
+    gap:10px;
+    padding: 12px 12px 10px 12px !important;
   }
   /* Keep text/countdown above any pseudo overlays */
   #heroBanner .heroKicker,
