@@ -2668,11 +2668,11 @@ body.kiosk-mode *::-webkit-scrollbar{
   body[data-msec="menu"] #scheduleCard,
   body[data-msec="menu"] #vipHoldRail{ display:none !important; }
 
-  body[data-msec="fan"] #fanZoneLeft{ display:block !important; }
-  body[data-msec="fan"] .chatcard,
-  body[data-msec="fan"] .menucard,
-  body[data-msec="fan"] #fanZoneRight,
-  body[data-msec="fan"] #scheduleCard{ display:none !important; }
+  body[data-msec="fanzone"] #fanZoneLeft{ display:block !important; }
+  body[data-msec="fanzone"] .chatcard,
+  body[data-msec="fanzone"] .menucard,
+  body[data-msec="fanzone"] #fanZoneRight,
+  body[data-msec="fanzone"] #scheduleCard{ display:none !important; }
 
   body[data-msec="extras"] #fanZoneRight{ display:block !important; }
   body[data-msec="extras"] .chatcard,
@@ -2687,7 +2687,7 @@ body.kiosk-mode *::-webkit-scrollbar{
   body[data-msec="schedule"] #fanZoneRight{ display:none !important; }
 
   /* VIP shown alongside Fan Zone (if you want it there) */
-  body[data-msec="fan"] #vipHoldRail{ display:block !important; }
+  body[data-msec="fanzone"] #vipHoldRail{ display:block !important; }
   body[data-msec="extras"] #vipHoldRail{ display:none !important; }
 }
 
@@ -2745,7 +2745,7 @@ body.kiosk-mode *::-webkit-scrollbar{
   body[data-msec="vip"] #fanZoneLeft,
   body[data-msec="vip"] #fanZoneRight,
   body[data-msec="vip"] #scheduleCard{ display:none !important; }
-  body[data-msec="fan"] #vipHoldRail{ display:block !important; }
+  body[data-msec="fanzone"] #vipHoldRail{ display:block !important; }
 }
 
 
@@ -3082,6 +3082,24 @@ body.kiosk-mode *::-webkit-scrollbar{
     scrollbar-width: none;
   }
   .heroRosterTrack::-webkit-scrollbar{ display:none; }
+}
+
+
+/* ===== MOBILE FINAL SAFETY OVERRIDES (desktop unchanged) ===== */
+@media (max-width: 950px){
+  /* Never let global “one-page lock” rules break mobile scrolling */
+  html, body{
+    height: auto !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+  .wrap{
+    height: auto !important;
+    min-height: 100vh !important;
+    overflow: visible !important;
+  }
+  /* Ensure bottom-nav model is the only nav on mobile */
+  .mnav{ display:none !important; pointer-events:none !important; }
 }
 
 </style>
@@ -5455,6 +5473,9 @@ function setSection(sec){
 /* MOBILE MENU TOGGLE (UI-only, safe) */
 (function(){
   function isSmall(){ return (window.innerWidth||0) <= 950; }
+  // If the newer bottom mobile nav exists, skip legacy injected nav to avoid section/key conflicts.
+  if(document.getElementById("mobileNav")) return;
+
   function setLabel(){
     const t = document.getElementById("menuTitle");
     if(!t) return;
@@ -5523,7 +5544,7 @@ function setSection(sec){
     nav.innerHTML = `
       <button class="mnav-btn" data-sec="home">Home</button>
       <button class="mnav-btn" data-sec="chat">Chat</button>
-      <button class="mnav-btn" data-sec="fan">Fan Zone</button>
+      <button class="mnav-btn" data-sec="fanzone">Fan Zone</button>
       <button class="mnav-btn" data-sec="vip">VIP</button>
       <button class="mnav-btn" data-sec="extras">Extras</button>
       <button class="mnav-btn" data-sec="schedule">Schedule</button>
