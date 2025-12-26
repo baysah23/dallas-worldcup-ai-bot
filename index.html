@@ -3366,6 +3366,117 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 }
 
+
+
+/* =========================================================
+   MOBILE HERO BANNER ROOT FIX (Safari + Chrome)
+   - prevents star cards from sitting behind text
+   - improves clarity/contrast of star images
+   - centers player names directly under each card
+   - desktop untouched (mobile-only overrides)
+   ========================================================= */
+@media (max-width: 720px){
+
+  /* Keep the banner compact and predictable */
+  .hero{
+    height: 190px !important;
+    margin: 10px !important;
+    border-radius: 16px !important;
+  }
+
+  /* Text block: smaller + reserved space so cards never overlap */
+  .heroOverlay{
+    padding: 14px 12px !important;
+    gap: 4px !important;
+    padding-bottom: 78px !important; /* reserves space for 3 cards + names */
+  }
+  .heroKicker{
+    font-size: 9px !important;
+    letter-spacing: .16em !important;
+  }
+  .heroTitle{
+    font-size: 14px !important;
+    letter-spacing: .08em !important;
+    line-height: 1.08 !important;
+    max-width: 100% !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  .heroSub{
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+    max-width: 100% !important;
+    opacity: .88 !important;
+  }
+
+  /* If a roster strip exists, hide it on mobile to avoid collisions */
+  .heroRoster{ display:none !important; }
+
+  /* Star trio: dock to bottom, full width */
+  .heroTriWrap{
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    bottom: 8px !important;
+    width: 100% !important;
+    padding: 0 10px !important;
+    justify-content: center !important;
+    align-items: flex-end !important;
+  }
+  .heroTri{
+    width: 100% !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  /* Cards: shorter, sharper, more contrast */
+  .heroCard.heroCardTri{
+    height: 66px !important;
+    border-radius: 14px !important;
+    background: rgba(6,12,26,.72) !important;
+    border-color: rgba(255,255,255,.18) !important;
+    overflow: visible !important; /* allows name to sit below */
+  }
+  .heroCard.heroCardTri .heroCardImg{
+    border-radius: 14px !important;
+    overflow: hidden !important;
+  }
+  .heroCard.heroCardTri .heroCardImg img{
+    object-position: 50% 20% !important;
+    transform: scale(1.10) translateZ(0) !important;
+    filter: saturate(1.25) contrast(1.15) brightness(1.06) !important;
+    -webkit-transform: scale(1.10) translateZ(0) !important;
+    image-rendering: -webkit-optimize-contrast;
+  }
+
+  /* Name placement: directly under each card, centered */
+  .heroCard.heroCardTri .heroCardMeta{
+    left: 0 !important;
+    right: 0 !important;
+    bottom: -18px !important;
+    padding: 0 2px !important;
+    text-align: center !important;
+  }
+  .heroCard.heroCardTri .heroCardName{
+    font-size: 10px !important;
+    font-weight: 900 !important;
+    line-height: 1.05 !important;
+    color: var(--gold) !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  .heroCard.heroCardTri .heroCardCountry{ display:none !important; }
+
+  /* Reduce risk of Safari text/image blending artifacts */
+  .hero, .heroOverlay, .heroTriWrap, .heroTri{
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+}
+
 </style>
 </head>
 <body>
