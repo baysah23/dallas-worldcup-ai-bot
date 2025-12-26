@@ -2646,45 +2646,158 @@ body.kiosk-mode *::-webkit-scrollbar{
     background: linear-gradient(135deg, rgba(212,175,55,.18), rgba(255,255,255,.06));
   }
 
-  /* Default: show Chat section (MOBILE ONLY)
-     - Prevents “everything stacked” flash on load
-     - Keeps desktop untouched */
-  @media (max-width: 950px){
-    /* Hide all major cards by default; reveal one per body[data-msec] */
-    .chatcard,
-    .menucard,
-    #scheduleCard,
-    #fanZoneLeft,
-    #fanZoneRight,
-    #vipHoldRail{ display:none !important; }
+  /* Default: show Chat section */
+  body[data-msec="home"] .chatcard{ display:block !important; }
+  body[data-msec="home"] .menucard,
+  body[data-msec="home"] #fanZoneLeft,
+  body[data-msec="home"] #fanZoneRight,
+  body[data-msec="home"] #scheduleCard,
+  body[data-msec="home"] #vipHoldRail{ display:none !important; }
 
-    body[data-msec="home"] .chatcard{ display:block !important; }
-    body[data-msec="chat"] .chatcard{ display:block !important; }
+  body[data-msec="chat"] .chatcard{ display:block !important; }
+  body[data-msec="chat"] .menucard,
+  body[data-msec="chat"] #fanZoneLeft,
+  body[data-msec="chat"] #fanZoneRight,
+  body[data-msec="chat"] #scheduleCard,
+  body[data-msec="chat"] #vipHoldRail{ display:none !important; }
 
-    body[data-msec="menu"] .menucard{ display:block !important; }
+  body[data-msec="menu"] .menucard{ display:block !important; }
+  body[data-msec="menu"] .chatcard,
+  body[data-msec="menu"] #fanZoneLeft,
+  body[data-msec="menu"] #fanZoneRight,
+  body[data-msec="menu"] #scheduleCard,
+  body[data-msec="menu"] #vipHoldRail{ display:none !important; }
 
-    body[data-msec="schedule"] #scheduleCard{ display:block !important; }
+  body[data-msec="fanzone"] #fanZoneLeft{ display:block !important; }
+  body[data-msec="fanzone"] .chatcard,
+  body[data-msec="fanzone"] .menucard,
+  body[data-msec="fanzone"] #fanZoneRight,
+  body[data-msec="fanzone"] #scheduleCard{ display:none !important; }
 
-    /* Fan Zone button shows BOTH panels on mobile (stacked) */
-    body[data-msec="fanzone"] #fanZoneLeft,
-    body[data-msec="fanzone"] #fanZoneRight{ display:block !important; }
+  body[data-msec="extras"] #fanZoneRight{ display:block !important; }
+  body[data-msec="extras"] .chatcard,
+  body[data-msec="extras"] .menucard,
+  body[data-msec="extras"] #fanZoneLeft,
+  body[data-msec="extras"] #scheduleCard{ display:none !important; }
 
-    body[data-msec="vip"] #vipHoldRail{ display:block !important; }
+  body[data-msec="schedule"] #scheduleCard{ display:block !important; }
+  body[data-msec="schedule"] .chatcard,
+  body[data-msec="schedule"] .menucard,
+  body[data-msec="schedule"] #fanZoneLeft,
+  body[data-msec="schedule"] #fanZoneRight{ display:none !important; }
 
-    /* Mobile-friendly Fan Zone layout: make rails normal flow */
-    #fanZoneLeft,
-    #fanZoneRight{
-      position: relative !important;
-      left: auto !important; right: auto !important;
-      top: auto !important; bottom: auto !important;
-      width: auto !important;
-      max-width: 100% !important;
-      margin: 10px !important;
-      z-index: 2 !important;
-    }
+  /* VIP shown alongside Fan Zone (if you want it there) */
+  body[data-msec="fanzone"] #vipHoldRail{ display:block !important; }
+  body[data-msec="extras"] #vipHoldRail{ display:none !important; }
+}
+
+
+/* =========================
+   MOBILE FIT + SCHEDULE SAFETY
+/* ========================= */
+@media (max-width: 950px){
+  html, body{ width:100%; max-width:100%; overflow-x:hidden; }
+  .wrap{ max-width: 100% !important; width: 100% !important; }
+  .card{ width: 100% !important; }
+  #scheduleList, .schedule, .list{ max-width:100% !important; }
+  .row{ flex-wrap: wrap !important; }
+  .row .muted{ word-break: break-word; }
+  #pager{ position: static !important; }
+}
+
+
+@media (max-width: 950px){
+  .mnav{
+    position: sticky;
+    top: 0;
+    z-index: 6000;
+    padding: 10px;
+    background: rgba(7,16,34,.92);
+    border-bottom: 1px solid rgba(255,255,255,.10);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .mchatfab{
+    position: fixed;
+    right: 12px;
+    bottom: 12px;
+    z-index: 6500;
+    border-radius: 999px;
+    padding: 10px 12px;
+    border: 1px solid rgba(212,175,55,.28);
+    background: rgba(7,16,34,.92);
+    color: var(--text);
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    font-size: 11px;
+    display: none;
+    box-shadow: 0 16px 40px rgba(0,0,0,.35);
+  }
+  body[data-msec]:not([data-msec="chat"]) .mchatfab{ display: inline-flex; }
+}
+
+
+@media (max-width: 950px){
+  body[data-msec="vip"] #vipHoldRail{ display:block !important; }
+  body[data-msec="vip"] .chatcard,
+  body[data-msec="vip"] .menucard,
+  body[data-msec="vip"] #fanZoneLeft,
+  body[data-msec="vip"] #fanZoneRight,
+  body[data-msec="vip"] #scheduleCard{ display:none !important; }
+  body[data-msec="fanzone"] #vipHoldRail{ display:block !important; }
+}
+
+
+
+/* =========================================================
+   MOBILE-FIRST NAV MODEL (desktop unchanged)
+   - Bottom nav sets body[data-msec]
+   - Rails become flow cards on mobile (no overlays / no tap-blocking)
+   - Schedule gets safe-area padding so pager never hides last item
+========================================================= */
+@media (max-width: 950px){
+  /* Bottom nav */
+  nav.mobileNav{display:flex !important;}
+
+  .mobileNav{
+    position: fixed;
+    left: 10px; right: 10px; bottom: 10px;
+    z-index: 9999;
+    display: flex;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 16px;
+    border: 1px solid var(--line);
+    background: rgba(10,18,35,.92);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 24px rgba(0,0,0,.35);
+  }
+  .mnavBtn{
+    flex: 1 1 0;
+    display: grid;
+    place-items: center;
+    gap: 2px;
+    padding: 8px 6px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--muted);
+    font-weight: 700;
+    font-size: 12px;
+    line-height: 1.05;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mnavBtn span{ font-size: 10px; font-weight: 800; letter-spacing: .2px; }
+  .mnavBtn.active{
+    color: var(--text);
+    background: rgba(255,255,255,.08);
   }
 
-/* Mobile micro animations */
+  
+  /* Mobile micro animations */
   @media (max-width: 950px){
     .mnavBtn{ transition: transform .12s ease, background .18s ease, color .18s ease, filter .18s ease; }
     .mnavBtn:active{ transform: scale(.96); }
@@ -2765,13 +2878,6 @@ body.kiosk-mode *::-webkit-scrollbar{
     text-overflow: ellipsis;
     max-width: 52px;
   }
-
-  /* Ultra-narrow phones: prevent label collisions in bottom nav */
-  @media (max-width: 380px){
-    .mnavBtn span{ display:none; }
-    .mnavBtn{ padding: 10px 6px; font-size: 14px; }
-  }
-
   @media (max-width: 420px){
     .mnavBtn span{ display:none; }
     .mobileNav{ gap: 4px; }
@@ -2881,12 +2987,6 @@ body.kiosk-mode *::-webkit-scrollbar{
   .tabs .pill, .topTabs .pill{ white-space:nowrap; }
 
   /* Schedule/Menu: ensure they don't render off-screen */
-  /* Extra safety: stop tables/rows from forcing page width */
-  #scheduleCard{ max-width:100% !important; }
-  #schedule{ max-width:100% !important; overflow:auto !important; }
-  #schedule table{ width:100% !important; min-width: 0 !important; }
-  #schedule th, #schedule td{ white-space: nowrap; }
-
   #scheduleCard, .menucard{ overflow:visible !important; }
   #schedule{ overflow:auto !important; -webkit-overflow-scrolling:touch; max-height: calc(100vh - 240px) !important; }
   #pager, .pager{ position:sticky; bottom:0; z-index:5; }
@@ -2984,9 +3084,27 @@ body.kiosk-mode *::-webkit-scrollbar{
   .heroRosterTrack::-webkit-scrollbar{ display:none; }
 }
 
+
+/* ===== MOBILE FINAL SAFETY OVERRIDES (desktop unchanged) ===== */
+@media (max-width: 950px){
+  /* Never let global “one-page lock” rules break mobile scrolling */
+  html, body{
+    height: auto !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+  .wrap{
+    height: auto !important;
+    min-height: 100vh !important;
+    overflow: visible !important;
+  }
+  /* Ensure bottom-nav model is the only nav on mobile */
+  .mnav{ display:none !important; pointer-events:none !important; }
+}
+
 </style>
 </head>
-<body data-msec="home">
+<body>
 <div class="wrap">
 <header>
 <div class="toprow">
@@ -5355,6 +5473,9 @@ function setSection(sec){
 /* MOBILE MENU TOGGLE (UI-only, safe) */
 (function(){
   function isSmall(){ return (window.innerWidth||0) <= 950; }
+  // If the newer bottom mobile nav exists, skip legacy injected nav to avoid section/key conflicts.
+  if(document.getElementById("mobileNav")) return;
+
   function setLabel(){
     const t = document.getElementById("menuTitle");
     if(!t) return;
@@ -5423,7 +5544,7 @@ function setSection(sec){
     nav.innerHTML = `
       <button class="mnav-btn" data-sec="home">Home</button>
       <button class="mnav-btn" data-sec="chat">Chat</button>
-      <button class="mnav-btn" data-sec="fan">Fan Zone</button>
+      <button class="mnav-btn" data-sec="fanzone">Fan Zone</button>
       <button class="mnav-btn" data-sec="vip">VIP</button>
       <button class="mnav-btn" data-sec="extras">Extras</button>
       <button class="mnav-btn" data-sec="schedule">Schedule</button>
