@@ -233,9 +233,7 @@
       gap:6px;
       padding:18px 16px;
     }
-    
-    .heroText{ display:flex; flex-direction:column; gap:6px; min-width:0; }
-.heroKicker{
+    .heroKicker{
       letter-spacing:.18em;
       font-size:11px;
       font-weight:900;
@@ -810,7 +808,7 @@
     @media (max-width:720px){
       .heroCaption .heroName{ font-size:12px; }
     }
-    
+    @media (min-width: 951px){ .heroRoster{ display:none !important; } }
     .heroKicker, .heroTitle{ color: var(--gold); }
 
 
@@ -3014,11 +3012,7 @@ body.kiosk-mode *::-webkit-scrollbar{
     position:absolute !important;
     inset:0 !important;
     z-index: 20 !important;
-    display:grid !important;
-    grid-template-columns: minmax(0,1fr) auto;
-    align-items:start;
-    gap:10px;
-    padding: 12px 12px 10px 12px !important;
+    display:flex !important;
   }
   /* Keep text/countdown above any pseudo overlays */
   #heroBanner .heroKicker,
@@ -3032,64 +3026,50 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 
 
-/* === MOBILE STEP (v2): keep hero text + stars visible with no overlap === */
+/* === MOBILE STEP: prevent stars overlapping text (mobile-only, safe) === */
 @media (max-width: 720px){
-  /* Make overlay a 2-column grid: text left, stars right */
+  /* Reserve left space for text, right space for stars */
   #heroBanner .heroOverlay{
-    display:grid !important;
-    grid-template-columns: 1fr auto;
-    align-items:start;
-    gap:10px;
-    padding: 12px 12px 10px 12px !important;
+    max-width: 52vw !important;
+    padding: 12px 10px 12px 12px !important;
   }
-  #heroBanner .heroText{
-    min-width:0;
-    display:flex;
-    flex-direction:column;
-    gap:6px;
-    pointer-events:none;
-  }
-  #heroBanner .heroKicker{ font-size: 9px !important; letter-spacing:.14em !important; }
-  #heroBanner .heroTitle{
-    font-size: 13px !important;
-    line-height: 1.06 !important;
-    letter-spacing: .04em !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-  }
+
+  #heroBanner .heroKicker{ font-size: 9px !important; letter-spacing:.12em !important; }
+  #heroBanner .heroTitle{ font-size: 13px !important; letter-spacing:.04em !important; }
   #heroBanner .heroSub{
-    font-size: 10px !important;
-    line-height: 1.18 !important;
+    font-size: 9.5px !important;
+    max-width: 52vw !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    opacity: .92;
-  }
-  #heroBanner #wcCount{
-    margin-top: 6px !important;
-    transform-origin: left top;
-    transform: scale(.92);
   }
 
-  /* Stars sit in their own strip on the right */
-  #heroBanner .heroRoster{
-    justify-self:end;
-    align-self:center;
-    margin-top: 0 !important;
-    max-width: 44vw;
-    pointer-events:none;
+  /* Keep countdown compact and single-line label */
+  #heroBanner #wcCount .wcLabel,
+  #heroBanner .countdown .label{
+    font-size: 9px !important;
+    white-space: nowrap !important;
+  }
+  #heroBanner #wcCount .wcNums,
+  #heroBanner .countdown .nums{
+    font-size: 10.5px !important;
+    gap: 8px !important;
   }
 
-  /* Ensure layers: slides < FX < overlay */
-  #heroBanner{ overflow:hidden; }
-  #heroBanner .heroSlides{ z-index: 1; }
-  #heroBanner .heroFX{ z-index: 2; }
-  #heroBanner .heroOverlay{ z-index: 6; }
-  /* If legacy 3-up "tri" strip exists, hide it on small screens (we use the roster strip instead) */
-  #heroBanner .heroTriWrap{ display:none !important; }
-
+  /* Star strip stays on the right and doesn't intrude */
+  #heroBanner .heroTriWrap{
+    right: 10px !important;
+    top: 12px !important;
+    bottom: 12px !important;
+    width: min(420px, 46%) !important;
+  }
+  #heroBanner .heroTri{ gap: 10px !important; }
+  #heroBanner .heroCard.heroCardTri{ height: 92px !important; }
+  #heroBanner .heroCardName{ font-size: 10px !important; }
+  #heroBanner .heroCardCountry{ font-size: 9px !important; }
 }
+
+
 /* =========================
    MOBILE ROSTER STABILIZE (SAFE)
    ========================= */
@@ -3104,104 +3084,6 @@ body.kiosk-mode *::-webkit-scrollbar{
   .heroRosterTrack::-webkit-scrollbar{ display:none; }
 }
 
-
-
-
-/* ===== MOBILE HERO BANNER ROOT CAUSE FIX =====
-   Root cause: .heroTriWrap is z-index:4 and sits above .heroOverlay (z-index:3),
-   so on small screens the 3-up cards can cover/occlude the hero text/countdown.
-   Fix: on mobile, hide the 3-up cards and keep the cinematic slide + text + roster. */
-@media (max-width: 720px){
-  #heroBanner .heroOverlay{ z-index: 8 !important; padding: 12px 12px !important; }
-  #heroBanner .heroTriWrap{ display:none !important; }
-  #heroBanner .heroText{ max-width: 100% !important; }
-  #heroBanner .heroTitle{ font-size: clamp(14px, 5.0vw, 18px) !important; }
-  #heroBanner .heroSub{ font-size: 11px !important; max-width: 100% !important; }
-  #heroBanner .wcLabel{ font-size: 10px !important; }
-  #heroBanner .wcNums{ gap: 8px !important; font-size: 12px !important; }
-  #heroBanner .heroRoster{ margin-top: 8px !important; }
-}
-
-/* ===== MOBILE HERO FIX (banner) =====
-   Root cause: hero has fixed height + many overlay elements (title/sub/countdown/roster) + extra hero layers (tri cards/marquees)
-   On small screens that content exceeds the fixed height and gets clipped by .hero{overflow:hidden}, while extra layers can overlap.
-   These overrides only apply on mobile and do not change desktop. */
-@media (max-width: 720px){
-  /* Give the banner enough vertical room for text + countdown + roster (prevents clipping) */
-  #heroBanner.hero{
-    height: 205px !important;
-    margin: 10px !important;
-    border-radius: 14px !important;
-  }
-
-  /* Reduce overlay padding so we reclaim vertical space */
-  #heroBanner .heroOverlay{
-    padding: 12px 12px !important;
-    gap: 6px !important;
-  }
-
-  /* Tighten headline stack but keep single-line (no wrap) */
-  #heroBanner .heroKicker{
-    font-size: 10px !important;
-    letter-spacing: .14em !important;
-  }
-  #heroBanner .heroTitle{
-    font-size: clamp(14px, 4.4vw, 18px) !important;
-    line-height: 1.05 !important;
-    white-space: nowrap !important;
-  }
-  #heroBanner .heroSub{
-    font-size: 11px !important;
-    line-height: 1.15 !important;
-    max-width: 100% !important;
-  }
-
-  /* Countdown: make it compact so it doesn't push content off-canvas */
-  #heroBanner .wcCount{
-    margin-top: 2px !important;
-    padding: 8px 10px !important;
-    border-radius: 12px !important;
-    background: rgba(0,0,0,.22) !important;
-    border: 1px solid rgba(255,255,255,.12) !important;
-  }
-  #heroBanner .wcLabel{
-    font-size: 10px !important;
-    letter-spacing: .08em !important;
-    opacity: .9 !important;
-  }
-  #heroBanner .wcNums{
-    gap: 10px !important;
-    font-size: 12px !important;
-  }
-  #heroBanner .wcNums b{
-    font-size: 13px !important;
-  }
-
-  /* Roster: keep visible but smaller and prevent it from forcing extra height */
-  #heroBanner .heroRoster{
-    margin-top: 8px !important;
-    padding: 0 !important;
-    border-radius: 999px !important;
-  }
-  #heroBanner .heroRosterTrack{
-    padding: 6px 8px !important;
-    gap: 6px !important;
-  }
-  #heroBanner .heroChip{
-    font-size: 10px !important;
-    padding: 3px 7px !important;
-  }
-
-  /* IMPORTANT: Disable the extra hero “marquee” + “3-up tri cards” layers on mobile.
-     They can overlap the text on narrow screens even with pointer-events:none. */
-  #heroBanner .heroTriWrap,
-  #heroBanner .heroMarquee,
-  #heroBanner .heroMarqueeA,
-  #heroBanner .heroMarqueeB{
-    display: none !important;
-  }
-}
-/* ===== END MOBILE HERO FIX ===== */
 
 /* ===== MOBILE FINAL SAFETY OVERRIDES (desktop unchanged) ===== */
 @media (max-width: 950px){
@@ -3221,153 +3103,111 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-/* =========================================================
-   MOBILE HERO BANNER — ROOT FIX
-   Root cause: #heroRoster was in normal flow (no z-index/position),
-   while .heroOverlay is absolutely positioned with z-index:3.
-   Result: roster renders *under* overlay text on mobile.
-   Fix: layer & place roster above overlay, and tune mobile typography.
-   ========================================================= */
+/* =========================
+   MOBILE HERO BANNER FIX (v4)
+   Root causes addressed:
+   - hero was being built twice (DOMContentLoaded + init), causing inconsistent layout
+   - overlay layout defaulted to vertical stack on small screens, clipping roster
+   - roster had no thumbnail UI; add high-contrast thumbnails
+   ========================= */
 
-/* Ensure roster is always a top layer element (desktop + mobile) */
-#heroBanner{ position:relative; }
-/* Reserve right-side space so text never collides with the roster strip */
-#heroBanner .heroOverlay{ padding-right: clamp(260px, 38vw, 560px); }
-#heroBanner #heroRoster{
-  position:absolute;
-  z-index:4;
-  right:12px;
-  top:12px;
-  max-width:min(460px, 52%);
-  margin:0;
-}
+#heroBanner{ position:relative; overflow:hidden; }
+#heroBanner .heroSlides{ position:absolute; inset:0; z-index:1; }
+#heroBanner .heroFX{ position:absolute; inset:0; z-index:2; pointer-events:none; }
+#heroBanner .heroOverlay{ position:absolute; inset:0; z-index:5; pointer-events:none; }
 
-/* Improve star player "pop" (less dull) */
-#heroBanner #heroRoster .heroCard img,
-#heroBanner #heroRoster img{
-  filter: saturate(1.25) contrast(1.18) brightness(1.10) drop-shadow(0 12px 18px rgba(0,0,0,.55));
-  opacity:1;
-}
-#heroBanner #heroRoster .heroCard{
-  border-color: rgba(255,255,255,.18);
-  box-shadow: 0 18px 40px rgba(0,0,0,.35);
-}
-
-/* Mobile layout: keep text on one line, shrink sizes, and reserve space so roster never overlaps */
 @media (max-width: 720px){
-  #heroBanner{ height: 170px; }
+  #heroBanner.hero, #heroBanner{ height: 176px !important; }
+
   #heroBanner .heroOverlay{
-    padding: 12px 12px;
-    padding-right: clamp(150px, 44vw, 210px); /* reserve space for roster on the right */
+    display:grid !important;
+    grid-template-columns: 1fr 126px !important;
+    align-items:start !important;
+    gap:10px !important;
+    padding: 12px 12px 10px 12px !important;
   }
+  #heroBanner .heroText{ min-width:0 !important; max-width:100% !important; }
+
+  #heroBanner .heroKicker{ font-size: 10px !important; letter-spacing:.22em !important; }
   #heroBanner .heroTitle{
-    font-size: clamp(15px, 4.2vw, 18px);
-    letter-spacing: .04em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-size: 14px !important;
+    line-height: 1.05 !important;
+    white-space: nowrap !important;
+    overflow:hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 100% !important;
   }
   #heroBanner .heroSub{
-    font-size: clamp(10px, 3.1vw, 12px);
-    opacity: .92;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-size: 11px !important;
+    line-height: 1.15 !important;
+    white-space: nowrap !important;
+    overflow:hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 100% !important;
   }
-  #heroBanner .heroKicker{ font-size: 10px; letter-spacing: .16em; }
-  #heroBanner .wcCount{ transform: scale(.92); transform-origin: left top; }
 
-  /* Move roster into a dedicated vertical strip on the right */
-  #heroBanner #heroRoster{
-    top: 10px;
-    right: 10px;
-    max-width: clamp(140px, 40vw, 200px);
+  #heroBanner .wcCount{
+    margin-top: 8px !important;
+    padding: 8px 10px !important;
+    border-radius: 14px !important;
   }
-  #heroBanner #heroRoster .heroRosterTrack{
-    padding: 6px 8px;
-    gap: 8px;
-    animation-duration: 22s; /* slower = easier to see */
+  #heroBanner .wcLabel{ font-size: 9px !important; }
+  #heroBanner .wcNums{ gap: 8px !important; font-size: 11px !important; }
+
+  #heroBanner .heroSlide img{
+    filter: drop-shadow(0 16px 26px rgba(0,0,0,.45)) brightness(1.12) contrast(1.10) saturate(1.12) !important;
   }
-  #heroBanner #heroRoster .heroCard{
-    width: 120px;
-    height: 78px;
+
+  #heroRoster{
+    display:flex !important;
+    flex-direction:column !important;
+    gap:6px !important;
+    justify-content:center !important;
+    align-items:flex-end !important;
+    max-width: 126px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+  #heroRoster .rosterItem{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    width: 126px;
+    padding: 4px 6px;
     border-radius: 14px;
+    background: rgba(0,0,0,.22);
+    border: 1px solid rgba(255,255,255,.14);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 10px 22px rgba(0,0,0,.22);
   }
-  #heroBanner #heroRoster .heroCardMeta{ left:8px; right:8px; bottom:6px; }
-  #heroBanner #heroRoster .heroCardName{ font-size: 11px; }
-  #heroBanner #heroRoster .heroCardCountry{ font-size: 9px; opacity:.95; }
-}
-
-/* Extra-tight phones */
-@media (max-width: 380px){
-  #heroBanner .heroOverlay{ padding-right: 155px; }
-  #heroBanner .heroTitle{ font-size: 14px; }
-  #heroBanner .heroSub{ font-size: 10px; }
-  #heroBanner #heroRoster .heroCard{ width: 110px; height: 72px; }
-}
-
-
-/* ===== MOBILE HERO BANNER ROOTFIX (Chrome + Safari) =====
-   Root cause: heroOverlay was absolute/inset with high z-index, so it covered the roster layer.
-   Fix: keep overlay as a grid (text left, roster right) and move #heroRoster inside the overlay.
-   Also shrink text on small screens + boost roster contrast. */
-@media (max-width: 950px){
-  #heroBanner{ position:relative; overflow:hidden; }
-  #heroBanner .heroOverlay{
-    width:100% !important;
-    max-width:none !important;
-    display:grid !important;
-    grid-template-columns: minmax(0,1fr) auto;
-    gap:10px;
-    align-items:start;
-    padding:12px 12px 12px 12px !important;
-    z-index:20 !important;
-    background: transparent !important; /* don't wash out the roster */
+  #heroRoster .rosterItem img{
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    object-fit: cover;
+    filter: brightness(1.18) contrast(1.18) saturate(1.18);
+    box-shadow: 0 0 0 1px rgba(255,255,255,.14), 0 10px 18px rgba(0,0,0,.35);
+    flex: 0 0 auto;
   }
-  #heroBanner .heroText{
-    max-width: 62vw;
-    background: rgba(0,0,0,.38);
-    border:1px solid rgba(255,255,255,.14);
-    border-radius:16px;
-    padding:10px 10px 8px;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+  #heroRoster .rosterItem span{
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .01em;
+    color: var(--text);
+    white-space: nowrap;
+    overflow:hidden;
+    text-overflow: ellipsis;
+    max-width: 78px;
   }
-  #heroBanner .heroRoster{
-    position:relative !important;
-    z-index:21 !important;
-    align-self:flex-end;
-    margin-top:0 !important;
-    opacity: 1 !important;
-    background: rgba(0,0,0,.30) !important;
-    border-color: rgba(255,255,255,.16) !important;
-  }
-  /* make the roster chips pop more */
-  #heroBanner .heroChip{
-    background: rgba(255,255,255,.12) !important;
-    border-color: rgba(255,255,255,.18) !important;
-    filter: saturate(1.22) contrast(1.08);
-  }
-}
-
-@media (max-width: 720px){
-  /* reduce text sizing so it stays 1-line and doesn't collide */
-  #heroBanner .heroKicker{ font-size:11px !important; }
-  #heroBanner .heroTitle{ font-size:20px !important; letter-spacing:.6px !important; }
-  #heroBanner .heroSub{ font-size:12px !important; }
-  #heroBanner #wcCount{ transform: scale(.92); transform-origin:left top; }
-  #heroBanner .heroText{ max-width: 58vw; }
-  #heroBanner .heroRoster{ max-width: 40vw; }
 }
 
 @media (max-width: 390px){
-  /* ultra-small phones */
-  #heroBanner .heroTitle{ font-size:18px !important; }
-  #heroBanner .heroSub{ font-size:11px !important; }
-  #heroBanner .heroText{ max-width: 56vw; }
-  #heroBanner .heroRoster{ max-width: 42vw; }
+  #heroBanner .heroOverlay{ grid-template-columns: 1fr 118px !important; }
+  #heroRoster .rosterItem{ width: 118px; }
+  #heroRoster{ max-width:118px !important; }
 }
-/* ===== END MOBILE HERO BANNER ROOTFIX ===== */
 
 </style>
 </head>
@@ -3490,7 +3330,6 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="heroSweep"></div>
 </div>
 <div class="heroOverlay">
-<div class="heroText">
 <div class="heroKicker">WORLD CUP 2026</div>
 <div class="heroTitle">DALLAS WORLD CUP HQ</div>
 <div class="heroSub">Reserve tables • Live schedules • Concierge chat</div>
@@ -3502,10 +3341,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <span><b id="wcM">--</b><small>m</small></span>
 <span><b id="wcS">--</b><small>s</small></span></div>
 </div>
-
-
-  <div aria-hidden="true" class="heroRoster" id="heroRoster"></div>
-</div>
+<div aria-hidden="true" class="heroRoster" id="heroRoster"></div>
 </div>
 </div>
 <!-- Left column: Menu (left) + Chat/Reservations (right) -->
@@ -3950,6 +3786,7 @@ function stripHtml(html){
 // HERO banner (UI-only) — single centered player, 5s, fade
 // -----------------------
 const HERO_SLIDE_MS = 5000; // 5 seconds per player
+let __heroBuilt = false;
 let _heroTimer = null;
 let _heroIndex = 0;
 let _heroPaused = false;
@@ -4011,7 +3848,40 @@ const heroPlayers = [
   },
 ];
 
+function updateHeroRoster(){
+  const roster = document.getElementById('heroRoster');
+  if(!roster) return;
+  roster.innerHTML = '';
+
+  const n = heroPlayers.length || 0;
+  if(!n) return;
+
+  // Show 3 thumbnails (current + next 2)
+  for(let k=0;k<3;k++){
+    const idx = (_heroIndex + k) % n;
+    const p = heroPlayers[idx];
+
+    const item = document.createElement('div');
+    item.className = 'rosterItem';
+
+    const img = document.createElement('img');
+    img.alt = p.name;
+    img.loading = 'eager';
+    img.decoding = 'async';
+    img.src = p.img;
+
+    const label = document.createElement('span');
+    label.textContent = p.name;
+
+    item.appendChild(img);
+    item.appendChild(label);
+    roster.appendChild(item);
+  }
+}
+
 function buildHero(){
+  if(__heroBuilt) return;
+  __heroBuilt = true;
   const hero = document.getElementById("heroBanner");
   const slides = document.getElementById("heroSlides");
   if(!hero || !slides) return;
@@ -4050,6 +3920,9 @@ function buildHero(){
     slides.appendChild(s);
   });
 
+  // build visible roster thumbnails (mobile-safe)
+  updateHeroRoster();
+
   // pause on hover (banner only)
   hero.addEventListener("mouseenter", () => { _heroPaused = true; });
   hero.addEventListener("mouseleave", () => { _heroPaused = false; });
@@ -4066,6 +3939,8 @@ function showHero(i){
     if(idx === _heroIndex) s.classList.add("active");
     else s.classList.remove("active");
   });
+
+  updateHeroRoster();
 }
 
 function restartHero(){
