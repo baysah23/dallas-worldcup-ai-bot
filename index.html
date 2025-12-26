@@ -233,7 +233,9 @@
       gap:6px;
       padding:18px 16px;
     }
-    .heroKicker{
+    
+    .heroText{ display:flex; flex-direction:column; gap:6px; min-width:0; }
+.heroKicker{
       letter-spacing:.18em;
       font-size:11px;
       font-weight:900;
@@ -808,7 +810,7 @@
     @media (max-width:720px){
       .heroCaption .heroName{ font-size:12px; }
     }
-    @media (min-width: 951px){ .heroRoster{ display:none !important; } }
+    
     .heroKicker, .heroTitle{ color: var(--gold); }
 
 
@@ -3026,15 +3028,62 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 
 
-/* === MOBILE STEP: prevent stars overlapping text (mobile-only, safe) === */
+/* === MOBILE STEP (v2): keep hero text + stars visible with no overlap === */
 @media (max-width: 720px){
-  /* Reserve left space for text, right space for stars */
+  /* Make overlay a 2-column grid: text left, stars right */
   #heroBanner .heroOverlay{
-    max-width: 52vw !important;
-    padding: 12px 10px 12px 12px !important;
+    display:grid !important;
+    grid-template-columns: 1fr auto;
+    align-items:start;
+    gap:10px;
+    padding: 12px 12px 10px 12px !important;
+  }
+  #heroBanner .heroText{
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    pointer-events:none;
+  }
+  #heroBanner .heroKicker{ font-size: 9px !important; letter-spacing:.14em !important; }
+  #heroBanner .heroTitle{
+    font-size: 13px !important;
+    line-height: 1.06 !important;
+    letter-spacing: .04em !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  #heroBanner .heroSub{
+    font-size: 10px !important;
+    line-height: 1.18 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    opacity: .92;
+  }
+  #heroBanner #wcCount{
+    margin-top: 6px !important;
+    transform-origin: left top;
+    transform: scale(.92);
   }
 
-  #heroBanner .heroKicker{ font-size: 9px !important; letter-spacing:.12em !important; }
+  /* Stars sit in their own strip on the right */
+  #heroBanner .heroRoster{
+    justify-self:end;
+    align-self:center;
+    margin-top: 0 !important;
+    max-width: 44vw;
+    pointer-events:none;
+  }
+
+  /* Ensure layers: slides < FX < overlay */
+  #heroBanner{ overflow:hidden; }
+  #heroBanner .heroSlides{ z-index: 1; }
+  #heroBanner .heroFX{ z-index: 2; }
+  #heroBanner .heroOverlay{ z-index: 6; }
+}
+#heroBanner .heroKicker{ font-size: 9px !important; letter-spacing:.12em !important; }
   #heroBanner .heroTitle{ font-size: 13px !important; letter-spacing:.04em !important; }
   #heroBanner .heroSub{
     font-size: 9.5px !important;
@@ -3067,7 +3116,6 @@ body.kiosk-mode *::-webkit-scrollbar{
   #heroBanner .heroCard.heroCardTri{ height: 92px !important; }
   #heroBanner .heroCardName{ font-size: 10px !important; }
   #heroBanner .heroCardCountry{ font-size: 9px !important; }
-}
 
 
 /* =========================
@@ -3223,6 +3271,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="heroSweep"></div>
 </div>
 <div class="heroOverlay">
+<div class="heroText">
 <div class="heroKicker">WORLD CUP 2026</div>
 <div class="heroTitle">DALLAS WORLD CUP HQ</div>
 <div class="heroSub">Reserve tables • Live schedules • Concierge chat</div>
@@ -3234,6 +3283,8 @@ body.kiosk-mode *::-webkit-scrollbar{
 <span><b id="wcM">--</b><small>m</small></span>
 <span><b id="wcS">--</b><small>s</small></span></div>
 </div>
+</div>
+
 <div aria-hidden="true" class="heroRoster" id="heroRoster"></div>
 </div>
 </div>
