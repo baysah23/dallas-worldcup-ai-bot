@@ -2929,50 +2929,6 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
-
-/* Schedule sub-tabs (Fixtures / Live / Groups) — mobile & desktop safe */
-.segbar{
-  display:flex;
-  gap:6px;
-  padding:6px;
-  border:1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.03);
-  border-radius: 999px;
-  width: fit-content;
-  max-width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-.segbar::-webkit-scrollbar{ height: 0; }
-.segbtn{
-  appearance:none;
-  border:0;
-  cursor:pointer;
-  padding:8px 12px;
-  border-radius: 999px;
-  font-weight: 800;
-  font-size: 12px;
-  letter-spacing: .02em;
-  color: rgba(255,255,255,.82);
-  background: transparent;
-  white-space: nowrap;
-}
-.segbtn[aria-selected="true"]{
-  color: rgba(0,0,0,.88);
-  background: rgba(212,175,55,.95);
-  box-shadow: 0 10px 26px rgba(0,0,0,.30), inset 0 0 0 1px rgba(0,0,0,.22);
-}
-@media (max-width: 950px){
-  .segbar{ width: 100%; justify-content: space-between; }
-  .segbtn{ flex: 1; text-align:center; }
-}
-
-
-.match.is-live{
-  border-color: rgba(212,175,55,.45) !important;
-  box-shadow: 0 10px 28px rgba(0,0,0,.30), inset 0 0 0 1px rgba(212,175,55,.18);
-}
-
 /* =========================
    MOBILE FIT + SCHEDULE SAFETY
 /* ========================= */
@@ -4896,19 +4852,10 @@ body[data-msec="schedule"] #scheduleCard{
 <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
 <input id="teamSearch" list="teamSuggestions" placeholder="Search team / venue / date (e.g., June 13 or 2026-06-13)..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;"/>
 <datalist id="teamSuggestions"></datalist>
-<div class="pill" id="dataFreshness" style="padding:6px 10px; opacity:.78; white-space:nowrap;">Updated: —</div>
-      <div class="pill" id="matchCount">0</div></div>
+<div class="pill" id="matchCount">0</div></div>
 </div>
 <div class="sidepad" style="padding-bottom:0;">
 <div class="pill" id="nextHint" style="display:inline-block;">Next upcoming match is highlighted</div></div>
-
-<div class="sidepad" style="padding-top:8px; padding-bottom:0;">
-  <div class="segbar" id="scheduleTabs" role="tablist" aria-label="Schedule views">
-    <button class="segbtn" type="button" data-view="fixtures" aria-selected="true">Fixtures</button>
-    <button class="segbtn" type="button" data-view="live" aria-selected="false">Live</button>
-    <button class="segbtn" type="button" data-view="groups" aria-selected="false">Groups</button>
-  </div>
-</div>
 <div class="schedule" id="schedule"></div>
 <div class="sidepad" id="pager" style="display:none; padding-top:10px;">
 <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
@@ -4954,12 +4901,6 @@ let lang = localStorage.getItem("lang") || "en";
 let scheduleData = null;
 let scope = localStorage.getItem("schedule_scope") || "dallas";
 let scheduleQuery = "";
-
-let scheduleView = localStorage.getItem("schedule_view") || "fixtures"; // fixtures | live | groups
-let liveData = null;
-let standingsData = null;
-let liveTicker = null;
-
 
 // Pagination (Dallas + All Matches)
 const PAGE_SIZE = 5;
@@ -5276,45 +5217,6 @@ async function setLanguage(newLang){
   lang = newLang;
   localStorage.setItem("lang", lang);
   applyLanguageToUI();
-
-// Schedule sub-tabs (Fixtures / Live / Groups)
-try{
-  const tabs = document.getElementById("scheduleTabs");
-  if(tabs){
-    const btns = Array.from(tabs.querySelectorAll("button[data-view]"));
-    const setView = (v)=>{
-      scheduleView = v;
-      try{ localStorage.setItem("schedule_view", v); }catch(_){}
-      btns.forEach(b=>{
-        const on = (b.getAttribute("data-view") === v);
-        b.setAttribute("aria-selected", on ? "true" : "false");
-      });
-      // Live view: gentle refresh (only while on the Schedule section)
-      try{
-        if(liveTicker) clearInterval(liveTicker);
-        liveTicker = null;
-        if(v === "live"){
-          liveTicker = setInterval(async ()=>{
-            const activeSec = (document.querySelector(".section.active") || {}).id || "";
-            if(activeSec !== "scheduleSection") return;
-            try{
-              const res = await fetch(`/worldcup/live.json?scope=${encodeURIComponent(scope === "dallas" ? "dallas" : "all")}`, {cache:"no-store"});
-              liveData = await res.json();
-              renderSchedule();
-            }catch(_){}
-          }, 30000);
-        }
-      }catch(_){}
-      renderSchedule();
-    };
-    // initial
-    setView((scheduleView || "fixtures"));
-    btns.forEach(b=>{
-      b.addEventListener("click", ()=> setView(b.getAttribute("data-view") || "fixtures"));
-    });
-  }
-}catch(_){}
-
 applyCompactMode();
 
   // reload menu in the chosen language
@@ -5475,172 +5377,14 @@ document.addEventListener("DOMContentLoaded", buildHero);
 // -----------------------
 // Fetchers (match app.py)
 // -----------------------
-
-
-/* --- Data freshness (luxury + reliability, non-breaking) --- */
-function _fmtAge(sec){
-  if(!isFinite(sec) || sec < 0) return "—";
-  if(sec < 5) return "just now";
-  if(sec < 60) return sec + "s ago";
-  const m = Math.floor(sec/60);
-  if(m < 60) return m + "m ago";
-  const h = Math.floor(m/60);
-  return h + "h ago";
-}
-function updateFreshnessPill(){
-  const el = document.getElementById("dataFreshness");
-  if(!el) return;
-  const ts = Math.max(
-    (scheduleData && scheduleData.updated_at) ? Number(scheduleData.updated_at) : 0,
-    (liveData && liveData.updated_at) ? Number(liveData.updated_at) : 0,
-    (standingsData && standingsData.updated_at) ? Number(standingsData.updated_at) : 0
-  );
-  if(!ts){
-    el.textContent = "Updated: —";
-    el.style.opacity = ".6";
-    return;
-  }
-  const age = Math.max(0, Math.floor(Date.now()/1000) - ts);
-  el.textContent = "Updated: " + _fmtAge(age);
-  // subtle 'stale' hint after 3 minutes (still premium, no flashing)
-  el.style.opacity = (age > 180) ? ".55" : ".78";
-}
-
-/* Safe fetch wrapper (never crashes the UI) */
-async function fetchJsonSafe(url){
-  try{
-    const res = await fetch(url, {cache:"no-store"});
-    if(!res.ok) throw new Error("HTTP " + res.status);
-    return {ok:true, data: await res.json()};
-  }catch(e){
-    return {ok:false, error: String(e || "")};
-  }
-}
-
 async function loadSchedule(){
-  // 1) Base fixtures list (core schedule)
-  const schedUrl = `/schedule.json?scope=${encodeURIComponent(scope)}&q=${encodeURIComponent(scheduleQuery)}`;
-  const r1 = await fetchJsonSafe(schedUrl);
-  if(r1.ok) scheduleData = r1.data;
-
-  // 2) Optional live window + group standings (these endpoints are safe even if ignored)
-  try{
-    const liveScope = (scope === "dallas") ? "dallas" : "all";
-    const [rLive, rStand] = await Promise.all([
-      fetchJsonSafe(`/worldcup/live.json?scope=${encodeURIComponent(liveScope)}`),
-      fetchJsonSafe(`/worldcup/standings.json?scope=all`)
-    ]);
-    if(rLive.ok) liveData = rLive.data;
-    if(rStand.ok) standingsData = rStand.data;
-  }catch(_){}
-
+  const res = await fetch(`/schedule.json?scope=${encodeURIComponent(scope)}&q=${encodeURIComponent(scheduleQuery)}`, {cache:"no-store"});
+  scheduleData = await res.json();
   renderSchedule();
   try{ renderHomePanel(); }catch(e){}
   updateMatchDayMode();
   restartCountdown(); // uses schedule info when available
-  updateFreshnessPill();
 }
-
-// Background refresh (keeps UI feeling "live" without breaking anything)
-(function initAutoRefresh(){
-  if(window.__wcq_auto_refresh) return;
-  window.__wcq_auto_refresh = true;
-
-  // Lightweight refresh for live + standings
-  setInterval(async ()=>{
-    try{
-      const liveScope = (scope === "dallas") ? "dallas" : "all";
-      const [rLive, rStand] = await Promise.all([
-        fetchJsonSafe(`/worldcup/live.json?scope=${encodeURIComponent(liveScope)}`),
-        fetchJsonSafe(`/worldcup/standings.json?scope=all`)
-      ]);
-      if(rLive.ok) liveData = rLive.data;
-      if(rStand.ok) standingsData = rStand.data;
-
-      // Re-render only if user is on Schedule (or the views rely on these)
-      if(document.body.classList.contains("msec-schedule")){
-        renderSchedule();
-        updateFreshnessPill();
-      }
-    }catch(_){}
-  }, 30000);
-
-  // Full fixtures refresh a bit slower
-  setInterval(async ()=>{
-    try{
-      const schedUrl = `/schedule.json?scope=${encodeURIComponent(scope)}&q=${encodeURIComponent(scheduleQuery)}`;
-      const r = await fetchJsonSafe(schedUrl);
-      if(r.ok) scheduleData = r.data;
-      if(document.body.classList.contains("msec-schedule")){
-        renderSchedule();
-        updateFreshnessPill();
-      }
-      restartCountdown();
-    }catch(_){}
-  }, 120000);
-})();
-// -------------------------------------------------------
-// Schedule auto-refresh (premium + non-jumpy)
-// - When Schedule is active: refresh ~every 30s
-// - Otherwise: refresh gently every 5 min
-// - Uses in-flight guard + backoff on failures
-// -------------------------------------------------------
-(function(){
-  let inFlight = false;
-  let lastOk = 0;
-  let intervalId = null;
-  let backoffMs = 30000;
-
-  function isScheduleActive(){
-    try{ return (document.body.getAttribute('data-msec') || 'chat') === 'schedule'; }catch(_){ return false; }
-  }
-
-  async function tick(){
-    if(inFlight) return;
-    const now = Date.now();
-    const active = isScheduleActive();
-    const target = active ? 30000 : 300000;
-    if(now - lastOk < target) return;
-
-    inFlight = true;
-    try{
-      await loadSchedule();
-      lastOk = Date.now();
-      backoffMs = 30000;
-    }catch(e){
-      // exponential backoff up to 10 min
-      backoffMs = Math.min(600000, Math.floor(backoffMs * 1.6));
-    }finally{
-      inFlight = false;
-    }
-  }
-
-  function start(){
-    if(intervalId) return;
-    intervalId = setInterval(tick, 5000); // lightweight check; actual fetch is gated above
-  }
-
-  // start on load
-  start();
-
-  // also refresh immediately when user enters schedule (no jump)
-  try{
-    const _oldSetSection = window.setSection;
-    if(typeof _oldSetSection === 'function'){
-      window.setSection = function(sec){
-        const r = _oldSetSection(sec);
-        if(sec === 'schedule'){
-          setTimeout(()=>{ try{ tick(); }catch(_){ } }, 80);
-        }
-        return r;
-      }
-    }
-  }catch(_){}
-
-  window.__scheduleAutoRefresh = { tick };
-})();
-
-
 
 async function loadMenu(){
   const res = await fetch("/menu.json?lang=" + encodeURIComponent(lang), {cache:"no-store"});
@@ -6122,115 +5866,7 @@ function updateSearchSuggestions(matches){
   dl.innerHTML = teams.map(t=>`<option value="${escapeHtml(t)}"></option>`).join("");
 }
 
-
 function renderSchedule(){
-  const v = (scheduleView || "fixtures").toLowerCase();
-  if(v === "live"){ renderScheduleLive(); return; }
-  if(v === "groups"){ renderScheduleGroups(); return; }
-  renderScheduleFixtures();
-}
-
-function renderScheduleLive(){
-  const el = document.getElementById("schedule");
-  if(!el) return;
-  el.innerHTML = "";
-
-  const list = (liveData && Array.isArray(liveData.matches)) ? liveData.matches.slice() : [];
-  if(!list.length){
-    el.innerHTML = `<div class="match"><div class="left"><div><b>Live Center</b></div><div class="when">No live feed yet. This will auto-populate when scores are available.</div></div><div class="pill">—</div></div>`;
-    return;
-  }
-
-  const now = Date.now();
-  const enriched = list.map(m => ({...m, ts: safeParseTimestamp(m.date, m.time)}))
-                      .sort((a,b)=>(a.ts||0)-(b.ts||0));
-  const near = enriched.filter(m => {
-    const t = m.ts || 0;
-    return Math.abs(t - now) <= (10*60*60*1000); // +/- 10h window for "today-ish"
-  }).slice(0, 12);
-
-  near.forEach(m => {
-    const row = document.createElement("div");
-    row.className = "match";
-    const hs = (m.home_score !== undefined) ? m.home_score : m.homeScore;
-    const as = (m.away_score !== undefined) ? m.away_score : m.awayScore;
-    const hasScore = (hs !== null && hs !== undefined && as !== null && as !== undefined);
-    const scoreTxt = hasScore ? `${hs}–${as}` : "—";
-    const stat = (m.status === "live") ? "LIVE" : (hasScore ? "FT" : "KO");
-    if(stat === "LIVE") row.classList.add("is-live");
-
-    const teamsTxt = (m.home || m.away) ? `${m.home || "TBD"} vs ${m.away || "TBD"}` : (m.teams||"TBD vs TBD");
-    const meta = [m.stage, m.venue].filter(Boolean).join(" • ");
-    row.innerHTML = `
-      <div class="left">
-        <div><b>${escapeHtml(stat)}</b> • ${buildTeamsHtml(teamsTxt)}</div>
-        <div class="when">${escapeHtml(m.date||"")} • ${escapeHtml(formatKickoffTime(m.time||""))}${meta ? ` • ${escapeHtml(meta)}` : ``}</div>
-      </div>
-      <div class="pill"><b>${escapeHtml(scoreTxt)}</b></div>
-    `;
-    el.appendChild(row);
-  });
-}
-
-function renderScheduleGroups(){
-  const el = document.getElementById("schedule");
-  if(!el) return;
-  el.innerHTML = "";
-
-  const groups = (standingsData && standingsData.groups) ? standingsData.groups : null;
-  if(!groups || !Object.keys(groups).length){
-    el.innerHTML = `<div class="match"><div class="left"><div><b>Group Standings</b></div><div class="when">Standings will appear once group matches have scores.</div></div><div class="pill">—</div></div>`;
-    return;
-  }
-
-  const keys = Object.keys(groups).sort();
-  keys.forEach(g => {
-    const rows = groups[g] || [];
-    const card = document.createElement("div");
-    card.className = "match";
-    const table = `
-      <div style="width:100%">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
-          <div><b>${escapeHtml(g)}</b></div>
-          <div class="pill" style="min-width:auto;padding:6px 10px">${rows.length} teams</div>
-        </div>
-        <div style="margin-top:10px; overflow:auto; -webkit-overflow-scrolling:touch;">
-          <table style="width:100%; border-collapse:collapse; font-size:12px;">
-            <thead>
-              <tr style="color:rgba(255,255,255,.7); text-align:left;">
-                <th style="padding:6px 0;">Team</th>
-                <th style="padding:6px 0; text-align:right;">P</th>
-                <th style="padding:6px 0; text-align:right;">W</th>
-                <th style="padding:6px 0; text-align:right;">D</th>
-                <th style="padding:6px 0; text-align:right;">L</th>
-                <th style="padding:6px 0; text-align:right;">GD</th>
-                <th style="padding:6px 0; text-align:right;">Pts</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rows.map(r => `
-                <tr style="border-top:1px solid rgba(255,255,255,.10);">
-                  <td style="padding:7px 0;">${escapeHtml(r.team||"")}</td>
-                  <td style="padding:7px 0; text-align:right;">${escapeHtml(String(r.p??""))}</td>
-                  <td style="padding:7px 0; text-align:right;">${escapeHtml(String(r.w??""))}</td>
-                  <td style="padding:7px 0; text-align:right;">${escapeHtml(String(r.d??""))}</td>
-                  <td style="padding:7px 0; text-align:right;">${escapeHtml(String(r.l??""))}</td>
-                  <td style="padding:7px 0; text-align:right;">${escapeHtml(String(r.gd??""))}</td>
-                  <td style="padding:7px 0; text-align:right; font-weight:900;">${escapeHtml(String(r.pts??""))}</td>
-                </tr>
-              `).join("")}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `;
-    card.innerHTML = table;
-    el.appendChild(card);
-  });
-}
-
-
-function renderScheduleFixtures(){
   const el = document.getElementById("schedule");
   el.innerHTML = "";
 
@@ -6324,18 +5960,11 @@ if (totalPages <= 1){
 
     const venueTxt = m.venue ? ` • ${m.venue}` : "";
 
-    const hs = (m.home_score !== undefined) ? m.home_score : m.homeScore;
-    const as = (m.away_score !== undefined) ? m.away_score : m.awayScore;
-    const hasScore = (hs !== null && hs !== undefined && as !== null && as !== undefined);
-    const scoreTxt = hasScore ? `${hs}–${as}` : "";
-    const stat = (m.status === "live") ? "LIVE" : (hasScore ? "FT" : "");
-    if(stat) row.classList.add(stat === "LIVE" ? "is-live" : "is-finished");
-
     row.innerHTML = `
       <div class="left">
         <div><b>${escapeHtml(m.stage || "Match")}</b> • ${buildTeamsHtml(teamsTxt)}</div>
         <div class="when">${escapeHtml(m.date || "")} • ${escapeHtml(timeTxt)}${escapeHtml(venueTxt)}</div></div>
-      <div class="pill">${scoreTxt ? `<b>${escapeHtml(scoreTxt)}</b><div style="font-size:10px;opacity:.75;margin-top:2px">${escapeHtml(m.id || "")}</div>` : escapeHtml(m.id || "")}${stat ? `<div style="font-size:10px;opacity:.75;margin-top:2px">${escapeHtml(stat)}</div>` : ``}</div>
+      <div class="pill">${escapeHtml(m.id || "")}</div>
     `;
     el.appendChild(row);
   });

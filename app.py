@@ -11,7 +11,8 @@ import datetime
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
-from flask import Flask, request, jsonify, send_from_directory, send_file, g, from openai import OpenAI
+from flask import Flask, request, jsonify, send_from_directory, send_file, g
+from openai import OpenAI
 
 import gspread
 from google.oauth2.service_account import Credentials
