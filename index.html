@@ -5430,9 +5430,55 @@ document.addEventListener("DOMContentLoaded", buildHero);
 // -----------------------
 // Fetchers (match app.py)
 // -----------------------
+
+function __cacheSet(key, payload){
+  try{ localStorage.setItem(key, JSON.stringify({ts: Date.now(), payload})); }catch(_){}
+}
+function __cacheGet(key){
+  try{
+    const raw = localStorage.getItem(key);
+    if(!raw) return null;
+    const obj = JSON.parse(raw);
+    return (obj && obj.payload) ? obj : null;
+  }catch(_){ return null; }
+}
+async function safeFetchJSON(url, {timeoutMs=12000, retries=2, cacheKey=null} = {}){
+  const useAbort = !!window.AbortController;
+  let lastErr = null;
+  for(let attempt=0; attempt<=retries; attempt++){
+    const controller = useAbort ? new AbortController() : null;
+    let to = null;
+    if(controller){
+      to = setTimeout(()=>{ try{ controller.abort(); }catch(e){} }, timeoutMs);
+    }
+    try{
+      const res = await fetch(url, {cache:"no-store", signal: controller ? controller.signal : undefined});
+      if(to) clearTimeout(to);
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if(cacheKey) __cacheSet(cacheKey, data);
+      return data;
+    }catch(e){
+      if(to) try{ clearTimeout(to); }catch(_){}
+      lastErr = e;
+      // brief backoff
+      await new Promise(r=>setTimeout(r, 250 + attempt*350));
+    }
+  }
+  throw lastErr || new Error("Fetch failed");
+}
+
 async function loadSchedule(){
-  const res = await fetch(`/schedule.json?scope=${encodeURIComponent(scope)}&q=${encodeURIComponent(scheduleQuery)}`, {cache:"no-store"});
-  scheduleData = await res.json();
+  const url = `/schedule.json?scope=${encodeURIComponent(scope)}&q=${encodeURIComponent(scheduleQuery)}`;
+  const cacheKey = `wc_schedule_${scope}`;
+  const timeoutMs = (window.innerWidth && window.innerWidth <= 950) ? 20000 : 12000;
+  try{
+    scheduleData = await safeFetchJSON(url, {timeoutMs, retries: 2, cacheKey});
+  }catch(e){
+    const cached = __cacheGet(cacheKey);
+    scheduleData = cached ? cached.payload : { matches: [], notice: "Schedule feed temporarily unavailable (showing no results).", _cached: true };
+    if(scheduleData && cached && cached.ts) scheduleData._cachedAt = cached.ts;
+  }
   renderSchedule();
   try{ renderHomePanel(); }catch(e){}
   updateMatchDayMode();
@@ -5440,20 +5486,32 @@ async function loadSchedule(){
 }
 
 async function loadLiveData(){
+  const s = (scope === "dallas" ? "dallas" : "all");
+  const url = `/worldcup/live.json?scope=${encodeURIComponent(s)}`;
+  const cacheKey = `wc_live_${s}`;
+  const timeoutMs = (window.innerWidth && window.innerWidth <= 950) ? 18000 : 11000;
   try{
-    const res = await fetch(`/worldcup/live.json?scope=${encodeURIComponent(scope === "dallas" ? "dallas" : "all")}`, { cache: "no-store" });
-    liveData = await res.json();
+    liveData = await safeFetchJSON(url, {timeoutMs, retries: 2, cacheKey});
   }catch(e){
-    liveData = { matches: [] };
+    const cached = __cacheGet(cacheKey);
+    liveData = cached ? cached.payload : { matches: [] };
+    if(liveData && cached && cached.ts) liveData._cachedAt = cached.ts;
+    liveData._cached = true;
   }
 }
 
 async function loadStandingsData(){
+  const s = (scope === "dallas" ? "dallas" : "all");
+  const url = `/worldcup/standings.json?scope=${encodeURIComponent(s)}`;
+  const cacheKey = `wc_stand_${s}`;
+  const timeoutMs = (window.innerWidth && window.innerWidth <= 950) ? 20000 : 12000;
   try{
-    const res = await fetch(`/worldcup/standings.json?scope=${encodeURIComponent(scope === "dallas" ? "dallas" : "all")}`, { cache: "no-store" });
-    standingsData = await res.json();
+    standingsData = await safeFetchJSON(url, {timeoutMs, retries: 2, cacheKey});
   }catch(e){
-    standingsData = { groups: {} };
+    const cached = __cacheGet(cacheKey);
+    standingsData = cached ? cached.payload : { groups: {} };
+    if(standingsData && cached && cached.ts) standingsData._cachedAt = cached.ts;
+    standingsData._cached = true;
   }
 }
 
@@ -5997,7 +6055,19 @@ function updateSearchSuggestions(matches){
 
 function renderScheduleFixtures(){
   const el = document.getElementById("schedule");
+  if(!el) return;
   el.innerHTML = "";
+
+  // Safety: never allow the schedule panel to go blank due to a transient fetch issue
+  if(!scheduleData || !Array.isArray(scheduleData.matches) || !scheduleData.matches.length){
+    const when = scheduleData && scheduleData._cachedAt ? new Date(scheduleData._cachedAt).toLocaleString() : null;
+    const note = (scheduleData && scheduleData.notice) ? scheduleData.notice : "No fixtures available yet. This will auto-populate as soon as the official feed publishes matches.";
+    el.innerHTML = `<div class="match"><div class="left"><div><b>Fixtures</b></div><div class="muted">${escapeHtml(note)}${when ? `<div class="muted" style="margin-top:6px;">Last good update: ${escapeHtml(when)}</div>` : ``}</div></div><div class="pill">⏳</div></div>`;
+    if (matchCountEl) matchCountEl.textContent = "0";
+    if (pagerEl) pagerEl.style.display = "none";
+    return;
+  }
+
 
   // Guard: show notice if backend returned one
   if (scheduleData && scheduleData.notice){

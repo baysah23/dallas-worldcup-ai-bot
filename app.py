@@ -150,8 +150,62 @@ FIXTURE_FEED_URL = os.environ.get(
 # (Verified in the fixture feed as "Dallas Stadium".)
 DALLAS_LOCATION_KEYWORDS = ["dallas stadium", "arlington", "at&t"]
 
+# If the remote feed is empty/unavailable (e.g., schedule not published yet),
+# we serve a small premium "demo" dataset so the Schedule UI never goes blank.
+# As soon as the feed returns real matches, the app automatically switches to it.
+DEMO_FIXTURES_RAW: List[Dict[str, Any]] = [
+    {
+        "MatchNumber": 1,
+        "RoundNumber": 1,
+        "DateUtc": "2026-06-11 19:00:00Z",
+        "Location": "Dallas Stadium",
+        "HomeTeam": "United States",
+        "AwayTeam": "Mexico",
+        "Group": "Group A",
+        "HomeTeamScore": None,
+        "AwayTeamScore": None,
+        "Status": "Scheduled",
+    },
+    {
+        "MatchNumber": 2,
+        "RoundNumber": 1,
+        "DateUtc": "2026-06-12 23:00:00Z",
+        "Location": "Dallas Stadium",
+        "HomeTeam": "Canada",
+        "AwayTeam": "Japan",
+        "Group": "Group A",
+        "HomeTeamScore": None,
+        "AwayTeamScore": None,
+        "Status": "Scheduled",
+    },
+    {
+        "MatchNumber": 3,
+        "RoundNumber": 1,
+        "DateUtc": "2026-06-13 02:00:00Z",
+        "Location": "Mexico City Stadium",
+        "HomeTeam": "Mexico",
+        "AwayTeam": "Spain",
+        "Group": "Group A",
+        "HomeTeamScore": None,
+        "AwayTeamScore": None,
+        "Status": "Scheduled",
+    },
+    {
+        "MatchNumber": 4,
+        "RoundNumber": 1,
+        "DateUtc": "2026-06-13 19:00:00Z",
+        "Location": "Dallas Stadium",
+        "HomeTeam": "France",
+        "AwayTeam": "Brazil",
+        "Group": "Group B",
+        "HomeTeamScore": None,
+        "AwayTeamScore": None,
+        "Status": "Scheduled",
+    },
+]
+
 # In-memory cache (plus optional disk cache) so we don't hit the feed too often.
-_fixtures_cache: Dict[str, Any] = {"loaded_at": 0, "matches": []}
+_fixtures_cache: Dict[str, Any] = {"loaded_at": 0, "matches": [], "source": "empty", "last_error": None}
 FIXTURE_CACHE_SECONDS = int(os.environ.get("FIXTURE_CACHE_SECONDS", str(6 * 60 * 60)))  # 6h
 FIXTURE_CACHE_FILE = os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_fixtures.json")
 POLL_STORE_FILE = os.environ.get("POLL_STORE_FILE", "/tmp/wc26_poll_votes.json")
@@ -283,16 +337,34 @@ def load_all_matches(force: bool = False) -> List[Dict[str, Any]]:
             return _fixtures_cache["matches"]
 
     # Fetch fresh (but fall back to any cache if the network times out)
+    raw_matches: List[Dict[str, Any]] = []
     try:
         raw_matches = _fetch_fixture_feed()
-    except Exception:
+        _fixtures_cache["last_error"] = None
+        _fixtures_cache["source"] = "remote"
+    except Exception as e:
+        _fixtures_cache["last_error"] = repr(e)
         # If we have ANY disk cache (even stale), use it instead of breaking the UI
         disk2 = _safe_read_json_file(FIXTURE_CACHE_FILE)
         if disk2 and isinstance(disk2, dict) and isinstance(disk2.get("matches"), list) and disk2["matches"]:
+            _fixtures_cache["source"] = "disk-stale"
             return disk2["matches"]
-        # Otherwise fall back to in-memory cache (may be empty)
-        return _fixtures_cache.get("matches") or []
+        # If we have ANY in-memory cache, use it.
+        if _fixtures_cache.get("matches"):
+            _fixtures_cache["source"] = "mem-stale"
+            return _fixtures_cache["matches"]
+        # Absolute fallback: demo dataset so Schedule never goes blank.
+        raw_matches = list(DEMO_FIXTURES_RAW)
+        _fixtures_cache["source"] = "demo"
 
+    # If the feed responded but returned no matches, fall back gracefully.
+    if not raw_matches:
+        disk2 = _safe_read_json_file(FIXTURE_CACHE_FILE)
+        if disk2 and isinstance(disk2, dict) and isinstance(disk2.get("matches"), list) and disk2["matches"]:
+            _fixtures_cache["source"] = "disk-stale"
+            return disk2["matches"]
+        raw_matches = list(DEMO_FIXTURES_RAW)
+        _fixtures_cache["source"] = "demo"
     norm: List[Dict[str, Any]] = []
     for m in raw_matches:
         dt = _parse_dateutc(m.get("DateUtc") or "")
@@ -341,6 +413,10 @@ def load_all_matches(force: bool = False) -> List[Dict[str, Any]]:
     norm.sort(key=lambda x: x.get("datetime_utc") or "")
     _fixtures_cache["loaded_at"] = now
     _fixtures_cache["matches"] = norm
+    if _fixtures_cache.get("source") not in ("demo", "disk-stale", "mem-stale"):
+        _fixtures_cache["source"] = "remote"
+    if _fixtures_cache.get("source") == "remote":
+        _fixtures_cache["last_error"] = None
     _safe_write_json_file(FIXTURE_CACHE_FILE, {"loaded_at": now, "matches": norm})
 
     return norm
@@ -1774,6 +1850,23 @@ def worldcup_standings_json():
         "note": "Standings are computed from group matches that have scores present in the fixture feed.",
     }
     return _json_with_etag(payload)
+
+
+@app.route("/worldcup/feed_status.json")
+def worldcup_feed_status():
+    """Small health payload for the schedule feed (used for debugging + UI fallbacks)."""
+    loaded_at = int(_fixtures_cache.get("loaded_at") or 0)
+    age = _now_ts() - loaded_at if loaded_at else None
+    return jsonify({
+        "feed_url": FIXTURE_FEED_URL,
+        "cache_loaded_at": loaded_at,
+        "cache_age_sec": age,
+        "cache_ttl_sec": FIXTURE_CACHE_SECONDS,
+        "source": _fixtures_cache.get("source") or "unknown",
+        "last_error": _fixtures_cache.get("last_error"),
+        "disk_cache_file": FIXTURE_CACHE_FILE,
+    })
+
 
 @app.route("/worldcup/qualified.json")
 def qualified_json():
