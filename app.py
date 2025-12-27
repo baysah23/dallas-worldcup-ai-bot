@@ -21,18 +21,6 @@ from google.oauth2.service_account import Credentials
 # ============================================================
 app = Flask(__name__)
 
-
-# === PHASE 6: JSON ETAG (AUTO-INSERTED) ===
-def _set_json_etag(resp, payload_bytes: bytes):
-    """Attach a weak ETag for JSON responses so mobile browsers can revalidate quickly."""
-    try:
-        etag = hashlib.sha1(payload_bytes).hexdigest()
-        resp.set_etag(etag, weak=True)
-        resp.headers.setdefault("Cache-Control", "public, max-age=60")
-    except Exception:
-        pass
-    return resp
-
 client = OpenAI()
 
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
@@ -53,6 +41,18 @@ def add_no_cache_headers(response):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
+        # === PHASE 6: JSON ETAG (AUTO-INSERTED) ===
+        try:
+            # Add weak ETag for JSON to improve revalidation on mobile
+            ctype = response.headers.get("Content-Type","")
+            if (getattr(response, "mimetype", "") == "application/json") or ctype.startswith("application/json"):
+                payload = response.get_data()
+                etag = hashlib.sha1(payload).hexdigest()
+                response.set_etag(etag, weak=True)
+                response.headers.setdefault("Cache-Control", "public, max-age=60")
+        except Exception:
+            pass
+
         return response
 
     # Short cache for JSON (schedule/menu/qualified lists). Helps flaky mobile networks.
@@ -971,49 +971,25 @@ def home():
 
 @app.route("/health")
 def health():
-    resp = jsonify({"status": "ok"})
-    try:
-        payload = resp.get_data()
-        _set_json_etag(resp, payload)
-    except Exception:
-        pass
-    return resp
+    return jsonify({"status": "ok"})
 
 
 @app.route("/version")
 def version():
     try:
         mtime = os.path.getmtime("index.html")
-        resp = jsonify({
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({
             "index_html_last_modified_epoch": mtime,
             "index_html_last_modified": datetime.fromtimestamp(mtime).isoformat(timespec="seconds"),
         })
     except Exception as e:
-        resp = jsonify({"error": repr(e)}), 500
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({"error": repr(e)}), 500
 
 
 @app.route("/menu.json")
 def menu_json():
     lang = norm_lang(request.args.get("lang", "en"))
-    resp = jsonify({"lang": lang, "menu": MENU[lang]})
-    try:
-        payload = resp.get_data()
-        _set_json_etag(resp, payload)
-    except Exception:
-        pass
-    return resp
+    return jsonify({"lang": lang, "menu": MENU[lang]})
 
 
 @app.route("/schedule.json")
@@ -1044,13 +1020,7 @@ def schedule_json():
                 nxt = m
                 break
 
-        resp = jsonify({
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({
             "scope": scope,
             "query": q,
             "today": today.isoformat(),
@@ -1060,13 +1030,7 @@ def schedule_json():
             "matches": matches,
         })
     except Exception as e:
-        resp = jsonify({
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({
             "scope": scope,
             "query": q,
             "today": datetime.now().date().isoformat(),
@@ -1595,13 +1559,7 @@ def get_qualified_teams(force: bool = False) -> List[str]:
 @app.route("/worldcup/qualified.json")
 def qualified_json():
     teams = get_qualified_teams()
-    resp = jsonify({
-    try:
-        payload = resp.get_data()
-        _set_json_etag(resp, payload)
-    except Exception:
-        pass
-    return resp
+    return jsonify({
         "updated_at": int(_qualified_cache.get("loaded_at") or 0),
         "count": len(teams),
         "teams": teams,
@@ -1629,21 +1587,9 @@ def test_sheet():
             "party_size": 4,
             "language": "en",
         })
-        resp = jsonify({"ok": True, "sheet": SHEET_NAME, "message": "✅ Test row appended."})
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({"ok": True, "sheet": SHEET_NAME, "message": "✅ Test row appended."})
     except Exception as e:
-        resp = jsonify({"ok": False, "sheet": SHEET_NAME, "error": repr(e)}), 500
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({"ok": False, "sheet": SHEET_NAME, "error": repr(e)}), 500
 
 
 # ============================================================
@@ -1657,13 +1603,7 @@ def chat():
         ip = client_ip()
         allowed, remaining = check_rate_limit(ip)
         if not allowed:
-            resp = jsonify({
-            try:
-                payload = resp.get_data()
-                _set_json_etag(resp, payload)
-            except Exception:
-                pass
-            return resp
+            return jsonify({
                 "reply": "⚠️ Too many requests. Please wait a minute and try again.",
                 "rate_limit_remaining": 0,
             }), 429
@@ -1679,23 +1619,11 @@ def chat():
         sess["lead"]["language"] = lang
 
         if not msg:
-            resp = jsonify({"reply": "Please type a message.", "rate_limit_remaining": remaining})
-            try:
-                payload = resp.get_data()
-                _set_json_etag(resp, payload)
-            except Exception:
-                pass
-            return resp
+            return jsonify({"reply": "Please type a message.", "rate_limit_remaining": remaining})
 
         # Recall support (all languages)
         if want_recall(msg, lang):
-            resp = jsonify({"reply": recall_text(sess), "rate_limit_remaining": remaining})
-            try:
-                payload = resp.get_data()
-                _set_json_etag(resp, payload)
-            except Exception:
-                pass
-            return resp
+            return jsonify({"reply": recall_text(sess), "rate_limit_remaining": remaining})
 
         # Start reservation flow if user indicates intent
         if sess["mode"] == "idle" and want_reservation(msg):
@@ -1706,13 +1634,7 @@ def chat():
                 sess["lead"]["name"] = ""
 
             q = next_question(sess)
-            resp = jsonify({"reply": q, "rate_limit_remaining": remaining})
-            try:
-                payload = resp.get_data()
-                _set_json_etag(resp, payload)
-            except Exception:
-                pass
-            return resp
+            return jsonify({"reply": q, "rate_limit_remaining": remaining})
 
         # If reserving, keep collecting fields deterministically
         if sess["mode"] == "reserving":
@@ -1721,13 +1643,7 @@ def chat():
                 if validate_date_iso(d_iso):
                     sess["lead"]["date"] = d_iso
                 else:
-                    resp = jsonify({"reply": LANG[lang]["ask_date"], "rate_limit_remaining": remaining})
-                    try:
-                        payload = resp.get_data()
-                        _set_json_etag(resp, payload)
-                    except Exception:
-                        pass
-                    return resp
+                    return jsonify({"reply": LANG[lang]["ask_date"], "rate_limit_remaining": remaining})
 
             t = extract_time(msg)
             if t:
@@ -1751,22 +1667,10 @@ def chat():
             rule = apply_business_rules(sess["lead"])
             if rule == "party":
                 sess["mode"] = "idle"
-                resp = jsonify({"reply": LANG[lang]["rule_party"], "rate_limit_remaining": remaining})
-                try:
-                    payload = resp.get_data()
-                    _set_json_etag(resp, payload)
-                except Exception:
-                    pass
-                return resp
+                return jsonify({"reply": LANG[lang]["rule_party"], "rate_limit_remaining": remaining})
             if rule == "closed":
                 sess["mode"] = "idle"
-                resp = jsonify({"reply": LANG[lang]["rule_closed"], "rate_limit_remaining": remaining})
-                try:
-                    payload = resp.get_data()
-                    _set_json_etag(resp, payload)
-                except Exception:
-                    pass
-                return resp
+                return jsonify({"reply": LANG[lang]["rule_closed"], "rate_limit_remaining": remaining})
 
             # If complete, save + confirm
             lead = sess["lead"]
@@ -1795,32 +1699,14 @@ def chat():
                         "status": "New",
                         "vip": "No",
                     }
-                    resp = jsonify({"reply": confirm, "rate_limit_remaining": remaining})
-                    try:
-                        payload = resp.get_data()
-                        _set_json_etag(resp, payload)
-                    except Exception:
-                        pass
-                    return resp
+                    return jsonify({"reply": confirm, "rate_limit_remaining": remaining})
                 except Exception as e:
                     # Always return JSON so the UI never shows "no reply received".
-                    resp = jsonify({"reply": f"⚠️ Could not save reservation: {repr(e)}", "rate_limit_remaining": remaining}), 500
-                    try:
-                        payload = resp.get_data()
-                        _set_json_etag(resp, payload)
-                    except Exception:
-                        pass
-                    return resp
+                    return jsonify({"reply": f"⚠️ Could not save reservation: {repr(e)}", "rate_limit_remaining": remaining}), 500
 
             # Otherwise ask next missing field
             q = next_question(sess)
-            resp = jsonify({"reply": q, "rate_limit_remaining": remaining})
-            try:
-                payload = resp.get_data()
-                _set_json_etag(resp, payload)
-            except Exception:
-                pass
-            return resp
+            return jsonify({"reply": q, "rate_limit_remaining": remaining})
 
         # Otherwise: normal Q&A using OpenAI (with language + business profile + menu)
         system_msg = f"""
@@ -1848,34 +1734,16 @@ def chat():
                 ],
             )
             reply = (resp.output_text or "").strip() or "(No response)"
-            resp = jsonify({"reply": reply, "rate_limit_remaining": remaining})
-            try:
-                payload = resp.get_data()
-                _set_json_etag(resp, payload)
-            except Exception:
-                pass
-            return resp
+            return jsonify({"reply": reply, "rate_limit_remaining": remaining})
         except Exception as e:
             # If OPENAI_API_KEY isn't set (or any API issue), fail gracefully.
             fallback = "⚠️ Chat is temporarily unavailable. Please try again, or type 'reservation' to book a table."
-            resp = jsonify({"reply": f"{fallback}\n\nDebug: {type(e).__name__}", "rate_limit_remaining": remaining}), 200
-            try:
-                payload = resp.get_data()
-                _set_json_etag(resp, payload)
-            except Exception:
-                pass
-            return resp
+            return jsonify({"reply": f"{fallback}\n\nDebug: {type(e).__name__}", "rate_limit_remaining": remaining}), 200
 
     except Exception as e:
         # Never break the UI: always return JSON.
         fallback = "⚠️ Chat is temporarily unavailable. Please try again, or type 'reservation' to book a table."
-        resp = jsonify({"reply": f"{fallback}\n\nDebug: {type(e).__name__}", "rate_limit_remaining": 0}), 200
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({"reply": f"{fallback}\n\nDebug: {type(e).__name__}", "rate_limit_remaining": 0}), 200
 
 
 # ============================================================
@@ -2204,13 +2072,7 @@ def api_config():
         "motd_datetime_utc": cfg.get("motd_datetime_utc", ""),
         "poll_lock_mode": cfg.get("poll_lock_mode", "auto"),
     }
-    resp = jsonify(public)
-    try:
-        payload = resp.get_data()
-        _set_json_etag(resp, payload)
-    except Exception:
-        pass
-    return resp
+    return jsonify(public)
 
 
 @app.route("/api/poll/state")
@@ -2225,13 +2087,7 @@ def api_poll_state():
         if not motd:
             # Keep the UI responsive even if matches failed to load.
             cfg = get_config()
-            resp = jsonify({
-            try:
-                payload = resp.get_data()
-                _set_json_etag(resp, payload)
-            except Exception:
-                pass
-            return resp
+            return jsonify({
                 "ok": True,
                 "locked": True,
                 "post_match": False,
@@ -2262,13 +2118,7 @@ def api_poll_state():
         if total > 0:
             winner = max(teams, key=lambda t: counts.get(t, 0))
         cfg = get_config()
-        resp = jsonify({
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({
             "ok": True,
             "match": {
                 "id": mid,
@@ -2297,13 +2147,7 @@ def api_poll_state():
             cfg = get_config()
         except Exception:
             cfg = {}
-        resp = jsonify({
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({
             "ok": True,
             "locked": True,
             "post_match": False,
@@ -2328,13 +2172,7 @@ def api_poll_vote():
     if not motd:
         # Keep the UI responsive even if matches failed to load.
         cfg = get_config()
-        resp = jsonify({
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({
             "ok": True,
             "locked": True,
             "post_match": False,
@@ -2351,43 +2189,19 @@ def api_poll_vote():
 
     mid = _match_id(motd)
     if _poll_is_locked(motd):
-        resp = jsonify({"ok": False, "error": "Poll locked at kickoff"}), 423
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({"ok": False, "error": "Poll locked at kickoff"}), 423
 
     teams = [motd.get("home") or "Team A", motd.get("away") or "Team B"]
     if team not in teams:
-        resp = jsonify({"ok": False, "error": "Invalid team"}), 400
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({"ok": False, "error": "Invalid team"}), 400
 
     already = _poll_has_voted(mid, client_id)
     if already:
-        resp = jsonify({"ok": False, "error": "Already voted", "voted_for": already}), 409
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({"ok": False, "error": "Already voted", "voted_for": already}), 409
 
     ok = _poll_record_vote(mid, client_id, team)
     if not ok:
-        resp = jsonify({"ok": False, "error": "Could not record vote"}), 500
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({"ok": False, "error": "Could not record vote"}), 500
 
     # return updated state
     return api_poll_state()
@@ -2396,13 +2210,7 @@ def api_poll_vote():
 def admin_update_config():
     key = request.args.get("key", "")
     if not ADMIN_KEY or key != ADMIN_KEY:
-        resp = jsonify({"ok": False, "error": "Unauthorized"}), 401
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({"ok": False, "error": "Unauthorized"}), 401
 
     data = request.get_json(silent=True) or {}
 
@@ -2433,13 +2241,7 @@ def admin_update_config():
         }
 
         cfg = set_config(pairs)
-        resp = jsonify({"ok": True, "config": {
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({"ok": True, "config": {
             "poll_sponsor_text": cfg.get("poll_sponsor_text",""),
             "match_of_day_id": cfg.get("match_of_day_id",""),
             "motd_home": cfg.get("motd_home",""),
@@ -2452,49 +2254,25 @@ def admin_update_config():
 
 
     except Exception as e:
-        resp = jsonify({"ok": False, "error": str(e)}), 500
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route("/admin/update-lead", methods=["POST"])
 def admin_update_lead():
     key = request.args.get("key", "")
     if not ADMIN_KEY or key != ADMIN_KEY:
-        resp = jsonify({"ok": False, "error": "Unauthorized"}), 401
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({"ok": False, "error": "Unauthorized"}), 401
 
     data = request.get_json(silent=True) or {}
     row_num = int(data.get("row") or 0)
     if row_num < 2:
-        resp = jsonify({"ok": False, "error": "Bad row"}), 400
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({"ok": False, "error": "Bad row"}), 400
 
     status = (data.get("status") or "").strip()
     vip = (data.get("vip") or "").strip()
 
     allowed_status = ["New", "Confirmed", "Seated", "No-Show"]
     if status and status not in allowed_status:
-        resp = jsonify({"ok": False, "error": "Invalid status"}), 400
-        try:
-            payload = resp.get_data()
-            _set_json_etag(resp, payload)
-        except Exception:
-            pass
-        return resp
+        return jsonify({"ok": False, "error": "Invalid status"}), 400
 
     if vip:
         vip_norm = vip.lower()
@@ -2503,13 +2281,7 @@ def admin_update_lead():
         elif vip_norm in ["false", "0", "no", "n", "off"]:
             vip = "No"
         elif vip not in ["Yes", "No"]:
-            resp = jsonify({"ok": False, "error": "Invalid vip"}), 400
-            try:
-                payload = resp.get_data()
-                _set_json_etag(resp, payload)
-            except Exception:
-                pass
-            return resp
+            return jsonify({"ok": False, "error": "Invalid vip"}), 400
 
     gc = get_gspread_client()
     ws = gc.open(SHEET_NAME).sheet1
@@ -2529,13 +2301,7 @@ def admin_update_lead():
             ws.update_cell(row_num, col, vip)
             updates += 1
 
-    resp = jsonify({"ok": True, "updated": updates})
-    try:
-        payload = resp.get_data()
-        _set_json_etag(resp, payload)
-    except Exception:
-        pass
-    return resp
+    return jsonify({"ok": True, "updated": updates})
 
 
 @app.route("/admin/export.csv")
