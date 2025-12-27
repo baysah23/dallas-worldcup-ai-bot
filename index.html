@@ -5778,33 +5778,34 @@ const __sectionEls = {
 // Mobile section order for swipe navigation
 const __sectionOrder = ['home','chat','menu','schedule','fanzone','vip'];
 
+
+// Focus chat input when entering Chat (mobile UX)
+function __focusChatInput(){
+  const t = document.getElementById('msg');
+  if(!t) return;
+  try{ t.focus({preventScroll:true}); }catch(_){ try{ t.focus(); }catch(__){} }
+  try{
+    const v = (t.value || "");
+    if(t.setSelectionRange) t.setSelectionRange(v.length, v.length);
+  }catch(_){}
+  // iOS sometimes needs a tiny delay after section becomes visible
+  try{ setTimeout(()=>{ try{ t.focus({preventScroll:true}); }catch(_2){} }, 40); }catch(_){}
+  // Bring just the input into view (no full-page jump)
+  try{ t.scrollIntoView({block:'end'}); }catch(_){}
+}
 function __currentSection(){
   return (document.body.getAttribute('data-msec') || 'chat');
 }
 
-// Focus the Chat input reliably on mobile section changes.
-// Must run as a direct result of a user gesture (nav tap) for iOS Safari to allow focus.
-function __focusChatInput(){
-  const msgEl = document.getElementById('msg');
-  if(!msgEl) return;
-  // Ensure the chat card is visible before focusing.
-  const run = ()=>{
-    try{
-      // Bring the composer (or the textarea) into view first, then focus without scrolling the whole page.
-      const composer = msgEl.closest('.composer') || msgEl;
-      try{ composer.scrollIntoView({behavior:'auto', block:'end'}); }catch(_){ try{ composer.scrollIntoView(); }catch(__){} }
-      try{ msgEl.focus({preventScroll:true}); }catch(e){ try{ msgEl.focus(); }catch(_e){} }
-      // iOS sometimes needs a second microtask tick to keep focus after layout/scroll.
-      setTimeout(()=>{ try{ msgEl.focus({preventScroll:true}); }catch(e){ try{ msgEl.focus(); }catch(_e){} } }, 60);
-    }catch(e){}
-  };
-  // rAF ensures visibility changes from data-msec have applied.
-  try{ requestAnimationFrame(()=>requestAnimationFrame(run)); }catch(e){ setTimeout(run, 0); }
-}
-
-
 function setSection(sec){
     document.body.setAttribute('data-msec', sec);
+
+    // Persist the last visited section on mobile (so reload doesn't feel random)
+    try{
+      if(sec === 'home') localStorage.removeItem('wc_mobile_section');
+      else localStorage.setItem('wc_mobile_section', sec);
+    }catch(_){ }
+
 
     // Mobile-only micro animation on section change
     if(isMobile && isMobile() && !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
@@ -5828,32 +5829,25 @@ function setSection(sec){
         try{ if(typeof renderSchedule==='function'){ renderSchedule(); } }catch(e){}
       }
     }
-
-    // When navigating to Chat on mobile, auto-ready the input for typing (no extra tap).
-    if(sec === 'chat' && isMobile && isMobile()){
-      try{ __focusChatInput(); }catch(e){}
-    }
-
     const nav = document.getElementById('mobileNav');
     if(nav){
       nav.querySelectorAll('.mnavBtn').forEach(b=>{
         b.classList.toggle('active', b.dataset.msec === sec);
       });
     }
-    // When switching, scroll the relevant card into view for a “native app” feel.
-    const el = __sectionEls[sec];
-    if(isMobile()){
-      const target = (sec === 'home') ? document.getElementById('heroBanner') : (sec === 'chat' ? (document.getElementById('msg')?.closest('.composer') || document.getElementById('msg') || el) : (el || document.getElementById('heroBanner')));
-      if(target){
-        try{ target.scrollIntoView({behavior:(sec==='chat' ? 'auto' : 'smooth'), block:(sec==='chat' ? 'end' : 'start')}); }catch(e){ target.scrollIntoView(); }
-      }
+
+    // Chat: autofocus input so user can type immediately
+    if(sec === 'chat'){
+      try{ setTimeout(__focusChatInput, 30); }catch(_){ }
     }
-  }
+}
+  // Expose for bottom-nav click wiring
+  window.setSection = setSection;
 
 /* Mobile swipe navigation (between sections) */
 (function(){
   function enabled(){
-    return (typeof isMobile === 'function') && isMobile() && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    return false; // disabled: was causing accidental section changes during vertical scroll
   }
   let startX=0, startY=0, tracking=false, lastSec=null;
   const THRESH=42;         // px
@@ -5912,9 +5906,11 @@ function setSection(sec){
       if(!btn) return;
       setSection(btn.dataset.msec || 'chat');
     });
-    // Default section on mobile
+    // Default section on mobile (restore last visited)
     if(isMobile() && !document.body.getAttribute('data-msec')){
-      setSection('home');
+      let pref = 'home';
+      try{ pref = (localStorage.getItem('wc_mobile_section') || 'home'); }catch(_){ }
+      setSection(pref);
     }
   }
 
@@ -6679,6 +6675,9 @@ function setSection(sec){
 /* MOBILE SECTION NAV (UI-only, safe)
    Gives phone users full access to desktop features without clutter/overlap. */
 (function(){
+  // If the newer bottom mobile nav exists, skip legacy injected nav to avoid conflicts.
+  if(document.getElementById('mobileNav')){ return; }
+
   function isSmall(){ return (window.innerWidth||0) <= 950; }
 
   function ensureScheduleId(){
