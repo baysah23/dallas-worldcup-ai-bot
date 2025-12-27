@@ -2725,6 +2725,36 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
   .homeLinkBtn:hover{ transform: translateY(-1px); background: rgba(255,255,255,.10); }
   .homeLinkRow{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .homeTip{
+    margin-top:12px;
+    border:1px solid rgba(255,255,255,.14);
+    background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,.14));
+    border-radius: 14px;
+    padding: 10px 10px;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .homeTip b{ font-weight:950; }
+  .homeTip .t{ font-size:12px; color: var(--text); line-height:1.25; }
+  .homeTip .s{ margin-top:4px; font-size:11px; color: var(--muted); line-height:1.25; }
+  .homeTipClose{
+    flex:0 0 auto;
+    width:30px; height:30px;
+    border-radius: 999px;
+    border:1px solid rgba(255,255,255,.16);
+    background: rgba(255,255,255,.06);
+    color: var(--text);
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:900;
+    line-height:1;
+  }
+  .homeTipClose:hover{ transform: translateY(-1px); background: rgba(255,255,255,.10); }
+
   .homeKicker{
     font-size: 9.5px;
     letter-spacing: .22em;
@@ -4628,6 +4658,14 @@ body.kiosk-mode *::-webkit-scrollbar{
           <div class="homeStepTxt"><b>Explore</b> — see upcoming matches globally.</div>
         </div>
       </div>
+
+      <div class="homeTip" id="homeTip" role="note" aria-label="Quick start tip">
+        <div>
+          <div class="t"><b>Quick start:</b> Tap <b>Reserve</b> to book, then <b>Explore Matches</b> for the full World Cup schedule.</div>
+          <div class="s">You can switch schedule scope anytime: <b>All matches</b> (global) or <b>Dallas spotlight</b> (optional).</div>
+        </div>
+        <button class="homeTipClose" id="homeTipClose" type="button" aria-label="Dismiss tip">×</button>
+      </div>
     </div>
 
     <div class="homeTile" aria-label="Upcoming World Cup matches">
@@ -5436,6 +5474,32 @@ function wireHomePanel(){
   if(goFan) goFan.addEventListener("click", ()=>{
     try{ if(typeof window.setSection === "function") window.setSection("fanzone"); }catch(_){}
   });
+
+  // Home pulse scope controls (safe)
+  const setAll  = document.getElementById("homeSetAll");
+  const setDal  = document.getElementById("homeSetDallas");
+  function setScope(v){
+    try{ localStorage.setItem("schedule_scope", v); }catch(_){}
+    try{ scope = v; }catch(_){}
+    try{ renderHomePanel(); }catch(_){}
+    try{ if(typeof window.renderSchedule === "function") window.renderSchedule(); }catch(_){}
+  }
+  if(setAll) setAll.addEventListener("click", ()=> setScope("all"));
+  if(setDal) setDal.addEventListener("click", ()=> setScope("dallas"));
+
+  // Dismissible quick-start tip (first-time users)
+  try{
+    const tip = document.getElementById("homeTip");
+    const tipClose = document.getElementById("homeTipClose");
+    const dismissed = (()=>{ try{ return localStorage.getItem("home_tip_dismissed")==="1"; }catch(_){ return false; } })();
+    if(tip && dismissed) tip.style.display = "none";
+    if(tip && tipClose){
+      tipClose.addEventListener("click", ()=>{
+        try{ localStorage.setItem("home_tip_dismissed","1"); }catch(_){}
+        tip.style.display = "none";
+      });
+    }
+  }catch(_){}
 
   // Home fastlane chips
   try{
