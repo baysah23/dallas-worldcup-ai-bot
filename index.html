@@ -4895,9 +4895,9 @@ body[data-msec="schedule"] #scheduleCard{
 </div>
 <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
 <input id="teamSearch" list="teamSuggestions" placeholder="Search team / venue / date (e.g., June 13 or 2026-06-13)..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;"/>
-<div class="pill" id="dataFreshness" style="padding:6px 10px; opacity:.78; white-space:nowrap;">Updated: —</div>
 <datalist id="teamSuggestions"></datalist>
-<div class="pill" id="matchCount">0</div></div>
+<div class="pill" id="dataFreshness" style="padding:6px 10px; opacity:.78; white-space:nowrap;">Updated: —</div>
+      <div class="pill" id="matchCount">0</div></div>
 </div>
 <div class="sidepad" style="padding-bottom:0;">
 <div class="pill" id="nextHint" style="display:inline-block;">Next upcoming match is highlighted</div></div>
@@ -4959,59 +4959,6 @@ let scheduleView = localStorage.getItem("schedule_view") || "fixtures"; // fixtu
 let liveData = null;
 let standingsData = null;
 let liveTicker = null;
-let standTicker = null;
-
-// ---- Live/standings smart refresh (ETag-aware + safe backoff) ----
-const _etagStore = Object.create(null);
-const _failCount = Object.create(null);
-
-async function fetchJsonSmart(url, key){
-  try{
-    const headers = {};
-    if(_etagStore[key]) headers["If-None-Match"] = _etagStore[key];
-    const res = await fetch(url, {cache:"no-store", headers});
-    if(res.status === 304) return {status:"not_modified"};
-    if(!res.ok) throw new Error("HTTP "+res.status);
-    const et = res.headers.get("ETag");
-    if(et) _etagStore[key] = et;
-    const data = await res.json();
-    _failCount[key] = 0;
-    return {status:"ok", data};
-  }catch(e){
-    _failCount[key] = (_failCount[key]||0)+1;
-    return {status:"error", error: String(e||"")};
-  }
-}
-
-function _fmtAge(sec){
-  if(sec < 5) return "just now";
-  if(sec < 60) return sec+"s ago";
-  const m = Math.floor(sec/60);
-  if(m < 60) return m+"m ago";
-  const h = Math.floor(m/60);
-  return h+"h ago";
-}
-
-function updateFreshnessPill(){
-  const el = document.getElementById("dataFreshness");
-  if(!el) return;
-  const v = (scheduleView || "fixtures").toLowerCase();
-  const now = Math.floor(Date.now()/1000);
-  let ts = null;
-  if(v === "live" && liveData && liveData.updated_at) ts = liveData.updated_at;
-  if(v === "groups" && standingsData && standingsData.updated_at) ts = standingsData.updated_at;
-  if(!ts){
-    el.textContent = "Updated: —";
-    return;
-  }
-  const age = Math.max(0, now - Number(ts||0));
-  const fails = _failCount[(v==="live") ? "live" : "stand"] || 0;
-  el.textContent = "Updated: "+_fmtAge(age)+(fails?(" • reconnecting…"):"");
-}
-setInterval(()=>{ 
-  const activeSec = (document.querySelector(".section.active") || {}).id || "";
-  if(activeSec === "scheduleSection") updateFreshnessPill();
-}, 1000);
 
 
 // Pagination (Dallas + All Matches)
@@ -5342,36 +5289,18 @@ try{
         const on = (b.getAttribute("data-view") === v);
         b.setAttribute("aria-selected", on ? "true" : "false");
       });
-      // Live + Groups view: gentle refresh (only while on the Schedule section)
+      // Live view: gentle refresh (only while on the Schedule section)
       try{
         if(liveTicker) clearInterval(liveTicker);
-        if(standTicker) clearInterval(standTicker);
         liveTicker = null;
-        standTicker = null;
-
         if(v === "live"){
           liveTicker = setInterval(async ()=>{
             const activeSec = (document.querySelector(".section.active") || {}).id || "";
             if(activeSec !== "scheduleSection") return;
-            const r = await fetchJsonSmart(`/worldcup/live.json?scope=${encodeURIComponent(scope === "dallas" ? "dallas" : "all")}`,'live');
-            if(r.status === "ok"){ liveData = r.data; renderSchedule(); }
-            updateFreshnessPill();
-          }, 30000);
-        }
-
-        if(v === "groups"){
-          standTicker = setInterval(async ()=>{
-            const activeSec = (document.querySelector(".section.active") || {}).id || "";
-            if(activeSec !== "scheduleSection") return;
-            const r = await fetchJsonSmart(`/worldcup/standings.json?scope=all`,'stand');
-            if(r.status === "ok"){ standingsData = r.data; renderSchedule(); }
-            updateFreshnessPill();
-          }, 60000);
-        }
-      }catch(_){}
-      renderSchedule();
-      updateFreshnessPill(); updateFreshnessPill(); }
-              else if(r.status === "not_modified"){ updateFreshnessPill(); }
+            try{
+              const res = await fetch(`/worldcup/live.json?scope=${encodeURIComponent(scope === "dallas" ? "dallas" : "all")}`, {cache:"no-store"});
+              liveData = await res.json();
+              renderSchedule();
             }catch(_){}
           }, 30000);
         }
@@ -5547,30 +5476,170 @@ document.addEventListener("DOMContentLoaded", buildHero);
 // Fetchers (match app.py)
 // -----------------------
 
-async function loadSchedule(){
-  const res = await fetch(`/schedule.json?scope=${encodeURIComponent(scope)}&q=${encodeURIComponent(scheduleQuery)}`, {cache:"no-store"});
-  scheduleData = await res.json();
 
-  // Non-breaking: live + standings are optional (render uses fallbacks).
+/* --- Data freshness (luxury + reliability, non-breaking) --- */
+function _fmtAge(sec){
+  if(!isFinite(sec) || sec < 0) return "—";
+  if(sec < 5) return "just now";
+  if(sec < 60) return sec + "s ago";
+  const m = Math.floor(sec/60);
+  if(m < 60) return m + "m ago";
+  const h = Math.floor(m/60);
+  return h + "h ago";
+}
+function updateFreshnessPill(){
+  const el = document.getElementById("dataFreshness");
+  if(!el) return;
+  const ts = Math.max(
+    (scheduleData && scheduleData.updated_at) ? Number(scheduleData.updated_at) : 0,
+    (liveData && liveData.updated_at) ? Number(liveData.updated_at) : 0,
+    (standingsData && standingsData.updated_at) ? Number(standingsData.updated_at) : 0
+  );
+  if(!ts){
+    el.textContent = "Updated: —";
+    el.style.opacity = ".6";
+    return;
+  }
+  const age = Math.max(0, Math.floor(Date.now()/1000) - ts);
+  el.textContent = "Updated: " + _fmtAge(age);
+  // subtle 'stale' hint after 3 minutes (still premium, no flashing)
+  el.style.opacity = (age > 180) ? ".55" : ".78";
+}
+
+/* Safe fetch wrapper (never crashes the UI) */
+async function fetchJsonSafe(url){
   try{
-    const [liveRes, standRes] = await Promise.allSettled([
-      fetchJsonSmart(`/worldcup/live.json?scope=${encodeURIComponent(scope === "dallas" ? "dallas" : "all")}`,'live'),
-      fetchJsonSmart(`/worldcup/standings.json?scope=all`,'stand')
+    const res = await fetch(url, {cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP " + res.status);
+    return {ok:true, data: await res.json()};
+  }catch(e){
+    return {ok:false, error: String(e || "")};
+  }
+}
+
+async function loadSchedule(){
+  // 1) Base fixtures list (core schedule)
+  const schedUrl = `/schedule.json?scope=${encodeURIComponent(scope)}&q=${encodeURIComponent(scheduleQuery)}`;
+  const r1 = await fetchJsonSafe(schedUrl);
+  if(r1.ok) scheduleData = r1.data;
+
+  // 2) Optional live window + group standings (these endpoints are safe even if ignored)
+  try{
+    const liveScope = (scope === "dallas") ? "dallas" : "all";
+    const [rLive, rStand] = await Promise.all([
+      fetchJsonSafe(`/worldcup/live.json?scope=${encodeURIComponent(liveScope)}`),
+      fetchJsonSafe(`/worldcup/standings.json?scope=all`)
     ]);
-    if(liveRes.status === "fulfilled" && liveRes.value){
-      if(liveRes.value.status === "ok") liveData = liveRes.value.data;
-    }
-    if(standRes.status === "fulfilled" && standRes.value){
-      if(standRes.value.status === "ok") standingsData = standRes.value.data;
-    }
-    updateFreshnessPill();
+    if(rLive.ok) liveData = rLive.data;
+    if(rStand.ok) standingsData = rStand.data;
   }catch(_){}
 
   renderSchedule();
   try{ renderHomePanel(); }catch(e){}
   updateMatchDayMode();
   restartCountdown(); // uses schedule info when available
+  updateFreshnessPill();
 }
+
+// Background refresh (keeps UI feeling "live" without breaking anything)
+(function initAutoRefresh(){
+  if(window.__wcq_auto_refresh) return;
+  window.__wcq_auto_refresh = true;
+
+  // Lightweight refresh for live + standings
+  setInterval(async ()=>{
+    try{
+      const liveScope = (scope === "dallas") ? "dallas" : "all";
+      const [rLive, rStand] = await Promise.all([
+        fetchJsonSafe(`/worldcup/live.json?scope=${encodeURIComponent(liveScope)}`),
+        fetchJsonSafe(`/worldcup/standings.json?scope=all`)
+      ]);
+      if(rLive.ok) liveData = rLive.data;
+      if(rStand.ok) standingsData = rStand.data;
+
+      // Re-render only if user is on Schedule (or the views rely on these)
+      if(document.body.classList.contains("msec-schedule")){
+        renderSchedule();
+        updateFreshnessPill();
+      }
+    }catch(_){}
+  }, 30000);
+
+  // Full fixtures refresh a bit slower
+  setInterval(async ()=>{
+    try{
+      const schedUrl = `/schedule.json?scope=${encodeURIComponent(scope)}&q=${encodeURIComponent(scheduleQuery)}`;
+      const r = await fetchJsonSafe(schedUrl);
+      if(r.ok) scheduleData = r.data;
+      if(document.body.classList.contains("msec-schedule")){
+        renderSchedule();
+        updateFreshnessPill();
+      }
+      restartCountdown();
+    }catch(_){}
+  }, 120000);
+})();
+// -------------------------------------------------------
+// Schedule auto-refresh (premium + non-jumpy)
+// - When Schedule is active: refresh ~every 30s
+// - Otherwise: refresh gently every 5 min
+// - Uses in-flight guard + backoff on failures
+// -------------------------------------------------------
+(function(){
+  let inFlight = false;
+  let lastOk = 0;
+  let intervalId = null;
+  let backoffMs = 30000;
+
+  function isScheduleActive(){
+    try{ return (document.body.getAttribute('data-msec') || 'chat') === 'schedule'; }catch(_){ return false; }
+  }
+
+  async function tick(){
+    if(inFlight) return;
+    const now = Date.now();
+    const active = isScheduleActive();
+    const target = active ? 30000 : 300000;
+    if(now - lastOk < target) return;
+
+    inFlight = true;
+    try{
+      await loadSchedule();
+      lastOk = Date.now();
+      backoffMs = 30000;
+    }catch(e){
+      // exponential backoff up to 10 min
+      backoffMs = Math.min(600000, Math.floor(backoffMs * 1.6));
+    }finally{
+      inFlight = false;
+    }
+  }
+
+  function start(){
+    if(intervalId) return;
+    intervalId = setInterval(tick, 5000); // lightweight check; actual fetch is gated above
+  }
+
+  // start on load
+  start();
+
+  // also refresh immediately when user enters schedule (no jump)
+  try{
+    const _oldSetSection = window.setSection;
+    if(typeof _oldSetSection === 'function'){
+      window.setSection = function(sec){
+        const r = _oldSetSection(sec);
+        if(sec === 'schedule'){
+          setTimeout(()=>{ try{ tick(); }catch(_){ } }, 80);
+        }
+        return r;
+      }
+    }
+  }catch(_){}
+
+  window.__scheduleAutoRefresh = { tick };
+})();
+
 
 
 async function loadMenu(){

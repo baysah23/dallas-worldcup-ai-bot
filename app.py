@@ -11,8 +11,7 @@ import datetime
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
-from flask import Flask, request, jsonify, send_from_directory, send_file, g, make_response
-from openai import OpenAI
+from flask import Flask, request, jsonify, send_from_directory, send_file, g, from openai import OpenAI
 
 import gspread
 from google.oauth2.service_account import Credentials
@@ -1619,20 +1618,17 @@ _stand_payload_cache: Dict[str, Dict[str, Any]] = {}
 _payload_cache_ttl_sec = 15
 
 def _json_with_etag(payload: Dict[str, Any]):
-    """Return JSON with ETag + no-store, enabling client-side 304s.
-    Safe: clients that ignore headers still work.
+    """Return JSON with a stable ETag header (always 200).
+
+    Why: some fetch() code treats HTTP 304 as an error (res.ok === false),
+    which can look like the app is 'broken'. This keeps reliability benefits
+    (ETag + short server cache) without ever returning 304.
     """
     body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
     etag = hashlib.sha256(body.encode("utf-8")).hexdigest()[:16]
-    inm = request.headers.get("If-None-Match")
-    if inm and inm.strip('"') == etag:
-        resp = make_response("", 304)
-    else:
-        resp = make_response(body, 200)
-        resp.headers["Content-Type"] = "application/json; charset=utf-8"
-    resp.headers["ETag"] = f'"{etag}"'
+    resp = jsonify(payload)
+    resp.headers["ETag"] = f"\"{etag}\""
     resp.headers["Cache-Control"] = "no-store"
-    resp.headers["X-Data-Updated-At"] = str(payload.get("updated_at", int(time.time())))
     return resp
 
 def _now_ts() -> int:
