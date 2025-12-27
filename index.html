@@ -4118,6 +4118,85 @@ body.kiosk-mode *::-webkit-scrollbar{
     .is-safari button { -webkit-appearance: none; }
 /* === END PHASE 5 === */
 
+
+/* === PHASE 6: ULTRA PREMIUM PERFORMANCE + QA (AUTO-INSERTED) === */
+    /* Reduce paint work and keep scrolling buttery */
+    .lux-anim {
+      will-change: transform, opacity;
+      transform: translateZ(0);
+    }
+    /* “Reveal” system (no layout change) */
+    .lux-reveal {
+      opacity: 0.001;
+      transform: translateY(6px);
+      transition: opacity .32s ease, transform .42s ease;
+    }
+    .lux-reveal.in-view {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .lux-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
+    }
+
+    /* QA overlay (only when enabled via ?qa=1) */
+    #luxQaPanel {
+      position: fixed;
+      right: 10px;
+      bottom: 10px;
+      z-index: 99999;
+      width: min(380px, calc(100vw - 20px));
+      max-height: 60vh;
+      overflow: auto;
+      border-radius: 16px;
+      padding: 12px 12px 10px;
+      background: rgba(8,12,20,.82);
+      border: 1px solid rgba(255,255,255,.14);
+      box-shadow: 0 18px 55px rgba(0,0,0,.48);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      color: rgba(255,255,255,.92);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    #luxQaPanel h3 {
+      margin: 0 0 8px;
+      font-size: 13px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: rgba(242,209,124,.92);
+    }
+    #luxQaPanel .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 12px;
+      padding: 6px 0;
+      border-top: 1px solid rgba(255,255,255,.08);
+    }
+    #luxQaPanel .k { color: rgba(255,255,255,.68); }
+    #luxQaPanel .v { color: rgba(255,255,255,.92); text-align: right; }
+    #luxQaPanel .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      font-size: 12px;
+      margin-right: 6px;
+      margin-top: 6px;
+    }
+    #luxQaPanel .ok { color: rgba(170,255,200,.95); }
+    #luxQaPanel .bad { color: rgba(255,180,180,.95); }
+    #luxQaPanel button {
+      margin-top: 10px;
+      width: 100%;
+      min-height: 40px;
+      border-radius: 12px;
+    }
+/* === END PHASE 6 === */
+
 </style>
 </head>
 <body data-lux="on">
@@ -4144,7 +4223,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 <div class="fz-left-stack" id="fzLeftStack">
 <aside aria-label="VIP Table Hold" class="vip-rail" id="vipHoldRail">
-<div class="fz-card vip-hold vip-card" id="vipHoldCard">
+<div class="fz-card vip-hold vip-card lux-reveal" id="vipHoldCard">
 <h3>⭐ VIP Table Hold</h3>
 <div class="fz-muted" style="margin-top:6px;">Fast-track your best tables for big matches.</div>
 <div class="vip-actions" style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
@@ -4164,7 +4243,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <button class="fz-iconbtn" id="fzIconPoll" title="Fan poll">📊</button>
 <button class="fz-btn" id="btnPickCountry">Which country are you supporting?</button>
 <button class="fz-btn" id="btnOpenPoll">Match poll</button></div>
-<div class="fz-card" id="pollCard" style="display:none; margin-top:10px; max-height:52vh; overflow:auto;">
+<div class="fz-card lux-reveal" id="pollCard" style="display:none; margin-top:10px; max-height:52vh; overflow:auto;">
 <h3>⚔️ Match of the Day Poll</h3>
 <div class="fz-muted">Vote for who you think will win.</div>
 <div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
@@ -4178,7 +4257,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <button class="fz-iconbtn" id="fzIconDrinks" title="Drink highlight">🍹</button>
 <button class="fz-iconbtn" id="fzIconQR" title="QR poster">📱</button>
 <button class="fz-btn" id="btnSharePoster">QR poster</button></div>
-<div class="fz-card" id="drinkCard" style="margin-top:10px;">
+<div class="fz-card lux-reveal" id="drinkCard" style="margin-top:10px;">
 <h3>🍹 Drink highlights</h3>
 <div id="drinkHighlight" style="margin-top:10px;">
       <div style="border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:10px; background: rgba(0,0,0,.10);">
@@ -4186,7 +4265,7 @@ body.kiosk-mode *::-webkit-scrollbar{
         <div id="drinkDesc" class="fz-muted" style="margin-top:4px;"></div>
       </div></div>
 </div>
-<div class="fz-card" id="qrCard" style="display:none; margin-top:10px;">
+<div class="fz-card lux-reveal" id="qrCard" style="display:none; margin-top:10px;">
 <h3>📱 QR poster</h3>
 <div class="fz-muted">Print/display at the entrance. Scan to open the app.</div>
 <div class="qrWrap" style="margin-top:10px;">
@@ -4199,7 +4278,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 </aside>
 <!-- Modal -->
 <div aria-labelledby="countryModalTitle" aria-modal="true" class="fz-modal" id="countryModal" role="dialog">
-<div class="panel">
+<div class="panel lux-reveal">
 <h2 id="countryModalTitle">Which country are you supporting?</h2>
 <div class="fz-muted" style="margin-bottom:10px;">Pick one. We’ll personalize the experience (stored locally).</div>
 <div class="fz-country-grid" id="countryGrid"></div>
@@ -4210,7 +4289,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 <!-- Match Poll Modal -->
 <div aria-labelledby="pollModalTitle" aria-modal="true" class="fz-modal" id="pollModal" role="dialog">
-  <div class="panel">
+  <div class="panel lux-reveal">
     <h2 id="pollModalTitle">⚔️ Match of the Day Poll</h2>
     <div class="fz-muted" style="margin-bottom:10px;">Vote for who you think will win.</div>
     <div id="pollListModal" style="display:grid; gap:8px; max-height:60vh; overflow:auto;"></div>
@@ -4256,14 +4335,14 @@ body.kiosk-mode *::-webkit-scrollbar{
 <!-- Left column: Menu (left) + Chat/Reservations (right) -->
 <div class="leftcol">
 <!-- Menu -->
-<div class="card menucard" style="display:flex;flex-direction:column;min-height:0; max-width:190px;">
+<div class="card menucard lux-reveal" style="display:flex;flex-direction:column;min-height:0; max-width:190px;">
 <div class="cardhead">
 <div class="title" id="menuTitle">Menu</div>
 </div>
 <div class="menu" id="menu"></div>
 </div>
 <!-- Chat / Reservations -->
-<div class="card chatcard" style="display:flex;flex-direction:column;min-height:0;">
+<div class="card chatcard lux-reveal" style="display:flex;flex-direction:column;min-height:0;">
 <div class="cardhead">
 <div class="title" id="chatTitle">Chat</div>
 <div style="display:flex; gap:8px; align-items:center;">
@@ -4279,7 +4358,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="hint" id="helperHint"></div>
 </div></div>
 <!-- Sidebar -->
-<div class="card schedulecard" id="scheduleCard" style="display:flex;flex-direction:column;min-height:0;">
+<div class="card schedulecard lux-reveal" id="scheduleCard" style="display:flex;flex-direction:column;min-height:0;">
 <div class="cardhead">
 <div class="title" id="sideTitle">Dallas Schedule</div>
 <div class="pill" id="pillLang">EN</div></div>
@@ -6780,6 +6859,164 @@ function apply(){
 
   // Consistent tap delay handling (modern browsers ignore, harmless otherwise)
   root.style.touchAction = 'manipulation';
+})();
+</script>
+
+
+<script>
+/* === PHASE 6: PERFORMANCE + QA MATRIX (AUTO-INSERTED) === */
+(() => {
+  const q = new URLSearchParams(location.search);
+  const qaEnabled = q.get('qa') === '1' || q.get('QA') === '1';
+
+  // --- 1) Ultra-premium performance scheduling (no behavior changes) ---
+  const onIdle = (fn, timeout=800) => {
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(fn, { timeout });
+    } else {
+      setTimeout(fn, Math.min(timeout, 250));
+    }
+  };
+
+  // Intersection-based reveal (smooth + cheap)
+  onIdle(() => {
+    try {
+      const els = Array.from(document.querySelectorAll('.lux-reveal'));
+      if (!els.length || !('IntersectionObserver' in window)) {
+        els.forEach(e => e.classList.add('in-view'));
+        return;
+      }
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach(ent => {
+          if (ent.isIntersecting) {
+            ent.target.classList.add('in-view');
+            io.unobserve(ent.target);
+          }
+        });
+      }, { root: null, threshold: 0.12 });
+      els.forEach(e => io.observe(e));
+    } catch (_) {}
+  }, 600);
+
+  // --- 2) Micro-perf marks (for real-device QA) ---
+  try {
+    performance.mark('lux_boot_start');
+    window.addEventListener('load', () => {
+      try {
+        performance.mark('lux_load');
+        performance.measure('lux_boot_to_load', 'lux_boot_start', 'lux_load');
+      } catch(_) {}
+    }, { once: true });
+  } catch(_) {}
+
+  // --- 3) Per-device QA matrix (only when ?qa=1) ---
+  const runChecks = () => {
+    const checks = [];
+    const add = (name, ok, detail="") => checks.push({ name, ok: !!ok, detail });
+
+    // No horizontal scroll
+    const sw = document.documentElement.scrollWidth;
+    const cw = document.documentElement.clientWidth;
+    add('No horizontal scroll', sw <= cw + 1, `scrollWidth=${sw}, clientWidth=${cw}`);
+
+    // Hero visible (if exists)
+    const hero = document.querySelector('.hero');
+    if (hero) {
+      const r = hero.getBoundingClientRect();
+      add('Hero in viewport', r.height >= 120 && r.top < window.innerHeight, `h=${Math.round(r.height)}, top=${Math.round(r.top)}`);
+      // Hero title inside hero bounds (prevents offscreen)
+      const ht = hero.querySelector('.heroTitle');
+      if (ht) {
+        const tr = ht.getBoundingClientRect();
+        add('Hero title not clipped', tr.left >= -2 && tr.right <= window.innerWidth + 2, `L=${Math.round(tr.left)}, R=${Math.round(tr.right)}`);
+      }
+      // Roster exists if your app uses it
+      const roster = hero.querySelector('.heroRoster');
+      if (roster) {
+        const kids = roster.querySelectorAll(':scope > *').length;
+        add('Star roster populated', kids >= 1, `items=${kids}`);
+      } else {
+        add('Star roster element exists', false, 'Missing .heroRoster');
+      }
+    } else {
+      add('Hero exists', false, 'Missing .hero');
+    }
+
+    // Tap targets (minimum 44px) for primary nav buttons if present
+    const btns = Array.from(document.querySelectorAll('button, .btn, .langbtn, .navBtn, .tabBtn')).slice(0, 12);
+    if (btns.length) {
+      const small = btns.filter(b => (b.getBoundingClientRect().height || 0) < 40);
+      add('Tap targets ok', small.length === 0, `checked=${btns.length}, small=${small.length}`);
+    }
+
+    return checks;
+  };
+
+  const buildQaPanel = () => {
+    const panel = document.createElement('div');
+    panel.id = 'luxQaPanel';
+
+    const ua = navigator.userAgent || '';
+    const dpr = window.devicePixelRatio || 1;
+    const vp = `${window.innerWidth}×${window.innerHeight}`;
+    const lang = (navigator.language || '').toLowerCase();
+    const mem = navigator.deviceMemory ? `${navigator.deviceMemory}GB` : 'n/a';
+    const cores = navigator.hardwareConcurrency ? `${navigator.hardwareConcurrency}` : 'n/a';
+    const net = (navigator.connection && navigator.connection.effectiveType) ? navigator.connection.effectiveType : 'n/a';
+    const rm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduce' : 'no-preference';
+    const scheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+
+    const checks = runChecks();
+
+    panel.innerHTML = `
+      <h3>QA Matrix (Device)</h3>
+      <div class="pill">VP: <span class="v">${vp}</span></div>
+      <div class="pill">DPR: <span class="v">${dpr}</span></div>
+      <div class="pill">Net: <span class="v">${net}</span></div>
+      <div class="pill">CPU: <span class="v">${cores}</span></div>
+      <div class="pill">Mem: <span class="v">${mem}</span></div>
+      <div class="row"><div class="k">Lang</div><div class="v">${lang}</div></div>
+      <div class="row"><div class="k">Motion</div><div class="v">${rm}</div></div>
+      <div class="row"><div class="k">Scheme</div><div class="v">${scheme}</div></div>
+      <div class="row"><div class="k">Classes</div><div class="v">${document.documentElement.className || '—'}</div></div>
+      <div class="row"><div class="k">User-Agent</div><div class="v" style="max-width: 220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${ua.replace(/"/g,'&quot;')}">${ua}</div></div>
+      <h3 style="margin-top:10px;">Checks</h3>
+      <div id="luxQaChecks"></div>
+      <button type="button" class="btn" id="luxQaRerun">Re-run checks</button>
+    `;
+
+    const renderChecks = () => {
+      const c = runChecks();
+      const wrap = panel.querySelector('#luxQaChecks');
+      wrap.innerHTML = c.map(x => `
+        <div class="row">
+          <div class="k">${x.name}</div>
+          <div class="v ${x.ok ? 'ok' : 'bad'}">${x.ok ? 'PASS' : 'FAIL'}</div>
+        </div>
+        ${
+          x.detail ? `<div style="font-size:11px;color:rgba(255,255,255,.62);padding:0 0 6px;border-top:0;margin-top:-2px;">${x.detail}</div>` : ''
+        }
+      `).join('');
+    };
+
+    renderChecks();
+    panel.querySelector('#luxQaRerun').addEventListener('click', renderChecks);
+    document.body.appendChild(panel);
+
+    // Keep it accurate on rotate
+    window.addEventListener('resize', () => {
+      const pills = panel.querySelectorAll('.pill .v');
+      if (pills && pills[0]) pills[0].textContent = `${window.innerWidth}×${window.innerHeight}`;
+      renderChecks();
+    }, { passive: true });
+  };
+
+  if (qaEnabled) {
+    // Build after first paint so it doesn't impact load
+    onIdle(buildQaPanel, 900);
+    console.info('[QA] Enabled. Add ?qa=1 to any URL to show device matrix.');
+  }
+
 })();
 </script>
 
