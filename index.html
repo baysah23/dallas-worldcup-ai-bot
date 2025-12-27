@@ -3552,6 +3552,21 @@ body.kiosk-mode *::-webkit-scrollbar{
   #heroBanner .heroCaption .heroName{ font-size: 11.5px !important; }
 }
 
+
+/* === FINAL: REMOVE ALL PLAYER NAMES / LABELS (ALL PLATFORMS) ===
+   Hides:
+   - single-slide caption name (.heroCaption)
+   - any name text under players (.player-name / .heroCardMeta)
+   - roster chips strip (.heroRoster)
+   Safe: CSS-only; does not touch desktop layout logic or JS.
+*/
+.heroCaption,
+.player-name,
+.heroCardMeta,
+.heroRoster{
+  display:none !important;
+}
+
 </style>
 </head>
 <body>
