@@ -7,6 +7,12 @@
 <meta name="format-detection" content="telephone=no">
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
 <title>World Cup 2026 Dallas Concierge</title>
+
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="theme-color" content="#070A0F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
 <style>
     :root{
       --bg:#071022;
@@ -4234,6 +4240,67 @@ body.kiosk-mode *::-webkit-scrollbar{
     #luxToast .muted { color: rgba(255,255,255,.68); font-size: 12px; margin-top: 2px; }
 /* === END PHASE 7 === */
 
+
+/* === PHASE 8: PWA + HERO ROSTER (AUTO-INSERTED) === */
+    @media (max-width: 720px) {
+      /* Give the left overlay room so roster doesn't collide */
+      .heroOverlay {
+        max-width: 54%;
+      }
+
+      .heroRoster {
+        position: absolute;
+        top: 14px;
+        right: 12px;
+        width: 44%;
+        max-width: 320px;
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        align-items: flex-start;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 6px 6px 8px;
+        border-radius: 16px;
+        background: rgba(0,0,0,.22);
+        border: 1px solid rgba(255,255,255,.10);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        box-shadow: 0 10px 26px rgba(0,0,0,.30);
+      }
+      .heroRoster::-webkit-scrollbar { height: 0px; }
+      .heroRoster { scrollbar-width: none; }
+
+      .heroStar {
+        flex: 0 0 auto;
+        width: 64px;
+        display: grid;
+        grid-template-rows: 48px auto;
+        justify-items: center;
+        gap: 6px;
+        text-align: center;
+      }
+      .heroStar img {
+        width: 48px;
+        height: 48px;
+        border-radius: 999px;
+        object-fit: cover;
+        border: 1px solid rgba(255,255,255,.16);
+        box-shadow: 0 10px 22px rgba(0,0,0,.32);
+        transform: translateZ(0);
+      }
+      .heroStar .nm {
+        font-size: 10px;
+        line-height: 1.05;
+        color: rgba(255,255,255,.86);
+        max-width: 64px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+    }
+/* === END PHASE 8 === */
+
 </style>
 </head>
 <body data-lux="on">
@@ -7193,6 +7260,79 @@ function apply(){
       showToast('Something went wrong', msg);
     } catch(_) {}
   });
+})();
+</script>
+
+
+<script>
+/* === PHASE 8: PWA + ROSTER ENGINE (AUTO-INSERTED) === */
+(() => {
+  // ---- A) Ensure hero roster is populated (fixes QA "Star roster populated" FAIL) ----
+  const renderRoster = () => {
+    try {
+      const roster = document.getElementById('heroRoster') || document.querySelector('.heroRoster');
+      if (!roster) return;
+
+      // If already populated, don't duplicate.
+      if (roster.querySelector('.heroStar')) return;
+
+      // heroPlayers is defined in your file (used for slides). If missing, abort safely.
+      if (!window.heroPlayers || !Array.isArray(window.heroPlayers) || !window.heroPlayers.length) return;
+
+      const max = 9; // you mentioned 9 star players
+      const players = window.heroPlayers.slice(0, max);
+
+      roster.innerHTML = '';
+      players.forEach(p => {
+        const item = document.createElement('div');
+        item.className = 'heroStar lux-press';
+        const img = document.createElement('img');
+        img.alt = p.name || 'Star player';
+        img.decoding = 'async';
+        img.loading = 'eager'; // keep crisp in hero
+        img.src = p.img;
+
+        const nm = document.createElement('div');
+        nm.className = 'nm';
+        nm.textContent = p.name || '';
+
+        item.appendChild(img);
+        item.appendChild(nm);
+
+        // Optional: tap sets the hero slide to that player if your slider uses index
+        item.addEventListener('click', () => {
+          try {
+            if (typeof window.setHeroIndex === 'function') {
+              const idx = window.heroPlayers.findIndex(x => x && x.name === p.name);
+              if (idx >= 0) window.setHeroIndex(idx);
+            }
+          } catch(_) {}
+        });
+
+        roster.appendChild(item);
+      });
+    } catch(_) {}
+  };
+
+  // Run once after DOM and after hero initialization
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(renderRoster, 350), { once: true });
+  } else {
+    setTimeout(renderRoster, 350);
+  }
+
+  // ---- B) Register service worker for install/offline polish ----
+  const registerSW = async () => {
+    try {
+      if (!('serviceWorker' in navigator)) return;
+      await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    } catch (e) {
+      // silent: never break app
+    }
+  };
+  // Defer to idle so it doesn't affect first paint
+  const onIdle = (fn) => ('requestIdleCallback' in window) ? requestIdleCallback(fn, { timeout: 1200 }) : setTimeout(fn, 600);
+  onIdle(registerSW);
 })();
 </script>
 
