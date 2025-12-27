@@ -11,7 +11,7 @@ import datetime
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
-from flask import Flask, request, jsonify, send_from_directory, send_file, g, Response
+from flask import Flask, request, jsonify, send_from_directory, send_file, g
 from openai import OpenAI
 
 import gspread
@@ -77,18 +77,6 @@ def add_no_cache_headers(response):
                 response.set_etag(etag, weak=True)
                 response.headers.setdefault("Cache-Control", "public, max-age=60")
         except Exception:
-            pass
-
-        # === PHASE 9: SECURITY/POLISH HEADERS (AUTO-INSERTED) ===
-
-        try:
-
-            response.headers.setdefault("X-Content-Type-Options", "nosniff")
-
-            response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-
-        except Exception:
-
             pass
 
         return response
@@ -2935,22 +2923,6 @@ tr:hover td{background:rgba(255,255,255,.03)}
 
     html.append("</div></body></html>")
     return "".join(html)
-
-# === PHASE 8: PWA ROUTES (AUTO-INSERTED) ===
-@app.get("/manifest.webmanifest")
-def manifest_webmanifest():
-    data = '{"name":"Dallas World Cup HQ","short_name":"Dallas WC HQ","start_url":"/","display":"standalone","background_color":"#070A0F","theme_color":"#070A0F","icons":[]}'
-    resp = Response(data, mimetype="application/manifest+json")
-    resp.headers["Cache-Control"] = "public, max-age=3600"
-    return resp
-
-@app.get("/sw.js")
-def service_worker():
-    js = "// Phase 8 Service Worker: premium offline + fast reload\nconst CACHE = 'lux-v1';\nconst CORE = [\n  '/',\n  '/manifest.webmanifest'\n];\n\nself.addEventListener('install', (event) => {\n  event.waitUntil(\n    caches.open(CACHE).then((c) => c.addAll(CORE)).then(() => self.skipWaiting())\n  );\n});\n\nself.addEventListener('activate', (event) => {\n  event.waitUntil(\n    caches.keys().then(keys => Promise.all(keys.map(k => (k !== CACHE) ? caches.delete(k) : null)))\n      .then(() => self.clients.claim())\n  );\n});\n\n// Stale-while-revalidate for GET requests\nself.addEventListener('fetch', (event) => {\n  const req = event.request;\n  if (req.method !== 'GET') return;\n\n  const url = new URL(req.url);\n  // Only handle same-origin\n  if (url.origin !== self.location.origin) return;\n\n  // Network-first for chat/admin (avoid stale)\n  if (url.pathname.startsWith('/chat') || url.pathname.startsWith('/admin')) {\n    event.respondWith(fetch(req).catch(() => caches.match('/')));\n    return;\n  }\n\n  event.respondWith(\n    caches.match(req).then((cached) => {\n      const fetchPromise = fetch(req).then((res) => {\n        // Cache successful, basic responses\n        if (res && res.status === 200 && (res.type === 'basic' || res.type === 'cors')) {\n          const copy = res.clone();\n          caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});\n        }\n        return res;\n      }).catch(() => cached || caches.match('/'));\n\n      return cached || fetchPromise;\n    })\n  );\n});"
-    resp = Response(js, mimetype="application/javascript")
-    resp.headers["Cache-Control"] = "public, max-age=3600"
-    return resp
-
 
 
 if __name__ == "__main__":
