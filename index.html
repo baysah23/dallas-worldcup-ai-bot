@@ -4443,6 +4443,27 @@ body.kiosk-mode *::-webkit-scrollbar{
     }
 /* === END PHASE 9.1 === */
 
+
+/* === MOBILE PORTRAIT GLARE FIX (SURGICAL) ===
+   Removes bright sweep/glow layers that cause glare ONLY in portrait.
+   Desktop + landscape remain untouched.
+*/
+@media (orientation: portrait){
+  .hero::after,
+  .heroGlow,
+  .heroSweep,
+  .heroSlide::before{
+    opacity: 0 !important;
+    animation: none !important;
+    filter: none !important;
+    mix-blend-mode: normal !important;
+  }
+  /* Keep images crisp without halo */
+  .heroSlide img{
+    filter: brightness(1) contrast(1) !important;
+  }
+}
+
 </style>
 </head>
 <body data-lux="on">
