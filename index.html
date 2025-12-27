@@ -3841,9 +3841,149 @@ body.kiosk-mode *::-webkit-scrollbar{
     }
 /* === END PHASE 1+2 LAYER === */
 
+
+/* === PHASE 3: LUXURY VISUAL SYSTEM (AUTO-INSERTED) === */
+    /* Design tokens (kept neutral so desktop stays familiar) */
+    :root {
+      --lux-bg0: #070A0F;
+      --lux-bg1: #0B1020;
+      --lux-card: rgba(255,255,255,.06);
+      --lux-card2: rgba(255,255,255,.08);
+      --lux-stroke: rgba(255,255,255,.12);
+      --lux-stroke2: rgba(255,255,255,.18);
+      --lux-text: rgba(255,255,255,.92);
+      --lux-muted: rgba(255,255,255,.72);
+      --lux-faint: rgba(255,255,255,.56);
+      --lux-gold: #C8A74A;
+      --lux-gold2: #F2D17C;
+      --lux-shadow: 0 18px 55px rgba(0,0,0,.48);
+      --lux-shadow2: 0 10px 26px rgba(0,0,0,.34);
+      --lux-radius: 16px;
+      --lux-radius2: 20px;
+    }
+
+    /* Premium backdrop and “soft noise” (pure CSS; no assets) */
+    body {
+      color: var(--lux-text);
+      background:
+        radial-gradient(1200px 700px at 18% 8%, rgba(200,167,74,.16), transparent 55%),
+        radial-gradient(900px 600px at 85% 12%, rgba(90,145,255,.16), transparent 52%),
+        radial-gradient(900px 700px at 55% 92%, rgba(255,255,255,.06), transparent 56%),
+        linear-gradient(180deg, var(--lux-bg0), var(--lux-bg1));
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .05;
+      background-image:
+        repeating-linear-gradient(0deg, rgba(255,255,255,.25) 0, rgba(255,255,255,.25) 1px, transparent 1px, transparent 2px),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.15) 0, rgba(255,255,255,.15) 1px, transparent 1px, transparent 3px);
+      mix-blend-mode: overlay;
+      transform: translateZ(0);
+    }
+
+    /* Elevate cards/panels without changing layout */
+    .card, .panel, .section, .module, .box {
+      background: var(--lux-card);
+      border: 1px solid var(--lux-stroke);
+      border-radius: var(--lux-radius);
+      box-shadow: var(--lux-shadow2);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+
+    /* Buttons and chips: premium feel, consistent across devices */
+    button, .btn, .pill, .chip, .langbtn, .segBtn, .navBtn, .tabBtn {
+      border-radius: 999px;
+      border: 1px solid var(--lux-stroke);
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
+      box-shadow: 0 10px 22px rgba(0,0,0,.28);
+      transition: transform .12s ease, filter .12s ease, box-shadow .18s ease;
+      will-change: transform;
+    }
+    button:active, .btn:active, .pill:active, .chip:active, .langbtn:active, .segBtn:active, .navBtn:active, .tabBtn:active {
+      transform: translateY(1px) scale(.99);
+      filter: brightness(1.03);
+      box-shadow: 0 6px 14px rgba(0,0,0,.22);
+    }
+    button:hover, .btn:hover, .pill:hover, .chip:hover, .langbtn:hover, .segBtn:hover, .navBtn:hover, .tabBtn:hover {
+      filter: brightness(1.06);
+    }
+
+    /* Gold accent: reserved and controlled (use .accentGold on Dallas/Knockout/Finals if you already tag them) */
+    .accentGold {
+      color: var(--lux-gold2);
+      text-shadow: 0 0 18px rgba(200,167,74,.28);
+    }
+    .accentGoldBorder {
+      border-color: rgba(200,167,74,.45) !important;
+      box-shadow: 0 0 0 1px rgba(200,167,74,.20) inset, 0 14px 30px rgba(0,0,0,.30);
+    }
+
+    /* Hero: cinematic “premium” polish without touching desktop rules */
+    @media (max-width: 720px) {
+      .hero {
+        border-radius: var(--lux-radius2);
+        background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+        border: 1px solid rgba(255,255,255,.14);
+        box-shadow: var(--lux-shadow);
+        overflow: hidden;
+      }
+      .hero::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          radial-gradient(650px 280px at 22% 20%, rgba(200,167,74,.22), transparent 55%),
+          radial-gradient(620px 280px at 92% 28%, rgba(255,255,255,.12), transparent 58%),
+          linear-gradient(180deg, rgba(255,255,255,.06), transparent 45%);
+        mix-blend-mode: screen;
+        opacity: .9;
+      }
+      /* Subtle divider glow under hero title (requested previously) */
+      .heroTitle {
+        position: relative;
+      }
+      .heroTitle::after {
+        content: "";
+        display: block;
+        height: 1px;
+        width: min(220px, 62vw);
+        margin-top: 8px;
+        background: linear-gradient(90deg, rgba(200,167,74,.0), rgba(200,167,74,.55), rgba(255,255,255,.25), rgba(200,167,74,.0));
+        filter: blur(.1px);
+        opacity: .9;
+      }
+      /* Make text stack feel “tight” */
+      .heroOverlay {
+        gap: 5px;
+      }
+    }
+
+    /* Scroll polish: avoid “rubber band” white flash on iOS */
+    html, body {
+      background-color: var(--lux-bg0);
+    }
+
+    /* Micro-animations (non-invasive) */
+    @media (prefers-reduced-motion: no-preference) {
+      .card, .panel, .section, .module, .box {
+        transition: transform .18s ease, box-shadow .22s ease, border-color .22s ease;
+      }
+      .card:hover, .panel:hover, .section:hover, .module:hover, .box:hover {
+        transform: translateY(-1px);
+        border-color: var(--lux-stroke2);
+        box-shadow: var(--lux-shadow);
+      }
+    }
+/* === END PHASE 3: LUXURY VISUAL SYSTEM === */
+
 </style>
 </head>
-<body>
+<body data-lux="on">
 <div class="wrap">
 <header>
 <div class="toprow">
