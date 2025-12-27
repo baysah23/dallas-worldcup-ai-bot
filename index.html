@@ -4504,31 +4504,37 @@ body.kiosk-mode *::-webkit-scrollbar{
   body[data-msec="schedule"] #scheduleCard{ scroll-margin-top: 8px; }
 }
 /* =======================
-   MOBILE SCHEDULE GAP FIX (v4)
-   Root cause: in Schedule section, child cards inside .leftcol are hidden,
-   but .leftcol itself still occupies space in the layout, leaving a big blank area
-   before #scheduleCard. We hide .leftcol entirely for schedule view (mobile + desktop).
+   MOBILE SCHEDULE GAP FIX (v5 - definitive)
+   Problem: Schedule tab hides the contents inside .leftcol, but .leftcol still participates
+   in the grid and can consume the full "1fr" row (especially on mobile where columns collapse),
+   creating a large blank gap before #scheduleCard.
+   Fix: remove .leftcol from layout in schedule mode, and make the grid auto-height (no 1fr stretch).
    ======================= */
 body[data-msec="schedule"] .leftcol{ display:none !important; }
 
-/* Mobile: make the main grid a tight vertical stack for schedule */
+body[data-msec="schedule"] .grid{
+  grid-template-columns: 1fr !important;
+  grid-template-rows: auto auto !important; /* hero + schedule */
+  align-content: start !important;
+  align-items: start !important;
+  height: auto !important;
+}
+
+body[data-msec="schedule"] #scheduleCard{
+  display:block !important;
+  grid-column: 1 / -1 !important;
+  grid-row: 2 !important;
+  margin-top: 0 !important;
+}
+
+/* Mobile polish */
 @media (max-width: 950px){
   body[data-msec="schedule"] .grid{
-    display:flex !important;
-    flex-direction:column !important;
-    gap: 10px !important;
     padding-top: 10px !important;
     padding-bottom: 110px !important; /* room for bottom nav */
-    min-height: 0 !important;
-    height: auto !important;
+    gap: 10px !important;
   }
-  body[data-msec="schedule"] .hero{
-    margin: 0 !important;
-    margin-bottom: 6px !important;
-  }
-  body[data-msec="schedule"] #scheduleCard{
-    margin-top: 0 !important;
-  }
+  body[data-msec="schedule"] .hero{ margin: 10px !important; margin-bottom: 6px !important; }
 }
 
 </style>
