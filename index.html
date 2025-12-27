@@ -719,7 +719,7 @@
 .heroTriWrap{
   position:absolute;
   top:14px; bottom:14px;
-  right:14px;
+  right:34px;
   width:min(460px, 48%);
   z-index:4;
   pointer-events:none; /* never blocks chat/menu/schedule */
@@ -727,7 +727,7 @@
   align-items:flex-end;
   justify-content:flex-end;
 }
-.compact .heroTriWrap{ width:min(380px, 56%); right:10px; top:10px; bottom:10px; }
+.compact .heroTriWrap{ width:min(380px, 56%); right:26px; top:10px; bottom:10px; }
 
 .heroTri{
   width:100%;
@@ -756,10 +756,7 @@
 }
 .compact .heroCard.heroCardTri{ height:92px; border-radius:14px; }
 
-.heroCard.heroCardTri .heroCardImg img{
-  width:100%; height:100%;
-  object-fit: cover;
-  object-position: 50% 18%;
+h% 22%;
   filter: saturate(1.18) contrast(1.10);
   transform: scale(1.04);
 }
@@ -1811,7 +1808,7 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
 
 /* Star 3-up wrapper: responsive + never overflow */
 .heroTriWrap{
-  right: 8px;
+  right: 20px;
   width: 44%;
   max-width: 320px;
   min-width: 0;
@@ -2494,7 +2491,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 /* Extra micro-depth on the 3-up cards (if enabled) */
 .hero .heroCard.heroCardTri .heroCardImg img{
-  transform: translateZ(8px) scale(1.04);
+  transform: translateZ(8px) scale(1.02);
 }
 
 /* Respect reduced motion */
@@ -3213,11 +3210,25 @@ body.kiosk-mode *::-webkit-scrollbar{
 /* Extra-small phones */
 @media (max-width: 420px){
   .heroOverlay{ width: 56% !important; }
-  .heroTriWrap{ width: 44% !important; max-width: 250px !important; }
+  .heroTriWrap{ width: 46% !important; max-width: 250px !important; right: 16px !important; }
   .heroCard.heroCardTri{ height: 92px !important; }
   .heroTri{ gap: 8px !important; }
 }
 
+
+
+/* Portrait phones: make star players larger while keeping text clear */
+@media (max-width: 520px) and (orientation: portrait){
+  .heroOverlay{ width: 58% !important; }
+  .heroTriWrap{ width: 46% !important; max-width: 360px !important; right: 22px !important; }
+  .heroCard.heroCardTri{ height: 104px !important; }
+  .heroTri{ gap: 10px !important; }
+}
+
+/* Landscape phones: keep the tighter (already-good) sizing */
+@media (max-width: 520px) and (orientation: landscape){
+  .heroTriWrap{ right: 16px !important; }
+}
 
 /* =========================================================
    Apply Step 1 + 2 only (recommended) — CLEANED + ENHANCED
