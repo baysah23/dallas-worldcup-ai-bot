@@ -4537,6 +4537,46 @@ body[data-msec="schedule"] #scheduleCard{
   body[data-msec="schedule"] .hero{ margin: 10px !important; margin-bottom: 6px !important; }
 }
 
+
+
+/* Schedule sub-tabs (Fixtures / Live / Groups) — mobile & desktop safe */
+.segbar{
+  display:flex;
+  gap:6px;
+  padding:6px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.03);
+  border-radius: 999px;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.segbar::-webkit-scrollbar{ height: 0; }
+.segbtn{
+  appearance:none;
+  border:0;
+  cursor:pointer;
+  padding:8px 12px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: .02em;
+  color: rgba(255,255,255,.82);
+  background: transparent;
+  white-space: nowrap;
+}
+.segbtn[aria-selected="true"]{
+  color: rgba(0,0,0,.88);
+  background: rgba(212,175,55,.95);
+  box-shadow: 0 10px 26px rgba(0,0,0,.30), inset 0 0 0 1px rgba(0,0,0,.22);
+}
+@media (max-width: 950px){
+  .segbar{ width: 100%; justify-content: space-between; }
+  .segbtn{ flex: 1; text-align:center; }
+}
+
+
 </style>
 </head>
 <body data-lux="on">
@@ -4856,6 +4896,13 @@ body[data-msec="schedule"] #scheduleCard{
 </div>
 <div class="sidepad" style="padding-bottom:0;">
 <div class="pill" id="nextHint" style="display:inline-block;">Next upcoming match is highlighted</div></div>
+<div class="sidepad" style="padding-top:8px; padding-bottom:0;">
+  <div class="segbar" id="scheduleTabs" role="tablist" aria-label="Schedule views">
+    <button class="segbtn" type="button" data-view="fixtures" aria-selected="true">Fixtures</button>
+    <button class="segbtn" type="button" data-view="live" aria-selected="false">Live</button>
+    <button class="segbtn" type="button" data-view="groups" aria-selected="false">Groups</button>
+  </div>
+</div>
 <div class="schedule" id="schedule"></div>
 <div class="sidepad" id="pager" style="display:none; padding-top:10px;">
 <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
@@ -4901,6 +4948,12 @@ let lang = localStorage.getItem("lang") || "en";
 let scheduleData = null;
 let scope = localStorage.getItem("schedule_scope") || "dallas";
 let scheduleQuery = "";
+
+let scheduleView = localStorage.getItem("schedule_view") || "fixtures"; // fixtures | live | groups
+let liveData = null;
+let standingsData = null;
+let liveTicker = null;
+
 
 // Pagination (Dallas + All Matches)
 const PAGE_SIZE = 5;
@@ -5386,6 +5439,71 @@ async function loadSchedule(){
   restartCountdown(); // uses schedule info when available
 }
 
+async function loadLiveData(){
+  try{
+    const res = await fetch(`/worldcup/live.json?scope=${encodeURIComponent(scope === "dallas" ? "dallas" : "all")}`, { cache: "no-store" });
+    liveData = await res.json();
+  }catch(e){
+    liveData = { matches: [] };
+  }
+}
+
+async function loadStandingsData(){
+  try{
+    const res = await fetch(`/worldcup/standings.json?scope=${encodeURIComponent(scope === "dallas" ? "dallas" : "all")}`, { cache: "no-store" });
+    standingsData = await res.json();
+  }catch(e){
+    standingsData = { groups: {} };
+  }
+}
+
+function initScheduleTabs(){
+  const tabs = document.getElementById("scheduleTabs");
+  if(!tabs) return;
+  const btns = Array.from(tabs.querySelectorAll("button[data-view]"));
+
+  const setView = async (v)=>{
+    scheduleView = (v || "fixtures");
+    try{ localStorage.setItem("schedule_view", scheduleView); }catch(_){}
+
+    btns.forEach(b=>{
+      const on = (b.getAttribute("data-view") === scheduleView);
+      b.setAttribute("aria-selected", on ? "true" : "false");
+    });
+
+    // stop any existing live polling
+    try{ if(liveTicker) clearInterval(liveTicker); }catch(_){}
+    liveTicker = null;
+
+    // load data needed for the selected view
+    if(scheduleView === "live"){
+      await loadLiveData();
+      // gentle refresh while user stays on Schedule
+      liveTicker = setInterval(async ()=>{
+        if(document.body.getAttribute("data-msec") !== "schedule") return;
+        await loadLiveData();
+        renderSchedule();
+      }, 30000);
+    } else if(scheduleView === "groups"){
+      if(!standingsData || !standingsData.groups || !Object.keys(standingsData.groups).length){
+        await loadStandingsData();
+      }
+    }
+
+    renderSchedule();
+  };
+
+  // wire clicks
+  btns.forEach(b=>{
+    b.addEventListener("click", ()=> setView(b.getAttribute("data-view")));
+  });
+
+  // initial
+  setView(scheduleView || "fixtures");
+}
+
+
+
 async function loadMenu(){
   const res = await fetch("/menu.json?lang=" + encodeURIComponent(lang), {cache:"no-store"});
   const data = await res.json();
@@ -5561,14 +5679,25 @@ function wireHomePanel(){
   // Home pulse scope controls (safe)
   const setAll  = document.getElementById("homeSetAll");
   const setDal  = document.getElementById("homeSetDallas");
-  function setScope(v){
+  function setScopeHome(v){
     try{ localStorage.setItem("schedule_scope", v); }catch(_){}
-    try{ scope = v; }catch(_){}
+    scope = v;
     try{ renderHomePanel(); }catch(_){}
-    try{ if(typeof window.renderSchedule === "function") window.renderSchedule(); }catch(_){}
+
+    // If you're viewing Live or Groups, refresh their data to match the scope
+    (async ()=>{
+      try{
+        if((scheduleView || "fixtures") === "live"){
+          await loadLiveData();
+        } else if((scheduleView || "fixtures") === "groups"){
+          await loadStandingsData();
+        }
+      }catch(_){}
+      try{ renderSchedule(); }catch(_){}
+    })();
   }
-  if(setAll) setAll.addEventListener("click", ()=> setScope("all"));
-  if(setDal) setDal.addEventListener("click", ()=> setScope("dallas"));
+  if(setAll) setAll.addEventListener("click", ()=> setScopeHome("all"));
+  if(setDal) setDal.addEventListener("click", ()=> setScopeHome("dallas"));
 
   // Dismissible quick-start tip (first-time users)
   try{
@@ -5866,7 +5995,7 @@ function updateSearchSuggestions(matches){
   dl.innerHTML = teams.map(t=>`<option value="${escapeHtml(t)}"></option>`).join("");
 }
 
-function renderSchedule(){
+function renderScheduleFixtures(){
   const el = document.getElementById("schedule");
   el.innerHTML = "";
 
@@ -5967,6 +6096,112 @@ if (totalPages <= 1){
       <div class="pill">${escapeHtml(m.id || "")}</div>
     `;
     el.appendChild(row);
+  });
+}
+
+function renderSchedule(){
+  const v = (scheduleView || "fixtures").toLowerCase();
+  if(v === "live"){ renderScheduleLive(); return; }
+  if(v === "groups"){ renderScheduleGroups(); return; }
+  renderScheduleFixtures();
+}
+
+function renderScheduleLive(){
+  const el = document.getElementById("schedule");
+  if(!el) return;
+  el.innerHTML = "";
+
+  const list = (liveData && Array.isArray(liveData.matches)) ? liveData.matches.slice() : [];
+  if(!list.length){
+    el.innerHTML = `<div class="match"><div class="left"><div><b>Live Center</b></div><div class="when">No live feed yet. This will auto-populate when scores are available.</div></div><div class="pill">—</div></div>`;
+    return;
+  }
+
+  const now = Date.now();
+  const enriched = list.map(m => ({...m, ts: safeParseTimestamp(m.date, m.time)}))
+                      .sort((a,b)=>(a.ts||0)-(b.ts||0));
+  const near = enriched.filter(m => {
+    const t = m.ts || 0;
+    return Math.abs(t - now) <= (10*60*60*1000); // +/- 10h window for "today-ish"
+  }).slice(0, 12);
+
+  near.forEach(m => {
+    const row = document.createElement("div");
+    row.className = "match";
+    const hs = (m.home_score !== undefined) ? m.home_score : m.homeScore;
+    const as = (m.away_score !== undefined) ? m.away_score : m.awayScore;
+    const hasScore = (hs !== null && hs !== undefined && as !== null && as !== undefined);
+    const scoreTxt = hasScore ? `${hs}–${as}` : "—";
+    const stat = (m.status === "live") ? "LIVE" : (hasScore ? "FT" : "KO");
+    if(stat === "LIVE") row.classList.add("is-live");
+
+    const teamsTxt = (m.home || m.away) ? `${m.home || "TBD"} vs ${m.away || "TBD"}` : (m.teams||"TBD vs TBD");
+    const meta = [m.stage, m.venue].filter(Boolean).join(" • ");
+    row.innerHTML = `
+      <div class="left">
+        <div><b>${escapeHtml(stat)}</b> • ${buildTeamsHtml(teamsTxt)}</div>
+        <div class="when">${escapeHtml(m.date||"")} • ${escapeHtml(formatKickoffTime(m.time||""))}${meta ? ` • ${escapeHtml(meta)}` : ``}</div>
+      </div>
+      <div class="pill"><b>${escapeHtml(scoreTxt)}</b></div>
+    `;
+    el.appendChild(row);
+  });
+}
+
+function renderScheduleGroups(){
+  const el = document.getElementById("schedule");
+  if(!el) return;
+  el.innerHTML = "";
+
+  const groups = (standingsData && standingsData.groups) ? standingsData.groups : null;
+  if(!groups || !Object.keys(groups).length){
+    el.innerHTML = `<div class="match"><div class="left"><div><b>Group Standings</b></div><div class="when">Standings will appear once group matches have scores.</div></div><div class="pill">—</div></div>`;
+    return;
+  }
+
+  const keys = Object.keys(groups).sort();
+  keys.forEach(g => {
+    const rows = groups[g] || [];
+    const card = document.createElement("div");
+    card.className = "match";
+    const table = `
+      <div style="width:100%">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div><b>${escapeHtml(g)}</b></div>
+          <div class="pill" style="min-width:auto;padding:6px 10px">${rows.length} teams</div>
+        </div>
+        <div style="margin-top:10px; overflow:auto; -webkit-overflow-scrolling:touch;">
+          <table style="width:100%; border-collapse:collapse; font-size:12px;">
+            <thead>
+              <tr style="color:rgba(255,255,255,.7); text-align:left;">
+                <th style="padding:6px 0;">Team</th>
+                <th style="padding:6px 0; text-align:right;">P</th>
+                <th style="padding:6px 0; text-align:right;">W</th>
+                <th style="padding:6px 0; text-align:right;">D</th>
+                <th style="padding:6px 0; text-align:right;">L</th>
+                <th style="padding:6px 0; text-align:right;">GD</th>
+                <th style="padding:6px 0; text-align:right;">Pts</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows.map(r => `
+                <tr style="border-top:1px solid rgba(255,255,255,.10);">
+                  <td style="padding:7px 0;">${escapeHtml(r.team||"")}</td>
+                  <td style="padding:7px 0; text-align:right;">${escapeHtml(String(r.p??""))}</td>
+                  <td style="padding:7px 0; text-align:right;">${escapeHtml(String(r.w??""))}</td>
+                  <td style="padding:7px 0; text-align:right;">${escapeHtml(String(r.d??""))}</td>
+                  <td style="padding:7px 0; text-align:right;">${escapeHtml(String(r.l??""))}</td>
+                  <td style="padding:7px 0; text-align:right;">${escapeHtml(String(r.gd??""))}</td>
+                  <td style="padding:7px 0; text-align:right; font-weight:900;">${escapeHtml(String(r.pts??""))}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+    card.innerHTML = table;
+    el.appendChild(card);
   });
 }
 
@@ -6142,12 +6377,23 @@ msgEl.addEventListener("input", () => {
 // -----------------------
 function setScope(newScope){
   scope = (newScope === "all") ? "all" : "dallas";
-  localStorage.setItem("schedule_scope", scope);
+  try{ localStorage.setItem("schedule_scope", scope); }catch(_){}
   // Reset pagination when switching scope
   currentPage = 1;
+
   if (scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope === "dallas");
   if (scopeAllBtn) scopeAllBtn.classList.toggle("active", scope === "all");
-  loadSchedule();
+
+  // Refresh fixtures and any active dynamic views
+  (async ()=>{
+    await loadSchedule();
+    if((scheduleView || "fixtures") === "live"){
+      await loadLiveData();
+    } else if((scheduleView || "fixtures") === "groups"){
+      await loadStandingsData();
+    }
+    renderSchedule();
+  })();
 }
 if (scopeDallasBtn) scopeDallasBtn.addEventListener("click", () => setScope("dallas"));
 if (scopeAllBtn) scopeAllBtn.addEventListener("click", () => setScope("all"));
@@ -6234,6 +6480,7 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
 
   // Load sidebar data
   await loadSchedule();
+  initScheduleTabs();
   await loadMenu();
 
   // Welcome message (feature preserved)
