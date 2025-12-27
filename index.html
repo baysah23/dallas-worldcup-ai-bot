@@ -3593,6 +3593,113 @@ body.kiosk-mode *::-webkit-scrollbar{
   padding:0 !important;
 }
 
+
+/* =========================================================
+   MOBILE LUXURY POLISH (UI-only, no functionality changes)
+   - Glassy cards, premium tap states, better input focus
+   - Removes "cheap glare" feel by calming sweep/over-bright FX
+   - Mobile-only to keep desktop untouched
+   ========================================================= */
+@media (max-width: 950px){
+
+  /* Slightly richer, calmer surface + smoother type */
+  body{
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Glass panels (subtle) */
+  .card{
+    background: linear-gradient(180deg, rgba(255,255,255,.065) 0%, rgba(255,255,255,.028) 100%) !important;
+    border-color: rgba(255,255,255,.14) !important;
+    box-shadow: 0 14px 40px rgba(0,0,0,.28) !important;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  /* Card headers: tighter + more premium contrast */
+  .cardhead{
+    background: rgba(0,0,0,.18) !important;
+    border-bottom-color: rgba(255,255,255,.14) !important;
+  }
+
+  /* Fix invalid rgba values (mobile-only overrides) */
+  .composer{ background: rgba(0,0,0,.12) !important; }
+  textarea{
+    border-color: rgba(255,255,255,.16) !important;
+    background: rgba(0,0,0,.22) !important;
+  }
+  button.secondary{
+    background: rgba(255,255,255,.10) !important;
+    border-color: rgba(255,255,255,.18) !important;
+  }
+
+  /* Premium tap/press states (no layout shift) */
+  button, .langbtn, .fz-btn{
+    transition: transform 120ms ease, filter 120ms ease, background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:active, .langbtn:active, .fz-btn:active{
+    transform: translateY(1px) scale(.99);
+    filter: brightness(1.06);
+  }
+  button:focus-visible, .langbtn:focus-visible, textarea:focus-visible, .fz-btn:focus-visible{
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(212,175,55,.22), 0 0 0 1px rgba(212,175,55,.45) inset;
+    border-color: rgba(212,175,55,.45) !important;
+  }
+
+  /* Slightly larger tap targets for mobile comfort */
+  button{ min-height: 44px; }
+  .langbtn{ min-height: 40px; }
+
+  /* Chat bubbles: a touch more “soft luxury” */
+  .bubble{
+    border-color: rgba(255,255,255,.12) !important;
+    box-shadow: 0 10px 22px rgba(0,0,0,.16);
+  }
+  .user{
+    box-shadow: 0 12px 26px rgba(31,111,235,.14);
+  }
+
+  /* HERO: reduce harsh “glare line” by calming sweep + over-bright glow */
+  .heroSweep{ opacity: .40 !important; }
+  .heroGlow{ opacity: .70 !important; }
+  .hero::after{ opacity: .62 !important; }
+
+  /* Add subtle divider glow under hero title (premium) */
+  #heroBanner .heroTitle{
+    position: relative;
+  }
+  #heroBanner .heroTitle::after{
+    content:"";
+    display:block;
+    height:2px;
+    width:min(420px, 72vw);
+    margin-top:8px;
+    border-radius:999px;
+    background: linear-gradient(90deg, rgba(212,175,55,.0), rgba(212,175,55,.75), rgba(212,175,55,.0));
+    filter: blur(.2px);
+    opacity:.85;
+    pointer-events:none;
+  }
+
+  /* Bottom mobile nav: more “native app” glass */
+  nav.mobileNav{
+    background: rgba(7,16,34,.72) !important;
+    border: 1px solid rgba(255,255,255,.14) !important;
+    box-shadow: 0 18px 55px rgba(0,0,0,.45) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce){
+  button, .langbtn, .fz-btn{ transition: none !important; }
+  button:active, .langbtn:active, .fz-btn:active{ transform:none !important; }
+}
+
 </style>
 </head>
 <body>
