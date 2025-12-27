@@ -4503,6 +4503,35 @@ body.kiosk-mode *::-webkit-scrollbar{
   /* Small scroll offset so sticky header feels nicer */
   body[data-msec="schedule"] #scheduleCard{ scroll-margin-top: 8px; }
 }
+/* =======================
+   MOBILE SCHEDULE GAP FIX (v3)
+   - Forces the Schedule view to be a tight vertical stack: HERO -> SCHEDULE CARD
+   - Overrides any earlier mobile rules that accidentally make .grid block-flow with extra spacing
+   ======================= */
+@media (max-width: 950px){
+  body[data-msec="schedule"] .grid{
+    display:flex !important;
+    flex-direction:column !important;
+    gap: 10px !important;
+    padding-top: 10px !important;   /* tighten top padding */
+    padding-bottom: 110px !important; /* keep room for bottom nav */
+  }
+  body[data-msec="schedule"] .hero{
+    margin: 0 !important;
+    margin-bottom: 6px !important;  /* small, intentional breathing room */
+  }
+  body[data-msec="schedule"] #scheduleCard{
+    margin-top: 0 !important;
+  }
+  /* If any legacy top-nav is still rendered, ensure it cannot create vertical space */
+  body[data-msec="schedule"] .mnav{
+    display:none !important;
+    height:0 !important;
+    margin:0 !important;
+    padding:0 !important;
+  }
+}
+
 </style>
 </head>
 <body data-lux="on">
