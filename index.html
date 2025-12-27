@@ -4718,7 +4718,21 @@ body.kiosk-mode *::-webkit-scrollbar{
         <button class="btn" id="homeGoFan" type="button">Pick supporter</button>
       </div>
       <div class="homeNote">Most fans start here: pick a country, then tap “Explore Matches” for the full World Cup schedule.</div>
+    
+    <div class="homeTile" id="homeReserveTile" aria-label="Reservations">
+      <div class="homeTileTitle">Reservations</div>
+      <div class="homeSub" style="margin:0;">This is a concierge first: reserve in seconds, then attach any match (Dallas or global) so your table is ready.</div>
+
+      <div class="homeChips" role="list" aria-label="Reservation actions" style="margin-top:10px;">
+        <button class="homeChipBtn primary" type="button" data-go="chat" data-prefill="reservation">Start reservation</button>
+        <button class="homeChipBtn" id="homeReserveNextBtn" type="button" data-go="chat" data-prefill="reservation">Reserve for next match</button>
+        <button class="homeChipBtn" type="button" data-go="chat" data-prefill="VIP reservation options and minimums?">VIP table</button>
+      </div>
+
+      <div class="homeNote" id="homeReserveNote">Tip: tell the concierge your party size + time, and the match you’re coming for (any city).</div>
     </div>
+
+</div>
 
 <div class="homeTile" id="homeFastlane" aria-label="Concierge fastlane">
       <div class="homeTileTitle">Concierge fastlane</div>
@@ -5405,6 +5419,21 @@ function renderHomePanel(){
 
   // Home “World Cup pulse” stats (global snapshot). Safe: no-ops if elements missing.
   try{ updateHomePulseStats(enriched); }catch(_){ }
+
+  // Reservations: personalize the "Reserve for next match" chip with real match details (global).
+  try{
+    const btnNext = document.getElementById("homeReserveNextBtn");
+    if(btnNext && upcoming && upcoming[0]){
+      const m0 = upcoming[0];
+      const when = __formatHomeWhen(m0);
+      const teamsTxt = (m0.teams && String(m0.teams).trim())
+        ? m0.teams
+        : ((m0.home || m0.away) ? `${m0.home || "TBD"} vs ${m0.away || "TBD"}` : "TBD vs TBD");
+      const where = [m0.venue, m0.city].filter(Boolean).join(", ");
+      const line = where ? ` at ${where}` : "";
+      btnNext.setAttribute("data-prefill", `reservation\nMatch: ${teamsTxt}\nWhen: ${when}${line}\nParty size: \nPreferred seating: \nNotes:`);
+    }
+  }catch(_){ }
 }
 
 function updateHomePulseStats(enriched){
@@ -5503,7 +5532,7 @@ function wireHomePanel(){
 
   // Home fastlane chips
   try{
-    const chips = document.querySelectorAll("#homeFastlane .homeChipBtn");
+    const chips = document.querySelectorAll("#homeCard .homeChipBtn");
     chips.forEach(btn=>{
       btn.addEventListener("click", ()=>{
         const go = (btn.getAttribute("data-go") || "chat").toLowerCase();
