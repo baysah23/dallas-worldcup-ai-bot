@@ -3593,6 +3593,62 @@ body.kiosk-mode *::-webkit-scrollbar{
   padding:0 !important;
 }
 
+
+/* =========================
+   HERO MOBILE: NO-INTERFERENCE + UNIFORM STAR CARD SIZES
+   ========================= */
+@media (max-width: 720px){
+  /* Reserve bottom space for the 3-up star strip so text never overlaps it */
+  .heroOverlay{
+    padding: 14px 12px 96px 12px !important; /* bottom padding = strip height + breathing room */
+  }
+  /* Keep text readable and prevent it from stretching under the player strip */
+  .heroSub{ max-width: 72vw !important; }
+
+  /* Move the 3-up star players to a dedicated bottom strip (no interference) */
+  .heroTriWrap{
+    left: 12px !important;
+    right: 12px !important;
+    top: auto !important;
+    bottom: 10px !important;
+    width: auto !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+  }
+  .heroTri{
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+
+  /* Uniform card sizing */
+  .heroCard.heroCardTri{
+    height: 74px !important;
+    border-radius: 14px !important;
+  }
+
+  /* Uniform image sizing inside cards */
+  .heroCard.heroCardTri .heroCardImg img{
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    object-position: 50% 18% !important;
+    transform: none !important; /* avoid per-image scaling differences */
+  }
+
+  /* Keep name/country readable but compact */
+  .heroCard.heroCardTri .heroCardMeta{ left: 8px !important; right: 8px !important; bottom: 6px !important; }
+  .heroCardName{ font-size: 10px !important; }
+  .heroCardCountry{ font-size: 9px !important; }
+}
+
+/* Tight phones (portrait) */
+@media (max-width: 420px){
+  .heroOverlay{ padding-bottom: 102px !important; }
+  .heroCard.heroCardTri{ height: 70px !important; }
+  .heroCardName{ font-size: 9.5px !important; }
+  .heroCardCountry{ font-size: 8.5px !important; }
+}
+
 </style>
 </head>
 <body>
