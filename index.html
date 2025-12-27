@@ -4055,9 +4055,6 @@ body.kiosk-mode *::-webkit-scrollbar{
       animation: luxShimmer 1.15s linear infinite;
       opacity: .85;
     }
-    @keyframes luxShimmer {
-      to { transform: translateX(60%orN%); }
-    }
     /* Fix typo in keyframes transform target (safe override) */
     @keyframes luxShimmer {
       to { transform: translateX(60%); }
@@ -4073,6 +4070,53 @@ body.kiosk-mode *::-webkit-scrollbar{
       }
     }
 /* === END PHASE 4: PREMIUM INTERACTION POLISH === */
+
+
+/* === PHASE 5: DEVICE CONSISTENCY + QA GUARDS (AUTO-INSERTED) === */
+    /* Cross-device stability */
+    body {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overscroll-behavior-y: none; /* reduces “rubber band” feel */
+    }
+    /* Prefer modern viewport units when supported */
+    @supports (height: 100dvh) {
+      .wrap {
+        min-height: 100dvh;
+      }
+    }
+
+    /* Reduce layout shifts from media-heavy sections */
+    img, video {
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* If your hero images are absolutely positioned, enforce cover + crispness */
+    @media (max-width: 720px) {
+      .heroSlide img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center top;
+      }
+    }
+
+    /* Performance: render big sections only when needed (safe for modern browsers) */
+    .panel, .section, .module, .card {
+      content-visibility: auto;
+      contain-intrinsic-size: 1px 700px;
+    }
+
+    /* Anchor navigation polish (prevents header overlap on mobile) */
+    html {
+      scroll-padding-top: 78px;
+    }
+
+    /* Targeted device hooks (no-op unless you use them) */
+    .is-ios .hero { -webkit-transform: translateZ(0); }
+    .is-safari button { -webkit-appearance: none; }
+/* === END PHASE 5 === */
 
 </style>
 </head>
@@ -6717,6 +6761,25 @@ function apply(){
     window.addEventListener(evt, () => {}, { passive: true });
   });
 
+})();
+</script>
+
+
+<script>
+/* === PHASE 5: DEVICE CLASSIFIER (AUTO-INSERTED) === */
+(() => {
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(ua);
+  const isSafari = /^((?!chrome|android).)*safari/i.test(ua);
+
+  const root = document.documentElement;
+  if (isIOS) root.classList.add('is-ios');
+  if (isAndroid) root.classList.add('is-android');
+  if (isSafari) root.classList.add('is-safari');
+
+  // Consistent tap delay handling (modern browsers ignore, harmless otherwise)
+  root.style.touchAction = 'manipulation';
 })();
 </script>
 
