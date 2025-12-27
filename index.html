@@ -3612,6 +3612,33 @@ body.kiosk-mode *::-webkit-scrollbar{
   opacity:.9;
 }
 
+
+/* === GLOBAL: REMOVE TOP HEADER SUBTITLE (ALL PLATFORMS) ===
+   This is the line under the app title in the header.
+   (You said you already show this messaging elsewhere.)
+*/
+header .sub, .sub{
+  display:none !important;
+}
+
+/* === GLOBAL: REMOVE ANY YELLOW DIVIDER / GLARE LINES (ALL PLATFORMS) ===
+   Removes underline/glow rules that were added under hero titles.
+*/
+.heroTitle::after,
+.hero-title::after,
+.heroTitleRow h1::after,
+.hero h1::after{
+  content: none !important;
+  display: none !important;
+  height: 0 !important;
+  width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  box-shadow: none !important;
+  opacity: 0 !important;
+}
+
 </style>
 </head>
 <body>
