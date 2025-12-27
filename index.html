@@ -275,12 +275,12 @@
     .heroGlow{
       position:absolute; inset:0;
       background:
-        radial-gradient(520px 260px at 65% 25%, rgba(255,215,64,.04), transparent 62%),
+        radial-gradient(520px 260px at 65% 25%, rgba(255,215,64,.12), transparent 62%),
         radial-gradient(720px 280px at 25% 20%, rgba(31,111,235,.18), transparent 60%);
       opacity:.9;
       mix-blend-mode: screen;
     }
-    .heroSweep{ display:none; /* disabled to remove glare line */ 
+    .heroSweep{
       position:absolute; top:-30%; left:-30%;
       width:60%; height:160%;
       background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
@@ -606,13 +606,13 @@
 .heroGlow{
   position:absolute; inset:-60px;
   background:
-    radial-gradient(520px 260px at 15% 55%, rgba(255,255,255,.10), transparent 62%),
+    radial-gradient(520px 260px at 15% 55%, rgba(255,255,255,.22), transparent 62%),
     radial-gradient(760px 360px at 60% 70%, rgba(255,255,255,.15), transparent 68%),
     radial-gradient(900px 420px at 80% 35%, rgba(255,255,255,.13), transparent 72%);
   filter: blur(14px);
   opacity: .85;
 }
-.heroSweep{ display:none; /* disabled to remove glare line */ 
+.heroSweep{
   opacity:.85;
   filter: blur(0px);
 }
@@ -3612,6 +3612,18 @@ body.kiosk-mode *::-webkit-scrollbar{
   opacity:.9;
 }
 
+
+/* =========================================================
+   GLARE FIX (all platforms)
+   Removes the moving "glare/yellow line" artifacts on the hero banner
+   ========================================================= */
+.heroSweep{ display:none !important; opacity:0 !important; animation:none !important; }
+.hero::before, .hero::after{ will-change:auto; } /* reduce GPU banding on some mobiles */
+.hero-title::after{ display:none !important; }   /* remove gold underline that can look like a yellow line */
+@media (prefers-reduced-motion: reduce){
+  .heroSmoke, .heroGlow{ animation:none !important; }
+}
+
 </style>
 </head>
 <body>
@@ -6185,3 +6197,14 @@ function apply(){
 
 </body>
 </html>
+
+
+/* === FINAL HARD FIX: remove yellow divider / glare line === */
+.hero-title::after,
+.heroTitle::after,
+.hero h1::after{
+  display:none !important;
+  content:none !important;
+  background:none !important;
+  box-shadow:none !important;
+}
