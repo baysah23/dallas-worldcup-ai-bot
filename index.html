@@ -4250,6 +4250,39 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 }
 
+
+/* === MICRO-POLISH (SAFE) === */
+:root{ --mnav-h: 0px; }
+@media (max-width: 950px){
+  /* Give every section a guaranteed safe bottom so fixed mobile nav never covers content */
+  body{ padding-bottom: calc(var(--mnav-h) + env(safe-area-inset-bottom)); }
+  .wrap{ padding-bottom: calc(var(--mnav-h) + env(safe-area-inset-bottom)); }
+}
+
+/* Premium-feel interactions (kept subtle + safe) */
+.mnav-btn{
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform 120ms ease, background 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+.mnav-btn:active{ transform: translateY(1px) scale(.985); }
+.mnav-btn:focus-visible{
+  outline: 2px solid rgba(212,175,55,.75);
+  outline-offset: 2px;
+}
+
+/* Smoother perceived performance on mobile (no layout changes) */
+@media (hover: none){
+  .card, .menucard, .panel, .hero{ transform: translateZ(0); }
+}
+
+/* Respect reduced-motion users */
+@media (prefers-reduced-motion: reduce){
+  *, *::before, *::after{ animation:none !important; transition:none !important; scroll-behavior:auto !important; }
+}
+
+
+.is-pressed{ filter: brightness(1.06); }
 </style>
 </head>
 <body data-lux="on">
@@ -7258,6 +7291,36 @@ function apply(){
     } catch(_) {}
   });
 })();
+
+/* === MICRO-POLISH (SAFE) === */
+(function(){
+  function updateNavSafe(){
+    const nav = document.querySelector('.mnav');
+    if(!nav) return;
+    const h = Math.ceil(nav.getBoundingClientRect().height || 0);
+    document.documentElement.style.setProperty('--mnav-h', h + 'px');
+  }
+
+  // Run now + after layout settles
+  const raf2 = (fn)=>requestAnimationFrame(()=>requestAnimationFrame(fn));
+  raf2(updateNavSafe);
+
+  window.addEventListener('resize', updateNavSafe, {passive:true});
+  window.addEventListener('orientationchange', ()=>raf2(updateNavSafe), {passive:true});
+
+  // If nav is inserted later, observe once and update
+  const mo = new MutationObserver(()=>{ updateNavSafe(); });
+  mo.observe(document.documentElement, { childList:true, subtree:true });
+
+  // Tiny press feedback on primary interactive elements (CSS handles most; this is a fallback for custom controls)
+  document.addEventListener('pointerdown', (e)=>{
+    const el = e.target && e.target.closest ? e.target.closest('.mnav-btn, button, .chip, .pill, .seg button, .btn') : null;
+    if(!el) return;
+    el.classList.add('is-pressed');
+    raf2(()=>el.classList.remove('is-pressed'));
+  }, {passive:true});
+})();
+
 </script>
 
 </body>
