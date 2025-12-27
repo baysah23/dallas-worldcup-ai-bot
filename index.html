@@ -3,6 +3,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
 <title>World Cup 2026 Dallas Concierge</title>
 <style>
@@ -3735,6 +3737,110 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 }
 
+
+/* === PHASE 1+2: MOBILE LUXURY QUALITY LAYER (AUTO-INSERTED) === */
+    /* Foundation: consistent rendering across iOS Safari / Chrome / Android */
+    html {
+      -webkit-text-size-adjust: 100%;
+      text-rendering: optimizeLegibility;
+      scroll-behavior: smooth;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    :focus-visible {
+      outline: 2px solid rgba(255,255,255,.55);
+      outline-offset: 3px;
+      border-radius: 10px;
+    }
+    /* Prevent iOS tap highlight “flash” */
+    a, button, [role="button"], .langbtn {
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    /* Safe-area support */
+    @supports (padding: env(safe-area-inset-top)) {
+      header {
+        padding-top: calc(16px + env(safe-area-inset-top));
+        padding-left: calc(18px + env(safe-area-inset-left));
+        padding-right: calc(18px + env(safe-area-inset-right));
+      }
+      .wrap {
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+      }
+      /* If you have any fixed bottom elements, this prevents “home bar” overlap */
+      .pager, .bottomBar, .dock, .tabbar {
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
+      }
+    }
+
+    /* Luxury typography scaling (mobile-first, desktop mostly unchanged) */
+    @media (max-width: 720px) {
+      header h1 {
+        font-size: clamp(16px, 4.4vw, 20px);
+        line-height: 1.15;
+        letter-spacing: .02em;
+      }
+      header .sub {
+        font-size: clamp(11px, 3.2vw, 13px);
+        line-height: 1.25;
+      }
+
+      /* Raise touch quality: minimum comfortable hit area */
+      button, .btn, .pill, .chip, .langbtn, .segBtn, .navBtn, .tabBtn {
+        min-height: 44px;
+      }
+      .langbar { gap: 8px; }
+
+      /* Make hero scale smoothly and avoid “glare lines” */
+      .hero {
+        height: clamp(150px, 34vw, 190px);
+        margin: 10px 10px 10px 10px;
+        border-bottom: 0; /* removes thin “glare” on some devices */
+        box-shadow:
+          0 10px 30px rgba(0,0,0,.22),
+          inset 0 0 0 1px rgba(255,255,255,.10);
+      }
+      .heroOverlay {
+        padding: 16px 14px;
+        gap: 6px;
+      }
+      .heroKicker {
+        font-size: 10px;
+        letter-spacing: .20em;
+      }
+      .heroTitle {
+        font-size: clamp(18px, 5.4vw, 24px);
+      }
+      .heroSub {
+        font-size: clamp(11px, 3.3vw, 13px);
+        max-width: 75vw;
+      }
+
+      /* Keep images crisp on mobile (avoid unintended blur from scaling) */
+      .heroSlide img {
+        image-rendering: auto;
+        transform: translateZ(0);
+        backface-visibility: hidden;
+      }
+
+      /* Reduce layout thrash on long pages */
+      .panel, .card, .section, .module {
+        contain: layout paint style;
+      }
+    }
+
+    /* Performance and accessibility: respect reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
+/* === END PHASE 1+2 LAYER === */
+
 </style>
 </head>
 <body>
@@ -6303,6 +6409,20 @@ function apply(){
     nav.querySelectorAll('.mnavBtn').forEach(b=>b.classList.toggle('active', b===btn));
   }
   nav.addEventListener('click', onClick, {passive:true});
+})();
+</script>
+
+
+<script>
+/* === PHASE 2: DVH FIX (AUTO-INSERTED) === */
+(() => {
+  // Stabilize “100vh” on iOS address-bar collapse/expand.
+  const setDvh = () => {
+    document.documentElement.style.setProperty('--dvh', `${window.innerHeight * 0.01}px`);
+  };
+  setDvh();
+  window.addEventListener('resize', setDvh, { passive: true });
+  window.addEventListener('orientationchange', setDvh, { passive: true });
 })();
 </script>
 

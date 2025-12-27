@@ -27,9 +27,27 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
 @app.after_request
 def add_no_cache_headers(response):
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
+    # === PHASE 2: SMART CACHE HEADERS (AUTO-INSERTED) ===
+    # Keep the app feeling fast and consistent on mobile by allowing short caching
+    # for read-only JSON, while still preventing stale admin/chat experiences.
+    try:
+        path = request.path or ""
+    except Exception:
+        path = ""
+
+    # Never cache: HTML shell + admin/chat actions
+    if path == "/" or path.startswith("/admin") or path.startswith("/chat"):
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+        return response
+
+    # Short cache for JSON (schedule/menu/qualified lists). Helps flaky mobile networks.
+    if path.endswith(".json") or path.startswith("/api/") or path.startswith("/countries/") or path.startswith("/worldcup/"):
+        response.headers["Cache-Control"] = "public, max-age=60"  # 1 minute
+        return response
+
+    # Default: allow browser heuristics
     return response
 
 
