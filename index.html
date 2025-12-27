@@ -4579,6 +4579,75 @@ body[data-msec="schedule"] #scheduleCard{
 }
 
 
+
+/* =========================================================
+   STAR PLAYERS (HERO) — NORMALIZE LOOK (CSS ONLY)
+   Goals:
+   - Same visual size + crisp feel (original poses preserved)
+   - No text overlap (portrait or landscape)
+   - No functionality changes (pure CSS)
+   - Per-player micro scale offsets for balance
+   ========================================================= */
+#heroBanner .heroOverlay{
+  /* Reserve a text lane so the athlete never visually collides with text */
+  max-width: 58%;
+  /* subtle readability wash behind text, keeps the right side clean */
+  background: linear-gradient(90deg, rgba(0,0,0,.22) 0%, rgba(0,0,0,.14) 55%, rgba(0,0,0,0) 100%);
+  border-top-left-radius: 16px;
+  border-bottom-left-radius: 16px;
+}
+#heroBanner .heroImg{
+  /* Constrain the player to the right lane */
+  left: 52%;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  padding: 8px 12px 10px 8px;
+  justify-content: center;
+}
+#heroBanner .heroSlide img{
+  /* Normalize sizing across athletes (no cropping) */
+  height: clamp(96px, 18vw, 150px);
+  width: auto;
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+
+  /* Crisp + premium (Safari-friendly) */
+  -webkit-transform: translateZ(0) scale(var(--pScale, 1));
+  transform: translateZ(0) scale(var(--pScale, 1));
+  will-change: transform;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  image-rendering: auto;
+  -webkit-image-rendering: -webkit-optimize-contrast;
+
+  /* Gentle depth (kept subtle to avoid “glare”) */
+  filter: drop-shadow(0 18px 28px rgba(0,0,0,.45)) saturate(1.02) contrast(1.03);
+}
+
+/* Per-player micro scale offsets (keeps original pose, just balances perceived size) */
+#heroBanner #heroSlides .heroSlide:nth-child(1){ --pScale: 1.02; }
+#heroBanner #heroSlides .heroSlide:nth-child(2){ --pScale: 1.00; }
+#heroBanner #heroSlides .heroSlide:nth-child(3){ --pScale: 0.99; }
+#heroBanner #heroSlides .heroSlide:nth-child(4){ --pScale: 1.03; }
+#heroBanner #heroSlides .heroSlide:nth-child(5){ --pScale: 0.98; }
+#heroBanner #heroSlides .heroSlide:nth-child(6){ --pScale: 1.01; }
+#heroBanner #heroSlides .heroSlide:nth-child(7){ --pScale: 1.00; }
+#heroBanner #heroSlides .heroSlide:nth-child(8){ --pScale: 1.02; }
+#heroBanner #heroSlides .heroSlide:nth-child(9){ --pScale: 0.99; }
+
+/* Mobile portrait: give text a bit more room; keep player on the right */
+@media (max-width: 720px){
+  #heroBanner .heroOverlay{ max-width: 64%; padding: 14px 12px; }
+  #heroBanner .heroImg{ left: 60%; padding: 8px 10px 10px 6px; }
+  #heroBanner .heroSlide img{ height: clamp(90px, 24vw, 140px); }
+}
+@media (max-width: 420px){
+  #heroBanner .heroOverlay{ max-width: 66%; }
+  #heroBanner .heroImg{ left: 62%; }
+}
+
 </style>
 </head>
 <body data-lux="on">
