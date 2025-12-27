@@ -4540,6 +4540,8 @@ body[data-msec="schedule"] #scheduleCard{
 
 
 /* Schedule sub-tabs (Fixtures / Live / Groups) — mobile & desktop safe */
+.metaLine{margin:8px 0 0; font-size:12px; letter-spacing:.2px; opacity:.72}
+.metaLine strong{opacity:.95}
 .segbar{
   display:flex;
   gap:6px;
@@ -4903,6 +4905,7 @@ body[data-msec="schedule"] #scheduleCard{
     <button class="segbtn" type="button" data-view="groups" aria-selected="false">Groups</button>
   </div>
 </div>
+  <div class="metaLine" id="scheduleMetaLine" aria-live="polite">Updating…</div>
 <div class="schedule" id="schedule"></div>
 <div class="sidepad" id="pager" style="display:none; padding-top:10px;">
 <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
@@ -5515,6 +5518,68 @@ async function loadStandingsData(){
   }
 }
 
+
+
+// -----------------------
+// Live refresh ticker (premium + resilient)
+// - Pauses when tab is hidden
+// - Uses adaptive cadence (faster when matches are live)
+// - Keeps Groups view fresh too
+// -----------------------
+let _liveNextFetchAt = 0;
+let _liveCadenceMs = 30000; // default 30s
+
+function stopLiveTicker(){
+  try{ if(liveTicker) clearInterval(liveTicker); }catch(_){}
+  liveTicker = null;
+}
+function _computeLiveCadenceMs(payload){
+  try{
+    const ms = (payload && payload.matches) ? payload.matches : [];
+    const hasLive = ms.some(m => (m.status||"").toLowerCase()==="live");
+    const hasSoon = ms.some(m => (m.status||"").toLowerCase()==="scheduled");
+    if(hasLive) return 15000;        // 15s during live
+    if(hasSoon) return 45000;        // 45s near kickoff
+    return 120000;                  // 2m otherwise
+  }catch(_){ return 30000; }
+}
+async function _tickLiveOnce(force=false){
+  if(document.hidden) return;
+  if(!(scheduleView==="live" || scheduleView==="groups")) return;
+  const now = Date.now();
+  if(!force && now < _liveNextFetchAt) return;
+
+  try{
+    await loadLiveData();
+    if(scheduleView==="groups"){
+      await loadStandingsData();
+    }
+    renderSchedule();
+    _liveCadenceMs = _computeLiveCadenceMs(liveData) || 30000;
+    _liveNextFetchAt = Date.now() + _liveCadenceMs;
+  }catch(e){
+    // backoff on errors
+    _liveCadenceMs = Math.min(Math.max(_liveCadenceMs * 2, 30000), 300000);
+    _liveNextFetchAt = Date.now() + _liveCadenceMs;
+  }
+}
+function startLiveTicker(){
+  stopLiveTicker();
+  _liveNextFetchAt = 0;
+  _liveCadenceMs = 30000;
+  _tickLiveOnce(true);
+  // lightweight heartbeat, actual fetch cadence is adaptive
+  liveTicker = setInterval(()=>{ _tickLiveOnce(false); }, 5000);
+}
+
+// Resume live tickers when user returns
+document.addEventListener("visibilitychange", ()=>{
+  if(!document.hidden && (scheduleView==="live" || scheduleView==="groups")){
+    try{ _tickLiveOnce(true); }catch(_){}
+  }
+});
+
+
 function initScheduleTabs(){
   const tabs = document.getElementById("scheduleTabs");
   if(!tabs) return;
@@ -5530,22 +5595,17 @@ function initScheduleTabs(){
     });
 
     // stop any existing live polling
-    try{ if(liveTicker) clearInterval(liveTicker); }catch(_){}
-    liveTicker = null;
+    stopLiveTicker();
 
     // load data needed for the selected view
     if(scheduleView === "live"){
       await loadLiveData();
-      // gentle refresh while user stays on Schedule
-      liveTicker = setInterval(async ()=>{
-        if(document.body.getAttribute("data-msec") !== "schedule") return;
-        await loadLiveData();
-        renderSchedule();
-      }, 30000);
+      startLiveTicker(); // adaptive + pauses when hidden
     } else if(scheduleView === "groups"){
       if(!standingsData || !standingsData.groups || !Object.keys(standingsData.groups).length){
         await loadStandingsData();
       }
+      startLiveTicker(); // keeps live + groups fresh while viewing standings
     }
 
     renderSchedule();
@@ -6169,7 +6229,35 @@ if (totalPages <= 1){
   });
 }
 
+
+function _fmtUpdated(ts){
+  try{
+    const d = new Date((ts||0)*1000);
+    if(!ts || isNaN(d.getTime())) return "";
+    return d.toLocaleTimeString(undefined, {hour:"numeric", minute:"2-digit"});
+  }catch(_){ return ""; }
+}
+function _scheduleMetaText(){
+  const v = (scheduleView || "fixtures").toLowerCase();
+  const el = (v==="live") ? liveData : (v==="groups" ? standingsData : scheduleData);
+  const updated = el ? (el.updated_at || (el._cachedAt ? Math.floor(el._cachedAt/1000) : null)) : null;
+  const t = _fmtUpdated(updated);
+  const cached = !!(el && el._cached);
+  const scopeLabel = (scope==="dallas") ? "Dallas" : "All matches";
+  const parts = [];
+  if(v==="fixtures") parts.push("Fixtures");
+  if(v==="live") parts.push("Live");
+  if(v==="groups") parts.push("Groups");
+  if(scopeLabel) parts.push(scopeLabel);
+  let msg = parts.join(" • ");
+  if(t) msg += ` • <strong>Updated ${t}</strong>`;
+  if(cached) msg += ` • Cached`;
+  return msg;
+}
+
 function renderSchedule(){
+  const meta = document.getElementById("scheduleMetaLine");
+  if(meta) meta.innerHTML = _scheduleMetaText();
   const v = (scheduleView || "fixtures").toLowerCase();
   if(v === "live"){ renderScheduleLive(); return; }
   if(v === "groups"){ renderScheduleGroups(); return; }
