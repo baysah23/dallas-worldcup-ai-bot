@@ -4582,29 +4582,11 @@ body[data-msec="schedule"] #scheduleCard{
 
 /* =========================================================
    STAR PLAYERS (HERO) — NORMALIZE LOOK (CSS ONLY)
-   Goals:
    - Same visual size + crisp feel (original poses preserved)
    - No text overlap (portrait or landscape)
    - No functionality changes (pure CSS)
    - Per-player micro scale offsets for balance
    ========================================================= */
-#heroBanner .heroOverlay{
-  /* Reserve a text lane so the athlete never visually collides with text */
-  max-width: 58%;
-  /* subtle readability wash behind text, keeps the right side clean */
-  background: linear-gradient(90deg, rgba(0,0,0,.22) 0%, rgba(0,0,0,.14) 55%, rgba(0,0,0,0) 100%);
-  border-top-left-radius: 16px;
-  border-bottom-left-radius: 16px;
-}
-#heroBanner .heroImg{
-  /* Constrain the player to the right lane */
-  left: 52%;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  padding: 8px 12px 10px 8px;
-  justify-content: center;
-}
 #heroBanner .heroSlide img{
   /* Normalize sizing across athletes (no cropping) */
   height: clamp(96px, 18vw, 150px);
@@ -4637,15 +4619,59 @@ body[data-msec="schedule"] #scheduleCard{
 #heroBanner #heroSlides .heroSlide:nth-child(8){ --pScale: 1.02; }
 #heroBanner #heroSlides .heroSlide:nth-child(9){ --pScale: 0.99; }
 
-/* Mobile portrait: give text a bit more room; keep player on the right */
+/* Right-lane placement for the player image */
+#heroBanner .heroSlide .heroImg{
+  position:absolute; top:0; bottom:0;
+  left:52%; right:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:8px 12px 10px 8px;
+  pointer-events:none;
+}
 @media (max-width: 720px){
-  #heroBanner .heroOverlay{ max-width: 64%; padding: 14px 12px; }
-  #heroBanner .heroImg{ left: 60%; padding: 8px 10px 10px 6px; }
   #heroBanner .heroSlide img{ height: clamp(90px, 24vw, 140px); }
+  #heroBanner .heroSlide .heroImg{ left:60%; padding:8px 10px 10px 6px; }
 }
 @media (max-width: 420px){
-  #heroBanner .heroOverlay{ max-width: 66%; }
-  #heroBanner .heroImg{ left: 62%; }
+  #heroBanner .heroSlide .heroImg{ left:62%; }
+}
+
+
+/* =========================================================
+   FIX: Ensure STAR PLAYER IMAGE stays visible (portrait + landscape)
+   - Hero text overlay must NOT cover entire banner
+   - Keep everything CSS-only (no JS/HTML changes)
+   ========================================================= */
+#heroBanner .heroOverlay{
+  position:absolute;
+  top:0; bottom:0; left:0;
+  right:auto !important;                 /* stop full-width stretch */
+  width:58% !important;                  /* reserve text lane */
+  max-width:none !important;
+  pointer-events:none;
+  border-top-left-radius:16px;
+  border-bottom-left-radius:16px;
+  background: linear-gradient(90deg,
+    rgba(0,0,0,.28) 0%,
+    rgba(0,0,0,.18) 55%,
+    rgba(0,0,0,0) 100%);
+}
+#heroBanner .heroSlide .heroImg{
+  /* keep player above background layers */
+  z-index:2 !important;
+}
+#heroBanner .heroSlide{
+  z-index:1; /* above hero::before */
+}
+#heroBanner.hero::before{
+  z-index:0;
+}
+@media (max-width: 720px){
+  #heroBanner .heroOverlay{ width:64% !important; padding:14px 12px; }
+}
+@media (max-width: 420px){
+  #heroBanner .heroOverlay{ width:66% !important; }
 }
 
 </style>
