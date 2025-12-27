@@ -4544,9 +4544,9 @@ body.kiosk-mode *::-webkit-scrollbar{
 </div>
 
 <!-- Home (mobile-only panel): premium onboarding + global World Cup snapshot -->
-<div class="card homecard lux-reveal" id="homeCard" aria-label="Home">
+<div class="card homecard lux-reveal" id="homeCard" aria-label="World Cup Concierge">
   <div class="cardhead">
-    <div class="title">Home</div>
+    <div class="title">World Cup Concierge</div>
     <div class="actions">
       <button class="btn btn-primary" id="homeReserveBtn" type="button">Reserve</button>
       <button class="btn" id="homeExploreBtn" type="button">Explore Matches</button>
@@ -5208,8 +5208,10 @@ function renderHomePanel(){
   const supEl  = document.getElementById("homeSupport");
   if(langEl) langEl.textContent = (localStorage.getItem("lang") || "en").toUpperCase();
   if(scopeEl){
-    const s = (localStorage.getItem("schedule_scope") || "dallas");
-    scopeEl.textContent = (s === "all") ? "All matches" : "Dallas";
+    let s = localStorage.getItem("schedule_scope");
+    if(!s){ s="all"; localStorage.setItem("schedule_scope", s); }
+    
+    scopeEl.textContent = (s === "all") ? "All matches" : "Dallas spotlight";
   }
   if(supEl){
     const k = __lsGet("supporting_country", "") || __lsGet("supporting", "") || __lsGet("country", "");
