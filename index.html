@@ -185,16 +185,16 @@
       width:100%;
       display:flex;
       align-items:center;
-      justify-content:flex-end;
-      padding:8px 16px 8px 10px;
+      justify-content:center;
+      padding:8px 10px;
       z-index:0;
       pointer-events:none;
     }
     .heroSlide img{
-      /* Uniform player sizing + keep clear of the text lane */
-      height:96%;
-      width:min(420px, 46%);
-      max-width:46%;
+      max-height:96%;
+      max-width:92%;
+      width:auto;
+      height:auto;
       object-fit:contain;
       filter: drop-shadow(0 16px 26px rgba(0,0,0,.45));
       opacity:1;
@@ -214,12 +214,12 @@
       pointer-events:none;
     }
       .heroSlide img{
-      /* Mobile: keep player consistent + away from text */
-      height:92%;
-      width:min(320px, 58%);
-      max-width:58%;
+      max-height:96%;
+      max-width:92%;
+      width:auto;
+      height:auto;
       object-fit:contain;
-      filter: drop-shadow(0 14px 22px rgba(0,0,0,.45));
+      filter: drop-shadow(0 16px 26px rgba(0,0,0,.45));
       opacity:1;
     }
     }
@@ -719,7 +719,7 @@
 .heroTriWrap{
   position:absolute;
   top:14px; bottom:14px;
-  right: clamp(22px, 5vw, 96px);
+  right:14px;
   width:min(460px, 48%);
   z-index:4;
   pointer-events:none; /* never blocks chat/menu/schedule */
@@ -727,7 +727,7 @@
   align-items:flex-end;
   justify-content:flex-end;
 }
-.compact .heroTriWrap{ width:min(380px, 56%); right: clamp(18px, 4.5vw, 84px); top:10px; bottom:10px; }
+.compact .heroTriWrap{ width:min(380px, 56%); right:10px; top:10px; bottom:10px; }
 
 .heroTri{
   width:100%;
@@ -754,20 +754,12 @@
   box-shadow: 0 16px 30px rgba(0,0,0,.25);
   position:relative;
 }
-
-/* Ensure every star player card image renders at the SAME visual size (no "one bigger than others") */
-.heroCard.heroCardTri .heroCardImg,
-.heroCard.heroCardTri .heroCardImg img{
-  width:100%;
-  height:100%;
-}
-.heroCard.heroCardTri .heroCardImg img{
-  object-fit: cover;
-  object-position: 50% 20%;
-}
 .compact .heroCard.heroCardTri{ height:92px; border-radius:14px; }
 
-h% 22%;
+.heroCard.heroCardTri .heroCardImg img{
+  width:100%; height:100%;
+  object-fit: cover;
+  object-position: 50% 18%;
   filter: saturate(1.18) contrast(1.10);
   transform: scale(1.04);
 }
@@ -1819,7 +1811,7 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
 
 /* Star 3-up wrapper: responsive + never overflow */
 .heroTriWrap{
-  right: 20px;
+  right: 8px;
   width: 44%;
   max-width: 320px;
   min-width: 0;
@@ -2502,7 +2494,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 /* Extra micro-depth on the 3-up cards (if enabled) */
 .hero .heroCard.heroCardTri .heroCardImg img{
-  transform: translateZ(8px) scale(1.02);
+  transform: translateZ(8px) scale(1.04);
 }
 
 /* Respect reduced motion */
@@ -3221,25 +3213,11 @@ body.kiosk-mode *::-webkit-scrollbar{
 /* Extra-small phones */
 @media (max-width: 420px){
   .heroOverlay{ width: 56% !important; }
-  .heroTriWrap{ width: 46% !important; max-width: 250px !important; right: 16px !important; }
+  .heroTriWrap{ width: 44% !important; max-width: 250px !important; }
   .heroCard.heroCardTri{ height: 92px !important; }
   .heroTri{ gap: 8px !important; }
 }
 
-
-
-/* Portrait phones: make star players larger while keeping text clear */
-@media (max-width: 520px) and (orientation: portrait){
-  .heroOverlay{ width: 58% !important; }
-  .heroTriWrap{ width: 46% !important; max-width: 360px !important; right: 22px !important; }
-  .heroCard.heroCardTri{ height: 104px !important; }
-  .heroTri{ gap: 10px !important; }
-}
-
-/* Landscape phones: keep the tighter (already-good) sizing */
-@media (max-width: 520px) and (orientation: landscape){
-  .heroTriWrap{ right: 16px !important; }
-}
 
 /* =========================================================
    Apply Step 1 + 2 only (recommended) — CLEANED + ENHANCED
@@ -3613,131 +3591,6 @@ body.kiosk-mode *::-webkit-scrollbar{
   height:0 !important;
   margin:0 !important;
   padding:0 !important;
-}
-
-
-
-/* =========================
-   HERO BANNER: NO-INTERFERENCE GUARDS
-   - keeps player art from colliding with text
-   - normalizes player thumbnail sizing
-   ========================= */
-@media (min-width: 951px){
-  #heroBanner .heroOverlay{
-    /* Reserve the right lane for the 3-up cards / art */
-    padding-right: calc(16px + min(460px, 48%) + 20px);
-  }
-  #heroBanner .heroTitle,
-  #heroBanner .wcCount{
-    max-width: 54%;
-  }
-}
-
-/* Normalize any roster/player thumbnails (works with current & future markup) */
-#heroRoster img{
-  width: 44px;
-  height: 44px;
-  object-fit: cover;
-  border-radius: 12px;
-  flex: 0 0 auto;
-}
-
-/* If names exist under thumbnails, keep them tight and aligned */
-#heroRoster .name,
-#heroRoster .playerName,
-#heroRoster [data-name]{
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1.05;
-  text-align: center;
-  white-space: nowrap;
-}
-
-/* ============================
-   HERO BANNER OVERLAY SAFETY + ROSTER CONSISTENCY (v2)
-   - Prevent player images from interfering with text (desktop + mobile)
-   - Keep player cards consistently sized
-   - Nudge roster slightly inward (more centered) without overlap
-   ============================ */
-.hero{
-  /* Reserve space on the right for the 3 player cards.
-     Matches the card wrap width so title/subtitle never sit underneath. */
-  --hero-right-reserve: clamp(220px, 44vw, 420px);
-}
-
-/* Constrain hero text region so it never overlaps the player cards */
-.heroOverlay{
-  inset: 0 var(--hero-right-reserve) 0 0 !important;
-  padding: 18px 16px !important;
-}
-
-/* Player cards: keep them slightly inset from the edge */
-.heroTriWrap{
-  width: var(--hero-right-reserve) !important;
-  right: clamp(18px, 3.2vw, 32px) !important;
-  top: 14px !important;
-  bottom: 14px !important;
-}
-
-/* Uniform player image crop/scale (some source images are larger/smaller) */
-.heroCard.heroCardTri{
-  height: 110px !important;
-}
-.compact .heroCard.heroCardTri{
-  height: 92px !important;
-}
-.heroCard.heroCardTri .heroCardImg img{
-  transform: none !important;
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-  object-position: 50% 22% !important; /* consistent headroom */
-  filter: saturate(1.12) contrast(1.08) !important;
-}
-
-/* Mobile tuning: preserve text + roster separation on portrait */
-@media (max-width: 720px){
-  .hero{
-    --hero-right-reserve: clamp(170px, 46vw, 250px);
-  }
-  .heroOverlay{
-    inset: 0 var(--hero-right-reserve) 0 0 !important;
-    padding: 14px 12px !important;
-  }
-  .heroTriWrap{
-    right: 18px !important; /* a touch more inward than before */
-    top: 12px !important;
-    bottom: 12px !important;
-  }
-}
-
-@media (max-width: 420px){
-  .hero{
-    --hero-right-reserve: clamp(150px, 48vw, 220px);
-  }
-  .heroCard.heroCardTri{ height: 96px !important; border-radius: 14px !important; }
-  .heroCard.heroCardTri .heroCardMeta{ left: 8px !important; right: 8px !important; bottom: 7px !important; }
-}
-
-
-/* =========================
-   PORTRAIT MOBILE BOOST (no overlap, bigger players)
-   - Portrait needed larger player cards; landscape already OK
-   ========================= */
-@media (max-width: 720px) and (orientation: portrait){
-  /* Give the banner a bit more vertical room */
-  .hero{ height: 190px !important; }
-
-  /* Slightly rebalance lanes: more room for players without touching desktop */
-  .heroOverlay{ width: 50% !important; }
-  .heroTriWrap{
-    width: 50% !important;
-    max-width: 360px !important;
-    right: 22px !important; /* pulls players toward center, still avoids text */
-  }
-
-  /* Make each player card larger so faces don't feel tiny in portrait */
-  .heroCard.heroCardTri{ height: 122px !important; }
 }
 
 </style>
