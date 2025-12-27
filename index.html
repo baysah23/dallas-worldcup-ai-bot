@@ -4483,6 +4483,26 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 
 .is-pressed{ filter: brightness(1.06); }
+
+
+/* =======================
+   MOBILE SCHEDULE SPACING TIGHTEN
+   Reduces vertical gap between hero banner and schedule panel ONLY on mobile schedule view
+   ======================= */
+@media (max-width: 950px){
+  body[data-msec="schedule"] .hero{
+    margin-bottom: 6px !important;
+  }
+  body[data-msec="schedule"] .grid{
+    row-gap: 10px !important;
+  }
+  body[data-msec="schedule"] .rightcol{
+    margin-top: 0 !important;
+  }
+  body[data-msec="schedule"] .card{
+    scroll-margin-top: 8px;
+  }
+}
 </style>
 </head>
 <body data-lux="on">
