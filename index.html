@@ -4234,6 +4234,22 @@ body.kiosk-mode *::-webkit-scrollbar{
     #luxToast .muted { color: rgba(255,255,255,.68); font-size: 12px; margin-top: 2px; }
 /* === END PHASE 7 === */
 
+
+/* --- Fix: keep mobile bottom-nav from covering chat composer/input --- */
+@media (max-width: 950px){
+  :root{ --mnav-h: 98px; } /* approximate nav height incl. padding + safe space */
+  /* Lift the chat composer above the fixed bottom nav */
+  .composer{
+    position: sticky;
+    bottom: calc(var(--mnav-h) + env(safe-area-inset-bottom));
+    z-index: 100; /* below nav (9999) but above chat content */
+  }
+  /* Ensure the chat card has scroll room so last messages aren't hidden behind the composer */
+  .chatcard{
+    padding-bottom: calc(var(--mnav-h) + 16px);
+  }
+}
+
 </style>
 </head>
 <body data-lux="on">
