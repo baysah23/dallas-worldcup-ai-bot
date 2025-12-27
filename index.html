@@ -5838,7 +5838,9 @@ function setSection(sec){
 
     // Chat: autofocus input so user can type immediately
     if(sec === 'chat'){
-      try{ setTimeout(__focusChatInput, 30); }catch(_){ }
+      try{ __focusChatInput(); }catch(_){ }
+      try{ requestAnimationFrame(()=>{ try{ __focusChatInput(); }catch(_2){} }); }catch(_){ }
+      try{ setTimeout(__focusChatInput, 120); }catch(_){ }
     }
 }
   // Expose for bottom-nav click wiring
@@ -6819,15 +6821,35 @@ function apply(){
 (function(){
   const nav = document.getElementById('mobileNav');
   if(!nav) return;
-  function onClick(e){
-    const btn = e.target.closest('.mnavBtn');
+
+  function handle(e){
+    const btn = e.target && e.target.closest ? e.target.closest('.mnavBtn') : null;
     if(!btn) return;
-    const sec = btn.getAttribute('data-msec');
+
+    const sec = btn.getAttribute('data-msec') || 'home';
+
+    // Switch section
     if(typeof window.setSection === 'function') window.setSection(sec);
+
     // Active state
     nav.querySelectorAll('.mnavBtn').forEach(b=>b.classList.toggle('active', b===btn));
+
+    // Critical mobile UX: focus chat input *synchronously* inside the user gesture
+    if(sec === 'chat'){
+      try{ __focusChatInput(); }catch(_){}
+      try{ requestAnimationFrame(()=>{ try{ __focusChatInput(); }catch(_2){} }); }catch(_){}
+    }
   }
-  nav.addEventListener('click', onClick, {passive:true});
+
+  // Use touch/pointer to keep focus allowed on iOS Safari
+  nav.addEventListener('pointerdown', (e)=>{
+    // Let mouse clicks behave normally (desktop testing)
+    if(e && e.pointerType === 'mouse') return;
+    handle(e);
+  }, {passive:false});
+
+  nav.addEventListener('touchstart', (e)=>{ handle(e); }, {passive:false});
+  nav.addEventListener('click', (e)=>{ handle(e); });
 })();
 </script>
 
