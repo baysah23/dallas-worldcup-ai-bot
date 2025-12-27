@@ -3664,6 +3664,13 @@ header .sub, .sub{
   box-shadow:none !important;
 }
 
+
+
+/* === HARD HIDE: subtitle phrase holders (all platforms/orientations) === */
+header .sub, .sub, .heroSub, #headerSub, #headerSubtitle, [data-role="header-sub"]{
+  display:none !important;
+}
+
 </style>
 </head>
 <body>
@@ -3973,7 +3980,7 @@ const STRINGS = {
     schedule_empty: "Schedule coming soon — update the match list in <code>app.py</code> (DALLAS_MATCHES).",
     menu_title: "Menu",
     header_title: 'World Cup 2026 • Dallas Match-Day Concierge',
-    header_sub: 'Reserve tables, explore schedules, and chat in English • Español • Português • Français',
+    header_sub: '',
     scope_dallas: 'Dallas',
     scope_all: 'All Matches',
     search_ph: 'Search team…',
@@ -4007,7 +4014,7 @@ const STRINGS = {
     schedule_empty: "El calendario estará disponible pronto — actualiza <code>DALLAS_MATCHES</code> en <code>app.py</code>.",
     menu_title: "Menú",
     header_title: 'Copa Mundial 2026 • Concierge Día de Partido (Dallas)',
-    header_sub: 'Reserva mesas, explora calendarios y chatea en English • Español • Português • Français',
+    header_sub: '',
     scope_dallas: 'Dallas',
     scope_all: 'Todos (Partidos)',
     search_ph: 'Buscar equipo…',
@@ -4041,7 +4048,7 @@ const STRINGS = {
     schedule_empty: "Agenda em breve — atualize <code>DALLAS_MATCHES</code> no <code>app.py</code>.",
     menu_title: "Cardápio",
     header_title: 'Copa do Mundo 2026 • Concierge do Dia do Jogo (Dallas)',
-    header_sub: 'Reserve mesas, explore agendas e converse em English • Español • Português • Français',
+    header_sub: '',
     scope_dallas: 'Dallas',
     scope_all: 'Todos os Jogos',
     search_ph: 'Buscar time…',
@@ -4075,7 +4082,7 @@ const STRINGS = {
     schedule_empty: "Programme bientôt disponible — mettez à jour <code>DALLAS_MATCHES</code> dans <code>app.py</code>.",
     menu_title: "Menu",
     header_title: 'Coupe du Monde 2026 • Concierge Jour de Match (Dallas)',
-    header_sub: 'Réservez des tables, explorez les matchs et discutez en English • Español • Português • Français',
+    header_sub: '',
     scope_dallas: 'Dallas',
     scope_all: 'Tous les Matchs',
     search_ph: 'Rechercher une équipe…',
@@ -6235,5 +6242,41 @@ function apply(){
 })();
 </script>
 
+<script>
+
+/* === DEFENSIVE CLEANUP: remove the old subtitle phrase on any layout/orientation === */
+document.addEventListener("DOMContentLoaded", () => {
+  const phrases = [
+    "Reserve tables",
+    "Reserve Tables",
+    "Live Schedules",
+    "Concierge Chat",
+    "Reserva mesas",
+    "Réservez",
+    "Réservez des tables",
+    "Reserve mesas",
+    "Explore schedules",
+    "explore schedules",
+  ];
+  const nodes = document.querySelectorAll("header, .hero, body");
+  // Fast pass: remove known targets if present
+  ["headerSub","headerSubtitle","header-sub","heroSub"].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.style.display = "none";
+  });
+  document.querySelectorAll("header .sub, .heroSub").forEach(el=>{ el.style.display="none"; });
+
+  // Safe scan: only hide small leaf nodes (prevents nuking big containers)
+  document.querySelectorAll("header *, .heroOverlay *, .hero *").forEach(el=>{
+    if(el.children && el.children.length) return;
+    const t = (el.textContent || "").trim();
+    if(!t) return;
+    if(phrases.some(p => t.includes(p))){
+      el.style.display = "none";
+    }
+  });
+});
+
+</script>
 </body>
 </html>
