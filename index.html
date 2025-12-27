@@ -2650,6 +2650,119 @@ body.kiosk-mode *::-webkit-scrollbar{
 }
 
 
+
+/* =========================
+   MOBILE HOME PANEL (premium, non-redundant)
+   ========================= */
+@media (max-width: 950px){
+  #homeCard{ display:none; } /* shown only when Home tab is active */
+  .homeGrid{ display:flex; flex-direction:column; gap:12px; }
+  .homeTile{
+    border:1px solid rgba(255,255,255,.10);
+    background: rgba(255,255,255,.06);
+    border-radius: 16px;
+    padding: 12px;
+    box-shadow: 0 12px 28px rgba(0,0,0,.24);
+  }
+  .homeTile--hero{
+    background:
+      radial-gradient(1200px 520px at 12% 0%, rgba(212,175,55,.18) 0%, rgba(255,255,255,0) 55%),
+      rgba(255,255,255,.06);
+    border-color: rgba(212,175,55,.22);
+  }
+  .homeKicker{
+    font-size: 9.5px;
+    letter-spacing: .22em;
+    font-weight: 900;
+    color: var(--muted);
+  }
+  .homeHeadline{
+    margin-top: 6px;
+    font-size: 15px;
+    line-height: 1.18;
+    font-weight: 950;
+    letter-spacing: .01em;
+  }
+  .homeSub{
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .homeSteps{ margin-top: 10px; display:flex; flex-direction:column; gap:8px; }
+  .homeStep{
+    display:flex; gap:10px; align-items:flex-start;
+    padding: 10px 10px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.10);
+    background: rgba(0,0,0,.12);
+  }
+  .homeStepNum{
+    width: 22px; height: 22px;
+    display:flex; align-items:center; justify-content:center;
+    border-radius: 999px;
+    border: 1px solid rgba(212,175,55,.32);
+    background: rgba(212,175,55,.14);
+    font-weight: 950;
+    font-size: 11px;
+  }
+  .homeStepTxt{ font-size: 11px; color: var(--text); line-height: 1.25; }
+  .homeTileTitle{
+    font-weight: 950;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .homeHighlights{ display:flex; flex-direction:column; gap:8px; }
+  .homeMatch{
+    display:flex; justify-content:space-between; gap:10px;
+    padding: 10px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.10);
+    background: rgba(0,0,0,.14);
+  }
+  .homeMatch .left{ min-width:0; }
+  .homeMatch .when{
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: .02em;
+  }
+  .homeMatch .teams{
+    margin-top: 2px;
+    font-size: 12px;
+    font-weight: 950;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .homeMatch .meta{
+    margin-top: 2px;
+    font-size: 10px;
+    color: var(--muted);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .homeMuted{ color: var(--muted); font-size: 11px; }
+
+  .homeMeta{ display:flex; flex-direction:column; gap:8px; }
+  .homeMetaRow{
+    display:flex; justify-content:space-between; gap:10px;
+    padding: 9px 10px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.10);
+    background: rgba(0,0,0,.12);
+    font-size: 11px;
+  }
+  .homeMetaRow span{ color: var(--muted); }
+  .homeActions{ display:flex; gap:8px; margin-top:10px; }
+  .homeActions .btn{ flex:1 1 auto; }
+
+  /* Slightly tighter cardhead on home for “luxury” */
+  #homeCard .cardhead{ align-items:center; gap:10px; }
+  #homeCard .cardhead .actions{ display:flex; gap:8px; }
+  #homeCard .cardhead .actions .btn{ padding: 10px 12px; border-radius: 14px; }
+}
+
 /* =========================
    MOBILE: SECTION NAV (desktop parity without clutter)
    - One-tap switch between Chat / Fan Zone / Extras / Schedule / Menu
@@ -2684,7 +2797,9 @@ body.kiosk-mode *::-webkit-scrollbar{
   }
 
   /* Default: show Chat section */
-  body[data-msec="home"] .chatcard{ display:block !important; }
+    /* Home: show Home panel only (chat lives on Chat tab) */
+  body[data-msec="home"] #homeCard{ display:block !important; }
+  body[data-msec="home"] .chatcard,
   body[data-msec="home"] .menucard,
   body[data-msec="home"] #fanZoneLeft,
   body[data-msec="home"] #fanZoneRight,
@@ -4292,7 +4407,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="brand">
 <div aria-hidden="true" class="badge"></div>
 <div>
-<h1>World Cup 2026 • Dallas Match-Day Concierge</h1>
+<h1>World Cup 2026 • World Cup Concierge</h1>
 <div class="sub">Reserve tables, see Dallas match schedule, and chat in English • Español • Português • Français</div></div>
 </div>
 <div aria-label="Language toggle" class="langbar">
@@ -4427,6 +4542,62 @@ body.kiosk-mode *::-webkit-scrollbar{
 </div>
 <div class="menu" id="menu"></div>
 </div>
+
+<!-- Home (mobile-only panel): premium onboarding + global World Cup snapshot -->
+<div class="card homecard lux-reveal" id="homeCard" aria-label="Home">
+  <div class="cardhead">
+    <div class="title">Home</div>
+    <div class="actions">
+      <button class="btn btn-primary" id="homeReserveBtn" type="button">Reserve</button>
+      <button class="btn" id="homeExploreBtn" type="button">Explore Matches</button>
+    </div>
+  </div>
+
+  <div class="homeGrid">
+    <div class="homeTile homeTile--hero" id="homeIntro">
+      <div class="homeKicker">WORLD CUP CONCIERGE</div>
+      <div class="homeHeadline">Reservations first. Matches everywhere.</div>
+      <div class="homeSub">Book a table in seconds, then browse the full World Cup schedule—Dallas and every host city—without losing your place.</div>
+
+      <div class="homeSteps" aria-label="How it works">
+        <div class="homeStep">
+          <div class="homeStepNum">1</div>
+          <div class="homeStepTxt"><b>Reserve</b> — type “reservation” or tap Reserve.</div>
+        </div>
+        <div class="homeStep">
+          <div class="homeStepNum">2</div>
+          <div class="homeStepTxt"><b>Follow</b> — pick a country in Fan Zone.</div>
+        </div>
+        <div class="homeStep">
+          <div class="homeStepNum">3</div>
+          <div class="homeStepTxt"><b>Explore</b> — see upcoming matches globally.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="homeTile" aria-label="Upcoming World Cup matches">
+      <div class="homeTileTitle">Up next (global)</div>
+      <div class="homeHighlights" id="homeHighlights">
+        <div class="homeMuted">Loading matches…</div>
+      </div>
+    </div>
+
+    <div class="homeTile" aria-label="Quick settings">
+      <div class="homeTileTitle">Your setup</div>
+      <div class="homeMeta" id="homeMeta">
+        <div class="homeMetaRow"><span>Language</span><b id="homeLang">—</b></div>
+        <div class="homeMetaRow"><span>Schedule scope</span><b id="homeScope">—</b></div>
+        <div class="homeMetaRow"><span>Supporting</span><b id="homeSupport">—</b></div>
+      </div>
+      <div class="homeActions">
+        <button class="btn" id="homeGoChat" type="button">Open Chat</button>
+        <button class="btn" id="homeGoFan" type="button">Open Fan Zone</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
 <!-- Chat / Reservations -->
 <div class="card chatcard lux-reveal" style="display:flex;flex-direction:column;min-height:0;">
 <div class="cardhead">
@@ -4446,12 +4617,12 @@ body.kiosk-mode *::-webkit-scrollbar{
 <!-- Sidebar -->
 <div class="card schedulecard lux-reveal" id="scheduleCard" style="display:flex;flex-direction:column;min-height:0;">
 <div class="cardhead">
-<div class="title" id="sideTitle">Dallas Schedule</div>
+<div class="title" id="sideTitle">World Cup Schedule</div>
 <div class="pill" id="pillLang">EN</div></div>
 <div class="countdown">
 <div>
 <div class="label" id="countLabel">World Cup countdown</div>
-<div class="sub" id="countSub" style="margin:4px 0 0;">Dallas / Arlington match days</div></div>
+<div class="sub" id="countSub" style="margin:4px 0 0;">All host cities</div></div>
 <div class="nums" id="countNums">
 <span><b id="d">0</b>d</span>
 <span><b id="h">0</b>h</span>
@@ -4579,19 +4750,19 @@ if (compactToggleBtn){
 
 const STRINGS = {
   en: {
-    welcome: "⚽ Welcome, World Cup fan! I’m your Dallas Match-Day Concierge.\nType \"reservation\" to book a table, or ask about Dallas matches, all matches, or the menu.",
+    welcome: "⚽ Welcome, World Cup fan! I’m your World Cup Concierge.\nType \"reservation\" to book a table, or ask about Dallas matches, all matches, or the menu.",
     lang_set: "Language set to English.",
     helper: 'Try: <code>reservation</code> to book • <code>Recall reservation so far</code> • Ask about the menu • Ask about Dallas match days. Search by team, venue, or date (e.g., "June 13").',
     send: "Send",
     typing: "...",
     chat_title: "Chat",
-    side_title: "Dallas Schedule",
+    side_title: "World Cup Schedule",
     countdown: "World Cup countdown",
-    countdown_sub: "Dallas / Arlington match days",
+    countdown_sub: "All host cities",
     next_hint: "Next upcoming match is highlighted",
     schedule_empty: "Schedule coming soon — update the match list in <code>app.py</code> (DALLAS_MATCHES).",
     menu_title: "Menu",
-    header_title: 'World Cup 2026 • Dallas Match-Day Concierge',
+    header_title: 'World Cup 2026 • World Cup Concierge',
     header_sub: 'Reserve tables, explore schedules, and chat in English • Español • Português • Français',
     scope_dallas: 'Dallas',
     scope_all: 'All Matches',
@@ -4625,7 +4796,7 @@ const STRINGS = {
     next_hint: "El próximo partido está resaltado",
     schedule_empty: "El calendario estará disponible pronto — actualiza <code>DALLAS_MATCHES</code> en <code>app.py</code>.",
     menu_title: "Menú",
-    header_title: 'Copa Mundial 2026 • Concierge Día de Partido (Dallas)',
+    header_title: 'Copa Mundial 2026 • Concierge Copa do Mundo',
     header_sub: 'Reserva mesas, explora calendarios y chatea en English • Español • Português • Français',
     scope_dallas: 'Dallas',
     scope_all: 'Todos (Partidos)',
@@ -4659,7 +4830,7 @@ const STRINGS = {
     next_hint: "O próximo jogo está destacado",
     schedule_empty: "Agenda em breve — atualize <code>DALLAS_MATCHES</code> no <code>app.py</code>.",
     menu_title: "Cardápio",
-    header_title: 'Copa do Mundo 2026 • Concierge do Dia do Jogo (Dallas)',
+    header_title: 'Copa do Mundo 2026 • Concierge da Copa do Mundo',
     header_sub: 'Reserve mesas, explore agendas e converse em English • Español • Português • Français',
     scope_dallas: 'Dallas',
     scope_all: 'Todos os Jogos',
@@ -4681,7 +4852,7 @@ const STRINGS = {
 
   },
   fr: {
-    welcome: "⚽ Bienvenue, fan de la Coupe du Monde ! Je suis votre concierge des jours de match à Dallas.\nTapez \"réservation\" pour réserver une table, ou demandez les matchs (Dallas / tous) ou le menu.",
+    welcome: "⚽ Bienvenue, fan de la Coupe du Monde ! Je suis votre concierge de la Coupe du Monde.\nTapez \"réservation\" pour réserver une table, ou demandez les matchs (Dallas / tous) ou le menu.",
     lang_set: "Langue définie sur Français.",
     helper: 'Essayez : <code>réservation</code> pour réserver • <code>Rappeler la réservation</code> • Demandez le menu • Demandez les matchs à Dallas.',
     send: "Envoyer",
@@ -4997,6 +5168,7 @@ async function loadSchedule(){
   const res = await fetch(`/schedule.json?scope=${encodeURIComponent(scope)}&q=${encodeURIComponent(scheduleQuery)}`, {cache:"no-store"});
   scheduleData = await res.json();
   renderSchedule();
+  try{ renderHomePanel(); }catch(e){}
   updateMatchDayMode();
   restartCountdown(); // uses schedule info when available
 }
@@ -5009,6 +5181,129 @@ async function loadMenu(){
   window.menuDataList = (menuData && Array.isArray(menuData.items)) ? menuData.items : [];
   menuPage = 1;
   renderMenu(window.menuDataList);
+
+// -----------------------
+// Home (mobile) panel
+// -----------------------
+function __lsGet(k, d=null){ try{ const v = localStorage.getItem(k); return (v===null||v===undefined) ? d : v; }catch(_){ return d; } }
+function __formatHomeWhen(m){
+  try{
+    const dt = safeParseTimestamp(m.date, m.time);
+    if(!dt) return `${m.date || ""} ${m.time || ""}`.trim();
+    const d = new Date(dt);
+    const ds = d.toLocaleDateString(undefined, { month:"short", day:"numeric" });
+    const ts = d.toLocaleTimeString(undefined, { hour:"numeric", minute:"2-digit" });
+    return `${ds} • ${ts}`;
+  }catch(_){
+    return `${m.date || ""} ${m.time || ""}`.trim();
+  }
+}
+function renderHomePanel(){
+  const card = document.getElementById("homeCard");
+  if(!card) return;
+
+  // meta
+  const langEl = document.getElementById("homeLang");
+  const scopeEl = document.getElementById("homeScope");
+  const supEl  = document.getElementById("homeSupport");
+  if(langEl) langEl.textContent = (localStorage.getItem("lang") || "en").toUpperCase();
+  if(scopeEl){
+    const s = (localStorage.getItem("schedule_scope") || "dallas");
+    scopeEl.textContent = (s === "all") ? "All matches" : "Dallas";
+  }
+  if(supEl){
+    const k = __lsGet("supporting_country", "") || __lsGet("supporting", "") || __lsGet("country", "");
+    supEl.textContent = k ? k : "Not set";
+  }
+
+  // highlights
+  const host = document.getElementById("homeHighlights");
+  if(!host) return;
+
+  const raw = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches.slice() : [];
+  if(!raw.length){
+    host.innerHTML = `<div class="homeMuted">No matches loaded yet. Tap “Explore Matches” to load the schedule.</div>`;
+    return;
+  }
+
+  const now = Date.now();
+  const enriched = raw.map(m => ({...m, ts: safeParseTimestamp(m.date, m.time)}))
+                     .filter(m => m.ts !== null)
+                     .sort((a,b)=>a.ts-b.ts);
+
+  const upcoming = enriched.filter(m => m.ts >= (now - 5*60*1000)).slice(0, 3);
+
+  if(!upcoming.length){
+    host.innerHTML = `<div class="homeMuted">No upcoming matches found (check schedule scope / data).</div>`;
+    return;
+  }
+
+  host.innerHTML = upcoming.map(m => {
+    const when = __formatHomeWhen(m);
+    const teamsTxt = (m.teams && String(m.teams).trim())
+      ? m.teams
+      : ((m.home || m.away) ? `${m.home || "TBD"} vs ${m.away || "TBD"}` : "TBD vs TBD");
+    const meta = [m.stage, m.venue].filter(Boolean).join(" • ");
+    return `
+      <div class="homeMatch">
+        <div class="left">
+          <div class="when">${escapeHtml(when)}</div>
+          <div class="teams">${escapeHtml(teamsTxt)}</div>
+          ${meta ? `<div class="meta">${escapeHtml(meta)}</div>` : ``}
+        </div>
+        <div class="pill">${escapeHtml((m.scope||"").toUpperCase() || (localStorage.getItem("schedule_scope")||"").toUpperCase() || "WC")}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+function wireHomePanel(){
+  const reserve = document.getElementById("homeReserveBtn");
+  const explore = document.getElementById("homeExploreBtn");
+  const goChat  = document.getElementById("homeGoChat");
+  const goFan   = document.getElementById("homeGoFan");
+
+  function toChat(prefill){
+    try{ if(typeof window.setSection === "function") window.setSection("chat"); }catch(_){}
+    try{
+      const t = document.getElementById("msg");
+      if(t && prefill){
+        t.value = prefill;
+        t.dispatchEvent(new Event("input", {bubbles:true}));
+      }
+      try{ __focusChatInput(); }catch(_){}
+    }catch(_){}
+  }
+
+  if(reserve) reserve.addEventListener("click", ()=> toChat("reservation"));
+  if(goChat)  goChat.addEventListener("click", ()=> toChat(""));
+
+  if(goFan) goFan.addEventListener("click", ()=>{
+    try{ if(typeof window.setSection === "function") window.setSection("fanzone"); }catch(_){}
+  });
+
+  if(explore) explore.addEventListener("click", async ()=>{
+    // Force “All matches” view then go to Schedule
+    try{
+      scope = "all";
+      localStorage.setItem("schedule_scope","all");
+      currentPage = 1;
+      scheduleQuery = "";
+      if(teamSearchEl) teamSearchEl.value = "";
+      await loadSchedule();
+    }catch(_){}
+    try{ if(typeof window.setSection === "function") window.setSection("schedule"); }catch(_){}
+  });
+}
+
+// Wire after DOM is ready
+if(document.readyState === "loading"){
+  document.addEventListener("DOMContentLoaded", ()=>{ try{ wireHomePanel(); renderHomePanel(); }catch(e){} });
+}else{
+  try{ wireHomePanel(); renderHomePanel(); }catch(e){}
+}
+
+
 }
 
 function safeParseTimestamp(dateIso, timeStr){
