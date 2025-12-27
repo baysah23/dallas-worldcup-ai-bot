@@ -3630,6 +3630,73 @@ body.kiosk-mode *::-webkit-scrollbar{
   text-align: center;
   white-space: nowrap;
 }
+
+/* ============================
+   HERO BANNER OVERLAY SAFETY + ROSTER CONSISTENCY (v2)
+   - Prevent player images from interfering with text (desktop + mobile)
+   - Keep player cards consistently sized
+   - Nudge roster slightly inward (more centered) without overlap
+   ============================ */
+.hero{
+  /* Reserve space on the right for the 3 player cards.
+     Matches the card wrap width so title/subtitle never sit underneath. */
+  --hero-right-reserve: clamp(220px, 44vw, 420px);
+}
+
+/* Constrain hero text region so it never overlaps the player cards */
+.heroOverlay{
+  inset: 0 var(--hero-right-reserve) 0 0 !important;
+  padding: 18px 16px !important;
+}
+
+/* Player cards: keep them slightly inset from the edge */
+.heroTriWrap{
+  width: var(--hero-right-reserve) !important;
+  right: clamp(18px, 3.2vw, 32px) !important;
+  top: 14px !important;
+  bottom: 14px !important;
+}
+
+/* Uniform player image crop/scale (some source images are larger/smaller) */
+.heroCard.heroCardTri{
+  height: 110px !important;
+}
+.compact .heroCard.heroCardTri{
+  height: 92px !important;
+}
+.heroCard.heroCardTri .heroCardImg img{
+  transform: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: 50% 22% !important; /* consistent headroom */
+  filter: saturate(1.12) contrast(1.08) !important;
+}
+
+/* Mobile tuning: preserve text + roster separation on portrait */
+@media (max-width: 720px){
+  .hero{
+    --hero-right-reserve: clamp(170px, 46vw, 250px);
+  }
+  .heroOverlay{
+    inset: 0 var(--hero-right-reserve) 0 0 !important;
+    padding: 14px 12px !important;
+  }
+  .heroTriWrap{
+    right: 18px !important; /* a touch more inward than before */
+    top: 12px !important;
+    bottom: 12px !important;
+  }
+}
+
+@media (max-width: 420px){
+  .hero{
+    --hero-right-reserve: clamp(150px, 48vw, 220px);
+  }
+  .heroCard.heroCardTri{ height: 96px !important; border-radius: 14px !important; }
+  .heroCard.heroCardTri .heroCardMeta{ left: 8px !important; right: 8px !important; bottom: 7px !important; }
+}
+
 </style>
 </head>
 <body>
