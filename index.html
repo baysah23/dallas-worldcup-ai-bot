@@ -3700,6 +3700,41 @@ body.kiosk-mode *::-webkit-scrollbar{
   button:active, .langbtn:active, .fz-btn:active{ transform:none !important; }
 }
 
+
+/* =========================================================
+   MOBILE HOTFIX: REMOVE YELLOW / GOLD GLARE FROM HERO
+   - Mobile ONLY
+   - Visual-only (no layout / no functionality changes)
+   ========================================================= */
+@media (max-width: 950px){
+
+  /* Kill all gold/yellow light sources in the hero */
+  .hero::after,
+  .heroGlow,
+  .heroSweep,
+  .heroSmoke{
+    opacity: 0 !important;
+  }
+
+  /* Neutralize gold radial gradients if any remain */
+  .hero,
+  .hero::before{
+    background-image: none !important;
+    filter: none !important;
+  }
+
+  /* Ensure text remains readable without glow */
+  .heroTitle,
+  .heroSub{
+    text-shadow: 0 6px 18px rgba(0,0,0,.85) !important;
+  }
+
+  /* Remove decorative gold divider under title (mobile only) */
+  #heroBanner .heroTitle::after{
+    display: none !important;
+  }
+}
+
 </style>
 </head>
 <body>
