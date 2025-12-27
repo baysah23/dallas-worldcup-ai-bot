@@ -2670,6 +2670,32 @@ body.kiosk-mode *::-webkit-scrollbar{
       rgba(255,255,255,.06);
     border-color: rgba(212,175,55,.22);
   }
+
+  /* Home Fastlane chips (mobile Home) */
+  .homeChips{ display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .homeChipBtn{
+    border:1px solid rgba(255,255,255,.14);
+    background: rgba(0,0,0,.18);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .01em;
+    cursor:pointer;
+    min-width: 0;
+  }
+  .homeChipBtn:hover{ transform: translateY(-1px); background: rgba(255,255,255,.08); }
+  .homeChipBtn.primary{
+    border-color: rgba(46,160,67,.35);
+    background: rgba(46,160,67,.14);
+  }
+  .homeNote{
+    margin-top:10px;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.25;
+  }
   .homeKicker{
     font-size: 9.5px;
     letter-spacing: .22em;
@@ -4592,7 +4618,24 @@ body.kiosk-mode *::-webkit-scrollbar{
       <div class="homeActions">
         <button class="btn" id="homeGoChat" type="button">Open Chat</button>
         <button class="btn" id="homeGoFan" type="button">Open Fan Zone</button>
+      
+    <div class="homeTile" id="homeFastlane" aria-label="Concierge fastlane">
+      <div class="homeTileTitle">Concierge fastlane</div>
+      <div class="homeSub" style="margin:0;">One tap to get where you need—reservations, any match, or quick help.</div>
+
+      <div class="homeChips" role="list" aria-label="Quick actions">
+        <button class="homeChipBtn primary" type="button" data-go="chat" data-prefill="reservation">Reserve a table</button>
+        <button class="homeChipBtn" type="button" data-go="chat" data-prefill="Show me today’s World Cup matches.">Today’s matches</button>
+        <button class="homeChipBtn" type="button" data-go="chat" data-prefill="What are the next 5 matches globally?">Next matches</button>
+        <button class="homeChipBtn" type="button" data-go="chat" data-prefill="Menu recommendations for a group of 4?">Menu picks</button>
+        <button class="homeChipBtn" type="button" data-go="chat" data-prefill="How do I reserve a VIP table?">VIP help</button>
+        <button class="homeChipBtn" type="button" data-go="fanzone">Pick supporter country</button>
       </div>
+
+      <div class="homeNote">Tip: You can explore the full World Cup schedule from any section—Home just gives you the fastest launchpad.</div>
+    </div>
+
+</div>
     </div>
   </div>
 </div>
@@ -5283,6 +5326,22 @@ function wireHomePanel(){
   if(goFan) goFan.addEventListener("click", ()=>{
     try{ if(typeof window.setSection === "function") window.setSection("fanzone"); }catch(_){}
   });
+
+  // Home fastlane chips
+  try{
+    const chips = document.querySelectorAll("#homeFastlane .homeChipBtn");
+    chips.forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const go = (btn.getAttribute("data-go") || "chat").toLowerCase();
+        const pre = btn.getAttribute("data-prefill") || "";
+        if(go === "fanzone"){
+          try{ if(typeof window.setSection === "function") window.setSection("fanzone"); }catch(_){}
+          return;
+        }
+        toChat(pre);
+      });
+    });
+  }catch(_){}
 
   if(explore) explore.addEventListener("click", async ()=>{
     // Force “All matches” view then go to Schedule
