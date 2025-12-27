@@ -3639,6 +3639,31 @@ header .sub, .sub{
   opacity: 0 !important;
 }
 
+
+
+/* === HARD FIX: remove any thin yellow/ gold lines in hero (ALL PLATFORMS) ===
+   Some devices render pseudo-elements/underlines with different rounding.
+   This disables ALL hero-title underline styles and any bottom borders that can look like a glare.
+*/
+.heroTitle::after,
+.hero-title::after,
+.heroTitleRow h1::after,
+.hero h1::after,
+.heroOverlay::after,
+.heroOverlay::before{
+  content:none !important;
+  display:none !important;
+  background:none !important;
+  box-shadow:none !important;
+  border:none !important;
+  opacity:0 !important;
+}
+.heroTitle, .hero-title, .heroTitleRow h1, .hero h1{
+  text-decoration:none !important;
+  border-bottom: none !important;
+  box-shadow:none !important;
+}
+
 </style>
 </head>
 <body>
@@ -3649,7 +3674,7 @@ header .sub, .sub{
 <div aria-hidden="true" class="badge"></div>
 <div>
 <h1>World Cup 2026 • Dallas Match-Day Concierge</h1>
-<div class="sub">Reserve tables, see Dallas match schedule, and chat in English • Español • Português • Français</div></div>
+</div>
 </div>
 <div aria-label="Language toggle" class="langbar">
 <div class="langbtn active" data-lang="en">English</div>
