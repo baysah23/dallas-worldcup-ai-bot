@@ -4234,15 +4234,6 @@ body.kiosk-mode *::-webkit-scrollbar{
     #luxToast .muted { color: rgba(255,255,255,.68); font-size: 12px; margin-top: 2px; }
 /* === END PHASE 7 === */
 
-
-/* PHASE11: Mobile menu should show full content (no internal clipping) */
-@media (max-width: 950px){
-  body.menu-expanded .menucard .menu{
-    max-height: none !important;
-    overflow: visible !important;
-  }
-}
-
 </style>
 </head>
 <body data-lux="on">
@@ -5787,41 +5778,57 @@ const __sectionEls = {
 // Mobile section order for swipe navigation
 const __sectionOrder = ['home','chat','menu','schedule','fanzone','vip'];
 
+
+// Focus chat input when entering Chat (mobile UX)
+function __focusChatInput(){
+  const t = document.getElementById('msg');
+  if(!t) return;
+  try{ t.focus({preventScroll:true}); }catch(_){ try{ t.focus(); }catch(__){} }
+  try{
+    const v = (t.value || "");
+    if(t.setSelectionRange) t.setSelectionRange(v.length, v.length);
+  }catch(_){}
+  // iOS sometimes needs a tiny delay after section becomes visible
+  try{ setTimeout(()=>{ try{ t.focus({preventScroll:true}); }catch(_2){} }, 40); }catch(_){}
+  // Bring just the input into view (no full-page jump)
+  try{ t.scrollIntoView({block:'end'}); }catch(_){}
+}
 function __currentSection(){
   return (document.body.getAttribute('data-msec') || 'chat');
 }
 
 function setSection(sec){
-    // Normalize section values
-    sec = (sec || 'chat').toString().toLowerCase();
-    if(sec === 'home') sec = 'chat';
-
-    // Set current section visibility (mobile-only CSS uses body[data-msec])
     document.body.setAttribute('data-msec', sec);
 
-    // Persist user's last section (so refresh doesn't jump unexpectedly)
-    try{ localStorage.setItem('wc_mobile_section', sec); }catch(e){}
+    // Persist the last visited section on mobile (so reload doesn't feel random)
+    try{
+      if(sec === 'home') localStorage.removeItem('wc_mobile_section');
+      else localStorage.setItem('wc_mobile_section', sec);
+    }catch(_){ }
 
-    // Mobile-only micro animation on section change (safe + short)
+
+    // Mobile-only micro animation on section change
     if(isMobile && isMobile() && !window.matchMedia('(prefers-reduced-motion: reduce)').matches){
       document.body.classList.add('msec-anim');
       window.clearTimeout(window.__msecAnimT);
       window.__msecAnimT = window.setTimeout(()=>document.body.classList.remove('msec-anim'), 220);
     }
-
-    // Mobile: ensure menu/schedule content renders when user navigates there
-    if(isMobile && isMobile()){
+    
+    if(sec === 'home'){
+      // Home = top of app (hero + default state)
+      try{ window.scrollTo({ top: 0, behavior: 'smooth' }); }catch(_){ window.scrollTo(0,0); }
+    }
+// On mobile, expand the menu when you navigate to it (avoid “blank menu” feel)
+    if(isMobile && isMobile()){ // safeguard
       if(sec === 'menu'){
         document.body.classList.add('menu-expanded');
         document.body.classList.remove('menu-collapsed');
-        try{ if(typeof renderMenu === 'function'){ renderMenu(window.menuDataList || []); } }catch(e){}
+        try{ if(typeof renderMenu==='function'){ renderMenu(window.menuDataList || []); } }catch(e){}
       }
       if(sec === 'schedule'){
-        try{ if(typeof renderSchedule === 'function'){ renderSchedule(); } }catch(e){}
+        try{ if(typeof renderSchedule==='function'){ renderSchedule(); } }catch(e){}
       }
     }
-
-    // Nav active state
     const nav = document.getElementById('mobileNav');
     if(nav){
       nav.querySelectorAll('.mnavBtn').forEach(b=>{
@@ -5829,17 +5836,69 @@ function setSection(sec){
       });
     }
 
-    // IMPORTANT:
-    // Do NOT auto-scroll here. Auto-scroll on section changes was causing
-    // the “jump back to Home” feeling while users scroll on mobile.
-  }
-  // Expose for other scripts (mobileNav click wiring)
+    // Chat: autofocus input so user can type immediately
+    if(sec === 'chat'){
+      try{ setTimeout(__focusChatInput, 30); }catch(_){ }
+    }
+}
+  // Expose for bottom-nav click wiring
   window.setSection = setSection;
 
-
 /* Mobile swipe navigation (between sections) */
-/* Disabled: was causing accidental section changes during vertical scroll on some devices. */
-function wireNav(){
+(function(){
+  function enabled(){
+    return false; // disabled: was causing accidental section changes during vertical scroll
+  }
+  let startX=0, startY=0, tracking=false, lastSec=null;
+  const THRESH=42;         // px
+  const VERTICAL_GUARD=28; // px
+  const EDGE_GUARD=18;     // px: ignore gesture from OS edge areas
+
+  function onStart(e){
+    if(!enabled()) return;
+    const t = (e.touches && e.touches[0]) ? e.touches[0] : e;
+    if(t.clientX < EDGE_GUARD || t.clientX > (window.innerWidth-EDGE_GUARD)) return;
+    startX = t.clientX; startY = t.clientY;
+    tracking = true;
+    lastSec = __currentSection();
+  }
+  function onMove(e){
+    if(!tracking) return;
+    const t = (e.touches && e.touches[0]) ? e.touches[0] : e;
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    if(Math.abs(dy) > VERTICAL_GUARD && Math.abs(dy) > Math.abs(dx)){
+      tracking = false;
+      return;
+    }
+    if(Math.abs(dx) > THRESH && Math.abs(dx) > Math.abs(dy)){
+      try{ e.preventDefault(); }catch(_){}
+    }
+  }
+  function onEnd(e){
+    if(!tracking) return;
+    tracking = false;
+    const t = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : e;
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    if(Math.abs(dx) < THRESH || Math.abs(dx) < Math.abs(dy)) return;
+
+    const cur = lastSec || __currentSection();
+    const i = Math.max(0, __sectionOrder.indexOf(cur));
+    const dir = (dx < 0) ? 1 : -1; // swipe left -> next
+    const next = __sectionOrder[Math.min(__sectionOrder.length-1, Math.max(0, i + dir))];
+    if(next && next !== cur){
+      setSection(next);
+    }
+  }
+
+  document.addEventListener('touchstart', onStart, {passive:true});
+  document.addEventListener('touchmove', onMove, {passive:false});
+  document.addEventListener('touchend', onEnd, {passive:true});
+})();
+
+
+  function wireNav(){
     const nav = document.getElementById('mobileNav');
     if(!nav) return;
     nav.addEventListener('click', (e)=>{
@@ -5847,9 +5906,11 @@ function wireNav(){
       if(!btn) return;
       setSection(btn.dataset.msec || 'chat');
     });
-    // Default section on mobile
+    // Default section on mobile (restore last visited)
     if(isMobile() && !document.body.getAttribute('data-msec')){
-      setSection((localStorage.getItem('wc_mobile_section') || 'chat'));
+      let pref = 'home';
+      try{ pref = (localStorage.getItem('wc_mobile_section') || 'home'); }catch(_){ }
+      setSection(pref);
     }
   }
 
@@ -6610,9 +6671,123 @@ function wireNav(){
 </script>
 
 
+<script>
+/* MOBILE SECTION NAV (UI-only, safe)
+   Gives phone users full access to desktop features without clutter/overlap. */
+(function(){
+  // If the newer bottom mobile nav exists, skip legacy injected nav to avoid conflicts.
+  if(document.getElementById('mobileNav')){ return; }
 
-<!-- Removed legacy injected mnav section-nav script (was causing scroll jumps) -->
+  function isSmall(){ return (window.innerWidth||0) <= 950; }
 
+  function ensureScheduleId(){
+    const sideTitle = document.getElementById("sideTitle");
+    if(sideTitle){
+      const card = sideTitle.closest(".card");
+      if(card && !card.id) card.id = "scheduleCard";
+    }
+  }
+
+  function injectNav(){
+    if(!isSmall()) return;
+    const hero = document.getElementById("heroBanner") || document.querySelector(".hero");
+    if(!hero) return;
+
+    // Avoid duplicates
+    if(document.getElementById("mnav")) return;
+
+    const nav = document.createElement("div");
+    nav.className = "mnav";
+    nav.id = "mnav";
+    nav.innerHTML = `
+      <button class="mnav-btn" data-sec="home">Home</button>
+      <button class="mnav-btn" data-sec="chat">Chat</button>
+      <button class="mnav-btn" data-sec="fanzone">Fan Zone</button>
+      <button class="mnav-btn" data-sec="vip">VIP</button>
+      <button class="mnav-btn" data-sec="extras">Extras</button>
+      <button class="mnav-btn" data-sec="schedule">Schedule</button>
+      <button class="mnav-btn" data-sec="menu">Menu</button>
+    `;
+
+    hero.insertAdjacentElement("afterend", nav);
+
+    nav.addEventListener("click", (e) => {
+      const b = e.target.closest("button[data-sec]");
+      if(!b) return;
+      const sec = b.getAttribute("data-sec");
+      setSection(sec, true);
+    });
+  }
+
+  function setSection(sec, persist){
+  if(sec === "home"){
+      // Home = default experience (chat) + clear any persisted section
+      try{ localStorage.removeItem("wc_mobile_section"); }catch(e){}
+      sec = "chat";
+      document.body.removeAttribute("data-msec");
+    }
+    if(!isSmall()) return;
+    document.body.setAttribute("data-msec", sec || "chat");
+    // button states
+    const nav = document.getElementById("mnav");
+    if(nav){
+      nav.querySelectorAll(".mnav-btn").forEach(btn => {
+        btn.classList.toggle("on", btn.getAttribute("data-sec") === sec);
+      });
+    }
+    if(persist){
+      try{ localStorage.setItem("wc_mobile_section", sec); }catch(e){}
+    }
+
+    // When showing chat, focus input for quick use
+    if(sec === "chat"){
+      try{
+        const t = document.getElementById("msg");
+        if(t){ t.focus({preventScroll:true}); }
+      }catch(e){}
+    }
+
+    // Scroll to top of section (keeps premium feel)
+    try{ window.scrollTo({top: 0, behavior: "smooth"}); }catch(e){}
+  }
+
+  
+// Back gesture: if on another section and user hits browser back (popstate), return to chat without leaving
+window.addEventListener("popstate", () => {
+  try{
+    if(isSmall()){
+      setSection("chat", true);
+    }
+  }catch(e){}
+});
+
+function apply(){
+    ensureScheduleId();
+    if(isSmall()){
+      injectNav();
+      const pref = (localStorage.getItem("wc_mobile_section") || "chat");
+      setSection(pref, false);
+    }else{
+      // desktop: remove attribute so everything shows
+      document.body.removeAttribute("data-msec");
+      const nav = document.getElementById("mnav");
+      if(nav) nav.remove();
+    }
+  }
+
+  if(document.readyState==="loading"){
+    document.addEventListener("DOMContentLoaded", apply);
+  }else{
+    apply();
+  }
+
+  let t=null;
+  window.addEventListener("resize", () => {
+    clearTimeout(t);
+    t = setTimeout(apply, 160);
+  });
+})();
+</script>
 
 
 <script>
@@ -6639,9 +6814,22 @@ function wireNav(){
 </script>
 
 
-
-<!-- Removed duplicate mobileNav click wiring (v3) to prevent double-handling) -->
-
+<script>
+/* Mobile nav wiring (v3) */
+(function(){
+  const nav = document.getElementById('mobileNav');
+  if(!nav) return;
+  function onClick(e){
+    const btn = e.target.closest('.mnavBtn');
+    if(!btn) return;
+    const sec = btn.getAttribute('data-msec');
+    if(typeof window.setSection === 'function') window.setSection(sec);
+    // Active state
+    nav.querySelectorAll('.mnavBtn').forEach(b=>b.classList.toggle('active', b===btn));
+  }
+  nav.addEventListener('click', onClick, {passive:true});
+})();
+</script>
 
 
 <script>
