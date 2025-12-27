@@ -2696,6 +2696,35 @@ body.kiosk-mode *::-webkit-scrollbar{
     font-size: 12px;
     line-height: 1.25;
   }
+
+  .homeStats{ display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin-top:10px; }
+  .homeStat{
+    border:1px solid rgba(255,255,255,.12);
+    background: rgba(0,0,0,.18);
+    border-radius: 14px;
+    padding: 10px 10px;
+    min-width: 0;
+  }
+  .homeStat .k{ display:block; font-size:10px; color: var(--muted); letter-spacing:.16em; text-transform:uppercase; font-weight:900; }
+  .homeStat b{ display:block; margin-top:6px; font-size:13px; line-height:1.12; font-weight:950; letter-spacing:.01em; }
+  .homeStat small{ display:block; margin-top:4px; font-size:11px; color: var(--muted); line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  @media (max-width: 420px){
+    .homeStats{ grid-template-columns: 1fr; }
+    .homeStat small{ white-space: normal; }
+  }
+  .homeLinkBtn{
+    border:1px solid rgba(255,255,255,.14);
+    background: rgba(255,255,255,.06);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 8px 10px;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing:.01em;
+    cursor:pointer;
+  }
+  .homeLinkBtn:hover{ transform: translateY(-1px); background: rgba(255,255,255,.10); }
+  .homeLinkRow{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
   .homeKicker{
     font-size: 9.5px;
     letter-spacing: .22em;
@@ -4608,7 +4637,38 @@ body.kiosk-mode *::-webkit-scrollbar{
       </div>
     </div>
 
-    <div class="homeTile" aria-label="Quick settings">
+    
+<div class="homeTile" id="homePulse" aria-label="World Cup pulse">
+      <div class="homeTileTitle">World Cup pulse</div>
+      <div class="homeSub" style="margin:0;">A clean snapshot of the entire tournament—global first, Dallas included.</div>
+
+      <div class="homeStats" id="homeStats">
+        <div class="homeStat">
+          <span class="k">Today</span>
+          <b id="homeStatToday">—</b>
+          <small id="homeStatTodaySub">Matches worldwide</small>
+        </div>
+        <div class="homeStat">
+          <span class="k">Next kickoff</span>
+          <b id="homeStatNext">—</b>
+          <small id="homeStatNextSub">—</small>
+        </div>
+        <div class="homeStat">
+          <span class="k">Your time</span>
+          <b id="homeStatTZ">—</b>
+          <small id="homeStatTZSub">Local</small>
+        </div>
+      </div>
+
+      <div class="homeLinkRow" aria-label="Schedule scope controls">
+        <button class="homeLinkBtn" id="homeSetAll" type="button">All matches</button>
+        <button class="homeLinkBtn" id="homeSetDallas" type="button">Dallas spotlight</button>
+      </div>
+
+      <div class="homeNote" id="homePulseNote">Tip: Keep “All matches” for the full tournament view. Dallas spotlight is optional.</div>
+    </div>
+
+<div class="homeTile" aria-label="Quick settings">
       <div class="homeTileTitle">Your setup</div>
       <div class="homeMeta" id="homeMeta">
         <div class="homeMetaRow"><span>Language</span><b id="homeLang">—</b></div>
@@ -4616,10 +4676,13 @@ body.kiosk-mode *::-webkit-scrollbar{
         <div class="homeMetaRow"><span>Supporting</span><b id="homeSupport">—</b></div>
       </div>
       <div class="homeActions">
-        <button class="btn" id="homeGoChat" type="button">Open Chat</button>
-        <button class="btn" id="homeGoFan" type="button">Open Fan Zone</button>
-      
-    <div class="homeTile" id="homeFastlane" aria-label="Concierge fastlane">
+        <button class="btn" id="homeGoChat" type="button">Open Concierge</button>
+        <button class="btn" id="homeGoFan" type="button">Pick supporter</button>
+      </div>
+      <div class="homeNote">Most fans start here: pick a country, then tap “Explore Matches” for the full World Cup schedule.</div>
+    </div>
+
+<div class="homeTile" id="homeFastlane" aria-label="Concierge fastlane">
       <div class="homeTileTitle">Concierge fastlane</div>
       <div class="homeSub" style="margin:0;">One tap to get where you need—reservations, any match, or quick help.</div>
 
@@ -4634,6 +4697,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 
       <div class="homeNote">Tip: You can explore the full World Cup schedule from any section—Home just gives you the fastest launchpad.</div>
     </div>
+
 
 </div>
     </div>
@@ -5300,6 +5364,52 @@ function renderHomePanel(){
       </div>
     `;
   }).join("");
+
+  // Home “World Cup pulse” stats (global snapshot). Safe: no-ops if elements missing.
+  try{ updateHomePulseStats(enriched); }catch(_){ }
+}
+
+function updateHomePulseStats(enriched){
+  if(!Array.isArray(enriched) || !enriched.length) return;
+  const elToday = document.getElementById("homeStatToday");
+  const elTodaySub = document.getElementById("homeStatTodaySub");
+  const elNext = document.getElementById("homeStatNext");
+  const elNextSub = document.getElementById("homeStatNextSub");
+  const elTz = document.getElementById("homeStatTZ");
+  const elTzSub = document.getElementById("homeStatTZSub");
+
+  // If none exist, skip fast.
+  if(!elToday && !elTodaySub && !elNext && !elNextSub && !elTz && !elTzSub) return;
+
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Local";
+  if(elTz){
+    const shortTz = tz.includes("/") ? tz.split("/").pop().replace(/_/g," ") : tz;
+    elTz.textContent = shortTz;
+  }
+  if(elTzSub){
+    elTzSub.textContent = new Date().toLocaleString(undefined, {
+      weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit"
+    });
+  }
+
+  const now = Date.now();
+  const todayKey = new Date().toLocaleDateString();
+  const todays = enriched.filter(m => {
+    try{ return new Date(m.ts).toLocaleDateString() === todayKey; }catch(_){ return false; }
+  });
+  if(elToday) elToday.textContent = todays.length ? String(todays.length) : "0";
+  if(elTodaySub) elTodaySub.textContent = "Matches worldwide";
+
+  const next = enriched.find(m => m.ts >= (now - 5*60*1000));
+  if(next){
+    if(elNext) elNext.textContent = (next.teams && String(next.teams).trim())
+      ? String(next.teams).trim()
+      : ((next.home || next.away) ? `${next.home || "TBD"} vs ${next.away || "TBD"}` : "TBD vs TBD");
+    if(elNextSub) elNextSub.textContent = __formatHomeWhen(next);
+  }else{
+    if(elNext) elNext.textContent = "—";
+    if(elNextSub) elNextSub.textContent = "Next match";
+  }
 }
 
 function wireHomePanel(){
