@@ -8,6 +8,7 @@ import hashlib
 import re
 import time
 import datetime
+import threading
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
@@ -54,9 +55,12 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
 @app.after_request
 def add_no_cache_headers(response):
-    # === PHASE 2: SMART CACHE HEADERS (AUTO-INSERTED) ===
-    # Keep the app feeling fast and consistent on mobile by allowing short caching
-    # for read-only JSON, while still preventing stale admin/chat experiences.
+    """Cache policy tuned for 'dynamic' UX without breaking offline resilience.
+
+    - HTML/admin/chat: never cached.
+    - JSON APIs: always revalidated (ETag) so clients get fresh data while
+      still benefiting from conditional requests on flaky mobile networks.
+    """
     try:
         path = request.path or ""
     except Exception:
@@ -67,26 +71,30 @@ def add_no_cache_headers(response):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
-        # === PHASE 6: JSON ETAG (AUTO-INSERTED) ===
+        return response
+
+    # JSON endpoints should be dynamic: allow storing, but require revalidation
+    is_json = (
+        path.endswith(".json")
+        or path.startswith("/api/")
+        or path.startswith("/schedule.json")
+        or path.startswith("/menu.json")
+        or path.startswith("/countries/")
+        or path.startswith("/worldcup/")
+    )
+    if is_json:
+        response.headers["Cache-Control"] = "no-cache, max-age=0, must-revalidate"
+        # Weak ETag helps mobile revalidate quickly without stale data
         try:
-            # Add weak ETag for JSON to improve revalidation on mobile
             ctype = response.headers.get("Content-Type","")
             if (getattr(response, "mimetype", "") == "application/json") or ctype.startswith("application/json"):
                 payload = response.get_data()
                 etag = hashlib.sha1(payload).hexdigest()
                 response.set_etag(etag, weak=True)
-                response.headers.setdefault("Cache-Control", "public, max-age=60")
         except Exception:
             pass
-
         return response
 
-    # Short cache for JSON (schedule/menu/qualified lists). Helps flaky mobile networks.
-    if path.endswith(".json") or path.startswith("/api/") or path.startswith("/countries/") or path.startswith("/worldcup/"):
-        response.headers["Cache-Control"] = "public, max-age=60"  # 1 minute
-        return response
-
-    # Default: allow browser heuristics
     return response
 
 
@@ -155,6 +163,31 @@ _fixtures_cache: Dict[str, Any] = {"loaded_at": 0, "matches": []}
 FIXTURE_CACHE_SECONDS = int(os.environ.get("FIXTURE_CACHE_SECONDS", str(6 * 60 * 60)))  # 6h
 FIXTURE_CACHE_FILE = os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_fixtures.json")
 POLL_STORE_FILE = os.environ.get("POLL_STORE_FILE", "/tmp/wc26_poll_votes.json")
+
+# Refresh fixtures periodically in the background so schedule/standings feel "live"
+# even when the first request after idle hits a cold cache.
+FIXTURE_REFRESH_SECONDS = int(os.environ.get("FIXTURE_REFRESH_SECONDS", "900"))  # 15 min default
+_fixture_refresh_lock = threading.Lock()
+_fixture_refresh_started = False
+
+def _fixture_refresh_loop():
+    # Runs forever in a daemon thread.
+    while True:
+        try:
+            with _fixture_refresh_lock:
+                # Best-effort refresh; load_all_matches already falls back to cache on failure.
+                load_all_matches(force=True)
+        except Exception:
+            pass
+        time.sleep(max(60, FIXTURE_REFRESH_SECONDS))
+
+def _ensure_fixture_refresher_started():
+    global _fixture_refresh_started
+    if _fixture_refresh_started:
+        return
+    _fixture_refresh_started = True
+    t = threading.Thread(target=_fixture_refresh_loop, daemon=True, name="fixture-refresh")
+    t.start()
 
 
 def _safe_read_json_file(path: str) -> Optional[Any]:
@@ -269,6 +302,12 @@ def load_all_matches(force: bool = False) -> List[Dict[str, Any]]:
         "away": "South Africa",
       }
     """
+    # Ensure background refresher is running (safe + idempotent)
+    try:
+        _ensure_fixture_refresher_started()
+    except Exception:
+        pass
+
     now = int(time.time())
     if not force and _fixtures_cache["matches"] and (now - int(_fixtures_cache["loaded_at"] or 0) < FIXTURE_CACHE_SECONDS):
         return _fixtures_cache["matches"]
@@ -1614,6 +1653,22 @@ def get_qualified_teams(force: bool = False) -> List[str]:
 
 def _utc_now():
     return datetime.now(timezone.utc)
+
+@app.route("/api/data/status")
+def api_data_status():
+    now = int(time.time())
+    loaded = int(_fixtures_cache.get("loaded_at") or 0)
+    age = (now - loaded) if loaded else None
+    return jsonify({
+        "updated_at": now,
+        "fixture_feed": {
+            "url": FIXTURE_FEED_URL,
+            "loaded_at": loaded,
+            "age_seconds": age,
+            "refresh_seconds": FIXTURE_REFRESH_SECONDS,
+        }
+    })
+
 
 @app.route("/worldcup/live.json")
 def worldcup_live_json():

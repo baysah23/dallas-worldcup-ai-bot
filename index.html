@@ -5498,6 +5498,67 @@ async function loadSchedule(){
   updateMatchDayMode();
   restartCountdown(); // uses schedule info when available
 }
+// -------------------------------------------------------
+// Schedule auto-refresh (premium + non-jumpy)
+// - When Schedule is active: refresh ~every 30s
+// - Otherwise: refresh gently every 5 min
+// - Uses in-flight guard + backoff on failures
+// -------------------------------------------------------
+(function(){
+  let inFlight = false;
+  let lastOk = 0;
+  let intervalId = null;
+  let backoffMs = 30000;
+
+  function isScheduleActive(){
+    try{ return (document.body.getAttribute('data-msec') || 'chat') === 'schedule'; }catch(_){ return false; }
+  }
+
+  async function tick(){
+    if(inFlight) return;
+    const now = Date.now();
+    const active = isScheduleActive();
+    const target = active ? 30000 : 300000;
+    if(now - lastOk < target) return;
+
+    inFlight = true;
+    try{
+      await loadSchedule();
+      lastOk = Date.now();
+      backoffMs = 30000;
+    }catch(e){
+      // exponential backoff up to 10 min
+      backoffMs = Math.min(600000, Math.floor(backoffMs * 1.6));
+    }finally{
+      inFlight = false;
+    }
+  }
+
+  function start(){
+    if(intervalId) return;
+    intervalId = setInterval(tick, 5000); // lightweight check; actual fetch is gated above
+  }
+
+  // start on load
+  start();
+
+  // also refresh immediately when user enters schedule (no jump)
+  try{
+    const _oldSetSection = window.setSection;
+    if(typeof _oldSetSection === 'function'){
+      window.setSection = function(sec){
+        const r = _oldSetSection(sec);
+        if(sec === 'schedule'){
+          setTimeout(()=>{ try{ tick(); }catch(_){ } }, 80);
+        }
+        return r;
+      }
+    }
+  }catch(_){}
+
+  window.__scheduleAutoRefresh = { tick };
+})();
+
 
 
 async function loadMenu(){
