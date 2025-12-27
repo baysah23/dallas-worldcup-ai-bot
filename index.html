@@ -2696,35 +2696,6 @@ body.kiosk-mode *::-webkit-scrollbar{
     font-size: 12px;
     line-height: 1.25;
   }
-
-  .homeStats{ display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; margin-top:10px; }
-  .homeStat{
-    border:1px solid rgba(255,255,255,.12);
-    background: rgba(0,0,0,.18);
-    border-radius: 14px;
-    padding: 10px 10px;
-    min-width: 0;
-  }
-  .homeStat .k{ display:block; font-size:10px; color: var(--muted); letter-spacing:.16em; text-transform:uppercase; font-weight:900; }
-  .homeStat b{ display:block; margin-top:6px; font-size:13px; line-height:1.12; font-weight:950; letter-spacing:.01em; }
-  .homeStat small{ display:block; margin-top:4px; font-size:11px; color: var(--muted); line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  @media (max-width: 420px){
-    .homeStats{ grid-template-columns: 1fr; }
-    .homeStat small{ white-space: normal; }
-  }
-  .homeLinkBtn{
-    border:1px solid rgba(255,255,255,.14);
-    background: rgba(255,255,255,.06);
-    color: var(--text);
-    border-radius: 999px;
-    padding: 8px 10px;
-    font-size: 12px;
-    font-weight: 900;
-    letter-spacing:.01em;
-    cursor:pointer;
-  }
-  .homeLinkBtn:hover{ transform: translateY(-1px); background: rgba(255,255,255,.10); }
-  .homeLinkRow{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
   .homeKicker{
     font-size: 9.5px;
     letter-spacing: .22em;
@@ -4637,38 +4608,7 @@ body.kiosk-mode *::-webkit-scrollbar{
       </div>
     </div>
 
-    
-<div class="homeTile" id="homePulse" aria-label="World Cup pulse">
-      <div class="homeTileTitle">World Cup pulse</div>
-      <div class="homeSub" style="margin:0;">A clean snapshot of the entire tournament—global first, Dallas included.</div>
-
-      <div class="homeStats" id="homeStats">
-        <div class="homeStat">
-          <span class="k">Today</span>
-          <b id="homeStatToday">—</b>
-          <small id="homeStatTodaySub">Matches worldwide</small>
-        </div>
-        <div class="homeStat">
-          <span class="k">Next kickoff</span>
-          <b id="homeStatNext">—</b>
-          <small id="homeStatNextSub">—</small>
-        </div>
-        <div class="homeStat">
-          <span class="k">Your time</span>
-          <b id="homeStatTZ">—</b>
-          <small id="homeStatTZSub">Local</small>
-        </div>
-      </div>
-
-      <div class="homeLinkRow" aria-label="Schedule scope controls">
-        <button class="homeLinkBtn" id="homeSetAll" type="button">All matches</button>
-        <button class="homeLinkBtn" id="homeSetDallas" type="button">Dallas spotlight</button>
-      </div>
-
-      <div class="homeNote" id="homePulseNote">Tip: Keep “All matches” for the full tournament view. Dallas spotlight is optional.</div>
-    </div>
-
-<div class="homeTile" aria-label="Quick settings">
+    <div class="homeTile" aria-label="Quick settings">
       <div class="homeTileTitle">Your setup</div>
       <div class="homeMeta" id="homeMeta">
         <div class="homeMetaRow"><span>Language</span><b id="homeLang">—</b></div>
@@ -4676,13 +4616,10 @@ body.kiosk-mode *::-webkit-scrollbar{
         <div class="homeMetaRow"><span>Supporting</span><b id="homeSupport">—</b></div>
       </div>
       <div class="homeActions">
-        <button class="btn" id="homeGoChat" type="button">Open Concierge</button>
-        <button class="btn" id="homeGoFan" type="button">Pick supporter</button>
-      </div>
-      <div class="homeNote">Most fans start here: pick a country, then tap “Explore Matches” for the full World Cup schedule.</div>
-    </div>
-
-<div class="homeTile" id="homeFastlane" aria-label="Concierge fastlane">
+        <button class="btn" id="homeGoChat" type="button">Open Chat</button>
+        <button class="btn" id="homeGoFan" type="button">Open Fan Zone</button>
+      
+    <div class="homeTile" id="homeFastlane" aria-label="Concierge fastlane">
       <div class="homeTileTitle">Concierge fastlane</div>
       <div class="homeSub" style="margin:0;">One tap to get where you need—reservations, any match, or quick help.</div>
 
@@ -4697,7 +4634,6 @@ body.kiosk-mode *::-webkit-scrollbar{
 
       <div class="homeNote">Tip: You can explore the full World Cup schedule from any section—Home just gives you the fastest launchpad.</div>
     </div>
-
 
 </div>
     </div>
@@ -5364,41 +5300,6 @@ function renderHomePanel(){
       </div>
     `;
   }).join("");
-
-  // pulse stats (global)
-  try{
-    const elToday = document.getElementById("homeStatToday");
-    const elTodaySub = document.getElementById("homeStatTodaySub");
-    const elNext = document.getElementById("homeStatNext");
-    const elNextSub = document.getElementById("homeStatNextSub");
-    const elTz = document.getElementById("homeStatTZ");
-    const elTzSub = document.getElementById("homeStatTZSub");
-
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "Local";
-    if(elTz) elTz.textContent = tz.includes("/") ? tz.split("/").pop().replace(/_/g," ") : tz;
-    if(elTzSub) elTzSub.textContent = new Date().toLocaleString(undefined, { weekday:"short", month:"short", day:"numeric", hour:"numeric", minute:"2-digit" });
-
-    const todayKey = new Date().toLocaleDateString();
-    const todays = enriched.filter(m => {
-      try{ return new Date(m.ts).toLocaleDateString() === todayKey; }catch(_){ return false; }
-    });
-    if(elToday) elToday.textContent = `${todays.length} match${todays.length===1?"":"es"}`;
-    if(elTodaySub) elTodaySub.textContent = (todays.length ? "Across all venues" : "No matches today (local time)");
-
-    const next = upcoming[0];
-    if(next){
-      const when = __formatHomeWhen(next);
-      const teamsTxt = (next.teams && String(next.teams).trim())
-        ? next.teams
-        : ((next.home || next.away) ? `${next.home || "TBD"} vs ${next.away || "TBD"}` : "TBD vs TBD");
-      if(elNext) elNext.textContent = when;
-      if(elNextSub) elNextSub.textContent = teamsTxt;
-    }else{
-      if(elNext) elNext.textContent = "—";
-      if(elNextSub) elNextSub.textContent = "No upcoming match found";
-    }
-  }catch(_){}
-
 }
 
 function wireHomePanel(){
@@ -5406,8 +5307,6 @@ function wireHomePanel(){
   const explore = document.getElementById("homeExploreBtn");
   const goChat  = document.getElementById("homeGoChat");
   const goFan   = document.getElementById("homeGoFan");
-  const setAll  = document.getElementById("homeSetAll");
-  const setDal  = document.getElementById("homeSetDallas");
 
   function toChat(prefill){
     try{ if(typeof window.setSection === "function") window.setSection("chat"); }catch(_){}
@@ -5427,15 +5326,6 @@ function wireHomePanel(){
   if(goFan) goFan.addEventListener("click", ()=>{
     try{ if(typeof window.setSection === "function") window.setSection("fanzone"); }catch(_){}
   });
-
-  // Home pulse scope controls
-  function setScope(v){
-    try{ localStorage.setItem(\"schedule_scope\", v); }catch(_){ }
-    try{ renderHomePanel(); }catch(_){ }
-    try{ if(typeof window.renderSchedule === \"function\") window.renderSchedule(); }catch(_){ }
-  }
-  if(setAll) setAll.addEventListener(\"click\", ()=> setScope(\"all\"));
-  if(setDal) setDal.addEventListener(\"click\", ()=> setScope(\"dallas\"));
 
   // Home fastlane chips
   try{
