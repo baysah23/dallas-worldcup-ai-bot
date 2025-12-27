@@ -4895,6 +4895,7 @@ body[data-msec="schedule"] #scheduleCard{
 </div>
 <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
 <input id="teamSearch" list="teamSuggestions" placeholder="Search team / venue / date (e.g., June 13 or 2026-06-13)..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;"/>
+<div class="pill" id="dataFreshness" style="padding:6px 10px; opacity:.78; white-space:nowrap;">Updated: —</div>
 <datalist id="teamSuggestions"></datalist>
 <div class="pill" id="matchCount">0</div></div>
 </div>
@@ -4958,6 +4959,59 @@ let scheduleView = localStorage.getItem("schedule_view") || "fixtures"; // fixtu
 let liveData = null;
 let standingsData = null;
 let liveTicker = null;
+let standTicker = null;
+
+// ---- Live/standings smart refresh (ETag-aware + safe backoff) ----
+const _etagStore = Object.create(null);
+const _failCount = Object.create(null);
+
+async function fetchJsonSmart(url, key){
+  try{
+    const headers = {};
+    if(_etagStore[key]) headers["If-None-Match"] = _etagStore[key];
+    const res = await fetch(url, {cache:"no-store", headers});
+    if(res.status === 304) return {status:"not_modified"};
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const et = res.headers.get("ETag");
+    if(et) _etagStore[key] = et;
+    const data = await res.json();
+    _failCount[key] = 0;
+    return {status:"ok", data};
+  }catch(e){
+    _failCount[key] = (_failCount[key]||0)+1;
+    return {status:"error", error: String(e||"")};
+  }
+}
+
+function _fmtAge(sec){
+  if(sec < 5) return "just now";
+  if(sec < 60) return sec+"s ago";
+  const m = Math.floor(sec/60);
+  if(m < 60) return m+"m ago";
+  const h = Math.floor(m/60);
+  return h+"h ago";
+}
+
+function updateFreshnessPill(){
+  const el = document.getElementById("dataFreshness");
+  if(!el) return;
+  const v = (scheduleView || "fixtures").toLowerCase();
+  const now = Math.floor(Date.now()/1000);
+  let ts = null;
+  if(v === "live" && liveData && liveData.updated_at) ts = liveData.updated_at;
+  if(v === "groups" && standingsData && standingsData.updated_at) ts = standingsData.updated_at;
+  if(!ts){
+    el.textContent = "Updated: —";
+    return;
+  }
+  const age = Math.max(0, now - Number(ts||0));
+  const fails = _failCount[(v==="live") ? "live" : "stand"] || 0;
+  el.textContent = "Updated: "+_fmtAge(age)+(fails?(" • reconnecting…"):"");
+}
+setInterval(()=>{ 
+  const activeSec = (document.querySelector(".section.active") || {}).id || "";
+  if(activeSec === "scheduleSection") updateFreshnessPill();
+}, 1000);
 
 
 // Pagination (Dallas + All Matches)
@@ -5288,18 +5342,36 @@ try{
         const on = (b.getAttribute("data-view") === v);
         b.setAttribute("aria-selected", on ? "true" : "false");
       });
-      // Live view: gentle refresh (only while on the Schedule section)
+      // Live + Groups view: gentle refresh (only while on the Schedule section)
       try{
         if(liveTicker) clearInterval(liveTicker);
+        if(standTicker) clearInterval(standTicker);
         liveTicker = null;
+        standTicker = null;
+
         if(v === "live"){
           liveTicker = setInterval(async ()=>{
             const activeSec = (document.querySelector(".section.active") || {}).id || "";
             if(activeSec !== "scheduleSection") return;
-            try{
-              const res = await fetch(`/worldcup/live.json?scope=${encodeURIComponent(scope === "dallas" ? "dallas" : "all")}`, {cache:"no-store"});
-              liveData = await res.json();
-              renderSchedule();
+            const r = await fetchJsonSmart(`/worldcup/live.json?scope=${encodeURIComponent(scope === "dallas" ? "dallas" : "all")}`,'live');
+            if(r.status === "ok"){ liveData = r.data; renderSchedule(); }
+            updateFreshnessPill();
+          }, 30000);
+        }
+
+        if(v === "groups"){
+          standTicker = setInterval(async ()=>{
+            const activeSec = (document.querySelector(".section.active") || {}).id || "";
+            if(activeSec !== "scheduleSection") return;
+            const r = await fetchJsonSmart(`/worldcup/standings.json?scope=all`,'stand');
+            if(r.status === "ok"){ standingsData = r.data; renderSchedule(); }
+            updateFreshnessPill();
+          }, 60000);
+        }
+      }catch(_){}
+      renderSchedule();
+      updateFreshnessPill(); updateFreshnessPill(); }
+              else if(r.status === "not_modified"){ updateFreshnessPill(); }
             }catch(_){}
           }, 30000);
         }
@@ -5482,15 +5554,16 @@ async function loadSchedule(){
   // Non-breaking: live + standings are optional (render uses fallbacks).
   try{
     const [liveRes, standRes] = await Promise.allSettled([
-      fetch(`/worldcup/live.json?scope=${encodeURIComponent(scope === "dallas" ? "dallas" : "all")}`, {cache:"no-store"}),
-      fetch(`/worldcup/standings.json?scope=all`, {cache:"no-store"})
+      fetchJsonSmart(`/worldcup/live.json?scope=${encodeURIComponent(scope === "dallas" ? "dallas" : "all")}`,'live'),
+      fetchJsonSmart(`/worldcup/standings.json?scope=all`,'stand')
     ]);
-    if(liveRes.status === "fulfilled"){
-      try{ liveData = await liveRes.value.json(); }catch(_){}
+    if(liveRes.status === "fulfilled" && liveRes.value){
+      if(liveRes.value.status === "ok") liveData = liveRes.value.data;
     }
-    if(standRes.status === "fulfilled"){
-      try{ standingsData = await standRes.value.json(); }catch(_){}
+    if(standRes.status === "fulfilled" && standRes.value){
+      if(standRes.value.status === "ok") standingsData = standRes.value.data;
     }
+    updateFreshnessPill();
   }catch(_){}
 
   renderSchedule();
@@ -5498,67 +5571,6 @@ async function loadSchedule(){
   updateMatchDayMode();
   restartCountdown(); // uses schedule info when available
 }
-// -------------------------------------------------------
-// Schedule auto-refresh (premium + non-jumpy)
-// - When Schedule is active: refresh ~every 30s
-// - Otherwise: refresh gently every 5 min
-// - Uses in-flight guard + backoff on failures
-// -------------------------------------------------------
-(function(){
-  let inFlight = false;
-  let lastOk = 0;
-  let intervalId = null;
-  let backoffMs = 30000;
-
-  function isScheduleActive(){
-    try{ return (document.body.getAttribute('data-msec') || 'chat') === 'schedule'; }catch(_){ return false; }
-  }
-
-  async function tick(){
-    if(inFlight) return;
-    const now = Date.now();
-    const active = isScheduleActive();
-    const target = active ? 30000 : 300000;
-    if(now - lastOk < target) return;
-
-    inFlight = true;
-    try{
-      await loadSchedule();
-      lastOk = Date.now();
-      backoffMs = 30000;
-    }catch(e){
-      // exponential backoff up to 10 min
-      backoffMs = Math.min(600000, Math.floor(backoffMs * 1.6));
-    }finally{
-      inFlight = false;
-    }
-  }
-
-  function start(){
-    if(intervalId) return;
-    intervalId = setInterval(tick, 5000); // lightweight check; actual fetch is gated above
-  }
-
-  // start on load
-  start();
-
-  // also refresh immediately when user enters schedule (no jump)
-  try{
-    const _oldSetSection = window.setSection;
-    if(typeof _oldSetSection === 'function'){
-      window.setSection = function(sec){
-        const r = _oldSetSection(sec);
-        if(sec === 'schedule'){
-          setTimeout(()=>{ try{ tick(); }catch(_){ } }, 80);
-        }
-        return r;
-      }
-    }
-  }catch(_){}
-
-  window.__scheduleAutoRefresh = { tick };
-})();
-
 
 
 async function loadMenu(){
