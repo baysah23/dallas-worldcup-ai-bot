@@ -4197,6 +4197,43 @@ body.kiosk-mode *::-webkit-scrollbar{
     }
 /* === END PHASE 6 === */
 
+
+/* === PHASE 7: RELIABILITY + FEEDBACK (AUTO-INSERTED) === */
+    /* Connection + error toast */
+    #luxToast {
+      position: fixed;
+      left: 10px;
+      right: 10px;
+      bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+      z-index: 99998;
+      display: none;
+      border-radius: 16px;
+      padding: 10px 12px;
+      background: rgba(8,12,20,.86);
+      border: 1px solid rgba(255,255,255,.14);
+      box-shadow: 0 18px 55px rgba(0,0,0,.48);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      color: rgba(255,255,255,.92);
+      font-size: 13px;
+      line-height: 1.25;
+    }
+    #luxToast .trow {
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:10px;
+    }
+    #luxToast .tmsg { flex: 1; }
+    #luxToast .tbtn {
+      border-radius: 12px;
+      padding: 8px 10px;
+      min-height: 36px;
+      white-space: nowrap;
+    }
+    #luxToast .muted { color: rgba(255,255,255,.68); font-size: 12px; margin-top: 2px; }
+/* === END PHASE 7 === */
+
 </style>
 </head>
 <body data-lux="on">
@@ -7017,6 +7054,145 @@ function apply(){
     console.info('[QA] Enabled. Add ?qa=1 to any URL to show device matrix.');
   }
 
+})();
+</script>
+
+
+<script>
+/* === PHASE 7: RELIABILITY LAYER (AUTO-INSERTED) === */
+(() => {
+  // Premium reliability on mobile: timeout+retry for GET schedule/menu JSON endpoints, plus offline feedback.
+  const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Toast UI (non-invasive)
+  const ensureToast = () => {
+    let t = document.getElementById('luxToast');
+    if (t) return t;
+    t = document.createElement('div');
+    t.id = 'luxToast';
+    t.innerHTML = `
+      <div class="trow">
+        <div class="tmsg">
+          <div id="luxToastMain">…</div>
+          <div id="luxToastSub" class="muted"></div>
+        </div>
+        <button type="button" class="tbtn btn" id="luxToastBtn" style="display:none;">Retry</button>
+      </div>
+    `;
+    document.body.appendChild(t);
+    return t;
+  };
+
+  const showToast = (main, sub="", btnText="", onBtn=null) => {
+    const t = ensureToast();
+    t.style.display = 'block';
+    const m = t.querySelector('#luxToastMain');
+    const s = t.querySelector('#luxToastSub');
+    const b = t.querySelector('#luxToastBtn');
+    if (m) m.textContent = main || "";
+    if (s) s.textContent = sub || "";
+    if (btnText && b) {
+      b.textContent = btnText;
+      b.style.display = 'inline-flex';
+      b.onclick = () => { try { onBtn && onBtn(); } catch(_) {} };
+    } else if (b) {
+      b.style.display = 'none';
+      b.onclick = null;
+    }
+    if (!prefersReduced) {
+      t.style.transform = 'translateY(6px)';
+      t.style.opacity = '0.001';
+      requestAnimationFrame(() => {
+        t.style.transition = 'opacity .22s ease, transform .28s ease';
+        t.style.opacity = '1';
+        t.style.transform = 'translateY(0)';
+      });
+    }
+  };
+
+  const hideToast = () => {
+    const t = document.getElementById('luxToast');
+    if (!t) return;
+    if (prefersReduced) { t.style.display = 'none'; return; }
+    t.style.transition = 'opacity .18s ease, transform .18s ease';
+    t.style.opacity = '0';
+    t.style.transform = 'translateY(6px)';
+    setTimeout(() => { t.style.display = 'none'; }, 180);
+  };
+
+  // Offline / online feedback
+  const updateOnline = () => {
+    if (navigator.onLine === false) {
+      showToast('You’re offline', 'We’ll reconnect automatically when network returns.');
+    } else {
+      hideToast();
+    }
+  };
+  window.addEventListener('online', updateOnline, { passive: true });
+  window.addEventListener('offline', updateOnline, { passive: true });
+  setTimeout(updateOnline, 300);
+
+  // Fetch reliability: timeout + single retry for GET to read-only endpoints.
+  const originalFetch = window.fetch ? window.fetch.bind(window) : null;
+  if (!originalFetch) return;
+
+  const withTimeout = (promise, ms, controller) => {
+    let t;
+    const timeout = new Promise((_, rej) => {
+      t = setTimeout(() => {
+        try { controller && controller.abort(); } catch(_) {}
+        rej(new Error('Timeout'));
+      }, ms);
+    });
+    return Promise.race([promise.finally(() => clearTimeout(t)), timeout]);
+  };
+
+  const shouldGuard = (input, init) => {
+    const method = (init && init.method) ? String(init.method).toUpperCase() : 'GET';
+    if (method !== 'GET') return false;
+    const url = (typeof input === 'string') ? input : (input && input.url) ? input.url : '';
+    return /(\.json($|\?)|\/api\/|\/worldcup\/|\/countries\/)/i.test(url);
+  };
+
+  window.fetch = async (input, init) => {
+    if (!shouldGuard(input, init)) return originalFetch(input, init);
+
+    const controller = ('AbortController' in window) ? new AbortController() : null;
+    const mergedInit = controller ? { ...(init||{}), signal: controller.signal } : (init||{});
+    try {
+      const res = await withTimeout(originalFetch(input, mergedInit), 9000, controller);
+      if (!res || (res.status >= 500 && res.status <= 599)) throw new Error('HTTP ' + (res ? res.status : 'ERR'));
+      return res;
+    } catch (e) {
+      // retry once
+      try {
+        await new Promise(r => setTimeout(r, 450));
+        const controller2 = ('AbortController' in window) ? new AbortController() : null;
+        const merged2 = controller2 ? { ...(init||{}), signal: controller2.signal } : (init||{});
+        const res2 = await withTimeout(originalFetch(input, merged2), 9000, controller2);
+        if (!res2 || (res2.status >= 500 && res2.status <= 599)) throw new Error('HTTP ' + (res2 ? res2.status : 'ERR'));
+        hideToast();
+        return res2;
+      } catch (e2) {
+        showToast('Network is slow right now', 'Pull to refresh or tap Retry.', 'Retry', () => location.reload());
+        throw e2;
+      }
+    }
+  };
+
+  // Global JS error surface (premium + QA-friendly)
+  window.addEventListener('error', (ev) => {
+    try {
+      const msg = (ev && ev.message) ? ev.message : 'Unexpected error';
+      showToast('Something went wrong', msg);
+    } catch(_) {}
+  });
+  window.addEventListener('unhandledrejection', (ev) => {
+    try {
+      const msg = (ev && ev.reason && (ev.reason.message || String(ev.reason))) ? (ev.reason.message || String(ev.reason)) : 'Promise error';
+      showToast('Something went wrong', msg);
+    } catch(_) {}
+  });
 })();
 </script>
 

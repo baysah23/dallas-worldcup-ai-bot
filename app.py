@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+import uuid
 load_dotenv()
 
 import os
@@ -10,7 +11,7 @@ import datetime
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
-from flask import Flask, request, jsonify, send_from_directory, send_file
+from flask import Flask, request, jsonify, send_from_directory, send_file, g
 from openai import OpenAI
 
 import gspread
@@ -20,6 +21,31 @@ from google.oauth2.service_account import Credentials
 # App + cache-busting (helps Render show latest index.html)
 # ============================================================
 app = Flask(__name__)
+
+
+# === PHASE 7: HEALTH + REQUEST ID (AUTO-INSERTED) ===
+@app.before_request
+def _lux_request_start():
+    try:
+        g._lux_start = time.time()
+        rid = request.headers.get("X-Request-Id") or str(uuid.uuid4())
+        g._lux_rid = rid
+    except Exception:
+        pass
+
+@app.after_request
+def _lux_request_id(response):
+    try:
+        rid = getattr(g, "_lux_rid", None)
+        if rid:
+            response.headers.setdefault("X-Request-Id", rid)
+    except Exception:
+        pass
+    return response
+
+@app.get("/healthz")
+def healthz():
+    return {"ok": True, "ts": int(time.time())}
 
 client = OpenAI()
 
