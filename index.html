@@ -4486,22 +4486,22 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 
 /* =======================
-   MOBILE SCHEDULE SPACING TIGHTEN
-   Reduces vertical gap between hero banner and schedule panel ONLY on mobile schedule view
+   MOBILE SCHEDULE SPACING TIGHTEN (v2)
+   Fixes large vertical gap on mobile Schedule view by removing the empty left column container.
    ======================= */
 @media (max-width: 950px){
-  body[data-msec="schedule"] .hero{
-    margin-bottom: 6px !important;
-  }
-  body[data-msec="schedule"] .grid{
-    row-gap: 10px !important;
-  }
-  body[data-msec="schedule"] .rightcol{
-    margin-top: 0 !important;
-  }
-  body[data-msec="schedule"] .card{
-    scroll-margin-top: 8px;
-  }
+  /* When viewing Schedule on mobile, hide the left column wrapper entirely (it becomes empty) */
+  body[data-msec="schedule"] .leftcol{ display:none !important; }
+
+  /* Tighten hero → schedule spacing */
+  body[data-msec="schedule"] .hero{ margin-bottom: 6px !important; }
+  body[data-msec="schedule"] .grid{ row-gap: 10px !important; }
+
+  /* Make sure the schedule card sits directly under the hero */
+  body[data-msec="schedule"] #scheduleCard{ margin-top: 0 !important; }
+
+  /* Small scroll offset so sticky header feels nicer */
+  body[data-msec="schedule"] #scheduleCard{ scroll-margin-top: 8px; }
 }
 </style>
 </head>
