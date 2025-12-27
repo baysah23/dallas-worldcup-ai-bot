@@ -5813,71 +5813,16 @@ function setSection(sec){
         b.classList.toggle('active', b.dataset.msec === sec);
       });
     }
-    // When switching, scroll the relevant card into view for a “native app” feel.
-    const el = __sectionEls[sec];
-    if(isMobile()){
-      const target = (sec === 'home') ? document.getElementById('heroBanner') : (el || document.getElementById('heroBanner'));
-      if(target){
-        try{ target.scrollIntoView({behavior:'smooth', block:'start'}); }catch(e){ target.scrollIntoView(); }
-      }
-    }
+    // When switching sections on mobile, do NOT auto-scroll.
+    // This prevents 'jumping' and accidental returns to Home while the user scrolls.
   }
+  // Expose for other scripts (mobileNav click wiring)
+  window.setSection = setSection;
+
 
 /* Mobile swipe navigation (between sections) */
-(function(){
-  function enabled(){
-    return (typeof isMobile === 'function') && isMobile() && !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  }
-  let startX=0, startY=0, tracking=false, lastSec=null;
-  const THRESH=42;         // px
-  const VERTICAL_GUARD=28; // px
-  const EDGE_GUARD=18;     // px: ignore gesture from OS edge areas
-
-  function onStart(e){
-    if(!enabled()) return;
-    const t = (e.touches && e.touches[0]) ? e.touches[0] : e;
-    if(t.clientX < EDGE_GUARD || t.clientX > (window.innerWidth-EDGE_GUARD)) return;
-    startX = t.clientX; startY = t.clientY;
-    tracking = true;
-    lastSec = __currentSection();
-  }
-  function onMove(e){
-    if(!tracking) return;
-    const t = (e.touches && e.touches[0]) ? e.touches[0] : e;
-    const dx = t.clientX - startX;
-    const dy = t.clientY - startY;
-    if(Math.abs(dy) > VERTICAL_GUARD && Math.abs(dy) > Math.abs(dx)){
-      tracking = false;
-      return;
-    }
-    if(Math.abs(dx) > THRESH && Math.abs(dx) > Math.abs(dy)){
-      try{ e.preventDefault(); }catch(_){}
-    }
-  }
-  function onEnd(e){
-    if(!tracking) return;
-    tracking = false;
-    const t = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0] : e;
-    const dx = t.clientX - startX;
-    const dy = t.clientY - startY;
-    if(Math.abs(dx) < THRESH || Math.abs(dx) < Math.abs(dy)) return;
-
-    const cur = lastSec || __currentSection();
-    const i = Math.max(0, __sectionOrder.indexOf(cur));
-    const dir = (dx < 0) ? 1 : -1; // swipe left -> next
-    const next = __sectionOrder[Math.min(__sectionOrder.length-1, Math.max(0, i + dir))];
-    if(next && next !== cur){
-      setSection(next);
-    }
-  }
-
-  document.addEventListener('touchstart', onStart, {passive:true});
-  document.addEventListener('touchmove', onMove, {passive:false});
-  document.addEventListener('touchend', onEnd, {passive:true});
-})();
-
-
-  function wireNav(){
+/* Disabled: was causing accidental section changes during vertical scroll on some devices. */
+function wireNav(){
     const nav = document.getElementById('mobileNav');
     if(!nav) return;
     nav.addEventListener('click', (e)=>{
@@ -6652,6 +6597,8 @@ function setSection(sec){
 /* MOBILE SECTION NAV (UI-only, safe)
    Gives phone users full access to desktop features without clutter/overlap. */
 (function(){
+  if(document.getElementById('mobileNav')){ return; }
+
   function isSmall(){ return (window.innerWidth||0) <= 950; }
 
   function ensureScheduleId(){
@@ -6794,6 +6741,7 @@ function apply(){
   const nav = document.getElementById('mobileNav');
   if(!nav) return;
   function onClick(e){
+     try{ e.preventDefault(); }catch(_){ }
     const btn = e.target.closest('.mnavBtn');
     if(!btn) return;
     const sec = btn.getAttribute('data-msec');
@@ -6801,7 +6749,7 @@ function apply(){
     // Active state
     nav.querySelectorAll('.mnavBtn').forEach(b=>b.classList.toggle('active', b===btn));
   }
-  nav.addEventListener('click', onClick, {passive:true});
+  nav.addEventListener('click', onClick, {passive:false});
 })();
 </script>
 
