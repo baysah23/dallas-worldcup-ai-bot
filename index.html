@@ -3577,6 +3577,41 @@ body.kiosk-mode *::-webkit-scrollbar{
   display:none !important;
 }
 
+
+/* === HERO REFINEMENT AFTER SUBTITLE REMOVAL ===
+   1) Slightly tighten hero height
+   2) Add subtle gold divider glow under hero title
+   Safe CSS-only refinement
+*/
+
+/* 1) Tighten hero height */
+.hero{
+  height: 190px !important; /* was ~220 desktop / ~168 mobile */
+}
+@media (max-width: 720px){
+  .hero{
+    height: 156px !important;
+  }
+}
+
+/* 2) Subtle divider glow under hero title */
+.heroTitle::after{
+  content:"";
+  display:block;
+  height:2px;
+  width:min(420px, 72vw);
+  margin:10px 0 0;
+  background: linear-gradient(
+    90deg,
+    rgba(212,175,55,.85),
+    rgba(212,175,55,.35),
+    rgba(212,175,55,0)
+  );
+  border-radius:999px;
+  box-shadow: 0 0 14px rgba(212,175,55,.35);
+  opacity:.9;
+}
+
 </style>
 </head>
 <body>
