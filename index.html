@@ -6208,3 +6208,34 @@ function apply(){
   background:none !important;
   box-shadow:none !important;
 }
+
+
+
+/* === ABSOLUTE GLARE REMOVAL (ALL PLATFORMS) === */
+
+/* Kill ALL hero underline / divider artifacts */
+.hero-title::after,
+.heroTitle::after,
+.hero h1::after{
+  display:none !important;
+  content:none !important;
+}
+
+/* Kill hero background glow layers that band on mobile Safari */
+.hero::after,
+.hero::before{
+  background:none !important;
+  animation:none !important;
+  filter:none !important;
+}
+
+/* Kill any residual gold linear gradients */
+.hero *,
+.hero{
+  background-image:none !important;
+}
+
+/* Keep stadium image ONLY */
+.hero{
+  background-color:#0b1733 !important;
+}
