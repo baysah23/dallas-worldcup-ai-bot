@@ -79,6 +79,18 @@ def add_no_cache_headers(response):
         except Exception:
             pass
 
+        # === PHASE 9: SECURITY/POLISH HEADERS (AUTO-INSERTED) ===
+
+        try:
+
+            response.headers.setdefault("X-Content-Type-Options", "nosniff")
+
+            response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+
+        except Exception:
+
+            pass
+
         return response
 
     # Short cache for JSON (schedule/menu/qualified lists). Helps flaky mobile networks.
