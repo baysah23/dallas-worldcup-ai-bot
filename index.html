@@ -3580,6 +3580,19 @@ body.kiosk-mode *::-webkit-scrollbar{
   display: none !important;
 }
 
+
+/* =========================
+   FORCE-HIDE HERO SUBTEXT (ALL PLATFORMS)
+   Targets the actual element in this file: .heroSub
+   ========================= */
+#heroBanner .heroSub{
+  display:none !important;
+  visibility:hidden !important;
+  height:0 !important;
+  margin:0 !important;
+  padding:0 !important;
+}
+
 </style>
 </head>
 <body>
@@ -3703,7 +3716,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 <div class="heroOverlay">
 <div class="heroKicker">WORLD CUP 2026</div>
 <div class="heroTitle">DALLAS WORLD CUP HQ</div>
-<div class="heroSub">Reserve tables • Live schedules • Concierge chat</div>
+<div class="heroSub" aria-hidden="true"></div><!-- removed: Reserve tables • Live schedules • Concierge chat -->
 <div class="wcCount" id="wcCount">
 <div class="wcLabel">WORLD CUP KICKOFF IN</div>
 <div aria-live="polite" class="wcNums">
