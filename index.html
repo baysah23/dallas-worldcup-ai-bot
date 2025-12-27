@@ -4443,6 +4443,38 @@ body.kiosk-mode *::-webkit-scrollbar{
     }
 /* === END PHASE 9.1 === */
 
+
+/* === PHASE 9.2: HERO GLARE KILL + ROSTER GUARANTEE (AUTO-INSERTED) === */
+    /* 1) Kill the “glare” layer entirely on mobile (it’s the #1 cause across iOS Safari) */
+    @media (max-width: 720px) {
+      .hero::after {
+        content: none !important;
+        display: none !important;
+        background: none !important;
+      }
+      /* Ensure nothing else is adding wash-out */
+      .hero, .heroSlide, .heroSlide img {
+        filter: none !important;
+        mix-blend-mode: normal !important;
+      }
+      /* Make roster strip consistently readable */
+      .heroRoster {
+        background: rgba(0,0,0,.30) !important;
+        border-color: rgba(255,255,255,.12) !important;
+      }
+      .heroStar img {
+        background: rgba(0,0,0,.25);
+        filter: none !important;
+      }
+    }
+
+    /* 2) Tone down global “noise” so it can’t look like glare on small images */
+    body::before {
+      opacity: .03 !important;
+      mix-blend-mode: normal !important;
+    }
+/* === END PHASE 9.2 === */
+
 </style>
 </head>
 <body data-lux="on">
@@ -7569,6 +7601,83 @@ item.appendChild(img);
     }
   }, true);
 
+})();
+</script>
+
+
+<script>
+/* === PHASE 9.2: ROSTER GUARANTEE (AUTO-INSERTED) === */
+(() => {
+  const ensureRosterEl = () => {
+    const hero = document.querySelector('.hero');
+    if (!hero) return null;
+
+    // Prefer existing
+    let roster = document.getElementById('heroRoster') || hero.querySelector('.heroRoster');
+
+    // Create if missing (fixes QA FAIL "Missing .heroRoster")
+    if (!roster) {
+      roster = document.createElement('div');
+      roster.id = 'heroRoster';
+      roster.className = 'heroRoster';
+      hero.appendChild(roster);
+    }
+    return roster;
+  };
+
+  const getPlayers = () => {
+    // Most robust: look for a global array
+    if (Array.isArray(window.heroPlayers) && window.heroPlayers.length) return window.heroPlayers;
+
+    // If heroPlayers exists in scope but not on window
+    try { if (typeof heroPlayers !== 'undefined' && Array.isArray(heroPlayers) && heroPlayers.length) return heroPlayers; } catch(_) {}
+
+    // Fallback: try to derive from hero slides (images inside hero carousel)
+    try {
+      const imgs = Array.from(document.querySelectorAll('.heroSlide img')).map(img => img && img.src ? ({ img: img.src }) : null).filter(Boolean);
+      if (imgs.length) return imgs;
+    } catch(_) {}
+
+    return [];
+  };
+
+  const renderRosterNoNames = () => {
+    try {
+      const roster = ensureRosterEl();
+      if (!roster) return;
+
+      // Prevent duplicates
+      if (roster.querySelector('.heroStar')) return;
+
+      const players = getPlayers().slice(0, 9);
+      if (!players.length) return;
+
+      roster.innerHTML = '';
+      players.forEach(p => {
+        const item = document.createElement('div');
+        item.className = 'heroStar lux-press';
+        const img = document.createElement('img');
+        img.alt = 'Star player';
+        img.decoding = 'async';
+        img.loading = 'eager';
+        img.src = p.img || p.image || p.src || p;
+        item.appendChild(img);
+        roster.appendChild(item);
+      });
+    } catch(_) {}
+  };
+
+  const run = () => setTimeout(renderRosterNoNames, 250);
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', run, { once: true });
+  } else {
+    run();
+  }
+
+  // Re-try after hero init (some builds populate hero later)
+  setTimeout(renderRosterNoNames, 900);
+  setTimeout(renderRosterNoNames, 1800);
 })();
 </script>
 
