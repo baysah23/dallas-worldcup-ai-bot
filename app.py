@@ -302,6 +302,27 @@ def load_all_matches(force: bool = False) -> List[Dict[str, Any]]:
         match_num = int(m.get("MatchNumber") or 0) or None
         match_id = f"wc-{match_num:03d}" if match_num else f"wc-{len(norm)+1:03d}"
 
+                # Scores (best-effort; feed includes finals once matches are completed)
+        def _to_int(x):
+            try:
+                if x is None or x == "":
+                    return None
+                return int(float(str(x).strip()))
+            except Exception:
+                return None
+
+        hs = _to_int(m.get("HomeTeamScore") if "HomeTeamScore" in m else m.get("HomeScore"))
+        as_ = _to_int(m.get("AwayTeamScore") if "AwayTeamScore" in m else m.get("AwayScore"))
+
+        # Status (UI hints; true "live" requires a live data provider)
+        nowu = datetime.now(timezone.utc)
+        kickoff = dt.replace(tzinfo=timezone.utc)
+        status = "upcoming"
+        if nowu >= kickoff and nowu <= (kickoff + timedelta(hours=2, minutes=30)):
+            status = "live"
+        if nowu > (kickoff + timedelta(hours=2, minutes=30)) and (hs is not None or as_ is not None):
+            status = "finished"
+
         norm.append({
             "id": match_id,
             "match_number": match_num,
@@ -312,9 +333,11 @@ def load_all_matches(force: bool = False) -> List[Dict[str, Any]]:
             "venue": (m.get("Location") or "").strip(),
             "home": (m.get("HomeTeam") or "").strip(),
             "away": (m.get("AwayTeam") or "").strip(),
+            "home_score": hs,
+            "away_score": as_,
+            "status": status,
         })
-
-    # Sort by kickoff UTC
+# Sort by kickoff UTC
     norm.sort(key=lambda x: x.get("datetime_utc") or "")
     _fixtures_cache["loaded_at"] = now
     _fixtures_cache["matches"] = norm
@@ -1582,6 +1605,141 @@ def get_qualified_teams(force: bool = False) -> List[str]:
             pass
 
     return list(_qualified_cache["teams"])
+
+# ============================================================
+# Live scores + group standings (dynamic, non-breaking)
+#  - If the fixture feed provides final scores, we surface them.
+#  - True live scores require a licensed live data provider.
+# ============================================================
+
+def _utc_now():
+    return datetime.now(timezone.utc)
+
+@app.route("/worldcup/live.json")
+def worldcup_live_json():
+    """Return matches in a 'live window' plus recently finished.
+
+    Query params:
+      scope= dallas | all (default: all)
+      window_hours= hours around now to include (default: 8)
+    """
+    scope = (request.args.get("scope") or "all").lower().strip()
+    try:
+        window_h = float(request.args.get("window_hours") or "8")
+    except Exception:
+        window_h = 8.0
+
+    try:
+        matches = filter_matches(scope=scope, q="")
+    except Exception:
+        matches = []
+
+    nowu = _utc_now()
+    win = timedelta(hours=window_h)
+    out = []
+    for m in matches:
+        dt = (m.get("datetime_utc") or "").strip()
+        if not dt:
+            continue
+        try:
+            k = datetime.strptime(dt, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+        except Exception:
+            continue
+
+        # Include: live window (pre + in-game + short post) OR explicitly marked live/finished
+        if (k - win) <= nowu <= (k + win):
+            out.append(m)
+        elif (m.get("status") in ["live", "finished"]):
+            out.append(m)
+
+    return jsonify({
+        "scope": scope,
+        "updated_at": int(time.time()),
+        "count": len(out),
+        "matches": out,
+        "note": "If fixture feed provides scores, you'll see them here. True real-time live scores require a provider/API key.",
+    })
+
+
+def _compute_group_standings(matches: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Compute group standings from available completed group matches."""
+    groups: Dict[str, Dict[str, Any]] = {}
+
+    def ensure_team(g: str, team: str):
+        if not team:
+            return
+        groups.setdefault(g, {})
+        groups[g].setdefault(team, {
+            "team": team,
+            "p": 0, "w": 0, "d": 0, "l": 0,
+            "gf": 0, "ga": 0, "gd": 0,
+            "pts": 0,
+        })
+
+    for m in matches:
+        stage = (m.get("stage") or "").strip()
+        if not stage.lower().startswith("group"):
+            continue
+        hs = m.get("home_score")
+        as_ = m.get("away_score")
+        if hs is None or as_ is None:
+            continue  # can't compute without a result
+        try:
+            hs = int(hs); as_ = int(as_)
+        except Exception:
+            continue
+
+        g = stage
+        home = (m.get("home") or "").strip() or "TBD"
+        away = (m.get("away") or "").strip() or "TBD"
+        ensure_team(g, home); ensure_team(g, away)
+        if home == "TBD" or away == "TBD":
+            continue
+
+        ht = groups[g][home]
+        at = groups[g][away]
+        ht["p"] += 1; at["p"] += 1
+        ht["gf"] += hs; ht["ga"] += as_
+        at["gf"] += as_; at["ga"] += hs
+
+        if hs > as_:
+            ht["w"] += 1; at["l"] += 1
+            ht["pts"] += 3
+        elif hs < as_:
+            at["w"] += 1; ht["l"] += 1
+            at["pts"] += 3
+        else:
+            ht["d"] += 1; at["d"] += 1
+            ht["pts"] += 1; at["pts"] += 1
+
+    # finalize GD + sorting
+    out: Dict[str, Any] = {}
+    for g, teams in groups.items():
+        rows = list(teams.values())
+        for r in rows:
+            r["gd"] = int(r["gf"]) - int(r["ga"])
+        rows.sort(key=lambda r: (r["pts"], r["gd"], r["gf"], r["team"]), reverse=True)
+        out[g] = rows
+    return out
+
+
+@app.route("/worldcup/standings.json")
+def worldcup_standings_json():
+    scope = (request.args.get("scope") or "all").lower().strip()
+    try:
+        matches = filter_matches(scope=scope, q="")
+    except Exception:
+        matches = []
+
+    standings = _compute_group_standings(matches)
+    return jsonify({
+        "scope": scope,
+        "updated_at": int(time.time()),
+        "groups": standings,
+        "count_groups": len(standings),
+        "note": "Standings are computed from completed group matches that have scores in the feed.",
+    })
+
 @app.route("/worldcup/qualified.json")
 def qualified_json():
     teams = get_qualified_teams()
