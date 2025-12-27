@@ -3981,6 +3981,99 @@ body.kiosk-mode *::-webkit-scrollbar{
     }
 /* === END PHASE 3: LUXURY VISUAL SYSTEM === */
 
+
+/* === PHASE 4: PREMIUM INTERACTION POLISH (AUTO-INSERTED) === */
+    /* Tactile press feedback + ripple (delegated by JS; respects reduced motion) */
+    .lux-press {
+      position: relative;
+      overflow: hidden;
+    }
+    .lux-press::after {
+      content: "";
+      position: absolute;
+      inset: -30%;
+      background: radial-gradient(circle at var(--lux-rx, 50%) var(--lux-ry, 50%),
+        rgba(255,255,255,.28) 0%,
+        rgba(200,167,74,.20) 20%,
+        rgba(255,255,255,.00) 55%);
+      opacity: 0;
+      transform: scale(.6);
+      transition: opacity .18s ease, transform .24s ease;
+      pointer-events: none;
+    }
+    .lux-press.is-pressing {
+      filter: brightness(1.05);
+    }
+    .lux-press.is-pressing::after {
+      opacity: .9;
+      transform: scale(1);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .lux-press::after { display: none; }
+      .lux-press.is-pressing { filter: none; }
+    }
+
+    /* Premium scrollbars (supported browsers only) */
+    @supports (scrollbar-width: thin) {
+      * { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.22) transparent; }
+    }
+    *::-webkit-scrollbar { width: 8px; height: 8px; }
+    *::-webkit-scrollbar-thumb {
+      background: rgba(255,255,255,.18);
+      border-radius: 999px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+    *::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.26); }
+    *::-webkit-scrollbar-track { background: transparent; }
+
+    /* Reduce jank on mobile: opt-in for GPU compositing where it helps */
+    .hero, .card, .panel, .section, .module, .box {
+      transform: translateZ(0);
+    }
+
+    /* Skeleton shimmer utility (use: class="lux-skeleton") */
+    .lux-skeleton {
+      position: relative;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .lux-skeleton::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg,
+        rgba(255,255,255,0) 0%,
+        rgba(255,255,255,.10) 35%,
+        rgba(200,167,74,.08) 50%,
+        rgba(255,255,255,.10) 65%,
+        rgba(255,255,255,0) 100%);
+      transform: translateX(-60%);
+      animation: luxShimmer 1.15s linear infinite;
+      opacity: .85;
+    }
+    @keyframes luxShimmer {
+      to { transform: translateX(60%orN%); }
+    }
+    /* Fix typo in keyframes transform target (safe override) */
+    @keyframes luxShimmer {
+      to { transform: translateX(60%); }
+    }
+
+    /* Sticky header polish on mobile if header is fixed/sticky */
+    @media (max-width: 720px) {
+      header {
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        background: linear-gradient(180deg, rgba(7,10,15,.72), rgba(7,10,15,.32));
+        border-bottom: 1px solid rgba(255,255,255,.10);
+      }
+    }
+/* === END PHASE 4: PREMIUM INTERACTION POLISH === */
+
 </style>
 </head>
 <body data-lux="on">
@@ -6563,6 +6656,67 @@ function apply(){
   setDvh();
   window.addEventListener('resize', setDvh, { passive: true });
   window.addEventListener('orientationchange', setDvh, { passive: true });
+})();
+</script>
+
+
+<script>
+/* === PHASE 4: INTERACTION ENGINE (AUTO-INSERTED) === */
+(() => {
+  const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // 1) Add “tactile” press + ripple on tap for buttons/interactive elements
+  const pressSelector = 'button, a.btn, .btn, .pill, .chip, .langbtn, .segBtn, .navBtn, .tabBtn, [role="button"]';
+
+  const ensurePressClass = (el) => {
+    if (!el.classList.contains('lux-press')) el.classList.add('lux-press');
+  };
+
+  const setRippleVars = (el, ev) => {
+    try {
+      const r = el.getBoundingClientRect();
+      const x = ((ev.clientX - r.left) / Math.max(1, r.width)) * 100;
+      const y = ((ev.clientY - r.top) / Math.max(1, r.height)) * 100;
+      el.style.setProperty('--lux-rx', `${x.toFixed(2)}%`);
+      el.style.setProperty('--lux-ry', `${y.toFixed(2)}%`);
+    } catch (_) {}
+  };
+
+  document.addEventListener('pointerdown', (ev) => {
+    const t = ev.target && ev.target.closest ? ev.target.closest(pressSelector) : null;
+    if (!t) return;
+    ensurePressClass(t);
+    if (!prefersReduced) setRippleVars(t, ev);
+    t.classList.add('is-pressing');
+  }, { passive: true });
+
+  const clearPress = (ev) => {
+    const t = ev.target && ev.target.closest ? ev.target.closest(pressSelector) : null;
+    if (!t) return;
+    t.classList.remove('is-pressing');
+  };
+
+  document.addEventListener('pointerup', clearPress, { passive: true });
+  document.addEventListener('pointercancel', clearPress, { passive: true });
+  document.addEventListener('pointerleave', clearPress, { passive: true });
+
+  // 2) Smart image loading defaults (keeps hero crisp; lazy-loads non-hero images)
+  try {
+    const imgs = Array.from(document.querySelectorAll('img'));
+    imgs.forEach(img => {
+      const inHero = img.closest && (img.closest('.hero') || img.closest('.heroSlide'));
+      if (!inHero) img.loading = img.loading || 'lazy';
+      img.decoding = img.decoding || 'async';
+    });
+  } catch (_) {}
+
+  // 3) Passive listeners for scroll/touch to keep mobile smooth
+  //    (No behavioral change; performance hint only)
+  const passiveEvents = ['touchstart','touchmove','wheel'];
+  passiveEvents.forEach(evt => {
+    window.addEventListener(evt, () => {}, { passive: true });
+  });
+
 })();
 </script>
 
