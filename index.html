@@ -6964,6 +6964,17 @@ function setSection(sec){
   // Expose for bottom-nav click wiring
   window.setSection = setSection;
 
+  // __wcDefaultSectionBoot: land on Home by default (unless a section is already set/persisted)
+  try{
+    const already = document.body.getAttribute('data-msec');
+    const persisted = (function(){ try{ return localStorage.getItem('wc_mobile_section'); }catch(e){ return null; } })();
+    if(!already && !persisted){
+      // Use the canonical setSection so UI state stays consistent
+      setTimeout(()=>{ try{ setSection('home'); }catch(_e){} }, 0);
+    }
+  }catch(_e){}
+
+
 /* Mobile swipe navigation (between sections) */
 (function(){
   function enabled(){
