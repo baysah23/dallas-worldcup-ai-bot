@@ -1202,114 +1202,46 @@ body.phase-finals{ background: var(--phaseF); }
   word-break: break-word;
   line-height: 1.1;
 }
+
+/* ===== Supporter Flag Theme (premium, subtle) ===== */
+:root{
+  --supportA: rgba(245,215,110,.18);
+  --supportB: rgba(31,111,235,.16);
+  --supportGlow: rgba(245,215,110,.22);
+  --supportBorder: rgba(255,255,255,.14);
+}
+body.has-support #supporterChip{
+  background:
+    radial-gradient(220px 120px at 12% 18%, var(--supportA), transparent 60%),
+    linear-gradient(135deg, rgba(0,0,0,.18), rgba(0,0,0,.08));
+  border-color: color-mix(in srgb, var(--supportA) 55%, var(--supportBorder));
+  box-shadow: 0 14px 38px color-mix(in srgb, var(--supportGlow) 45%, transparent);
+}
+body.has-support #supporterChip span#supporterFlag{
+  filter: drop-shadow(0 8px 18px rgba(0,0,0,.35));
+}
+body.has-support .fz-modal .panel{
+  border-color: color-mix(in srgb, var(--supportA) 55%, rgba(255,255,255,.12));
+  box-shadow: 0 18px 55px rgba(0,0,0,.55);
+}
+body.has-support .fz-country:hover{
+  border-color: color-mix(in srgb, var(--supportA) 65%, rgba(255,255,255,.14));
+}
+body.has-support .hero::after{
+  /* tiny supporter tint layered into existing crowd glow */
+  background:
+    radial-gradient(720px 320px at 18% 22%, var(--supportA), transparent 62%),
+    radial-gradient(900px 420px at 70% 80%, var(--supportB), transparent 66%),
+    radial-gradient(520px 260px at 20% 30%, rgba(255,255,255,.22), transparent 60%),
+    radial-gradient(680px 320px at 70% 18%, rgba(255,255,255,.18), transparent 62%),
+    radial-gradient(900px 420px at 55% 85%, rgba(46,160,67,.14), transparent 65%),
+    radial-gradient(900px 420px at 35% 88%, rgba(31,111,235,.16), transparent 66%);
+}
+/* ===== End Supporter Flag Theme ===== */
+
 @media (max-width: 420px){
   #supporterChip b#supporterLabel{ max-width: 140px; }
 }
-
-/* === Supporter Premium Themes: Flag Chip + Crest + Passport Toast === */
-:root{
-  --flag1: rgba(255,204,102,.9);
-  --flag2: rgba(79,201,195,.9);
-  --flag3: rgba(154,113,255,.9);
-}
-.fz-chip.flagged{
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 10px 26px rgba(0,0,0,.25);
-}
-.fz-chip.flagged::before{
-  content:"";
-  position:absolute; inset:-2px;
-  background: linear-gradient(120deg, var(--flag1), var(--flag2), var(--flag3));
-  opacity: .22;
-  filter: blur(.2px);
-  pointer-events:none;
-}
-.fz-chip.flagged::after{
-  content:"";
-  position:absolute; inset:0;
-  background:
-    radial-gradient(120px 60px at 10% 0%, rgba(255,255,255,.22), transparent 60%),
-    radial-gradient(120px 60px at 90% 120%, rgba(255,255,255,.14), transparent 60%);
-  opacity: .6;
-  pointer-events:none;
-}
-.fz-chip.flagged > *{ position: relative; z-index: 1; }
-#supporterChip .fz-flagmini{ font-size: 18px; margin-right:2px; filter: drop-shadow(0 2px 4px rgba(0,0,0,.35)); }
-
-.supporter-crest{
-  position:absolute;
-  right: 10px; bottom: 10px;
-  display:inline-flex;
-  align-items:center; gap:8px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,.18);
-  background: rgba(0,0,0,.28);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 12px 30px rgba(0,0,0,.35);
-  max-width: 70%;
-}
-.supporter-crest .crest-flag{ font-size: 18px; }
-.supporter-crest .crest-name{
-  font-weight: 700;
-  letter-spacing: .2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-@media (max-width: 520px){
-  .supporter-crest{ right: 8px; bottom: 8px; padding: 7px 9px; }
-  .supporter-crest .crest-name{ max-width: 42vw; }
-}
-
-.supporter-toast{
-  position: fixed;
-  left: 50%;
-  top: 14px;
-  transform: translateX(-50%);
-  z-index: 99999;
-  padding: 10px 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.16);
-  background: rgba(0,0,0,.35);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  box-shadow: 0 18px 50px rgba(0,0,0,.45);
-  display: none;
-  gap: 10px;
-  align-items: center;
-  max-width: min(92vw, 520px);
-}
-.supporter-toast.show{ display:flex; animation: toastIn .55s cubic-bezier(.2,.9,.25,1) both; }
-.supporter-toast .stamp{
-  width: 34px; height: 34px;
-  border-radius: 10px;
-  display:grid; place-items:center;
-  border: 1px solid rgba(255,255,255,.18);
-  background: linear-gradient(135deg, rgba(255,255,255,.12), rgba(255,255,255,.03));
-  position: relative;
-  overflow:hidden;
-}
-.supporter-toast .stamp::before{
-  content:"";
-  position:absolute; inset:-2px;
-  background: linear-gradient(120deg, var(--flag1), var(--flag2), var(--flag3));
-  opacity: .22;
-}
-.supporter-toast .msg{ display:flex; flex-direction:column; gap:2px; min-width:0; }
-.supporter-toast .msg b{ font-size: 13.5px; }
-.supporter-toast .msg span{ font-size: 12px; opacity:.82; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-@keyframes toastIn{
-  0%{ transform: translateX(-50%) translateY(-12px) scale(.98); opacity: 0; }
-  100%{ transform: translateX(-50%) translateY(0) scale(1); opacity: 1; }
-}
-@keyframes toastOut{
-  0%{ opacity:1; transform: translateX(-50%) translateY(0) scale(1); }
-  100%{ opacity:0; transform: translateX(-50%) translateY(-10px) scale(.98); }
-}
-
 .fz-actions{ display:flex; gap:8px; flex-wrap:wrap; }
 .fz-btn{
   border:1px solid var(--line);
@@ -4751,7 +4683,7 @@ body[data-msec="schedule"] #scheduleCard{
 <button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button></div>
 <div class="fz-row" style="justify-content:flex-start;">
 <div class="fz-chip" id="supporterChip" title="Personalization stored on this device only">
-<span>🏁</span><span>Supporting:</span> <b id="supporterLabel">Not set</b></div>
+<span id="supporterFlag" aria-hidden="true">🏁</span><span>Supporting:</span> <b id="supporterLabel">Not set</b></div>
 </div>
 <div class="fz-actions" style="margin-top:10px;">
 <button class="fz-iconbtn" id="fzIconCountry" title="Pick country">🏁</button>
@@ -4835,9 +4767,7 @@ body[data-msec="schedule"] #scheduleCard{
 <div class="heroOverlay">
 <div class="heroKicker">WORLD CUP 2026</div>
 <div class="heroTitle">DALLAS WORLD CUP HQ</div>
-<div class="heroSub" aria-hidden="true"></div>
-<div id="supporterCrest" class="supporter-crest" style="display:none" aria-hidden="true"></div>
-<!-- removed: Reserve tables • Live schedules • Concierge chat -->
+<div class="heroSub" aria-hidden="true"></div><!-- removed: Reserve tables • Live schedules • Concierge chat -->
 <div class="wcCount" id="wcCount">
 <div class="wcLabel">WORLD CUP KICKOFF IN</div>
 <div aria-live="polite" class="wcNums">
@@ -7182,6 +7112,7 @@ function setSection(sec){
     const modal = el("countryModal");
     const countryGrid = el("countryGrid");
     const supporterLabel = el("supporterLabel");
+    const supporterFlag = el("supporterFlag");
 
     const pollCard = el("pollCard");
     const pollModal = el("pollModal");
@@ -7298,103 +7229,52 @@ function setSection(sec){
     function clearSupport(){
       try{ localStorage.removeItem(LS_SUPPORT); }catch(e){}
     }
+
+    // ----- Supporter theme (flag-tinted, premium) -----
+    const SUPPORT_THEME = {
+      USA: { a:"rgba(31,111,235,.22)", b:"rgba(214,40,40,.18)", glow:"rgba(245,215,110,.22)" },
+      MEX: { a:"rgba(0,104,71,.22)",  b:"rgba(206,17,38,.16)",  glow:"rgba(255,255,255,.16)" },
+      CAN: { a:"rgba(213,43,30,.20)", b:"rgba(255,255,255,.14)", glow:"rgba(213,43,30,.18)" },
+      BRA: { a:"rgba(0,156,59,.20)",  b:"rgba(255,223,0,.18)",  glow:"rgba(0,156,59,.18)" },
+      ARG: { a:"rgba(116,172,223,.22)", b:"rgba(255,255,255,.14)", glow:"rgba(116,172,223,.18)" },
+      FRA: { a:"rgba(0,85,164,.22)",  b:"rgba(239,65,53,.16)",  glow:"rgba(245,215,110,.16)" },
+      ENG: { a:"rgba(206,17,38,.18)", b:"rgba(255,255,255,.14)", glow:"rgba(206,17,38,.16)" },
+      ESP: { a:"rgba(198,12,48,.18)", b:"rgba(255,199,44,.18)", glow:"rgba(255,199,44,.16)" },
+      POR: { a:"rgba(0,102,0,.20)",   b:"rgba(255,0,0,.14)",    glow:"rgba(0,102,0,.18)" },
+      GER: { a:"rgba(0,0,0,.18)",     b:"rgba(221,0,0,.16)",    glow:"rgba(255,206,0,.16)" },
+      JPN: { a:"rgba(188,0,45,.18)",  b:"rgba(255,255,255,.14)", glow:"rgba(188,0,45,.16)" },
+      NGA: { a:"rgba(0,135,81,.20)",  b:"rgba(255,255,255,.14)", glow:"rgba(0,135,81,.18)" },
+      MAR: { a:"rgba(193,39,45,.18)", b:"rgba(0,98,51,.16)",     glow:"rgba(193,39,45,.16)" },
+      SEN: { a:"rgba(0,133,63,.20)",  b:"rgba(252,209,22,.16)",  glow:"rgba(0,133,63,.16)" },
+      GHA: { a:"rgba(206,17,38,.18)", b:"rgba(252,209,22,.16)",  glow:"rgba(0,107,63,.14)" }
+    };
+
+    function applySupportTheme(c){
+      const root = document.documentElement;
+      const body = document.body;
+      if(!c){
+        body.classList.remove("has-support");
+        body.removeAttribute("data-support");
+        root.style.removeProperty("--supportA");
+        root.style.removeProperty("--supportB");
+        root.style.removeProperty("--supportGlow");
+        return;
+      }
+      const code = (c.code || c.fifa || c.fifa_code || "").toUpperCase();
+      const t = SUPPORT_THEME[code] || null;
+      body.classList.add("has-support");
+      body.setAttribute("data-support", code || "SET");
+      root.style.setProperty("--supportA", t?.a || "rgba(245,215,110,.18)");
+      root.style.setProperty("--supportB", t?.b || "rgba(31,111,235,.16)");
+      root.style.setProperty("--supportGlow", t?.glow || "rgba(245,215,110,.22)");
+    }
+
     function renderSupporter(){
       const c = getSupport();
-      if(!supporterLabel) return;
-
-      // Update label
-      supporterLabel.textContent = c?.name || "Not set";
-
-      // Flag palette (premium but subtle)
-      const FLAG_COLORS = {
-        "USA": ["#B22234","#FFFFFF","#3C3B6E"],
-        "MEX": ["#006847","#FFFFFF","#CE1126"],
-        "CAN": ["#D80621","#FFFFFF","#D80621"],
-        "BRA": ["#009C3B","#FFDF00","#002776"],
-        "ARG": ["#74ACDF","#FFFFFF","#74ACDF"],
-        "FRA": ["#0055A4","#FFFFFF","#EF4135"],
-        "ENG": ["#CE1126","#FFFFFF","#CE1126"],
-        "ESP": ["#AA151B","#F1BF00","#AA151B"],
-        "POR": ["#006600","#FF0000","#FFCC00"],
-        "GER": ["#000000","#DD0000","#FFCE00"],
-        "JPN": ["#FFFFFF","#BC002D","#FFFFFF"],
-        "NGA": ["#008753","#FFFFFF","#008753"],
-        "MAR": ["#C1272D","#FFFFFF","#006233"],
-        "SEN": ["#00853F","#FDEF42","#E31B23"],
-        "GHA": ["#CE1126","#FCD116","#006B3F"]
-      };
-
-      const root = document.documentElement;
-      const chip = document.getElementById("supporterChip");
-      const crest = document.getElementById("supporterCrest");
-
-      // Helper: apply flag palette vars
-      function applyPalette(code){
-        const cols = FLAG_COLORS[code] || null;
-        const c1 = cols?.[0] || "rgba(255,204,102,.95)";
-        const c2 = cols?.[1] || "rgba(79,201,195,.95)";
-        const c3 = cols?.[2] || "rgba(154,113,255,.95)";
-        root.style.setProperty("--flag1", c1);
-        root.style.setProperty("--flag2", c2);
-        root.style.setProperty("--flag3", c3);
-      }
-
-      if(c?.name){
-        const meta = COUNTRY_META[c.name] || null;
-        const flag = meta?.flag || c.flag || "🏳️";
-        const code = meta?.code || c.code || "";
-        applyPalette(code);
-
-        // Chip: swap icon to the actual flag + premium flagged background
-        if(chip){
-          chip.classList.add("flagged");
-          const firstSpan = chip.querySelector("span");
-          if(firstSpan) firstSpan.innerHTML = `<span class="fz-flagmini">${escapeHtml(flag)}</span>`;
-        }
-
-        // Crest: show in hero (non-intrusive)
-        if(crest){
-          crest.style.display = "inline-flex";
-          crest.innerHTML = `<span class="crest-flag">${escapeHtml(flag)}</span><span class="crest-name">${escapeHtml(c.name)}</span>`;
-        }
-      }else{
-        // Reset
-        root.style.setProperty("--flag1","rgba(255,204,102,.9)");
-        root.style.setProperty("--flag2","rgba(79,201,195,.9)");
-        root.style.setProperty("--flag3","rgba(154,113,255,.9)");
-        if(chip){
-          chip.classList.remove("flagged");
-          const firstSpan = chip.querySelector("span");
-          if(firstSpan) firstSpan.textContent = "🏁";
-        }
-        if(crest){
-          crest.style.display = "none";
-          crest.innerHTML = "";
-        }
-      }
+      if(supporterLabel) supporterLabel.textContent = c?.name || "Not set";
+      if(supporterFlag) supporterFlag.textContent = (c?.flag || "🏁");
+      applySupportTheme(c);
     }
-
-
-    function showSupporterToast(country){
-      const toast = document.getElementById("supporterToast");
-      const text = document.getElementById("supporterToastText");
-      if(!toast || !text) return;
-      const meta = COUNTRY_META[country?.name || ""] || null;
-      const flag = meta?.flag || country?.flag || "🏳️";
-      text.textContent = `Supporting: ${flag} ${country?.name || ""}`;
-      toast.classList.add("show");
-      // auto hide
-      clearTimeout(window.__supporterToastTimer);
-      window.__supporterToastTimer = setTimeout(()=>{
-        toast.style.animation = "toastOut .45s ease both";
-        setTimeout(()=>{
-          toast.classList.remove("show");
-          toast.style.animation = "";
-        }, 460);
-      }, 1800);
-    }
-
-
 
     function openCountryModal(){
       if(!modal) return;
@@ -7429,7 +7309,6 @@ function setSection(sec){
             renderSupporter();
             renderDrink();
             closeCountryModal();
-            showSupporterToast(c);
           }
         });
       });
@@ -8568,15 +8447,6 @@ function apply(){
 })();
 
 </script>
-
-
-<div id="supporterToast" class="supporter-toast" role="status" aria-live="polite">
-  <div class="stamp">✅</div>
-  <div class="msg">
-    <b>Support locked in</b>
-    <span id="supporterToastText">Supporting:</span>
-  </div>
-</div>
 
 </body>
 </html>
