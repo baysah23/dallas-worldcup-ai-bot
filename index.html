@@ -4592,6 +4592,12 @@ body[data-msec="schedule"] #scheduleCard{
    LUXURY HOME (match provided mock) — HOME ONLY
    ========================= */
 
+/* Home should match the luxury mock: hide legacy top header + hero banner ONLY while Home is active */
+body[data-msec="home"] header{ display:none !important; }
+body[data-msec="home"] #heroBanner{ display:none !important; }
+body[data-msec="home"] .grid{ padding-top: 0 !important; margin-top: 0 !important; }
+
+
 /* Force Home to show ONLY the luxury layout (prevents any legacy Home blocks from rendering) */
 #homeCard.luxHomeCard > *:not(.luxHome){ display: none !important; }
 #homeCard.luxHomeCard .luxHome{ display: block !important; }
