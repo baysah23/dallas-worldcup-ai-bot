@@ -4644,97 +4644,6 @@ body[data-msec="schedule"] #scheduleCard{
   padding-top: 10px;
 }
 
-
-/* === HOME REFRESH (Phase 1) — cleaner, reservation-first, luxury spacing === */
-.homeWrap{ padding:14px; display:flex; flex-direction:column; gap:14px; }
-.homeHero{
-  border:1px solid rgba(255,255,255,.10);
-  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,.10));
-  border-radius:16px;
-  padding:14px;
-  position:relative;
-  overflow:hidden;
-}
-.homeHero::before{
-  content:"";
-  position:absolute; inset:-1px;
-  background: radial-gradient(520px 220px at 20% 18%, rgba(212,175,55,.16), transparent 60%),
-              radial-gradient(620px 260px at 80% 90%, rgba(31,111,235,.14), transparent 60%);
-  pointer-events:none;
-}
-.homeEyebrow{
-  font-size:11px;
-  letter-spacing:.18em;
-  text-transform:uppercase;
-  color:rgba(234,240,255,.72);
-  font-weight:900;
-}
-.homeH1{
-  margin-top:8px;
-  font-size:18px;
-  line-height:1.12;
-  font-weight:950;
-  letter-spacing:.02em;
-}
-.homeSub{
-  margin-top:8px;
-  font-size:12.5px;
-  line-height:1.35;
-  color:rgba(234,240,255,.80);
-}
-.homeCTA{ display:flex; flex-direction:column; gap:10px; margin-top:12px; }
-.homeBtnBig{
-  width:100%;
-  display:flex;
-  flex-direction:column;
-  align-items:flex-start;
-  gap:4px;
-  padding:12px 14px;
-  border-radius:14px;
-  min-width:0;
-}
-.homeBtnHint{ font-size:11px; opacity:.85; font-weight:800; }
-.btn.btn-primary.homeBtnBig{ box-shadow: 0 16px 30px rgba(0,0,0,.22); }
-.homeGrid{
-  display:grid;
-  grid-template-columns:repeat(2, minmax(0,1fr));
-  gap:12px;
-}
-.homeTile{
-  text-align:left;
-  padding:12px 12px;
-  border-radius:16px;
-  border:1px solid rgba(255,255,255,.12);
-  background: rgba(0,0,0,.14);
-  color:var(--text);
-  cursor:pointer;
-  min-width:0;
-  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease;
-}
-.homeTile:hover{ transform: translateY(-1px); box-shadow: 0 10px 22px rgba(0,0,0,.22); background: rgba(255,255,255,.08); }
-.homeTile .k{ font-size:18px; }
-.homeTile .t{ margin-top:8px; font-weight:950; font-size:13px; }
-.homeTile .d{ margin-top:4px; font-size:11px; color:rgba(234,240,255,.72); font-weight:800; }
-.homeMiniNote{
-  display:flex; align-items:center; gap:10px;
-  padding:10px 12px;
-  border-radius:14px;
-  border:1px dashed rgba(255,255,255,.16);
-  background: rgba(0,0,0,.10);
-  color:rgba(234,240,255,.82);
-  font-size:12px;
-}
-.homeMiniNote .dot{
-  width:9px;height:9px;border-radius:999px;
-  background: rgba(212,175,55,.95);
-  box-shadow: 0 0 0 6px rgba(212,175,55,.14);
-  flex:0 0 auto;
-}
-/* Keep this layout strictly mobile-only (desktop stays unchanged) */
-@media (min-width: 951px){
-  #homeCard{ display:none !important; }
-}
-
 </style>
 </head>
 <body data-lux="on">
@@ -4881,67 +4790,136 @@ body[data-msec="schedule"] #scheduleCard{
 </div>
 
 <!-- Home (mobile-only panel): premium onboarding + global World Cup snapshot -->
-
 <div class="card homecard lux-reveal" id="homeCard" aria-label="World Cup Concierge">
   <div class="cardhead">
     <div class="title">World Cup Concierge</div>
-    <div class="pill" id="homeLangPill" aria-label="Chat supports four languages">EN • ES • PT • FR</div>
+    <div class="actions">
+      <button class="btn btn-primary" id="homeReserveBtn" type="button">Reserve</button>
+      <button class="btn" id="homeExploreBtn" type="button">Explore Matches</button>
+    </div>
   </div>
 
-  <div class="homeWrap">
-    <div class="homeHero">
-      <div class="homeEyebrow">Reservations • Match schedules • VIP</div>
-      <div class="homeH1">Reserve first. Celebrate the World Cup.</div>
-      <div class="homeSub">
-        Your concierge is a <b>chat</b>. Talk in <b>English</b>, <b>Español</b>, <b>Português</b>, or <b>Français</b>.
+  <div class="homeGrid">
+    <div class="homeTile homeTile--hero" id="homeIntro">
+      <div class="homeKicker">WORLD CUP CONCIERGE</div>
+      <div class="homeHeadline">Reservations first. Matches everywhere.</div>
+      <div class="homeSub">Book a table in seconds, then browse the full World Cup schedule—Dallas and every host city—without losing your place.</div>
+
+      <div class="homeSteps" aria-label="How it works">
+        <div class="homeStep">
+          <div class="homeStepNum">1</div>
+          <div class="homeStepTxt"><b>Reserve</b> — type “reservation” or tap Reserve.</div>
+        </div>
+        <div class="homeStep">
+          <div class="homeStepNum">2</div>
+          <div class="homeStepTxt"><b>Follow</b> — pick a country in Fan Zone.</div>
+        </div>
+        <div class="homeStep">
+          <div class="homeStepNum">3</div>
+          <div class="homeStepTxt"><b>Explore</b> — see upcoming matches globally.</div>
+        </div>
       </div>
 
-      <div class="homeCTA">
-        <button class="btn btn-primary homeBtnBig" id="homeReserveBtn" type="button" aria-label="Reserve a table">
-          🥂 Reserve a Table
-          <span class="homeBtnHint">Type “reservation / reserva / réservation”</span>
-        </button>
-
-        <button class="btn btn-secondary homeBtnBig" id="homeChatBtn" type="button" aria-label="Open concierge chat">
-          💬 Open Concierge Chat
-          <span class="homeBtnHint">Ask anything about matches & the menu</span>
-        </button>
+      <div class="homeTip" id="homeTip" role="note" aria-label="Quick start tip">
+        <div>
+          <div class="t"><b>Quick start:</b> Tap <b>Reserve</b> to book, then <b>Explore Matches</b> for the full World Cup schedule.</div>
+          <div class="s">You can switch schedule scope anytime: <b>All matches</b> (global) or <b>Dallas spotlight</b> (optional).</div>
+        </div>
+        <button class="homeTipClose" id="homeTipClose" type="button" aria-label="Dismiss tip">×</button>
       </div>
     </div>
 
-    <div class="homeGrid" role="navigation" aria-label="Home shortcuts">
-      <button class="homeTile" data-home-go="schedule" type="button" aria-label="Explore matches">
-        <div class="k">📅</div>
-        <div class="t">Explore Matches</div>
-        <div class="d">Groups → Finals</div>
-      </button>
-
-      <button class="homeTile" data-home-go="fanzone" type="button" aria-label="Open fan zone">
-        <div class="k">🎉</div>
-        <div class="t">Fan Zone</div>
-        <div class="d">Polls • Country</div>
-      </button>
-
-      <button class="homeTile" data-home-go="vip" type="button" aria-label="Open VIP">
-        <div class="k">⭐</div>
-        <div class="t">VIP</div>
-        <div class="d">Priority perks</div>
-      </button>
-
-      <button class="homeTile" data-home-go="menu" type="button" aria-label="Open menu">
-        <div class="k">🍽️</div>
-        <div class="t">Menu</div>
-        <div class="d">Tap to browse</div>
-      </button>
+    <div class="homeTile" aria-label="Upcoming World Cup matches">
+      <div class="homeTileTitle">Up next (global)</div>
+      <div class="homeHighlights" id="homeHighlights">
+        <div class="homeMuted">Loading matches…</div>
+      </div>
     </div>
 
-    <div class="homeMiniNote" role="note">
-      <span class="dot"></span>
-      <span><b>Tip:</b> New here? Tap <b>Reserve</b> — we’ll guide you in chat.</span>
+    
+<div class="homeTile" id="homePulse" aria-label="World Cup pulse">
+      <div class="homeTileTitle">World Cup pulse</div>
+      <div class="homeSub" style="margin:0;">A clean snapshot of the entire tournament—global first, Dallas included.</div>
+
+      <div class="homeStats" id="homeStats">
+        <div class="homeStat">
+          <span class="k">Today</span>
+          <b id="homeStatToday">—</b>
+          <small id="homeStatTodaySub">Matches worldwide</small>
+        </div>
+        <div class="homeStat">
+          <span class="k">Next kickoff</span>
+          <b id="homeStatNext">—</b>
+          <small id="homeStatNextSub">—</small>
+        </div>
+        <div class="homeStat">
+          <span class="k">Your time</span>
+          <b id="homeStatTZ">—</b>
+          <small id="homeStatTZSub">Local</small>
+        </div>
+      </div>
+
+      <div class="homeLinkRow" aria-label="Schedule scope controls">
+        <button class="homeLinkBtn" id="homeSetAll" type="button">All matches</button>
+        <button class="homeLinkBtn" id="homeSetDallas" type="button">Dallas spotlight</button>
+      </div>
+
+      <div class="homeNote" id="homePulseNote">Tip: Keep “All matches” for the full tournament view. Dallas spotlight is optional.</div>
+    </div>
+
+<div class="homeTile" aria-label="Quick settings">
+      <div class="homeTileTitle">Your setup</div>
+      <div class="homeMeta" id="homeMeta">
+        <div class="homeMetaRow"><span>Language</span><b id="homeLang">—</b></div>
+        <div class="homeMetaRow"><span>Schedule scope</span><b id="homeScope">—</b></div>
+        <div class="homeMetaRow"><span>Supporting</span><b id="homeSupport">—</b></div>
+      </div>
+      <div class="homeActions">
+        <button class="btn" id="homeGoChat" type="button">Open Concierge</button>
+        <button class="btn" id="homeGoFan" type="button">Pick supporter</button>
+      </div>
+      <div class="homeNote">Most fans start here: pick a country, then tap “Explore Matches” for the full World Cup schedule.</div>
+    
+    <div class="homeTile" id="homeReserveTile" aria-label="Reservations">
+      <div class="homeTileTitle">Reservations</div>
+      <div class="homeSub" style="margin:0;">This is a concierge first: reserve in seconds, then attach any match (Dallas or global) so your table is ready.</div>
+
+      <div class="homeChips" role="list" aria-label="Reservation actions" style="margin-top:10px;">
+        <button class="homeChipBtn primary" type="button" data-go="chat" data-prefill="reservation">Start reservation</button>
+        <button class="homeChipBtn" id="homeReserveNextBtn" type="button" data-go="chat" data-prefill="reservation">Reserve for next match</button>
+        <button class="homeChipBtn" type="button" data-go="chat" data-prefill="VIP reservation options and minimums?">VIP table</button>
+      </div>
+
+      <div class="homeNote" id="homeReserveNote">Tip: tell the concierge your party size + time, and the match you’re coming for (any city).</div>
+    </div>
+
+</div>
+
+<div class="homeTile" id="homeFastlane" aria-label="Concierge fastlane">
+      <div class="homeTileTitle">Concierge fastlane</div>
+      <div class="homeSub" style="margin:0;">One tap to get where you need—reservations, any match, or quick help.</div>
+
+      <div class="homeChips" role="list" aria-label="Quick actions">
+        <button class="homeChipBtn primary" type="button" data-go="chat" data-prefill="reservation">Reserve a table</button>
+        <button class="homeChipBtn" type="button" data-go="chat" data-prefill="Show me today’s World Cup matches.">Today’s matches</button>
+        <button class="homeChipBtn" type="button" data-go="chat" data-prefill="What are the next 5 matches globally?">Next matches</button>
+        <button class="homeChipBtn" type="button" data-go="chat" data-prefill="Menu recommendations for a group of 4?">Menu picks</button>
+        <button class="homeChipBtn" type="button" data-go="chat" data-prefill="How do I reserve a VIP table?">VIP help</button>
+        <button class="homeChipBtn" type="button" data-go="fanzone">Pick supporter country</button>
+      </div>
+
+      <div class="homeNote">Tip: You can explore the full World Cup schedule from any section—Home just gives you the fastest launchpad.</div>
+    </div>
+
+
+</div>
     </div>
   </div>
 </div>
-class="card chatcard lux-reveal" style="display:flex;flex-direction:column;min-height:0;">
+
+
+<!-- Chat / Reservations -->
+<div class="card chatcard lux-reveal" style="display:flex;flex-direction:column;min-height:0;">
 <div class="cardhead">
 <div class="title" id="chatTitle">Chat</div>
 <div style="display:flex; gap:8px; align-items:center;">
@@ -8503,60 +8481,6 @@ function apply(){
   }, {passive:true});
 })();
 
-</script>
-
-
-<script>
-/* === HOME REFRESH (Phase 1) wiring — surgical, no side effects === */
-(function(){
-  function setMsec(sec){
-    try{
-      document.body.setAttribute("data-msec", sec);
-      document.querySelectorAll(".mnavBtn").forEach(b=>{
-        b.classList.toggle("active", b.getAttribute("data-msec")===sec);
-      });
-      localStorage.setItem("msec", sec);
-    }catch(e){}
-  }
-  function goChat(prefill){
-    try{
-      setMsec("chat");
-      const ta = document.getElementById("msg");
-      if(ta){
-        if(prefill){ ta.value = prefill; }
-        setTimeout(()=>{
-          try{
-            ta.focus({preventScroll:true});
-            ta.scrollIntoView({block:"end", behavior:"smooth"});
-          }catch(e){}
-        }, 60);
-      }
-    }catch(e){}
-  }
-
-  document.addEventListener("click", (ev)=>{
-    const t = ev.target;
-    if(!t) return;
-
-    const tile = t.closest && t.closest("[data-home-go]");
-    if(tile){
-      ev.preventDefault();
-      setMsec(tile.getAttribute("data-home-go"));
-      return;
-    }
-    if(t.closest && t.closest("#homeReserveBtn")){
-      ev.preventDefault();
-      // keep simple: prefill "reservation" — backend can translate/respond based on chosen language
-      goChat("reservation");
-      return;
-    }
-    if(t.closest && t.closest("#homeChatBtn")){
-      ev.preventDefault();
-      goChat("");
-      return;
-    }
-  }, {passive:false});
-})();
 </script>
 
 </body>
