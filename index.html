@@ -2878,6 +2878,8 @@ body.kiosk-mode *::-webkit-scrollbar{
   .homeMetaRow span{ color: var(--muted); }
   .homeActions{ display:flex; gap:8px; margin-top:10px; }
   .homeActions .btn{ flex:1 1 auto; }
+  .homeLangHint{ margin-top:8px; font-size:12px; color: var(--muted); }
+  .homeLangHint b{ color: rgba(255,255,255,.92); font-weight:800; }
 
   /* Slightly tighter cardhead on home for “luxury” */
   #homeCard .cardhead{ align-items:center; gap:10px; }
@@ -4802,7 +4804,7 @@ body[data-msec="schedule"] #scheduleCard{
   <div class="homeGrid">
     <div class="homeTile homeTile--hero" id="homeIntro">
       <div class="homeKicker">WORLD CUP CONCIERGE</div>
-      <div class="homeHeadline">Reservations first. Matches everywhere.</div>
+      <div class="homeHeadline">Reservations first — with a 4‑language concierge chat.</div>
       <div class="homeSub">Book a table in seconds, then browse the full World Cup schedule—Dallas and every host city—without losing your place.</div>
 
       <div class="homeSteps" aria-label="How it works">
@@ -4875,9 +4877,10 @@ body[data-msec="schedule"] #scheduleCard{
         <div class="homeMetaRow"><span>Supporting</span><b id="homeSupport">—</b></div>
       </div>
       <div class="homeActions">
-        <button class="btn" id="homeGoChat" type="button">Open Concierge</button>
+        <button class="btn" id="homeGoChat" type="button">Chat Concierge</button>
         <button class="btn" id="homeGoFan" type="button">Pick supporter</button>
       </div>
+      <div class="homeLangHint" aria-label="Concierge languages">Speaks <b>EN</b> <b>ES</b> <b>PT</b> <b>FR</b> — just type in your language.</div>
       <div class="homeNote">Most fans start here: pick a country, then tap “Explore Matches” for the full World Cup schedule.</div>
     
     <div class="homeTile" id="homeReserveTile" aria-label="Reservations">
@@ -4929,7 +4932,7 @@ body[data-msec="schedule"] #scheduleCard{
 <!-- HERO: Cinematic rotating banner (UI-only; no backend impact) -->
 <div id="chat"></div>
 <div class="composer">
-<textarea id="msg" placeholder="Type here..."></textarea>
+<textarea id="msg" placeholder="Ask the Concierge… (EN / ES / PT / FR)  •  Try: reservation"></textarea>
 <button id="sendBtn">Send</button>
 <button class="secondary" id="clearBtn">Clear</button></div>
 <div class="hint" id="helperHint"></div>
