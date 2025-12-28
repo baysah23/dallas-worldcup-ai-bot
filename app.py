@@ -10,18 +10,21 @@ import datetime
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
-from flask import Flask, request, jsonify, send_from_directory, send_file, make_response
+from flask import Flask, request, jsonify, send_from_directory, send_file
 
 # OpenAI client (compat: works with both newer and older openai python packages)
 try:
     from openai import OpenAI  # new SDK
     client = OpenAI()
+    _OPENAI_MODE = "new"
 except Exception:
     import openai  # legacy SDK
+    _OPENAI_MODE = "legacy"
 
     class _CompatResponses:
         @staticmethod
         def create(model: str, input):
+            # Map new "input" (list of role/content dicts) to legacy ChatCompletion messages
             messages = input
             r = openai.ChatCompletion.create(model=model, messages=messages)
             class _Resp: pass
@@ -1087,12 +1090,7 @@ def next_question(sess: Dict[str, Any]) -> str:
 # ============================================================
 @app.route("/")
 def home():
-    # Prevent stale caching so deploys always serve the latest index.html
-    resp = make_response(send_from_directory(".", "index.html"))
-    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    resp.headers["Pragma"] = "no-cache"
-    resp.headers["Expires"] = "0"
-    return resp
+    return send_from_directory(".", "index.html")
 
 
 @app.route("/health")
@@ -1100,7 +1098,16 @@ def health():
     return jsonify({"status": "ok"})
 
 
-
+@app.route("/version")
+def version():
+    try:
+        mtime = os.path.getmtime("index.html")
+        return jsonify({
+            "index_html_last_modified_epoch": mtime,
+            "index_html_last_modified": datetime.fromtimestamp(mtime).isoformat(timespec="seconds"),
+        })
+    except Exception as e:
+        return jsonify({"error": repr(e)}), 500
 
 
 @app.route("/menu.json")
