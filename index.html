@@ -1202,6 +1202,43 @@ body.phase-finals{ background: var(--phaseF); }
   word-break: break-word;
   line-height: 1.1;
 }
+
+/* ===== Supporter Flag Theme (premium, subtle) ===== */
+:root{
+  --supportA: rgba(245,215,110,.18);
+  --supportB: rgba(31,111,235,.16);
+  --supportGlow: rgba(245,215,110,.22);
+  --supportBorder: rgba(255,255,255,.14);
+}
+body.has-support #supporterChip{
+  background:
+    radial-gradient(220px 120px at 12% 18%, var(--supportA), transparent 60%),
+    linear-gradient(135deg, rgba(0,0,0,.18), rgba(0,0,0,.08));
+  border-color: color-mix(in srgb, var(--supportA) 55%, var(--supportBorder));
+  box-shadow: 0 14px 38px color-mix(in srgb, var(--supportGlow) 45%, transparent);
+}
+body.has-support #supporterChip span#supporterFlag{
+  filter: drop-shadow(0 8px 18px rgba(0,0,0,.35));
+}
+body.has-support .fz-modal .panel{
+  border-color: color-mix(in srgb, var(--supportA) 55%, rgba(255,255,255,.12));
+  box-shadow: 0 18px 55px rgba(0,0,0,.55);
+}
+body.has-support .fz-country:hover{
+  border-color: color-mix(in srgb, var(--supportA) 65%, rgba(255,255,255,.14));
+}
+body.has-support .hero::after{
+  /* tiny supporter tint layered into existing crowd glow */
+  background:
+    radial-gradient(720px 320px at 18% 22%, var(--supportA), transparent 62%),
+    radial-gradient(900px 420px at 70% 80%, var(--supportB), transparent 66%),
+    radial-gradient(520px 260px at 20% 30%, rgba(255,255,255,.22), transparent 60%),
+    radial-gradient(680px 320px at 70% 18%, rgba(255,255,255,.18), transparent 62%),
+    radial-gradient(900px 420px at 55% 85%, rgba(46,160,67,.14), transparent 65%),
+    radial-gradient(900px 420px at 35% 88%, rgba(31,111,235,.16), transparent 66%);
+}
+/* ===== End Supporter Flag Theme ===== */
+
 @media (max-width: 420px){
   #supporterChip b#supporterLabel{ max-width: 140px; }
 }
@@ -4646,7 +4683,7 @@ body[data-msec="schedule"] #scheduleCard{
 <button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button></div>
 <div class="fz-row" style="justify-content:flex-start;">
 <div class="fz-chip" id="supporterChip" title="Personalization stored on this device only">
-<span>🏁</span><span>Supporting:</span> <b id="supporterLabel">Not set</b></div>
+<span id="supporterFlag" aria-hidden="true">🏁</span><span>Supporting:</span> <b id="supporterLabel">Not set</b></div>
 </div>
 <div class="fz-actions" style="margin-top:10px;">
 <button class="fz-iconbtn" id="fzIconCountry" title="Pick country">🏁</button>
@@ -7075,6 +7112,7 @@ function setSection(sec){
     const modal = el("countryModal");
     const countryGrid = el("countryGrid");
     const supporterLabel = el("supporterLabel");
+    const supporterFlag = el("supporterFlag");
 
     const pollCard = el("pollCard");
     const pollModal = el("pollModal");
@@ -7191,10 +7229,51 @@ function setSection(sec){
     function clearSupport(){
       try{ localStorage.removeItem(LS_SUPPORT); }catch(e){}
     }
+
+    // ----- Supporter theme (flag-tinted, premium) -----
+    const SUPPORT_THEME = {
+      USA: { a:"rgba(31,111,235,.22)", b:"rgba(214,40,40,.18)", glow:"rgba(245,215,110,.22)" },
+      MEX: { a:"rgba(0,104,71,.22)",  b:"rgba(206,17,38,.16)",  glow:"rgba(255,255,255,.16)" },
+      CAN: { a:"rgba(213,43,30,.20)", b:"rgba(255,255,255,.14)", glow:"rgba(213,43,30,.18)" },
+      BRA: { a:"rgba(0,156,59,.20)",  b:"rgba(255,223,0,.18)",  glow:"rgba(0,156,59,.18)" },
+      ARG: { a:"rgba(116,172,223,.22)", b:"rgba(255,255,255,.14)", glow:"rgba(116,172,223,.18)" },
+      FRA: { a:"rgba(0,85,164,.22)",  b:"rgba(239,65,53,.16)",  glow:"rgba(245,215,110,.16)" },
+      ENG: { a:"rgba(206,17,38,.18)", b:"rgba(255,255,255,.14)", glow:"rgba(206,17,38,.16)" },
+      ESP: { a:"rgba(198,12,48,.18)", b:"rgba(255,199,44,.18)", glow:"rgba(255,199,44,.16)" },
+      POR: { a:"rgba(0,102,0,.20)",   b:"rgba(255,0,0,.14)",    glow:"rgba(0,102,0,.18)" },
+      GER: { a:"rgba(0,0,0,.18)",     b:"rgba(221,0,0,.16)",    glow:"rgba(255,206,0,.16)" },
+      JPN: { a:"rgba(188,0,45,.18)",  b:"rgba(255,255,255,.14)", glow:"rgba(188,0,45,.16)" },
+      NGA: { a:"rgba(0,135,81,.20)",  b:"rgba(255,255,255,.14)", glow:"rgba(0,135,81,.18)" },
+      MAR: { a:"rgba(193,39,45,.18)", b:"rgba(0,98,51,.16)",     glow:"rgba(193,39,45,.16)" },
+      SEN: { a:"rgba(0,133,63,.20)",  b:"rgba(252,209,22,.16)",  glow:"rgba(0,133,63,.16)" },
+      GHA: { a:"rgba(206,17,38,.18)", b:"rgba(252,209,22,.16)",  glow:"rgba(0,107,63,.14)" }
+    };
+
+    function applySupportTheme(c){
+      const root = document.documentElement;
+      const body = document.body;
+      if(!c){
+        body.classList.remove("has-support");
+        body.removeAttribute("data-support");
+        root.style.removeProperty("--supportA");
+        root.style.removeProperty("--supportB");
+        root.style.removeProperty("--supportGlow");
+        return;
+      }
+      const code = (c.code || c.fifa || c.fifa_code || "").toUpperCase();
+      const t = SUPPORT_THEME[code] || null;
+      body.classList.add("has-support");
+      body.setAttribute("data-support", code || "SET");
+      root.style.setProperty("--supportA", t?.a || "rgba(245,215,110,.18)");
+      root.style.setProperty("--supportB", t?.b || "rgba(31,111,235,.16)");
+      root.style.setProperty("--supportGlow", t?.glow || "rgba(245,215,110,.22)");
+    }
+
     function renderSupporter(){
       const c = getSupport();
-      if(!supporterLabel) return;
-      supporterLabel.textContent = c?.name || "Not set";
+      if(supporterLabel) supporterLabel.textContent = c?.name || "Not set";
+      if(supporterFlag) supporterFlag.textContent = (c?.flag || "🏁");
+      applySupportTheme(c);
     }
 
     function openCountryModal(){
