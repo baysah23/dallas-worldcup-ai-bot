@@ -4888,162 +4888,48 @@ body[data-msec="schedule"] #scheduleCard{
 </div>
 
 <!-- Home (mobile-only panel): premium onboarding + global World Cup snapshot -->
-<div class="card homecard lux-reveal" id="homeCard" class="luxHomeCard" aria-label="World Cup Concierge">
+<div class="card homecard lux-reveal" id="homeCard" aria-label="World Cup Concierge">
   
   <div class="luxHome" aria-label="World Cup Concierge Home">
-    <div class="luxHero">
-      <div class="luxTitle">WORLD CUP<br>CONCIERGE</div>
-      <div class="luxTagline">Reserve tables &amp; VIP experiences — just ask</div>
-      <div class="luxLang">EN • ES • PT • FR</div>
-    </div>
+  <div class="luxHero">
+    <div class="luxTitle">WORLD CUP<br>CONCIERGE</div>
+    <div class="luxTagline">Reserve tables &amp; VIP experiences — just ask</div>
+    <div class="luxLang">EN • ES • PT • FR</div>
+  </div>
 
-    <!-- Primary CTA (keeps existing ID so wiring stays intact) -->
-    <button class="luxBigBtn" id="homeReserveBtn" type="button" aria-label="Reserve / Concierge">
-      <div class="luxBigIcon" aria-hidden="true">💬</div>
-      <div class="luxBigText">
-        <div class="luxBigTitle">Reserve / Concierge</div>
-        <div class="luxBigSub">Talk to our concierge</div>
-        <div class="luxBigLang">EN • ES • PT • FR</div>
-      </div>
+  <!-- Primary CTA (keeps existing ID so wiring stays intact) -->
+  <button class="luxBigBtn" id="homeReserveBtn" type="button" aria-label="Reserve / Concierge">
+    <div class="luxBigIcon" aria-hidden="true">💬</div>
+    <div class="luxBigText">
+      <div class="luxBigTitle">Reserve / Concierge</div>
+      <div class="luxBigSub">Talk to our concierge</div>
+      <div class="luxBigLang">EN • ES • PT • FR</div>
+    </div>
+  </button>
+
+  <div class="luxTiles" role="group" aria-label="Quick actions">
+    <button class="luxTile" id="luxHomeMenu" type="button" aria-label="Menu">
+      <div class="luxTileIcon" aria-hidden="true">🍽️</div>
+      <div class="luxTileLabel">Menu</div>
     </button>
 
-    <div class="luxTiles" role="group" aria-label="Quick actions">
-      <button class="luxTile" id="luxHomeMenu" type="button" aria-label="Menu">
-        <div class="luxTileIcon" aria-hidden="true">🍽️</div>
-        <div class="luxTileLabel">Menu</div>
-      </button>
+    <button class="luxTile" id="luxHomeVip" type="button" aria-label="VIP Access">
+      <div class="luxTileIcon" aria-hidden="true">🎟️</div>
+      <div class="luxTileLabel">VIP Access</div>
+    </button>
 
-      <button class="luxTile" id="luxHomeVip" type="button" aria-label="VIP Access">
-        <div class="luxTileIcon" aria-hidden="true">🎟️</div>
-        <div class="luxTileLabel">VIP Access</div>
-      </button>
+    <button class="luxTile" id="luxHomeInfo" type="button" aria-label="Info">
+      <div class="luxTileIcon" aria-hidden="true">!</div>
+      <div class="luxTileLabel">INFO</div>
+    </button>
 
-      <button class="luxTile" id="luxHomeInfo" type="button" aria-label="Info">
-        <div class="luxTileIcon" aria-hidden="true">⭐</div>
-        <div class="luxTileLabel">INFO</div>
-      </button>
-
-      <!-- Added per request: Info (ⓘ) tile -->
-      <button class="luxTile" id="luxHomeInfoI" type="button" aria-label="Information">
-        <div class="luxTileIcon" aria-hidden="true">ⓘ</div>
-        <div class="luxTileLabel">&nbsp;</div>
-      </button>
-    </div>
-  </div>
-<div class="cardhead">
-    <div class="title">World Cup Concierge</div>
-    <div class="actions">
-      <button class="btn btn-primary" id="homeReserveBtn" type="button">Reserve</button>
-      <button class="btn" id="homeExploreBtn" type="button">Explore Matches</button>
-    </div>
-  </div>
-        <div class="homeStep">
-          <div class="homeStepNum">2</div>
-          <div class="homeStepTxt"><b>Follow</b> — pick a country in Fan Zone.</div>
-        </div>
-        <div class="homeStep">
-          <div class="homeStepNum">3</div>
-          <div class="homeStepTxt"><b>Explore</b> — see upcoming matches globally.</div>
-        </div>
-      </div>
-
-      <div class="homeTip" id="homeTip" role="note" aria-label="Quick start tip">
-        <div>
-          <div class="t"><b>Quick start:</b> Tap <b>Reserve</b> to book, then <b>Explore Matches</b> for the full World Cup schedule.</div>
-          <div class="s">You can switch schedule scope anytime: <b>All matches</b> (global) or <b>Dallas spotlight</b> (optional).</div>
-        </div>
-        <button class="homeTipClose" id="homeTipClose" type="button" aria-label="Dismiss tip">×</button>
-      </div>
-    </div>
-
-    <div class="homeTile" aria-label="Upcoming World Cup matches">
-      <div class="homeTileTitle">Up next (global)</div>
-      <div class="homeHighlights" id="homeHighlights">
-        <div class="homeMuted">Loading matches…</div>
-      </div>
-    </div>
-
-    
-<div class="homeTile" id="homePulse" aria-label="World Cup pulse">
-      <div class="homeTileTitle">World Cup pulse</div>
-      <div class="homeSub" style="margin:0;">A clean snapshot of the entire tournament—global first, Dallas included.</div>
-
-      <div class="homeStats" id="homeStats">
-        <div class="homeStat">
-          <span class="k">Today</span>
-          <b id="homeStatToday">—</b>
-          <small id="homeStatTodaySub">Matches worldwide</small>
-        </div>
-        <div class="homeStat">
-          <span class="k">Next kickoff</span>
-          <b id="homeStatNext">—</b>
-          <small id="homeStatNextSub">—</small>
-        </div>
-        <div class="homeStat">
-          <span class="k">Your time</span>
-          <b id="homeStatTZ">—</b>
-          <small id="homeStatTZSub">Local</small>
-        </div>
-      </div>
-
-      <div class="homeLinkRow" aria-label="Schedule scope controls">
-        <button class="homeLinkBtn" id="homeSetAll" type="button">All matches</button>
-        <button class="homeLinkBtn" id="homeSetDallas" type="button">Dallas spotlight</button>
-      </div>
-
-      <div class="homeNote" id="homePulseNote">Tip: Keep “All matches” for the full tournament view. Dallas spotlight is optional.</div>
-    </div>
-
-<div class="homeTile" aria-label="Quick settings">
-      <div class="homeTileTitle">Your setup</div>
-      <div class="homeMeta" id="homeMeta">
-        <div class="homeMetaRow"><span>Language</span><b id="homeLang">—</b></div>
-        <div class="homeMetaRow"><span>Schedule scope</span><b id="homeScope">—</b></div>
-        <div class="homeMetaRow"><span>Supporting</span><b id="homeSupport">—</b></div>
-      </div>
-      <div class="homeActions">
-        <button class="btn" id="homeGoChat" type="button">Open Concierge</button>
-        <button class="btn" id="homeGoFan" type="button">Pick supporter</button>
-      </div>
-      <div class="homeNote">Most fans start here: pick a country, then tap “Explore Matches” for the full World Cup schedule.</div>
-    
-    <div class="homeTile" id="homeReserveTile" aria-label="Reservations">
-      <div class="homeTileTitle">Reservations</div>
-      <div class="homeSub" style="margin:0;">This is a concierge first: reserve in seconds, then attach any match (Dallas or global) so your table is ready.</div>
-
-      <div class="homeChips" role="list" aria-label="Reservation actions" style="margin-top:10px;">
-        <button class="homeChipBtn primary" type="button" data-go="chat" data-prefill="reservation">Start reservation</button>
-        <button class="homeChipBtn" id="homeReserveNextBtn" type="button" data-go="chat" data-prefill="reservation">Reserve for next match</button>
-        <button class="homeChipBtn" type="button" data-go="chat" data-prefill="VIP reservation options and minimums?">VIP table</button>
-      </div>
-
-      <div class="homeNote" id="homeReserveNote">Tip: tell the concierge your party size + time, and the match you’re coming for (any city).</div>
-    </div>
-
-</div>
-
-<div class="homeTile" id="homeFastlane" aria-label="Concierge fastlane">
-      <div class="homeTileTitle">Concierge fastlane</div>
-      <div class="homeSub" style="margin:0;">One tap to get where you need—reservations, any match, or quick help.</div>
-
-      <div class="homeChips" role="list" aria-label="Quick actions">
-        <button class="homeChipBtn primary" type="button" data-go="chat" data-prefill="reservation">Reserve a table</button>
-        <button class="homeChipBtn" type="button" data-go="chat" data-prefill="Show me today’s World Cup matches.">Today’s matches</button>
-        <button class="homeChipBtn" type="button" data-go="chat" data-prefill="What are the next 5 matches globally?">Next matches</button>
-        <button class="homeChipBtn" type="button" data-go="chat" data-prefill="Menu recommendations for a group of 4?">Menu picks</button>
-        <button class="homeChipBtn" type="button" data-go="chat" data-prefill="How do I reserve a VIP table?">VIP help</button>
-        <button class="homeChipBtn" type="button" data-go="fanzone">Pick supporter country</button>
-      </div>
-
-      <div class="homeNote">Tip: You can explore the full World Cup schedule from any section—Home just gives you the fastest launchpad.</div>
-    </div>
-
-
-</div>
-    </div>
+    <!-- Added per request: Info (ⓘ) tile -->
+    <button class="luxTile" id="luxHomeInfoI" type="button" aria-label="Information">
+      <div class="luxTileIcon" aria-hidden="true">ⓘ</div>
+      <div class="luxTileLabel">&nbsp;</div>
+    </button>
   </div>
 </div>
-
 
 <!-- Chat / Reservations -->
 <div class="card chatcard lux-reveal" style="display:flex;flex-direction:column;min-height:0;">
