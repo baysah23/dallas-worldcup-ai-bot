@@ -2977,6 +2977,41 @@ body.kiosk-mode *::-webkit-scrollbar{
   #homeCard .cardhead .actions .btn{ padding: 10px 12px; border-radius: 14px; }
 }
 
+
+  /* Home "Try this" + chat preview (makes chat/languages obvious) */
+  .homeTryRow{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
+  .homeTryLabel{ font-size:11px; color:var(--muted); font-weight:900; letter-spacing:.10em; text-transform:uppercase; }
+  .homeTryChip{
+    border:1px solid rgba(255,255,255,.14);
+    background: rgba(0,0,0,.18);
+    padding:6px 10px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:900;
+    white-space:nowrap;
+  }
+  .homeChatPreview{
+    margin-top:10px;
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:14px;
+    overflow:hidden;
+    background: rgba(0,0,0,.16);
+  }
+  .homeChatPreview .row{ display:flex; gap:10px; padding:10px 12px; align-items:flex-start; }
+  .homeChatPreview .dot{
+    width:9px; height:9px; border-radius:999px;
+    background: rgba(46,160,67,.90);
+    box-shadow: 0 0 0 6px rgba(46,160,67,.12);
+    margin-top:4px;
+    flex:0 0 auto;
+  }
+  .homeChatPreview .txt{ font-size:12px; color:rgba(234,240,255,.90); line-height:1.25; }
+  .homeChatPreview .hint{
+    padding:10px 12px;
+    border-top:1px solid rgba(255,255,255,.10);
+    font-size:12px;
+    color:var(--muted);
+  }
 /* =========================
    MOBILE: SECTION NAV (desktop parity without clutter)
    - One-tap switch between Chat / Fan Zone / Extras / Schedule / Menu
@@ -4886,7 +4921,7 @@ body[data-msec="schedule"] #scheduleCard{
   <div class="cardhead">
     <div class="title">World Cup Concierge</div>
     <div class="actions">
-      <button class="btn btn-primary btn-reserve" id="homeReserveBtn" type="button">Reserve</button>
+      <button class="btn btn-primary btn-reserve" id="homeReserveBtn" type="button">Reserve a Table</button>
       <button class="btn btn-secondary btn-explore" id="homeExploreBtn" type="button">Explore Matches</button>
     </div>
   </div>
@@ -4894,8 +4929,24 @@ body[data-msec="schedule"] #scheduleCard{
   <div class="homeGrid">
     <div class="homeTile homeTile--hero" id="homeIntro">
       <div class="homeKicker">WORLD CUP CONCIERGE</div>
-      <div class="homeHeadline">Reserve first. Then enjoy the World Cup.</div>
-      <div class="homeSub">Book a table in seconds via the concierge chat (English • Español • Português • Français), then browse the full World Cup schedule—Dallas and every host city.</div>
+      <div class="homeHeadline">Reserve a table — in any language.</div>
+      <div class="homeSub">Chat with the concierge to book instantly. Try: <b>reservation</b> / <b>reservar</b> / <b>reserva</b> / <b>réservation</b>. Then browse fixtures, live scores, and groups for the full 2026 World Cup.</div>
+      <div class="homeTryRow" aria-label="Try speaking to the concierge">
+        <span class="homeTryLabel">Try:</span>
+        <span class="homeTryChip">reservation</span>
+        <span class="homeTryChip">reservar</span>
+        <span class="homeTryChip">reserva</span>
+        <span class="homeTryChip">réservation</span>
+      </div>
+
+      <div class="homeChatPreview" role="group" aria-label="Concierge chat preview">
+        <div class="row">
+          <div class="dot" aria-hidden="true"></div>
+          <div class="txt"><b>Concierge Chat</b> books tables and answers World Cup questions. Use the language buttons below to switch instantly.</div>
+        </div>
+        <div class="hint">Tip: Tap <b>Chat</b> → your keyboard opens automatically.</div>
+      </div>
+
 
       <div class="homeMicroRow" aria-label="Concierge chat languages">
         <div class="homeLangPills">💬 Concierge Chat: <b>English</b> • <b>Español</b> • <b>Português</b> • <b>Français</b></div>
