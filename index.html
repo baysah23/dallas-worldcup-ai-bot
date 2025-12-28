@@ -4590,28 +4590,6 @@ body[data-msec="schedule"] #scheduleCard{
 </style>
 </head>
 <body data-lux="on">
-
-<!-- =========================
-     LUXURY HOME SHELL (PIXEL-PERFECT)
-     ========================= -->
-<div id="luxuryHomeShell" hidden aria-label="World Cup Concierge Luxury Home">
-  <div class="luxHomeFS" aria-hidden="true"></div>
-
-  <!-- Hotspots: top actions -->
-  <button class="luxHotspot hs-reserve" type="button" data-go="chat" aria-label="Reserve / Concierge"></button>
-  <button class="luxHotspot hs-menu" type="button" data-go="menu" aria-label="Menu"></button>
-  <button class="luxHotspot hs-vip" type="button" data-go="vip" aria-label="VIP Access"></button>
-  <button class="luxHotspot hs-infoBang" type="button" data-go="extras" aria-label="Info"></button>
-  <button class="luxHotspot hs-infoI" type="button" data-go="extras" aria-label="Information"></button>
-
-  <!-- Hotspots: bottom nav (pixel-perfect, functional) -->
-  <button class="luxHotspot hs-nav-home" type="button" data-go="home" aria-label="Home"></button>
-  <button class="luxHotspot hs-nav-schedule" type="button" data-go="schedule" aria-label="Schedule"></button>
-  <button class="luxHotspot hs-nav-fanzone" type="button" data-go="fanzone" aria-label="Fan Zone"></button>
-  <button class="luxHotspot hs-nav-menu" type="button" data-go="menu" aria-label="Menu"></button>
-  <button class="luxHotspot hs-nav-vip" type="button" data-go="vip" aria-label="VIP"></button>
-</div>
-
 <div class="wrap">
 <header>
 <div class="toprow">
@@ -6926,7 +6904,7 @@ function __focusChatInput(){
   try{ t.scrollIntoView({block:'end'}); }catch(_){}
 }
 function __currentSection(){
-  return (document.body.getAttribute('data-msec') || 'home');
+  return (document.body.getAttribute('data-msec') || 'chat');
 }
 
 function setSection(sec){
@@ -6974,14 +6952,6 @@ function setSection(sec){
       try{ requestAnimationFrame(()=>{ try{ __focusChatInput(); }catch(_2){} }); }catch(_){ }
       try{ setTimeout(__focusChatInput, 120); }catch(_){ }
     }
-
-  // When switching to Chat, make the input immediately ready for typing
-  try{
-    if(sec === 'chat'){
-      setTimeout(()=>{ try{ __focusMsgInput(); }catch(_e){} }, 30);
-    }
-  }catch(_e){}
-
 }
   // Expose for bottom-nav click wiring
   window.setSection = setSection;
@@ -7905,10 +7875,9 @@ function setSection(sec){
 
   function setSection(sec, persist){
   if(sec === "home"){
-      // Home = default experience (chat) + clear any persisted section
+      // Home = Luxury Home (clear persisted section so it always feels like Home)
       try{ localStorage.removeItem("wc_mobile_section"); }catch(e){}
-      sec = "chat";
-      document.body.removeAttribute("data-msec");
+      // keep sec as "home"
     }
     if(!isSmall()) return;
     document.body.setAttribute("data-msec", sec || "chat");
@@ -8317,113 +8286,6 @@ function apply(){
   }, {passive:true});
 })();
 
-</script>
-
-
-<script>
-
-<script>
-/* Home intercept shim: ensure 'home' truly means Luxury Home (not mapped to chat) */
-(function(){
-  function forceHome(){
-    try{ document.body.setAttribute('data-msec','home'); }catch(e){}
-  }
-  // keep original
-  if(typeof window.setSection === 'function' && !window.__setSectionRaw){
-    window.__setSectionRaw = window.setSection;
-    window.setSection = function(sec){
-      if(sec === 'home'){
-        forceHome();
-        // do not delegate to raw mapping which may remap home->chat
-        return;
-      }
-      try{ window.__setSectionRaw(sec); }catch(e){}
-    };
-  }
-})();
-</script>
-
-<script>
-/* Luxury Home Shell (pixel-perfect) wiring — robust (observer + timer) */
-(function(){
-  function showShell(){
-    var shell = document.getElementById('luxuryHomeShell');
-    if(!shell) return;
-    shell.hidden = false;
-    document.body.classList.add('lux-shell-on');
-  }
-  function hideShell(){
-    var shell = document.getElementById('luxuryHomeShell');
-    if(!shell) return;
-    shell.hidden = true;
-    document.body.classList.remove('lux-shell-on');
-  }
-  function sync(){
-    try{
-      var cur = document.body.getAttribute('data-msec');
-      if(cur === 'home') showShell(); else hideShell();
-    }catch(e){}
-  }
-
-  // 1) Run immediately + on DOM ready
-  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", sync);
-  else sync();
-
-  // 2) Observe attribute changes (covers any internal navigation logic)
-  try{
-    var mo = new MutationObserver(function(muts){
-      for(var i=0;i<muts.length;i++){
-        if(muts[i].type === 'attributes' && muts[i].attributeName === 'data-msec'){
-          sync(); break;
-        }
-      }
-    });
-    mo.observe(document.body, { attributes:true });
-  }catch(e){}
-
-  // 3) Short safety timer (covers late scripts)
-  var t0 = Date.now();
-  (function tick(){
-    sync();
-    if(Date.now() - t0 < 8000) setTimeout(tick, 250);
-  })();
-
-  // 4) Route clicks on shell hotspots
-  function wire(){
-    var shell = document.getElementById('luxuryHomeShell');
-    if(!shell) return;
-    shell.addEventListener('click', function(e){
-      var b = e.target.closest('button[data-go]');
-      if(!b) return;
-      var sec = b.getAttribute('data-go');
-      try{ window.setSection && window.setSection(sec); }catch(_e){}
-      // If home is remapped internally, enforce it
-      if(sec === 'home'){
-        try{ document.body.setAttribute('data-msec','home'); }catch(_e){}
-        sync();
-      }
-    });
-  }
-  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", wire);
-  else wire();
-})();
-</script>
-
-
-<script>
-/* Boot into Luxury Home on first load (only if no section is set) */
-(function(){
-  function boot(){
-    try{
-      var cur = document.body.getAttribute('data-msec');
-      if(!cur){
-        document.body.setAttribute('data-msec','home');
-      }
-    }catch(e){}
-  }
-  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
-  else boot();
-})();
 </script>
 
 </body>

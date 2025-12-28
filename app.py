@@ -11,31 +11,8 @@ from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
 from flask import Flask, request, jsonify, send_from_directory, send_file
+from openai import OpenAI
 
-# OpenAI client (compat: works with both newer and older openai python packages)
-try:
-    from openai import OpenAI  # new SDK
-    client = OpenAI()
-    _OPENAI_MODE = "new"
-except Exception:
-    import openai  # legacy SDK
-    _OPENAI_MODE = "legacy"
-
-    class _CompatResponses:
-        @staticmethod
-        def create(model: str, input):
-            # Map new "input" (list of role/content dicts) to legacy ChatCompletion messages
-            messages = input
-            r = openai.ChatCompletion.create(model=model, messages=messages)
-            class _Resp: pass
-            resp = _Resp()
-            resp.output_text = (r["choices"][0]["message"]["content"] or "")
-            return resp
-
-    class _CompatClient:
-        responses = _CompatResponses()
-
-    client = _CompatClient()
 import gspread
 from google.oauth2.service_account import Credentials
 
