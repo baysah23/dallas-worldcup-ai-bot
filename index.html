@@ -5115,17 +5115,8 @@ const STRINGS = {
     fz_qr_link_label: 'Open app',
     wc_label: 'WORLD CUP KICKOFF IN',
     wc_live: 'WORLD CUP IS LIVE',
-nav_home: "Home",
-    nav_chat: "Chat",
-    nav_menu: "Menu",
-    nav_schedule: "Schedule",
-    nav_fanzone: "Fan Zone",
-    nav_vip: "VIP",
-    fz_pick_country_btn: "Which country are you supporting?",
-    fz_poll_btn: "Match poll",
-    fz_icon_country: "Pick country",
-    fz_icon_poll: "Fan poll"
-},
+
+  },
   es: {
     welcome: "⚽ ¡Bienvenido, fan del Mundial! Soy tu concierge de días de partido en Dallas.\nEscribe \"reserva\" para reservar una mesa, o pregunta por los partidos (Dallas / todos) o el menú.",
     lang_set: "Idioma cambiado a Español.",
@@ -5158,17 +5149,8 @@ nav_home: "Home",
     fz_qr_link_label: 'Abrir app',
     wc_label: 'INICIO DEL MUNDIAL EN',
     wc_live: 'EL MUNDIAL ESTÁ EN VIVO',
-nav_home: "Inicio",
-    nav_chat: "Chat",
-    nav_menu: "Menú",
-    nav_schedule: "Calendario",
-    nav_fanzone: "Zona Fan",
-    nav_vip: "VIP",
-    fz_pick_country_btn: "¿A qué país apoyas?",
-    fz_poll_btn: "Encuesta del partido",
-    fz_icon_country: "Elegir país",
-    fz_icon_poll: "Encuesta de fans"
-},
+
+  },
   pt: {
     welcome: "⚽ Bem-vindo, fã da Copa do Mundo! Sou seu concierge de dias de jogo em Dallas.\nDigite \"reserva\" para reservar uma mesa, ou pergunte sobre jogos em Dallas, todos os jogos ou o cardápio.",
     lang_set: "Idioma definido para Português.",
@@ -5201,17 +5183,8 @@ nav_home: "Inicio",
     fz_qr_link_label: 'Abrir app',
     wc_label: 'A COPA COMEÇA EM',
     wc_live: 'A COPA ESTÁ AO VIVO',
-nav_home: "Início",
-    nav_chat: "Chat",
-    nav_menu: "Menu",
-    nav_schedule: "Agenda",
-    nav_fanzone: "Fan Zone",
-    nav_vip: "VIP",
-    fz_pick_country_btn: "Qual país você está apoiando?",
-    fz_poll_btn: "Enquete da partida",
-    fz_icon_country: "Escolher país",
-    fz_icon_poll: "Enquete dos fãs"
-},
+
+  },
   fr: {
     welcome: "⚽ Bienvenue, fan de la Coupe du Monde ! Je suis votre concierge de la Coupe du Monde.\nTapez \"réservation\" pour réserver une table, ou demandez les matchs (Dallas / tous) ou le menu.",
     lang_set: "Langue définie sur Français.",
@@ -5244,17 +5217,8 @@ nav_home: "Início",
     fz_qr_link_label: 'Ouvrir l’app',
     wc_label: 'COUP D’ENVOI DANS',
     wc_live: 'LA COUPE DU MONDE EST EN COURS',
-nav_home: "Accueil",
-    nav_chat: "Chat",
-    nav_menu: "Menu",
-    nav_schedule: "Calendrier",
-    nav_fanzone: "Zone Fans",
-    nav_vip: "VIP",
-    fz_pick_country_btn: "Quel pays supportez-vous ?",
-    fz_poll_btn: "Sondage du match",
-    fz_icon_country: "Choisir un pays",
-    fz_icon_poll: "Sondage des fans"
-}
+
+  }
 };
 
 function L(){ return STRINGS[lang] || STRINGS.en; }
@@ -5267,42 +5231,35 @@ function addBubble(role, text){
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
-function ensureWelcomeBubble(){
-  // Keep ONLY one welcome bubble, and update it to the selected language.
-  const welcomes = Object.values(STRINGS).map(o => o && o.welcome).filter(Boolean);
-  let welcomeEl = chatEl.querySelector('.bubble.bot[data-welcome="1"]') || null;
-
-  // Remove duplicates that match any welcome text
-  chatEl.querySelectorAll('.bubble.bot').forEach(b => {
-    if(welcomes.includes(b.textContent)){
-      if(!welcomeEl){
-        welcomeEl = b;
-        welcomeEl.dataset.welcome = "1";
-      }else if(b !== welcomeEl){
-        b.remove();
-      }
+// -----------------------
+// Single welcome message (keeps only ONE welcome bubble while switching languages)
+// -----------------------
+let welcomeHistoryIndex = -1;
+function syncWelcomeMessage(){
+  const welcomeText = L().welcome;
+  let wb = document.getElementById("welcomeBubble");
+  if(!wb){
+    wb = document.createElement("div");
+    wb.id = "welcomeBubble";
+    wb.className = "bubble bot";
+    if(chatEl.firstChild){
+      chatEl.insertBefore(wb, chatEl.firstChild);
+    } else {
+      chatEl.appendChild(wb);
     }
-  });
-
-  if(!welcomeEl){
-    welcomeEl = document.createElement("div");
-    welcomeEl.className = "bubble bot";
-    welcomeEl.dataset.welcome = "1";
-    chatEl.appendChild(welcomeEl);
-  }
-
-  welcomeEl.textContent = L().welcome;
-
-  // Keep history tidy: update the existing welcome if present
-  if(history && history.length){
-    if(history[0].role === "assistant" && welcomes.includes(history[0].content)){
-      history[0].content = L().welcome;
+  } else {
+    // Keep the welcome at the top (so language changes don't "add" more greetings)
+    if(chatEl.firstChild !== wb){
+      chatEl.insertBefore(wb, chatEl.firstChild);
     }
-  }else if(history){
-    history.push({role:"assistant", content: L().welcome});
   }
-
+  wb.textContent = welcomeText;
   chatEl.scrollTop = chatEl.scrollHeight;
+
+  // Update the existing welcome entry in history (no new message)
+  if(typeof welcomeHistoryIndex === "number" && welcomeHistoryIndex >= 0 && Array.isArray(history) && history[welcomeHistoryIndex]){
+    history[welcomeHistoryIndex].content = welcomeText;
+  }
 }
 
 
@@ -5408,53 +5365,6 @@ function applyLanguageToUI(){
     }
   }catch(e){}
 
-
-// --- Navigation labels (mobile + any generated nav) ---
-  try{
-    const navLabels = {
-      home: L().nav_home || "Home",
-      chat: L().nav_chat || "Chat",
-      menu: L().nav_menu || "Menu",
-      schedule: L().nav_schedule || "Schedule",
-      fanzone: L().nav_fanzone || "Fan Zone",
-      vip: L().nav_vip || "VIP",
-    };
-
-    // Static mobile nav in markup
-    document.querySelectorAll("#mobileNav .mnavBtn").forEach(btn=>{
-      const sec = btn.dataset.msec;
-      if(!sec || !navLabels[sec]) return;
-      const label = navLabels[sec];
-      const span = btn.querySelector("span");
-      if(span) span.textContent = label;
-      btn.setAttribute("aria-label", label);
-      btn.setAttribute("title", label);
-    });
-
-    // Any dynamically generated nav buttons (legacy)
-    document.querySelectorAll(".mnav-btn[data-sec]").forEach(btn=>{
-      const sec = btn.dataset.sec;
-      if(!sec || !navLabels[sec]) return;
-      btn.textContent = navLabels[sec];
-      btn.setAttribute("aria-label", navLabels[sec]);
-      btn.setAttribute("title", navLabels[sec]);
-    });
-  }catch(e){}
-
-  // --- Fan Zone button labels ---
-  try{
-    const btnPick = document.getElementById("btnPickCountry");
-    if(btnPick) btnPick.textContent = L().fz_pick_country_btn || btnPick.textContent;
-
-    const btnPoll = document.getElementById("btnOpenPoll");
-    if(btnPoll) btnPoll.textContent = L().fz_poll_btn || btnPoll.textContent;
-
-    const icCountry = document.getElementById("fzIconCountry");
-    if(icCountry) icCountry.setAttribute("title", L().fz_icon_country || icCountry.getAttribute("title") || "");
-
-    const icPoll = document.getElementById("fzIconPoll");
-    if(icPoll) icPoll.setAttribute("title", L().fz_icon_poll || icPoll.getAttribute("title") || "");
-  }catch(e){}
 }
 
 async function setLanguage(newLang){
@@ -5466,12 +5376,8 @@ applyCompactMode();
   // reload menu in the chosen language
   await loadMenu();
 
-  // show a bot notice (feature preserved)
-  addBubble("assistant", L().lang_set + "\n\n" + stripHtml(L().helper));
-  history.push({role:"assistant", content: L().lang_set});
-  // Update welcome bubble (don’t stack multiples on language toggles)
-  ensureWelcomeBubble();
-
+  // Keep chat clean: update the single welcome message in-place (no stacking)
+  syncWelcomeMessage();
 }
 
 document.querySelectorAll(".langbtn[data-lang]").forEach(btn => {
@@ -6807,7 +6713,11 @@ if (teamSearchEl){
 function clearConversation(){
   history.length = 0;
   chatEl.innerHTML = "";
-  ensureWelcomeBubble();
+  history.length = 0;
+  // Create the single welcome message
+  welcomeHistoryIndex = history.length;
+  syncWelcomeMessage();
+  history.push({role:"assistant", content: L().welcome});
 msgEl.value = "";
   msgEl.style.height = "44px";
   msgEl.focus();
@@ -6831,8 +6741,10 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
   initScheduleTabs();
   await loadMenu();
 
-  // Welcome message (feature preserved)
-  ensureWelcomeBubble();
+  // Welcome message (single, language-aware)
+  welcomeHistoryIndex = history.length;
+  syncWelcomeMessage();
+  history.push({role:"assistant", content: L().welcome});
 // Ensure focus
   msgEl.focus();
 })();
