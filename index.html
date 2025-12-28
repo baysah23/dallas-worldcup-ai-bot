@@ -2920,15 +2920,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 
   /* Default: show Chat section */
     /* Home: show Home panel only (chat lives on Chat tab) */
-  body[data-msec="home"] #luxHomeShell{ display:block !important; }
-  body[data-msec="home"] #homeCard{ display:none !important; }
-  
-  body[data-msec="chat"] #luxHomeShell,
-  body[data-msec="menu"] #luxHomeShell,
-  body[data-msec="fanzone"] #luxHomeShell,
-  body[data-msec="extras"] #luxHomeShell,
-  body[data-msec="schedule"] #luxHomeShell{ display:none !important; }
-body[data-msec="home"] .chatcard,
+  body[data-msec="home"] .chatcard,
   body[data-msec="home"] .menucard,
   body[data-msec="home"] #fanZoneLeft,
   body[data-msec="home"] #fanZoneRight,
@@ -4594,9 +4586,130 @@ body[data-msec="schedule"] #scheduleCard{
   padding-top: 10px;
 }
 
+
+/* =========================================================
+   LUX HOME STYLES (Home replacement)
+   ========================================================= */
+#luxHomeShell{ display:none; margin:0 0 14px 0; }
+body[data-msec="home"] #luxHomeShell{ display:block; }
+
+#luxHomeShell .luxHero{
+  position:relative;
+  border-radius:18px;
+  overflow:hidden;
+  min-height: 520px;
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow:0 22px 70px rgba(0,0,0,.45);
+  isolation:isolate;
+}
+#luxHomeShell .luxHero::before{
+  content:"";
+  position:absolute; inset:-60px;
+  background:
+    radial-gradient(900px 460px at 50% 24%, rgba(255,255,255,.11), transparent 58%),
+    radial-gradient(820px 420px at 18% 18%, rgba(31,111,235,.20), transparent 62%),
+    radial-gradient(820px 420px at 86% 14%, rgba(255,215,110,.18), transparent 64%),
+    radial-gradient(900px 500px at 50% 88%, rgba(46,160,67,.12), transparent 66%),
+    linear-gradient(140deg, rgba(9,18,40,.95), rgba(6,12,26,.95));
+  transform: scale(1.03);
+  filter: saturate(1.18) contrast(1.07);
+}
+#luxHomeShell .luxHero::after{
+  content:"";
+  position:absolute; inset:0;
+  background:
+    radial-gradient(800px 520px at 50% 18%, rgba(0,0,0,.0), rgba(0,0,0,.60) 74%),
+    linear-gradient(180deg, rgba(0,0,0,.18), rgba(0,0,0,.62));
+}
+#luxHomeShell .luxOverlay{
+  position:absolute; inset:0;
+  z-index:2;
+  padding: 18px 16px 16px 16px;
+  display:flex;
+  flex-direction:column;
+  justify-content:flex-end;
+  gap: 12px;
+}
+#luxHomeShell .luxKicker{
+  display:inline-flex; align-items:center; gap:10px;
+  font-size: 12px; letter-spacing:.22em; text-transform: uppercase;
+  opacity: .92;
+}
+#luxHomeShell .luxKicker .dot{
+  width:10px; height:10px; border-radius:999px;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.95), rgba(255,215,110,.90), rgba(255,215,110,.18));
+  box-shadow: 0 0 22px rgba(255,215,110,.45);
+}
+#luxHomeShell .luxTitle{
+  margin:0;
+  font-size: clamp(30px, 4.6vw, 46px);
+  line-height: 1.02;
+  letter-spacing: .02em;
+}
+#luxHomeShell .luxSub{
+  margin:0;
+  opacity: .90;
+  font-size: 14px;
+  max-width: 58ch;
+}
+#luxHomeShell .luxCtas{ display:flex; flex-wrap:wrap; gap:10px; margin-top: 2px; }
+#luxHomeShell .luxBtn{
+  appearance:none;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  color: inherit;
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-weight: 800;
+  letter-spacing: .02em;
+  cursor:pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+#luxHomeShell .luxBtn.primary{
+  border-color: rgba(255,215,110,.38);
+  background: linear-gradient(180deg, rgba(255,215,110,.24), rgba(255,215,110,.10));
+  box-shadow: 0 14px 40px rgba(255,215,110,.12);
+}
+#luxHomeShell .luxQuickGrid{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+#luxHomeShell .luxQuick{
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  padding: 12px;
+  min-height: 90px;
+  display:flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor:pointer;
+}
+#luxHomeShell .luxQuick .t{ font-weight: 900; letter-spacing:.02em; font-size: 13px; }
+#luxHomeShell .luxQuick .s{ opacity:.85; font-size: 12px; }
+
+@media (min-width: 951px){
+  #luxHomeShell .luxQuickGrid{ grid-template-columns: repeat(4, minmax(0,1fr)); }
+  #luxHomeShell .luxOverlay{ padding: 22px 22px 18px 22px; }
+  #luxHomeShell .luxHero{ min-height: 420px; }
+}
+/* =========================================================
+   END LUX HOME STYLES
+   ========================================================= */
+
+
+/* ===== LUX HOME FINAL OVERRIDE (wins last) ===== */
+body[data-msec="home"] #luxHomeShell{ display:block !important; }
+body[data-msec="home"] #homeCard,
+body[data-msec="home"] .homecard{ display:none !important; }
+/* ============================================= */
+
 </style>
 </head>
-<body data-lux="on">
+<body data-msec="home" data-lux="on">
 <div class="wrap">
 <header>
 <div class="toprow">
@@ -4698,6 +4811,49 @@ body[data-msec="schedule"] #scheduleCard{
 
 <div class="grid"><div aria-label="World Cup 2026 hero banner" class="hero" id="heroBanner">
 <div aria-hidden="true" class="heroSlides" id="heroSlides"></div>
+
+
+<!-- =========================
+     LUX HOME SHELL (Home replacement)
+     ========================= -->
+<div id="luxHomeShell" aria-label="Luxury Home">
+  <div class="luxHero" role="region" aria-label="World Cup Concierge Luxury Home">
+    <div class="luxOverlay">
+      <div class="luxKicker"><span class="dot" aria-hidden="true"></span><span>FIFA WORLD CUP 2026</span></div>
+      <h1 class="luxTitle">World Cup Concierge</h1>
+      <p class="luxSub">Reserve tables, VIP experiences, and stay on top of live schedules — in any language.</p>
+      <div class="luxCtas" role="group" aria-label="Primary actions">
+        <button class="luxBtn primary" type="button" onclick="try{ window.setSection && window.setSection('vip'); }catch(e){}">Reserve</button>
+        <button class="luxBtn" type="button" onclick="try{ window.setSection && window.setSection('schedule'); }catch(e){}">Schedule</button>
+        <button class="luxBtn" type="button" onclick="try{ window.setSection && window.setSection('chat'); }catch(e){}">Concierge Chat</button>
+        <button class="luxBtn" type="button" onclick="try{ window.setSection && window.setSection('menu'); }catch(e){}">Menu</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="luxQuickGrid" aria-label="Quick access">
+    <div class="luxQuick" role="button" tabindex="0" onclick="try{ window.setSection && window.setSection('schedule'); }catch(e){}">
+      <div class="t">Live Fixtures</div>
+      <div class="s">Today • Groups • Knockout</div>
+    </div>
+    <div class="luxQuick" role="button" tabindex="0" onclick="try{ window.setSection && window.setSection('vip'); }catch(e){}">
+      <div class="t">VIP Fastlane</div>
+      <div class="s">Tables • Lounges • Hosts</div>
+    </div>
+    <div class="luxQuick" role="button" tabindex="0" onclick="try{ window.setSection && window.setSection('fanzone'); }catch(e){}">
+      <div class="t">Fan Zone</div>
+      <div class="s">Watch parties • Maps</div>
+    </div>
+    <div class="luxQuick" role="button" tabindex="0" onclick="try{ window.setSection && window.setSection('chat'); }catch(e){}">
+      <div class="t">4-Language Chat</div>
+      <div class="s">EN • ES • FR • PT</div>
+    </div>
+  </div>
+</div>
+<!-- =========================
+     END LUX HOME
+     ========================= -->
+
 <div aria-hidden="true" class="heroFX">
 <div class="heroSmoke">
 <div aria-hidden="true" class="hero-flags">
@@ -4740,33 +4896,7 @@ body[data-msec="schedule"] #scheduleCard{
 </div>
 
 <!-- Home (mobile-only panel): premium onboarding + global World Cup snapshot -->
-
-<!-- =========================================================
-     LUX HOME SHELL (replaces Home)
-     ========================================================= -->
-<div id="luxHomeShell" aria-label="Luxury Home">
-  <div class="luxHero" role="region" aria-label="World Cup Concierge Luxury Home">
-    <div class="luxOverlay">
-      <div class="luxKicker"><span class="dot" aria-hidden="true"></span><span>FIFA WORLD CUP 2026</span></div>
-      <h1 class="luxTitle">World Cup Concierge</h1>
-      <p class="luxSub">Reserve tables, VIP experiences, and stay on top of live schedules — in any language.</p>
-      <div class="luxCtas" role="group" aria-label="Primary actions">
-        <button class="luxBtn primary" type="button" onclick="try{ window.setSection && window.setSection('vip'); }catch(e){}">Reserve</button>
-        <button class="luxBtn" type="button" onclick="try{ window.setSection && window.setSection('schedule'); }catch(e){}">Schedule</button>
-        <button class="luxBtn" type="button" onclick="try{ window.setSection && window.setSection('chat'); }catch(e){}">Concierge Chat</button>
-        <button class="luxBtn" type="button" onclick="try{ window.setSection && window.setSection('menu'); }catch(e){}">Menu</button>
-      </div>
-    </div>
-  </div>
-</div>
-<!-- =========================================================
-     END LUX HOME
-     ========================================================= -->
-
-<div class="card homecard lux-reveal" id="homeCard" aria-label="World Cup Concierge">
-  <div class="cardhead">
-    <div class="title">World Cup Concierge</div>
-    <div class="actions">
+<div class="actions">
       <button class="btn btn-primary" id="homeReserveBtn" type="button">Reserve</button>
       <button class="btn" id="homeExploreBtn" type="button">Explore Matches</button>
     </div>
@@ -6938,6 +7068,8 @@ function __currentSection(){
 }
 
 function setSection(sec){
+  try{ document.body.dataset.msec = String(sec||"home"); }catch(e){}
+
     document.body.setAttribute('data-msec', sec);
 
     // Persist the last visited section on mobile (so reload doesn't feel random)
