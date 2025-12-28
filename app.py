@@ -23,6 +23,26 @@ from google.oauth2.service_account import Credentials
 app = Flask(__name__)
 
 
+
+# ============================================================
+# Step 12: Reduce “no change after deploy” issues (aggressive no-cache)
+# - Prevent stale index.html + JSON responses from being cached by browsers/CDNs.
+# ============================================================
+@app.after_request
+def add_no_cache_headers(resp):
+    try:
+        path = request.path or ""
+        # Always no-cache the app shell and JSON endpoints (schedule/menu/chat/version).
+        if path == "/" or path.endswith(".html") or path.endswith(".json") or path in ["/chat", "/version", "/health"]:
+            resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+            resp.headers["Pragma"] = "no-cache"
+            resp.headers["Expires"] = "0"
+    except Exception:
+        pass
+    return resp
+
+
+BUILD_ID = os.environ.get("BUILD_ID") or "STEP11-20251228T055534Z"
 # === PHASE 7: HEALTH + REQUEST ID (AUTO-INSERTED) ===
 @app.before_request
 def _lux_request_start():
@@ -63,7 +83,7 @@ def add_no_cache_headers(response):
         path = ""
 
     # Never cache: HTML shell + admin/chat actions
-    if path == "/" or path.startswith("/admin") or path.startswith("/chat"):
+    if path == "/" or path.startswith("/admin") or path.startswith("/chat") or path.startswith("/version"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -1104,6 +1124,7 @@ def version():
     try:
         mtime = os.path.getmtime("index.html")
         return jsonify({
+            "build_id": BUILD_ID,
             "index_html_last_modified_epoch": mtime,
             "index_html_last_modified": datetime.fromtimestamp(mtime).isoformat(timespec="seconds"),
         })

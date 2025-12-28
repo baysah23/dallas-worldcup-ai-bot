@@ -5,8 +5,14 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="format-detection" content="telephone=no">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0"/>
+<meta http-equiv="Pragma" content="no-cache"/>
+<meta http-equiv="Expires" content="0"/>
+
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
 <title>World Cup 2026 Dallas Concierge</title>
+<meta name="build" content="STEP11-20251228T055534Z"/>
+<!-- BUILD: STEP11-20251228T055534Z -->
 <style>
     :root{
       --bg:#071022;
@@ -46,6 +52,14 @@
     }
     h1{margin:0; font-size:16px; font-weight:800; letter-spacing:.2px;}
     .sub{margin:6px 0 0; color:var(--muted); font-size:12px;}
+    .buildtag{
+      margin:6px 0 0;
+      color: rgba(185,199,238,.85);
+      font-size: 11px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      opacity: .92;
+    }
     .langbar{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
     .langbtn{
       border:1px solid var(--line);
@@ -569,8 +583,13 @@
 .hero::before{
   content:"";
   position:absolute; inset:-12px;
-  background-image: url("https://commons.wikimedia.org/wiki/Special:FilePath/Snapdragon%20Stadium%20interior-Night%20panorama%20view%202.jpg?width=2000");
-  background-size: cover;
+  background-image: none;
+  background:
+    radial-gradient(900px 420px at 40% 35%, rgba(255,255,255,.10), transparent 62%),
+    radial-gradient(820px 360px at 70% 70%, rgba(31,111,235,.16), transparent 66%),
+    radial-gradient(820px 360px at 20% 80%, rgba(46,160,67,.14), transparent 66%),
+    linear-gradient(135deg, rgba(0,0,0,.55), rgba(0,0,0,.15));
+background-size: cover;
   background-position: center;
   opacity: .38;
   filter: saturate(1.22) contrast(1.10);
@@ -2878,8 +2897,6 @@ body.kiosk-mode *::-webkit-scrollbar{
   .homeMetaRow span{ color: var(--muted); }
   .homeActions{ display:flex; gap:8px; margin-top:10px; }
   .homeActions .btn{ flex:1 1 auto; }
-  .homeLangHint{ margin-top:8px; font-size:12px; color: var(--muted); }
-  .homeLangHint b{ color: rgba(255,255,255,.92); font-weight:800; }
 
   /* Slightly tighter cardhead on home for “luxury” */
   #homeCard .cardhead{ align-items:center; gap:10px; }
@@ -4646,6 +4663,33 @@ body[data-msec="schedule"] #scheduleCard{
   padding-top: 10px;
 }
 
+
+/* ============================================================
+   Step 12: Build badge + cache-bust helper (debug)
+   ============================================================ */
+#buildBadge{
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  z-index: 9999;
+  font-size: 12px;
+  line-height: 1;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(0,0,0,.55);
+  color: rgba(255,255,255,.92);
+  border: 1px solid rgba(255,255,255,.18);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  cursor: pointer;
+  user-select: none;
+}
+#buildBadge b{ font-weight: 700; }
+#buildBadge .muted{ opacity: .72; }
+@media (max-width: 520px){
+  #buildBadge{ right: 8px; bottom: 8px; font-size: 11px; padding: 7px 9px; }
+}
+
 </style>
 </head>
 <body data-lux="on">
@@ -4663,7 +4707,8 @@ body[data-msec="schedule"] #scheduleCard{
 <div class="langbtn" data-lang="es">Español</div>
 <div class="langbtn" data-lang="pt">Português</div>
 <div class="langbtn" data-lang="fr">Français</div></div>
-</div>
+
+<div class="pill" id="buildTag" title="Deployed build/version">Build: STEP11-20251228T055534Z</div></div>
 </header>
 <!-- =======================
      FAN ZONE (UI-only) — SIDE PANELS
@@ -4712,7 +4757,7 @@ body[data-msec="schedule"] #scheduleCard{
       <div style="border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:10px; background: rgba(0,0,0,.10);">
         <div id="drinkName" style="font-weight:900;">Country-themed drink</div>
         <div id="drinkDesc" class="fz-muted" style="margin-top:4px;"></div>
-      </div></div>
+<div class="buildtag" id="buildTagRail" title="Deployed build timestamp">Build: STEP11-20251228T055534Z</div></div></div>
 </div>
 <div class="fz-card lux-reveal" id="qrCard" style="display:none; margin-top:10px;">
 <h3>📱 QR poster</h3>
@@ -4804,7 +4849,7 @@ body[data-msec="schedule"] #scheduleCard{
   <div class="homeGrid">
     <div class="homeTile homeTile--hero" id="homeIntro">
       <div class="homeKicker">WORLD CUP CONCIERGE</div>
-      <div class="homeHeadline">Reservations first — with a 4‑language concierge chat.</div>
+      <div class="homeHeadline">Reservations first. Matches everywhere.</div>
       <div class="homeSub">Book a table in seconds, then browse the full World Cup schedule—Dallas and every host city—without losing your place.</div>
 
       <div class="homeSteps" aria-label="How it works">
@@ -4877,10 +4922,9 @@ body[data-msec="schedule"] #scheduleCard{
         <div class="homeMetaRow"><span>Supporting</span><b id="homeSupport">—</b></div>
       </div>
       <div class="homeActions">
-        <button class="btn" id="homeGoChat" type="button">Chat Concierge</button>
+        <button class="btn" id="homeGoChat" type="button">Open Concierge</button>
         <button class="btn" id="homeGoFan" type="button">Pick supporter</button>
       </div>
-      <div class="homeLangHint" aria-label="Concierge languages">Speaks <b>EN</b> <b>ES</b> <b>PT</b> <b>FR</b> — just type in your language.</div>
       <div class="homeNote">Most fans start here: pick a country, then tap “Explore Matches” for the full World Cup schedule.</div>
     
     <div class="homeTile" id="homeReserveTile" aria-label="Reservations">
@@ -4932,7 +4976,7 @@ body[data-msec="schedule"] #scheduleCard{
 <!-- HERO: Cinematic rotating banner (UI-only; no backend impact) -->
 <div id="chat"></div>
 <div class="composer">
-<textarea id="msg" placeholder="Ask the Concierge… (EN / ES / PT / FR)  •  Try: reservation"></textarea>
+<textarea id="msg" placeholder="Type here..."></textarea>
 <button id="sendBtn">Send</button>
 <button class="secondary" id="clearBtn">Clear</button></div>
 <div class="hint" id="helperHint"></div>
@@ -4995,6 +5039,21 @@ body[data-msec="schedule"] #scheduleCard{
 </nav>
 
 
+<script>
+/* STEP10: build + cache busting so you can confirm Render is serving the latest file. */
+const __BUILD_ID__ = "STEP11-20251228T055534Z";
+function cacheBust(url){
+  try {
+    const u = new URL(url, window.location.origin);
+    u.searchParams.set("v", __BUILD_ID__);
+    u.searchParams.set("ts", String(Date.now()));
+    return u.pathname + "?" + u.searchParams.toString();
+  } catch(e) {
+    const sep = url.includes("?") ? "&" : "?";
+    return url + sep + "v=" + encodeURIComponent(__BUILD_ID__) + "&ts=" + Date.now();
+  }
+}
+</script>
 <script>
 /**
  * This frontend matches your current app.py endpoints:
@@ -5723,7 +5782,7 @@ function initScheduleTabs(){
 
 
 async function loadMenu(){
-  const res = await fetch("/menu.json?lang=" + encodeURIComponent(lang), {cache:"no-store"});
+  const res = await fetch(cacheBust("/menu.json?lang=" + encodeURIComponent(lang), {cache:"no-store"});
   const data = await res.json();
   // app.py returns { lang, menu: {title, items:[]}}
   menuData = data.menu;
@@ -7667,7 +7726,6 @@ function setSection(sec){
   }
 })();
 </script>
-</script>
 <script>
 /* =======================
    FAN ZONE RAIL BEHAVIOR (UI-only)
@@ -8476,7 +8534,7 @@ function apply(){
   mo.observe(document.documentElement, { childList:true, subtree:true });
 
   // Tiny press feedback on primary interactive elements (CSS handles most; this is a fallback for custom controls)
-  document.addEventListener('pointerdown', (e)=>{
+document.addEventListener('pointerdown', (e)=>{
     const el = e.target && e.target.closest ? e.target.closest('.mnav-btn, button, .chip, .pill, .seg button, .btn') : null;
     if(!el) return;
     el.classList.add('is-pressed');
@@ -8484,6 +8542,68 @@ function apply(){
   }, {passive:true});
 })();
 
+</script>
+
+
+<div id="buildBadge" style="position:fixed;right:10px;bottom:10px;z-index:9999;
+background:rgba(15,27,51,.72);border:1px solid rgba(255,255,255,.18);
+backdrop
+<div id="buildBadge" title="Tap to hard-refresh this page">
+  <b>Build</b> <span class="muted" id="buildStamp">loading…</span>
+</div>
+<script>
+(function(){
+  const stampEl = document.getElementById('buildStamp');
+  const badge = document.getElementById('buildBadge');
+  function setStamp(txt){ if(stampEl) stampEl.textContent = txt; }
+  async function load(){
+    try{
+      const res = await fetch('/version?ts=' + Date.now(), { cache: 'no-store' });
+      const j = await res.json();
+      if (j && (j.index_html_last_modified || j.index_html_last_modified_epoch)){
+        setStamp(j.index_html_last_modified || ('' + j.index_html_last_modified_epoch));
+      } else if (j && j.error){
+        setStamp('error');
+      } else {
+        setStamp('unknown');
+      }
+    }catch(e){
+      setStamp('offline');
+    }
+  }
+  if (badge){
+    badge.addEventListener('click', function(){
+      // force a full reload with a cache-busting query param
+      const url = new URL(window.location.href);
+      url.searchParams.set('v', String(Date.now()));
+      window.location.replace(url.toString());
+    }, { passive: true });
+  }
+  load();
+})();
+</script>
+
+-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+color:rgba(234,240,255,.92);font:11px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial;
+padding:8px 10px;border-radius:999px;letter-spacing:.08em;text-transform:uppercase;">
+Build: <span id="buildBadgeText">STEP11-20251228T055534Z</span>
+</div>
+
+
+<script>
+/* STEP10_BUILD_SYNC: show the server's index.html mtime to confirm deploy. */
+(function(){
+  const el = document.getElementById("buildBadgeText");
+  if(!el) return;
+  fetch(cacheBust("/version"))
+    .then(r => r.ok ? r.json() : null)
+    .then(j => {
+      if(!j) return;
+      const m = j.index_html_last_modified || "";
+      el.textContent = (__BUILD_ID__ + (m ? " • " + m : ""));
+    })
+    .catch(()=>{});
+})();
 </script>
 
 </body>
