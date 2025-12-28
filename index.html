@@ -4590,6 +4590,28 @@ body[data-msec="schedule"] #scheduleCard{
 </style>
 </head>
 <body data-lux="on">
+
+<!-- =========================
+     LUXURY HOME SHELL (PIXEL-PERFECT, ISOLATED)
+     ========================= -->
+<div id="luxuryHomeShell" hidden aria-label="World Cup Concierge Luxury Home">
+  <div class="luxHomeFS" aria-hidden="true"></div>
+
+  <!-- Hotspots (invisible) -->
+  <button class="luxHotspot hs-reserve" type="button" data-go="chat" aria-label="Reserve / Concierge"></button>
+  <button class="luxHotspot hs-menu" type="button" data-go="menu" aria-label="Menu"></button>
+  <button class="luxHotspot hs-vip" type="button" data-go="vip" aria-label="VIP Access"></button>
+  <button class="luxHotspot hs-infoBang" type="button" data-go="extras" aria-label="Info"></button>
+  <button class="luxHotspot hs-infoI" type="button" data-go="extras" aria-label="Information"></button>
+
+  <!-- Bottom nav hotspots -->
+  <button class="luxHotspot hs-nav-home" type="button" data-go="home" aria-label="Home"></button>
+  <button class="luxHotspot hs-nav-schedule" type="button" data-go="schedule" aria-label="Schedule"></button>
+  <button class="luxHotspot hs-nav-fanzone" type="button" data-go="fanzone" aria-label="Fan Zone"></button>
+  <button class="luxHotspot hs-nav-menu" type="button" data-go="menu" aria-label="Menu nav"></button>
+  <button class="luxHotspot hs-nav-vip" type="button" data-go="vip" aria-label="VIP nav"></button>
+</div>
+
 <div class="wrap">
 <header>
 <div class="toprow">
@@ -8286,6 +8308,97 @@ function apply(){
   }, {passive:true});
 })();
 
+</script>
+
+
+<script>
+/* Boot Home state once (so shell + nav state are consistent) */
+(function(){
+  function boot(){
+    try{
+      // If user hasn't chosen a section yet, activate Home explicitly
+      var cur = document.body.getAttribute('data-msec');
+      var persisted = null;
+      try{ persisted = localStorage.getItem('wc_mobile_section'); }catch(_e){}
+      if(!cur && !persisted && typeof window.setSection === 'function'){
+        window.setSection('home');
+      }else if(!cur && !persisted){
+        document.body.setAttribute('data-msec','home');
+      }
+    }catch(e){}
+  }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
+})();
+</script>
+
+
+<script>
+/* Luxury Home Shell controller (pixel-perfect, isolated) */
+(function(){
+  function persisted(){
+    try{ return localStorage.getItem('wc_mobile_section'); }catch(e){ return null; }
+  }
+  function shouldShow(){
+    var cur = document.body.getAttribute('data-msec');
+    var p = persisted();
+    return (cur === 'home') || (!cur && !p);
+  }
+  function sync(){
+    var shell = document.getElementById('luxuryHomeShell');
+    if(!shell) return;
+    var on = shouldShow();
+    shell.hidden = !on;
+    document.body.classList.toggle('lux-shell-on', on);
+  }
+
+  // Initial + attribute observer
+  function start(){
+    sync();
+    try{
+      new MutationObserver(sync).observe(document.body, {attributes:true, attributeFilter:['data-msec']});
+    }catch(e){}
+    // Safety timer for late scripts
+    var t0 = Date.now();
+    (function tick(){
+      sync();
+      if(Date.now() - t0 < 6000) setTimeout(tick, 250);
+    })();
+
+    // Click routing
+    var shell = document.getElementById('luxuryHomeShell');
+    if(shell){
+      shell.addEventListener('click', function(e){
+        var b = e.target.closest('button[data-go]');
+        if(!b) return;
+        var sec = b.getAttribute('data-go');
+        try{
+          if(typeof window.setSection === 'function'){
+            window.setSection(sec);
+          }else{
+            document.body.setAttribute('data-msec', sec);
+          }
+        }catch(_e){}
+        // keep home explicit so shell stays up
+        if(sec === 'home'){
+          try{ document.body.setAttribute('data-msec','home'); }catch(_e){}
+        }
+        sync();
+      });
+    }
+
+    // First-load boot to home if nothing is set
+    try{
+      if(!document.body.getAttribute('data-msec') && !persisted()){
+        document.body.setAttribute('data-msec','home');
+      }
+    }catch(e){}
+    sync();
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+})();
 </script>
 
 </body>
