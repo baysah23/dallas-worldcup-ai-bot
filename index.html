@@ -8344,23 +8344,52 @@ function apply(){
 </script>
 
 <script>
-/* Luxury Home Shell (pixel-perfect) wiring */
+/* Luxury Home Shell (pixel-perfect) wiring — robust (observer + timer) */
 (function(){
-  function sync(){
+  function showShell(){
     var shell = document.getElementById('luxuryHomeShell');
     if(!shell) return;
-    shell.hidden = (document.body.getAttribute('data-msec') !== 'home');
+    shell.hidden = false;
+    document.body.classList.add('lux-shell-on');
   }
-  // hook into existing setSection without changing its behavior
-  var _set = window.setSection;
-  if(typeof _set === 'function'){
-    window.setSection = function(sec){
-      _set(sec);
-      sync();
-    };
+  function hideShell(){
+    var shell = document.getElementById('luxuryHomeShell');
+    if(!shell) return;
+    shell.hidden = true;
+    document.body.classList.remove('lux-shell-on');
   }
-  document.addEventListener('DOMContentLoaded', function(){
+  function sync(){
+    try{
+      var cur = document.body.getAttribute('data-msec');
+      if(cur === 'home') showShell(); else hideShell();
+    }catch(e){}
+  }
+
+  // 1) Run immediately + on DOM ready
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", sync);
+  else sync();
+
+  // 2) Observe attribute changes (covers any internal navigation logic)
+  try{
+    var mo = new MutationObserver(function(muts){
+      for(var i=0;i<muts.length;i++){
+        if(muts[i].type === 'attributes' && muts[i].attributeName === 'data-msec'){
+          sync(); break;
+        }
+      }
+    });
+    mo.observe(document.body, { attributes:true });
+  }catch(e){}
+
+  // 3) Short safety timer (covers late scripts)
+  var t0 = Date.now();
+  (function tick(){
     sync();
+    if(Date.now() - t0 < 8000) setTimeout(tick, 250);
+  })();
+
+  // 4) Route clicks on shell hotspots
+  function wire(){
     var shell = document.getElementById('luxuryHomeShell');
     if(!shell) return;
     shell.addEventListener('click', function(e){
@@ -8368,8 +8397,15 @@ function apply(){
       if(!b) return;
       var sec = b.getAttribute('data-go');
       try{ window.setSection && window.setSection(sec); }catch(_e){}
+      // If home is remapped internally, enforce it
+      if(sec === 'home'){
+        try{ document.body.setAttribute('data-msec','home'); }catch(_e){}
+        sync();
+      }
     });
-  });
+  }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", wire);
+  else wire();
 })();
 </script>
 
