@@ -2692,7 +2692,7 @@ body.kiosk-mode *::-webkit-scrollbar{
    MOBILE HOME PANEL (premium, non-redundant)
    ========================= */
 @media (max-width: 950px){
-  #homeCard{ display:none; } /* shown only when Home tab is active */
+  #homeCard{ display:block; } /* always visible on mobile */
   .homeGrid{ display:flex; flex-direction:column; gap:12px; }
   .homeTile{
     border:1px solid rgba(255,255,255,.10);
@@ -2745,10 +2745,7 @@ body.kiosk-mode *::-webkit-scrollbar{
   .homeStat .k{ display:block; font-size:10px; color: var(--muted); letter-spacing:.16em; text-transform:uppercase; font-weight:900; }
   .homeStat b{ display:block; margin-top:6px; font-size:13px; line-height:1.12; font-weight:950; letter-spacing:.01em; }
   .homeStat small{ display:block; margin-top:4px; font-size:11px; color: var(--muted); line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  @media (max-width: 420px){
-    .homeStats{ grid-template-columns: 1fr; }
-    .homeStat small{ white-space: normal; }
-  }
+  
   .homeLinkBtn{
     border:1px solid rgba(255,255,255,.14);
     background: rgba(255,255,255,.06);
@@ -3047,50 +3044,8 @@ body.kiosk-mode *::-webkit-scrollbar{
 
   /* Default: show Chat section */
     /* Home: show Home panel only (chat lives on Chat tab) */
-  body[data-msec="home"] #homeCard{ display:block !important; }
-  body[data-msec="home"] .chatcard,
-  body[data-msec="home"] .menucard,
-  body[data-msec="home"] #fanZoneLeft,
-  body[data-msec="home"] #fanZoneRight,
-  body[data-msec="home"] #scheduleCard,
-  body[data-msec="home"] #vipHoldRail{ display:none !important; }
-
-  body[data-msec="chat"] .chatcard{ display:block !important; }
-  body[data-msec="chat"] .menucard,
-  body[data-msec="chat"] #fanZoneLeft,
-  body[data-msec="chat"] #fanZoneRight,
-  body[data-msec="chat"] #scheduleCard,
-  body[data-msec="chat"] #vipHoldRail{ display:none !important; }
-
-  body[data-msec="menu"] .menucard{ display:block !important; }
-  body[data-msec="menu"] .chatcard,
-  body[data-msec="menu"] #fanZoneLeft,
-  body[data-msec="menu"] #fanZoneRight,
-  body[data-msec="menu"] #scheduleCard,
-  body[data-msec="menu"] #vipHoldRail{ display:none !important; }
-
-  body[data-msec="fanzone"] #fanZoneLeft{ display:block !important; }
-  body[data-msec="fanzone"] .chatcard,
-  body[data-msec="fanzone"] .menucard,
-  body[data-msec="fanzone"] #fanZoneRight,
-  body[data-msec="fanzone"] #scheduleCard{ display:none !important; }
-
-  body[data-msec="extras"] #fanZoneRight{ display:block !important; }
-  body[data-msec="extras"] .chatcard,
-  body[data-msec="extras"] .menucard,
-  body[data-msec="extras"] #fanZoneLeft,
-  body[data-msec="extras"] #scheduleCard{ display:none !important; }
-
-  body[data-msec="schedule"] #scheduleCard{ display:block !important; }
-  body[data-msec="schedule"] .chatcard,
-  body[data-msec="schedule"] .menucard,
-  body[data-msec="schedule"] #fanZoneLeft,
-  body[data-msec="schedule"] #fanZoneRight{ display:none !important; }
-
   /* VIP shown alongside Fan Zone (if you want it there) */
-  body[data-msec="fanzone"] #vipHoldRail{ display:block !important; }
-  body[data-msec="extras"] #vipHoldRail{ display:none !important; }
-}
+  }
 
 
 /* =========================
@@ -3140,14 +3095,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 
 @media (max-width: 950px){
-  body[data-msec="vip"] #vipHoldRail{ display:block !important; }
-  body[data-msec="vip"] .chatcard,
-  body[data-msec="vip"] .menucard,
-  body[data-msec="vip"] #fanZoneLeft,
-  body[data-msec="vip"] #fanZoneRight,
-  body[data-msec="vip"] #scheduleCard{ display:none !important; }
-  body[data-msec="fanzone"] #vipHoldRail{ display:block !important; }
-}
+  }
 
 
 
@@ -3305,41 +3253,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 */
 @media (max-width: 950px){
   /* default: chat */
-  body[data-msec="chat"] .chatcard{ display:block !important; }
-  body[data-msec="chat"] .menucard,
-  body[data-msec="chat"] #scheduleCard,
-  body[data-msec="chat"] #fanZoneLeft,
-  body[data-msec="chat"] #fanZoneRight,
-  body[data-msec="chat"] #vipHoldRail{ display:none !important; }
-
-  body[data-msec="menu"] .menucard{ display:block !important; }
-  body[data-msec="menu"] .chatcard,
-  body[data-msec="menu"] #scheduleCard,
-  body[data-msec="menu"] #fanZoneLeft,
-  body[data-msec="menu"] #fanZoneRight,
-  body[data-msec="menu"] #vipHoldRail{ display:none !important; }
-
-  body[data-msec="schedule"] #scheduleCard{ display:block !important; }
-  body[data-msec="schedule"] .chatcard,
-  body[data-msec="schedule"] .menucard,
-  body[data-msec="schedule"] #fanZoneLeft,
-  body[data-msec="schedule"] #fanZoneRight,
-  body[data-msec="schedule"] #vipHoldRail{ display:none !important; }
-
-  body[data-msec="fanzone"] #fanZoneLeft,
-  body[data-msec="fanzone"] #fanZoneRight{ display:block !important; }
-  body[data-msec="fanzone"] .chatcard,
-  body[data-msec="fanzone"] .menucard,
-  body[data-msec="fanzone"] #scheduleCard,
-  body[data-msec="fanzone"] #vipHoldRail{ display:none !important; }
-
-  body[data-msec="vip"] #vipHoldRail{ display:block !important; }
-  body[data-msec="vip"] .chatcard,
-  body[data-msec="vip"] .menucard,
-  body[data-msec="vip"] #scheduleCard,
-  body[data-msec="vip"] #fanZoneLeft,
-  body[data-msec="vip"] #fanZoneRight{ display:none !important; }
-}
+  }
 
 /* --- FIX: Mobile hero title/sub alignment + prevent overlap/truncation --- */
 @media (max-width: 520px){
@@ -4655,18 +4569,10 @@ body.kiosk-mode *::-webkit-scrollbar{
    ======================= */
 @media (max-width: 950px){
   /* When viewing Schedule on mobile, hide the left column wrapper entirely (it becomes empty) */
-  body[data-msec="schedule"] .leftcol{ display:none !important; }
-
   /* Tighten hero → schedule spacing */
-  body[data-msec="schedule"] .hero{ margin-bottom: 6px !important; }
-  body[data-msec="schedule"] .grid{ row-gap: 10px !important; }
-
   /* Make sure the schedule card sits directly under the hero */
-  body[data-msec="schedule"] #scheduleCard{ margin-top: 0 !important; }
-
   /* Small scroll offset so sticky header feels nicer */
-  body[data-msec="schedule"] #scheduleCard{ scroll-margin-top: 8px; }
-}
+  }
 /* =======================
    MOBILE SCHEDULE GAP FIX (v5 - definitive)
    Problem: Schedule tab hides the contents inside .leftcol, but .leftcol still participates
@@ -4674,32 +4580,9 @@ body.kiosk-mode *::-webkit-scrollbar{
    creating a large blank gap before #scheduleCard.
    Fix: remove .leftcol from layout in schedule mode, and make the grid auto-height (no 1fr stretch).
    ======================= */
-body[data-msec="schedule"] .leftcol{ display:none !important; }
-
-body[data-msec="schedule"] .grid{
-  grid-template-columns: 1fr !important;
-  grid-template-rows: auto auto !important; /* hero + schedule */
-  align-content: start !important;
-  align-items: start !important;
-  height: auto !important;
-}
-
-body[data-msec="schedule"] #scheduleCard{
-  display:block !important;
-  grid-column: 1 / -1 !important;
-  grid-row: 2 !important;
-  margin-top: 0 !important;
-}
-
 /* Mobile polish */
 @media (max-width: 950px){
-  body[data-msec="schedule"] .grid{
-    padding-top: 10px !important;
-    padding-bottom: 110px !important; /* room for bottom nav */
-    gap: 10px !important;
   }
-  body[data-msec="schedule"] .hero{ margin: 10px !important; margin-bottom: 6px !important; }
-}
 
 
 
@@ -8182,7 +8065,6 @@ function setSection(sec){
       document.body.removeAttribute("data-msec");
     }
     if(!isSmall()) return;
-    document.body.setAttribute("data-msec", sec || "chat");
     // button states
     const nav = document.getElementById("mnav");
     if(nav){
@@ -8726,50 +8608,38 @@ function apply(){
 })();
 
 
-/* === PHASE 4: Home CTA wiring (reservation-first) === */
+
+// === HOME BUTTONS (simple + safe): reservation-first ===
 (function(){
-  function goChatAndType(prefill){
+  const RES_WORD = { en:"reservation", es:"reserva", pt:"reserva", fr:"réservation" };
+  function lang(){ try{ return localStorage.getItem("lang") || "en"; }catch(e){ return "en"; } }
+  function goChat(prefill){
     try{
-      _setMobileSection("chat");
+      const chatCard = document.querySelector(".chatcard") || document.getElementById("chatCard") || document.getElementById("chat");
+      if(chatCard) chatCard.scrollIntoView({behavior:"smooth", block:"start"});
       const ta = document.getElementById("msg");
       if(ta){
-        if(prefill){
-          ta.value = prefill;
-        }
-        // focus + ensure composer visible
-        setTimeout(()=>{
-          ta.focus({preventScroll:true});
-          ta.scrollIntoView({block:"end", behavior:"smooth"});
-        }, 60);
+        if(prefill){ ta.value = prefill; }
+        setTimeout(()=>{ try{ ta.focus({preventScroll:true}); ta.scrollIntoView({behavior:"smooth", block:"end"}); }catch(e){} }, 120);
       }
     }catch(e){}
   }
-
+  function goSchedule(){
+    try{
+      const sc = document.getElementById("scheduleCard") || document.querySelector(".schedule");
+      if(sc) sc.scrollIntoView({behavior:"smooth", block:"start"});
+    }catch(e){}
+  }
   document.addEventListener("click", (ev)=>{
-    const t = ev.target;
-    if(!t) return;
-    const btn = t.closest && t.closest("#homeChatPreview, #homeChatBtn");
-    if(btn){
-      ev.preventDefault();
-      goChatAndType("");
-    }
-    const res = t.closest && t.closest("#homeReserveBtn");
-    if(res){
-      ev.preventDefault();
-      const phrase = (RES_WORD[currentLang] || "reservation");
-      goChatAndType(phrase);
-    }
-    const exp = t.closest && t.closest("#homeExploreBtn");
-    if(exp){
-      ev.preventDefault();
-      _setMobileSection("schedule");
-      setTimeout(()=>{ try{ document.getElementById("scheduleCard")?.scrollIntoView({block:"start", behavior:"smooth"});}catch(e){} }, 60);
-    }
+    const b = ev.target && ev.target.closest ? ev.target.closest("#homeReserveBtn,#homeExploreBtn,#homeChatPreview,#homeChatBtn") : null;
+    if(!b) return;
+    ev.preventDefault();
+    if(b.id==="homeExploreBtn"){ goSchedule(); return; }
+    if(b.id==="homeReserveBtn"){ goChat(RES_WORD[lang()]||"reservation"); return; }
+    goChat("");
   }, {passive:false});
-
-  // keep Home hint synced on first load
-  try{ _homeSyncHints(); }catch(e){}
 })();
+
 </script>
 
 </body>
