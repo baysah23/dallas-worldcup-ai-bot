@@ -2920,8 +2920,8 @@ body.kiosk-mode *::-webkit-scrollbar{
 
   /* Default: show Chat section */
     /* Home: show Home panel only (chat lives on Chat tab) */
-  body[data-msec="home"] #homeCard{ display:none !important; }
   body[data-msec="home"] #luxHomeShell{ display:block !important; }
+  body[data-msec="home"] #homeCard{ display:none !important; }
   body[data-msec="home"] .chatcard,
   body[data-msec="home"] .menucard,
   body[data-msec="home"] #fanZoneLeft,
@@ -2930,7 +2930,14 @@ body.kiosk-mode *::-webkit-scrollbar{
   body[data-msec="home"] #vipHoldRail{ display:none !important; }
 
   body[data-msec="chat"] .chatcard{ display:block !important; }
-  body[data-msec="chat"] .menucard,
+    body[data-msec="chat"] #luxHomeShell{ display:none !important; }
+
+  body[data-msec="menu"] #luxHomeShell,
+  body[data-msec="fanzone"] #luxHomeShell,
+  body[data-msec="extras"] #luxHomeShell,
+  body[data-msec="schedule"] #luxHomeShell{ display:none !important; }
+
+body[data-msec="chat"] .menucard,
   body[data-msec="chat"] #fanZoneLeft,
   body[data-msec="chat"] #fanZoneRight,
   body[data-msec="chat"] #scheduleCard,
@@ -4590,245 +4597,90 @@ body[data-msec="schedule"] #scheduleCard{
 
 
 /* =========================================================
-   STEP 4 — LUX HOME PIXEL (Home-only, safe)
+   STEP 3 FIX — TRUE LUX HOME REPLACEMENT (wins last)
+   - Kill legacy Home panel(s)
+   - Make Luxury Home the only Home surface
    ========================================================= */
+#homeCard, .homecard{ display:none !important; }
+#luxHomeShell{ display:block; }
 
-/* Hide legacy header/lang bar ONLY on Home (matches reference) */
-body[data-msec="home"] header,
-body[data-msec="home"] .langbar{ display:none !important; }
-
-/* Ensure Lux is the only Home surface */
-body[data-msec="home"] #luxHomeShell{ display:block !important; }
-body[data-msec="home"] #homeCard,
-body[data-msec="home"] .homecard,
-body[data-msec="home"] .hero{ display:none !important; }
-
-#luxHomeShell{ display:none; margin: 8px 0 14px 0; }
-#luxHomeShell .luxHero{
-  position: relative;
-  border-radius: 22px;
-  overflow: hidden;
-  min-height: calc(100svh - 140px);
-  border: 1px solid rgba(255,215,110,.22);
-  box-shadow: 0 24px 90px rgba(0,0,0,.58);
-  isolation: isolate;
-  background: #070b14;
-}
-@supports (height: 100dvh){
-  #luxHomeShell .luxHero{ min-height: calc(100dvh - 140px); }
-}
-#luxHomeShell .luxHero::before{
-  content:"";
-  position:absolute; inset:-90px;
-  background:
-    radial-gradient(520px 380px at 50% 16%, rgba(255,220,140,.26), transparent 62%),
-    radial-gradient(560px 420px at 50% 38%, rgba(255,215,110,.10), transparent 72%),
-    radial-gradient(920px 540px at 50% 78%, rgba(255,255,255,.06), transparent 70%),
-    radial-gradient(900px 540px at 20% 55%, rgba(255,215,110,.10), transparent 68%),
-    radial-gradient(900px 540px at 80% 55%, rgba(255,215,110,.10), transparent 68%),
-    linear-gradient(140deg, rgba(5,7,14,.96), rgba(4,6,12,.97));
-  filter: saturate(1.18) contrast(1.10);
-  transform: scale(1.03);
-}
-#luxHomeShell .luxHero::after{
-  content:"";
-  position:absolute; inset:0;
-  background:
-    radial-gradient(820px 520px at 50% 14%, rgba(0,0,0,.0), rgba(0,0,0,.74) 80%),
-    linear-gradient(180deg, rgba(0,0,0,.16), rgba(0,0,0,.70));
-}
-#luxHomeShell .luxOverlay{
-  position:absolute; inset:0;
-  z-index:2;
-  padding: 20px 18px 18px 18px;
-  display:flex;
-  flex-direction:column;
-  gap: 14px;
-  align-items: stretch;
-  justify-content: flex-end;
-  text-align: center;
-}
-
-/* Trophy glow (stand-in for image) */
-#luxHomeShell .luxTrophyGlow{
-  width: 150px;
-  height: 150px;
-  margin: 0 auto 6px auto;
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 50% 40%, rgba(255,240,190,.55), rgba(255,215,110,.26) 45%, rgba(255,215,110,.08) 64%, transparent 72%);
-  box-shadow:
-    0 0 36px rgba(255,215,110,.22),
-    0 0 90px rgba(255,215,110,.12);
-  opacity: .92;
-}
-
-#luxHomeShell .luxKicker{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap: 10px;
-  font-size: 12px;
-  letter-spacing: .24em;
-  text-transform: uppercase;
-  opacity: .92;
-}
-#luxHomeShell .luxKicker .dot{
-  width:10px; height:10px; border-radius:999px;
-  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.95), rgba(255,215,110,.92), rgba(255,215,110,.18));
-  box-shadow: 0 0 22px rgba(255,215,110,.45);
-}
-
-#luxHomeShell .luxTitleGold{
-  margin: 0;
-  font-family: ui-serif, Georgia, "Times New Roman", serif;
-  font-weight: 800;
-  letter-spacing: .10em;
-  text-transform: uppercase;
-  font-size: clamp(34px, 9vw, 56px);
-  line-height: 1.02;
-  color: rgba(255,230,170,.95);
-  text-shadow: 0 10px 34px rgba(0,0,0,.70);
-}
-#luxHomeShell .luxSubGold{
-  margin: 4px 0 0 0;
-  font-size: 14px;
-  opacity: .92;
-}
-#luxHomeShell .luxLangRow{
-  margin-top: 8px;
-  font-size: 12px;
-  letter-spacing: .28em;
-  opacity: .88;
-}
-
-/* Big CTA card */
-#luxHomeShell .luxCardCta{
-  display:flex;
-  align-items:center;
-  gap: 14px;
-  width: 100%;
-  border-radius: 18px;
-  padding: 14px 14px;
-  border: 1px solid rgba(255,215,110,.30);
-  background: rgba(0,0,0,.22);
-  box-shadow:
-    inset 0 0 0 1px rgba(255,255,255,.04),
-    0 18px 60px rgba(0,0,0,.55);
-  cursor:pointer;
-  text-align:left;
-}
-#luxHomeShell .luxCtaIcon{
-  width: 46px;
-  height: 46px;
-  border-radius: 16px;
-  display:grid;
-  place-items:center;
-  background: linear-gradient(180deg, rgba(255,215,110,.26), rgba(0,0,0,.15));
-  border: 1px solid rgba(255,215,110,.28);
-  box-shadow: 0 10px 32px rgba(255,215,110,.10);
-  font-size: 22px;
-  flex: 0 0 auto;
-}
-#luxHomeShell .luxCtaText{ display:block; }
-#luxHomeShell .luxCtaTitle{
-  display:block;
-  font-family: ui-serif, Georgia, "Times New Roman", serif;
-  font-weight: 800;
-  letter-spacing: .04em;
-  color: rgba(255,230,170,.98);
-  font-size: 18px;
-}
-#luxHomeShell .luxCtaSub{
-  display:block;
-  opacity: .90;
-  margin-top: 2px;
-  font-size: 13px;
-}
-#luxHomeShell .luxCtaLangs{
-  display:block;
-  margin-top: 6px;
-  font-size: 12px;
-  letter-spacing: .22em;
-  opacity: .86;
-}
-
-/* 2x2 tile grid */
-#luxHomeShell .luxTileGrid{
-  display:grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-#luxHomeShell .luxTileBtn{
-  border-radius: 18px;
-  padding: 14px;
-  min-height: 98px;
-  border: 1px solid rgba(255,215,110,.18);
-  background: rgba(0,0,0,.20);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.03);
-  display:flex;
-  flex-direction:column;
-  justify-content:space-between;
-  cursor:pointer;
-  text-align:left;
-}
-#luxHomeShell .luxTileIcon{
-  width: 46px;
-  height: 46px;
-  border-radius: 16px;
-  display:grid;
-  place-items:center;
-  background: rgba(255,215,110,.12);
-  border: 1px solid rgba(255,215,110,.18);
-  font-size: 22px;
-}
-#luxHomeShell .luxTileLabel{
-  font-weight: 900;
-  letter-spacing: .02em;
-  opacity: .95;
-}
-
-/* Home-only: mobile section system must NOT show the legacy homeCard */
-@media (max-width: 720px){
-  body[data-msec="home"] #homeCard{ display:none !important; }
+/* Mobile section model: only show Lux Home on Home tab */
+@media (max-width: 950px){
+  #luxHomeShell{ display:none; }
   body[data-msec="home"] #luxHomeShell{ display:block !important; }
 }
 /* ========================================================= */
 
 
 /* =========================================================
-   STEP 4C — REFERENCE BACKPLATE (embeds your reference image)
-   This makes Home look "exact" without needing external assets.
+   STEP 4D — PIXEL-PERFECT HOME (reference image + hotspots)
    ========================================================= */
-#luxHomeShell .luxHero::before{
-  background-image:
-    radial-gradient(560px 420px at 50% 16%, rgba(255,220,140,.22), transparent 62%),
-    radial-gradient(920px 620px at 50% 78%, rgba(255,255,255,.06), transparent 70%),
-    linear-gradient(180deg, rgba(0,0,0,.10), rgba(0,0,0,.72)),
-    url('/static/lux-bg.webp') /* cache-bust */;
-  background-size: cover;
-  background-position: 50% 10%;
-  background-repeat: no-repeat;
+
+/* Home-only: hide legacy top header/lang bar (non-destructive) */
+body[data-msec="home"] header,
+body[data-msec="home"] .langbar,
+body[data-msec="home"] .langPills,
+body[data-msec="home"] .filtersBar{ display:none !important; }
+
+/* Home surface: show only Lux; hide old home/hero panels */
+body[data-msec="home"] #homeCard,
+body[data-msec="home"] .homecard,
+body[data-msec="home"] .hero{ display:none !important; }
+body[data-msec="home"] #luxHomeShell{ display:block !important; }
+#luxHomeShell{ display:none; margin: 8px 0 14px 0; }
+
+/* The mock background */
+#luxHomeShell .luxHero.luxMock{
+  position: relative;
+  border-radius: 22px;
+  overflow: hidden;
+  min-height: calc(100svh - 140px);
+  border: 1px solid rgba(255,215,110,.22);
+  box-shadow: 0 24px 90px rgba(0,0,0,.58);
+  background: url('/static/lux-home-mock.webp') center 12% / cover no-repeat;
+  isolation: isolate;
+}
+@supports (height: 100dvh){
+  #luxHomeShell .luxHero.luxMock{ min-height: calc(100dvh - 140px); }
+}
+/* subtle glass gradient so buttons read */
+#luxHomeShell .luxHero.luxMock::after{
+  content:"";
+  position:absolute; inset:0;
+  background:
+    radial-gradient(900px 520px at 50% 14%, rgba(0,0,0,.00), rgba(0,0,0,.55) 78%),
+    linear-gradient(180deg, rgba(0,0,0,.08), rgba(0,0,0,.50));
+  pointer-events:none;
 }
 
-/* tighten + center like the reference */
-#luxHomeShell .luxOverlay{ padding: 18px 16px 16px 16px; }
-#luxHomeShell .luxTop{ padding-top: 0; }
-#luxHomeShell .luxTrophyGlow{ display:none !important; } /* we now have the real trophy */
-
-/* gold title spacing like the mock */
-#luxHomeShell .luxTitleGold{ margin-top: 10px; }
-#luxHomeShell .luxLangRow{ margin-top: 10px; }
-
-/* CTA card looks like a framed panel */
-#luxHomeShell .luxCardCta{
-  border-color: rgba(255,215,110,.40);
-  background: rgba(0,0,0,.34);
+/* Hotspots (invisible, but tappable) */
+#luxHomeShell .luxHotspot{
+  position:absolute;
+  z-index: 2;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 18px;
 }
-#luxHomeShell .luxTileBtn{
-  background: rgba(0,0,0,.32);
-  border-color: rgba(255,215,110,.26);
+#luxHomeShell .luxHotspot:focus-visible{
+  outline: 2px solid rgba(255,215,110,.65);
+  outline-offset: 3px;
 }
+
+/* Tuned to the reference crop proportions */
+#luxHomeShell .hsReserve{ left: 8%; top: 46%; width: 84%; height: 17%; }
+#luxHomeShell .hsMenu   { left: 8%; top: 68.5%; width: 40.5%; height: 13%; }
+#luxHomeShell .hsVip    { left: 51.5%; top: 68.5%; width: 40.5%; height: 13%; }
+#luxHomeShell .hsSchedule{ left: 8%; top: 83%; width: 40.5%; height: 12.5%; }
+#luxHomeShell .hsFan    { left: 51.5%; top: 83%; width: 40.5%; height: 12.5%; }
+
+/* Mobile section system safety */
+@media (max-width: 950px){
+  body[data-msec="home"] #luxHomeShell{ display:block !important; }
+  body[data-msec="home"] #homeCard{ display:none !important; }
+}
+
 /* ========================================================= */
 
 </style>
@@ -4852,53 +4704,25 @@ body[data-msec="home"] .hero{ display:none !important; }
 </header>
 
 
-<!-- =========================
-     LUX HOME (Step 4)
-     ========================= -->
 <div id="luxHomeShell" aria-label="Luxury Home">
-  <div class="luxHero" role="region" aria-label="World Cup Concierge Luxury Home">
-    <div class="luxOverlay">
-      <div class="luxTrophyGlow" aria-hidden="true"></div>
+  <div class="luxHero luxMock" role="region" aria-label="World Cup Concierge Luxury Home">
+    <!-- Pixel-perfect reference as background image + invisible hotspots -->
+    <button class="luxHotspot hsReserve" type="button" aria-label="Reserve / Concierge"
+      onclick="try{ window.setSection && window.setSection('chat'); }catch(e){}"></button>
 
-      <div class="luxKicker"><span class="dot" aria-hidden="true"></span><span>FIFA WORLD CUP 2026</span></div>
+    <button class="luxHotspot hsMenu" type="button" aria-label="Menu"
+      onclick="try{ window.setSection && window.setSection('menu'); }catch(e){}"></button>
 
-      <h1 class="luxTitleGold">WORLD CUP<br>CONCIERGE</h1>
-      <p class="luxSubGold">Reserve tables &amp; VIP experiences — just ask</p>
-      <div class="luxLangRow" aria-label="Languages">EN&nbsp;&nbsp;•&nbsp;&nbsp;ES&nbsp;&nbsp;•&nbsp;&nbsp;PT&nbsp;&nbsp;•&nbsp;&nbsp;FR</div>
+    <button class="luxHotspot hsVip" type="button" aria-label="VIP Access"
+      onclick="try{ window.setSection && window.setSection('vip'); }catch(e){}"></button>
 
-      <button class="luxCardCta" type="button" onclick="try{ window.setSection && window.setSection('chat'); }catch(e){}">
-        <span class="luxCtaIcon" aria-hidden="true">💬</span>
-        <span class="luxCtaText">
-          <span class="luxCtaTitle">Reserve / Concierge</span>
-          <span class="luxCtaSub">Talk to our concierge</span>
-          <span class="luxCtaLangs">EN • ES • PT • FR</span>
-        </span>
-      </button>
+    <button class="luxHotspot hsSchedule" type="button" aria-label="Schedule"
+      onclick="try{ window.setSection && window.setSection('schedule'); }catch(e){}"></button>
 
-      <div class="luxTileGrid" aria-label="Home tiles">
-        <button class="luxTileBtn" type="button" onclick="try{ window.setSection && window.setSection('menu'); }catch(e){}">
-          <span class="luxTileIcon" aria-hidden="true">🍽️</span>
-          <span class="luxTileLabel">Menu</span>
-        </button>
-        <button class="luxTileBtn" type="button" onclick="try{ window.setSection && window.setSection('vip'); }catch(e){}">
-          <span class="luxTileIcon" aria-hidden="true">⭐</span>
-          <span class="luxTileLabel">VIP Access</span>
-        </button>
-        <button class="luxTileBtn" type="button" onclick="try{ window.setSection && window.setSection('schedule'); }catch(e){}">
-          <span class="luxTileIcon" aria-hidden="true">📅</span>
-          <span class="luxTileLabel">Schedule</span>
-        </button>
-        <button class="luxTileBtn" type="button" onclick="try{ window.setSection && window.setSection('fanzone'); }catch(e){}">
-          <span class="luxTileIcon" aria-hidden="true">⚽</span>
-          <span class="luxTileLabel">Fan Zone</span>
-        </button>
-      </div>
-    </div>
+    <button class="luxHotspot hsFan" type="button" aria-label="Fan Zone"
+      onclick="try{ window.setSection && window.setSection('fanzone'); }catch(e){}"></button>
   </div>
 </div>
-<!-- =========================
-     END LUX HOME
-     ========================= -->
 
 <!-- =======================
      FAN ZONE (UI-only) — SIDE PANELS
@@ -8599,11 +8423,6 @@ function apply(){
     raf2(()=>el.classList.remove('is-pressed'));
   }, {passive:true});
 })();
-
-
-  // Step4: force Home on startup so Lux Home always renders first
-  try{ localStorage.removeItem('wc_mobile_section'); }catch(_e){}
-  try{ setTimeout(function(){ try{ window.setSection && window.setSection('home'); }catch(_e2){} }, 0); }catch(_e3){}
 
 </script>
 
