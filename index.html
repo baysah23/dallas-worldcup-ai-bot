@@ -4961,9 +4961,23 @@ body[data-msec="schedule"] #scheduleCard{
         <div class="homeLangHint">Chat + reservations in 4 languages.</div>
       </div>
 
-      <button class="homeChatPreview" id="homeChatPreview" type="button" aria-label="Start a reservation in chat">
-        💬 Start here: type <b>reservation</b> (or <b>reserva</b> / <b>réservation</b>)
-      </button>
+      <button class="homeChatPreview" id="homeChatPreview" type="button" aria-label="Open concierge chat">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+    <div style="display:flex; flex-direction:column; gap:3px; min-width:0;">
+      <div style="font-weight:950; letter-spacing:.02em;">💬 Concierge Chat</div>
+      <div class="homeMuted" id="homeChatHintLine">Talk in <b>English</b>, <b>Español</b>, <b>Português</b>, <b>Français</b>.</div>
+    </div>
+    <div style="flex:0 0 auto; font-weight:950; opacity:.95;">→</div>
+  </div>
+  <div style="margin-top:10px; border:1px solid rgba(255,255,255,.12); background:rgba(0,0,0,.18); border-radius:12px; padding:10px 12px; display:flex; align-items:center; gap:10px;">
+    <div style="width:9px;height:9px;border-radius:999px;background:rgba(31,111,235,.95); box-shadow:0 0 0 6px rgba(31,111,235,.12); flex:0 0 auto;"></div>
+    <div style="font-size:12px; color:rgba(234,240,255,.92); line-height:1.25; min-width:0;">
+      <span style="color:rgba(234,240,255,.75); font-weight:900; letter-spacing:.08em; text-transform:uppercase;">Try:</span>
+      <span id="homeTryPhrase" style="font-weight:950;"> reservation</span>
+      <span style="color:rgba(234,240,255,.72);"> to book a table.</span>
+    </div>
+  </div>
+</button>
 <button class="homeChatCta" id="homeChatBtn" type="button" aria-label="Start chat">Start Chat</button>
       </div>
 
@@ -5149,8 +5163,8 @@ body[data-msec="schedule"] #scheduleCard{
 
 <!-- Mobile bottom navigation (mobile-first, does not affect desktop) -->
 <nav class="mobileNav" id="mobileNav" aria-label="Mobile navigation">
-  <button class="mnavBtn" data-msec="home" type="button" aria-label="Home">🏠<span>Home</span></button>
-  <button class="mnavBtn active" data-msec="chat" type="button" aria-label="Chat">💬<span>Chat</span></button>
+  <button class="mnavBtn active" data-msec="home" type="button" aria-label="Home">🏠<span>Home</span></button>
+  <button class="mnavBtn" data-msec="chat" type="button" aria-label="Chat">💬<span>Chat</span></button>
   <button class="mnavBtn" data-msec="menu" type="button" aria-label="Menu">🍽️<span>Menu</span></button>
   <button class="mnavBtn" data-msec="schedule" type="button" aria-label="Schedule">📅<span>Schedule</span></button>
   <button class="mnavBtn" data-msec="fanzone" type="button" aria-label="Fan Zone">⚽<span>Fan Zone</span></button>
@@ -8678,6 +8692,51 @@ function apply(){
   }, {passive:true});
 })();
 
+
+/* === PHASE 4: Home CTA wiring (reservation-first) === */
+(function(){
+  function goChatAndType(prefill){
+    try{
+      _setMobileSection("chat");
+      const ta = document.getElementById("msg");
+      if(ta){
+        if(prefill){
+          ta.value = prefill;
+        }
+        // focus + ensure composer visible
+        setTimeout(()=>{
+          ta.focus({preventScroll:true});
+          ta.scrollIntoView({block:"end", behavior:"smooth"});
+        }, 60);
+      }
+    }catch(e){}
+  }
+
+  document.addEventListener("click", (ev)=>{
+    const t = ev.target;
+    if(!t) return;
+    const btn = t.closest && t.closest("#homeChatPreview, #homeChatBtn");
+    if(btn){
+      ev.preventDefault();
+      goChatAndType("");
+    }
+    const res = t.closest && t.closest("#homeReserveBtn");
+    if(res){
+      ev.preventDefault();
+      const phrase = (RES_WORD[currentLang] || "reservation");
+      goChatAndType(phrase);
+    }
+    const exp = t.closest && t.closest("#homeExploreBtn");
+    if(exp){
+      ev.preventDefault();
+      _setMobileSection("schedule");
+      setTimeout(()=>{ try{ document.getElementById("scheduleCard")?.scrollIntoView({block:"start", behavior:"smooth"});}catch(e){} }, 60);
+    }
+  }, {passive:false});
+
+  // keep Home hint synced on first load
+  try{ _homeSyncHints(); }catch(e){}
+})();
 </script>
 
 </body>
