@@ -127,11 +127,20 @@ SCOPES = [
 # Business Profile
 # ============================================================
 BUSINESS_PROFILE_PATH = "business_profile.txt"
-if not os.path.exists(BUSINESS_PROFILE_PATH):
-    raise FileNotFoundError("business_profile.txt not found in the same folder as app.py.")
 
-with open(BUSINESS_PROFILE_PATH, "r", encoding="utf-8") as f:
-    BUSINESS_PROFILE = f.read().strip()
+# In production (e.g., Render), this file may not be present. Never crash the app for this.
+# If the file exists, we load it. Otherwise we use a built-in default profile.
+_DEFAULT_BUSINESS_PROFILE = """World Cup Concierge (Dallas)
+- Concierge chat for match-day guests
+- Reservations: provide date, time, party size, name, and phone
+- Ask about: Dallas matches, all World Cup matches, menu, and venue hours
+"""
+
+if os.path.exists(BUSINESS_PROFILE_PATH):
+    with open(BUSINESS_PROFILE_PATH, "r", encoding="utf-8") as f:
+        BUSINESS_PROFILE = f.read().strip()
+else:
+    BUSINESS_PROFILE = _DEFAULT_BUSINESS_PROFILE
 
 
 # ============================================================
