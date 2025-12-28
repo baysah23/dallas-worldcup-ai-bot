@@ -4579,6 +4579,34 @@ body[data-msec="schedule"] #scheduleCard{
 }
 
 
+
+/* =======================
+   FAN ZONE MODAL MOBILE SCROLL FIX
+   Ensures long lists (countries, polls) never render off-screen.
+   Keeps footer buttons reachable without awkward scrolling.
+======================= */
+.fz-modal .panel{
+  max-height: 88vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+#countryGrid,
+#pollList,
+#pollResults{
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.fz-footer{
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  background: rgba(10,18,40,.92);
+  padding-top: 10px;
+}
+
 </style>
 </head>
 <body data-lux="on">
