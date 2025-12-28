@@ -1067,24 +1067,18 @@ def next_question(sess: Dict[str, Any]) -> str:
 # ============================================================
 @app.route("/")
 def home():
-    return send_from_directory(".", "index.html")
+    # Mobile-first SPA shell: prevent stale caching so deploys always serve the latest index.html
+    resp = make_response(send_from_directory(".", "index.html"))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"})
 
-
-@app.route("/version")
-def version():
-    try:
-        mtime = os.path.getmtime("index.html")
-        return jsonify({
-            "index_html_last_modified_epoch": mtime,
-            "index_html_last_modified": datetime.fromtimestamp(mtime).isoformat(timespec="seconds"),
-        })
-    except Exception as e:
-        return jsonify({"error": repr(e)}), 500
 
 
 @app.route("/menu.json")
