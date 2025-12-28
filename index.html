@@ -2842,7 +2842,54 @@ body.kiosk-mode *::-webkit-scrollbar{
     white-space: nowrap;
   }
   .homeChatCta:active{ transform: translateY(1px); }
-  .homeNote{
+  
+  /* Language segment + chat preview (Home) */
+  .homeLangSegWrap{ margin-top: 10px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .homeLangSeg{
+    display:inline-flex;
+    border:1px solid rgba(255,255,255,.14);
+    background: rgba(0,0,0,.18);
+    border-radius: 999px;
+    overflow:hidden;
+  }
+  .homeLangBtn{
+    border:0;
+    background: transparent;
+    color: rgba(234,240,255,.92);
+    font-weight: 900;
+    font-size: 11px;
+    padding: 8px 12px;
+    cursor:pointer;
+    letter-spacing: .08em;
+  }
+  .homeLangBtn.active{
+    background: rgba(212,175,55,.18);
+    color: #f5d76e;
+  }
+  .homeLangHint{
+    font-size: 11px;
+    color: rgba(234,240,255,.80);
+    padding: 2px 0;
+  }
+  .homeChatPreview{
+    margin-top: 10px;
+    width: 100%;
+    text-align:left;
+    border: 1px solid rgba(212,175,55,.28);
+    background:
+      radial-gradient(900px 280px at 10% 10%, rgba(212,175,55,.16), transparent 62%),
+      rgba(0,0,0,.18);
+    border-radius: 16px;
+    padding: 12px 12px;
+    color: rgba(234,240,255,.95);
+    cursor:pointer;
+    line-height: 1.25;
+    font-size: 12px;
+  }
+  .homeChatPreview b{ color:#f5d76e; }
+  .homeChatPreview:active{ transform: translateY(1px); }
+
+.homeNote{
     margin-top: 10px;
     font-size: 11px;
     color: var(--muted);
@@ -4852,7 +4899,21 @@ body[data-msec="schedule"] #scheduleCard{
 
       <div class="homeMicroRow" aria-label="Concierge chat languages">
         <div class="homeLangPills">💬 Concierge Chat: <b>English</b> • <b>Español</b> • <b>Português</b> • <b>Français</b></div>
-        <button class="homeChatCta" id="homeChatBtn" type="button" aria-label="Start chat">Start Chat</button>
+        
+      <div class="homeLangSegWrap" aria-label="Choose language">
+        <div class="homeLangSeg" role="group" aria-label="Concierge language">
+          <button class="homeLangBtn" type="button" data-lang="en">EN</button>
+          <button class="homeLangBtn" type="button" data-lang="es">ES</button>
+          <button class="homeLangBtn" type="button" data-lang="pt">PT</button>
+          <button class="homeLangBtn" type="button" data-lang="fr">FR</button>
+        </div>
+        <div class="homeLangHint">Chat + reservations in 4 languages.</div>
+      </div>
+
+      <button class="homeChatPreview" id="homeChatPreview" type="button" aria-label="Start a reservation in chat">
+        💬 Start here: type <b>reservation</b> (or <b>reserva</b> / <b>réservation</b>)
+      </button>
+<button class="homeChatCta" id="homeChatBtn" type="button" aria-label="Start chat">Start Chat</button>
       </div>
 
       <div class="homeNote" aria-label="Reservations note">
@@ -5926,6 +5987,35 @@ function wireHomePanel(){
   const goChat  = document.getElementById("homeGoChat");
   const chatBtn = document.getElementById("homeChatBtn");
   const goFan   = document.getElementById("homeGoFan");
+  const homeLangBtns = document.querySelectorAll("#homeIntro .homeLangBtn[data-lang]");
+  const homeChatPreview = document.getElementById("homeChatPreview");
+
+  function syncHomeLangButtons(){
+    try{
+      const cur = (localStorage.getItem("lang") || "").toLowerCase() || "en";
+      homeLangBtns.forEach(b=>{
+        const on = (b.dataset.lang || "").toLowerCase() === cur;
+        b.classList.toggle("active", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+    }catch(_){}
+  }
+
+  homeLangBtns.forEach(b=>{
+    b.addEventListener("click", ()=>{
+      const l = (b.dataset.lang || "en").toLowerCase();
+      try{ if(typeof window.setLanguage === "function") window.setLanguage(l); }catch(_){}
+      try{ if(typeof window.setLang === "function") window.setLang(l); }catch(_){}
+      try{ localStorage.setItem("lang", l); }catch(_){}
+      syncHomeLangButtons();
+    });
+  });
+
+  if(homeChatPreview) homeChatPreview.addEventListener("click", ()=> toChat("reservation"));
+
+  // initial state
+  syncHomeLangButtons();
+
 
   function toChat(prefill){
     try{ if(typeof window.setSection === "function") window.setSection("chat"); }catch(_){}
