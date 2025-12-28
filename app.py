@@ -1075,17 +1075,6 @@ def health():
     return jsonify({"status": "ok"})
 
 
-@app.route("/version")
-def version():
-    try:
-        mtime = os.path.getmtime("index.html")
-        return jsonify({
-            "index_html_last_modified_epoch": mtime,
-            "index_html_last_modified": datetime.fromtimestamp(mtime).isoformat(timespec="seconds"),
-        })
-    except Exception as e:
-        return jsonify({"error": repr(e)}), 500
-
 
 @app.route("/menu.json")
 def menu_json():
