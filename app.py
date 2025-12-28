@@ -1,5 +1,4 @@
 from dotenv import load_dotenv
-import uuid
 load_dotenv()
 
 import os
@@ -11,7 +10,7 @@ import datetime
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
-from flask import Flask, request, jsonify, send_from_directory, send_file, g
+from flask import Flask, request, jsonify, send_from_directory, send_file
 from openai import OpenAI
 
 import gspread
@@ -23,49 +22,6 @@ from google.oauth2.service_account import Credentials
 app = Flask(__name__)
 
 
-
-# ============================================================
-# Step 12: Reduce “no change after deploy” issues (aggressive no-cache)
-# - Prevent stale index.html + JSON responses from being cached by browsers/CDNs.
-# ============================================================
-@app.after_request
-def add_no_cache_headers(resp):
-    try:
-        path = request.path or ""
-        # Always no-cache the app shell and JSON endpoints (schedule/menu/chat/version).
-        if path == "/" or path.endswith(".html") or path.endswith(".json") or path in ["/chat", "/version", "/health"]:
-            resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-            resp.headers["Pragma"] = "no-cache"
-            resp.headers["Expires"] = "0"
-    except Exception:
-        pass
-    return resp
-
-
-BUILD_ID = os.environ.get("BUILD_ID") or "STEP11-20251228T055534Z"
-# === PHASE 7: HEALTH + REQUEST ID (AUTO-INSERTED) ===
-@app.before_request
-def _lux_request_start():
-    try:
-        g._lux_start = time.time()
-        rid = request.headers.get("X-Request-Id") or str(uuid.uuid4())
-        g._lux_rid = rid
-    except Exception:
-        pass
-
-@app.after_request
-def _lux_request_id(response):
-    try:
-        rid = getattr(g, "_lux_rid", None)
-        if rid:
-            response.headers.setdefault("X-Request-Id", rid)
-    except Exception:
-        pass
-    return response
-
-@app.get("/healthz")
-def healthz():
-    return {"ok": True, "ts": int(time.time())}
 
 client = OpenAI()
 
@@ -83,7 +39,7 @@ def add_no_cache_headers(response):
         path = ""
 
     # Never cache: HTML shell + admin/chat actions
-    if path == "/" or path.startswith("/admin") or path.startswith("/chat") or path.startswith("/version"):
+    if path == "/" or path.startswith("/admin") or path.startswith("/chat"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -127,20 +83,11 @@ SCOPES = [
 # Business Profile
 # ============================================================
 BUSINESS_PROFILE_PATH = "business_profile.txt"
+if not os.path.exists(BUSINESS_PROFILE_PATH):
+    raise FileNotFoundError("business_profile.txt not found in the same folder as app.py.")
 
-# In production (e.g., Render), this file may not be present. Never crash the app for this.
-# If the file exists, we load it. Otherwise we use a built-in default profile.
-_DEFAULT_BUSINESS_PROFILE = """World Cup Concierge (Dallas)
-- Concierge chat for match-day guests
-- Reservations: provide date, time, party size, name, and phone
-- Ask about: Dallas matches, all World Cup matches, menu, and venue hours
-"""
-
-if os.path.exists(BUSINESS_PROFILE_PATH):
-    with open(BUSINESS_PROFILE_PATH, "r", encoding="utf-8") as f:
-        BUSINESS_PROFILE = f.read().strip()
-else:
-    BUSINESS_PROFILE = _DEFAULT_BUSINESS_PROFILE
+with open(BUSINESS_PROFILE_PATH, "r", encoding="utf-8") as f:
+    BUSINESS_PROFILE = f.read().strip()
 
 
 # ============================================================
@@ -1133,7 +1080,6 @@ def version():
     try:
         mtime = os.path.getmtime("index.html")
         return jsonify({
-            "build_id": BUILD_ID,
             "index_html_last_modified_epoch": mtime,
             "index_html_last_modified": datetime.fromtimestamp(mtime).isoformat(timespec="seconds"),
         })

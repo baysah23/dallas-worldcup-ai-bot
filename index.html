@@ -5,14 +5,8 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="format-detection" content="telephone=no">
-<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0"/>
-<meta http-equiv="Pragma" content="no-cache"/>
-<meta http-equiv="Expires" content="0"/>
-
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
 <title>World Cup 2026 Dallas Concierge</title>
-<meta name="build" content="STEP11-20251228T055534Z"/>
-<!-- BUILD: STEP11-20251228T055534Z -->
 <style>
     :root{
       --bg:#071022;
@@ -52,14 +46,6 @@
     }
     h1{margin:0; font-size:16px; font-weight:800; letter-spacing:.2px;}
     .sub{margin:6px 0 0; color:var(--muted); font-size:12px;}
-    .buildtag{
-      margin:6px 0 0;
-      color: rgba(185,199,238,.85);
-      font-size: 11px;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-      opacity: .92;
-    }
     .langbar{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
     .langbtn{
       border:1px solid var(--line);
@@ -583,13 +569,8 @@
 .hero::before{
   content:"";
   position:absolute; inset:-12px;
-  background-image: none;
-  background:
-    radial-gradient(900px 420px at 40% 35%, rgba(255,255,255,.10), transparent 62%),
-    radial-gradient(820px 360px at 70% 70%, rgba(31,111,235,.16), transparent 66%),
-    radial-gradient(820px 360px at 20% 80%, rgba(46,160,67,.14), transparent 66%),
-    linear-gradient(135deg, rgba(0,0,0,.55), rgba(0,0,0,.15));
-background-size: cover;
+  background-image: url("https://commons.wikimedia.org/wiki/Special:FilePath/Snapdragon%20Stadium%20interior-Night%20panorama%20view%202.jpg?width=2000");
+  background-size: cover;
   background-position: center;
   opacity: .38;
   filter: saturate(1.22) contrast(1.10);
@@ -4394,63 +4375,6 @@ body.kiosk-mode *::-webkit-scrollbar{
     @media (prefers-reduced-motion: reduce) {
       .lux-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
     }
-
-    /* QA overlay (only when enabled via ?qa=1) */
-    #luxQaPanel {
-      position: fixed;
-      right: 10px;
-      bottom: 10px;
-      z-index: 99999;
-      width: min(380px, calc(100vw - 20px));
-      max-height: 60vh;
-      overflow: auto;
-      border-radius: 16px;
-      padding: 12px 12px 10px;
-      background: rgba(8,12,20,.82);
-      border: 1px solid rgba(255,255,255,.14);
-      box-shadow: 0 18px 55px rgba(0,0,0,.48);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      color: rgba(255,255,255,.92);
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
-    }
-    #luxQaPanel h3 {
-      margin: 0 0 8px;
-      font-size: 13px;
-      letter-spacing: .14em;
-      text-transform: uppercase;
-      color: rgba(242,209,124,.92);
-    }
-    #luxQaPanel .row {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      font-size: 12px;
-      padding: 6px 0;
-      border-top: 1px solid rgba(255,255,255,.08);
-    }
-    #luxQaPanel .k { color: rgba(255,255,255,.68); }
-    #luxQaPanel .v { color: rgba(255,255,255,.92); text-align: right; }
-    #luxQaPanel .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,.14);
-      background: rgba(255,255,255,.06);
-      font-size: 12px;
-      margin-right: 6px;
-      margin-top: 6px;
-    }
-    #luxQaPanel .ok { color: rgba(170,255,200,.95); }
-    #luxQaPanel .bad { color: rgba(255,180,180,.95); }
-    #luxQaPanel button {
-      margin-top: 10px;
-      width: 100%;
-      min-height: 40px;
-      border-radius: 12px;
-    }
 /* === END PHASE 6 === */
 
 
@@ -4663,33 +4587,6 @@ body[data-msec="schedule"] #scheduleCard{
   padding-top: 10px;
 }
 
-
-/* ============================================================
-   Step 12: Build badge + cache-bust helper (debug)
-   ============================================================ */
-#buildBadge{
-  position: fixed;
-  right: 10px;
-  bottom: 10px;
-  z-index: 9999;
-  font-size: 12px;
-  line-height: 1;
-  padding: 8px 10px;
-  border-radius: 999px;
-  background: rgba(0,0,0,.55);
-  color: rgba(255,255,255,.92);
-  border: 1px solid rgba(255,255,255,.18);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  cursor: pointer;
-  user-select: none;
-}
-#buildBadge b{ font-weight: 700; }
-#buildBadge .muted{ opacity: .72; }
-@media (max-width: 520px){
-  #buildBadge{ right: 8px; bottom: 8px; font-size: 11px; padding: 7px 9px; }
-}
-
 </style>
 </head>
 <body data-lux="on">
@@ -4707,8 +4604,7 @@ body[data-msec="schedule"] #scheduleCard{
 <div class="langbtn" data-lang="es">Español</div>
 <div class="langbtn" data-lang="pt">Português</div>
 <div class="langbtn" data-lang="fr">Français</div></div>
-
-<div class="pill" id="buildTag" title="Deployed build/version">Build: STEP11-20251228T055534Z</div></div>
+</div>
 </header>
 <!-- =======================
      FAN ZONE (UI-only) — SIDE PANELS
@@ -4757,7 +4653,7 @@ body[data-msec="schedule"] #scheduleCard{
       <div style="border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:10px; background: rgba(0,0,0,.10);">
         <div id="drinkName" style="font-weight:900;">Country-themed drink</div>
         <div id="drinkDesc" class="fz-muted" style="margin-top:4px;"></div>
-<div class="buildtag" id="buildTagRail" title="Deployed build timestamp">Build: STEP11-20251228T055534Z</div></div></div>
+      </div></div>
 </div>
 <div class="fz-card lux-reveal" id="qrCard" style="display:none; margin-top:10px;">
 <h3>📱 QR poster</h3>
@@ -5039,21 +4935,6 @@ body[data-msec="schedule"] #scheduleCard{
 </nav>
 
 
-<script>
-/* STEP10: build + cache busting so you can confirm Render is serving the latest file. */
-const __BUILD_ID__ = "STEP11-20251228T055534Z";
-function cacheBust(url){
-  try {
-    const u = new URL(url, window.location.origin);
-    u.searchParams.set("v", __BUILD_ID__);
-    u.searchParams.set("ts", String(Date.now()));
-    return u.pathname + "?" + u.searchParams.toString();
-  } catch(e) {
-    const sep = url.includes("?") ? "&" : "?";
-    return url + sep + "v=" + encodeURIComponent(__BUILD_ID__) + "&ts=" + Date.now();
-  }
-}
-</script>
 <script>
 /**
  * This frontend matches your current app.py endpoints:
@@ -5782,7 +5663,7 @@ function initScheduleTabs(){
 
 
 async function loadMenu(){
-  const res = await fetch(cacheBust("/menu.json?lang=" + encodeURIComponent(lang), {cache:"no-store"});
+  const res = await fetch("/menu.json?lang=" + encodeURIComponent(lang), {cache:"no-store"});
   const data = await res.json();
   // app.py returns { lang, menu: {title, items:[]}}
   menuData = data.menu;
@@ -7726,6 +7607,7 @@ function setSection(sec){
   }
 })();
 </script>
+</script>
 <script>
 /* =======================
    FAN ZONE RAIL BEHAVIOR (UI-only)
@@ -8222,8 +8104,6 @@ function apply(){
 /* === PHASE 6: PERFORMANCE + QA MATRIX (AUTO-INSERTED) === */
 (() => {
   const q = new URLSearchParams(location.search);
-  const qaEnabled = q.get('qa') === '1' || q.get('QA') === '1';
-
   // --- 1) Ultra-premium performance scheduling (no behavior changes) ---
   const onIdle = (fn, timeout=800) => {
     if ('requestIdleCallback' in window) {
@@ -8265,141 +8145,6 @@ function apply(){
   } catch(_) {}
 
   // --- 3) Per-device QA matrix (only when ?qa=1) ---
-  const runChecks = () => {
-    const checks = [];
-    const add = (name, ok, detail="") => checks.push({ name, ok: !!ok, detail });
-
-    // No horizontal scroll
-    const sw = document.documentElement.scrollWidth;
-    const cw = document.documentElement.clientWidth;
-    add('No horizontal scroll', sw <= cw + 1, `scrollWidth=${sw}, clientWidth=${cw}`);
-
-    // Hero visible (if exists)
-    const hero = document.querySelector('.hero');
-    if (hero) {
-      const r = hero.getBoundingClientRect();
-      add('Hero in viewport', r.height >= 120 && r.top < window.innerHeight, `h=${Math.round(r.height)}, top=${Math.round(r.top)}`);
-      // Hero title inside hero bounds (prevents offscreen)
-      const ht = hero.querySelector('.heroTitle');
-      if (ht) {
-        const tr = ht.getBoundingClientRect();
-        add('Hero title not clipped', tr.left >= -2 && tr.right <= window.innerWidth + 2, `L=${Math.round(tr.left)}, R=${Math.round(tr.right)}`);
-      }
-      // Roster exists if your app uses it
-      const roster = hero.querySelector('.heroRoster');
-      if (roster) {
-        const kids = roster.querySelectorAll(':scope > *').length;
-        add('Star roster populated', kids >= 1, `items=${kids}`);
-      } else {
-        add('Star roster element exists', false, 'Missing .heroRoster');
-      }
-    } else {
-      add('Hero exists', false, 'Missing .hero');
-    }
-
-    // Tap targets (minimum 44px) for primary nav buttons if present
-    const btns = Array.from(document.querySelectorAll('button, .btn, .langbtn, .navBtn, .tabBtn')).slice(0, 12);
-    if (btns.length) {
-      const small = btns.filter(b => (b.getBoundingClientRect().height || 0) < 40);
-      add('Tap targets ok', small.length === 0, `checked=${btns.length}, small=${small.length}`);
-    }
-
-    return checks;
-  };
-
-  const buildQaPanel = () => {
-    const panel = document.createElement('div');
-    panel.id = 'luxQaPanel';
-
-    const ua = navigator.userAgent || '';
-    const dpr = window.devicePixelRatio || 1;
-    const vp = `${window.innerWidth}×${window.innerHeight}`;
-    const lang = (navigator.language || '').toLowerCase();
-    const mem = navigator.deviceMemory ? `${navigator.deviceMemory}GB` : 'n/a';
-    const cores = navigator.hardwareConcurrency ? `${navigator.hardwareConcurrency}` : 'n/a';
-    const net = (navigator.connection && navigator.connection.effectiveType) ? navigator.connection.effectiveType : 'n/a';
-    const rm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduce' : 'no-preference';
-    const scheme = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-
-    const checks = runChecks();
-
-    panel.innerHTML = `
-      <h3>QA Matrix (Device)</h3>
-      <div class="pill">VP: <span class="v">${vp}</span></div>
-      <div class="pill">DPR: <span class="v">${dpr}</span></div>
-      <div class="pill">Net: <span class="v">${net}</span></div>
-      <div class="pill">CPU: <span class="v">${cores}</span></div>
-      <div class="pill">Mem: <span class="v">${mem}</span></div>
-      <div class="row"><div class="k">Lang</div><div class="v">${lang}</div></div>
-      <div class="row"><div class="k">Motion</div><div class="v">${rm}</div></div>
-      <div class="row"><div class="k">Scheme</div><div class="v">${scheme}</div></div>
-      <div class="row"><div class="k">Classes</div><div class="v">${document.documentElement.className || '—'}</div></div>
-      <div class="row"><div class="k">User-Agent</div><div class="v" style="max-width: 220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${ua.replace(/"/g,'&quot;')}">${ua}</div></div>
-      <h3 style="margin-top:10px;">Checks</h3>
-      <div id="luxQaChecks"></div>
-      <button type="button" class="btn" id="luxQaRerun">Re-run checks</button>
-    `;
-
-    const renderChecks = () => {
-      const c = runChecks();
-      const wrap = panel.querySelector('#luxQaChecks');
-      wrap.innerHTML = c.map(x => `
-        <div class="row">
-          <div class="k">${x.name}</div>
-          <div class="v ${x.ok ? 'ok' : 'bad'}">${x.ok ? 'PASS' : 'FAIL'}</div>
-        </div>
-        ${
-          x.detail ? `<div style="font-size:11px;color:rgba(255,255,255,.62);padding:0 0 6px;border-top:0;margin-top:-2px;">${x.detail}</div>` : ''
-        }
-      `).join('');
-    };
-
-    renderChecks();
-    panel.querySelector('#luxQaRerun').addEventListener('click', renderChecks);
-    document.body.appendChild(panel);
-
-    // Keep it accurate on rotate
-    window.addEventListener('resize', () => {
-      const pills = panel.querySelectorAll('.pill .v');
-      if (pills && pills[0]) pills[0].textContent = `${window.innerWidth}×${window.innerHeight}`;
-      renderChecks();
-    }, { passive: true });
-  };
-
-  if (qaEnabled) {
-    // Build after first paint so it doesn't impact load
-    onIdle(buildQaPanel, 900);
-    console.info('[QA] Enabled. Add ?qa=1 to any URL to show device matrix.');
-  }
-
-})();
-</script>
-
-
-<script>
-/* === PHASE 7: RELIABILITY LAYER (AUTO-INSERTED) === */
-(() => {
-  // Premium reliability on mobile: timeout+retry for GET schedule/menu JSON endpoints, plus offline feedback.
-  const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  // Toast UI (non-invasive)
-  const ensureToast = () => {
-    let t = document.getElementById('luxToast');
-    if (t) return t;
-    t = document.createElement('div');
-    t.id = 'luxToast';
-    t.innerHTML = `
-      <div class="trow">
-        <div class="tmsg">
-          <div id="luxToastMain">…</div>
-          <div id="luxToastSub" class="muted"></div>
-        </div>
-        <button type="button" class="tbtn btn" id="luxToastBtn" style="display:none;">Retry</button>
-      </div>
-    `;
-    document.body.appendChild(t);
-    return t;
-  };
 
   const showToast = (main, sub="", btnText="", onBtn=null) => {
     const t = ensureToast();
@@ -8534,7 +8279,7 @@ function apply(){
   mo.observe(document.documentElement, { childList:true, subtree:true });
 
   // Tiny press feedback on primary interactive elements (CSS handles most; this is a fallback for custom controls)
-document.addEventListener('pointerdown', (e)=>{
+  document.addEventListener('pointerdown', (e)=>{
     const el = e.target && e.target.closest ? e.target.closest('.mnav-btn, button, .chip, .pill, .seg button, .btn') : null;
     if(!el) return;
     el.classList.add('is-pressed');
@@ -8542,68 +8287,6 @@ document.addEventListener('pointerdown', (e)=>{
   }, {passive:true});
 })();
 
-</script>
-
-
-<div id="buildBadge" style="position:fixed;right:10px;bottom:10px;z-index:9999;
-background:rgba(15,27,51,.72);border:1px solid rgba(255,255,255,.18);
-backdrop
-<div id="buildBadge" title="Tap to hard-refresh this page">
-  <b>Build</b> <span class="muted" id="buildStamp">loading…</span>
-</div>
-<script>
-(function(){
-  const stampEl = document.getElementById('buildStamp');
-  const badge = document.getElementById('buildBadge');
-  function setStamp(txt){ if(stampEl) stampEl.textContent = txt; }
-  async function load(){
-    try{
-      const res = await fetch('/version?ts=' + Date.now(), { cache: 'no-store' });
-      const j = await res.json();
-      if (j && (j.index_html_last_modified || j.index_html_last_modified_epoch)){
-        setStamp(j.index_html_last_modified || ('' + j.index_html_last_modified_epoch));
-      } else if (j && j.error){
-        setStamp('error');
-      } else {
-        setStamp('unknown');
-      }
-    }catch(e){
-      setStamp('offline');
-    }
-  }
-  if (badge){
-    badge.addEventListener('click', function(){
-      // force a full reload with a cache-busting query param
-      const url = new URL(window.location.href);
-      url.searchParams.set('v', String(Date.now()));
-      window.location.replace(url.toString());
-    }, { passive: true });
-  }
-  load();
-})();
-</script>
-
--filter:blur(10px);-webkit-backdrop-filter:blur(10px);
-color:rgba(234,240,255,.92);font:11px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial;
-padding:8px 10px;border-radius:999px;letter-spacing:.08em;text-transform:uppercase;">
-Build: <span id="buildBadgeText">STEP11-20251228T055534Z</span>
-</div>
-
-
-<script>
-/* STEP10_BUILD_SYNC: show the server's index.html mtime to confirm deploy. */
-(function(){
-  const el = document.getElementById("buildBadgeText");
-  if(!el) return;
-  fetch(cacheBust("/version"))
-    .then(r => r.ok ? r.json() : null)
-    .then(j => {
-      if(!j) return;
-      const m = j.index_html_last_modified || "";
-      el.textContent = (__BUILD_ID__ + (m ? " • " + m : ""));
-    })
-    .catch(()=>{});
-})();
 </script>
 
 </body>
