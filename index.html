@@ -2811,6 +2811,45 @@ body.kiosk-mode *::-webkit-scrollbar{
     font-size: 11px;
     line-height: 1.35;
   }
+
+  .homeMicroRow{
+    margin-top: 10px;
+    display:flex;
+    gap:10px;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+  }
+  .homeLangPills{
+    font-size: 11px;
+    color: rgba(234,240,255,.92);
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(0,0,0,.16);
+    padding: 8px 10px;
+    border-radius: 999px;
+    line-height: 1.2;
+  }
+  .homeLangPills b{ color: #f5d76e; }
+  .homeChatCta{
+    border: 1px solid rgba(31,111,235,.45);
+    background: rgba(31,111,235,.20);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-weight: 950;
+    font-size: 12px;
+    cursor:pointer;
+    white-space: nowrap;
+  }
+  .homeChatCta:active{ transform: translateY(1px); }
+  .homeNote{
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--muted);
+    border-left: 2px solid rgba(245,215,110,.45);
+    padding-left: 10px;
+  }
+
   .homeSteps{ margin-top: 10px; display:flex; flex-direction:column; gap:8px; }
   .homeStep{
     display:flex; gap:10px; align-items:flex-start;
@@ -2878,6 +2917,12 @@ body.kiosk-mode *::-webkit-scrollbar{
   .homeMetaRow span{ color: var(--muted); }
   .homeActions{ display:flex; gap:8px; margin-top:10px; }
   .homeActions .btn{ flex:1 1 auto; }
+.btn-secondary{
+    background: rgba(255,255,255,.10);
+    border: 1px solid rgba(255,255,255,.16);
+    color: var(--text);
+  }
+  .btn-secondary:hover{ background: rgba(255,255,255,.14); }
 
   /* Slightly tighter cardhead on home for “luxury” */
   #homeCard .cardhead{ align-items:center; gap:10px; }
@@ -4794,16 +4839,25 @@ body[data-msec="schedule"] #scheduleCard{
   <div class="cardhead">
     <div class="title">World Cup Concierge</div>
     <div class="actions">
-      <button class="btn btn-primary" id="homeReserveBtn" type="button">Reserve</button>
-      <button class="btn" id="homeExploreBtn" type="button">Explore Matches</button>
+      <button class="btn btn-primary btn-reserve" id="homeReserveBtn" type="button">Reserve</button>
+      <button class="btn btn-secondary btn-explore" id="homeExploreBtn" type="button">Explore Matches</button>
     </div>
   </div>
 
   <div class="homeGrid">
     <div class="homeTile homeTile--hero" id="homeIntro">
       <div class="homeKicker">WORLD CUP CONCIERGE</div>
-      <div class="homeHeadline">Reservations first. Matches everywhere.</div>
-      <div class="homeSub">Book a table in seconds, then browse the full World Cup schedule—Dallas and every host city—without losing your place.</div>
+      <div class="homeHeadline">Reserve first. Then enjoy the World Cup.</div>
+      <div class="homeSub">Book a table in seconds via the concierge chat (English • Español • Português • Français), then browse the full World Cup schedule—Dallas and every host city.</div>
+
+      <div class="homeMicroRow" aria-label="Concierge chat languages">
+        <div class="homeLangPills">💬 Concierge Chat: <b>English</b> • <b>Español</b> • <b>Português</b> • <b>Français</b></div>
+        <button class="homeChatCta" id="homeChatBtn" type="button" aria-label="Start chat">Start Chat</button>
+      </div>
+
+      <div class="homeNote" aria-label="Reservations note">
+        Reservations are handled in chat — type <code>reservation</code> (or <code>reserva</code> / <code>réservation</code>) anytime.
+      </div>
 
       <div class="homeSteps" aria-label="How it works">
         <div class="homeStep">
@@ -5870,6 +5924,7 @@ function wireHomePanel(){
   const reserve = document.getElementById("homeReserveBtn");
   const explore = document.getElementById("homeExploreBtn");
   const goChat  = document.getElementById("homeGoChat");
+  const chatBtn = document.getElementById("homeChatBtn");
   const goFan   = document.getElementById("homeGoFan");
 
   function toChat(prefill){
@@ -5885,7 +5940,8 @@ function wireHomePanel(){
   }
 
   if(reserve) reserve.addEventListener("click", ()=> toChat("reservation"));
-  if(goChat)  goChat.addEventListener("click", ()=> toChat(""));
+  if(goChat)  goChat.addEventListener("click", ()=> toChat("")); 
+  if(chatBtn) chatBtn.addEventListener("click", ()=> toChat(""));
 
   if(goFan) goFan.addEventListener("click", ()=>{
     try{ if(typeof window.setSection === "function") window.setSection("fanzone"); }catch(_){}
