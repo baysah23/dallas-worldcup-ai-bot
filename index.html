@@ -4591,6 +4591,11 @@ body[data-msec="schedule"] #scheduleCard{
 /* =========================
    LUXURY HOME (match provided mock) — HOME ONLY
    ========================= */
+
+/* Force Home to show ONLY the luxury layout (prevents any legacy Home blocks from rendering) */
+#homeCard.luxHomeCard > *:not(.luxHome){ display: none !important; }
+#homeCard.luxHomeCard .luxHome{ display: block !important; }
+
 #homeCard.luxHomeCard{
   padding: 0 !important;
   border-radius: 18px !important;
