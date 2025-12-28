@@ -10,9 +10,29 @@ import datetime
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
-from flask import Flask, request, jsonify, send_from_directory, send_file
-from openai import OpenAI
+from flask import Flask, request, jsonify, send_from_directory, send_file, make_response
 
+# OpenAI client (compat: works with both newer and older openai python packages)
+try:
+    from openai import OpenAI  # new SDK
+    client = OpenAI()
+except Exception:
+    import openai  # legacy SDK
+
+    class _CompatResponses:
+        @staticmethod
+        def create(model: str, input):
+            messages = input
+            r = openai.ChatCompletion.create(model=model, messages=messages)
+            class _Resp: pass
+            resp = _Resp()
+            resp.output_text = (r["choices"][0]["message"]["content"] or "")
+            return resp
+
+    class _CompatClient:
+        responses = _CompatResponses()
+
+    client = _CompatClient()
 import gspread
 from google.oauth2.service_account import Credentials
 
@@ -1067,12 +1087,19 @@ def next_question(sess: Dict[str, Any]) -> str:
 # ============================================================
 @app.route("/")
 def home():
-    return send_from_directory(".", "index.html")
+    # Prevent stale caching so deploys always serve the latest index.html
+    resp = make_response(send_from_directory(".", "index.html"))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"})
+
+
 
 
 
