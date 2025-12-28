@@ -8321,6 +8321,29 @@ function apply(){
 
 
 <script>
+
+<script>
+/* Home intercept shim: ensure 'home' truly means Luxury Home (not mapped to chat) */
+(function(){
+  function forceHome(){
+    try{ document.body.setAttribute('data-msec','home'); }catch(e){}
+  }
+  // keep original
+  if(typeof window.setSection === 'function' && !window.__setSectionRaw){
+    window.__setSectionRaw = window.setSection;
+    window.setSection = function(sec){
+      if(sec === 'home'){
+        forceHome();
+        // do not delegate to raw mapping which may remap home->chat
+        return;
+      }
+      try{ window.__setSectionRaw(sec); }catch(e){}
+    };
+  }
+})();
+</script>
+
+<script>
 /* Luxury Home Shell (pixel-perfect) wiring */
 (function(){
   function sync(){
@@ -8347,6 +8370,23 @@ function apply(){
       try{ window.setSection && window.setSection(sec); }catch(_e){}
     });
   });
+})();
+</script>
+
+
+<script>
+/* Boot into Luxury Home on first load (only if no section is set) */
+(function(){
+  function boot(){
+    try{
+      var cur = document.body.getAttribute('data-msec');
+      if(!cur){
+        document.body.setAttribute('data-msec','home');
+      }
+    }catch(e){}
+  }
+  if(document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+  else boot();
 })();
 </script>
 
