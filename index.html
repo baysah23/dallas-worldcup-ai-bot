@@ -2920,6 +2920,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 
   /* Default: show Chat section */
     /* Home: show Home panel only (chat lives on Chat tab) */
+  body[data-msec="home"] #luxHomeShell{ display:block !important; }
   body[data-msec="home"] .chatcard,
   body[data-msec="home"] .menucard,
   body[data-msec="home"] #fanZoneLeft,
@@ -4822,6 +4823,7 @@ body[data-msec="home"] .homecard{ display:none !important; }
       <div class="luxKicker"><span class="dot" aria-hidden="true"></span><span>FIFA WORLD CUP 2026</span></div>
       <h1 class="luxTitle">World Cup Concierge</h1>
       <p class="luxSub">Reserve tables, VIP experiences, and stay on top of live schedules — in any language.</p>
+
       <div class="luxCtas" role="group" aria-label="Primary actions">
         <button class="luxBtn primary" type="button" onclick="try{ window.setSection && window.setSection('vip'); }catch(e){}">Reserve</button>
         <button class="luxBtn" type="button" onclick="try{ window.setSection && window.setSection('schedule'); }catch(e){}">Schedule</button>
@@ -7068,8 +7070,6 @@ function __currentSection(){
 }
 
 function setSection(sec){
-  try{ document.body.dataset.msec = String(sec||"home"); }catch(e){}
-
     document.body.setAttribute('data-msec', sec);
 
     // Persist the last visited section on mobile (so reload doesn't feel random)
