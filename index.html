@@ -5231,6 +5231,39 @@ function addBubble(role, text){
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
+// -----------------------
+// Single welcome message (keeps only ONE welcome bubble while switching languages)
+// -----------------------
+let welcomeHistoryIndex = -1;
+function syncWelcomeMessage(){
+  const welcomeText = L().welcome;
+  let wb = document.getElementById("welcomeBubble");
+  if(!wb){
+    wb = document.createElement("div");
+    wb.id = "welcomeBubble";
+    wb.className = "bubble bot";
+    if(chatEl.firstChild){
+      chatEl.insertBefore(wb, chatEl.firstChild);
+    } else {
+      chatEl.appendChild(wb);
+    }
+  } else {
+    // Keep the welcome at the top (so language changes don't "add" more greetings)
+    if(chatEl.firstChild !== wb){
+      chatEl.insertBefore(wb, chatEl.firstChild);
+    }
+  }
+  wb.textContent = welcomeText;
+  chatEl.scrollTop = chatEl.scrollHeight;
+
+  // Update the existing welcome entry in history (no new message)
+  if(typeof welcomeHistoryIndex === "number" && welcomeHistoryIndex >= 0 && Array.isArray(history) && history[welcomeHistoryIndex]){
+    history[welcomeHistoryIndex].content = welcomeText;
+  }
+}
+
+
+
 function setSending(isSending){
   sendBtn.disabled = isSending;
   msgEl.disabled = isSending;
@@ -5343,9 +5376,8 @@ applyCompactMode();
   // reload menu in the chosen language
   await loadMenu();
 
-  // show a bot notice (feature preserved)
-  addBubble("assistant", L().lang_set + "\n\n" + stripHtml(L().helper));
-  history.push({role:"assistant", content: L().lang_set});
+  // Keep chat clean: update the single welcome message in-place (no stacking)
+  syncWelcomeMessage();
 }
 
 document.querySelectorAll(".langbtn[data-lang]").forEach(btn => {
@@ -6681,9 +6713,12 @@ if (teamSearchEl){
 function clearConversation(){
   history.length = 0;
   chatEl.innerHTML = "";
-  addBubble("assistant", L().welcome);
+  history.length = 0;
+  // Create the single welcome message
+  welcomeHistoryIndex = history.length;
+  syncWelcomeMessage();
   history.push({role:"assistant", content: L().welcome});
-  msgEl.value = "";
+msgEl.value = "";
   msgEl.style.height = "44px";
   msgEl.focus();
 }
@@ -6706,11 +6741,11 @@ if (clearBtn) clearBtn.addEventListener("click", clearConversation);
   initScheduleTabs();
   await loadMenu();
 
-  // Welcome message (feature preserved)
-  addBubble("assistant", L().welcome);
+  // Welcome message (single, language-aware)
+  welcomeHistoryIndex = history.length;
+  syncWelcomeMessage();
   history.push({role:"assistant", content: L().welcome});
-
-  // Ensure focus
+// Ensure focus
   msgEl.focus();
 })();
 
