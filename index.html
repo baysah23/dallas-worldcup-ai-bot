@@ -2921,15 +2921,8 @@ body.kiosk-mode *::-webkit-scrollbar{
   /* Default: show Chat section */
     /* Home: show Home panel only (chat lives on Chat tab) */
   body[data-msec="home"] #luxHomeShell{ display:block !important; }
+  body[data-msec="home"] #luxHomeShell{ display:block !important; }
   body[data-msec="home"] #homeCard{ display:none !important; }
-  body[data-msec="home"] .chatcard,
-  body[data-msec="home"] .menucard,
-  body[data-msec="home"] #fanZoneLeft,
-  body[data-msec="home"] #fanZoneRight,
-  body[data-msec="home"] #scheduleCard,
-  body[data-msec="home"] #vipHoldRail{ display:none !important; }
-
-  body[data-msec="chat"] .chatcard{ display:block !important; }
     body[data-msec="chat"] #luxHomeShell{ display:none !important; }
 
   body[data-msec="menu"] #luxHomeShell,
@@ -4750,6 +4743,15 @@ body[data-msec="home"] #luxHomeShell{ display:block; }
     #luxHomeShell .luxHero{ min-height: calc(100dvh - 170px); }
   }
 }
+/* ========================================================= */
+
+
+/* =========================================================
+   STEP 4 VERIFIED — Lux Home is the ONLY Home surface
+   ========================================================= */
+#homeCard, .homecard{ display:none !important; }
+.hero{ display:none !important; } /* old hero removed from Home UI */
+body[data-msec="home"] #luxHomeShell{ display:block !important; }
 /* ========================================================= */
 
 </style>
