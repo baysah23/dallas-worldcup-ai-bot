@@ -2692,7 +2692,7 @@ body.kiosk-mode *::-webkit-scrollbar{
    MOBILE HOME PANEL (premium, non-redundant)
    ========================= */
 @media (max-width: 950px){
-  #homeCard{ display:none; } /* shown only when Home tab is active */
+  #homeCard{ display:block; } /* always visible on mobile */
   .homeGrid{ display:flex; flex-direction:column; gap:12px; }
   .homeTile{
     border:1px solid rgba(255,255,255,.10);
@@ -2745,10 +2745,7 @@ body.kiosk-mode *::-webkit-scrollbar{
   .homeStat .k{ display:block; font-size:10px; color: var(--muted); letter-spacing:.16em; text-transform:uppercase; font-weight:900; }
   .homeStat b{ display:block; margin-top:6px; font-size:13px; line-height:1.12; font-weight:950; letter-spacing:.01em; }
   .homeStat small{ display:block; margin-top:4px; font-size:11px; color: var(--muted); line-height:1.2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  @media (max-width: 420px){
-    .homeStats{ grid-template-columns: 1fr; }
-    .homeStat small{ white-space: normal; }
-  }
+  
   .homeLinkBtn{
     border:1px solid rgba(255,255,255,.14);
     background: rgba(255,255,255,.06);
@@ -2811,6 +2808,92 @@ body.kiosk-mode *::-webkit-scrollbar{
     font-size: 11px;
     line-height: 1.35;
   }
+
+  .homeMicroRow{
+    margin-top: 10px;
+    display:flex;
+    gap:10px;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+  }
+  .homeLangPills{
+    font-size: 11px;
+    color: rgba(234,240,255,.92);
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(0,0,0,.16);
+    padding: 8px 10px;
+    border-radius: 999px;
+    line-height: 1.2;
+  }
+  .homeLangPills b{ color: #f5d76e; }
+  .homeChatCta{
+    border: 1px solid rgba(31,111,235,.45);
+    background: rgba(31,111,235,.20);
+    color: var(--text);
+    padding: 10px 12px;
+    border-radius: 12px;
+    font-weight: 950;
+    font-size: 12px;
+    cursor:pointer;
+    white-space: nowrap;
+  }
+  .homeChatCta:active{ transform: translateY(1px); }
+  
+  /* Language segment + chat preview (Home) */
+  .homeLangSegWrap{ margin-top: 10px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .homeLangSeg{
+    display:inline-flex;
+    border:1px solid rgba(255,255,255,.14);
+    background: rgba(0,0,0,.18);
+    border-radius: 999px;
+    overflow:hidden;
+  }
+  .homeLangBtn{
+    border:0;
+    background: transparent;
+    color: rgba(234,240,255,.92);
+    font-weight: 900;
+    font-size: 11px;
+    padding: 8px 12px;
+    cursor:pointer;
+    letter-spacing: .08em;
+  }
+  .homeLangBtn.active{
+    background: rgba(212,175,55,.18);
+    color: #f5d76e;
+  }
+  .homeLangHint{
+    font-size: 11px;
+    color: rgba(234,240,255,.80);
+    padding: 2px 0;
+  }
+  .homeChatPreview{
+    margin-top: 10px;
+    width: 100%;
+    text-align:left;
+    border: 1px solid rgba(212,175,55,.28);
+    background:
+      radial-gradient(900px 280px at 10% 10%, rgba(212,175,55,.16), transparent 62%),
+      rgba(0,0,0,.18);
+    border-radius: 16px;
+    padding: 12px 12px;
+    color: rgba(234,240,255,.95);
+    cursor:pointer;
+    line-height: 1.25;
+    font-size: 12px;
+  }
+  .homeChatPreview b{ color:#f5d76e; }
+  .homeChatPreview:active{ transform: translateY(1px); }
+
+.homeNote{
+    margin-top: 10px;
+    font-size: 11px;
+    color: var(--muted);
+    border-left: 2px solid rgba(245,215,110,.45);
+    padding-left: 10px;
+  }
+
   .homeSteps{ margin-top: 10px; display:flex; flex-direction:column; gap:8px; }
   .homeStep{
     display:flex; gap:10px; align-items:flex-start;
@@ -2878,6 +2961,12 @@ body.kiosk-mode *::-webkit-scrollbar{
   .homeMetaRow span{ color: var(--muted); }
   .homeActions{ display:flex; gap:8px; margin-top:10px; }
   .homeActions .btn{ flex:1 1 auto; }
+.btn-secondary{
+    background: rgba(255,255,255,.10);
+    border: 1px solid rgba(255,255,255,.16);
+    color: var(--text);
+  }
+  .btn-secondary:hover{ background: rgba(255,255,255,.14); }
 
   /* Slightly tighter cardhead on home for “luxury” */
   #homeCard .cardhead{ align-items:center; gap:10px; }
@@ -2885,6 +2974,41 @@ body.kiosk-mode *::-webkit-scrollbar{
   #homeCard .cardhead .actions .btn{ padding: 10px 12px; border-radius: 14px; }
 }
 
+
+  /* Home "Try this" + chat preview (makes chat/languages obvious) */
+  .homeTryRow{ display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:10px; }
+  .homeTryLabel{ font-size:11px; color:var(--muted); font-weight:900; letter-spacing:.10em; text-transform:uppercase; }
+  .homeTryChip{
+    border:1px solid rgba(255,255,255,.14);
+    background: rgba(0,0,0,.18);
+    padding:6px 10px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:900;
+    white-space:nowrap;
+  }
+  .homeChatPreview{
+    margin-top:10px;
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:14px;
+    overflow:hidden;
+    background: rgba(0,0,0,.16);
+  }
+  .homeChatPreview .row{ display:flex; gap:10px; padding:10px 12px; align-items:flex-start; }
+  .homeChatPreview .dot{
+    width:9px; height:9px; border-radius:999px;
+    background: rgba(46,160,67,.90);
+    box-shadow: 0 0 0 6px rgba(46,160,67,.12);
+    margin-top:4px;
+    flex:0 0 auto;
+  }
+  .homeChatPreview .txt{ font-size:12px; color:rgba(234,240,255,.90); line-height:1.25; }
+  .homeChatPreview .hint{
+    padding:10px 12px;
+    border-top:1px solid rgba(255,255,255,.10);
+    font-size:12px;
+    color:var(--muted);
+  }
 /* =========================
    MOBILE: SECTION NAV (desktop parity without clutter)
    - One-tap switch between Chat / Fan Zone / Extras / Schedule / Menu
@@ -2920,50 +3044,8 @@ body.kiosk-mode *::-webkit-scrollbar{
 
   /* Default: show Chat section */
     /* Home: show Home panel only (chat lives on Chat tab) */
-  body[data-msec="home"] #homeCard{ display:block !important; }
-  body[data-msec="home"] .chatcard,
-  body[data-msec="home"] .menucard,
-  body[data-msec="home"] #fanZoneLeft,
-  body[data-msec="home"] #fanZoneRight,
-  body[data-msec="home"] #scheduleCard,
-  body[data-msec="home"] #vipHoldRail{ display:none !important; }
-
-  body[data-msec="chat"] .chatcard{ display:block !important; }
-  body[data-msec="chat"] .menucard,
-  body[data-msec="chat"] #fanZoneLeft,
-  body[data-msec="chat"] #fanZoneRight,
-  body[data-msec="chat"] #scheduleCard,
-  body[data-msec="chat"] #vipHoldRail{ display:none !important; }
-
-  body[data-msec="menu"] .menucard{ display:block !important; }
-  body[data-msec="menu"] .chatcard,
-  body[data-msec="menu"] #fanZoneLeft,
-  body[data-msec="menu"] #fanZoneRight,
-  body[data-msec="menu"] #scheduleCard,
-  body[data-msec="menu"] #vipHoldRail{ display:none !important; }
-
-  body[data-msec="fanzone"] #fanZoneLeft{ display:block !important; }
-  body[data-msec="fanzone"] .chatcard,
-  body[data-msec="fanzone"] .menucard,
-  body[data-msec="fanzone"] #fanZoneRight,
-  body[data-msec="fanzone"] #scheduleCard{ display:none !important; }
-
-  body[data-msec="extras"] #fanZoneRight{ display:block !important; }
-  body[data-msec="extras"] .chatcard,
-  body[data-msec="extras"] .menucard,
-  body[data-msec="extras"] #fanZoneLeft,
-  body[data-msec="extras"] #scheduleCard{ display:none !important; }
-
-  body[data-msec="schedule"] #scheduleCard{ display:block !important; }
-  body[data-msec="schedule"] .chatcard,
-  body[data-msec="schedule"] .menucard,
-  body[data-msec="schedule"] #fanZoneLeft,
-  body[data-msec="schedule"] #fanZoneRight{ display:none !important; }
-
   /* VIP shown alongside Fan Zone (if you want it there) */
-  body[data-msec="fanzone"] #vipHoldRail{ display:block !important; }
-  body[data-msec="extras"] #vipHoldRail{ display:none !important; }
-}
+  }
 
 
 /* =========================
@@ -3013,14 +3095,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 
 
 @media (max-width: 950px){
-  body[data-msec="vip"] #vipHoldRail{ display:block !important; }
-  body[data-msec="vip"] .chatcard,
-  body[data-msec="vip"] .menucard,
-  body[data-msec="vip"] #fanZoneLeft,
-  body[data-msec="vip"] #fanZoneRight,
-  body[data-msec="vip"] #scheduleCard{ display:none !important; }
-  body[data-msec="fanzone"] #vipHoldRail{ display:block !important; }
-}
+  }
 
 
 
@@ -3178,41 +3253,7 @@ body.kiosk-mode *::-webkit-scrollbar{
 */
 @media (max-width: 950px){
   /* default: chat */
-  body[data-msec="chat"] .chatcard{ display:block !important; }
-  body[data-msec="chat"] .menucard,
-  body[data-msec="chat"] #scheduleCard,
-  body[data-msec="chat"] #fanZoneLeft,
-  body[data-msec="chat"] #fanZoneRight,
-  body[data-msec="chat"] #vipHoldRail{ display:none !important; }
-
-  body[data-msec="menu"] .menucard{ display:block !important; }
-  body[data-msec="menu"] .chatcard,
-  body[data-msec="menu"] #scheduleCard,
-  body[data-msec="menu"] #fanZoneLeft,
-  body[data-msec="menu"] #fanZoneRight,
-  body[data-msec="menu"] #vipHoldRail{ display:none !important; }
-
-  body[data-msec="schedule"] #scheduleCard{ display:block !important; }
-  body[data-msec="schedule"] .chatcard,
-  body[data-msec="schedule"] .menucard,
-  body[data-msec="schedule"] #fanZoneLeft,
-  body[data-msec="schedule"] #fanZoneRight,
-  body[data-msec="schedule"] #vipHoldRail{ display:none !important; }
-
-  body[data-msec="fanzone"] #fanZoneLeft,
-  body[data-msec="fanzone"] #fanZoneRight{ display:block !important; }
-  body[data-msec="fanzone"] .chatcard,
-  body[data-msec="fanzone"] .menucard,
-  body[data-msec="fanzone"] #scheduleCard,
-  body[data-msec="fanzone"] #vipHoldRail{ display:none !important; }
-
-  body[data-msec="vip"] #vipHoldRail{ display:block !important; }
-  body[data-msec="vip"] .chatcard,
-  body[data-msec="vip"] .menucard,
-  body[data-msec="vip"] #scheduleCard,
-  body[data-msec="vip"] #fanZoneLeft,
-  body[data-msec="vip"] #fanZoneRight{ display:none !important; }
-}
+  }
 
 /* --- FIX: Mobile hero title/sub alignment + prevent overlap/truncation --- */
 @media (max-width: 520px){
@@ -4528,18 +4569,10 @@ body.kiosk-mode *::-webkit-scrollbar{
    ======================= */
 @media (max-width: 950px){
   /* When viewing Schedule on mobile, hide the left column wrapper entirely (it becomes empty) */
-  body[data-msec="schedule"] .leftcol{ display:none !important; }
-
   /* Tighten hero → schedule spacing */
-  body[data-msec="schedule"] .hero{ margin-bottom: 6px !important; }
-  body[data-msec="schedule"] .grid{ row-gap: 10px !important; }
-
   /* Make sure the schedule card sits directly under the hero */
-  body[data-msec="schedule"] #scheduleCard{ margin-top: 0 !important; }
-
   /* Small scroll offset so sticky header feels nicer */
-  body[data-msec="schedule"] #scheduleCard{ scroll-margin-top: 8px; }
-}
+  }
 /* =======================
    MOBILE SCHEDULE GAP FIX (v5 - definitive)
    Problem: Schedule tab hides the contents inside .leftcol, but .leftcol still participates
@@ -4547,32 +4580,9 @@ body.kiosk-mode *::-webkit-scrollbar{
    creating a large blank gap before #scheduleCard.
    Fix: remove .leftcol from layout in schedule mode, and make the grid auto-height (no 1fr stretch).
    ======================= */
-body[data-msec="schedule"] .leftcol{ display:none !important; }
-
-body[data-msec="schedule"] .grid{
-  grid-template-columns: 1fr !important;
-  grid-template-rows: auto auto !important; /* hero + schedule */
-  align-content: start !important;
-  align-items: start !important;
-  height: auto !important;
-}
-
-body[data-msec="schedule"] #scheduleCard{
-  display:block !important;
-  grid-column: 1 / -1 !important;
-  grid-row: 2 !important;
-  margin-top: 0 !important;
-}
-
 /* Mobile polish */
 @media (max-width: 950px){
-  body[data-msec="schedule"] .grid{
-    padding-top: 10px !important;
-    padding-bottom: 110px !important; /* room for bottom nav */
-    gap: 10px !important;
   }
-  body[data-msec="schedule"] .hero{ margin: 10px !important; margin-bottom: 6px !important; }
-}
 
 
 
@@ -4642,6 +4652,39 @@ body[data-msec="schedule"] #scheduleCard{
   bottom: 0;
   background: rgba(10,18,40,.92);
   padding-top: 10px;
+}
+
+
+/* === PHASE 5: Luxury Hero + Grid Polish === */
+#home-hero{
+  min-height:38vh;
+  display:flex;
+  align-items:flex-end;
+  padding-bottom:18px;
+}
+#home-hero::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:
+    radial-gradient(60% 35% at 50% 75%, rgba(212,175,55,.18), transparent 60%),
+    linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,.05));
+  pointer-events:none;
+}
+.home-grid{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:14px;
+}
+.home-tile.primary{
+  grid-column:1 / -1;
+  background:linear-gradient(135deg, rgba(212,175,55,.28), rgba(0,0,0,.25));
+  border:1px solid rgba(212,175,55,.45);
+  box-shadow:0 18px 40px rgba(0,0,0,.45);
+}
+.home-tile.primary .lang{
+  opacity:.95;
+  font-weight:900;
 }
 
 </style>
@@ -4794,16 +4837,69 @@ body[data-msec="schedule"] #scheduleCard{
   <div class="cardhead">
     <div class="title">World Cup Concierge</div>
     <div class="actions">
-      <button class="btn btn-primary" id="homeReserveBtn" type="button">Reserve</button>
-      <button class="btn" id="homeExploreBtn" type="button">Explore Matches</button>
+      <button class="btn btn-primary btn-reserve" id="homeReserveBtn" type="button">Reserve a Table</button>
+      <button class="btn btn-secondary btn-explore" id="homeExploreBtn" type="button">Explore Matches</button>
     </div>
   </div>
 
   <div class="homeGrid">
     <div class="homeTile homeTile--hero" id="homeIntro">
       <div class="homeKicker">WORLD CUP CONCIERGE</div>
-      <div class="homeHeadline">Reservations first. Matches everywhere.</div>
-      <div class="homeSub">Book a table in seconds, then browse the full World Cup schedule—Dallas and every host city—without losing your place.</div>
+      <div class="homeHeadline">Reserve a table — in any language.</div>
+      <div class="homeSub">Chat with the concierge to book instantly. Try: <b>reservation</b> / <b>reservar</b> / <b>reserva</b> / <b>réservation</b>. Then browse fixtures, live scores, and groups for the full 2026 World Cup.</div>
+      <div class="homeTryRow" aria-label="Try speaking to the concierge">
+        <span class="homeTryLabel">Try:</span>
+        <span class="homeTryChip">reservation</span>
+        <span class="homeTryChip">reservar</span>
+        <span class="homeTryChip">reserva</span>
+        <span class="homeTryChip">réservation</span>
+      </div>
+
+      <div class="homeChatPreview" role="group" aria-label="Concierge chat preview">
+        <div class="row">
+          <div class="dot" aria-hidden="true"></div>
+          <div class="txt"><b>Concierge Chat</b> books tables and answers World Cup questions. Use the language buttons below to switch instantly.</div>
+        </div>
+        <div class="hint">Tip: Tap <b>Chat</b> → your keyboard opens automatically.</div>
+      </div>
+
+
+      <div class="homeMicroRow" aria-label="Concierge chat languages">
+        <div class="homeLangPills">💬 Concierge Chat: <b>English</b> • <b>Español</b> • <b>Português</b> • <b>Français</b></div>
+        
+      <div class="homeLangSegWrap" aria-label="Choose language">
+        <div class="homeLangSeg" role="group" aria-label="Concierge language">
+          <button class="homeLangBtn" type="button" data-lang="en">EN</button>
+          <button class="homeLangBtn" type="button" data-lang="es">ES</button>
+          <button class="homeLangBtn" type="button" data-lang="pt">PT</button>
+          <button class="homeLangBtn" type="button" data-lang="fr">FR</button>
+        </div>
+        <div class="homeLangHint">Chat + reservations in 4 languages.</div>
+      </div>
+
+      <button class="homeChatPreview" id="homeChatPreview" type="button" aria-label="Open concierge chat">
+  <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+    <div style="display:flex; flex-direction:column; gap:3px; min-width:0;">
+      <div style="font-weight:950; letter-spacing:.02em;">💬 Concierge Chat</div>
+      <div class="homeMuted" id="homeChatHintLine">Talk in <b>English</b>, <b>Español</b>, <b>Português</b>, <b>Français</b>.</div>
+    </div>
+    <div style="flex:0 0 auto; font-weight:950; opacity:.95;">→</div>
+  </div>
+  <div style="margin-top:10px; border:1px solid rgba(255,255,255,.12); background:rgba(0,0,0,.18); border-radius:12px; padding:10px 12px; display:flex; align-items:center; gap:10px;">
+    <div style="width:9px;height:9px;border-radius:999px;background:rgba(31,111,235,.95); box-shadow:0 0 0 6px rgba(31,111,235,.12); flex:0 0 auto;"></div>
+    <div style="font-size:12px; color:rgba(234,240,255,.92); line-height:1.25; min-width:0;">
+      <span style="color:rgba(234,240,255,.75); font-weight:900; letter-spacing:.08em; text-transform:uppercase;">Try:</span>
+      <span id="homeTryPhrase" style="font-weight:950;"> reservation</span>
+      <span style="color:rgba(234,240,255,.72);"> to book a table.</span>
+    </div>
+  </div>
+</button>
+<button class="homeChatCta" id="homeChatBtn" type="button" aria-label="Start chat">Start Chat</button>
+      </div>
+
+      <div class="homeNote" aria-label="Reservations note">
+        Reservations are handled in chat — type <code>reservation</code> (or <code>reserva</code> / <code>réservation</code>) anytime.
+      </div>
 
       <div class="homeSteps" aria-label="How it works">
         <div class="homeStep">
@@ -4983,8 +5079,8 @@ body[data-msec="schedule"] #scheduleCard{
 
 <!-- Mobile bottom navigation (mobile-first, does not affect desktop) -->
 <nav class="mobileNav" id="mobileNav" aria-label="Mobile navigation">
-  <button class="mnavBtn" data-msec="home" type="button" aria-label="Home">🏠<span>Home</span></button>
-  <button class="mnavBtn active" data-msec="chat" type="button" aria-label="Chat">💬<span>Chat</span></button>
+  <button class="mnavBtn active" data-msec="home" type="button" aria-label="Home">🏠<span>Home</span></button>
+  <button class="mnavBtn" data-msec="chat" type="button" aria-label="Chat">💬<span>Chat</span></button>
   <button class="mnavBtn" data-msec="menu" type="button" aria-label="Menu">🍽️<span>Menu</span></button>
   <button class="mnavBtn" data-msec="schedule" type="button" aria-label="Schedule">📅<span>Schedule</span></button>
   <button class="mnavBtn" data-msec="fanzone" type="button" aria-label="Fan Zone">⚽<span>Fan Zone</span></button>
@@ -5870,7 +5966,37 @@ function wireHomePanel(){
   const reserve = document.getElementById("homeReserveBtn");
   const explore = document.getElementById("homeExploreBtn");
   const goChat  = document.getElementById("homeGoChat");
+  const chatBtn = document.getElementById("homeChatBtn");
   const goFan   = document.getElementById("homeGoFan");
+  const homeLangBtns = document.querySelectorAll("#homeIntro .homeLangBtn[data-lang]");
+  const homeChatPreview = document.getElementById("homeChatPreview");
+
+  function syncHomeLangButtons(){
+    try{
+      const cur = (localStorage.getItem("lang") || "").toLowerCase() || "en";
+      homeLangBtns.forEach(b=>{
+        const on = (b.dataset.lang || "").toLowerCase() === cur;
+        b.classList.toggle("active", on);
+        b.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+    }catch(_){}
+  }
+
+  homeLangBtns.forEach(b=>{
+    b.addEventListener("click", ()=>{
+      const l = (b.dataset.lang || "en").toLowerCase();
+      try{ if(typeof window.setLanguage === "function") window.setLanguage(l); }catch(_){}
+      try{ if(typeof window.setLang === "function") window.setLang(l); }catch(_){}
+      try{ localStorage.setItem("lang", l); }catch(_){}
+      syncHomeLangButtons();
+    });
+  });
+
+  if(homeChatPreview) homeChatPreview.addEventListener("click", ()=> toChat("reservation"));
+
+  // initial state
+  syncHomeLangButtons();
+
 
   function toChat(prefill){
     try{ if(typeof window.setSection === "function") window.setSection("chat"); }catch(_){}
@@ -5885,7 +6011,8 @@ function wireHomePanel(){
   }
 
   if(reserve) reserve.addEventListener("click", ()=> toChat("reservation"));
-  if(goChat)  goChat.addEventListener("click", ()=> toChat(""));
+  if(goChat)  goChat.addEventListener("click", ()=> toChat("")); 
+  if(chatBtn) chatBtn.addEventListener("click", ()=> toChat(""));
 
   if(goFan) goFan.addEventListener("click", ()=>{
     try{ if(typeof window.setSection === "function") window.setSection("fanzone"); }catch(_){}
@@ -7938,7 +8065,6 @@ function setSection(sec){
       document.body.removeAttribute("data-msec");
     }
     if(!isSmall()) return;
-    document.body.setAttribute("data-msec", sec || "chat");
     // button states
     const nav = document.getElementById("mnav");
     if(nav){
@@ -8479,6 +8605,39 @@ function apply(){
     el.classList.add('is-pressed');
     raf2(()=>el.classList.remove('is-pressed'));
   }, {passive:true});
+})();
+
+
+
+// === HOME BUTTONS (simple + safe): reservation-first ===
+(function(){
+  const RES_WORD = { en:"reservation", es:"reserva", pt:"reserva", fr:"réservation" };
+  function lang(){ try{ return localStorage.getItem("lang") || "en"; }catch(e){ return "en"; } }
+  function goChat(prefill){
+    try{
+      const chatCard = document.querySelector(".chatcard") || document.getElementById("chatCard") || document.getElementById("chat");
+      if(chatCard) chatCard.scrollIntoView({behavior:"smooth", block:"start"});
+      const ta = document.getElementById("msg");
+      if(ta){
+        if(prefill){ ta.value = prefill; }
+        setTimeout(()=>{ try{ ta.focus({preventScroll:true}); ta.scrollIntoView({behavior:"smooth", block:"end"}); }catch(e){} }, 120);
+      }
+    }catch(e){}
+  }
+  function goSchedule(){
+    try{
+      const sc = document.getElementById("scheduleCard") || document.querySelector(".schedule");
+      if(sc) sc.scrollIntoView({behavior:"smooth", block:"start"});
+    }catch(e){}
+  }
+  document.addEventListener("click", (ev)=>{
+    const b = ev.target && ev.target.closest ? ev.target.closest("#homeReserveBtn,#homeExploreBtn,#homeChatPreview,#homeChatBtn") : null;
+    if(!b) return;
+    ev.preventDefault();
+    if(b.id==="homeExploreBtn"){ goSchedule(); return; }
+    if(b.id==="homeReserveBtn"){ goChat(RES_WORD[lang()]||"reservation"); return; }
+    goChat("");
+  }, {passive:false});
 })();
 
 </script>
