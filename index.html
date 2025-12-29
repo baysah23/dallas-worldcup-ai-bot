@@ -45,21 +45,17 @@
       position:relative;
       border-radius: var(--r16);
       overflow:hidden;
-      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
       border: 1px solid var(--line);
       box-shadow: var(--shadow);
-      min-height: 186px;
+      background: #0b152c;
+      padding:0;
     }
-    .hero::before{
-      content:"";
-      position:absolute; inset:-2px;
-      background:
-        radial-gradient(900px 360px at 30% 30%, rgba(31,111,235,.35), transparent 60%),
-        radial-gradient(800px 320px at 80% 20%, rgba(212,175,55,.22), transparent 55%),
-        radial-gradient(700px 300px at 60% 90%, rgba(46,160,67,.18), transparent 55%);
-      transform: translateZ(0);
+    .heroImg{
+      display:block;
+      width:100%;
+      height:auto;
     }
-    .hero::after{
+        .hero::after{
       content:"";
       position:absolute; inset:0;
       background: linear-gradient(180deg, rgba(7,16,34,.15), rgba(7,16,34,.78));
@@ -140,6 +136,7 @@
       display:flex;
       gap:10px;
       align-items:center;
+      flex-wrap:wrap;
     }
     .cta{
       flex: 1 1 auto;
@@ -452,40 +449,64 @@ body.modalOpen{ overflow:hidden; }
   <div class="wrap">
 
     <!-- PREMIUM GLOBAL BANNER -->
-    <section class="hero" id="heroBanner" aria-label="World Cup Concierge banner">
-      <div class="heroInner">
-        <div class="brandRow">
-          <div class="badge"><span class="badgeDot" aria-hidden="true"></span><span>World Cup Concierge</span></div>
-          <div class="pills" aria-label="Quick controls">
-            <button class="pill" id="pillLang" type="button" aria-label="Language"><strong>EN</strong> · 4 languages</button>
-            <button class="pill" id="pillScope" type="button" aria-label="Scope">Scope: <strong>Global</strong></button>
-          </div>
-        </div>
-
-        <h1 class="heroTitle">World Cup 2026</h1>
-        <p class="heroSub">Reserve in seconds. Concierge chat in 4 languages. Premium nights for matchweek energy.</p>
-
-        <div class="heroMeta" aria-label="Kickoff countdown">
-          <div class="trophy" aria-hidden="true">🏆</div>
-          <div class="countdownLine">
-            <span class="countLabel">Kickoff</span>
-            <span id="kickoffCountdown" class="countValue">Loading…</span>
-          </div>
-        </div>
-
-        <div class="heroActions" aria-label="Primary actions">
-          <button class="cta primary" id="ctaReserve" type="button">Reserve</button>
-          <button class="cta" id="ctaChat" type="button">Chat Concierge</button>
-          <button class="cta" id="ctaPlan" type="button">Build My Matchday</button>
-        </div>
-      </div>
-    </section>
+    <section class="hero" id="heroBanner" aria-label="World Cup 2026 banner">
+    <img class="heroImg" src="/static/stadium.png" alt="World Cup 2026 Concierge banner with trophy and kickoff countdown" />
+  </section>
 
     <main>
       <!-- HOME -->
       <section class="section" id="sec-home" aria-label="Home">
-        
-</section>
+        <div class="card" aria-label="Primary actions">
+          <div class="cardHead">
+            <h2 class="cardTitle">Reserve in seconds</h2>
+          </div>
+          <div class="cardBody">
+            <p class="hint" style="margin-top:0">
+              Your venue’s concierge app — fast bookings, 4 languages, matchweek energy without the hassle.
+            </p>
+
+            <div class="heroActions" style="margin-top:14px" aria-label="Primary buttons">
+              <button class="cta primary" id="ctaReserve" type="button">Reserve</button>
+              <button class="cta" id="ctaChat" type="button">Chat concierge</button>
+              <button class="cta" id="ctaPlan" type="button">Build my matchday</button>
+            </div>
+
+            <p class="hint" style="margin-top:12px">
+              Tip: Try “Reserve a table for 4 at 7pm in Dallas” — we’ll handle the rest.
+            </p>
+          </div>
+        </div>
+
+        <div class="card" aria-label="Today">
+          <div class="cardHead">
+            <h2 class="cardTitle">Today</h2>
+            <button class="pill" id="refreshStatus" type="button">Refresh</button>
+          </div>
+          <div class="cardBody">
+            <div id="presenceText" class="hint">Loading…</div>
+            <p class="hint" style="margin-top:10px">
+              Use <b>Schedule</b> for global matches or switch to your <b>City</b> to see local plans.
+            </p>
+          </div>
+        </div>
+
+        <div class="card" aria-label="Explore">
+          <div class="cardHead">
+            <h2 class="cardTitle">Explore</h2>
+          </div>
+          <div class="cardBody">
+            <div class="heroActions" style="margin-top:0">
+              <button class="cta" id="homeSchedule" type="button">Schedule</button>
+              <button class="cta" id="homeFanzone" type="button">Fan Zone</button>
+            </div>
+            <div style="height:10px"></div>
+            <div class="heroActions" style="margin-top:0">
+              <button class="cta" id="homeVIP" type="button">VIP</button>
+              <button class="cta" id="homeMenu" type="button">Menu</button>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <!-- CHAT -->
       <section class="section" id="sec-chat" aria-label="Chat">
@@ -667,9 +688,6 @@ body.modalOpen{ overflow:hidden; }
       state.scope = (state.scope === 'global') ? 'city' : 'global';
       updatePills();
       systemMsg(state.scope === 'global' ? 'Global schedule enabled.' : 'City schedule enabled. Enter a city name.');
-      updateKickoffCountdown();
-      setInterval(updateKickoffCountdown, 60000);
-
       loadPresence();
       if(document.body.dataset.sec === 'schedule') loadSchedule();
     }
@@ -960,29 +978,6 @@ body.modalOpen{ overflow:hidden; }
       }, {passive:true});
     }
 
-
-    function updateKickoffCountdown(){
-      const el = document.getElementById('kickoffCountdown');
-      if(!el) return;
-
-      // FIFA World Cup 2026 opening match: June 11, 2026 (local display)
-      const kickoff = new Date('2026-06-11T00:00:00');
-      const now = new Date();
-      let ms = kickoff - now;
-
-      if(ms <= 0){
-        el.textContent = 'It’s kickoff time';
-        return;
-      }
-
-      const totalMin = Math.floor(ms / 60000);
-      const days = Math.floor(totalMin / (60*24));
-      const hours = Math.floor((totalMin - days*60*24) / 60);
-      const mins = totalMin - days*60*24 - hours*60;
-
-      el.textContent = `${days}d ${hours}h ${mins}m`;
-    }
-
     function boot(){
       console.log('WC_BOOT','STEP12-20251229-182802');
       wireNav();
@@ -990,31 +985,27 @@ body.modalOpen{ overflow:hidden; }
       document.getElementById('pillLang').addEventListener('click', cycleLang);
       document.getElementById('pillScope').addEventListener('click', toggleScope);
 
-      document.getElementById('ctaChat').addEventListener('click', ()=>setSection('chat'));
-      document.getElementById('ctaPlan').addEventListener('click', ()=>openIntake());
+      const ctaChat = document.getElementById('ctaChat');
+      if(ctaChat) ctaChat.addEventListener('click', ()=>setSection('chat'));
 
-      // Home actions
-      const hr = document.getElementById('homeReserve');
-      if(hr) hr.addEventListener('click', ()=>document.getElementById('ctaReserve').click());
-
-      const hc = document.getElementById('homeChat');
-      if(hc) hc.addEventListener('click', ()=>setSection('chat'));
-
-      const hs = document.getElementById('homeSchedule');
-      if(hs) hs.addEventListener('click', ()=>setSection('schedule'));
-
-      const hf = document.getElementById('homeFanzone');
-      if(hf) hf.addEventListener('click', ()=>setSection('fanzone'));
-
-      const hv = document.getElementById('homeVIP');
-      if(hv) hv.addEventListener('click', ()=>setSection('vip'));
-
-      const hm = document.getElementById('homeMenu');
-      if(hm) hm.addEventListener('click', ()=>setSection('menu'));
-      document.getElementById('ctaReserve').addEventListener('click', ()=>{
+      const ctaReserve = document.getElementById('ctaReserve');
+      if(ctaReserve) ctaReserve.addEventListener('click', ()=>{
         setSection('chat');
         systemMsg('Reservation request: tell me city/venue + date/time + party size.');
       });
+
+      const ctaPlan = document.getElementById('ctaPlan');
+      if(ctaPlan) ctaPlan.addEventListener('click', ()=>openIntake());
+
+      // Home Explore shortcuts
+      const hs = document.getElementById('homeSchedule');
+      if(hs) hs.addEventListener('click', ()=>setSection('schedule'));
+      const hf = document.getElementById('homeFanzone');
+      if(hf) hf.addEventListener('click', ()=>setSection('fanzone'));
+      const hv = document.getElementById('homeVIP');
+      if(hv) hv.addEventListener('click', ()=>setSection('vip'));
+      const hm = document.getElementById('homeMenu');
+      if(hm) hm.addEventListener('click', ()=>setSection('menu'));
 
       document.getElementById('sendBtn').addEventListener('click', sendChat);
       document.getElementById('msg').addEventListener('keydown', (e)=>{ if(e.key === 'Enter') sendChat(); });
@@ -1026,10 +1017,7 @@ body.modalOpen{ overflow:hidden; }
       document.getElementById('scopeSelect').addEventListener('change', (e)=>{
         state.scope = (e.target.value === 'city') ? 'city' : 'global';
         updatePills();
-        updateKickoffCountdown();
-      setInterval(updateKickoffCountdown, 60000);
-
-      loadPresence();
+        loadPresence();
         loadSchedule();
       });
 
@@ -1037,10 +1025,7 @@ body.modalOpen{ overflow:hidden; }
         clearTimeout(window.__cityDeb);
         window.__cityDeb = setTimeout(()=>{
           if(state.scope === 'city') loadSchedule();
-          updateKickoffCountdown();
-      setInterval(updateKickoffCountdown, 60000);
-
-      loadPresence();
+          loadPresence();
         }, 350);
       });
 
@@ -1052,9 +1037,6 @@ body.modalOpen{ overflow:hidden; }
 
       updatePills();
       systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
-      updateKickoffCountdown();
-      setInterval(updateKickoffCountdown, 60000);
-
       loadPresence();
       setTimeout(prefetchAll, 250);
     }
