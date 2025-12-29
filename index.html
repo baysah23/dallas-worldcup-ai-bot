@@ -4902,6 +4902,127 @@ body[data-msec="home"] .hero{ display:none !important; }
 #luxHomeShell .luxOverlay > *{ position:relative; z-index:1; }
 /* ========================================================= */
 
+
+/* =========================================================
+   STEP 4F — GEOMETRY PASS (closer to your exact reference)
+   - centers the composition vertically
+   - refines type sizes/spacing
+   - adds the thin gold inner-frame like the mock
+   ========================================================= */
+
+/* give the hero the exact “phone hero” feel */
+#luxHomeShell .luxHero{
+  min-height: calc(100svh - 120px) !important;
+}
+@supports (height: 100dvh){
+  #luxHomeShell .luxHero{ min-height: calc(100dvh - 120px) !important; }
+}
+
+/* move content slightly upward (reference has more breathing room above tiles) */
+#luxHomeShell .luxOverlay{
+  padding: 18px 16px 18px 16px !important;
+  gap: 12px !important;
+  justify-content: center !important; /* center stack */
+}
+
+/* trophy scale + position */
+#luxHomeShell .luxTrophy svg{
+  width: 108px !important;
+  height: 152px !important;
+}
+#luxHomeShell .luxTrophy{
+  margin-bottom: 0px !important;
+}
+
+/* kicker + title geometry */
+#luxHomeShell .luxKicker{
+  margin-top: 2px !important;
+  font-size: 11px !important;
+  letter-spacing: .30em !important;
+}
+#luxHomeShell .luxTitleGold{
+  font-size: clamp(36px, 9.6vw, 58px) !important;
+  letter-spacing: .12em !important;
+  line-height: 1.00 !important;
+  margin-top: 6px !important;
+}
+#luxHomeShell .luxSubGold{
+  font-size: 13px !important;
+  margin-top: 6px !important;
+}
+#luxHomeShell .luxLangRow{
+  font-size: 11px !important;
+  letter-spacing: .34em !important;
+  margin-top: 10px !important;
+}
+
+/* card framing like the reference (inner border + highlight) */
+#luxHomeShell .luxCardCta,
+#luxHomeShell .luxTileBtn{
+  position: relative;
+}
+#luxHomeShell .luxCardCta::before,
+#luxHomeShell .luxTileBtn::before{
+  content:"";
+  position:absolute; inset: 1px;
+  border-radius: 17px;
+  border: 1px solid rgba(255,215,110,.20);
+  pointer-events:none;
+}
+#luxHomeShell .luxCardCta{
+  border-radius: 20px !important;
+  padding: 16px 16px !important;
+}
+#luxHomeShell .luxCardCta::before{ border-radius: 19px; }
+
+/* CTA text proportions */
+#luxHomeShell .luxCtaTitle{
+  font-size: 19px !important;
+  letter-spacing: .03em !important;
+}
+#luxHomeShell .luxCtaSub{ font-size: 12.5px !important; }
+#luxHomeShell .luxCtaLangs{ font-size: 11px !important; letter-spacing: .28em !important; }
+
+/* tiles: make them slightly shorter + tighter */
+#luxHomeShell .luxTileGrid{ gap: 14px !important; }
+#luxHomeShell .luxTileBtn{
+  min-height: 92px !important;
+  border-radius: 20px !important;
+}
+#luxHomeShell .luxTileBtn::before{ border-radius: 19px; }
+
+/* tile icon = gold badge, more “premium” */
+#luxHomeShell .luxTileIcon,
+#luxHomeShell .luxCtaIcon{
+  background: linear-gradient(180deg, rgba(255,215,110,.18), rgba(0,0,0,.12)) !important;
+  border-color: rgba(255,215,110,.32) !important;
+}
+
+/* subtle gold divider line under title stack (like the mock’s light streak) */
+#luxHomeShell .luxTop{
+  position: relative;
+}
+#luxHomeShell .luxTop::after{
+  content:"";
+  display:block;
+  width: 70%;
+  height: 2px;
+  margin: 14px auto 0 auto;
+  background: linear-gradient(90deg, transparent, rgba(255,215,110,.55), transparent);
+  box-shadow: 0 0 22px rgba(255,215,110,.18);
+  opacity: .65;
+}
+
+/* keep the grain subtle */
+#luxHomeShell .luxOverlay::after{ opacity: .06 !important; }
+
+/* small phones: preserve tap targets */
+@media (max-width: 390px){
+  #luxHomeShell .luxOverlay{ padding: 16px 14px 16px 14px !important; }
+  #luxHomeShell .luxTileBtn{ min-height: 88px !important; }
+}
+/* ========================================================= */
+
 </style>
 </head>
 <body data-msec="home" data-lux="on">
