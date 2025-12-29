@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="format-detection" content="telephone=no"/>
   <title>World Cup Concierge</title>
-<!-- WC_BUILD_VERSION: STEP14-20251229-184844 -->
+  <!-- WC_BUILD_VERSION: STEP15-20251229-PHASE2 -->
   <style>
     :root{
       --bg:#071022;
@@ -20,7 +20,12 @@
       --warn:#ffcc66;
       --shadow: 0 10px 30px rgba(0,0,0,.45);
       --r16:16px;
+
+      --glass: rgba(255,255,255,.08);
+      --glass2: rgba(255,255,255,.04);
+      --glass-border: rgba(255,255,255,.18);
     }
+
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
     body{
@@ -33,71 +38,96 @@
         radial-gradient(900px 520px at 40% 120%, rgba(46,160,67,.18), transparent 55%),
         var(--bg);
       overflow-x:hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
+
     .wrap{
       max-width: 560px;
       margin: 0 auto;
       padding: 14px 14px calc(84px + env(safe-area-inset-bottom));
     }
 
-    /* === HERO / BANNER === */
+    /* =========================================================
+       HERO / BANNER (MUST STAY UNTOUCHED: NO OVERLAYS ON IMAGE)
+       ========================================================= */
     .hero{
       position:relative;
       border-radius: var(--r16);
       overflow:hidden;
-      border: 1px solid var(--line);
+      border: 1px solid rgba(255,255,255,.12);
       box-shadow: var(--shadow);
       padding:0;
-      background: transparent;
+      background: transparent; /* keep pure */
     }
     .heroImg{
       display:block;
       width:100%;
       height:auto;
     }
-    #heroBanner{ min-height: 220px; margin: 10px 0 14px; }
-    #heroBanner{ margin: 10px 0 14px; }
+    #heroBanner{ min-height: 220px; margin: 10px 0 10px; }
 
-.hero::after{
+    /* === HERO STRIP (BELOW IMAGE) === */
+    .heroStrip{
+      margin-top: 10px;
+      border-radius: var(--r16);
+      border: 1px solid var(--glass-border);
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.03));
+      box-shadow: 0 14px 40px rgba(0,0,0,.38);
+      padding: 12px 12px;
+      overflow:hidden;
+      position: relative;
+    }
+    .heroStrip::before{
       content:"";
-      position:absolute; inset:0;
-      background: linear-gradient(180deg, rgba(7,16,34,.15), rgba(7,16,34,.78));
+      position:absolute; inset:-2px;
+      background:
+        radial-gradient(40% 60% at 12% 20%, rgba(212,175,55,.22), transparent 55%),
+        radial-gradient(40% 60% at 88% 0%, rgba(31,111,235,.22), transparent 55%),
+        radial-gradient(40% 70% at 55% 130%, rgba(46,160,67,.18), transparent 60%);
       pointer-events:none;
+      filter: blur(12px);
+      opacity:.9;
     }
-    .heroInner{
-      position:relative;
-      padding: 16px 14px 14px;
-      z-index: 2;
-    }
-    .brandRow{
+    .heroStripInner{ position:relative; z-index:1; }
+
+    .stripTop{
       display:flex;
       align-items:center;
       justify-content:space-between;
-      gap: 10px;
+      gap:10px;
       margin-bottom: 10px;
     }
+
     .badge{
       display:inline-flex;
       align-items:center;
       gap:8px;
-      font-weight: 800;
-      letter-spacing:.08em;
+      font-weight: 900;
+      letter-spacing:.10em;
       text-transform: uppercase;
       font-size: 11px;
-      color: rgba(234,240,255,.9);
+      color: rgba(234,240,255,.92);
       padding: 8px 10px;
       border-radius: 999px;
-      border: 1px solid rgba(255,255,255,.16);
+      border: 1px solid rgba(255,255,255,.18);
       background: rgba(15,27,51,.55);
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      white-space: nowrap;
     }
     .badgeDot{
       width:8px; height:8px; border-radius:50%;
       background: var(--green);
       box-shadow: 0 0 0 4px rgba(46,160,67,.18);
       flex:0 0 auto;
+      animation: pulse 1.6s ease-in-out infinite;
     }
+    @keyframes pulse{
+      0%,100%{ transform: scale(1); filter: brightness(1); }
+      50%{ transform: scale(1.16); filter: brightness(1.2); }
+    }
+
     .pills{
       display:flex;
       gap:8px;
@@ -107,77 +137,103 @@
     }
     .pill{
       appearance:none;
-      border: 1px solid rgba(255,255,255,.16);
+      border: 1px solid rgba(255,255,255,.18);
       background: rgba(15,27,51,.55);
       color: var(--text);
       border-radius: 999px;
-      padding: 8px 10px;
+      padding: 9px 10px;
       font-size: 12px;
       line-height: 1;
       cursor:pointer;
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
-    }
-    .pill strong{ font-weight: 900; color: rgba(255,255,255,.95); }
-    .pill:active{ transform: translateY(1px); }
-
-    .heroTitle{
-      margin: 4px 0 6px;
-      font-weight: 900;
-      letter-spacing: .02em;
-      text-transform: uppercase;
-      font-size: clamp(20px, 5.6vw, 26px);
-      line-height: 1.05;
-    }
-    .heroSub{
-      margin:0 0 12px;
-      font-size: 13px;
-      color: rgba(185,199,238,.95);
-      max-width: 92%;
-    }
-    .heroActions{
-      display:flex;
-      gap:10px;
-      align-items:center;
-      flex-wrap:wrap;
-    }
-    .cta{
-      height: 54px;
-      padding: 0 16px;
-      border-radius: 16px;
-      border: 1px solid rgba(255,255,255,.16);
-      background: rgba(15,27,51,.92);
-      color: var(--text);
-      font-weight: 700;
-      font-size: 15px;
-      letter-spacing: -0.01em;
-      line-height: 1;
-      display:inline-flex;
-      align-items:center;
-      justify-content:center;
-      gap:10px;
-      box-shadow: 0 10px 24px rgba(0,0,0,.22);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       -webkit-tap-highlight-color: transparent;
       touch-action: manipulation;
+      transition: transform .12s ease, filter .12s ease;
     }
-    .cta:active{ transform: translateY(1px); }
-    .cta.primary{
-      background: linear-gradient(180deg, rgba(212,175,55,1), rgba(168,129,30,1));
-      color: #070f1f;
-      border: 0;
-      box-shadow: 0 14px 30px rgba(212,175,55,.22);
+    .pill strong{ font-weight: 900; color: rgba(255,255,255,.96); }
+    .pill:active{ transform: translateY(1px) scale(.99); }
+    .pill:focus-visible{ outline: none; box-shadow: 0 0 0 4px rgba(31,111,235,.18); }
+
+    .stripMid{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .stripTitle{
+      margin:0;
+      font-weight: 950;
+      letter-spacing:.02em;
+      text-transform: uppercase;
+      font-size: 16px;
+      line-height: 1.1;
+    }
+    .stripSub{
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: rgba(185,199,238,.92);
+      line-height: 1.35;
+      max-width: 35ch;
+    }
+    .countdownMini{
+      text-align:right;
+      min-width: 150px;
+    }
+    .cdNums{
+      font-variant-numeric: tabular-nums;
+      font-weight: 950;
+      letter-spacing: .02em;
+      font-size: 14px;
+      line-height: 1.1;
+      background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(212,175,55,.85));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      text-shadow: 0 14px 40px rgba(212,175,55,.12);
+      white-space: nowrap;
+    }
+    .cdLbl{
+      margin-top: 3px;
+      font-size: 11px;
+      color: rgba(185,199,238,.9);
     }
 
-.cta:active{ transform: translateY(1px); }
+    .valueChips{
+      margin-top: 10px;
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .vchip{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(11,21,44,.42);
+      font-size: 12px;
+      color: rgba(234,240,255,.95);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      user-select:none;
+    }
+    .vchip .dot{
+      width:6px; height:6px; border-radius:50%;
+      background: rgba(212,175,55,.95);
+      box-shadow: 0 0 0 4px rgba(212,175,55,.12);
+    }
 
     /* === CARDS === */
     .card{
       margin-top: 14px;
       border-radius: var(--r16);
-      border: 1px solid var(--line);
-      background: rgba(15,27,51,.60);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border);
+      background: linear-gradient(180deg, var(--glass), var(--glass2));
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
       box-shadow: var(--shadow);
       overflow:hidden;
     }
@@ -189,6 +245,118 @@
       font-size: 12px;
       color: rgba(185,199,238,.9);
       line-height: 1.35;
+    }
+
+    /* === HOME PHASE 2: MATCHDAY FLOW === */
+    .flow{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      margin-top: 8px;
+    }
+    .flowStep{
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(11,21,44,.52);
+      padding: 10px 10px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      min-height: 56px;
+    }
+    .flowLeft{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width: 0;
+    }
+    .stepNum{
+      width:28px; height:28px; border-radius: 10px;
+      display:flex; align-items:center; justify-content:center;
+      font-weight: 950;
+      font-size: 13px;
+      color: rgba(7,16,34,.98);
+      background: linear-gradient(180deg, rgba(212,175,55,1), rgba(168,129,30,1));
+      box-shadow: 0 10px 30px rgba(212,175,55,.18);
+      flex:0 0 auto;
+    }
+    .stepTxt{
+      min-width: 0;
+    }
+    .stepTitle{
+      font-weight: 950;
+      font-size: 13px;
+      margin:0;
+      letter-spacing:.01em;
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
+    }
+    .stepSub{
+      margin: 3px 0 0;
+      font-size: 12px;
+      color: rgba(185,199,238,.92);
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* === BUTTONS (MICRO INTERACTIONS) === */
+    .heroActions{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .cta{
+      height: 56px;
+      padding: 0 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(15,27,51,.86);
+      color: var(--text);
+      font-weight: 800;
+      font-size: 15px;
+      letter-spacing: -0.01em;
+      line-height: 1;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      box-shadow: 0 10px 24px rgba(0,0,0,.22);
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: transform .12s ease, filter .12s ease;
+      position: relative;
+      overflow:hidden;
+    }
+    .cta::after{
+      content:"";
+      position:absolute;
+      inset:-2px;
+      transform: translateX(-120%);
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
+      transition: transform .9s ease;
+      pointer-events:none;
+    }
+    .cta:active{ transform: translateY(1px) scale(.99); filter: brightness(1.06); }
+    .cta:active::after{ transform: translateX(120%); }
+    .cta:focus-visible{ outline:none; box-shadow: 0 0 0 4px rgba(31,111,235,.18); }
+
+    .cta.primary{
+      background: linear-gradient(180deg, rgba(212,175,55,1), rgba(168,129,30,1));
+      color: #070f1f;
+      border: 0;
+      box-shadow: 0 14px 30px rgba(212,175,55,.22);
+    }
+
+    .cta.small{
+      height: 44px;
+      font-size: 13px;
+      border-radius: 14px;
+      padding: 0 12px;
+      font-weight: 900;
     }
 
     /* === SECTIONS === */
@@ -253,8 +421,11 @@
       font-weight: 900;
       font-size: 14px;
       cursor:pointer;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: transform .12s ease, filter .12s ease;
     }
-    #sendBtn:active{ transform: translateY(1px); }
+    #sendBtn:active{ transform: translateY(1px) scale(.99); filter: brightness(1.08); }
 
     /* === LIST ITEMS (Menu / Schedule / Events) === */
     .list{ display:flex; flex-direction:column; gap:10px; }
@@ -330,6 +501,8 @@
       cursor:pointer;
       user-select:none;
       -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: transform .12s ease, filter .12s ease;
     }
     .mnavBtn .ico{ font-size: 18px; line-height: 1; }
     .mnavBtn span{
@@ -342,110 +515,121 @@
       background: rgba(31,111,235,.16);
       border: 1px solid rgba(31,111,235,.26);
     }
-    .mnavBtn:active{ transform: translateY(1px); }
+    .mnavBtn:active{ transform: translateY(1px) scale(.99); filter: brightness(1.06); }
 
     .srOnly{
       position:absolute; width:1px; height:1px; padding:0; margin:-1px;
       overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
     }
-  
-/* ===== STEP 10: Premium polish ===== */
-:root{
-  --gold: rgba(212,175,55,.9);
-  --glass: rgba(255,255,255,.08);
-  --glass-border: rgba(255,255,255,.18);
-}
-.hero{
-  background:
-    radial-gradient(120% 80% at 10% 0%, rgba(255,255,255,.15), transparent 40%),
-    linear-gradient(180deg, #0b1220 0%, #070b14 100%);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(10px);
-}
-.hero::after{
-  content:'';
-  position:absolute;
-  inset:0;
-  background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,.35) 70%);
-}
-.heroTitle{
-  letter-spacing:.04em;
-}
-.heroSub{
-  opacity:.85;
-}
-.sectionTitle{
-  font-weight:600;
-}
-.card{
-  border:1px solid var(--glass-border);
-  background: linear-gradient(180deg, var(--glass), rgba(255,255,255,.02));
-}
-.mnav{
-  backdrop-filter: blur(12px);
-  border-top:1px solid var(--glass-border);
-}
 
-
-/* ===== STEP 11: Concierge CTA & Modal ===== */
-.ctaBtn{margin-top:12px;padding:12px 16px;border-radius:14px;border:1px solid rgba(212,175,55,.6);
-background:linear-gradient(180deg, rgba(212,175,55,.25), rgba(212,175,55,.12));
-color:#fff;font-weight:600}
-.ctaBtn.full{width:100%}
-.modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-background:rgba(0,0,0,.5);z-index:50}
-.modal.hidden{display:none}
-.modalCard{width:92%;max-width:420px;border-radius:18px;padding:14px;
-background:linear-gradient(180deg, rgba(255,255,255,.1), rgba(255,255,255,.04));
-border:1px solid rgba(255,255,255,.2)}
-.modalHead{display:flex;justify-content:space-between;align-items:center}
-.modalBody label{display:block;font-size:12px;opacity:.85;margin-top:10px}
-.modalBody input,.modalBody select{width:100%;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.2);
-background:rgba(0,0,0,.2);color:#fff;margin-top:4px}
-.iconBtn{background:none;border:none;color:#fff;font-size:18px}
-
-
-/* ===== STEP 12: Intake UX polish + toast ===== */
-body.modalOpen{ overflow:hidden; }
-.toast{
-  position:fixed; left:50%; transform:translateX(-50%);
-  bottom: calc(74px + env(safe-area-inset-bottom));
-  background: rgba(15,27,51,.92);
-  border: 1px solid rgba(255,255,255,.18);
-  color: rgba(234,240,255,.96);
-  padding: 10px 12px;
-  border-radius: 14px;
-  box-shadow: 0 14px 40px rgba(0,0,0,.45);
-  z-index: 60;
-  width: min(92%, 460px);
-  font-size: 13px;
-}
-.toast.hidden{ display:none; }
-.modal{ padding: 18px; }
-.modalCard{ box-shadow: 0 18px 70px rgba(0,0,0,.55); }
-.modalHead h3{ margin: 0; font-size: 15px; letter-spacing:.02em; }
-.modalBody .hint{ margin-top: 10px; }
-.modalBody input:focus,.modalBody select:focus{
-  outline: none;
-  border-color: rgba(212,175,55,.75);
-  box-shadow: 0 0 0 4px rgba(212,175,55,.12);
-}
-.modalBody label.required::after{
-  content:' *';
-  color: rgba(255,204,102,.95);
-  font-weight: 900;
-}
-
-</style>
+    /* ===== Intake modal + toast (kept; home only uses it) ===== */
+    body.modalOpen{ overflow:hidden; }
+    .toast{
+      position:fixed; left:50%; transform:translateX(-50%);
+      bottom: calc(74px + env(safe-area-inset-bottom));
+      background: rgba(15,27,51,.92);
+      border: 1px solid rgba(255,255,255,.18);
+      color: rgba(234,240,255,.96);
+      padding: 10px 12px;
+      border-radius: 14px;
+      box-shadow: 0 14px 40px rgba(0,0,0,.45);
+      z-index: 60;
+      width: min(92%, 460px);
+      font-size: 13px;
+    }
+    .toast.hidden{ display:none; }
+    .modal{
+      position:fixed; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      background: rgba(0,0,0,.55);
+      z-index: 70;
+      padding: 18px;
+    }
+    .modal.hidden{ display:none; }
+    .modalCard{
+      width: 100%;
+      max-width: 440px;
+      border-radius: 18px;
+      padding: 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
+      border: 1px solid rgba(255,255,255,.20);
+      box-shadow: 0 18px 70px rgba(0,0,0,.55);
+    }
+    .modalHead{
+      display:flex; justify-content:space-between; align-items:center;
+      gap: 10px;
+    }
+    .modalHead h3{ margin:0; font-size: 15px; letter-spacing:.02em; }
+    .iconBtn{ background:none; border:none; color:#fff; font-size:18px; padding: 6px 10px; border-radius: 12px; }
+    .iconBtn:active{ transform: translateY(1px); }
+    .modalBody label{ display:block; font-size:12px; opacity:.85; margin-top:10px; }
+    .modalBody label.required::after{ content:' *'; color: rgba(255,204,102,.95); font-weight: 900; }
+    .modalBody input,.modalBody select{
+      width:100%;
+      padding:10px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.2);
+      background:rgba(0,0,0,.2);
+      color:#fff;
+      margin-top:4px;
+      outline:none;
+    }
+    .modalBody input:focus,.modalBody select:focus{
+      border-color: rgba(212,175,55,.75);
+      box-shadow: 0 0 0 4px rgba(212,175,55,.12);
+    }
+    .ctaBtn{
+      margin-top:12px;
+      padding:12px 16px;
+      border-radius:14px;
+      border:1px solid rgba(212,175,55,.6);
+      background:linear-gradient(180deg, rgba(212,175,55,.25), rgba(212,175,55,.12));
+      color:#fff;
+      font-weight:900;
+      width:100%;
+    }
+    .ctaBtn:active{ transform: translateY(1px); }
+  </style>
 </head>
 
 <body data-sec="home">
   <div class="wrap">
 
-    <!-- PREMIUM GLOBAL BANNER -->
+    <!-- PURE HERO IMAGE (NO OVERLAYS) -->
     <section class="hero" id="heroBanner" aria-label="World Cup 2026 banner">
-    <img class="heroImg" src="/static/hero_stadium.png?v=20251229" alt="World Cup 2026 Concierge banner with trophy and kickoff countdown" />
-  </section>
+      <img class="heroImg" src="/static/hero_stadium.png?v=20251229" alt="World Cup 2026 Concierge banner with trophy and kickoff countdown" />
+    </section>
+
+    <!-- PHASE 2: HERO STRIP BELOW BANNER -->
+    <section class="heroStrip" aria-label="Hero strip">
+      <div class="heroStripInner">
+        <div class="stripTop">
+          <div class="badge" aria-label="Live badge"><span class="badgeDot" aria-hidden="true"></span>LIVE WORLD CUP MODE</div>
+          <div class="pills" aria-label="Quick pills">
+            <button class="pill" id="pillLang" type="button" aria-label="Change language">EN</button>
+            <button class="pill" id="pillScope" type="button" aria-label="Toggle schedule scope">Scope: Global</button>
+          </div>
+        </div>
+
+        <div class="stripMid">
+          <div>
+            <p class="stripTitle">Premium reservations • matchday energy</p>
+            <p class="stripSub">Book fast. Plan smarter. Concierge chat in 4 languages.</p>
+          </div>
+          <div class="countdownMini" aria-label="Kickoff countdown">
+            <div class="cdNums" id="cdMini">—</div>
+            <div class="cdLbl" id="cdMiniLbl">until kickoff</div>
+          </div>
+        </div>
+
+        <div class="valueChips" aria-label="Value chips">
+          <div class="vchip"><span class="dot"></span>Instant table requests</div>
+          <div class="vchip"><span class="dot"></span>Global match schedule</div>
+          <div class="vchip"><span class="dot"></span>VIP + group access</div>
+          <div class="vchip"><span class="dot"></span>EN • ES • PT • FR</div>
+        </div>
+      </div>
+    </section>
 
     <main>
       <!-- HOME -->
@@ -456,17 +640,65 @@ body.modalOpen{ overflow:hidden; }
           </div>
           <div class="cardBody">
             <p class="hint" style="margin-top:0">
-              Your venue’s concierge app — fast bookings, 4 languages, matchweek energy without the hassle.
+              Fan-first. Luxury feel. Zero friction. Tell us city + time + party size — we handle the rest.
             </p>
 
             <div class="heroActions" style="margin-top:12px" aria-label="Primary buttons">
-              <button class="cta primary" id="ctaReserve" type="button">Reserve</button>
+              <button class="cta primary" id="ctaReserve" type="button">Reserve now</button>
               <button class="cta" id="ctaChat" type="button">Chat concierge</button>
               <button class="cta" id="ctaPlan" type="button">Build my matchday</button>
             </div>
 
             <p class="hint" style="margin-top:12px">
-              Tip: Try “Reserve a table for 4 at 7pm in Dallas” — we’ll handle the rest.
+              Tip: Try “Table for 4 • 7pm • Dallas” — or ask in Spanish/Portuguese/French.
+            </p>
+          </div>
+        </div>
+
+        <!-- PHASE 2: MATCHDAY FLOW -->
+        <div class="card" aria-label="Matchday flow">
+          <div class="cardHead">
+            <h2 class="cardTitle">Matchday flow</h2>
+            <button class="pill" id="flowQuick" type="button">Fast plan</button>
+          </div>
+          <div class="cardBody">
+            <div class="flow" aria-label="Steps">
+              <div class="flowStep">
+                <div class="flowLeft">
+                  <div class="stepNum">1</div>
+                  <div class="stepTxt">
+                    <p class="stepTitle">Pick your city</p>
+                    <p class="stepSub" id="flowCitySub">Global view (tap Scope → City)</p>
+                  </div>
+                </div>
+                <button class="cta small" id="flowCityBtn" type="button">Set city</button>
+              </div>
+
+              <div class="flowStep">
+                <div class="flowLeft">
+                  <div class="stepNum">2</div>
+                  <div class="stepTxt">
+                    <p class="stepTitle">Choose a match</p>
+                    <p class="stepSub">Search teams, venues, groups</p>
+                  </div>
+                </div>
+                <button class="cta small" id="flowMatchBtn" type="button">Browse</button>
+              </div>
+
+              <div class="flowStep">
+                <div class="flowLeft">
+                  <div class="stepNum">3</div>
+                  <div class="stepTxt">
+                    <p class="stepTitle">Reserve premium access</p>
+                    <p class="stepSub">Tables • watch parties • VIP</p>
+                  </div>
+                </div>
+                <button class="cta small primary" id="flowReserveBtn" type="button">Reserve</button>
+              </div>
+            </div>
+
+            <p class="hint" style="margin-top:10px" id="flowHint">
+              We’ll keep it simple: pick a match, we route you to the best options.
             </p>
           </div>
         </div>
@@ -479,7 +711,7 @@ body.modalOpen{ overflow:hidden; }
           <div class="cardBody">
             <div id="presenceText" class="hint">Loading…</div>
             <p class="hint" style="margin-top:10px">
-              Use <b>Schedule</b> for global matches or switch to your <b>City</b> to see local plans.
+              Use <b>Schedule</b> for global matches or switch to <b>City</b> to build your local plan.
             </p>
           </div>
         </div>
@@ -592,15 +824,37 @@ body.modalOpen{ overflow:hidden; }
     <button class="mnavBtn" data-sec="vip" type="button"><span class="ico">⭐</span><span>VIP</span></button>
   </nav>
 
-<div id="toast" class="toast hidden" aria-live="polite"></div>
+  <div id="toast" class="toast hidden" aria-live="polite"></div>
 
+  <!-- Intake modal (used by "Build my matchday") -->
+  <div id="intakeModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Concierge intake">
+    <div class="modalCard" role="document">
+      <div class="modalHead">
+        <h3>Matchday request</h3>
+        <button class="iconBtn" id="closeModal" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="modalBody">
+        <label class="required" for="iCity">City</label>
+        <input id="iCity" placeholder="e.g., Dallas" />
+        <label class="required" for="iDate">Date</label>
+        <input id="iDate" type="date" />
+        <label class="required" for="iGroup">Party size</label>
+        <input id="iGroup" inputmode="numeric" placeholder="e.g., 4" />
+        <label for="iBudget">Budget (optional)</label>
+        <input id="iBudget" placeholder="e.g., $200–$400" />
+        <label class="required" for="iContact">Contact</label>
+        <input id="iContact" placeholder="Phone or email" />
+        <button class="ctaBtn" id="submitIntake" type="button">Submit request</button>
+        <div id="intakeMsg" class="hint"></div>
+        <div class="hint">We’ll route you to Chat next to refine venue area + time window.</div>
+      </div>
+    </div>
+  </div>
 
-  
-  
   <script>
     const state = { lang:'en', scope:'global', city:'' };
 
-    // STEP12: Toast helper
+    // Toast helper
     function toast(msg){
       const t = document.getElementById('toast');
       if(!t) return;
@@ -608,6 +862,10 @@ body.modalOpen{ overflow:hidden; }
       t.classList.remove('hidden');
       clearTimeout(window.__toastT);
       window.__toastT = setTimeout(()=>t.classList.add('hidden'), 2800);
+    }
+
+    function haptic(ms=10){
+      try{ if(navigator.vibrate) navigator.vibrate(ms); }catch(e){}
     }
 
     function escapeHtml(s){
@@ -662,11 +920,30 @@ body.modalOpen{ overflow:hidden; }
       }
     }
 
+    function updateFlowCopy(){
+      const sub = document.getElementById('flowCitySub');
+      if(!sub) return;
+      if(state.scope === 'city' && state.city){
+        sub.textContent = `City mode: ${state.city}`;
+      }else if(state.scope === 'city'){
+        sub.textContent = 'City mode (enter a city in Schedule)';
+      }else{
+        sub.textContent = 'Global view (tap Scope → City)';
+      }
+    }
+
     function updatePills(){
-      document.getElementById('pillLang').innerHTML = `<strong>${state.lang.toUpperCase()}</strong> · 4 languages`;
-      document.getElementById('pillScope').innerHTML = `Scope: <strong>${state.scope === 'city' ? 'City' : 'Global'}</strong>`;
-      document.getElementById('scopeSelect').value = state.scope;
-      document.getElementById('citySearch').value = state.city || '';
+      const pillLang = document.getElementById('pillLang');
+      const pillScope = document.getElementById('pillScope');
+      if(pillLang) pillLang.innerHTML = `<strong>${state.lang.toUpperCase()}</strong> · 4`;
+      if(pillScope) pillScope.innerHTML = `Scope: <strong>${state.scope === 'city' ? 'City' : 'Global'}</strong>`;
+
+      const scopeSelect = document.getElementById('scopeSelect');
+      const citySearch = document.getElementById('citySearch');
+      if(scopeSelect) scopeSelect.value = state.scope;
+      if(citySearch) citySearch.value = state.city || '';
+
+      updateFlowCopy();
     }
 
     function cycleLang(){
@@ -674,6 +951,8 @@ body.modalOpen{ overflow:hidden; }
       state.lang = order[(order.indexOf(state.lang)+1) % order.length];
       updatePills();
       systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
+      toast(`Language: ${state.lang.toUpperCase()}`);
+      haptic(8);
       if(document.body.dataset.sec === 'menu') loadMenu();
       if(document.body.dataset.sec === 'fanzone') loadFanzone();
     }
@@ -681,9 +960,35 @@ body.modalOpen{ overflow:hidden; }
     function toggleScope(){
       state.scope = (state.scope === 'global') ? 'city' : 'global';
       updatePills();
-      systemMsg(state.scope === 'global' ? 'Global schedule enabled.' : 'City schedule enabled. Enter a city name.');
+      systemMsg(state.scope === 'global' ? 'Global schedule enabled.' : 'City schedule enabled. Enter a city name in Schedule.');
+      toast(state.scope === 'global' ? 'Scope: Global' : 'Scope: City');
+      haptic(8);
       loadPresence();
       if(document.body.dataset.sec === 'schedule') loadSchedule();
+    }
+
+    // === Mini countdown (kickoff: 2026-06-11) ===
+    const KICKOFF_ISO = '2026-06-11T00:00:00Z';
+    function updateCountdownMini(){
+      const el = document.getElementById('cdMini');
+      const lbl = document.getElementById('cdMiniLbl');
+      if(!el || !lbl) return;
+
+      const target = new Date(KICKOFF_ISO).getTime();
+      const now = Date.now();
+      const diff = target - now;
+
+      if(diff <= 0){
+        el.textContent = 'KICKOFF';
+        lbl.textContent = 'World Cup is live';
+        return;
+      }
+      const totalSec = Math.floor(diff / 1000);
+      const d = Math.floor(totalSec / 86400);
+      const h = Math.floor((totalSec % 86400) / 3600);
+      const m = Math.floor((totalSec % 3600) / 60);
+      el.textContent = `${d}d ${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m`;
+      lbl.textContent = 'until kickoff';
     }
 
     // === CHAT ===
@@ -707,6 +1012,7 @@ body.modalOpen{ overflow:hidden; }
       input.value = '';
       appendBubble(txt, 'me');
       focusChatInput();
+      haptic(8);
 
       try{
         const r = await fetch('/chat', {
@@ -808,6 +1114,7 @@ body.modalOpen{ overflow:hidden; }
           matches = matches.filter(m => String(m.city||'').toLowerCase().includes(c) || String(m.venue||'').toLowerCase().includes(c));
         }
         renderMatches(matches);
+        updatePills();
       }catch(e){
         hint.textContent = 'Schedule temporarily unavailable.';
       }
@@ -874,9 +1181,8 @@ body.modalOpen{ overflow:hidden; }
       try{ loadFanzone(); }catch(e){}
     }
 
-    // === MODAL (STEP12) ===
+    // === MODAL (intake) ===
     const modal = document.getElementById('intakeModal');
-    const overlay = document.getElementById('modalOverlay');
     const openBtn = document.getElementById('ctaPlan');
     const closeBtn = document.getElementById('closeModal');
 
@@ -884,6 +1190,7 @@ body.modalOpen{ overflow:hidden; }
       if(!modal) return;
       modal.classList.remove('hidden');
       document.body.classList.add('modalOpen');
+      haptic(10);
       // default date: tomorrow
       try{
         const d = new Date();
@@ -899,9 +1206,10 @@ body.modalOpen{ overflow:hidden; }
       modal.classList.add('hidden');
       document.body.classList.remove('modalOpen');
     }
+
     if(openBtn) openBtn.addEventListener('click', openModal);
     if(closeBtn) closeBtn.addEventListener('click', closeModal);
-    if(overlay) overlay.addEventListener('click', closeModal);
+    if(modal) modal.addEventListener('click', (e)=>{ if(e.target === modal) closeModal(); });
     // stop clicks inside card from closing
     const card = modal ? modal.querySelector('.modalCard') : null;
     if(card) card.addEventListener('click', (e)=> e.stopPropagation());
@@ -922,6 +1230,7 @@ body.modalOpen{ overflow:hidden; }
       if(!payload.city || !payload.date || !payload.group || !payload.contact){
         msg.textContent = 'Please complete all required fields.';
         toast('Missing required fields.');
+        haptic(12);
         return;
       }
       msg.textContent = 'Submitting…';
@@ -933,6 +1242,7 @@ body.modalOpen{ overflow:hidden; }
           msg.textContent = 'Request received. Concierge will follow up.';
           toast('Request received.');
           closeModal();
+
           // route to chat with a prefilled message
           setSection('chat');
           const input = document.getElementById('msg');
@@ -940,14 +1250,16 @@ body.modalOpen{ overflow:hidden; }
             input.value = `Concierge request: ${payload.city} · ${payload.date} · group ${payload.group} · budget ${payload.budget} · contact ${payload.contact}`;
             focusChatInput();
           }
-          systemMsg('Thanks — I can refine options now. Tell me: preferred venue area + time window + any dietary / seating preferences.');
+          systemMsg('Thanks — tell me: preferred venue area + time window + any seating preferences.');
         }else{
           msg.textContent = 'Submission failed.';
           toast('Submission failed.');
+          haptic(16);
         }
       }catch(e){
         msg.textContent = 'Submission failed.';
         toast('Submission failed.');
+        haptic(16);
       }
     }
     const submitBtn = document.getElementById('submitIntake');
@@ -968,68 +1280,115 @@ body.modalOpen{ overflow:hidden; }
       nav.addEventListener('click', (e)=>{
         const btn = e.target.closest('.mnavBtn');
         if(!btn) return;
+        haptic(6);
         setSection(btn.dataset.sec || 'home');
       }, {passive:true});
     }
 
     function boot(){
-      console.log('WC_BOOT','STEP12-20251229-182802');
+      console.log('WC_BOOT','STEP15-PHASE2');
       wireNav();
 
-      document.getElementById('pillLang').addEventListener('click', cycleLang);
-      document.getElementById('pillScope').addEventListener('click', toggleScope);
+      // Phase2 pills (exist in hero strip)
+      const pillLang = document.getElementById('pillLang');
+      const pillScope = document.getElementById('pillScope');
+      if(pillLang) pillLang.addEventListener('click', cycleLang);
+      if(pillScope) pillScope.addEventListener('click', toggleScope);
 
       const ctaChat = document.getElementById('ctaChat');
-      if(ctaChat) ctaChat.addEventListener('click', ()=>setSection('chat'));
+      if(ctaChat) ctaChat.addEventListener('click', ()=>{ haptic(8); setSection('chat'); });
 
       const ctaReserve = document.getElementById('ctaReserve');
       if(ctaReserve) ctaReserve.addEventListener('click', ()=>{
+        haptic(10);
         setSection('chat');
         systemMsg('Reservation request: tell me city/venue + date/time + party size.');
       });
 
-      const ctaPlan = document.getElementById('ctaPlan');
-      if(ctaPlan) ctaPlan.addEventListener('click', ()=>openIntake());
+      // Matchday flow wiring
+      const flowCityBtn = document.getElementById('flowCityBtn');
+      if(flowCityBtn) flowCityBtn.addEventListener('click', ()=>{
+        haptic(8);
+        setSection('schedule');
+        state.scope = 'city';
+        updatePills();
+        toast('Tip: enter your city, then Refresh.');
+        setTimeout(()=>{ try{ document.getElementById('citySearch').focus(); }catch(e){} }, 180);
+      });
+
+      const flowMatchBtn = document.getElementById('flowMatchBtn');
+      if(flowMatchBtn) flowMatchBtn.addEventListener('click', ()=>{
+        haptic(8);
+        setSection('schedule');
+      });
+
+      const flowReserveBtn = document.getElementById('flowReserveBtn');
+      if(flowReserveBtn) flowReserveBtn.addEventListener('click', ()=>{
+        haptic(10);
+        openModal();
+      });
+
+      const flowQuick = document.getElementById('flowQuick');
+      if(flowQuick) flowQuick.addEventListener('click', ()=>{
+        haptic(8);
+        toast('Fast plan: 1) City  2) Match  3) Reserve');
+        setTimeout(()=>{ try{ document.getElementById('flowReserveBtn').scrollIntoView({block:'center', behavior:'smooth'});}catch(e){} }, 60);
+      });
 
       // Home Explore shortcuts
       const hs = document.getElementById('homeSchedule');
-      if(hs) hs.addEventListener('click', ()=>setSection('schedule'));
+      if(hs) hs.addEventListener('click', ()=>{ haptic(8); setSection('schedule'); });
       const hf = document.getElementById('homeFanzone');
-      if(hf) hf.addEventListener('click', ()=>setSection('fanzone'));
+      if(hf) hf.addEventListener('click', ()=>{ haptic(8); setSection('fanzone'); });
       const hv = document.getElementById('homeVIP');
-      if(hv) hv.addEventListener('click', ()=>setSection('vip'));
+      if(hv) hv.addEventListener('click', ()=>{ haptic(8); setSection('vip'); });
       const hm = document.getElementById('homeMenu');
-      if(hm) hm.addEventListener('click', ()=>setSection('menu'));
+      if(hm) hm.addEventListener('click', ()=>{ haptic(8); setSection('menu'); });
 
-      document.getElementById('sendBtn').addEventListener('click', sendChat);
-      document.getElementById('msg').addEventListener('keydown', (e)=>{ if(e.key === 'Enter') sendChat(); });
+      const sendBtn = document.getElementById('sendBtn');
+      if(sendBtn) sendBtn.addEventListener('click', sendChat);
+      const msg = document.getElementById('msg');
+      if(msg) msg.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') sendChat(); });
 
-      document.getElementById('reloadMenu').addEventListener('click', loadMenu);
-      document.getElementById('reloadSchedule').addEventListener('click', loadSchedule);
-      document.getElementById('reloadFanzone').addEventListener('click', loadFanzone);
+      const reloadMenu = document.getElementById('reloadMenu');
+      if(reloadMenu) reloadMenu.addEventListener('click', ()=>{ haptic(6); loadMenu(); });
+      const reloadSchedule = document.getElementById('reloadSchedule');
+      if(reloadSchedule) reloadSchedule.addEventListener('click', ()=>{ haptic(6); loadSchedule(); });
+      const reloadFanzone = document.getElementById('reloadFanzone');
+      if(reloadFanzone) reloadFanzone.addEventListener('click', ()=>{ haptic(6); loadFanzone(); });
 
-      document.getElementById('scopeSelect').addEventListener('change', (e)=>{
+      const refreshStatus = document.getElementById('refreshStatus');
+      if(refreshStatus) refreshStatus.addEventListener('click', ()=>{ haptic(6); loadPresence(); });
+
+      const scopeSelect = document.getElementById('scopeSelect');
+      if(scopeSelect) scopeSelect.addEventListener('change', (e)=>{
         state.scope = (e.target.value === 'city') ? 'city' : 'global';
         updatePills();
         loadPresence();
         loadSchedule();
       });
 
-      document.getElementById('citySearch').addEventListener('input', ()=>{
+      const citySearch = document.getElementById('citySearch');
+      if(citySearch) citySearch.addEventListener('input', ()=>{
         clearTimeout(window.__cityDeb);
         window.__cityDeb = setTimeout(()=>{
           if(state.scope === 'city') loadSchedule();
           loadPresence();
+          updatePills();
         }, 350);
       });
 
-      document.getElementById('scheduleSearch').addEventListener('input', ()=>{
+      const scheduleSearch = document.getElementById('scheduleSearch');
+      if(scheduleSearch) scheduleSearch.addEventListener('input', ()=>{
         try{ renderMatches(window.__lastMatches || []); }catch(e){}
         clearTimeout(window.__schDeb);
         window.__schDeb = setTimeout(loadSchedule, 450);
       });
 
       updatePills();
+      updateCountdownMini();
+      setInterval(updateCountdownMini, 30_000);
+
       systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
       loadPresence();
       setTimeout(prefetchAll, 250);
