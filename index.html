@@ -462,7 +462,7 @@
             <div class="scheduleTools">
               <select class="select" id="scopeSelect" aria-label="Scope">
                 <option value="all">Global</option>
-                <option value="dallas">Host city</option>
+                <option value="host">Host city</option>
               </select>
               <input class="search" id="scheduleSearch" placeholder="Search team, venue, group, date…"/>
               <button class="pill" id="reloadSchedule" type="button">Refresh</button>
@@ -481,7 +481,7 @@
             <h2 class="cardTitle">Fan Zone</h2>
           </div>
           <div class="cardBody">
-            <div class="hint">Add Dallas fan events, watch parties, and stadium tips here.</div>
+            <div class="hint">Add fan events, watch parties, and stadium tips here.</div>
           </div>
         </div>
       </section>
@@ -514,7 +514,7 @@
     // ======= STATE =======
     const state = {
       lang: 'en',     // en | es | pt | fr
-      scope: 'all' // all | dallas (host city filter)
+      scope: 'all' // all | host (optional host-city filter)
     };
 
     function setActiveNav(sec){
@@ -554,9 +554,9 @@
     }
 
     function toggleScope(){
-      state.scope = (state.scope === 'dallas') ? 'all' : 'dallas';
+      state.scope = (state.scope === 'host') ? 'all' : 'host';
       updatePills();
-      systemMsg(`Schedule scope: ${state.scope === 'all' ? 'Global matches' : 'Host city matches'}.`);
+      systemMsg(`Scope: ${state.scope === 'all' ? 'Global (all matches)' : 'Host city matches'}.`);
       if(document.body.getAttribute('data-sec') === 'schedule') loadSchedule();
       loadPresence();
     }
@@ -677,9 +677,8 @@
       if(hint) hint.textContent = 'Loading schedule…';
 
       try{
-        // app.py supports /schedule.json?scope=dallas|all&q=...
-        const q = (document.getElementById('scheduleSearch')?.value || '').trim();
-        const url = `/schedule.json?scope=${encodeURIComponent(state.scope)}&q=${encodeURIComponent(q)}`;
+        // app.py supports /schedule.json?scope=all|host&q=...nst q = (document.getElementById('scheduleSearch')?.value || '').trim();
+        const url = `/schedule.json?scope=all|host&q=...ncodeURIComponent(state.scope)}&q=${encodeURIComponent(q)}`;
         const r = await fetch(url, {cache:'no-store'});
         const data = await r.json();
         const matches = Array.isArray(data.matches) ? data.matches : (Array.isArray(data) ? data : []);
@@ -695,7 +694,7 @@
       if(!el) return;
       el.textContent = 'Checking match status…';
       try{
-        const r = await fetch(`/schedule.json?scope=${encodeURIComponent(state.scope)}`, {cache:'no-store'});
+        const r = await fetch(`/schedule.json?scope=all|host&q=...ncodeURIComponent(state.scope)}`, {cache:'no-store'});
         const data = await r.json();
         const isMatchDay = !!(data && (data.is_matchday || data.is_match_day || data.is_match));
         el.innerHTML = isMatchDay
@@ -738,7 +737,7 @@
       document.getElementById('reloadSchedule')?.addEventListener('click', loadSchedule);
 
       document.getElementById('scopeSelect')?.addEventListener('change', (e)=>{
-        state.scope = e.target.value === 'all' ? 'all' : 'dallas';
+        state.scope = e.target.value === 'all' ? 'all' : 'host';
         updatePills();
         loadSchedule();
         loadPresence();

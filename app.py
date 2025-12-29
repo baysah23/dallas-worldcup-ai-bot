@@ -137,16 +137,12 @@ BUSINESS_RULES = {
 # ============================================================
 # World Cup 2026 schedule data
 # - We load ALL matches from a public JSON feed (no API key).
-# - Dallas-only schedule is filtered from the full list.
-# ============================================================
-FIXTURE_FEED_URL = os.environ.get(
-    "FIXTURE_FEED_URL",
+# - World Cup"FIXTURE_FEED_URL",
     "https://fixturedownload.com/feed/json/fifa-world-cup-2026",
 )
 
-# Location label used by the feed for Dallas/Arlington matches.
-# (Verified in the fixture feed as "Dallas Stadium".)
-DALLAS_LOCATION_KEYWORDS = ["dallas stadium", "arlington", "at&t"]
+# Location label used by the feed for World Cup"World Cup".)
+HOST_CITY_LOCATION_KEYWORDS = ["host stadium", "host city", "main stadium"]  # adjust for your host city
 
 # If the remote feed is empty/unavailable (e.g., schedule not published yet),
 # we serve a small premium "demo" dataset so the Schedule UI never goes blank.
@@ -156,7 +152,7 @@ DEMO_FIXTURES_RAW: List[Dict[str, Any]] = [
         "MatchNumber": 1,
         "RoundNumber": 1,
         "DateUtc": "2026-06-11 19:00:00Z",
-        "Location": "Dallas Stadium",
+        "Location": "World Cup",
         "HomeTeam": "United States",
         "AwayTeam": "Mexico",
         "Group": "Group A",
@@ -168,7 +164,7 @@ DEMO_FIXTURES_RAW: List[Dict[str, Any]] = [
         "MatchNumber": 2,
         "RoundNumber": 1,
         "DateUtc": "2026-06-12 23:00:00Z",
-        "Location": "Dallas Stadium",
+        "Location": "World Cup",
         "HomeTeam": "Canada",
         "AwayTeam": "Japan",
         "Group": "Group A",
@@ -192,7 +188,7 @@ DEMO_FIXTURES_RAW: List[Dict[str, Any]] = [
         "MatchNumber": 4,
         "RoundNumber": 1,
         "DateUtc": "2026-06-13 19:00:00Z",
-        "Location": "Dallas Stadium",
+        "Location": "World Cup",
         "HomeTeam": "France",
         "AwayTeam": "Brazil",
         "Group": "Group B",
@@ -420,18 +416,18 @@ def load_all_matches(force: bool = False) -> List[Dict[str, Any]]:
     return norm
 
 
-def is_dallas_match(m: Dict[str, Any]) -> bool:
+def is_host_city_match(m: Dict[str, Any]) -> bool:
     v = (m.get("venue") or "").lower()
-    return any(k in v for k in DALLAS_LOCATION_KEYWORDS)
+    return any(k in v for k in HOST_CITY_LOCATION_KEYWORDS)
 
 
 def filter_matches(scope: str, q: str = "") -> List[Dict[str, Any]]:
-    scope = (scope or "dallas").lower().strip()
+    scope = (scope or "all").lower().strip()
     q = (q or "").strip().lower()
 
     matches = load_all_matches()
     if scope != "all":
-        matches = [m for m in matches if is_dallas_match(m)]
+        matches = [m for m in matches if is_host_city_match(m)]
 
     if q:
         def hit(m):
@@ -492,7 +488,7 @@ MENU = {
 # ============================================================
 LANG = {
     "en": {
-        "welcome": "⚽ Welcome, World Cup fan! I'm your Dallas Match-Day Concierge.\nType reservation to book a table, or ask about Dallas matches, all matches, or the menu.",
+        "welcome": "⚽ Welcome, World Cup fan! I'm your World Cup",
         "ask_date": "What date would you like? (Example: June 23, 2026)\n\n(You can also type: “Recall reservation so far”)",
         "ask_time": "What time would you like?",
         "ask_party": "How many people are in your party?",
@@ -505,7 +501,7 @@ LANG = {
         "rule_closed": "⚠️ We’re closed on that date. Want the next available day?",
     },
     "es": {
-        "welcome": "⚽ ¡Bienvenido, fan del Mundial! Soy tu concierge de días de partido en Dallas.\nEscribe reserva para reservar una mesa, o pregunta por los partidos (Dallas / todos) o el menú.",
+        "welcome": "⚽ ¡Bienvenido, fan del Mundial! Soy tu concierge de días de partido en World Cup",
         "ask_date": "¿Qué fecha te gustaría? (Ejemplo: 23 de junio de 2026)\n\n(También puedes escribir: “Recordar reserva”)",
         "ask_time": "¿A qué hora te gustaría?",
         "ask_party": "¿Cuántas personas serán?",
@@ -518,7 +514,7 @@ LANG = {
         "rule_closed": "⚠️ Estamos cerrados ese día. ¿Quieres el siguiente día disponible?",
     },
     "pt": {
-        "welcome": "⚽ Bem-vindo, fã da Copa do Mundo! Sou seu concierge de dias de jogo em Dallas.\nDigite reserva para reservar uma mesa, ou pergunte sobre jogos em Dallas, todos os jogos ou o cardápio.",
+        "welcome": "⚽ Bem-vindo, fã da Copa do Mundo! Sou seu concierge de dias de jogo em World Cup",
         "ask_date": "Qual data você gostaria? (Exemplo: 23 de junho de 2026)\n\n(Você também pode digitar: “Relembrar reserva”)",
         "ask_time": "Que horas você gostaria?",
         "ask_party": "Quantas pessoas?",
@@ -531,7 +527,7 @@ LANG = {
         "rule_closed": "⚠️ Estaremos fechados nessa data. Quer o próximo dia disponível?",
     },
     "fr": {
-        "welcome": "⚽ Bienvenue, fan de la Coupe du Monde ! Je suis votre concierge des jours de match à Dallas.\nTapez réservation pour réserver une table, ou demandez les matchs (Dallas / tous) ou le menu.",
+        "welcome": "⚽ Bienvenue, fan de la Coupe du Monde ! Je suis votre concierge des jours de match à World Cup",
         "ask_date": "Quelle date souhaitez-vous ? (Exemple : 23 juin 2026)\n\n(Vous pouvez aussi écrire : « Rappeler la réservation »)",
         "ask_time": "À quelle heure ?",
         "ask_party": "Pour combien de personnes ?",
@@ -1115,7 +1111,7 @@ def menu_json():
 def schedule_json():
     """
     Query params:
-      scope= all | dallas (host city)   (default: all)
+      scope= all | host (host city)   (default: all)
       q= search text (team, venue, group, date)
     """
     scope = (request.args.get("scope") or "all").lower().strip()
@@ -1712,7 +1708,7 @@ def worldcup_live_json():
     """Return matches in a 'live window' plus recently finished.
 
     Query params:
-      scope= dallas | all (default: all)
+      scope= host | all (default: all)
       window_hours= hours around now to include (default: 8)
     """
     scope = (request.args.get("scope") or "all").lower().strip()
@@ -2016,13 +2012,7 @@ def chat():
 
         # Otherwise: normal Q&A using OpenAI (with language + business profile + menu)
         system_msg = f"""
-    You are a World Cup 2026 Dallas business concierge.
-
-    Business profile (source of truth):
-    {BUSINESS_PROFILE}
-
-    Menu (source of truth, language={lang}):
-    {json.dumps(MENU.get(lang, MENU['en']), ensure_ascii=False)}
+    You are a World Cup 2026 World Cup'en']), ensure_ascii=False)}
 
     Rules:
     - Be friendly, fast, and concise.
@@ -2130,7 +2120,7 @@ def get_config() -> Dict[str, str]:
         return dict(cached)
 
     cfg: Dict[str, str] = {
-        "poll_sponsor_text": "Fan Pick presented by World Cup Dallas HQ",
+        "poll_sponsor_text": "Fan Pick presented by World Cup World Cup",
         "match_of_day_id": "",
         "motd_home": "",
         "motd_away": "",
