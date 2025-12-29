@@ -1,4 +1,4 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
@@ -10,889 +10,759 @@
       --bg:#071022;
       --panel:#0f1b33;
       --panel2:#0b152c;
-      --line:rgba(255,255,255,.12);
+      --line:rgba(255,255,255,.10);
       --text:#eaf0ff;
       --muted:#b9c7ee;
-      --accent:#2ea043;
-      --accent2:#1f6feb;
+      --gold:#d4af37;
+      --blue:#1f6feb;
+      --green:#2ea043;
       --warn:#ffcc66;
-      --radius:18px;
+      --danger:#ff6b6b;
+      --shadow: 0 10px 30px rgba(0,0,0,.45);
+      --r16:16px;
+      --r14:14px;
     }
-    *{box-sizing:border-box;}
-    html,body{height:100%;}
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
     body{
       margin:0;
-      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
       color:var(--text);
       background:
-        radial-gradient(900px 420px at 20% 10%, #132a5b 0%, var(--bg) 58%),
-        radial-gradient(700px 320px at 85% 85%, rgba(46,160,67,.14), transparent 62%),
-        radial-gradient(700px 320px at 25% 90%, rgba(31,111,235,.16), transparent 66%);
+        radial-gradient(1200px 600px at 20% -10%, rgba(31,111,235,.35), transparent 60%),
+        radial-gradient(900px 520px at 110% 20%, rgba(212,175,55,.22), transparent 55%),
+        radial-gradient(900px 520px at 40% 120%, rgba(46,160,67,.18), transparent 55%),
+        var(--bg);
       overflow-x:hidden;
     }
 
-    /* Mobile-only app shell */
-    .app{
-      max-width: 560px;
+    /* Mobile-only: this app is intentionally optimized for phones */
+    .wrap{
+      max-width: 520px;     /* still mobile-friendly on larger phones */
       margin: 0 auto;
-      min-height: 100%;
-      padding: 14px 14px 96px; /* bottom nav */
+      padding: 14px 14px calc(84px + env(safe-area-inset-bottom));
     }
 
-    .card{
-      background: linear-gradient(180deg, rgba(255,255,255,.06) 0%, rgba(255,255,255,.03) 100%);
-      border:1px solid var(--line);
-      border-radius: var(--radius);
-      overflow:hidden;
-      box-shadow: 0 14px 40px rgba(0,0,0,.22);
-    }
-    .cardhead{
-      padding: 12px 14px;
-      border-bottom:1px solid var(--line);
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      background: rgba(0,0,0,.12);
-    }
-    .title{font-weight:900; font-size:13px; letter-spacing:.2px;}
-    .pill{
-      font-size:11px;
-      color:var(--muted);
-      border:1px solid var(--line);
-      padding:6px 10px;
-      border-radius:999px;
-      background:rgba(0,0,0,.12);
-      white-space:nowrap;
-    }
-
-    /* HERO (new banner) — NO roster, NO players */
+    /* ======= HERO (new banner) ======= */
     .hero{
       position:relative;
-      border-radius: var(--radius);
+      border-radius: var(--r16);
       overflow:hidden;
-      border:1px solid rgba(255,255,255,.12);
-      background: linear-gradient(135deg, rgba(31,111,235,.22), rgba(46,160,67,.12));
-      box-shadow: 0 16px 55px rgba(0,0,0,.32);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+      min-height: 180px;
     }
     .hero::before{
       content:"";
-      position:absolute; inset:-1px;
-      /* Stadium-ish silhouette (inline SVG, no external images) */
-      background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%221200%22%20height%3D%22600%22%20viewBox%3D%220%200%201200%20600%22%3E%0A%3Cdefs%3E%0A%3CradialGradient%20id%3D%22g%22%20cx%3D%2250%25%22%20cy%3D%2215%25%22%20r%3D%2290%25%22%3E%0A%20%20%3Cstop%20offset%3D%220%22%20stop-color%3D%22%231b3b7a%22%20stop-opacity%3D%220.95%22/%3E%0A%20%20%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23070f22%22%20stop-opacity%3D%220.95%22/%3E%0A%3C/radialGradient%3E%0A%3ClinearGradient%20id%3D%22lights%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%220%22%3E%0A%20%20%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23ffffff%22%20stop-opacity%3D%220.00%22/%3E%0A%20%20%3Cstop%20offset%3D%220.15%22%20stop-color%3D%22%23ffffff%22%20stop-opacity%3D%220.10%22/%3E%0A%20%20%3Cstop%20offset%3D%220.5%22%20stop-color%3D%22%23ffffff%22%20stop-opacity%3D%220.04%22/%3E%0A%20%20%3Cstop%20offset%3D%220.85%22%20stop-color%3D%22%23ffffff%22%20stop-opacity%3D%220.10%22/%3E%0A%20%20%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23ffffff%22%20stop-opacity%3D%220.00%22/%3E%0A%3C/linearGradient%3E%0A%3C/defs%3E%0A%3Crect%20width%3D%221200%22%20height%3D%22600%22%20fill%3D%22url%28%23g%29%22/%3E%0A%3C%21--%20crowd%20lights%20--%3E%0A%3Crect%20x%3D%220%22%20y%3D%2270%22%20width%3D%221200%22%20height%3D%22120%22%20fill%3D%22url%28%23lights%29%22/%3E%0A%3C%21--%20stadium%20bowl%20--%3E%0A%3Cpath%20d%3D%22M60%20420%20C220%20280%20430%20230%20600%20230%20C770%20230%20980%20280%201140%20420%20L1140%20560%20L60%20560%20Z%22%20fill%3D%22%23000%22%20fill-opacity%3D%220.25%22/%3E%0A%3Cpath%20d%3D%22M120%20410%20C260%20305%20445%20270%20600%20270%20C755%20270%20940%20305%201080%20410%22%20fill%3D%22none%22%20stroke%3D%22%23ffffff%22%20stroke-opacity%3D%220.12%22%20stroke-width%3D%2210%22/%3E%0A%3Cpath%20d%3D%22M160%20430%20C290%20340%20460%20315%20600%20315%20C740%20315%20910%20340%201040%20430%22%20fill%3D%22none%22%20stroke%3D%22%23ffffff%22%20stroke-opacity%3D%220.10%22%20stroke-width%3D%228%22/%3E%0A%3C%21--%20pitch%20--%3E%0A%3Crect%20x%3D%22260%22%20y%3D%22455%22%20width%3D%22680%22%20height%3D%22105%22%20rx%3D%2218%22%20fill%3D%22%232ea043%22%20fill-opacity%3D%220.18%22%20stroke%3D%22%232ea043%22%20stroke-opacity%3D%220.25%22/%3E%0A%3Crect%20x%3D%22300%22%20y%3D%22480%22%20width%3D%22600%22%20height%3D%2260%22%20rx%3D%2212%22%20fill%3D%22%232ea043%22%20fill-opacity%3D%220.10%22%20stroke%3D%22%23ffffff%22%20stroke-opacity%3D%220.10%22/%3E%0A%3C%21--%20center%20circle%20--%3E%0A%3Ccircle%20cx%3D%22600%22%20cy%3D%22510%22%20r%3D%2220%22%20fill%3D%22none%22%20stroke%3D%22%23ffffff%22%20stroke-opacity%3D%220.10%22%20stroke-width%3D%224%22/%3E%0A%3C/svg%3E");
-      background-size: cover;
-      background-position: center;
-      filter: saturate(1.18) contrast(1.06);
-      opacity:.9;
-      transform: scale(1.02);
-      z-index:0;
+      position:absolute; inset:-2px;
+      background:
+        radial-gradient(900px 360px at 30% 30%, rgba(31,111,235,.35), transparent 60%),
+        radial-gradient(800px 320px at 80% 20%, rgba(212,175,55,.22), transparent 55%),
+        radial-gradient(700px 300px at 60% 90%, rgba(46,160,67,.18), transparent 55%);
+      filter: saturate(1.1);
+      transform: translateZ(0);
     }
     .hero::after{
       content:"";
       position:absolute; inset:0;
-      background:
-        radial-gradient(520px 260px at 18% 22%, rgba(255,255,255,.18), transparent 60%),
-        radial-gradient(720px 320px at 75% 18%, rgba(255,255,255,.14), transparent 62%),
-        radial-gradient(900px 420px at 60% 88%, rgba(46,160,67,.14), transparent 65%),
-        radial-gradient(900px 420px at 30% 88%, rgba(31,111,235,.16), transparent 66%),
-        linear-gradient(90deg, rgba(0,0,0,.72) 0%, rgba(0,0,0,.44) 45%, rgba(0,0,0,.10) 80%, rgba(0,0,0,0) 100%);
-      mix-blend-mode: screen;
-      opacity:.85;
-      z-index:1;
+      background: linear-gradient(180deg, rgba(7,16,34,.15), rgba(7,16,34,.75));
       pointer-events:none;
     }
-    .heroInner{ position:relative; z-index:2; padding: 16px 14px; }
-    .heroKicker{
-      letter-spacing:.18em;
-      font-size:10px;
-      font-weight:900;
-      color:rgba(234,240,255,.85);
-      text-transform:uppercase;
+    .heroInner{
+      position:relative;
+      padding: 16px 14px 14px;
+      z-index: 2;
+    }
+    .brandRow{
       display:flex;
       align-items:center;
-      gap:10px;
+      justify-content:space-between;
+      gap: 10px;
+      margin-bottom: 10px;
     }
     .badge{
-      width:38px; height:38px; border-radius:12px;
-      background: linear-gradient(135deg, #f5d76e 0%, #2ea043 45%, #1f6feb 100%);
-      box-shadow: 0 10px 35px rgba(0,0,0,.25);
-      flex:0 0 auto;
-    }
-    .heroTitle{
-      margin: 10px 0 0;
-      font-size: 18px;
-      font-weight: 950;
-      letter-spacing: .08em;
-      text-transform: uppercase;
-      line-height: 1.12;
-      color: var(--warn);
-      text-shadow: 0 12px 26px rgba(0,0,0,.65);
-    }
-    .heroSub{
-      margin: 8px 0 0;
-      font-size: 12px;
-      color: rgba(234,240,255,.86);
-      max-width: 36ch;
-      text-shadow: 0 10px 20px rgba(0,0,0,.55);
-    }
-    .heroRow{
-      margin-top: 12px;
-      display:flex;
-      gap:10px;
-      flex-wrap:wrap;
-      align-items:center;
-    }
-    .chip{
       display:inline-flex;
       align-items:center;
       gap:8px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.18);
-      color: var(--text);
+      font-weight: 700;
+      letter-spacing:.08em;
+      text-transform: uppercase;
+      font-size: 11px;
+      color: rgba(234,240,255,.9);
       padding: 8px 10px;
       border-radius: 999px;
-      font-size: 11px;
-      font-weight: 800;
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(15,27,51,.55);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
     }
-    .chip b{ color: var(--warn); }
-    .heroCtas{
-      margin-top: 12px;
+    .badgeDot{
+      width:8px; height:8px; border-radius:50%;
+      background: var(--green);
+      box-shadow: 0 0 0 4px rgba(46,160,67,.18);
+      flex:0 0 auto;
+    }
+
+    .pills{
       display:flex;
-      gap:10px;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+      justify-content:flex-end;
     }
-    .btn{
-      border:0;
-      border-radius: 14px;
-      padding: 10px 12px;
-      font-weight: 950;
-      font-size: 13px;
-      color:#fff;
-      background: var(--accent);
-      cursor:pointer;
-      user-select:none;
-      box-shadow: 0 10px 26px rgba(0,0,0,.18);
-      flex: 1 1 auto;
-    }
-    .btn.secondary{
-      background: rgba(255,255,255,.10);
-      border:1px solid rgba(255,255,255,.18);
+    .pill{
+      appearance:none;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(15,27,51,.55);
       color: var(--text);
+      border-radius: 999px;
+      padding: 8px 10px;
+      font-size: 12px;
+      line-height: 1;
+      cursor:pointer;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
     }
-    .btn:active{ transform: translateY(1px); }
-    .btn:disabled{ opacity:.6; cursor:not-allowed; }
+    .pill strong{ font-weight: 800; color: rgba(255,255,255,.95); }
+    .pill:active{ transform: translateY(1px); }
 
-    /* Sections */
-    .section{ display:none; margin-top: 12px; }
-    .section.active{ display:block; }
-
-    /* Chat */
-    #chatLog{
-      padding: 14px;
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-      max-height: min(58vh, 520px);
-      overflow:auto;
-      -webkit-overflow-scrolling: touch;
+    .heroTitle{
+      margin: 4px 0 6px;
+      font-weight: 900;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+      font-size: clamp(20px, 5.6vw, 26px);
+      line-height: 1.05;
     }
-    .bubble{
-      max-width: 80%;
-      padding:10px 12px;
-      border-radius: 14px;
-      line-height:1.32;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-      border:1px solid rgba(255,255,255,.10);
+    .heroSub{
+      margin:0 0 12px;
       font-size: 13px;
+      color: rgba(185,199,238,.95);
+      max-width: 90%;
     }
-    .bubble.user{
-      align-self:flex-end;
-      background: rgba(31,111,235,.22);
-      border-color: rgba(31,111,235,.35);
-    }
-    .bubble.bot{
-      align-self:flex-start;
-      background: rgba(0,0,0,.18);
-    }
-    .composer{
+    .heroActions{
       display:flex;
       gap:10px;
-      padding: 12px 14px;
-      border-top:1px solid var(--line);
-      background: rgba(0,0,0,.12);
       align-items:center;
     }
-    textarea{
-      flex:1;
-      resize:none;
-      height:44px;
-      max-height:140px;
-      border-radius: 12px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.22);
+    .cta{
+      flex: 1 1 auto;
+      border-radius: 14px;
+      padding: 12px 12px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(15,27,51,.60);
       color: var(--text);
+      font-weight: 800;
+      font-size: 13px;
+      cursor:pointer;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      box-shadow: 0 10px 18px rgba(0,0,0,.24);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+    }
+    .cta.primary{
+      background: linear-gradient(135deg, rgba(212,175,55,.95), rgba(255,204,102,.75));
+      color:#111827;
+      border: 1px solid rgba(255,255,255,.35);
+    }
+    .cta:active{ transform: translateY(1px); }
+
+    /* ======= CARDS ======= */
+    .card{
+      margin-top: 14px;
+      border-radius: var(--r16);
+      border: 1px solid var(--line);
+      background: rgba(15,27,51,.60);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .cardHead{
+      padding: 12px 12px 10px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+      gap:10px;
+    }
+    .cardTitle{
+      margin:0;
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+    .cardBody{ padding: 12px; }
+
+    .hint{
+      margin: 8px 0 0;
+      font-size: 12px;
+      color: rgba(185,199,238,.9);
+    }
+
+    /* ======= SECTION VISIBILITY ======= */
+    .section{ display:none; }
+    body[data-sec="home"]   #sec-home{ display:block; }
+    body[data-sec="chat"]   #sec-chat{ display:block; }
+    body[data-sec="menu"]   #sec-menu{ display:block; }
+    body[data-sec="schedule"] #sec-schedule{ display:block; }
+    body[data-sec="fanzone"] #sec-fanzone{ display:block; }
+    body[data-sec="vip"]    #sec-vip{ display:block; }
+
+    /* ======= CHAT ======= */
+    .chatLog{
+      height: 44vh;
+      min-height: 280px;
+      max-height: 520px;
+      overflow:auto;
+      padding-right: 4px;
+    }
+    .bubble{
+      display:inline-block;
+      max-width: 88%;
       padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(11,21,44,.70);
+      margin: 6px 0;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      line-height: 1.35;
+      font-size: 13px;
+    }
+    .bubble.me{
+      background: rgba(31,111,235,.18);
+      border-color: rgba(31,111,235,.35);
+      margin-left:auto;
+      display:block;
+    }
+    .bubble.bot{
+      background: rgba(15,27,51,.72);
+      border-color: rgba(255,255,255,.12);
+      display:block;
+    }
+    .chatInputRow{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      margin-top: 10px;
+    }
+    #msg{
+      flex:1 1 auto;
+      padding: 12px 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(7,16,34,.55);
+      color: var(--text);
+      outline:none;
+      font-size: 14px;
+    }
+    #sendBtn{
+      flex: 0 0 auto;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(46,160,67,.25);
+      color: var(--text);
+      font-weight: 900;
+      font-size: 14px;
+      cursor:pointer;
+    }
+    #sendBtn:active{ transform: translateY(1px); }
+
+    /* ======= SCHEDULE ======= */
+    .scheduleTools{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .select, .search{
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(7,16,34,.45);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 10px;
       font-size: 13px;
       outline:none;
     }
-
-    /* Schedule */
-    .subtabs{
-      display:flex;
-      gap:8px;
-      padding: 12px 14px 0;
-      flex-wrap:wrap;
-    }
-    .tab{
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(255,255,255,.06);
-      color: var(--text);
-      padding: 8px 10px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 900;
-      cursor:pointer;
-    }
-    .tab.active{ background: rgba(46,160,67,.18); border-color: rgba(46,160,67,.45); }
-    .schedList{ padding: 10px 0 12px; max-height: min(58vh, 520px); overflow:auto; -webkit-overflow-scrolling: touch; }
+    .search{ flex: 1 1 140px; }
+    .scheduleList{ display:flex; flex-direction:column; gap:10px; }
     .match{
-      display:flex;
-      justify-content:space-between;
-      gap:10px;
-      padding: 10px 14px;
-      border-top: 1px solid rgba(255,255,255,.10);
-      font-size: 12px;
-    }
-    .match .left{ display:flex; flex-direction:column; gap:2px; min-width:0; }
-    .when{ color: var(--muted); font-size: 11px; }
-    .teams{ font-weight: 950; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .venue{ color: rgba(234,240,255,.78); font-size: 11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .score{ font-weight:950; color: var(--warn); white-space:nowrap; }
-    .status{
-      font-size: 10px;
-      padding: 5px 8px;
-      border-radius: 999px;
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(0,0,0,.16);
-      color: rgba(234,240,255,.85);
-      white-space:nowrap;
-    }
-    .status.live{ border-color: rgba(46,160,67,.45); background: rgba(46,160,67,.14); }
-    .status.finished{ border-color: rgba(255,204,102,.40); background: rgba(255,204,102,.10); }
-
-    /* Menu */
-    .menuWrap{ padding: 12px 14px; }
-    .menuItem{
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(11,21,44,.55);
       padding: 10px 10px;
-      border:1px solid rgba(255,255,255,.12);
-      border-radius: 14px;
-      background: linear-gradient(135deg, rgba(31,111,235,.16) 0%, rgba(0,0,0,.18) 55%, rgba(46,160,67,.10) 100%);
-      position:relative;
-      overflow:hidden;
-      margin-bottom: 10px;
     }
-    .menuItem:before{
-      content:"";
-      position:absolute;
-      inset:-1px;
-      background: radial-gradient(220px 90px at 15% 10%, rgba(245,215,110,.18) 0%, rgba(0,0,0,0) 60%);
-      pointer-events:none;
+    .matchTop{
+      display:flex; justify-content:space-between; align-items:center; gap:10px;
+      font-size: 12px; color: rgba(185,199,238,.95);
     }
-    .menuTop{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; position:relative; z-index:1; }
-    .menuName{ font-weight: 950; font-size: 13px; letter-spacing: .1px; }
-    .menuPrice{ font-weight: 950; color: var(--warn); white-space:nowrap; }
-    .menuDesc{ margin-top: 6px; color: var(--muted); font-size: 12px; line-height: 1.25; position:relative; z-index:1; }
+    .matchTeams{
+      margin-top:6px;
+      font-weight: 900;
+      font-size: 14px;
+      letter-spacing:.01em;
+    }
+    .matchMeta{
+      margin-top:4px;
+      font-size: 12px;
+      color: rgba(185,199,238,.95);
+    }
 
-    /* Reserve / VIP */
-    .pad{ padding: 12px 14px; }
-    .hint{ color: var(--muted); font-size: 12px; line-height: 1.35; }
-    .kpiRow{ display:flex; gap:10px; flex-wrap:wrap; margin-top: 10px; }
-    .kpi{
-      flex:1 1 120px;
-      border:1px solid rgba(255,255,255,.12);
-      border-radius: 14px;
-      padding: 10px;
-      background: rgba(0,0,0,.12);
-    }
-    .kpi b{ color: var(--warn); }
-
-    /* Bottom nav */
-    .bottomNav{
+    /* ======= BOTTOM NAV ======= */
+    .mobileNav{
       position: fixed;
-      left: 10px; right: 10px; bottom: 10px;
-      max-width: 560px;
-      margin: 0 auto;
-      display:flex;
-      gap: 6px;
-      padding: 8px;
-      border-radius: 18px;
-      border: 1px solid rgba(255,255,255,.14);
+      left: 0; right: 0;
+      bottom: 0;
+      padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
       background: rgba(7,16,34,.82);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      z-index: 9999;
-      box-shadow: 0 18px 55px rgba(0,0,0,.42);
+      border-top: 1px solid rgba(255,255,255,.10);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      display:flex;
+      justify-content: space-around;
+      gap: 6px;
+      z-index: 50;
     }
-    .navBtn{
-      flex:1 1 0;
-      border:1px solid transparent;
+    .mnavBtn{
+      appearance:none;
+      border: 0;
       background: transparent;
-      color: rgba(234,240,255,.86);
-      border-radius: 14px;
-      padding: 10px 6px;
+      color: rgba(185,199,238,.95);
       display:flex;
       flex-direction:column;
       align-items:center;
       justify-content:center;
       gap: 4px;
+      min-width: 54px;
+      padding: 6px 8px;
+      border-radius: 14px;
       cursor:pointer;
       user-select:none;
-      min-width: 0;
+      -webkit-tap-highlight-color: transparent;
     }
-    .navBtn .ico{ font-size: 16px; line-height: 1; }
-    .navBtn .lbl{
-      font-size: 10px;
-      font-weight: 950;
-      letter-spacing: .02em;
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-      max-width: 64px;
+    .mnavBtn .ico{ font-size: 18px; line-height: 1; }
+    .mnavBtn span{
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing:.01em;
     }
-    .navBtn.active{
-      border-color: rgba(46,160,67,.35);
-      background: rgba(46,160,67,.12);
-      color: var(--text);
+    .mnavBtn.active{
+      color: rgba(255,255,255,.98);
+      background: rgba(31,111,235,.16);
+      border: 1px solid rgba(31,111,235,.26);
     }
+    .mnavBtn:active{ transform: translateY(1px); }
 
-    /* Language */
-    .langbar{ display:flex; gap:8px; flex-wrap:wrap; margin-top: 10px; }
-    .langbtn{
-      border:1px solid rgba(255,255,255,.14);
-      background: rgba(255,255,255,.06);
-      color: var(--text);
-      padding: 8px 10px;
-      border-radius: 999px;
-      font-size: 12px;
-      font-weight: 900;
-      cursor:pointer;
-    }
-    .langbtn.active{ background: rgba(31,111,235,.22); border-color: rgba(31,111,235,.35); }
-
-    /* Reduced motion */
-    @media (prefers-reduced-motion: reduce){
-      *{ scroll-behavior:auto !important; }
+    /* Accessibility */
+    .srOnly{
+      position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+      overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
     }
   </style>
 </head>
-<body>
-  <main class="app" id="app">
-    <!-- HOME -->
-    <section class="section active" id="sec-home" aria-label="Home">
-      <div class="hero" id="heroBanner">
-        <div class="heroInner">
-          <div class="heroKicker"><span class="badge" aria-hidden="true"></span> World Cup Concierge</div>
-          <h1 class="heroTitle">WORLD CUP 2026 • DALLAS</h1>
-          <p class="heroSub">Reservations, live schedules, and multilingual concierge chat — built for mobile.</p>
 
-          <div class="heroRow">
-            <div class="chip">🗓️ <span id="homeNextMatch">Next match loading…</span></div>
-            <div class="chip">🌍 <b id="homeLangLabel">EN</b> • 4 languages</div>
-          </div>
+<body data-sec="home">
+  <div class="wrap">
 
-          <div class="heroCtas">
-            <button class="btn" type="button" id="ctaReserve">Reserve</button>
-            <button class="btn secondary" type="button" id="ctaChat">Chat</button>
-          </div>
-
-          <div class="langbar" role="group" aria-label="Language">
-            <button class="langbtn active" data-lang="en" type="button">EN</button>
-            <button class="langbtn" data-lang="es" type="button">ES</button>
-            <button class="langbtn" data-lang="pt" type="button">PT</button>
-            <button class="langbtn" data-lang="fr" type="button">FR</button>
+    <!-- NEW MOBILE BANNER -->
+    <section class="hero" id="heroBanner" aria-label="World Cup Concierge banner">
+      <div class="heroInner">
+        <div class="brandRow">
+          <div class="badge"><span class="badgeDot" aria-hidden="true"></span><span>World Cup Concierge</span></div>
+          <div class="pills" aria-label="Quick controls">
+            <button class="pill" id="pillLang" type="button" aria-label="Language"><strong>EN</strong> · 4 languages</button>
+            <button class="pill" id="pillMode" type="button" aria-label="Mode">Mode: <strong>Dallas</strong></button>
           </div>
         </div>
-      </div>
 
-      <div class="card" style="margin-top:12px;">
-        <div class="cardhead">
-          <div class="title">Quick Actions</div>
-          <div class="pill" id="netStatus">Online</div>
-        </div>
-        <div class="pad">
-          <div class="hint">
-            Tip: use <b>Chat</b> to book a table (“reservation”), ask about match days, or browse the menu in your language.
-          </div>
-          <div class="kpiRow">
-            <div class="kpi"><b>Reserve</b><div class="hint">Start a reservation in chat.</div></div>
-            <div class="kpi"><b>Schedule</b><div class="hint">All matches or Dallas-only.</div></div>
-            <div class="kpi"><b>Fan Zone</b><div class="hint">Vote / check poll state.</div></div>
-          </div>
+        <h1 class="heroTitle">World Cup 2026 • Dallas</h1>
+        <p class="heroSub">Concierge chat, match info, and live schedules — built for fast, mobile-only booking help.</p>
+
+        <div class="heroActions">
+          <button class="cta primary" id="ctaReserve" type="button">Reserve</button>
+          <button class="cta" id="ctaChat" type="button">Chat</button>
         </div>
       </div>
     </section>
 
-    <!-- CHAT -->
-    <section class="section" id="sec-chat" aria-label="Chat">
-      <div class="card">
-        <div class="cardhead">
-          <div class="title">Concierge Chat</div>
-          <div class="pill" id="chatPill">Ready</div>
-        </div>
-        <div id="chatLog" aria-live="polite"></div>
-        <div class="composer">
-          <textarea id="msg" placeholder="Type… (try: “reservation”, “menu”, “next match”)"></textarea>
-          <button class="btn" id="sendBtn" type="button">Send</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- SCHEDULE -->
-    <section class="section" id="sec-schedule" aria-label="Schedule">
-      <div class="card" id="scheduleCard">
-        <div class="cardhead">
-          <div class="title">Live Schedule</div>
-          <div class="pill" id="schedPill">Updating…</div>
-        </div>
-        <div class="subtabs">
-          <button class="tab active" type="button" data-scope="all">All Matches</button>
-          <button class="tab" type="button" data-scope="dallas">Dallas</button>
-        </div>
-        <div class="schedList" id="schedList"></div>
-      </div>
-    </section>
-
-    <!-- MENU -->
-    <section class="section" id="sec-menu" aria-label="Menu">
-      <div class="card">
-        <div class="cardhead">
-          <div class="title" id="menuTitle">Menu</div>
-          <div class="pill" id="menuPill">Loading…</div>
-        </div>
-        <div class="menuWrap" id="menuWrap"></div>
-      </div>
-    </section>
-
-    <!-- FAN ZONE -->
-    <section class="section" id="sec-fanzone" aria-label="Fan Zone">
-      <div class="card">
-        <div class="cardhead">
-          <div class="title">Fan Zone Poll</div>
-          <div class="pill" id="pollPill">Loading…</div>
-        </div>
-        <div class="pad">
-          <div class="hint" id="pollHint">See the current match poll and vote.</div>
-          <div class="kpiRow" style="margin-top:12px;">
-            <button class="btn secondary" type="button" id="btnPollRefresh">Refresh</button>
-            <button class="btn" type="button" id="btnPollVote">Vote</button>
+    <!-- SECTIONS -->
+    <main>
+      <!-- HOME -->
+      <section class="section" id="sec-home" aria-label="Home">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">Quick actions</h2>
+          </div>
+          <div class="cardBody">
+            <div class="heroActions" style="margin-top:0">
+              <button class="cta primary" type="button" data-jump="reserve">Reserve</button>
+              <button class="cta" type="button" data-jump="schedule">Schedule</button>
+            </div>
+            <p class="hint">Tip: Use <b>Chat</b> to ask “What are the next Dallas matches?” or “Find VIP table options near AT&amp;T Stadium”.</p>
           </div>
         </div>
-      </div>
-    </section>
 
-    <!-- RESERVE / VIP -->
-    <section class="section" id="sec-reserve" aria-label="Reserve">
-      <div class="card">
-        <div class="cardhead">
-          <div class="title">Reservations</div>
-          <div class="pill">Mobile</div>
-        </div>
-        <div class="pad">
-          <div class="hint">
-            To reserve: open <b>Chat</b> and type <b>reservation</b>. The concierge will collect your name, party size, date/time, and contact info.
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">Presence</h2>
           </div>
-          <div class="kpiRow">
-            <div class="kpi"><b>Hours</b><div class="hint">Configured in server rules.</div></div>
-            <div class="kpi"><b>Max party</b><div class="hint">Enforced in chat flow.</div></div>
-          </div>
-          <div style="margin-top:12px;">
-            <button class="btn" type="button" id="btnStartReservation">Start in Chat</button>
+          <div class="cardBody">
+            <div id="presenceText" class="hint">Checking match status…</div>
           </div>
         </div>
-      </div>
-    </section>
-  </main>
+      </section>
 
-  <nav class="bottomNav" aria-label="Navigation">
-    <button class="navBtn active" type="button" data-target="home"><div class="ico">🏟️</div><div class="lbl">Home</div></button>
-    <button class="navBtn" type="button" data-target="chat"><div class="ico">💬</div><div class="lbl">Chat</div></button>
-    <button class="navBtn" type="button" data-target="schedule"><div class="ico">📅</div><div class="lbl">Schedule</div></button>
-    <button class="navBtn" type="button" data-target="menu"><div class="ico">🍽️</div><div class="lbl">Menu</div></button>
-    <button class="navBtn" type="button" data-target="fanzone"><div class="ico">🗳️</div><div class="lbl">Fan Zone</div></button>
-    <button class="navBtn" type="button" data-target="reserve"><div class="ico">⭐</div><div class="lbl">Reserve</div></button>
+      <!-- CHAT -->
+      <section class="section" id="sec-chat" aria-label="Chat">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">Concierge chat</h2>
+            <button class="pill" id="clearChat" type="button">Clear</button>
+          </div>
+          <div class="cardBody">
+            <div id="chatLog" class="chatLog" aria-live="polite"></div>
+            <div class="chatInputRow">
+              <label class="srOnly" for="msg">Message</label>
+              <input id="msg" autocomplete="off" placeholder="Ask anything (EN/ES/PT/FR) — e.g., “book a table near downtown”"/>
+              <button id="sendBtn" type="button">Send</button>
+            </div>
+            <p class="hint">Language is set from the top-right pill. Your schedule scope is set from the Mode pill.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- MENU -->
+      <section class="section" id="sec-menu" aria-label="Menu">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">Menu</h2>
+            <button class="pill" id="reloadMenu" type="button">Refresh</button>
+          </div>
+          <div class="cardBody">
+            <div id="menuBody" class="hint">Tap refresh to load menu.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCHEDULE -->
+      <section class="section" id="sec-schedule" aria-label="Schedule">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">Schedule</h2>
+          </div>
+          <div class="cardBody">
+            <div class="scheduleTools">
+              <select class="select" id="scopeSelect" aria-label="Scope">
+                <option value="dallas">Dallas</option>
+                <option value="all">All</option>
+              </select>
+              <input class="search" id="scheduleSearch" placeholder="Search team, venue, group, date…"/>
+              <button class="pill" id="reloadSchedule" type="button">Refresh</button>
+            </div>
+            <div style="height:10px"></div>
+            <div id="scheduleBody" class="scheduleList"></div>
+            <div id="scheduleHint" class="hint"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAN ZONE -->
+      <section class="section" id="sec-fanzone" aria-label="Fan Zone">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">Fan Zone</h2>
+          </div>
+          <div class="cardBody">
+            <div class="hint">Add Dallas fan events, watch parties, and stadium tips here.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIP -->
+      <section class="section" id="sec-vip" aria-label="VIP">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">VIP</h2>
+          </div>
+          <div class="cardBody">
+            <div class="hint">Add VIP tables, bottle service options, and partner venues here.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Bottom nav -->
+  <nav class="mobileNav" id="mobileNav" aria-label="Navigation">
+    <button class="mnavBtn active" data-sec="home" type="button"><span class="ico">🏠</span><span>Home</span></button>
+    <button class="mnavBtn" data-sec="chat" type="button"><span class="ico">💬</span><span>Chat</span></button>
+    <button class="mnavBtn" data-sec="menu" type="button"><span class="ico">🍽️</span><span>Menu</span></button>
+    <button class="mnavBtn" data-sec="schedule" type="button"><span class="ico">📅</span><span>Schedule</span></button>
+    <button class="mnavBtn" data-sec="fanzone" type="button"><span class="ico">⚽</span><span>Fan Zone</span></button>
+    <button class="mnavBtn" data-sec="vip" type="button"><span class="ico">⭐</span><span>VIP</span></button>
   </nav>
 
   <script>
-    // -------------------------
-    // State
-    // -------------------------
-    const els = {
-      sections: {
-        home: document.getElementById("sec-home"),
-        chat: document.getElementById("sec-chat"),
-        schedule: document.getElementById("sec-schedule"),
-        menu: document.getElementById("sec-menu"),
-        fanzone: document.getElementById("sec-fanzone"),
-        reserve: document.getElementById("sec-reserve"),
-      },
-      navBtns: Array.from(document.querySelectorAll(".navBtn")),
-      msg: document.getElementById("msg"),
-      sendBtn: document.getElementById("sendBtn"),
-      chatLog: document.getElementById("chatLog"),
-      chatPill: document.getElementById("chatPill"),
-      netStatus: document.getElementById("netStatus"),
-      menuWrap: document.getElementById("menuWrap"),
-      menuTitle: document.getElementById("menuTitle"),
-      menuPill: document.getElementById("menuPill"),
-      homeNextMatch: document.getElementById("homeNextMatch"),
-      homeLangLabel: document.getElementById("homeLangLabel"),
-      schedList: document.getElementById("schedList"),
-      schedPill: document.getElementById("schedPill"),
-      tabs: Array.from(document.querySelectorAll(".tab")),
-      pollPill: document.getElementById("pollPill"),
-      pollHint: document.getElementById("pollHint"),
-      btnPollRefresh: document.getElementById("btnPollRefresh"),
-      btnPollVote: document.getElementById("btnPollVote"),
-      ctaReserve: document.getElementById("ctaReserve"),
-      ctaChat: document.getElementById("ctaChat"),
-      btnStartReservation: document.getElementById("btnStartReservation"),
-      btnStartReservation2: document.getElementById("btnStartReservation"),
-      langBtns: Array.from(document.querySelectorAll(".langbtn")),
+    // ======= STATE =======
+    const state = {
+      lang: 'en',     // en | es | pt | fr
+      scope: 'dallas' // dallas | all
     };
 
-    let language = localStorage.getItem("wcc_lang") || "en";
-    let scheduleScope = localStorage.getItem("wcc_scope") || "all";
-    const chatHistory = []; // [{role, content}]
-    const clientId = (localStorage.getItem("wcc_client_id") || (crypto?.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)));
-    localStorage.setItem("wcc_client_id", clientId);
-
-    // -------------------------
-    // Helpers
-    // -------------------------
-    function setOnlinePill(){
-      const ok = navigator.onLine !== false;
-      els.netStatus.textContent = ok ? "Online" : "Offline";
-      els.netStatus.style.borderColor = ok ? "rgba(46,160,67,.45)" : "rgba(255,204,102,.40)";
+    function setActiveNav(sec){
+      document.querySelectorAll('#mobileNav .mnavBtn').forEach(b=>{
+        b.classList.toggle('active', b.dataset.sec === sec);
+      });
     }
-    window.addEventListener("online", setOnlinePill);
-    window.addEventListener("offline", setOnlinePill);
-    setOnlinePill();
 
-    function showSection(name){
-      for (const [k, sec] of Object.entries(els.sections)){
-        sec.classList.toggle("active", k === name);
+    function setSection(sec){
+      document.body.setAttribute('data-sec', sec);
+      setActiveNav(sec);
+
+      // Make chat immediately ready (no extra tap)
+      if(sec === 'chat'){
+        setTimeout(()=>{ try{ document.getElementById('msg')?.focus(); }catch(e){} }, 30);
       }
-      els.navBtns.forEach(b => b.classList.toggle("active", b.dataset.target === name));
-
-      // “Auto-ready” typing when entering chat
-      if(name === "chat"){
-        setTimeout(() => {
-          try{ els.msg.focus({preventScroll:true}); }catch(e){ try{ els.msg.focus(); }catch(_){} }
-          try{ els.msg.scrollIntoView({block:"nearest"}); }catch(e){}
-        }, 60);
-      }
-
-      // Lazy loads
-      if(name === "menu") loadMenu();
-      if(name === "schedule") loadSchedule();
-      if(name === "fanzone") loadPollState();
     }
 
-    // Nav handlers
-    els.navBtns.forEach(btn => btn.addEventListener("click", () => showSection(btn.dataset.target)));
-
-    // Hero CTAs
-    els.ctaChat.addEventListener("click", () => showSection("chat"));
-    els.ctaReserve.addEventListener("click", () => showSection("reserve"));
-    els.btnStartReservation.addEventListener("click", () => {
-      showSection("chat");
-      // prime reservation intent
-      setTimeout(() => {
-        els.msg.value = "reservation";
-        autoGrow(els.msg);
-        sendMessage();
-      }, 120);
-    });
-
-    // Language
-    function setLanguage(lang){
-      language = (lang || "en").toLowerCase();
-      localStorage.setItem("wcc_lang", language);
-      els.langBtns.forEach(b => b.classList.toggle("active", b.dataset.lang === language));
-      els.homeLangLabel.textContent = language.toUpperCase();
-      // Refresh language-dependent content
-      loadMenu(true);
+    // ======= TOP PILLS =======
+    function updatePills(){
+      const pillLang = document.getElementById('pillLang');
+      const pillMode = document.getElementById('pillMode');
+      if(pillLang) pillLang.innerHTML = `<strong>${state.lang.toUpperCase()}</strong> · 4 languages`;
+      if(pillMode) pillMode.innerHTML = `Mode: <strong>${state.scope === 'all' ? 'All' : 'Dallas'}</strong>`;
+      const scopeSelect = document.getElementById('scopeSelect');
+      if(scopeSelect) scopeSelect.value = state.scope;
     }
-    els.langBtns.forEach(btn => btn.addEventListener("click", () => setLanguage(btn.dataset.lang)));
-    setLanguage(language);
 
-    // -------------------------
-    // Chat
-    // -------------------------
-    function addBubble(kind, text){
-      const div = document.createElement("div");
-      div.className = "bubble " + (kind === "user" ? "user" : "bot");
+    function cycleLang(){
+      const order = ['en','es','pt','fr'];
+      const i = order.indexOf(state.lang);
+      state.lang = order[(i+1) % order.length];
+      updatePills();
+      systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
+      // Refresh menu in new language if menu is open
+      if(document.body.getAttribute('data-sec') === 'menu') loadMenu();
+    }
+
+    function toggleScope(){
+      state.scope = (state.scope === 'dallas') ? 'all' : 'dallas';
+      updatePills();
+      systemMsg(`Schedule scope: ${state.scope === 'all' ? 'All matches' : 'Dallas matches'}.`);
+      if(document.body.getAttribute('data-sec') === 'schedule') loadSchedule();
+      loadPresence();
+    }
+
+    // ======= CHAT =======
+    const chatLog = document.getElementById('chatLog');
+    let sessionId = (()=>{ try{ return localStorage.getItem('wc_session_id') || crypto.randomUUID(); }catch(e){ return String(Date.now()); } })();
+
+    try{ localStorage.setItem('wc_session_id', sessionId); }catch(e){}
+
+    function appendBubble(text, who){
+      const div = document.createElement('div');
+      div.className = 'bubble ' + (who === 'me' ? 'me' : (who === 'system' ? 'bot' : 'bot'));
       div.textContent = text;
-      els.chatLog.appendChild(div);
-      els.chatLog.scrollTop = els.chatLog.scrollHeight;
+      chatLog.appendChild(div);
+      chatLog.scrollTop = chatLog.scrollHeight;
     }
-    function setChatPill(txt){ els.chatPill.textContent = txt; }
 
-    function autoGrow(el){
-      el.style.height = "44px";
-      el.style.height = Math.min(el.scrollHeight, 140) + "px";
-    }
-    els.msg.addEventListener("input", () => autoGrow(els.msg));
+    function systemMsg(t){ appendBubble(t, 'system'); }
 
-    async function sendMessage(){
-      const text = (els.msg.value || "").trim();
-      if(!text) return;
-
-      addBubble("user", text);
-      chatHistory.push({ role:"user", content:text });
-
-      els.msg.value = "";
-      autoGrow(els.msg);
-      els.sendBtn.disabled = true;
-      setChatPill("Sending…");
+    async function sendChat(){
+      const input = document.getElementById('msg');
+      const txt = (input.value || '').trim();
+      if(!txt) return;
+      input.value = '';
+      appendBubble(txt, 'me');
 
       try{
-        const res = await fetch("/chat", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({
-            message: text,
-            lang: language,
-            history: chatHistory.slice(-18) // harmless if ignored by server
-          })
+        const r = await fetch('/chat', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ message: txt, session_id: sessionId, language: state.lang })
         });
-
-        let reply = "Sorry — no reply received.";
-        if(res && res.ok){
-          const data = await res.json().catch(() => ({}));
-          reply = (data && data.reply) ? data.reply : reply;
-        }else{
-          const status = res ? (res.status + " " + res.statusText) : "No response";
-          reply = `Server issue (${status}). Try again.`;
-        }
-
-        addBubble("bot", reply);
-        chatHistory.push({ role:"assistant", content: reply });
+        const data = await r.json();
+        appendBubble(data.reply || '…', 'bot');
       }catch(e){
-        addBubble("bot", "⚠️ Network error. Please try again.");
-      }finally{
-        els.sendBtn.disabled = false;
-        setChatPill("Ready");
-        try{ els.msg.focus({preventScroll:true}); }catch(e){}
+        appendBubble('Chat is temporarily unavailable. Please try again.', 'bot');
       }
     }
 
-    els.sendBtn.addEventListener("click", sendMessage);
-    els.msg.addEventListener("keydown", (e) => {
-      if(e.key === "Enter" && !e.shiftKey){
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-
-    // Seed welcome
-    addBubble("bot", "Welcome! Ask me about reservations, Dallas match days, or type “menu” / “schedule”.");
-    addBubble("bot", "I can chat in English, Español, Português, or Français — switch language on Home.");
-
-    // -------------------------
-    // Menu
-    // -------------------------
-    let menuLoadedFor = "";
-    async function loadMenu(force=false){
-      if(!force && menuLoadedFor === language) return;
-      menuLoadedFor = language;
-
-      els.menuPill.textContent = "Loading…";
-      els.menuWrap.innerHTML = "";
-
+    // ======= MENU =======
+    async function loadMenu(){
+      const el = document.getElementById('menuBody');
+      if(!el) return;
+      el.textContent = 'Loading menu…';
       try{
-        const res = await fetch("/menu.json?lang=" + encodeURIComponent(language), { cache:"no-store" });
-        const data = await res.json().catch(()=> ({}));
-        const menu = data && data.menu ? data.menu : null;
-        const title = menu && menu.title ? menu.title : "Menu";
-        const items = (menu && Array.isArray(menu.items)) ? menu.items : [];
-
-        els.menuTitle.textContent = title;
-        if(!items.length){
-          els.menuWrap.innerHTML = "<div class='hint'>Menu temporarily unavailable.</div>";
-          els.menuPill.textContent = "Empty";
+        const r = await fetch(`/menu.json?lang=${encodeURIComponent(state.lang)}`, {cache:'no-store'});
+        const data = await r.json();
+        if(!Array.isArray(data) || !data.length){
+          el.textContent = 'Menu is empty.';
           return;
         }
-
-        const frag = document.createDocumentFragment();
-        items.forEach(it => {
-          const wrap = document.createElement("div");
-          wrap.className = "menuItem";
-          wrap.innerHTML = `
-            <div class="menuTop">
-              <div class="menuName">${escapeHtml(it.name || "")}</div>
-              <div class="menuPrice">${escapeHtml(it.price || "")}</div>
-            </div>
-            <div class="menuDesc">${escapeHtml(it.desc || "")}</div>
-          `;
-          frag.appendChild(wrap);
-        });
-        els.menuWrap.appendChild(frag);
-        els.menuPill.textContent = "Updated";
+        el.innerHTML = data.map(item=>{
+          const name = (item.name || item.title || 'Item');
+          const desc = (item.description || item.desc || '');
+          const price = (item.price ? ` • ${item.price}` : '');
+          return `<div class="match" style="margin-bottom:10px">
+                    <div class="matchTeams">${escapeHtml(name)}${escapeHtml(price)}</div>
+                    <div class="matchMeta">${escapeHtml(desc)}</div>
+                  </div>`;
+        }).join('');
       }catch(e){
-        els.menuWrap.innerHTML = "<div class='hint'>Menu temporarily unavailable.</div>";
-        els.menuPill.textContent = "Error";
+        el.textContent = 'Menu temporarily unavailable.';
       }
     }
 
-    // -------------------------
-    // Schedule
-    // -------------------------
-    function setSchedPill(t){ els.schedPill.textContent = t; }
-
-    function setScope(scope){
-      scheduleScope = (scope || "all");
-      localStorage.setItem("wcc_scope", scheduleScope);
-      els.tabs.forEach(t => t.classList.toggle("active", t.dataset.scope === scheduleScope));
-      loadSchedule(true);
-    }
-    els.tabs.forEach(t => t.addEventListener("click", () => setScope(t.dataset.scope)));
-    setScope(scheduleScope);
-
-    function fmtMatch(m){
-      const when = `${m.date || ""} • ${m.time || ""}`;
-      const teams = `${m.home || ""} vs ${m.away || ""}`;
-      const venue = m.venue || "";
-      const hs = (m.home_score !== null && m.home_score !== undefined) ? m.home_score : null;
-      const as = (m.away_score !== null && m.away_score !== undefined) ? m.away_score : null;
-      const score = (hs !== null || as !== null) ? `${hs ?? "-"}–${as ?? "-"}` : "";
-      const status = (m.status || "upcoming").toLowerCase();
-      return { when, teams, venue, score, status };
+    // ======= SCHEDULE =======
+    function escapeHtml(s){
+      return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
     }
 
-    function renderSchedule(list){
-      els.schedList.innerHTML = "";
-      if(!Array.isArray(list) || !list.length){
-        els.schedList.innerHTML = "<div class='pad'><div class='hint'>Schedule temporarily unavailable.</div></div>";
+    function renderMatches(matches){
+      const list = document.getElementById('scheduleBody');
+      const hint = document.getElementById('scheduleHint');
+      if(!list || !hint) return;
+      list.innerHTML = '';
+      const q = (document.getElementById('scheduleSearch')?.value || '').trim().toLowerCase();
+
+      const filtered = matches.filter(m=>{
+        if(!q) return true;
+        const hay = [
+          m.date, m.time, m.group, m.stage, m.venue, m.city,
+          m.home, m.away, m.team1, m.team2
+        ].filter(Boolean).join(' ').toLowerCase();
+        return hay.includes(q);
+      });
+
+      if(!filtered.length){
+        hint.textContent = 'No matches found.';
         return;
       }
-      const frag = document.createDocumentFragment();
-      list.slice(0, 60).forEach(m => {
-        const f = fmtMatch(m);
-        const row = document.createElement("div");
-        row.className = "match";
+      hint.textContent = `${filtered.length} match${filtered.length===1?'':'es'} shown.`;
+
+      filtered.forEach(m=>{
+        const date = m.date || '';
+        const time = m.time || '';
+        const venue = m.venue || m.stadium || '';
+        const city = m.city || '';
+        const group = m.group || m.stage || '';
+        const home = m.home || m.team1 || 'TBD';
+        const away = m.away || m.team2 || 'TBD';
+
+        const row = document.createElement('div');
+        row.className = 'match';
         row.innerHTML = `
-          <div class="left">
-            <div class="when">${escapeHtml(f.when)}</div>
-            <div class="teams">${escapeHtml(f.teams)}</div>
-            <div class="venue">${escapeHtml(f.venue)}</div>
-          </div>
-          <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
-            ${f.score ? `<div class="score">${escapeHtml(f.score)}</div>` : `<div class="score" style="opacity:.0;">-</div>`}
-            <div class="status ${escapeHtml(f.status)}">${escapeHtml(f.status.toUpperCase())}</div>
-          </div>
+          <div class="matchTop"><span>${escapeHtml(date)} ${escapeHtml(time)}</span><span>${escapeHtml(group)}</span></div>
+          <div class="matchTeams">${escapeHtml(home)} <span style="opacity:.8">vs</span> ${escapeHtml(away)}</div>
+          <div class="matchMeta">${escapeHtml(venue)}${venue && city ? ' • ' : ''}${escapeHtml(city)}</div>
         `;
-        frag.appendChild(row);
+        list.appendChild(row);
       });
-      els.schedList.appendChild(frag);
-
-      // Home hero "next match"
-      try{
-        const next = list.find(x => (x.status || "").toLowerCase() === "upcoming") || list[0];
-        const f = fmtMatch(next);
-        els.homeNextMatch.textContent = f.teams + " • " + (next.date || "") + " " + (next.time || "");
-      }catch(e){}
     }
 
-    let scheduleLoadedOnce = false;
-    async function loadSchedule(force=false){
-      if(scheduleLoadedOnce && !force) return;
-      scheduleLoadedOnce = true;
-      setSchedPill("Updating…");
+    async function loadSchedule(){
+      const list = document.getElementById('scheduleBody');
+      const hint = document.getElementById('scheduleHint');
+      if(list) list.innerHTML = '';
+      if(hint) hint.textContent = 'Loading schedule…';
+
       try{
-        // Use /worldcup/live.json because it gracefully falls back on the server if remote feed is slow.
-        const res = await fetch("/worldcup/live.json?scope=" + encodeURIComponent(scheduleScope), { cache:"no-store" });
-        const data = await res.json().catch(()=> ({}));
-        const matches = data && Array.isArray(data.matches) ? data.matches : [];
-        renderSchedule(matches);
-        setSchedPill("Updated");
+        // app.py supports /schedule.json?scope=dallas|all&q=...
+        const q = (document.getElementById('scheduleSearch')?.value || '').trim();
+        const url = `/schedule.json?scope=${encodeURIComponent(state.scope)}&q=${encodeURIComponent(q)}`;
+        const r = await fetch(url, {cache:'no-store'});
+        const data = await r.json();
+        const matches = Array.isArray(data.matches) ? data.matches : (Array.isArray(data) ? data : []);
+        renderMatches(matches);
       }catch(e){
-        renderSchedule([]);
-        setSchedPill("Error");
+        if(hint) hint.textContent = 'Schedule temporarily unavailable.';
       }
     }
 
-    // -------------------------
-    // Fan Zone Poll
-    // -------------------------
-    async function loadPollState(){
-      els.pollPill.textContent = "Loading…";
+    // ======= PRESENCE =======
+    async function loadPresence(){
+      const el = document.getElementById('presenceText');
+      if(!el) return;
+      el.textContent = 'Checking match status…';
       try{
-        const res = await fetch("/api/poll/state", { cache:"no-store" });
-        const data = await res.json().catch(()=> ({}));
-        const live = !!(data && data.is_live);
-        const match = data && data.match ? data.match : null;
-        const a = match?.home || "Home";
-        const b = match?.away || "Away";
-        els.pollHint.textContent = live
-          ? `Live poll: ${a} vs ${b}. Tap Vote to choose a supporter side.`
-          : "No live poll right now. Tap Refresh.";
-        els.pollPill.textContent = live ? "Live" : "Idle";
-        els.pollPill.style.borderColor = live ? "rgba(46,160,67,.45)" : "rgba(255,255,255,.14)";
+        const r = await fetch(`/schedule.json?scope=${encodeURIComponent(state.scope)}`, {cache:'no-store'});
+        const data = await r.json();
+        const isMatchDay = !!(data && (data.is_matchday || data.is_match_day || data.is_match));
+        el.innerHTML = isMatchDay
+          ? `<b style="color:var(--warn)">Match day</b> — ask Chat for crowd tips, arrival times, and reservations.`
+          : `No match today — plan ahead and reserve early.`;
       }catch(e){
-        els.pollHint.textContent = "Poll temporarily unavailable.";
-        els.pollPill.textContent = "Error";
+        el.textContent = 'Status unavailable.';
       }
     }
-    els.btnPollRefresh.addEventListener("click", loadPollState);
 
-    els.btnPollVote.addEventListener("click", async () => {
-      try{
-        const res0 = await fetch("/api/poll/state", { cache:"no-store" });
-        const st = await res0.json().catch(()=> ({}));
-        const match = st?.match || null;
-        if(!match){ alert("No live poll to vote on."); return; }
-        const a = match?.home || "Home";
-        const b = match?.away || "Away";
-        const team = prompt(`Vote your supporter side:\n1) ${a}\n2) ${b}\n\nType 1 or 2:`,"1");
-        if(!team) return;
-        const choice = (String(team).trim() === "2") ? b : a;
-
-        const res = await fetch("/api/poll/vote", {
-          method:"POST",
-          headers:{ "Content-Type":"application/json" },
-          body: JSON.stringify({ team: choice, client_id: clientId })
-        });
-        const data = await res.json().catch(()=> ({}));
-        if(res && res.ok){
-          alert("Vote recorded: " + choice);
-          loadPollState();
-        }else{
-          alert("Vote failed. Try again.");
-        }
-      }catch(e){
-        alert("Vote failed. Try again.");
-      }
-    });
-
-    // -------------------------
-    // Utilities
-    // -------------------------
-    function escapeHtml(s){
-      return String(s ?? "").replace(/[&<>"']/g, (m) => ({
-        "&":"&amp;",
-        "<":"&lt;",
-        ">":"&gt;",
-        '"':"&quot;",
-        "'":"&#39;",
-      }[m]));
+    // ======= WIRING =======
+    function wireNav(){
+      const nav = document.getElementById('mobileNav');
+      nav.addEventListener('click', (e)=>{
+        const btn = e.target.closest('.mnavBtn');
+        if(!btn) return;
+        setSection(btn.dataset.sec || 'home');
+      });
     }
 
-    // Initial loads (home)
-    loadSchedule(true);
-    loadMenu(true);
+    function wireButtons(){
+      document.getElementById('pillLang')?.addEventListener('click', cycleLang);
+      document.getElementById('pillMode')?.addEventListener('click', toggleScope);
+
+      document.getElementById('ctaReserve')?.addEventListener('click', ()=>systemMsg('Tell me what you want to reserve (venue, date/time, party size).'));
+      document.getElementById('ctaChat')?.addEventListener('click', ()=>setSection('chat'));
+
+      document.querySelectorAll('[data-jump="schedule"]').forEach(b=>b.addEventListener('click', ()=>setSection('schedule')));
+      document.querySelectorAll('[data-jump="reserve"]').forEach(b=>b.addEventListener('click', ()=>{ setSection('chat'); systemMsg('Reservation request: tell me venue/area + date/time + party size.'); }));
+
+      document.getElementById('sendBtn')?.addEventListener('click', sendChat);
+      document.getElementById('msg')?.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') sendChat(); });
+
+      document.getElementById('clearChat')?.addEventListener('click', ()=>{
+        chatLog.innerHTML = '';
+        systemMsg('Cleared. How can I help?');
+      });
+
+      document.getElementById('reloadMenu')?.addEventListener('click', loadMenu);
+      document.getElementById('reloadSchedule')?.addEventListener('click', loadSchedule);
+
+      document.getElementById('scopeSelect')?.addEventListener('change', (e)=>{
+        state.scope = e.target.value === 'all' ? 'all' : 'dallas';
+        updatePills();
+        loadSchedule();
+        loadPresence();
+      });
+
+      document.getElementById('scheduleSearch')?.addEventListener('input', ()=>{
+        // If schedule already loaded, re-fetch less often; we filter client-side when possible
+        // but keep it simple: try to render from last loaded by reloading on a short debounce
+        clearTimeout(window.__schDeb);
+        window.__schDeb = setTimeout(loadSchedule, 250);
+      });
+    }
+
+    function boot(){
+      wireNav();
+      wireButtons();
+      updatePills();
+      // Welcome line
+      systemMsg('Welcome. Ask me about reservations, match schedules, venues, or VIP options.');
+      loadPresence();
+    }
+
+    if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+    else boot();
   </script>
 </body>
 </html>
