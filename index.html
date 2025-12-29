@@ -498,7 +498,20 @@
   <script>
     const state = { lang:'en', scope:'global', city:'' };
 
-    function escapeHtml(s){
+        function to12Hour(t){
+      // Accept "HH:MM" (24h) and return "h:MM AM/PM". If invalid, return original.
+      const s = String(t || '').trim();
+      const m = /^([01]?\d|2[0-3]):([0-5]\d)/.exec(s);
+      if(!m) return s;
+      let hh = parseInt(m[1], 10);
+      const mm = m[2];
+      const ampm = hh >= 12 ? 'PM' : 'AM';
+      hh = hh % 12;
+      if(hh === 0) hh = 12;
+      return `${hh}:${mm} ${ampm}`;
+    }
+
+function escapeHtml(s){
       return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
     }
 
@@ -661,7 +674,7 @@
         const node = document.createElement('div');
         node.className = 'item';
         node.innerHTML = `
-          <div class="itemTop"><span>${escapeHtml(m.date || '')} ${escapeHtml(m.time || '')}</span><span>${escapeHtml(m.group || m.stage || '')}</span></div>
+          <div class="itemTop"><span>${escapeHtml(m.date || '')} ${escapeHtml(to12Hour(m.time || ''))}</span><span>${escapeHtml(m.group || m.stage || '')}</span></div>
           <div class="itemTitle">${escapeHtml(m.home || 'TBD')} <span style="opacity:.8">vs</span> ${escapeHtml(m.away || 'TBD')}</div>
           <div class="itemMeta">${escapeHtml(m.venue || '')}${m.venue && m.city ? ' • ' : ''}${escapeHtml(m.city || '')}</div>
         `;
