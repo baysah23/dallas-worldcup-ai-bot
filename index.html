@@ -5039,6 +5039,272 @@ body[data-msec="home"] .hero{ display:none !important; }
 }
 /* ========================================================= */
 
+
+/* =========================================================
+   OPTION A — iPhone Mock Match (REAL UI, no screenshot background)
+   ========================================================= */
+body[data-msec="home"] header,
+body[data-msec="home"] .langbar,
+body[data-msec="home"] .langPills,
+body[data-msec="home"] .filtersBar{ display:none !important; }
+
+body[data-msec="home"] #homeCard,
+body[data-msec="home"] .homecard,
+body[data-msec="home"] .hero{ display:none !important; }
+
+#luxHomeShell{ display:none; margin: 8px 0 14px 0; }
+body[data-msec="home"] #luxHomeShell{ display:block !important; }
+
+/* --- The "phone" stage --- */
+#luxHomeShell .luxHero{
+  position: relative;
+  border-radius: 26px;
+  overflow: hidden;
+  min-height: calc(100svh - 118px);
+  border: 1px solid rgba(255,215,110,.26);
+  box-shadow:
+    0 28px 110px rgba(0,0,0,.72),
+    inset 0 0 0 1px rgba(255,255,255,.04);
+  isolation: isolate;
+  background: #070b14;
+}
+@supports (height: 100dvh){
+  #luxHomeShell .luxHero{ min-height: calc(100dvh - 118px); }
+}
+
+/* Stadium + particles (no image) */
+#luxHomeShell .luxHero::before{
+  content:"";
+  position:absolute; inset:-120px;
+  background:
+    radial-gradient(560px 420px at 50% 10%, rgba(255,235,190,.42), transparent 60%),
+    radial-gradient(820px 520px at 50% 28%, rgba(255,215,110,.12), transparent 72%),
+    radial-gradient(1150px 680px at 50% 60%, rgba(255,255,255,.06), transparent 70%),
+    conic-gradient(from 210deg at 50% 34%,
+      rgba(255,215,110,.08), transparent 16%,
+      rgba(255,215,110,.05), transparent 34%,
+      rgba(255,215,110,.05), transparent 58%,
+      rgba(255,215,110,.08)),
+    radial-gradient(1200px 760px at 50% 88%, rgba(0,0,0,.0), rgba(0,0,0,.76) 70%),
+    linear-gradient(140deg, rgba(5,7,14,.96), rgba(4,6,12,.98));
+  filter: saturate(1.28) contrast(1.14);
+  transform: scale(1.04);
+}
+#luxHomeShell .luxHero::after{
+  content:"";
+  position:absolute; inset:0;
+  background:
+    radial-gradient(1000px 640px at 50% 12%, rgba(0,0,0,.00), rgba(0,0,0,.80) 82%),
+    linear-gradient(180deg, rgba(0,0,0,.10), rgba(0,0,0,.78));
+  pointer-events:none;
+}
+
+/* floating sparkles */
+#luxHomeShell .luxHero .luxSparkles{
+  position:absolute; inset:-40px;
+  background:
+    radial-gradient(circle at 10% 30%, rgba(255,215,110,.20), transparent 26%),
+    radial-gradient(circle at 70% 18%, rgba(255,255,255,.16), transparent 22%),
+    radial-gradient(circle at 85% 55%, rgba(255,215,110,.14), transparent 24%),
+    radial-gradient(circle at 25% 70%, rgba(255,255,255,.10), transparent 28%);
+  opacity: .55;
+  filter: blur(.2px);
+  animation: luxFloat 8.5s ease-in-out infinite;
+  pointer-events:none;
+  z-index: 1;
+}
+@keyframes luxFloat{
+  0%,100%{ transform: translate3d(0,0,0); }
+  50%{ transform: translate3d(0,-10px,0); }
+}
+
+/* Layout: match iPhone mock geometry */
+#luxHomeShell .luxOverlay{
+  position:absolute; inset:0;
+  z-index:2;
+  padding: 22px 18px 18px 18px;
+  display:flex;
+  flex-direction:column;
+  gap: 14px;
+  justify-content:flex-end;
+  text-align:center;
+}
+#luxHomeShell .luxTop{
+  margin-bottom: 2px;
+}
+
+/* Trophy: make it “hero” sized like the mock */
+#luxHomeShell .luxTrophy svg{
+  width: 118px !important;
+  height: 168px !important;
+}
+#luxHomeShell .luxTrophy{
+  display:flex;
+  justify-content:center;
+  margin-bottom: 4px;
+  filter: drop-shadow(0 26px 52px rgba(0,0,0,.70));
+}
+
+/* Title gold gradient like the mock */
+#luxHomeShell .luxTitleGold{
+  margin: 0;
+  font-family: ui-serif, Georgia, "Times New Roman", serif;
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  line-height: 1.00;
+  font-size: clamp(38px, 9.8vw, 62px);
+  background: linear-gradient(180deg, rgba(255,250,235,.98), rgba(255,215,110,.92) 54%, rgba(150,88,26,.90));
+  -webkit-background-clip:text;
+  background-clip:text;
+  color: transparent;
+  text-shadow: 0 14px 44px rgba(0,0,0,.72);
+}
+#luxHomeShell .luxSubGold{
+  margin: 6px 0 0 0;
+  font-size: 13.5px;
+  opacity: .92;
+}
+#luxHomeShell .luxLangRow{
+  margin-top: 10px;
+  font-size: 11px;
+  letter-spacing: .36em;
+  opacity: .90;
+}
+
+/* thin gold streak divider under title stack */
+#luxHomeShell .luxTop::after{
+  content:"";
+  display:block;
+  width: 74%;
+  height: 2px;
+  margin: 14px auto 0 auto;
+  background: linear-gradient(90deg, transparent, rgba(255,215,110,.62), transparent);
+  box-shadow: 0 0 26px rgba(255,215,110,.18);
+  opacity: .70;
+}
+
+/* “glass” card styling to match mock */
+#luxHomeShell .luxCardCta,
+#luxHomeShell .luxTileBtn{
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: rgba(0,0,0,.28);
+  border: 1px solid rgba(255,215,110,.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.07),
+    inset 0 -1px 0 rgba(0,0,0,.62),
+    0 18px 70px rgba(0,0,0,.62);
+}
+
+/* inner frame line */
+#luxHomeShell .luxCardCta::before,
+#luxHomeShell .luxTileBtn::before{
+  content:"";
+  position:absolute; inset: 1px;
+  border-radius: 19px;
+  border: 1px solid rgba(255,215,110,.18);
+  pointer-events:none;
+}
+#luxHomeShell .luxCardCta{
+  position:relative;
+  border-radius: 20px;
+  padding: 16px 16px;
+  display:flex;
+  align-items:center;
+  gap: 14px;
+  text-align:left;
+}
+#luxHomeShell .luxCtaIcon{
+  width: 46px; height: 46px;
+  border-radius: 16px;
+  display:grid; place-items:center;
+  background: linear-gradient(180deg, rgba(255,215,110,.18), rgba(0,0,0,.12));
+  border: 1px solid rgba(255,215,110,.34);
+  color: rgba(255,230,170,.92);
+}
+#luxHomeShell .luxCtaTitle{ font-size: 19px; letter-spacing: .03em; }
+#luxHomeShell .luxCtaSub{ font-size: 12.5px; opacity:.92; }
+#luxHomeShell .luxCtaLangs{ font-size: 11px; letter-spacing: .28em; opacity:.88; }
+
+/* 2x2 tiles EXACTLY like mock */
+#luxHomeShell .luxTileGrid{
+  width: 100%;
+  display:grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+#luxHomeShell .luxTileBtn{
+  position:relative;
+  border-radius: 20px;
+  padding: 14px 14px 12px 14px;
+  min-height: 96px;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  text-align:left;
+}
+#luxHomeShell .luxTileIcon{
+  width: 46px; height: 46px;
+  border-radius: 16px;
+  display:grid; place-items:center;
+  background: linear-gradient(180deg, rgba(255,215,110,.16), rgba(0,0,0,.12));
+  border: 1px solid rgba(255,215,110,.28);
+  color: rgba(255,230,170,.92);
+}
+#luxHomeShell .luxTileLabel{ font-weight: 900; letter-spacing: .02em; opacity:.96; }
+
+/* micro interactions */
+#luxHomeShell button{ transition: transform .12s ease, filter .12s ease; -webkit-tap-highlight-color: transparent; }
+#luxHomeShell button:active{ transform: translateY(1px) scale(.99); filter: brightness(1.06); }
+
+/* Small phones keep tap targets */
+@media (max-width: 390px){
+  #luxHomeShell .luxOverlay{ padding: 18px 14px 16px 14px; }
+  #luxHomeShell .luxTileBtn{ min-height: 92px; }
+}
+
+/* ========================================================= */
+
+
+/* =========================================================
+   STEP 4H — EXACT IPHONE BACKPLATE (FINAL)
+   ========================================================= */
+body[data-msec="home"] #luxHomeShell .luxHero{
+  background: none !important;
+}
+
+body[data-msec="home"] #luxHomeShell .luxHero::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  background-image:
+    linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.65)),
+    url("/static/lux-home-exact.webp");
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+  filter: saturate(1.05) contrast(1.05);
+  z-index:0;
+}
+
+body[data-msec="home"] #luxHomeShell .luxHero::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:
+    radial-gradient(900px 600px at 50% 18%, rgba(255,215,110,.25), transparent 60%),
+    radial-gradient(1200px 800px at 50% 80%, rgba(0,0,0,.0), rgba(0,0,0,.75) 75%);
+  pointer-events:none;
+  z-index:1;
+}
+
+body[data-msec="home"] #luxHomeShell .luxOverlay{
+  position:relative;
+  z-index:2;
+}
+/* ========================================================= */
+
 </style>
 </head>
 <body data-msec="home" data-lux="on">
