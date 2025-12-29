@@ -17,12 +17,9 @@
       --blue:#1f6feb;
       --green:#2ea043;
       --warn:#ffcc66;
-      --danger:#ff6b6b;
       --shadow: 0 10px 30px rgba(0,0,0,.45);
       --r16:16px;
-      --r14:14px;
     }
-
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
     body{
@@ -36,15 +33,13 @@
         var(--bg);
       overflow-x:hidden;
     }
-
-    /* Mobile-only: this app is intentionally optimized for phones */
     .wrap{
-      max-width: 520px;     /* still mobile-friendly on larger phones */
+      max-width: 560px;
       margin: 0 auto;
       padding: 14px 14px calc(84px + env(safe-area-inset-bottom));
     }
 
-    /* ======= HERO (new banner) ======= */
+    /* === HERO / BANNER === */
     .hero{
       position:relative;
       border-radius: var(--r16);
@@ -52,7 +47,7 @@
       background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
       border: 1px solid var(--line);
       box-shadow: var(--shadow);
-      min-height: 180px;
+      min-height: 186px;
     }
     .hero::before{
       content:"";
@@ -61,13 +56,12 @@
         radial-gradient(900px 360px at 30% 30%, rgba(31,111,235,.35), transparent 60%),
         radial-gradient(800px 320px at 80% 20%, rgba(212,175,55,.22), transparent 55%),
         radial-gradient(700px 300px at 60% 90%, rgba(46,160,67,.18), transparent 55%);
-      filter: saturate(1.1);
       transform: translateZ(0);
     }
     .hero::after{
       content:"";
       position:absolute; inset:0;
-      background: linear-gradient(180deg, rgba(7,16,34,.15), rgba(7,16,34,.75));
+      background: linear-gradient(180deg, rgba(7,16,34,.15), rgba(7,16,34,.78));
       pointer-events:none;
     }
     .heroInner{
@@ -86,7 +80,7 @@
       display:inline-flex;
       align-items:center;
       gap:8px;
-      font-weight: 700;
+      font-weight: 800;
       letter-spacing:.08em;
       text-transform: uppercase;
       font-size: 11px;
@@ -104,7 +98,6 @@
       box-shadow: 0 0 0 4px rgba(46,160,67,.18);
       flex:0 0 auto;
     }
-
     .pills{
       display:flex;
       gap:8px;
@@ -125,7 +118,7 @@
       backdrop-filter: blur(8px);
       -webkit-backdrop-filter: blur(8px);
     }
-    .pill strong{ font-weight: 800; color: rgba(255,255,255,.95); }
+    .pill strong{ font-weight: 900; color: rgba(255,255,255,.95); }
     .pill:active{ transform: translateY(1px); }
 
     .heroTitle{
@@ -140,7 +133,7 @@
       margin:0 0 12px;
       font-size: 13px;
       color: rgba(185,199,238,.95);
-      max-width: 90%;
+      max-width: 92%;
     }
     .heroActions{
       display:flex;
@@ -154,7 +147,7 @@
       border: 1px solid rgba(255,255,255,.14);
       background: rgba(15,27,51,.60);
       color: var(--text);
-      font-weight: 800;
+      font-weight: 900;
       font-size: 13px;
       cursor:pointer;
       display:flex;
@@ -166,13 +159,13 @@
       -webkit-backdrop-filter: blur(10px);
     }
     .cta.primary{
-      background: linear-gradient(135deg, rgba(212,175,55,.95), rgba(255,204,102,.75));
+      background: linear-gradient(135deg, rgba(212,175,55,.95), rgba(255,204,102,.78));
       color:#111827;
       border: 1px solid rgba(255,255,255,.35);
     }
     .cta:active{ transform: translateY(1px); }
 
-    /* ======= CARDS ======= */
+    /* === CARDS === */
     .card{
       margin-top: 14px;
       border-radius: var(--r16);
@@ -199,32 +192,33 @@
       text-transform: uppercase;
     }
     .cardBody{ padding: 12px; }
-
     .hint{
       margin: 8px 0 0;
       font-size: 12px;
       color: rgba(185,199,238,.9);
+      line-height: 1.35;
     }
 
-    /* ======= SECTION VISIBILITY ======= */
+    /* === SECTIONS === */
     .section{ display:none; }
-    body[data-sec="home"]   #sec-home{ display:block; }
-    body[data-sec="chat"]   #sec-chat{ display:block; }
-    body[data-sec="menu"]   #sec-menu{ display:block; }
+    body[data-sec="home"]     #sec-home{ display:block; }
+    body[data-sec="chat"]     #sec-chat{ display:block; }
+    body[data-sec="menu"]     #sec-menu{ display:block; }
     body[data-sec="schedule"] #sec-schedule{ display:block; }
-    body[data-sec="fanzone"] #sec-fanzone{ display:block; }
-    body[data-sec="vip"]    #sec-vip{ display:block; }
+    body[data-sec="fanzone"]  #sec-fanzone{ display:block; }
+    body[data-sec="vip"]      #sec-vip{ display:block; }
 
-    /* ======= CHAT ======= */
+    /* === CHAT === */
     .chatLog{
       height: 44vh;
       min-height: 280px;
-      max-height: 520px;
+      max-height: 540px;
       overflow:auto;
       padding-right: 4px;
+      scroll-behavior:smooth;
     }
     .bubble{
-      display:inline-block;
+      display:block;
       max-width: 88%;
       padding: 10px 12px;
       border-radius: 14px;
@@ -240,12 +234,6 @@
       background: rgba(31,111,235,.18);
       border-color: rgba(31,111,235,.35);
       margin-left:auto;
-      display:block;
-    }
-    .bubble.bot{
-      background: rgba(15,27,51,.72);
-      border-color: rgba(255,255,255,.12);
-      display:block;
     }
     .chatInputRow{
       display:flex;
@@ -276,8 +264,33 @@
     }
     #sendBtn:active{ transform: translateY(1px); }
 
-    /* ======= SCHEDULE ======= */
-    .scheduleTools{
+    /* === LIST ITEMS (Menu / Schedule / Events) === */
+    .list{ display:flex; flex-direction:column; gap:10px; }
+    .item{
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(11,21,44,.55);
+      padding: 10px 10px;
+    }
+    .itemTop{
+      display:flex; justify-content:space-between; align-items:center; gap:10px;
+      font-size: 12px; color: rgba(185,199,238,.95);
+    }
+    .itemTitle{
+      margin-top:6px;
+      font-weight: 900;
+      font-size: 14px;
+      letter-spacing:.01em;
+    }
+    .itemMeta{
+      margin-top:4px;
+      font-size: 12px;
+      color: rgba(185,199,238,.95);
+      line-height: 1.35;
+    }
+
+    /* === TOOLS ROW === */
+    .tools{
       display:flex;
       gap:8px;
       flex-wrap:wrap;
@@ -293,30 +306,8 @@
       outline:none;
     }
     .search{ flex: 1 1 140px; }
-    .scheduleList{ display:flex; flex-direction:column; gap:10px; }
-    .match{
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,.10);
-      background: rgba(11,21,44,.55);
-      padding: 10px 10px;
-    }
-    .matchTop{
-      display:flex; justify-content:space-between; align-items:center; gap:10px;
-      font-size: 12px; color: rgba(185,199,238,.95);
-    }
-    .matchTeams{
-      margin-top:6px;
-      font-weight: 900;
-      font-size: 14px;
-      letter-spacing:.01em;
-    }
-    .matchMeta{
-      margin-top:4px;
-      font-size: 12px;
-      color: rgba(185,199,238,.95);
-    }
 
-    /* ======= BOTTOM NAV ======= */
+    /* === BOTTOM NAV === */
     .mobileNav{
       position: fixed;
       left: 0; right: 0;
@@ -351,7 +342,7 @@
     .mnavBtn .ico{ font-size: 18px; line-height: 1; }
     .mnavBtn span{
       font-size: 11px;
-      font-weight: 800;
+      font-weight: 900;
       letter-spacing:.01em;
     }
     .mnavBtn.active{
@@ -361,7 +352,6 @@
     }
     .mnavBtn:active{ transform: translateY(1px); }
 
-    /* Accessibility */
     .srOnly{
       position:absolute; width:1px; height:1px; padding:0; margin:-1px;
       overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
@@ -372,19 +362,19 @@
 <body data-sec="home">
   <div class="wrap">
 
-    <!-- NEW MOBILE BANNER -->
+    <!-- PREMIUM GLOBAL BANNER -->
     <section class="hero" id="heroBanner" aria-label="World Cup Concierge banner">
       <div class="heroInner">
         <div class="brandRow">
           <div class="badge"><span class="badgeDot" aria-hidden="true"></span><span>World Cup Concierge</span></div>
           <div class="pills" aria-label="Quick controls">
             <button class="pill" id="pillLang" type="button" aria-label="Language"><strong>EN</strong> · 4 languages</button>
-            <button class="pill" id="pillMode" type="button" aria-label="Mode">Mode: <strong>Global</strong></button>
+            <button class="pill" id="pillScope" type="button" aria-label="Scope">Scope: <strong>Global</strong></button>
           </div>
         </div>
 
-        <h1 class="heroTitle">World Cup 2026 • Global</h1>
-        <p class="heroSub">A premium concierge for reservations, match schedules, and VIP experiences — worldwide, in 4 languages.</p>
+        <h1 class="heroTitle">World Cup 2026</h1>
+        <p class="heroSub">Luxury concierge for reservations, match schedules, and fan experiences — in 4 languages.</p>
 
         <div class="heroActions">
           <button class="cta primary" id="ctaReserve" type="button">Reserve</button>
@@ -393,29 +383,24 @@
       </div>
     </section>
 
-    <!-- SECTIONS -->
     <main>
       <!-- HOME -->
       <section class="section" id="sec-home" aria-label="Home">
         <div class="card">
-          <div class="cardHead">
-            <h2 class="cardTitle">Quick actions</h2>
-          </div>
+          <div class="cardHead"><h2 class="cardTitle">Quick actions</h2></div>
           <div class="cardBody">
             <div class="heroActions" style="margin-top:0">
               <button class="cta primary" type="button" data-jump="reserve">Reserve</button>
               <button class="cta" type="button" data-jump="schedule">Schedule</button>
             </div>
-            <p class="hint">Tip: Use <b>Chat</b> to ask “What are the next matches?” or “Find VIP table options near the stadium”.</p>
+            <p class="hint">Try: “Find VIP tables near the stadium”, “What matches are on tomorrow?”, “Book a table for 6 at 8pm”.</p>
           </div>
         </div>
 
         <div class="card">
-          <div class="cardHead">
-            <h2 class="cardTitle">Presence</h2>
-          </div>
+          <div class="cardHead"><h2 class="cardTitle">Status</h2></div>
           <div class="cardBody">
-            <div id="presenceText" class="hint">Checking match status…</div>
+            <div id="presenceText" class="hint">Loading…</div>
           </div>
         </div>
       </section>
@@ -431,10 +416,11 @@
             <div id="chatLog" class="chatLog" aria-live="polite"></div>
             <div class="chatInputRow">
               <label class="srOnly" for="msg">Message</label>
-              <input id="msg" autocomplete="off" placeholder="Ask anything (EN/ES/PT/FR) — e.g., “book a table near downtown”"/>
+              <input id="msg" autocomplete="off" inputmode="text"
+                     placeholder="Ask anything (EN/ES/PT/FR)…"/>
               <button id="sendBtn" type="button">Send</button>
             </div>
-            <p class="hint">Language is set from the top-right pill. Your schedule scope is set from the Mode pill.</p>
+            <p class="hint">Tap the language pill to switch EN → ES → PT → FR.</p>
           </div>
         </div>
       </section>
@@ -447,7 +433,8 @@
             <button class="pill" id="reloadMenu" type="button">Refresh</button>
           </div>
           <div class="cardBody">
-            <div id="menuBody" class="hint">Tap refresh to load menu.</div>
+            <div id="menuBody" class="list"></div>
+            <div id="menuHint" class="hint"></div>
           </div>
         </div>
       </section>
@@ -455,20 +442,19 @@
       <!-- SCHEDULE -->
       <section class="section" id="sec-schedule" aria-label="Schedule">
         <div class="card">
-          <div class="cardHead">
-            <h2 class="cardTitle">Schedule</h2>
-          </div>
+          <div class="cardHead"><h2 class="cardTitle">Schedule</h2></div>
           <div class="cardBody">
-            <div class="scheduleTools">
+            <div class="tools">
               <select class="select" id="scopeSelect" aria-label="Scope">
-                <option value="all">Global</option>
-                <option value="host">Host city</option>
+                <option value="global">Global</option>
+                <option value="city">City</option>
               </select>
-              <input class="search" id="scheduleSearch" placeholder="Search team, venue, group, date…"/>
+              <input class="search" id="citySearch" placeholder="City (optional)…"/>
+              <input class="search" id="scheduleSearch" placeholder="Search team, group, venue…"/>
               <button class="pill" id="reloadSchedule" type="button">Refresh</button>
             </div>
             <div style="height:10px"></div>
-            <div id="scheduleBody" class="scheduleList"></div>
+            <div id="scheduleBody" class="list"></div>
             <div id="scheduleHint" class="hint"></div>
           </div>
         </div>
@@ -479,9 +465,11 @@
         <div class="card">
           <div class="cardHead">
             <h2 class="cardTitle">Fan Zone</h2>
+            <button class="pill" id="reloadFanzone" type="button">Refresh</button>
           </div>
           <div class="cardBody">
-            <div class="hint">Add fan events, watch parties, and stadium tips here.</div>
+            <div id="fanzoneBody" class="list"></div>
+            <div id="fanzoneHint" class="hint"></div>
           </div>
         </div>
       </section>
@@ -489,18 +477,15 @@
       <!-- VIP -->
       <section class="section" id="sec-vip" aria-label="VIP">
         <div class="card">
-          <div class="cardHead">
-            <h2 class="cardTitle">VIP</h2>
-          </div>
+          <div class="cardHead"><h2 class="cardTitle">VIP</h2></div>
           <div class="cardBody">
-            <div class="hint">Add VIP tables, bottle service options, and partner venues here.</div>
+            <div class="hint">VIP inventory connects to your partners. For now, ask Chat: “VIP table near &lt;venue&gt; for &lt;party size&gt; at &lt;time&gt;”.</div>
           </div>
         </div>
       </section>
     </main>
   </div>
 
-  <!-- Bottom nav -->
   <nav class="mobileNav" id="mobileNav" aria-label="Navigation">
     <button class="mnavBtn active" data-sec="home" type="button"><span class="ico">🏠</span><span>Home</span></button>
     <button class="mnavBtn" data-sec="chat" type="button"><span class="ico">💬</span><span>Chat</span></button>
@@ -511,11 +496,11 @@
   </nav>
 
   <script>
-    // ======= STATE =======
-    const state = {
-      lang: 'en',     // en | es | pt | fr
-      scope: 'all' // all | host (optional host-city filter)
-    };
+    const state = { lang:'en', scope:'global', city:'' };
+
+    function escapeHtml(s){
+      return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    }
 
     function setActiveNav(sec){
       document.querySelectorAll('#mobileNav .mnavBtn').forEach(b=>{
@@ -523,59 +508,76 @@
       });
     }
 
+    // Critical: focus must happen synchronously inside the user click to work reliably on iOS.
+    function focusChatInput(){
+      const input = document.getElementById('msg');
+      if(!input) return;
+      try{
+        input.focus({preventScroll:true});
+        // ensure keyboard-ready & visible
+        input.scrollIntoView({block:'center', behavior:'smooth'});
+        // place cursor at end
+        const v = input.value || '';
+        input.setSelectionRange(v.length, v.length);
+      }catch(e){}
+    }
+
     function setSection(sec){
       document.body.setAttribute('data-sec', sec);
       setActiveNav(sec);
 
-      // Make chat immediately ready (no extra tap)
       if(sec === 'chat'){
-        setTimeout(()=>{ try{ document.getElementById('msg')?.focus(); }catch(e){} }, 30);
+        focusChatInput();
+      }
+      if(sec === 'menu'){
+        if(!window.__menuLoaded) loadMenu();
+      }
+      if(sec === 'schedule'){
+        if(!window.__scheduleLoaded) loadSchedule();
+      }
+      if(sec === 'fanzone'){
+        if(!window.__fanzoneLoaded) loadFanzone();
       }
     }
 
-    // ======= TOP PILLS =======
     function updatePills(){
-      const pillLang = document.getElementById('pillLang');
-      const pillMode = document.getElementById('pillMode');
-      if(pillLang) pillLang.innerHTML = `<strong>${state.lang.toUpperCase()}</strong> · 4 languages`;
-      if(pillMode) pillMode.innerHTML = `Mode: <strong>${state.scope === 'all' ? 'Global' : 'Host city'}</strong>`;
-      const scopeSelect = document.getElementById('scopeSelect');
-      if(scopeSelect) scopeSelect.value = state.scope;
+      document.getElementById('pillLang').innerHTML = `<strong>${state.lang.toUpperCase()}</strong> · 4 languages`;
+      document.getElementById('pillScope').innerHTML = `Scope: <strong>${state.scope === 'city' ? 'City' : 'Global'}</strong>`;
+      document.getElementById('scopeSelect').value = state.scope;
+      document.getElementById('citySearch').value = state.city || '';
     }
 
     function cycleLang(){
       const order = ['en','es','pt','fr'];
-      const i = order.indexOf(state.lang);
-      state.lang = order[(i+1) % order.length];
+      state.lang = order[(order.indexOf(state.lang)+1) % order.length];
       updatePills();
       systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
-      // Refresh menu in new language if menu is open
-      if(document.body.getAttribute('data-sec') === 'menu') loadMenu();
+      // Refresh localized things
+      if(document.body.dataset.sec === 'menu') loadMenu();
+      if(document.body.dataset.sec === 'fanzone') loadFanzone();
     }
 
     function toggleScope(){
-      state.scope = (state.scope === 'host') ? 'all' : 'host';
+      state.scope = (state.scope === 'global') ? 'city' : 'global';
       updatePills();
-      systemMsg(`Scope: ${state.scope === 'all' ? 'Global (all matches)' : 'Host city matches'}.`);
-      if(document.body.getAttribute('data-sec') === 'schedule') loadSchedule();
+      systemMsg(state.scope === 'global' ? 'Global schedule enabled.' : 'City schedule enabled. Enter a city name.');
       loadPresence();
+      if(document.body.dataset.sec === 'schedule') loadSchedule();
     }
 
-    // ======= CHAT =======
+    // === CHAT ===
     const chatLog = document.getElementById('chatLog');
-    let sessionId = (()=>{ try{ return localStorage.getItem('wc_session_id') || crypto.randomUUID(); }catch(e){ return String(Date.now()); } })();
-
+    const sessionId = (()=>{ try{ return localStorage.getItem('wc_session_id') || crypto.randomUUID(); }catch(e){ return String(Date.now()); } })();
     try{ localStorage.setItem('wc_session_id', sessionId); }catch(e){}
 
     function appendBubble(text, who){
       const div = document.createElement('div');
-      div.className = 'bubble ' + (who === 'me' ? 'me' : (who === 'system' ? 'bot' : 'bot'));
+      div.className = 'bubble ' + (who === 'me' ? 'me' : 'bot');
       div.textContent = text;
       chatLog.appendChild(div);
       chatLog.scrollTop = chatLog.scrollHeight;
     }
-
-    function systemMsg(t){ appendBubble(t, 'system'); }
+    function systemMsg(t){ appendBubble(t, 'bot'); }
 
     async function sendChat(){
       const input = document.getElementById('msg');
@@ -583,6 +585,7 @@
       if(!txt) return;
       input.value = '';
       appendBubble(txt, 'me');
+      focusChatInput();
 
       try{
         const r = await fetch('/chat', {
@@ -597,50 +600,54 @@
       }
     }
 
-    // ======= MENU =======
+    // === MENU ===
+    function renderMenu(items){
+      const body = document.getElementById('menuBody');
+      const hint = document.getElementById('menuHint');
+      body.innerHTML = '';
+      if(!items || !items.length){
+        hint.textContent = 'No menu items yet. (Server returned empty list)';
+        return;
+      }
+      hint.textContent = '';
+      items.forEach(it=>{
+        const name = it.name || it.title || 'Item';
+        const price = it.price ? ` • ${it.price}` : '';
+        const desc = it.description || it.desc || '';
+        const node = document.createElement('div');
+        node.className = 'item';
+        node.innerHTML = `
+          <div class="itemTop"><span>${escapeHtml(it.category || 'Menu')}</span><span>${escapeHtml(it.tag || '')}</span></div>
+          <div class="itemTitle">${escapeHtml(name)}${escapeHtml(price)}</div>
+          <div class="itemMeta">${escapeHtml(desc)}</div>
+        `;
+        body.appendChild(node);
+      });
+    }
+
     async function loadMenu(){
-      const el = document.getElementById('menuBody');
-      if(!el) return;
-      el.textContent = 'Loading menu…';
+      window.__menuLoaded = true;
+      const hint = document.getElementById('menuHint');
+      hint.textContent = 'Loading menu…';
       try{
         const r = await fetch(`/menu.json?lang=${encodeURIComponent(state.lang)}`, {cache:'no-store'});
         const data = await r.json();
-        if(!Array.isArray(data) || !data.length){
-          el.textContent = 'Menu is empty.';
-          return;
-        }
-        el.innerHTML = data.map(item=>{
-          const name = (item.name || item.title || 'Item');
-          const desc = (item.description || item.desc || '');
-          const price = (item.price ? ` • ${item.price}` : '');
-          return `<div class="match" style="margin-bottom:10px">
-                    <div class="matchTeams">${escapeHtml(name)}${escapeHtml(price)}</div>
-                    <div class="matchMeta">${escapeHtml(desc)}</div>
-                  </div>`;
-        }).join('');
+        renderMenu(Array.isArray(data.items) ? data.items : (Array.isArray(data) ? data : []));
       }catch(e){
-        el.textContent = 'Menu temporarily unavailable.';
+        hint.textContent = 'Menu temporarily unavailable.';
       }
     }
 
-    // ======= SCHEDULE =======
-    function escapeHtml(s){
-      return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-    }
-
+    // === SCHEDULE ===
     function renderMatches(matches){
-      const list = document.getElementById('scheduleBody');
+      const body = document.getElementById('scheduleBody');
       const hint = document.getElementById('scheduleHint');
-      if(!list || !hint) return;
-      list.innerHTML = '';
-      const q = (document.getElementById('scheduleSearch')?.value || '').trim().toLowerCase();
+      body.innerHTML = '';
+      const q = (document.getElementById('scheduleSearch').value || '').trim().toLowerCase();
 
-      const filtered = matches.filter(m=>{
+      const filtered = (matches || []).filter(m=>{
         if(!q) return true;
-        const hay = [
-          m.date, m.time, m.group, m.stage, m.venue, m.city,
-          m.home, m.away, m.team1, m.team2
-        ].filter(Boolean).join(' ').toLowerCase();
+        const hay = [m.date,m.time,m.group,m.stage,m.venue,m.city,m.home,m.away].filter(Boolean).join(' ').toLowerCase();
         return hay.includes(q);
       });
 
@@ -651,112 +658,145 @@
       hint.textContent = `${filtered.length} match${filtered.length===1?'':'es'} shown.`;
 
       filtered.forEach(m=>{
-        const date = m.date || '';
-        const time = m.time || '';
-        const venue = m.venue || m.stadium || '';
-        const city = m.city || '';
-        const group = m.group || m.stage || '';
-        const home = m.home || m.team1 || 'TBD';
-        const away = m.away || m.team2 || 'TBD';
-
-        const row = document.createElement('div');
-        row.className = 'match';
-        row.innerHTML = `
-          <div class="matchTop"><span>${escapeHtml(date)} ${escapeHtml(time)}</span><span>${escapeHtml(group)}</span></div>
-          <div class="matchTeams">${escapeHtml(home)} <span style="opacity:.8">vs</span> ${escapeHtml(away)}</div>
-          <div class="matchMeta">${escapeHtml(venue)}${venue && city ? ' • ' : ''}${escapeHtml(city)}</div>
+        const node = document.createElement('div');
+        node.className = 'item';
+        node.innerHTML = `
+          <div class="itemTop"><span>${escapeHtml(m.date || '')} ${escapeHtml(m.time || '')}</span><span>${escapeHtml(m.group || m.stage || '')}</span></div>
+          <div class="itemTitle">${escapeHtml(m.home || 'TBD')} <span style="opacity:.8">vs</span> ${escapeHtml(m.away || 'TBD')}</div>
+          <div class="itemMeta">${escapeHtml(m.venue || '')}${m.venue && m.city ? ' • ' : ''}${escapeHtml(m.city || '')}</div>
         `;
-        list.appendChild(row);
+        body.appendChild(node);
       });
     }
 
     async function loadSchedule(){
-      const list = document.getElementById('scheduleBody');
+      window.__scheduleLoaded = true;
       const hint = document.getElementById('scheduleHint');
-      if(list) list.innerHTML = '';
-      if(hint) hint.textContent = 'Loading schedule…';
-
+      hint.textContent = 'Loading schedule…';
       try{
-        // app.py supports /schedule.json?scope=all|host&q=...nst q = (document.getElementById('scheduleSearch')?.value || '').trim();
-        const url = `/schedule.json?scope=all|host&q=...ncodeURIComponent(state.scope)}&q=${encodeURIComponent(q)}`;
+        const city = (document.getElementById('citySearch').value || '').trim();
+        state.city = city;
+        const url = `/schedule.json?scope=${encodeURIComponent(state.scope)}&city=${encodeURIComponent(city)}`;
         const r = await fetch(url, {cache:'no-store'});
         const data = await r.json();
-        const matches = Array.isArray(data.matches) ? data.matches : (Array.isArray(data) ? data : []);
-        renderMatches(matches);
+        renderMatches(Array.isArray(data.matches) ? data.matches : (Array.isArray(data) ? data : []));
       }catch(e){
-        if(hint) hint.textContent = 'Schedule temporarily unavailable.';
+        hint.textContent = 'Schedule temporarily unavailable.';
       }
     }
 
-    // ======= PRESENCE =======
+    // === FAN ZONE ===
+    function renderEvents(events){
+      const body = document.getElementById('fanzoneBody');
+      const hint = document.getElementById('fanzoneHint');
+      body.innerHTML = '';
+      if(!events || !events.length){
+        hint.textContent = 'No events yet. (Server returned empty list)';
+        return;
+      }
+      hint.textContent = '';
+      events.forEach(ev=>{
+        const node = document.createElement('div');
+        node.className = 'item';
+        node.innerHTML = `
+          <div class="itemTop"><span>${escapeHtml(ev.date || '')}</span><span>${escapeHtml(ev.city || '')}</span></div>
+          <div class="itemTitle">${escapeHtml(ev.title || 'Fan event')}</div>
+          <div class="itemMeta">${escapeHtml(ev.location || '')}${ev.location && ev.description ? ' • ' : ''}${escapeHtml(ev.description || '')}</div>
+        `;
+        body.appendChild(node);
+      });
+    }
+
+    async function loadFanzone(){
+      window.__fanzoneLoaded = true;
+      const hint = document.getElementById('fanzoneHint');
+      hint.textContent = 'Loading fan zone…';
+      try{
+        const r = await fetch(`/fanzone.json?lang=${encodeURIComponent(state.lang)}`, {cache:'no-store'});
+        const data = await r.json();
+        renderEvents(Array.isArray(data.events) ? data.events : (Array.isArray(data) ? data : []));
+      }catch(e){
+        hint.textContent = 'Fan Zone temporarily unavailable.';
+      }
+    }
+
+    // === PRESENCE ===
     async function loadPresence(){
       const el = document.getElementById('presenceText');
-      if(!el) return;
-      el.textContent = 'Checking match status…';
+      el.textContent = 'Loading…';
       try{
-        const r = await fetch(`/schedule.json?scope=all|host&q=...ncodeURIComponent(state.scope)}`, {cache:'no-store'});
+        const city = (state.scope === 'city') ? (state.city || '') : '';
+        const url = `/schedule.json?scope=${encodeURIComponent(state.scope)}&city=${encodeURIComponent(city)}`;
+        const r = await fetch(url, {cache:'no-store'});
         const data = await r.json();
         const isMatchDay = !!(data && (data.is_matchday || data.is_match_day || data.is_match));
         el.innerHTML = isMatchDay
-          ? `<b style="color:var(--warn)">Match day</b> — ask Chat for crowd tips, arrival times, and reservations.`
-          : `No match today — plan ahead and reserve early worldwide.`;
+          ? `<b style="color:var(--warn)">Match day</b> — reserve early. Ask Chat for best venues near you.`
+          : `No match today — plan ahead and reserve early.`;
       }catch(e){
         el.textContent = 'Status unavailable.';
       }
     }
 
-    // ======= WIRING =======
+    // === WIRING ===
     function wireNav(){
-      const nav = document.getElementById('mobileNav');
-      nav.addEventListener('click', (e)=>{
+      document.getElementById('mobileNav').addEventListener('click', (e)=>{
         const btn = e.target.closest('.mnavBtn');
         if(!btn) return;
         setSection(btn.dataset.sec || 'home');
-      });
-    }
-
-    function wireButtons(){
-      document.getElementById('pillLang')?.addEventListener('click', cycleLang);
-      document.getElementById('pillMode')?.addEventListener('click', toggleScope);
-
-      document.getElementById('ctaReserve')?.addEventListener('click', ()=>systemMsg('Tell me what you want to reserve (city/venue, date/time, party size).'));
-      document.getElementById('ctaChat')?.addEventListener('click', ()=>setSection('chat'));
-
-      document.querySelectorAll('[data-jump="schedule"]').forEach(b=>b.addEventListener('click', ()=>setSection('schedule')));
-      document.querySelectorAll('[data-jump="reserve"]').forEach(b=>b.addEventListener('click', ()=>{ setSection('chat'); systemMsg('Reservation request: tell me venue/area + date/time + party size.'); }));
-
-      document.getElementById('sendBtn')?.addEventListener('click', sendChat);
-      document.getElementById('msg')?.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') sendChat(); });
-
-      document.getElementById('clearChat')?.addEventListener('click', ()=>{
-        chatLog.innerHTML = '';
-        systemMsg('Cleared. How can I help?');
-      });
-
-      document.getElementById('reloadMenu')?.addEventListener('click', loadMenu);
-      document.getElementById('reloadSchedule')?.addEventListener('click', loadSchedule);
-
-      document.getElementById('scopeSelect')?.addEventListener('change', (e)=>{
-        state.scope = e.target.value === 'all' ? 'all' : 'host';
-        updatePills();
-        loadSchedule();
-        loadPresence();
-      });
-
-      document.getElementById('scheduleSearch')?.addEventListener('input', ()=>{
-        // If schedule already loaded, re-fetch less often; we filter client-side when possible
-        // but keep it simple: try to render from last loaded by reloading on a short debounce
-        clearTimeout(window.__schDeb);
-        window.__schDeb = setTimeout(loadSchedule, 250);
-      });
+      }, {passive:true});
     }
 
     function boot(){
       wireNav();
-      wireButtons();
+
+      document.getElementById('pillLang').addEventListener('click', cycleLang);
+      document.getElementById('pillScope').addEventListener('click', toggleScope);
+
+      document.getElementById('ctaChat').addEventListener('click', ()=>setSection('chat'));
+      document.getElementById('ctaReserve').addEventListener('click', ()=>{
+        setSection('chat');
+        systemMsg('Reservation request: tell me city/venue + date/time + party size.');
+      });
+      document.querySelectorAll('[data-jump="schedule"]').forEach(b=>b.addEventListener('click', ()=>setSection('schedule')));
+      document.querySelectorAll('[data-jump="reserve"]').forEach(b=>b.addEventListener('click', ()=>{
+        setSection('chat');
+        systemMsg('Reservation request: tell me city/venue + date/time + party size.');
+      }));
+
+      document.getElementById('sendBtn').addEventListener('click', sendChat);
+      document.getElementById('msg').addEventListener('keydown', (e)=>{ if(e.key === 'Enter') sendChat(); });
+
+      document.getElementById('clearChat').addEventListener('click', ()=>{
+        chatLog.innerHTML = '';
+        systemMsg('Cleared. How can I help?');
+        focusChatInput();
+      });
+
+      document.getElementById('reloadMenu').addEventListener('click', loadMenu);
+      document.getElementById('reloadSchedule').addEventListener('click', loadSchedule);
+      document.getElementById('reloadFanzone').addEventListener('click', loadFanzone);
+
+      document.getElementById('scopeSelect').addEventListener('change', (e)=>{
+        state.scope = (e.target.value === 'city') ? 'city' : 'global';
+        updatePills();
+        loadPresence();
+        loadSchedule();
+      });
+      document.getElementById('citySearch').addEventListener('input', ()=>{
+        clearTimeout(window.__cityDeb);
+        window.__cityDeb = setTimeout(()=>{
+          if(state.scope === 'city') loadSchedule();
+          loadPresence();
+        }, 350);
+      });
+      document.getElementById('scheduleSearch').addEventListener('input', ()=>{
+        clearTimeout(window.__schDeb);
+        window.__schDeb = setTimeout(loadSchedule, 250);
+      });
+
       updatePills();
-      // Welcome line
-      systemMsg('Welcome. Ask me about reservations, match schedules, venues, VIP options, or travel tips — worldwide.');
+      systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
       loadPresence();
     }
 
