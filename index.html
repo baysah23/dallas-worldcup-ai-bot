@@ -379,12 +379,12 @@
           <div class="badge"><span class="badgeDot" aria-hidden="true"></span><span>World Cup Concierge</span></div>
           <div class="pills" aria-label="Quick controls">
             <button class="pill" id="pillLang" type="button" aria-label="Language"><strong>EN</strong> · 4 languages</button>
-            <button class="pill" id="pillMode" type="button" aria-label="Mode">Mode: <strong>Dallas</strong></button>
+            <button class="pill" id="pillMode" type="button" aria-label="Mode">Mode: <strong>Global</strong></button>
           </div>
         </div>
 
-        <h1 class="heroTitle">World Cup 2026 • Dallas</h1>
-        <p class="heroSub">Concierge chat, match info, and live schedules — built for fast, mobile-only booking help.</p>
+        <h1 class="heroTitle">World Cup 2026 • Global</h1>
+        <p class="heroSub">A premium concierge for reservations, match schedules, and VIP experiences — worldwide, in 4 languages.</p>
 
         <div class="heroActions">
           <button class="cta primary" id="ctaReserve" type="button">Reserve</button>
@@ -406,7 +406,7 @@
               <button class="cta primary" type="button" data-jump="reserve">Reserve</button>
               <button class="cta" type="button" data-jump="schedule">Schedule</button>
             </div>
-            <p class="hint">Tip: Use <b>Chat</b> to ask “What are the next Dallas matches?” or “Find VIP table options near AT&amp;T Stadium”.</p>
+            <p class="hint">Tip: Use <b>Chat</b> to ask “What are the next matches?” or “Find VIP table options near the stadium”.</p>
           </div>
         </div>
 
@@ -461,8 +461,8 @@
           <div class="cardBody">
             <div class="scheduleTools">
               <select class="select" id="scopeSelect" aria-label="Scope">
-                <option value="dallas">Dallas</option>
-                <option value="all">All</option>
+                <option value="all">Global</option>
+                <option value="dallas">Host city</option>
               </select>
               <input class="search" id="scheduleSearch" placeholder="Search team, venue, group, date…"/>
               <button class="pill" id="reloadSchedule" type="button">Refresh</button>
@@ -514,7 +514,7 @@
     // ======= STATE =======
     const state = {
       lang: 'en',     // en | es | pt | fr
-      scope: 'dallas' // dallas | all
+      scope: 'all' // all | dallas (host city filter)
     };
 
     function setActiveNav(sec){
@@ -538,7 +538,7 @@
       const pillLang = document.getElementById('pillLang');
       const pillMode = document.getElementById('pillMode');
       if(pillLang) pillLang.innerHTML = `<strong>${state.lang.toUpperCase()}</strong> · 4 languages`;
-      if(pillMode) pillMode.innerHTML = `Mode: <strong>${state.scope === 'all' ? 'All' : 'Dallas'}</strong>`;
+      if(pillMode) pillMode.innerHTML = `Mode: <strong>${state.scope === 'all' ? 'Global' : 'Host city'}</strong>`;
       const scopeSelect = document.getElementById('scopeSelect');
       if(scopeSelect) scopeSelect.value = state.scope;
     }
@@ -556,7 +556,7 @@
     function toggleScope(){
       state.scope = (state.scope === 'dallas') ? 'all' : 'dallas';
       updatePills();
-      systemMsg(`Schedule scope: ${state.scope === 'all' ? 'All matches' : 'Dallas matches'}.`);
+      systemMsg(`Schedule scope: ${state.scope === 'all' ? 'Global matches' : 'Host city matches'}.`);
       if(document.body.getAttribute('data-sec') === 'schedule') loadSchedule();
       loadPresence();
     }
@@ -700,7 +700,7 @@
         const isMatchDay = !!(data && (data.is_matchday || data.is_match_day || data.is_match));
         el.innerHTML = isMatchDay
           ? `<b style="color:var(--warn)">Match day</b> — ask Chat for crowd tips, arrival times, and reservations.`
-          : `No match today — plan ahead and reserve early.`;
+          : `No match today — plan ahead and reserve early worldwide.`;
       }catch(e){
         el.textContent = 'Status unavailable.';
       }
@@ -720,7 +720,7 @@
       document.getElementById('pillLang')?.addEventListener('click', cycleLang);
       document.getElementById('pillMode')?.addEventListener('click', toggleScope);
 
-      document.getElementById('ctaReserve')?.addEventListener('click', ()=>systemMsg('Tell me what you want to reserve (venue, date/time, party size).'));
+      document.getElementById('ctaReserve')?.addEventListener('click', ()=>systemMsg('Tell me what you want to reserve (city/venue, date/time, party size).'));
       document.getElementById('ctaChat')?.addEventListener('click', ()=>setSection('chat'));
 
       document.querySelectorAll('[data-jump="schedule"]').forEach(b=>b.addEventListener('click', ()=>setSection('schedule')));
@@ -757,7 +757,7 @@
       wireButtons();
       updatePills();
       // Welcome line
-      systemMsg('Welcome. Ask me about reservations, match schedules, venues, or VIP options.');
+      systemMsg('Welcome. Ask me about reservations, match schedules, venues, VIP options, or travel tips — worldwide.');
       loadPresence();
     }
 

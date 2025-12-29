@@ -1115,10 +1115,10 @@ def menu_json():
 def schedule_json():
     """
     Query params:
-      scope= dallas | all   (default: dallas)
+      scope= all | dallas (host city)   (default: all)
       q= search text (team, venue, group, date)
     """
-    scope = (request.args.get("scope") or "dallas").lower().strip()
+    scope = (request.args.get("scope") or "all").lower().strip()
     q = request.args.get("q") or ""
 
     try:
@@ -1126,8 +1126,8 @@ def schedule_json():
 
         today = datetime.now().date()
         if scope == "all":
-            # "match day" for Dallas means: any Dallas match today
-            is_match = any(m.get("date") == today.isoformat() and is_dallas_match(m) for m in load_all_matches())
+            # "match day": for Global scope, any match today; for Host city scope, any host-city match today
+            is_match = any(m.get("date") == today.isoformat() for m in load_all_matches())
         else:
             is_match = any(m.get("date") == today.isoformat() for m in matches)
 
