@@ -94,7 +94,7 @@
 
       /* Ultra-glass: show the banner through */
       background:
-        radial-gradient(120% 140% at 50% 0%, rgba(0,0,0,.08), rgba(0,0,0,.18) 70%),
+        radial-gradient(120% 140% at 50% 0%, rgba(0,0,0,.05), rgba(0,0,0,.12) 70%),
         linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
 
       backdrop-filter: blur(22px) saturate(1.45);
@@ -131,11 +131,9 @@
       content:"";
       position:absolute; inset:0;
       background:
-        radial-gradient(120% 120% at 50% 30%, rgba(255,255,255,.05), transparent 55%),
-        repeating-linear-gradient(90deg, rgba(255,255,255,.02) 0 1px, rgba(255,255,255,0) 1px 8px);
-      opacity:.10;
-      mix-blend-mode: overlay;
-      pointer-events:none;
+        radial-gradient(140% 120% at 50% 20%, rgba(255,255,255,.05), transparent 60%);
+      opacity:.06;
+            pointer-events:none;
     }
 
     @keyframes shimmerLine{
@@ -928,8 +926,9 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
     }
 
     
-    // === HERO LIVE COUNTDOWN (covers image-printed countdown) ===
-    const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z'; // adjust if you want local midnight
+    // === HERO LIVE COUNTDOWN (real timer) ===
+    const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z'; // 2026 World Cup kickoff (UTC)
+
     function updateHeroCountdown(){
       const dEl = document.getElementById('cdD');
       const hEl = document.getElementById('cdH');
@@ -939,15 +938,16 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
 
       const target = new Date(HERO_KICKOFF_ISO).getTime();
       const now = Date.now();
-      const diff = target - now;
+      let diff = target - now;
 
-      if(diff <= 0){
+      if(!Number.isFinite(diff) || diff <= 0){
         dEl.textContent = '00';
         hEl.textContent = '00';
         mEl.textContent = '00';
         sEl.textContent = '00';
         return;
       }
+    }
 
     function startHeroCountdown(){
       try{ updateHeroCountdown(); }catch(e){}
@@ -957,43 +957,7 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       }catch(e){}
     }
 
-      const totalSec = Math.floor(diff / 1000);
-      const days = Math.floor(totalSec / 86400);
-      const hrs  = Math.floor((totalSec % 86400) / 3600);
-      const mins = Math.floor((totalSec % 3600) / 60);
-      const secs = Math.floor(totalSec % 60);
-
-      dEl.textContent = String(days);
-      hEl.textContent = String(hrs).padStart(2,'0');
-      mEl.textContent = String(mins).padStart(2,'0');
-      sEl.textContent = String(secs).padStart(2,'0');
-    }
-
-// === Mini countdown (kickoff: 2026-06-11) ===
-    const KICKOFF_ISO = '2026-06-11T00:00:00Z';
-    function updateCountdownMini(){
-      const el = document.getElementById('cdMini');
-      const lbl = document.getElementById('cdMiniLbl');
-      if(!el || !lbl) return;
-
-      const target = new Date(KICKOFF_ISO).getTime();
-      const now = Date.now();
-      const diff = target - now;
-
-      if(diff <= 0){
-        el.textContent = 'KICKOFF';
-        lbl.textContent = 'World Cup is live';
-        return;
-      }
-      const totalSec = Math.floor(diff / 1000);
-      const d = Math.floor(totalSec / 86400);
-      const h = Math.floor((totalSec % 86400) / 3600);
-      const m = Math.floor((totalSec % 3600) / 60);
-      el.textContent = `${d}d ${String(h).padStart(2,'0')}h ${String(m).padStart(2,'0')}m`;
-      lbl.textContent = 'until kickoff';
-    }
-
-    // === CHAT ===
+// === CHAT ===
     const chatLog = document.getElementById('chatLog');
     const sessionId = (()=>{ try{ return localStorage.getItem('wc_session_id') || crypto.randomUUID(); }catch(e){ return String(Date.now()); } })();
     try{ localStorage.setItem('wc_session_id', sessionId); }catch(e){}
