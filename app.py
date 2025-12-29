@@ -1,6 +1,50 @@
 import os
 import json
 import time
+
+import pathlib
+
+LEADS_STORE_PATH = os.environ.get("LEADS_STORE_PATH", "static/data/leads.jsonl")
+GOOGLE_SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "").strip()
+GOOGLE_SERVICE_JSON = os.environ.get("GOOGLE_SERVICE_JSON", "").strip()
+
+def _append_lead_local(row: dict) -> None:
+    path = pathlib.Path(LEADS_STORE_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+def _append_lead_google_sheet(row: dict) -> bool:
+    # Optional: write to Google Sheets if configured.
+    # Set env vars:
+    # - GOOGLE_SHEET_ID: spreadsheet id
+    # - GOOGLE_SERVICE_JSON: service account json (string)
+    if not GOOGLE_SHEET_ID or not GOOGLE_SERVICE_JSON:
+        return False
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+        info = json.loads(GOOGLE_SERVICE_JSON)
+        scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+        creds = Credentials.from_service_account_info(info, scopes=scopes)
+        gc = gspread.authorize(creds)
+        sh = gc.open_by_key(GOOGLE_SHEET_ID)
+        ws = sh.sheet1
+        ws.append_row([
+            row.get("ts",""),
+            row.get("city",""),
+            row.get("date",""),
+            row.get("group",""),
+            row.get("budget",""),
+            row.get("contact",""),
+            row.get("lang",""),
+            row.get("ip",""),
+            row.get("ua",""),
+        ], value_input_option="USER_ENTERED")
+        return True
+    except Exception:
+        return False
+
 from typing import Any, Dict, List, Optional
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -246,8 +290,25 @@ def catch_all(path: str):
 @app.post('/lead')
 def lead():
     data = request.get_json(silent=True) or {}
-    # In production: store to DB / Google Sheet / CRM / send email/SMS
-    return jsonify({'ok': True, 'received': data})
+    row = {
+        "ts": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+        "city": str(data.get("city","")).strip(),
+        "date": str(data.get("date","")).strip(),
+        "group": str(data.get("group","")).strip(),
+        "budget": str(data.get("budget","")).strip(),
+        "contact": str(data.get("contact","")).strip(),
+        "lang": norm_lang(data.get("lang")),
+        "ip": request.headers.get("X-Forwarded-For", request.remote_addr),
+        "ua": request.headers.get("User-Agent",""),
+    }
+    # Persist locally (always)
+    try:
+        _append_lead_local(row)
+    except Exception:
+        pass
+    # Optional Sheets
+    wrote_sheet = _append_lead_google_sheet(row)
+    return jsonify({"ok": True, "stored_local": True, "stored_sheet": bool(wrote_sheet)})
 
 # ============================================================
 # Health
@@ -258,7 +319,7 @@ def lead():
 # ============================================================
 @app.get('/version')
 def version():
-    return jsonify({'build':'STEP11-20251229-181909'})
+    return jsonify({'build':'STEP12-20251229-182802'})
 @app.get("/health")
 def health():
     return jsonify({"ok": True})
