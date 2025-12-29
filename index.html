@@ -25,7 +25,7 @@
       --glass2: rgba(255,255,255,.04);
       --glass-border: rgba(255,255,255,.18);
     }
-    *{ box-sizing:border-box; }
+*{ box-sizing:border-box; }
     html,body{ height:100%; }
     body{
       margin:0;
@@ -68,27 +68,17 @@
     #heroBanner{ min-height: 220px; margin: 10px 0 10px; }
 
 
-    /* ===== CINEMATIC HERO MICRO-MOTION (image only) ===== */
-    :root{ --heroY: 0px; }
-    #heroBanner .heroImg{
-      transform: translate3d(0, var(--heroY), 0) scale(1.045);
-      transform-origin: 50% 40%;
-      animation: heroBreathe 9.5s ease-in-out infinite;
-      will-change: transform;
-    }
-    @keyframes heroBreathe{
-      0%,100%{ filter: saturate(1.02) contrast(1.02); }
-      50%{ filter: saturate(1.06) contrast(1.04); }
-    }
-    @media (prefers-reduced-motion: reduce){
-      #heroBanner .heroImg{ animation:none; transform:none; filter:none; }
-    }
-
-
-
 
     
 
+    /* ===== CINEMATIC HERO MICRO-MOTION (image only) ===== */
+    :root{ --heroY: 0px; }
+    #heroBanner .heroImg{
+      transform: translate3d(0, var(--heroY), 0) scale(1.035);
+      transition: transform 380ms ease;
+    }
+    @media (prefers-reduced-motion: reduce){
+      #heroBanner .heroImg{ transition:none; transform:none; }
     }
 
     
@@ -98,70 +88,70 @@
       left: 50%;
       transform: translateX(-50%);
       bottom: 10px;
-      width: min(92%, 420px);
+      width: min(88%, 360px);
       border-radius: 18px;
       border: 1px solid rgba(255,255,255,.14);
 
-      /* TRUE GLASS: very transparent so you still see the banner */
+      /* Ultra-glass: show the banner through */
       background:
-        radial-gradient(130% 140% at 50% 0%, rgba(0,0,0,.12), rgba(0,0,0,.28) 70%),
+        radial-gradient(120% 140% at 50% 0%, rgba(0,0,0,.08), rgba(0,0,0,.18) 70%),
         linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
 
-      backdrop-filter: blur(20px) saturate(1.35);
-      -webkit-backdrop-filter: blur(20px) saturate(1.35);
-      box-shadow: 0 18px 55px rgba(0,0,0,.36);
-      padding: 8px 12px 10px;
+      backdrop-filter: blur(22px) saturate(1.45);
+      -webkit-backdrop-filter: blur(22px) saturate(1.45);
+      box-shadow: 0 18px 55px rgba(0,0,0,.28);
+      padding: 7px 12px 9px;
       z-index: 8;
       pointer-events: none;
       overflow:hidden;
     }
 
-    /* Gold shimmer line (subtle premium highlight) */
+    /* Subtle gold shimmer line (premium highlight) */
     .heroCountdown::before{
       content:"";
       position:absolute;
-      left:14px; right:14px; top:8px;
+      left:14px; right:14px; top:7px;
       height: 2px;
       border-radius: 999px;
       background: linear-gradient(90deg,
         rgba(212,175,55,0) 0%,
-        rgba(212,175,55,.18) 24%,
-        rgba(255,255,255,.16) 50%,
-        rgba(212,175,55,.18) 76%,
+        rgba(212,175,55,.14) 24%,
+        rgba(255,255,255,.14) 50%,
+        rgba(212,175,55,.14) 76%,
         rgba(212,175,55,0) 100%
       );
-      opacity: .42;
-      transform: translateX(-22%);
+      opacity: .33;
+      transform: translateX(-18%);
       filter: blur(.15px);
-      animation: shimmerLine 8.4s ease-in-out infinite;
+      animation: shimmerLine 9.2s ease-in-out infinite;
     }
 
-    /* micro grain for premium texture */
+    /* Micro grain texture inside bar only */
     .heroCountdown::after{
       content:"";
       position:absolute; inset:0;
       background:
         radial-gradient(120% 120% at 50% 30%, rgba(255,255,255,.05), transparent 55%),
-        repeating-linear-gradient(90deg, rgba(255,255,255,.025) 0 1px, rgba(255,255,255,0) 1px 7px);
+        repeating-linear-gradient(90deg, rgba(255,255,255,.02) 0 1px, rgba(255,255,255,0) 1px 8px);
       opacity:.10;
       mix-blend-mode: overlay;
       pointer-events:none;
     }
 
     @keyframes shimmerLine{
-      0%,100%{ transform: translateX(-22%); opacity:.36; }
-      50%{ transform: translateX(22%); opacity:.50; }
+      0%,100%{ transform: translateX(-18%); opacity:.28; }
+      50%{ transform: translateX(18%); opacity:.40; }
     }
 
     .heroCdTop{
       text-align:center;
-      font-size: 10.5px;
+      font-size: 10px;
       font-weight: 950;
       letter-spacing: .22em;
       text-transform: uppercase;
       color: rgba(255,255,255,.92);
-      margin: 10px 0 6px;
-      text-shadow: 0 10px 30px rgba(0,0,0,.45);
+      margin: 10px 0 5px;
+      text-shadow: 0 10px 28px rgba(0,0,0,.34);
       position: relative;
       z-index: 1;
     }
@@ -179,42 +169,40 @@
       display:flex;
       flex-direction:column;
       align-items:center;
-      min-width: 48px;
+      min-width: 46px;
     }
 
     .heroCdNum{
       font-variant-numeric: tabular-nums;
       font-weight: 980;
       letter-spacing: .02em;
-      font-size: 24px;
+      font-size: 22px;
       line-height: 1;
       color: rgba(255,255,255,.98);
       text-shadow:
-        0 14px 40px rgba(0,0,0,.45),
-        0 0 16px rgba(255,255,255,.10);
+        0 12px 34px rgba(0,0,0,.32),
+        0 0 14px rgba(255,255,255,.08);
     }
 
     .heroCdLbl{
-      margin-top: 5px;
-      font-size: 10px;
+      margin-top: 4px;
+      font-size: 9.5px;
       font-weight: 900;
       letter-spacing: .20em;
       text-transform: uppercase;
-      color: rgba(255,255,255,.76);
-      text-shadow: 0 10px 30px rgba(0,0,0,.45);
+      color: rgba(255,255,255,.74);
+      text-shadow: 0 10px 24px rgba(0,0,0,.32);
     }
 
     .heroCdSep{
-      font-size: 18px;
+      font-size: 16px;
       line-height: 1;
-      opacity: .52;
+      opacity: .45;
       color: rgba(255,255,255,.86);
       transform: translateY(-2px);
-      text-shadow: 0 14px 40px rgba(0,0,0,.45);
+      text-shadow: 0 12px 34px rgba(0,0,0,.32);
     }
-
-
-    /* === CARDS === */
+/* === CARDS === */
     .card{
       margin-top: 14px;
       border-radius: var(--r16);
@@ -1015,6 +1003,7 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       const div = document.createElement('div');
       div.className = 'bubble ' + (who === 'me' ? 'me' : 'bot');
       div.textContent = text;
+      if(!chatLog) return;
       chatLog.appendChild(div);
       chatLog.scrollTop = chatLog.scrollHeight;
     }
@@ -1404,7 +1393,7 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       setTimeout(prefetchAll, 250);
 
 
-    // === Ambient parallax (micro) on hero image: tiny translate on scroll ===
+    // === Ambient parallax (micro) on hero image ===
     (function(){
       const img = document.querySelector('#heroBanner .heroImg');
       if(!img) return;
@@ -1414,7 +1403,7 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
         if(ticking) return;
         ticking = true;
         requestAnimationFrame(()=>{
-          const y = Math.min(6, Math.max(0, window.scrollY * 0.05)); // cap 6px
+          const y = Math.min(2, Math.max(0, window.scrollY * 0.02));
           document.documentElement.style.setProperty('--heroY', `${y}px`);
           ticking = false;
         });
@@ -1422,6 +1411,7 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       window.addEventListener('scroll', onScroll, {passive:true});
       onScroll();
     })();
+
 }
 
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
