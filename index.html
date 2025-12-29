@@ -140,7 +140,6 @@
       display:flex;
       gap:10px;
       align-items:center;
-      flex-wrap:wrap;
     }
     .cta{
       flex: 1 1 auto;
@@ -464,12 +463,20 @@ body.modalOpen{ overflow:hidden; }
         </div>
 
         <h1 class="heroTitle">World Cup 2026</h1>
-        <p class="heroSub">Luxury concierge for reservations, match schedules, and fan experiences — in 4 languages.</p>
+        <p class="heroSub">Reserve in seconds. Concierge chat in 4 languages. Premium nights for matchweek energy.</p>
 
-        <div class="heroActions">
+        <div class="heroMeta" aria-label="Kickoff countdown">
+          <div class="trophy" aria-hidden="true">🏆</div>
+          <div class="countdownLine">
+            <span class="countLabel">Kickoff</span>
+            <span id="kickoffCountdown" class="countValue">Loading…</span>
+          </div>
+        </div>
+
+        <div class="heroActions" aria-label="Primary actions">
           <button class="cta primary" id="ctaReserve" type="button">Reserve</button>
-          <button class="cta" id="ctaChat" type="button">Chat</button>
-          <button class="cta" id="ctaPlan" type="button">Plan My World Cup Experience</button>
+          <button class="cta" id="ctaChat" type="button">Chat Concierge</button>
+          <button class="cta" id="ctaPlan" type="button">Build My Matchday</button>
         </div>
       </div>
     </section>
@@ -570,44 +577,6 @@ body.modalOpen{ overflow:hidden; }
     <button class="mnavBtn" data-sec="vip" type="button"><span class="ico">⭐</span><span>VIP</span></button>
   </nav>
 
-  <!-- Intake Modal -->
-  <div id="intakeModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Plan your experience">
-    <div class="modalCard" role="document">
-      <div class="modalHead">
-        <h3>Plan My World Cup Experience</h3>
-        <button class="iconBtn" id="closeModal" type="button" aria-label="Close">✕</button>
-      </div>
-      <div class="modalBody">
-        <p class="hint" style="margin-top:6px">Tell us what you want. A concierge follow-up can be sent to your contact.</p>
-
-        <label class="required" for="iCity">City</label>
-        <input id="iCity" placeholder="Dallas, Miami, Mexico City…"/>
-
-        <label class="required" for="iDate">Date</label>
-        <input id="iDate" type="date"/>
-
-        <label class="required" for="iGroup">Group size</label>
-        <input id="iGroup" inputmode="numeric" placeholder="e.g., 4"/>
-
-        <label for="iBudget">Budget (optional)</label>
-        <select id="iBudget">
-          <option value="">Select…</option>
-          <option value="$">$</option>
-          <option value="$$">$$</option>
-          <option value="$$$">$$$</option>
-          <option value="VIP">VIP</option>
-        </select>
-
-        <label class="required" for="iContact">Contact</label>
-        <input id="iContact" placeholder="Phone or email"/>
-
-        <div class="hint" id="intakeMsg" style="margin-top:10px"></div>
-
-        <button class="ctaBtn full" id="submitIntake" type="button">Submit request</button>
-      </div>
-    </div>
-  </div>
-
 <div id="toast" class="toast hidden" aria-live="polite"></div>
 
 
@@ -698,6 +667,9 @@ body.modalOpen{ overflow:hidden; }
       state.scope = (state.scope === 'global') ? 'city' : 'global';
       updatePills();
       systemMsg(state.scope === 'global' ? 'Global schedule enabled.' : 'City schedule enabled. Enter a city name.');
+      updateKickoffCountdown();
+      setInterval(updateKickoffCountdown, 60000);
+
       loadPresence();
       if(document.body.dataset.sec === 'schedule') loadSchedule();
     }
@@ -988,6 +960,29 @@ body.modalOpen{ overflow:hidden; }
       }, {passive:true});
     }
 
+
+    function updateKickoffCountdown(){
+      const el = document.getElementById('kickoffCountdown');
+      if(!el) return;
+
+      // FIFA World Cup 2026 opening match: June 11, 2026 (local display)
+      const kickoff = new Date('2026-06-11T00:00:00');
+      const now = new Date();
+      let ms = kickoff - now;
+
+      if(ms <= 0){
+        el.textContent = 'It’s kickoff time';
+        return;
+      }
+
+      const totalMin = Math.floor(ms / 60000);
+      const days = Math.floor(totalMin / (60*24));
+      const hours = Math.floor((totalMin - days*60*24) / 60);
+      const mins = totalMin - days*60*24 - hours*60;
+
+      el.textContent = `${days}d ${hours}h ${mins}m`;
+    }
+
     function boot(){
       console.log('WC_BOOT','STEP12-20251229-182802');
       wireNav();
@@ -996,15 +991,14 @@ body.modalOpen{ overflow:hidden; }
       document.getElementById('pillScope').addEventListener('click', toggleScope);
 
       document.getElementById('ctaChat').addEventListener('click', ()=>setSection('chat'));
-      // Home quick actions
-      const rs = document.getElementById('refreshStatus');
-      if(rs) rs.addEventListener('click', loadPresence);
+      document.getElementById('ctaPlan').addEventListener('click', ()=>openIntake());
 
+      // Home actions
       const hr = document.getElementById('homeReserve');
-      if(hr) hr.addEventListener('click', ()=>{
-        setSection('chat');
-        systemMsg('Reservation request: tell me city/venue + date/time + party size.');
-      });
+      if(hr) hr.addEventListener('click', ()=>document.getElementById('ctaReserve').click());
+
+      const hc = document.getElementById('homeChat');
+      if(hc) hc.addEventListener('click', ()=>setSection('chat'));
 
       const hs = document.getElementById('homeSchedule');
       if(hs) hs.addEventListener('click', ()=>setSection('schedule'));
@@ -1014,6 +1008,9 @@ body.modalOpen{ overflow:hidden; }
 
       const hv = document.getElementById('homeVIP');
       if(hv) hv.addEventListener('click', ()=>setSection('vip'));
+
+      const hm = document.getElementById('homeMenu');
+      if(hm) hm.addEventListener('click', ()=>setSection('menu'));
       document.getElementById('ctaReserve').addEventListener('click', ()=>{
         setSection('chat');
         systemMsg('Reservation request: tell me city/venue + date/time + party size.');
@@ -1029,7 +1026,10 @@ body.modalOpen{ overflow:hidden; }
       document.getElementById('scopeSelect').addEventListener('change', (e)=>{
         state.scope = (e.target.value === 'city') ? 'city' : 'global';
         updatePills();
-        loadPresence();
+        updateKickoffCountdown();
+      setInterval(updateKickoffCountdown, 60000);
+
+      loadPresence();
         loadSchedule();
       });
 
@@ -1037,7 +1037,10 @@ body.modalOpen{ overflow:hidden; }
         clearTimeout(window.__cityDeb);
         window.__cityDeb = setTimeout(()=>{
           if(state.scope === 'city') loadSchedule();
-          loadPresence();
+          updateKickoffCountdown();
+      setInterval(updateKickoffCountdown, 60000);
+
+      loadPresence();
         }, 350);
       });
 
@@ -1049,6 +1052,9 @@ body.modalOpen{ overflow:hidden; }
 
       updatePills();
       systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
+      updateKickoffCountdown();
+      setInterval(updateKickoffCountdown, 60000);
+
       loadPresence();
       setTimeout(prefetchAll, 250);
     }
