@@ -67,165 +67,6 @@
     }
     #heroBanner{ min-height: 220px; margin: 10px 0 10px; }
 
-    /* === HERO STRIP (BELOW IMAGE) === */
-    .heroStrip{
-      margin-top: 10px;
-      border-radius: var(--r16);
-      border: 1px solid var(--glass-border);
-      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.03));
-      box-shadow: 0 14px 40px rgba(0,0,0,.38);
-      padding: 12px 12px;
-      overflow:hidden;
-      position: relative;
-    }
-    .heroStrip::before{
-      content:"";
-      position:absolute; inset:-2px;
-      background:
-        radial-gradient(40% 60% at 12% 20%, rgba(212,175,55,.22), transparent 55%),
-        radial-gradient(40% 60% at 88% 0%, rgba(31,111,235,.22), transparent 55%),
-        radial-gradient(40% 70% at 55% 130%, rgba(46,160,67,.18), transparent 60%);
-      pointer-events:none;
-      filter: blur(12px);
-      opacity:.9;
-    }
-    .heroStripInner{ position:relative; z-index:1; }
-
-    .stripTop{
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      margin-bottom: 10px;
-    }
-
-    .badge{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      font-weight: 900;
-      letter-spacing:.10em;
-      text-transform: uppercase;
-      font-size: 11px;
-      color: rgba(234,240,255,.92);
-      padding: 8px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,.18);
-      background: rgba(15,27,51,.55);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      white-space: nowrap;
-    }
-    .badgeDot{
-      width:8px; height:8px; border-radius:50%;
-      background: var(--green);
-      box-shadow: 0 0 0 4px rgba(46,160,67,.18);
-      flex:0 0 auto;
-      animation: pulse 1.6s ease-in-out infinite;
-    }
-    @keyframes pulse{
-      0%,100%{ transform: scale(1); filter: brightness(1); }
-      50%{ transform: scale(1.16); filter: brightness(1.2); }
-    }
-
-    .pills{
-      display:flex;
-      gap:8px;
-      align-items:center;
-      flex-wrap:wrap;
-      justify-content:flex-end;
-    }
-    .pill{
-      appearance:none;
-      border: 1px solid rgba(255,255,255,.18);
-      background: rgba(15,27,51,.55);
-      color: var(--text);
-      border-radius: 999px;
-      padding: 9px 10px;
-      font-size: 12px;
-      line-height: 1;
-      cursor:pointer;
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
-      transition: transform .12s ease, filter .12s ease;
-    }
-    .pill strong{ font-weight: 900; color: rgba(255,255,255,.96); }
-    .pill:active{ transform: translateY(1px) scale(.99); }
-    .pill:focus-visible{ outline: none; box-shadow: 0 0 0 4px rgba(31,111,235,.18); }
-
-    .stripMid{
-      display:flex;
-      align-items:flex-end;
-      justify-content:space-between;
-      gap:10px;
-    }
-    .stripTitle{
-      margin:0;
-      font-weight: 950;
-      letter-spacing:.02em;
-      text-transform: uppercase;
-      font-size: 16px;
-      line-height: 1.1;
-    }
-    .stripSub{
-      margin: 4px 0 0;
-      font-size: 12px;
-      color: rgba(185,199,238,.92);
-      line-height: 1.35;
-      max-width: 35ch;
-    }
-    .countdownMini{
-      text-align:right;
-      min-width: 150px;
-    }
-    .cdNums{
-      font-variant-numeric: tabular-nums;
-      font-weight: 950;
-      letter-spacing: .02em;
-      font-size: 14px;
-      line-height: 1.1;
-      background: linear-gradient(180deg, rgba(255,255,255,.95), rgba(212,175,55,.85));
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      text-shadow: 0 14px 40px rgba(212,175,55,.12);
-      white-space: nowrap;
-    }
-    .cdLbl{
-      margin-top: 3px;
-      font-size: 11px;
-      color: rgba(185,199,238,.9);
-    }
-
-    .valueChips{
-      margin-top: 10px;
-      display:flex;
-      gap:8px;
-      flex-wrap:wrap;
-      align-items:center;
-    }
-    .vchip{
-      display:inline-flex;
-      align-items:center;
-      gap:8px;
-      padding: 8px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,.16);
-      background: rgba(11,21,44,.42);
-      font-size: 12px;
-      color: rgba(234,240,255,.95);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      user-select:none;
-    }
-    .vchip .dot{
-      width:6px; height:6px; border-radius:50%;
-      background: rgba(212,175,55,.95);
-      box-shadow: 0 0 0 4px rgba(212,175,55,.12);
-    }
-
     /* === CARDS === */
     .card{
       margin-top: 14px;
@@ -600,38 +441,7 @@
       <img class="heroImg" src="/static/hero_stadium.png?v=20251229" alt="World Cup 2026 Concierge banner with trophy and kickoff countdown" />
     </section>
 
-    <!-- PHASE 2: HERO STRIP BELOW BANNER -->
-    <section class="heroStrip" aria-label="Hero strip">
-      <div class="heroStripInner">
-        <div class="stripTop">
-          
-          <div class="pills" aria-label="Quick pills">
-            <button class="pill" id="pillLang" type="button" aria-label="Change language">EN</button>
-            <button class="pill" id="pillScope" type="button" aria-label="Toggle schedule scope">Scope: Global</button>
-          </div>
-        </div>
-
-        <div class="stripMid">
-          <div>
-            <p class="stripTitle">Premium reservations • matchday energy</p>
-            <p class="stripSub">Book fast. Plan smarter. Concierge chat in 4 languages.</p>
-          </div>
-          <div class="countdownMini" aria-label="Kickoff countdown">
-            <div class="cdNums" id="cdMini">—</div>
-            <div class="cdLbl" id="cdMiniLbl">until kickoff</div>
-          </div>
-        </div>
-
-        <div class="valueChips" aria-label="Value chips">
-          <div class="vchip"><span class="dot"></span>Instant table requests</div>
-          <div class="vchip"><span class="dot"></span>Global match schedule</div>
-          <div class="vchip"><span class="dot"></span>VIP + group access</div>
-          <div class="vchip"><span class="dot"></span>EN • ES • PT • FR</div>
-        </div>
-      </div>
-    </section>
-
-    <main>
+<main>
       <!-- HOME -->
       <section class="section" id="sec-home" aria-label="Home">
         <div class="card" aria-label="Primary actions">
@@ -1288,12 +1098,6 @@
     function boot(){
       console.log('WC_BOOT','STEP15-PHASE2');
       wireNav();
-
-      // Phase2 pills (exist in hero strip)
-      const pillLang = document.getElementById('pillLang');
-      const pillScope = document.getElementById('pillScope');
-      if(pillLang) pillLang.addEventListener('click', cycleLang);
-      if(pillScope) pillScope.addEventListener('click', toggleScope);
 
       const ctaChat = document.getElementById('ctaChat');
       if(ctaChat) ctaChat.addEventListener('click', ()=>{ haptic(8); setSection('chat'); });
