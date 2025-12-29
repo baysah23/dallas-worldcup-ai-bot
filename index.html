@@ -140,6 +140,7 @@
       display:flex;
       gap:10px;
       align-items:center;
+      flex-wrap:wrap;
     }
     .cta{
       flex: 1 1 auto;
@@ -468,7 +469,8 @@ body.modalOpen{ overflow:hidden; }
         <div class="heroActions">
           <button class="cta primary" id="ctaReserve" type="button">Reserve</button>
           <button class="cta" id="ctaChat" type="button">Chat</button>
-                <button id="ctaPlan" class="ctaBtn">Plan My World Cup Experience</button>
+          <button class="cta" id="ctaPlan" type="button">Plan My World Cup Experience</button>
+        </div>
       </div>
     </section>
 
@@ -567,6 +569,44 @@ body.modalOpen{ overflow:hidden; }
     <button class="mnavBtn" data-sec="fanzone" type="button"><span class="ico">⚽</span><span>Fan Zone</span></button>
     <button class="mnavBtn" data-sec="vip" type="button"><span class="ico">⭐</span><span>VIP</span></button>
   </nav>
+
+  <!-- Intake Modal -->
+  <div id="intakeModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Plan your experience">
+    <div class="modalCard" role="document">
+      <div class="modalHead">
+        <h3>Plan My World Cup Experience</h3>
+        <button class="iconBtn" id="closeModal" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="modalBody">
+        <p class="hint" style="margin-top:6px">Tell us what you want. A concierge follow-up can be sent to your contact.</p>
+
+        <label class="required" for="iCity">City</label>
+        <input id="iCity" placeholder="Dallas, Miami, Mexico City…"/>
+
+        <label class="required" for="iDate">Date</label>
+        <input id="iDate" type="date"/>
+
+        <label class="required" for="iGroup">Group size</label>
+        <input id="iGroup" inputmode="numeric" placeholder="e.g., 4"/>
+
+        <label for="iBudget">Budget (optional)</label>
+        <select id="iBudget">
+          <option value="">Select…</option>
+          <option value="$">$</option>
+          <option value="$$">$$</option>
+          <option value="$$$">$$$</option>
+          <option value="VIP">VIP</option>
+        </select>
+
+        <label class="required" for="iContact">Contact</label>
+        <input id="iContact" placeholder="Phone or email"/>
+
+        <div class="hint" id="intakeMsg" style="margin-top:10px"></div>
+
+        <button class="ctaBtn full" id="submitIntake" type="button">Submit request</button>
+      </div>
+    </div>
+  </div>
 
 <div id="toast" class="toast hidden" aria-live="polite"></div>
 
@@ -828,6 +868,7 @@ body.modalOpen{ overflow:hidden; }
     // === PRESENCE ===
     async function loadPresence(){
       const el = document.getElementById('presenceText');
+      if(!el) return;
       el.textContent = 'Loading…';
       try{
         const city = (state.scope === 'city') ? (state.city || '') : '';
@@ -955,6 +996,24 @@ body.modalOpen{ overflow:hidden; }
       document.getElementById('pillScope').addEventListener('click', toggleScope);
 
       document.getElementById('ctaChat').addEventListener('click', ()=>setSection('chat'));
+      // Home quick actions
+      const rs = document.getElementById('refreshStatus');
+      if(rs) rs.addEventListener('click', loadPresence);
+
+      const hr = document.getElementById('homeReserve');
+      if(hr) hr.addEventListener('click', ()=>{
+        setSection('chat');
+        systemMsg('Reservation request: tell me city/venue + date/time + party size.');
+      });
+
+      const hs = document.getElementById('homeSchedule');
+      if(hs) hs.addEventListener('click', ()=>setSection('schedule'));
+
+      const hf = document.getElementById('homeFanzone');
+      if(hf) hf.addEventListener('click', ()=>setSection('fanzone'));
+
+      const hv = document.getElementById('homeVIP');
+      if(hv) hv.addEventListener('click', ()=>setSection('vip'));
       document.getElementById('ctaReserve').addEventListener('click', ()=>{
         setSection('chat');
         systemMsg('Reservation request: tell me city/venue + date/time + party size.');
