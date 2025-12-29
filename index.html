@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="format-detection" content="telephone=no"/>
   <title>World Cup Concierge</title>
-<!-- WC_BUILD_VERSION: STEP9-20251229-180033 -->
+<!-- WC_BUILD_VERSION: STEP10-20251229-180735 -->
   <style>
     :root{
       --bg:#071022;
@@ -357,7 +357,45 @@
       position:absolute; width:1px; height:1px; padding:0; margin:-1px;
       overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
     }
-  </style>
+  
+/* ===== STEP 10: Premium polish ===== */
+:root{
+  --gold: rgba(212,175,55,.9);
+  --glass: rgba(255,255,255,.08);
+  --glass-border: rgba(255,255,255,.18);
+}
+.hero{
+  background:
+    radial-gradient(120% 80% at 10% 0%, rgba(255,255,255,.15), transparent 40%),
+    linear-gradient(180deg, #0b1220 0%, #070b14 100%);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(10px);
+}
+.hero::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,.35) 70%);
+}
+.heroTitle{
+  letter-spacing:.04em;
+}
+.heroSub{
+  opacity:.85;
+}
+.sectionTitle{
+  font-weight:600;
+}
+.card{
+  border:1px solid var(--glass-border);
+  background: linear-gradient(180deg, var(--glass), rgba(255,255,255,.02));
+}
+.mnav{
+  backdrop-filter: blur(12px);
+  border-top:1px solid var(--glass-border);
+}
+
+</style>
 </head>
 
 <body data-sec="home">
@@ -387,29 +425,7 @@
     <main>
       <!-- HOME -->
       <section class="section" id="sec-home" aria-label="Home">
-        <div class="card">
-          <div class="cardHead"><h2 class="cardTitle">Quick actions</h2></div>
-          <div class="cardBody">
-            <div class="heroActions" style="margin-top:0">
-              <button class="cta primary" type="button" data-jump="reserve">Reserve</button>
-              <button class="cta" type="button" data-jump="schedule">Schedule</button>
-            </div>
-            <p class="hint">Try: “Find VIP tables near the stadium”, “What matches are on tomorrow?”, “Book a table for 6 at 8pm”.</p>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="cardHead"><h2 class="cardTitle">Status</h2></div>
-          <div class="cardBody">
-            <div id="presenceText" class="hint">Loading…</div>
-          </div>
-        </div>
-      
-        <div class="card" style="margin-top:10px">
-          <div class="cardBody">
-            <div style="font-size:11px;opacity:.6">Build: STEP9-20251229-180033 · Mobile Global Concierge</div>
-          </div>
-        </div>
+        
 </section>
 
       <!-- CHAT -->
@@ -844,7 +860,7 @@ function escapeHtml(s){
     }
 
     function boot(){
-      console.log('WC_BOOT','STEP9-20251229-180033');
+      console.log('WC_BOOT','STEP10-20251229-180735');
       wireNav();
 
       document.getElementById('pillLang').addEventListener('click', cycleLang);

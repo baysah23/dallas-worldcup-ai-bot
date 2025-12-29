@@ -251,7 +251,7 @@ def catch_all(path: str):
 # ============================================================
 @app.get('/version')
 def version():
-    return jsonify({'build':'STEP9-20251229-180033'})
+    return jsonify({'build':'STEP10-20251229-180735'})
 @app.get("/health")
 def health():
     return jsonify({"ok": True})
