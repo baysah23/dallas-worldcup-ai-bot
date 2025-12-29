@@ -137,9 +137,7 @@ BUSINESS_RULES = {
 # ============================================================
 # World Cup 2026 schedule data
 # - We load ALL matches from a public JSON feed (no API key).
-# - World Cup"FIXTURE_FEED_URL",
-    "https://fixturedownload.com/feed/json/fifa-world-cup-2026",
-)
+FIXTURE_FEED_URL = os.getenv("FIXTURE_FEED_URL", "https://fixturedownload.com/feed/json/fifa-world-cup-2026")
 
 # Location label used by the feed for World Cup"World Cup".)
 HOST_CITY_LOCATION_KEYWORDS = ["host stadium", "host city", "main stadium"]  # adjust for your host city
@@ -2011,15 +2009,16 @@ def chat():
             return jsonify({"reply": q, "rate_limit_remaining": remaining})
 
         # Otherwise: normal Q&A using OpenAI (with language + business profile + menu)
-        system_msg = f"""
-    You are a World Cup 2026 World Cup'en']), ensure_ascii=False)}
-
-    Rules:
-    - Be friendly, fast, and concise.
-    - Always respond in the user's chosen language: {lang}.
-    - If user asks about the World Cup match schedule, tell them to use the schedule panel on the page.
-    - If user asks to make a reservation, instruct them to type "reservation" (or equivalent) to start.
-    """
+        system_msg = (
+            "You are World Cup Concierge — a premium, mobile-first, multilingual concierge for the FIFA World Cup 2026.\n"
+            f"Always respond in the user's chosen language: {lang}.\n\n"
+            "Business profile (context):\n"
+            f"{BUSINESS_PROFILE}\n\n"
+            "Rules:\n"
+            "- Be friendly, fast, and concise.\n"
+            "- If the user asks about match schedules, direct them to the Schedule tab (and summarize if helpful).\n"
+            "- If the user wants a reservation, guide them through the reservation flow (name, phone, date, time, party size, VIP).\n"
+        )
 
         try:
             resp = client.responses.create(
