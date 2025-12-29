@@ -4683,6 +4683,22 @@ body[data-msec="home"] #luxHomeShell{ display:block !important; }
 
 /* ========================================================= */
 
+
+/* =========================================================
+   STEP 4D PATCH — ensure background image actually shows
+   Fixes:
+   - disables any older .luxHero::before overlays for the mock
+   - uses dual-path URL so it works on Render (/static/...) and local file preview (./static/...)
+   ========================================================= */
+#luxHomeShell .luxHero.luxMock::before{ content:none !important; background:none !important; }
+#luxHomeShell .luxHero.luxMock{
+  background-image: url("./static/lux-home-mock.webp"), url("/static/lux-home-mock.webp") !important;
+  background-size: cover !important;
+  background-position: 50% 12% !important;
+  background-repeat: no-repeat !important;
+}
+/* ========================================================= */
+
 </style>
 </head>
 <body data-msec="home" data-lux="on">
