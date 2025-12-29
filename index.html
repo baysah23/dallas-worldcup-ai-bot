@@ -4827,6 +4827,81 @@ body[data-msec="home"] .hero{ display:none !important; }
 }
 /* === END STEP 4 === */
 
+
+/* =========================================================
+   STEP 4E — PREMIUM TEXTURE + TYPO (closer to reference)
+   ========================================================= */
+#luxHomeShell .luxHero::before{
+  /* add subtle grain + stadium light arcs */
+  background:
+    radial-gradient(620px 420px at 50% 10%, rgba(255,235,190,.34), transparent 62%),
+    radial-gradient(900px 520px at 50% 30%, rgba(255,215,110,.10), transparent 74%),
+    radial-gradient(1200px 700px at 50% 56%, rgba(255,255,255,.06), transparent 72%),
+    conic-gradient(from 210deg at 50% 34%, rgba(255,215,110,.08), transparent 18%, rgba(255,215,110,.06), transparent 42%, rgba(255,215,110,.06), transparent 70%, rgba(255,215,110,.08)),
+    linear-gradient(140deg, rgba(5,7,14,.96), rgba(4,6,12,.97));
+}
+#luxHomeShell .luxHero::after{
+  background:
+    radial-gradient(860px 520px at 50% 12%, rgba(0,0,0,.0), rgba(0,0,0,.78) 82%),
+    linear-gradient(180deg, rgba(0,0,0,.10), rgba(0,0,0,.72));
+}
+
+/* Gold gradient title like the mock */
+#luxHomeShell .luxTitleGold{
+  background: linear-gradient(180deg, rgba(255,245,220,.98), rgba(255,215,110,.92) 52%, rgba(152,92,28,.90));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 10px 34px rgba(0,0,0,.70);
+}
+
+/* Kicker slightly higher */
+#luxHomeShell .luxTop{ margin-bottom: 2px; }
+#luxHomeShell .luxLangRow{ opacity: .92; }
+
+/* Emboss + glow on cards */
+#luxHomeShell .luxCardCta,
+#luxHomeShell .luxTileBtn{
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: rgba(0,0,0,.26);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.06),
+    inset 0 -1px 0 rgba(0,0,0,.55),
+    0 18px 60px rgba(0,0,0,.55);
+}
+#luxHomeShell .luxCardCta{ border-color: rgba(255,215,110,.42); }
+#luxHomeShell .luxTileBtn{ border-color: rgba(255,215,110,.26); }
+
+/* Icon tiles: monochrome gold */
+#luxHomeShell .luxCtaIcon,
+#luxHomeShell .luxTileIcon{
+  color: rgba(255,230,170,.92);
+}
+#luxHomeShell .luxTileIcon{
+  background: rgba(255,215,110,.10);
+}
+
+/* Micro interactions */
+#luxHomeShell button{ transition: transform .12s ease, filter .12s ease, border-color .12s ease, background .12s ease; }
+#luxHomeShell button:active{ transform: translateY(1px) scale(.99); }
+#luxHomeShell button:hover{ filter: brightness(1.05); }
+
+/* Add subtle grain overlay without images */
+#luxHomeShell .luxOverlay::after{
+  content:"";
+  position:absolute; inset:0;
+  pointer-events:none;
+  opacity:.09;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255,255,255,.0), rgba(255,255,255,.0) 2px, rgba(255,255,255,.08) 3px),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.0), rgba(0,0,0,.0) 3px, rgba(0,0,0,.08) 4px);
+  mix-blend-mode: overlay;
+}
+#luxHomeShell .luxOverlay{ position:absolute; } /* ensure ::after anchors */
+#luxHomeShell .luxOverlay > *{ position:relative; z-index:1; }
+/* ========================================================= */
+
 </style>
 </head>
 <body data-msec="home" data-lux="on">
@@ -4853,36 +4928,66 @@ body[data-msec="home"] .hero{ display:none !important; }
   <div class="luxHero" role="region" aria-label="World Cup Concierge Luxury Home">
     <div class="luxOverlay">
       <div class="luxTop">
-        <div class="luxTrophy" aria-hidden="true">
-          <svg viewBox="0 0 128 180" width="92" height="128" role="img" aria-label="Trophy">
-            <defs>
-              <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0" stop-color="#ffe6b0"/>
-                <stop offset="0.45" stop-color="#ffd56b"/>
-                <stop offset="1" stop-color="#8a5a1f"/>
-              </linearGradient>
-              <radialGradient id="glow" cx="50%" cy="20%" r="70%">
-                <stop offset="0" stop-color="#fff3c8" stop-opacity="0.85"/>
-                <stop offset="0.55" stop-color="#ffd56b" stop-opacity="0.22"/>
-                <stop offset="1" stop-color="#000" stop-opacity="0"/>
-              </radialGradient>
-            </defs>
-            <ellipse cx="64" cy="48" rx="56" ry="44" fill="url(#glow)"/>
-            <path d="M64 6c18 12 32 38 27 66-3 17-14 31-27 42-13-11-24-25-27-42C32 44 46 18 64 6z" fill="url(#g)" opacity="0.95"/>
-            <path d="M46 112c6 7 12 13 18 18 6-5 12-11 18-18 10 10 18 22 20 36H28c2-14 10-26 18-36z" fill="url(#g)" opacity="0.78"/>
-            <path d="M42 148h44c0 10-10 20-22 20s-22-10-22-20z" fill="#2a1a08" opacity="0.55"/>
-            <path d="M44 150h40" stroke="#ffd56b" stroke-width="3" opacity="0.45"/>
-          </svg>
-        </div>
+        
+<div class="luxTrophy" aria-hidden="true">
+  <svg viewBox="0 0 200 260" width="98" height="138" role="img" aria-label="Trophy">
+    <defs>
+      <linearGradient id="goldA" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#fff2cf"/>
+        <stop offset="0.22" stop-color="#ffe19a"/>
+        <stop offset="0.52" stop-color="#ffd06a"/>
+        <stop offset="0.78" stop-color="#b1762a"/>
+        <stop offset="1" stop-color="#6a3f14"/>
+      </linearGradient>
+      <linearGradient id="goldB" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#fff7dc" stop-opacity="0.95"/>
+        <stop offset="0.55" stop-color="#ffd06a" stop-opacity="0.55"/>
+        <stop offset="1" stop-color="#000" stop-opacity="0"/>
+      </linearGradient>
+      <radialGradient id="halo" cx="50%" cy="35%" r="70%">
+        <stop offset="0" stop-color="#fff4cf" stop-opacity="0.75"/>
+        <stop offset="0.45" stop-color="#ffd978" stop-opacity="0.22"/>
+        <stop offset="1" stop-color="#000" stop-opacity="0"/>
+      </radialGradient>
+      <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="6" result="b"/>
+        <feColorMatrix in="b" type="matrix" values="
+          1 0 0 0 0
+          0 0.9 0 0 0
+          0 0 0.2 0 0
+          0 0 0 0.7 0" result="c"/>
+        <feMerge>
+          <feMergeNode in="c"/>
+          <feMergeNode in="SourceGraphic"/>
+        </feMerge>
+      </filter>
+    </defs>
 
-        <div class="luxKicker"><span class="dot" aria-hidden="true"></span><span>FIFA WORLD CUP 2026</span></div>
+    <!-- halo -->
+    <ellipse cx="100" cy="78" rx="78" ry="62" fill="url(#halo)"/>
+    <!-- main trophy (stylized) -->
+    <path d="M103 18c-8 10-20 18-29 28-20 22-28 55-21 84 6 25 23 44 47 62 24-18 41-37 47-62 7-29-1-62-21-84-9-10-21-18-29-28z"
+          fill="url(#goldA)" filter="url(#softGlow)" opacity="0.96"/>
+    <!-- highlight sweep -->
+    <path d="M88 36c-18 18-29 46-26 74 3 21 13 37 28 51-9-20-10-44-4-70 4-19 12-37 24-55-7 0-14 0-22 0z"
+          fill="url(#goldB)" opacity="0.55"/>
+    <!-- base neck -->
+    <path d="M65 182c10 12 22 22 35 32 13-10 25-20 35-32 18 14 30 32 33 56H32c3-24 15-42 33-56z"
+          fill="url(#goldA)" opacity="0.82"/>
+    <!-- plinth -->
+    <path d="M64 238h72c0 14-16 24-36 24s-36-10-36-24z" fill="#1b1208" opacity="0.58"/>
+    <path d="M70 242h60" stroke="#ffd06a" stroke-width="4" opacity="0.45"/>
+  </svg>
+</div>
+
+<div class="luxKicker"><span class="dot" aria-hidden="true"></span><span>FIFA WORLD CUP 2026</span></div>
         <h1 class="luxTitleGold">WORLD CUP<br>CONCIERGE</h1>
         <p class="luxSubGold">Reserve tables &amp; VIP experiences — just ask</p>
         <div class="luxLangRow" aria-label="Languages">EN&nbsp;&nbsp;•&nbsp;&nbsp;ES&nbsp;&nbsp;•&nbsp;&nbsp;PT&nbsp;&nbsp;•&nbsp;&nbsp;FR</div>
       </div>
 
       <button class="luxCardCta" type="button" onclick="try{ window.setSection && window.setSection('chat'); }catch(e){}">
-        <span class="luxCtaIcon" aria-hidden="true">💬</span>
+        <span class="luxCtaIcon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 5.5A3.5 3.5 0 0 1 7.5 2h9A3.5 3.5 0 0 1 20 5.5v6A3.5 3.5 0 0 1 16.5 15H10l-4.5 3.5V15H7.5A3.5 3.5 0 0 1 4 11.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg></span>
         <span class="luxCtaText">
           <span class="luxCtaTitle">Reserve / Concierge</span>
           <span class="luxCtaSub">Talk to our concierge</span>
@@ -4892,19 +4997,7 @@ body[data-msec="home"] .hero{ display:none !important; }
 
       <div class="luxTileGrid" aria-label="Home tiles">
         <button class="luxTileBtn" type="button" onclick="try{ window.setSection && window.setSection('menu'); }catch(e){}">
-          <span class="luxTileIcon" aria-hidden="true">🍽️</span>
-          <span class="luxTileLabel">Menu</span>
-        </button>
-        <button class="luxTileBtn" type="button" onclick="try{ window.setSection && window.setSection('vip'); }catch(e){}">
-          <span class="luxTileIcon" aria-hidden="true">⭐</span>
-          <span class="luxTileLabel">VIP Access</span>
-        </button>
-        <button class="luxTileBtn" type="button" onclick="try{ window.setSection && window.setSection('schedule'); }catch(e){}">
-          <span class="luxTileIcon" aria-hidden="true">📅</span>
-          <span class="luxTileLabel">Schedule</span>
-        </button>
-        <button class="luxTileBtn" type="button" onclick="try{ window.setSection && window.setSection('fanzone'); }catch(e){}">
-          <span class="luxTileIcon" aria-hidden="true">⚽</span>
+          <span class="luxTileIcon" aria-hidden="true"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 12l2-2 2 2 2-2 2 2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
           <span class="luxTileLabel">Fan Zone</span>
         </button>
       </div>
