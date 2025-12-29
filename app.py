@@ -35,6 +35,20 @@ def home():
 # ============================================================
 SUPPORTED_LANGS = {"en", "es", "pt", "fr"}
 
+
+def _load_static_json(rel_path: str):
+    """Load JSON from ./static/data/<rel_path> if present."""
+    base = os.path.join(os.path.dirname(__file__), "static", "data")
+    path = os.path.join(base, rel_path)
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
 def norm_lang(v: Optional[str]) -> str:
     v = (v or "en").strip().lower()
     return v if v in SUPPORTED_LANGS else "en"
@@ -68,6 +82,9 @@ MENU_DEMO = {
 @app.get("/menu.json")
 def menu_json():
     lang = norm_lang(request.args.get("lang"))
+    data = _load_static_json(f"menu_{lang}.json")
+    if isinstance(data, list):
+        return jsonify({"items": data})
     return jsonify({"items": MENU_DEMO.get(lang, MENU_DEMO["en"])})
 
 # ============================================================
@@ -95,6 +112,9 @@ FANZONE_DEMO = {
 @app.get("/fanzone.json")
 def fanzone_json():
     lang = norm_lang(request.args.get("lang"))
+    data = _load_static_json(f"fanzone_{lang}.json")
+    if isinstance(data, list):
+        return jsonify({"events": data})
     return jsonify({"events": FANZONE_DEMO.get(lang, FANZONE_DEMO["en"])})
 
 # ============================================================
@@ -231,7 +251,7 @@ def catch_all(path: str):
 # ============================================================
 @app.get('/version')
 def version():
-    return jsonify({'build':'STEP8-20251229-175414'})
+    return jsonify({'build':'STEP9-20251229-180033'})
 @app.get("/health")
 def health():
     return jsonify({"ok": True})

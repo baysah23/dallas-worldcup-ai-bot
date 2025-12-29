@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="format-detection" content="telephone=no"/>
   <title>World Cup Concierge</title>
-<!-- WC_BUILD_VERSION: STEP8-20251229-175414 -->
+<!-- WC_BUILD_VERSION: STEP9-20251229-180033 -->
   <style>
     :root{
       --bg:#071022;
@@ -407,7 +407,7 @@
       
         <div class="card" style="margin-top:10px">
           <div class="cardBody">
-            <div style="font-size:11px;opacity:.6">Build: STEP8-20251229-175414 · Mobile Global Concierge</div>
+            <div style="font-size:11px;opacity:.6">Build: STEP9-20251229-180033 · Mobile Global Concierge</div>
           </div>
         </div>
 </section>
@@ -504,6 +504,56 @@
 
   <script>
     const state = { lang:'en', scope:'global', city:'' };
+
+    // STEP9: Client-side fallback content (keeps screens non-empty even if server endpoints are misconfigured)
+    const FALLBACK_DATA = {
+      menu: {
+        en: [
+          {category:'Reservations', name:'VIP Table Inquiry', price:'', description:'City + venue + date/time + party size.'},
+          {category:'Reservations', name:'Group Booking', price:'', description:'Corporate, birthdays, and large parties.'},
+          {category:'Experiences', name:'Fan Experience', price:'', description:'Fan zones, watch parties, transport tips.'},
+        ],
+        es: [
+          {category:'Reservas', name:'Consulta de Mesa VIP', price:'', description:'Ciudad + lugar + fecha/hora + tamaño del grupo.'},
+          {category:'Reservas', name:'Reserva para Grupos', price:'', description:'Empresas, cumpleaños y grupos grandes.'},
+          {category:'Experiencias', name:'Experiencia Fan', price:'', description:'Fan zones, watch parties y transporte.'},
+        ],
+        pt: [
+          {category:'Reservas', name:'Consulta de Mesa VIP', price:'', description:'Cidade + local + data/hora + tamanho do grupo.'},
+          {category:'Reservas', name:'Reserva para Grupos', price:'', description:'Empresas, aniversários e grupos grandes.'},
+          {category:'Experiências', name:'Experiência Fan', price:'', description:'Fan zones, watch parties e transporte.'},
+        ],
+        fr: [
+          {category:'Réservations', name:'Demande de Table VIP', price:'', description:'Ville + lieu + date/heure + taille du groupe.'},
+          {category:'Réservations', name:'Réservation Groupe', price:'', description:'Entreprises, anniversaires et grands groupes.'},
+          {category:'Expériences', name:'Expérience Fan', price:'', description:'Fan zones, watch parties et transport.'},
+        ],
+      },
+      fanzone: {
+        en: [
+          {date:'2026-06-11', city:'Host City', title:'Official Fan Zone', location:'City Center', description:'Live screenings, music, food.'},
+          {date:'2026-06-12', city:'Host City', title:'Premium Watch Party', location:'Partner Venue', description:'Reservations recommended.'},
+        ],
+        es: [
+          {date:'2026-06-11', city:'Ciudad Sede', title:'Fan Zone Oficial', location:'Centro', description:'Pantallas, música y comida.'},
+          {date:'2026-06-12', city:'Ciudad Sede', title:'Watch Party Premium', location:'Lugar Asociado', description:'Se recomienda reservar.'},
+        ],
+        pt: [
+          {date:'2026-06-11', city:'Cidade-Sede', title:'Fan Zone Oficial', location:'Centro', description:'Transmissão ao vivo, música e comida.'},
+          {date:'2026-06-12', city:'Cidade-Sede', title:'Watch Party Premium', location:'Local Parceiro', description:'Reservas recomendadas.'},
+        ],
+        fr: [
+          {date:'2026-06-11', city:'Ville Hôte', title:'Fan Zone Officielle', location:'Centre-ville', description:'Diffusion live, musique, food.'},
+          {date:'2026-06-12', city:'Ville Hôte', title:'Watch Party Premium', location:'Lieu Partenaire', description:'Réservation conseillée.'},
+        ],
+      },
+      schedule: [
+        {date:'2026-06-11', time:'19:00', group:'Group A', home:'Team A', away:'Team B', venue:'Stadium 1', city:'Host City'},
+        {date:'2026-06-12', time:'16:00', group:'Group B', home:'Team C', away:'Team D', venue:'Stadium 2', city:'Host City'},
+        {date:'2026-06-13', time:'21:00', group:'Group C', home:'Team E', away:'Team F', venue:'Stadium 3', city:'Another City'}
+      ]
+    };
+
 
         function to12Hour(t){
       // Accept "HH:MM" (24h) and return "h:MM AM/PM". If invalid, return original.
@@ -794,7 +844,7 @@ function escapeHtml(s){
     }
 
     function boot(){
-      console.log('WC_BOOT','STEP8-20251229-175414');
+      console.log('WC_BOOT','STEP9-20251229-180033');
       wireNav();
 
       document.getElementById('pillLang').addEventListener('click', cycleLang);
