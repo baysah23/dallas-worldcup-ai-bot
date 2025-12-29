@@ -242,6 +242,13 @@ def catch_all(path: str):
         return send_from_directory(".", path)
     return _serve_index()
 
+
+@app.post('/lead')
+def lead():
+    data = request.get_json(silent=True) or {}
+    # In production: store to DB / Google Sheet / CRM / send email/SMS
+    return jsonify({'ok': True, 'received': data})
+
 # ============================================================
 # Health
 # ============================================================
@@ -251,7 +258,7 @@ def catch_all(path: str):
 # ============================================================
 @app.get('/version')
 def version():
-    return jsonify({'build':'STEP10-20251229-180735'})
+    return jsonify({'build':'STEP11-20251229-181909'})
 @app.get("/health")
 def health():
     return jsonify({"ok": True})

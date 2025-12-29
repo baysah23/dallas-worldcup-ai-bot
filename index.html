@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="format-detection" content="telephone=no"/>
   <title>World Cup Concierge</title>
-<!-- WC_BUILD_VERSION: STEP10-20251229-180735 -->
+<!-- WC_BUILD_VERSION: STEP11-20251229-181909 -->
   <style>
     :root{
       --bg:#071022;
@@ -395,6 +395,24 @@
   border-top:1px solid var(--glass-border);
 }
 
+
+/* ===== STEP 11: Concierge CTA & Modal ===== */
+.ctaBtn{margin-top:12px;padding:12px 16px;border-radius:14px;border:1px solid rgba(212,175,55,.6);
+background:linear-gradient(180deg, rgba(212,175,55,.25), rgba(212,175,55,.12));
+color:#fff;font-weight:600}
+.ctaBtn.full{width:100%}
+.modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+background:rgba(0,0,0,.5);z-index:50}
+.modal.hidden{display:none}
+.modalCard{width:92%;max-width:420px;border-radius:18px;padding:14px;
+background:linear-gradient(180deg, rgba(255,255,255,.1), rgba(255,255,255,.04));
+border:1px solid rgba(255,255,255,.2)}
+.modalHead{display:flex;justify-content:space-between;align-items:center}
+.modalBody label{display:block;font-size:12px;opacity:.85;margin-top:10px}
+.modalBody input,.modalBody select{width:100%;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.2);
+background:rgba(0,0,0,.2);color:#fff;margin-top:4px}
+.iconBtn{background:none;border:none;color:#fff;font-size:18px}
+
 </style>
 </head>
 
@@ -418,7 +436,7 @@
         <div class="heroActions">
           <button class="cta primary" id="ctaReserve" type="button">Reserve</button>
           <button class="cta" id="ctaChat" type="button">Chat</button>
-        </div>
+                <button id="ctaPlan" class="ctaBtn">Plan My World Cup Experience</button>
       </div>
     </section>
 
@@ -860,7 +878,7 @@ function escapeHtml(s){
     }
 
     function boot(){
-      console.log('WC_BOOT','STEP10-20251229-180735');
+      console.log('WC_BOOT','STEP11-20251229-181909');
       wireNav();
 
       document.getElementById('pillLang').addEventListener('click', cycleLang);
@@ -920,6 +938,65 @@ function escapeHtml(s){
 
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
     else boot();
-  </script>
+  
+// STEP11: Intake modal wiring
+const modal = document.getElementById('intakeModal');
+const openBtn = document.getElementById('ctaPlan');
+const closeBtn = document.getElementById('closeModal');
+if(openBtn){
+  openBtn.onclick = ()=> modal.classList.remove('hidden');
+}
+if(closeBtn){
+  closeBtn.onclick = ()=> modal.classList.add('hidden');
+}
+const submitBtn = document.getElementById('submitIntake');
+if(submitBtn){
+  submitBtn.onclick = async ()=>{
+    const payload = {
+      city: document.getElementById('iCity').value,
+      date: document.getElementById('iDate').value,
+      group: document.getElementById('iGroup').value,
+      budget: document.getElementById('iBudget').value,
+      contact: document.getElementById('iContact').value,
+      lang: state.lang
+    };
+    const msg = document.getElementById('intakeMsg');
+    try{
+      const r = await fetch('/lead', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+      const j = await r.json();
+      msg.textContent = j.ok ? 'Request received. Concierge will follow up.' : 'Submission failed.';
+    }catch(e){
+      msg.textContent = 'Submission failed.';
+    }
+  };
+}
+
+</script>
+
+<!-- STEP11: Concierge Intake Modal -->
+<div id="intakeModal" class="modal hidden">
+  <div class="modalCard">
+    <div class="modalHead">
+      <h3>Concierge Intake</h3>
+      <button id="closeModal" class="iconBtn">✕</button>
+    </div>
+    <div class="modalBody">
+      <label>City or Host Location<input id="iCity" placeholder="City / Country"></label>
+      <label>Match Date<input id="iDate" type="date"></label>
+      <label>Group Size<input id="iGroup" type="number" min="1" placeholder="Number of guests"></label>
+      <label>Budget Tier
+        <select id="iBudget">
+          <option value="standard">Standard</option>
+          <option value="premium">Premium</option>
+          <option value="vip">VIP</option>
+        </select>
+      </label>
+      <label>Contact (email or phone)<input id="iContact" placeholder="you@email.com or +1..."></label>
+      <button id="submitIntake" class="ctaBtn full">Submit Request</button>
+      <div id="intakeMsg" class="hint"></div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
