@@ -63,9 +63,108 @@
     .heroImg{
       display:block;
       width:100%;
+      will-change: transform;
       height:auto;
     }
     #heroBanner{ min-height: 220px; margin: 10px 0 10px; }
+
+
+
+    /* ===== HERO LIVE COUNTDOWN OVERLAY (STYLE B: Bottom-Center Glass Bar) ===== */
+    .heroCountdown{
+      position:absolute;
+      left: 10px;
+      right: 10px;
+      bottom: 10px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.18);
+      /* Crowd flare control: vignette only inside the bar */
+      background:
+        radial-gradient(140% 120% at 50% 0%, rgba(0,0,0,.40), rgba(0,0,0,.70) 65%),
+        linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04));
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      box-shadow: 0 18px 55px rgba(0,0,0,.55);
+      padding: 10px 12px 10px;
+      z-index: 8;
+      pointer-events: none; /* decorative */
+      overflow:hidden;
+    }
+    /* Gold “Live” shimmer line (subtle highlight, not a badge) */
+    .heroCountdown::before{
+      content:"";
+      position:absolute;
+      left:12px; right:12px; top:8px;
+      height: 2px;
+      border-radius: 999px;
+      background: linear-gradient(90deg,
+        rgba(212,175,55,0) 0%,
+        rgba(212,175,55,.22) 22%,
+        rgba(255,255,255,.20) 50%,
+        rgba(212,175,55,.22) 78%,
+        rgba(212,175,55,0) 100%
+      );
+      opacity: .55;
+      filter: blur(.2px);
+      transform: translateX(-28%);
+      animation: shimmerLine 6.8s ease-in-out infinite;
+    }
+    @keyframes shimmerLine{
+      0%,100%{ transform: translateX(-28%); opacity:.45; }
+      50%{ transform: translateX(28%); opacity:.62; }
+    }
+
+    .heroCdTop{
+      text-align:center;
+      font-size: 12px;
+      font-weight: 950;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.92); /* white broadcast */
+      margin: 10px 0 8px; /* extra top space for shimmer line */
+      text-shadow: 0 10px 30px rgba(0,0,0,.55);
+    }
+    .heroCdRow{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap: 10px;
+    }
+    .heroCdCell{
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      min-width: 54px;
+    }
+    .heroCdNum{
+      font-variant-numeric: tabular-nums;
+      font-weight: 980;
+      letter-spacing: .02em;
+      font-size: 28px;
+      line-height: 1;
+      color: rgba(255,255,255,.97); /* white broadcast */
+      text-shadow:
+        0 14px 40px rgba(0,0,0,.55),
+        0 0 24px rgba(255,255,255,.10);
+    }
+    .heroCdLbl{
+      margin-top: 6px;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .20em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.78); /* white broadcast */
+      text-shadow: 0 10px 30px rgba(0,0,0,.55);
+    }
+    .heroCdSep{
+      font-size: 20px;
+      line-height: 1;
+      opacity: .60;
+      color: rgba(255,255,255,.88);
+      transform: translateY(-2px);
+      text-shadow: 0 14px 40px rgba(0,0,0,.55);
+    }
+
 
     /* === CARDS === */
     .card{
@@ -439,6 +538,20 @@
     <!-- PURE HERO IMAGE (NO OVERLAYS) -->
     <section class="hero" id="heroBanner" aria-label="World Cup 2026 banner">
       <img class="heroImg" src="/static/hero_stadium.png?v=20251229" alt="World Cup 2026 Concierge banner with trophy and kickoff countdown" />
+    
+      <!-- LIVE COUNTDOWN OVERLAY (covers the "fake" countdown printed on the image) -->
+      <div class="heroCountdown" aria-label="Live countdown">
+        <div class="heroCdTop">UNTIL KICKOFF</div>
+        <div class="heroCdRow" role="timer" aria-live="polite">
+          <div class="heroCdCell"><div class="heroCdNum" id="cdD">--</div><div class="heroCdLbl">DAYS</div></div>
+          <div class="heroCdSep">•</div>
+          <div class="heroCdCell"><div class="heroCdNum" id="cdH">--</div><div class="heroCdLbl">HRS</div></div>
+          <div class="heroCdSep">•</div>
+          <div class="heroCdCell"><div class="heroCdNum" id="cdM">--</div><div class="heroCdLbl">MINS</div></div>
+          <div class="heroCdSep">•</div>
+          <div class="heroCdCell"><div class="heroCdNum" id="cdS">--</div><div class="heroCdLbl">SECS</div></div>
+        </div>
+      </div>
     </section>
 
 <main>
@@ -760,6 +873,9 @@
       const order = ['en','es','pt','fr'];
       state.lang = order[(order.indexOf(state.lang)+1) % order.length];
       updatePills();
+      updateHeroCountdown();
+      setInterval(updateHeroCountdown, 1000);
+
       systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       toast(`Language: ${state.lang.toUpperCase()}`);
       haptic(8);
@@ -777,7 +893,41 @@
       if(document.body.dataset.sec === 'schedule') loadSchedule();
     }
 
-    // === Mini countdown (kickoff: 2026-06-11) ===
+    
+    // === HERO LIVE COUNTDOWN (covers image-printed countdown) ===
+    const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z'; // adjust if you want local midnight
+    function updateHeroCountdown(){
+      const dEl = document.getElementById('cdD');
+      const hEl = document.getElementById('cdH');
+      const mEl = document.getElementById('cdM');
+      const sEl = document.getElementById('cdS');
+      if(!dEl || !hEl || !mEl || !sEl) return;
+
+      const target = new Date(HERO_KICKOFF_ISO).getTime();
+      const now = Date.now();
+      const diff = target - now;
+
+      if(diff <= 0){
+        dEl.textContent = '00';
+        hEl.textContent = '00';
+        mEl.textContent = '00';
+        sEl.textContent = '00';
+        return;
+      }
+
+      const totalSec = Math.floor(diff / 1000);
+      const days = Math.floor(totalSec / 86400);
+      const hrs  = Math.floor((totalSec % 86400) / 3600);
+      const mins = Math.floor((totalSec % 3600) / 60);
+      const secs = Math.floor(totalSec % 60);
+
+      dEl.textContent = String(days);
+      hEl.textContent = String(hrs).padStart(2,'0');
+      mEl.textContent = String(mins).padStart(2,'0');
+      sEl.textContent = String(secs).padStart(2,'0');
+    }
+
+// === Mini countdown (kickoff: 2026-06-11) ===
     const KICKOFF_ISO = '2026-06-11T00:00:00Z';
     function updateCountdownMini(){
       const el = document.getElementById('cdMini');
@@ -1196,6 +1346,27 @@
       systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
       loadPresence();
       setTimeout(prefetchAll, 250);
+
+
+    // === Ambient parallax (micro) on hero image: 1–2px translate on scroll ===
+    (function(){
+      const img = document.querySelector('#heroBanner .heroImg');
+      if(!img) return;
+
+      let ticking = false;
+      function onScroll(){
+        if(ticking) return;
+        ticking = true;
+        requestAnimationFrame(()=>{
+          const y = Math.min(2, Math.max(0, window.scrollY * 0.02)); // cap 2px
+          img.style.transform = `translate3d(0, ${y}px, 0) scale(1.015)`;
+          ticking = false;
+        });
+      }
+      window.addEventListener('scroll', onScroll, {passive:true});
+      onScroll();
+    })();
+
     }
 
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
