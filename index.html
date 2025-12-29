@@ -47,15 +47,16 @@
       overflow:hidden;
       border: 1px solid var(--line);
       box-shadow: var(--shadow);
-      background: #0b152c;
       padding:0;
+      background: transparent;
     }
     .heroImg{
       display:block;
       width:100%;
       height:auto;
     }
-        .hero::after{
+
+.hero::after{
       content:"";
       position:absolute; inset:0;
       background: linear-gradient(180deg, rgba(7,16,34,.15), rgba(7,16,34,.78));
@@ -139,29 +140,33 @@
       flex-wrap:wrap;
     }
     .cta{
-      flex: 1 1 auto;
-      border-radius: 14px;
-      padding: 12px 12px;
-      border: 1px solid rgba(255,255,255,.14);
-      background: rgba(15,27,51,.60);
+      height: 54px;
+      padding: 0 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(15,27,51,.92);
       color: var(--text);
-      font-weight: 900;
-      font-size: 13px;
-      cursor:pointer;
-      display:flex;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: -0.01em;
+      line-height: 1;
+      display:inline-flex;
       align-items:center;
       justify-content:center;
-      gap:8px;
-      box-shadow: 0 10px 18px rgba(0,0,0,.24);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-    }
-    .cta.primary{
-      background: linear-gradient(135deg, rgba(212,175,55,.95), rgba(255,204,102,.78));
-      color:#111827;
-      border: 1px solid rgba(255,255,255,.35);
+      gap:10px;
+      box-shadow: 0 10px 24px rgba(0,0,0,.22);
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
     }
     .cta:active{ transform: translateY(1px); }
+    .cta.primary{
+      background: linear-gradient(180deg, rgba(212,175,55,1), rgba(168,129,30,1));
+      color: #070f1f;
+      border: 0;
+      box-shadow: 0 14px 30px rgba(212,175,55,.22);
+    }
+
+.cta:active{ transform: translateY(1px); }
 
     /* === CARDS === */
     .card{
@@ -174,22 +179,9 @@
       box-shadow: var(--shadow);
       overflow:hidden;
     }
-    .cardHead{
-      padding: 12px 12px 10px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      border-bottom: 1px solid rgba(255,255,255,.08);
-      gap:10px;
-    }
-    .cardTitle{
-      margin:0;
-      font-size: 13px;
-      font-weight: 900;
-      letter-spacing: .02em;
-      text-transform: uppercase;
-    }
-    .cardBody{ padding: 12px; }
+    .cardHead{ display:flex; align-items:center; justify-content:space-between; padding: 14px 14px 0; }
+    .cardTitle{ margin:0; font-size: 16px; letter-spacing:-0.01em; }
+    .cardBody{ padding: 14px 14px 16px; }
     .hint{
       margin: 8px 0 0;
       font-size: 12px;
@@ -450,7 +442,7 @@ body.modalOpen{ overflow:hidden; }
 
     <!-- PREMIUM GLOBAL BANNER -->
     <section class="hero" id="heroBanner" aria-label="World Cup 2026 banner">
-    <img class="heroImg" src="/static/stadium.png" alt="World Cup 2026 Concierge banner with trophy and kickoff countdown" />
+    <img class="heroImg" src="/static/hero_stadium.png" alt="World Cup 2026 Concierge banner with trophy and kickoff countdown" />
   </section>
 
     <main>
@@ -465,7 +457,7 @@ body.modalOpen{ overflow:hidden; }
               Your venue’s concierge app — fast bookings, 4 languages, matchweek energy without the hassle.
             </p>
 
-            <div class="heroActions" style="margin-top:14px" aria-label="Primary buttons">
+            <div class="heroActions" style="margin-top:12px" aria-label="Primary buttons">
               <button class="cta primary" id="ctaReserve" type="button">Reserve</button>
               <button class="cta" id="ctaChat" type="button">Chat concierge</button>
               <button class="cta" id="ctaPlan" type="button">Build my matchday</button>
