@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="format-detection" content="telephone=no"/>
   <title>World Cup Concierge</title>
+<!-- WC_BUILD_VERSION: STEP7-20251229-174837 -->
   <style>
     :root{
       --bg:#071022;
@@ -403,7 +404,13 @@
             <div id="presenceText" class="hint">Loading…</div>
           </div>
         </div>
-      </section>
+      
+        <div class="card" style="margin-top:10px">
+          <div class="cardBody">
+            <div style="font-size:11px;opacity:.6">Build: STEP7-20251229-174837 · Mobile Global Concierge</div>
+          </div>
+        </div>
+</section>
 
       <!-- CHAT -->
       <section class="section" id="sec-chat" aria-label="Chat">
@@ -761,6 +768,7 @@ function escapeHtml(s){
     }
 
     function boot(){
+      console.log('WC_BOOT','STEP7-20251229-174837');
       wireNav();
 
       document.getElementById('pillLang').addEventListener('click', cycleLang);
