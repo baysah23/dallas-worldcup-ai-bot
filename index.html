@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="format-detection" content="telephone=no"/>
   <title>World Cup Concierge</title>
-<!-- WC_BUILD_VERSION: STEP7-20251229-174837 -->
+<!-- WC_BUILD_VERSION: STEP8-20251229-175414 -->
   <style>
     :root{
       --bg:#071022;
@@ -407,7 +407,7 @@
       
         <div class="card" style="margin-top:10px">
           <div class="cardBody">
-            <div style="font-size:11px;opacity:.6">Build: STEP7-20251229-174837 · Mobile Global Concierge</div>
+            <div style="font-size:11px;opacity:.6">Build: STEP8-20251229-175414 · Mobile Global Concierge</div>
           </div>
         </div>
 </section>
@@ -441,7 +441,7 @@
           </div>
           <div class="cardBody">
             <div id="menuBody" class="list"></div>
-            <div id="menuHint" class="hint"></div>
+            <div id="menuHint" class="hint">Tap Refresh to load menu items.</div>
           </div>
         </div>
       </section>
@@ -462,7 +462,7 @@
             </div>
             <div style="height:10px"></div>
             <div id="scheduleBody" class="list"></div>
-            <div id="scheduleHint" class="hint"></div>
+            <div id="scheduleHint" class="hint">Tap Refresh to load matches.</div>
           </div>
         </div>
       </section>
@@ -476,7 +476,7 @@
           </div>
           <div class="cardBody">
             <div id="fanzoneBody" class="list"></div>
-            <div id="fanzoneHint" class="hint"></div>
+            <div id="fanzoneHint" class="hint">Tap Refresh to load fan events.</div>
           </div>
         </div>
       </section>
@@ -543,6 +543,9 @@ function escapeHtml(s){
     }
 
     function setSection(sec){
+      // Always start each screen at the top for a clean, app-like feel.
+      try{ window.scrollTo({top:0, behavior:'instant'}); }catch(e){ window.scrollTo(0,0); }
+
       document.body.setAttribute('data-sec', sec);
       setActiveNav(sec);
 
@@ -582,6 +585,7 @@ function escapeHtml(s){
       updatePills();
       systemMsg(state.scope === 'global' ? 'Global schedule enabled.' : 'City schedule enabled. Enter a city name.');
       loadPresence();
+      setTimeout(prefetchAll, 250);
       if(document.body.dataset.sec === 'schedule') loadSchedule();
     }
 
@@ -660,6 +664,8 @@ function escapeHtml(s){
 
     // === SCHEDULE ===
     function renderMatches(matches){
+      window.__lastMatches = matches || [];
+
       const body = document.getElementById('scheduleBody');
       const hint = document.getElementById('scheduleHint');
       body.innerHTML = '';
@@ -741,6 +747,14 @@ function escapeHtml(s){
     }
 
     // === PRESENCE ===
+    function prefetchAll(){
+      // Preload data in the background so screens aren't empty on first open.
+      // Keep requests lightweight; failures are fine.
+      try{ loadMenu(); }catch(e){}
+      try{ loadSchedule(); }catch(e){}
+      try{ loadFanzone(); }catch(e){}
+    }
+
     async function loadPresence(){
       const el = document.getElementById('presenceText');
       el.textContent = 'Loading…';
@@ -760,7 +774,19 @@ function escapeHtml(s){
 
     // === WIRING ===
     function wireNav(){
-      document.getElementById('mobileNav').addEventListener('click', (e)=>{
+      const nav = document.getElementById('mobileNav');
+      // iOS: focus must happen within a user gesture. Use pointerdown/touchstart for the Chat button.
+      const preFocus = (e)=>{
+        const btn = e.target.closest('.mnavBtn');
+        if(!btn) return;
+        if(btn.dataset.sec === 'chat'){
+          focusChatInput();
+        }
+      };
+      nav.addEventListener('pointerdown', preFocus, {passive:true});
+      nav.addEventListener('touchstart', preFocus, {passive:true});
+
+      nav.addEventListener('click', (e)=>{
         const btn = e.target.closest('.mnavBtn');
         if(!btn) return;
         setSection(btn.dataset.sec || 'home');
@@ -768,7 +794,7 @@ function escapeHtml(s){
     }
 
     function boot(){
-      console.log('WC_BOOT','STEP7-20251229-174837');
+      console.log('WC_BOOT','STEP8-20251229-175414');
       wireNav();
 
       document.getElementById('pillLang').addEventListener('click', cycleLang);
@@ -802,6 +828,7 @@ function escapeHtml(s){
         state.scope = (e.target.value === 'city') ? 'city' : 'global';
         updatePills();
         loadPresence();
+      setTimeout(prefetchAll, 250);
         loadSchedule();
       });
       document.getElementById('citySearch').addEventListener('input', ()=>{
@@ -809,16 +836,20 @@ function escapeHtml(s){
         window.__cityDeb = setTimeout(()=>{
           if(state.scope === 'city') loadSchedule();
           loadPresence();
+      setTimeout(prefetchAll, 250);
         }, 350);
       });
       document.getElementById('scheduleSearch').addEventListener('input', ()=>{
+        // instant client-side filter for a premium feel
+        try{ renderMatches(window.__lastMatches || []); }catch(e){}
         clearTimeout(window.__schDeb);
-        window.__schDeb = setTimeout(loadSchedule, 250);
+        window.__schDeb = setTimeout(loadSchedule, 450);
       });
 
       updatePills();
       systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
       loadPresence();
+      setTimeout(prefetchAll, 250);
     }
 
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

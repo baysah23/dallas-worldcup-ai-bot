@@ -10,13 +10,25 @@ import requests
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 
+from flask import abort
+
+def _serve_index():
+    # Prefer root index.html, else static/index.html
+    try:
+        return send_from_directory(".", "index.html")
+    except Exception:
+        try:
+            return send_from_directory(app.static_folder, "index.html")
+        except Exception:
+            abort(404)
+
+
 # ============================================================
 # Mobile-first: always serve index.html at /
 # ============================================================
 @app.get("/")
 def home():
-    # Render will serve from repo root by default; keep it simple.
-    return send_from_directory(".", "index.html")
+    return _serve_index()
 
 # ============================================================
 # Languages (4)
@@ -202,6 +214,14 @@ def chat():
     # Optional: integrate OpenAI SDK if you want; for now keep safe fallback
     return jsonify({"reply": fallback_reply(user_msg, lang)})
 
+
+@app.route("/<path:path>")
+def catch_all(path: str):
+    # Single-page app fallback: allow deep links.
+    if path.startswith("static/"):
+        return send_from_directory(".", path)
+    return _serve_index()
+
 # ============================================================
 # Health
 # ============================================================
@@ -211,7 +231,7 @@ def chat():
 # ============================================================
 @app.get('/version')
 def version():
-    return jsonify({'build':'STEP7-20251229-174837'})
+    return jsonify({'build':'STEP8-20251229-175414'})
 @app.get("/health")
 def health():
     return jsonify({"ok": True})
