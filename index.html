@@ -25,11 +25,6 @@
       --glass2: rgba(255,255,255,.04);
       --glass-border: rgba(255,255,255,.18);
     }
-
-    /* FALLBACK: ensure hero countdown starts even if another section errors */
-    try{ updateHeroCountdown(); }catch(e){}
-    try{ setInterval(updateHeroCountdown, 1000); }catch(e){}
-
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
     body{
@@ -73,89 +68,100 @@
     #heroBanner{ min-height: 220px; margin: 10px 0 10px; }
 
 
-
-    
-
     /* ===== CINEMATIC HERO MICRO-MOTION (image only) ===== */
     :root{ --heroY: 0px; }
     #heroBanner .heroImg{
-      transform: translate3d(0, var(--heroY), 0) scale(1.035);
-      transition: transform 380ms ease;
+      transform: translate3d(0, var(--heroY), 0) scale(1.045);
+      transform-origin: 50% 40%;
+      animation: heroBreathe 9.5s ease-in-out infinite;
+      will-change: transform;
+    }
+    @keyframes heroBreathe{
+      0%,100%{ filter: saturate(1.02) contrast(1.02); }
+      50%{ filter: saturate(1.06) contrast(1.04); }
     }
     @media (prefers-reduced-motion: reduce){
-      #heroBanner .heroImg{ transition:none; transform:none; }
+      #heroBanner .heroImg{ animation:none; transform:none; filter:none; }
     }
 
+
+
+
+    
+
+    }
+
+    
     /* ===== HERO LIVE COUNTDOWN OVERLAY (STYLE B: Bottom-Center Glass Bar) ===== */
     .heroCountdown{
       position:absolute;
-      left: 10px;
-      right: 10px;
+      left: 50%;
+      transform: translateX(-50%);
       bottom: 10px;
-      border-radius: 16px;
-      border: 1px solid rgba(255,255,255,.16);
+      width: min(92%, 420px);
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.14);
 
-      /* TRUE GLASS: very transparent, let the banner show through */
+      /* TRUE GLASS: very transparent so you still see the banner */
       background:
-        /* subtle vignette behind text (inside bar only) */
-        radial-gradient(140% 120% at 50% 0%, rgba(0,0,0,.18), rgba(0,0,0,.42) 70%),
-        linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
+        radial-gradient(130% 140% at 50% 0%, rgba(0,0,0,.12), rgba(0,0,0,.28) 70%),
+        linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
 
-      backdrop-filter: blur(18px) saturate(1.25);
-      -webkit-backdrop-filter: blur(18px) saturate(1.25);
-      box-shadow: 0 18px 55px rgba(0,0,0,.40);
-      padding: 8px 10px 9px;
+      backdrop-filter: blur(20px) saturate(1.35);
+      -webkit-backdrop-filter: blur(20px) saturate(1.35);
+      box-shadow: 0 18px 55px rgba(0,0,0,.36);
+      padding: 8px 12px 10px;
       z-index: 8;
-      pointer-events: none; /* decorative */
+      pointer-events: none;
       overflow:hidden;
     }
 
-    /* Gold “Live” shimmer line (subtle highlight, not a badge) */
+    /* Gold shimmer line (subtle premium highlight) */
     .heroCountdown::before{
       content:"";
       position:absolute;
-      left:12px; right:12px; top:7px;
+      left:14px; right:14px; top:8px;
       height: 2px;
       border-radius: 999px;
       background: linear-gradient(90deg,
         rgba(212,175,55,0) 0%,
         rgba(212,175,55,.18) 24%,
-        rgba(255,255,255,.18) 50%,
+        rgba(255,255,255,.16) 50%,
         rgba(212,175,55,.18) 76%,
         rgba(212,175,55,0) 100%
       );
-      opacity: .45;
+      opacity: .42;
       transform: translateX(-22%);
       filter: blur(.15px);
-      animation: shimmerLine 7.8s ease-in-out infinite;
+      animation: shimmerLine 8.4s ease-in-out infinite;
     }
 
-    /* Micro grain inside the bar for premium texture (does NOT touch the hero image) */
+    /* micro grain for premium texture */
     .heroCountdown::after{
       content:"";
       position:absolute; inset:0;
       background:
-        radial-gradient(120% 120% at 50% 30%, rgba(255,255,255,.06), transparent 55%),
-        repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, rgba(255,255,255,0) 1px 6px);
+        radial-gradient(120% 120% at 50% 30%, rgba(255,255,255,.05), transparent 55%),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.025) 0 1px, rgba(255,255,255,0) 1px 7px);
       opacity:.10;
       mix-blend-mode: overlay;
       pointer-events:none;
     }
 
     @keyframes shimmerLine{
-      0%,100%{ transform: translateX(-22%); opacity:.38; }
-      50%{ transform: translateX(22%); opacity:.52; }
+      0%,100%{ transform: translateX(-22%); opacity:.36; }
+      50%{ transform: translateX(22%); opacity:.50; }
     }
 
     .heroCdTop{
       text-align:center;
-      font-size: 11px;
+      font-size: 10.5px;
       font-weight: 950;
       letter-spacing: .22em;
       text-transform: uppercase;
-      color: rgba(255,255,255,.92); /* white broadcast */
-      margin: 10px 0 6px; /* room for shimmer line */
-      text-shadow: 0 10px 30px rgba(0,0,0,.50);
+      color: rgba(255,255,255,.92);
+      margin: 10px 0 6px;
+      text-shadow: 0 10px 30px rgba(0,0,0,.45);
       position: relative;
       z-index: 1;
     }
@@ -173,19 +179,19 @@
       display:flex;
       flex-direction:column;
       align-items:center;
-      min-width: 50px;
+      min-width: 48px;
     }
 
     .heroCdNum{
       font-variant-numeric: tabular-nums;
       font-weight: 980;
       letter-spacing: .02em;
-      font-size: 26px;
+      font-size: 24px;
       line-height: 1;
-      color: rgba(255,255,255,.97); /* white broadcast */
+      color: rgba(255,255,255,.98);
       text-shadow:
-        0 14px 40px rgba(0,0,0,.52),
-        0 0 18px rgba(255,255,255,.10);
+        0 14px 40px rgba(0,0,0,.45),
+        0 0 16px rgba(255,255,255,.10);
     }
 
     .heroCdLbl{
@@ -194,17 +200,17 @@
       font-weight: 900;
       letter-spacing: .20em;
       text-transform: uppercase;
-      color: rgba(255,255,255,.78);
-      text-shadow: 0 10px 30px rgba(0,0,0,.52);
+      color: rgba(255,255,255,.76);
+      text-shadow: 0 10px 30px rgba(0,0,0,.45);
     }
 
     .heroCdSep{
       font-size: 18px;
       line-height: 1;
-      opacity: .55;
+      opacity: .52;
       color: rgba(255,255,255,.86);
       transform: translateY(-2px);
-      text-shadow: 0 14px 40px rgba(0,0,0,.52);
+      text-shadow: 0 14px 40px rgba(0,0,0,.45);
     }
 
 
@@ -916,9 +922,7 @@
       state.lang = order[(order.indexOf(state.lang)+1) % order.length];
       updatePills();
       updateHeroCountdown();
-      setInterval(updateHeroCountdown, 1000);
-
-      systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
+systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       toast(`Language: ${state.lang.toUpperCase()}`);
       haptic(8);
       if(document.body.dataset.sec === 'menu') loadMenu();
@@ -956,6 +960,14 @@
         sEl.textContent = '00';
         return;
       }
+
+    function startHeroCountdown(){
+      try{ updateHeroCountdown(); }catch(e){}
+      try{
+        if(window.__heroCdTimer) clearInterval(window.__heroCdTimer);
+        window.__heroCdTimer = setInterval(()=>{ try{ updateHeroCountdown(); }catch(e){} }, 1000);
+      }catch(e){}
+    }
 
       const totalSec = Math.floor(diff / 1000);
       const days = Math.floor(totalSec / 86400);
@@ -1291,6 +1303,7 @@
     function boot(){
       console.log('WC_BOOT','STEP15-PHASE2');
       wireNav();
+      startHeroCountdown();
 
       const ctaChat = document.getElementById('ctaChat');
       if(ctaChat) ctaChat.addEventListener('click', ()=>{ haptic(8); setSection('chat'); });
@@ -1391,7 +1404,7 @@
       setTimeout(prefetchAll, 250);
 
 
-    // === Ambient parallax (micro) on hero image: 1–2px translate on scroll ===
+    // === Ambient parallax (micro) on hero image: tiny translate on scroll ===
     (function(){
       const img = document.querySelector('#heroBanner .heroImg');
       if(!img) return;
@@ -1401,7 +1414,7 @@
         if(ticking) return;
         ticking = true;
         requestAnimationFrame(()=>{
-          const y = Math.min(2, Math.max(0, window.scrollY * 0.02)); // cap 2px
+          const y = Math.min(6, Math.max(0, window.scrollY * 0.05)); // cap 6px
           document.documentElement.style.setProperty('--heroY', `${y}px`);
           ticking = false;
         });
