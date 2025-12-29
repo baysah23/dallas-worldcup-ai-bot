@@ -26,6 +26,10 @@
       --glass-border: rgba(255,255,255,.18);
     }
 
+    /* FALLBACK: ensure hero countdown starts even if another section errors */
+    try{ updateHeroCountdown(); }catch(e){}
+    try{ setInterval(updateHeroCountdown, 1000); }catch(e){}
+
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
     body{
@@ -70,6 +74,18 @@
 
 
 
+    
+
+    /* ===== CINEMATIC HERO MICRO-MOTION (image only) ===== */
+    :root{ --heroY: 0px; }
+    #heroBanner .heroImg{
+      transform: translate3d(0, var(--heroY), 0) scale(1.035);
+      transition: transform 380ms ease;
+    }
+    @media (prefers-reduced-motion: reduce){
+      #heroBanner .heroImg{ transition:none; transform:none; }
+    }
+
     /* ===== HERO LIVE COUNTDOWN OVERLAY (STYLE B: Bottom-Center Glass Bar) ===== */
     .heroCountdown{
       position:absolute;
@@ -77,92 +93,118 @@
       right: 10px;
       bottom: 10px;
       border-radius: 16px;
-      border: 1px solid rgba(255,255,255,.18);
-      /* Crowd flare control: vignette only inside the bar */
+      border: 1px solid rgba(255,255,255,.16);
+
+      /* TRUE GLASS: very transparent, let the banner show through */
       background:
-        radial-gradient(140% 120% at 50% 0%, rgba(0,0,0,.40), rgba(0,0,0,.70) 65%),
-        linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.04));
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      box-shadow: 0 18px 55px rgba(0,0,0,.55);
-      padding: 10px 12px 10px;
+        /* subtle vignette behind text (inside bar only) */
+        radial-gradient(140% 120% at 50% 0%, rgba(0,0,0,.18), rgba(0,0,0,.42) 70%),
+        linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
+
+      backdrop-filter: blur(18px) saturate(1.25);
+      -webkit-backdrop-filter: blur(18px) saturate(1.25);
+      box-shadow: 0 18px 55px rgba(0,0,0,.40);
+      padding: 8px 10px 9px;
       z-index: 8;
       pointer-events: none; /* decorative */
       overflow:hidden;
     }
+
     /* Gold “Live” shimmer line (subtle highlight, not a badge) */
     .heroCountdown::before{
       content:"";
       position:absolute;
-      left:12px; right:12px; top:8px;
+      left:12px; right:12px; top:7px;
       height: 2px;
       border-radius: 999px;
       background: linear-gradient(90deg,
         rgba(212,175,55,0) 0%,
-        rgba(212,175,55,.22) 22%,
-        rgba(255,255,255,.20) 50%,
-        rgba(212,175,55,.22) 78%,
+        rgba(212,175,55,.18) 24%,
+        rgba(255,255,255,.18) 50%,
+        rgba(212,175,55,.18) 76%,
         rgba(212,175,55,0) 100%
       );
-      opacity: .55;
-      filter: blur(.2px);
-      transform: translateX(-28%);
-      animation: shimmerLine 6.8s ease-in-out infinite;
+      opacity: .45;
+      transform: translateX(-22%);
+      filter: blur(.15px);
+      animation: shimmerLine 7.8s ease-in-out infinite;
     }
+
+    /* Micro grain inside the bar for premium texture (does NOT touch the hero image) */
+    .heroCountdown::after{
+      content:"";
+      position:absolute; inset:0;
+      background:
+        radial-gradient(120% 120% at 50% 30%, rgba(255,255,255,.06), transparent 55%),
+        repeating-linear-gradient(90deg, rgba(255,255,255,.03) 0 1px, rgba(255,255,255,0) 1px 6px);
+      opacity:.10;
+      mix-blend-mode: overlay;
+      pointer-events:none;
+    }
+
     @keyframes shimmerLine{
-      0%,100%{ transform: translateX(-28%); opacity:.45; }
-      50%{ transform: translateX(28%); opacity:.62; }
+      0%,100%{ transform: translateX(-22%); opacity:.38; }
+      50%{ transform: translateX(22%); opacity:.52; }
     }
 
     .heroCdTop{
       text-align:center;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 950;
       letter-spacing: .22em;
       text-transform: uppercase;
       color: rgba(255,255,255,.92); /* white broadcast */
-      margin: 10px 0 8px; /* extra top space for shimmer line */
-      text-shadow: 0 10px 30px rgba(0,0,0,.55);
+      margin: 10px 0 6px; /* room for shimmer line */
+      text-shadow: 0 10px 30px rgba(0,0,0,.50);
+      position: relative;
+      z-index: 1;
     }
+
     .heroCdRow{
       display:flex;
       align-items:center;
       justify-content:center;
       gap: 10px;
+      position: relative;
+      z-index: 1;
     }
+
     .heroCdCell{
       display:flex;
       flex-direction:column;
       align-items:center;
-      min-width: 54px;
+      min-width: 50px;
     }
+
     .heroCdNum{
       font-variant-numeric: tabular-nums;
       font-weight: 980;
       letter-spacing: .02em;
-      font-size: 28px;
+      font-size: 26px;
       line-height: 1;
       color: rgba(255,255,255,.97); /* white broadcast */
       text-shadow:
-        0 14px 40px rgba(0,0,0,.55),
-        0 0 24px rgba(255,255,255,.10);
+        0 14px 40px rgba(0,0,0,.52),
+        0 0 18px rgba(255,255,255,.10);
     }
+
     .heroCdLbl{
-      margin-top: 6px;
-      font-size: 11px;
+      margin-top: 5px;
+      font-size: 10px;
       font-weight: 900;
       letter-spacing: .20em;
       text-transform: uppercase;
-      color: rgba(255,255,255,.78); /* white broadcast */
-      text-shadow: 0 10px 30px rgba(0,0,0,.55);
+      color: rgba(255,255,255,.78);
+      text-shadow: 0 10px 30px rgba(0,0,0,.52);
     }
+
     .heroCdSep{
-      font-size: 20px;
+      font-size: 18px;
       line-height: 1;
-      opacity: .60;
-      color: rgba(255,255,255,.88);
+      opacity: .55;
+      color: rgba(255,255,255,.86);
       transform: translateY(-2px);
-      text-shadow: 0 14px 40px rgba(0,0,0,.55);
+      text-shadow: 0 14px 40px rgba(0,0,0,.52);
     }
 
 
@@ -957,6 +999,7 @@
     try{ localStorage.setItem('wc_session_id', sessionId); }catch(e){}
 
     function appendBubble(text, who){
+      if(!chatLog) return;
       const div = document.createElement('div');
       div.className = 'bubble ' + (who === 'me' ? 'me' : 'bot');
       div.textContent = text;
@@ -1359,15 +1402,14 @@
         ticking = true;
         requestAnimationFrame(()=>{
           const y = Math.min(2, Math.max(0, window.scrollY * 0.02)); // cap 2px
-          img.style.transform = `translate3d(0, ${y}px, 0) scale(1.015)`;
+          document.documentElement.style.setProperty('--heroY', `${y}px`);
           ticking = false;
         });
       }
       window.addEventListener('scroll', onScroll, {passive:true});
       onScroll();
     })();
-
-    }
+}
 
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
     else boot();
