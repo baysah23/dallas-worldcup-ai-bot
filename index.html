@@ -64,6 +64,8 @@
     }
 
     .hero{
+  padding-top: 42px;
+
       position: relative;
       border-radius: var(--r16);
       overflow: hidden;
@@ -796,10 +798,43 @@
   .countdownGlass{ background: rgba(255,255,255,.10); }
 }
 
+
+/* ===== Ultra-top Broadcast Title ===== */
+.broadcast-title{
+  position: fixed;
+  top: env(safe-area-inset-top);
+  left: 0;
+  right: 0;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  letter-spacing: .14em;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.92);
+  background: linear-gradient(
+    to bottom,
+    rgba(8,12,22,.65),
+    rgba(8,12,22,.15),
+    rgba(8,12,22,0)
+  );
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 1000;
+  pointer-events: none;
+}
+
 </style>
 </head>
 
 <body data-sec="home">
+<!-- Ultra-top Broadcast Title -->
+<div class="broadcast-title">
+  FIFA WORLD CUP™ 2026 · CONCIERGE
+</div>
+
   <div class="wrap">
 
     <!-- PURE HERO IMAGE (NO OVERLAYS) -->
