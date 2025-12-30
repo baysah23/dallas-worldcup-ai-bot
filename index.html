@@ -826,6 +826,37 @@
   pointer-events: none;
 }
 
+
+/* Day/Night gradient variants for title (tied to hero switch) */
+html[data-hero="day"] .broadcast-title{
+  background: linear-gradient(
+    to bottom,
+    rgba(245,250,255,.28),
+    rgba(245,250,255,.10),
+    rgba(245,250,255,0)
+  );
+  color: rgba(255,255,255,.96);
+  text-shadow: 0 2px 10px rgba(0,0,0,.22);
+}
+html[data-hero="night"] .broadcast-title{
+  background: linear-gradient(
+    to bottom,
+    rgba(8,12,22,.70),
+    rgba(8,12,22,.20),
+    rgba(8,12,22,0)
+  );
+  color: rgba(255,255,255,.92);
+  text-shadow: 0 2px 12px rgba(0,0,0,.35);
+}
+
+
+/* Landscape fix: let content breathe so panels expand with the hero/background */
+@media (orientation: landscape){
+  body{ min-height: 100vh; }
+  .wrap, .container, .shell, main{ width: 100%; max-width: 100%; }
+  .hero{ min-height: 60vh; }
+}
+
 </style>
 </head>
 
