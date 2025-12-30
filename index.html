@@ -71,9 +71,17 @@
 
     
 
+    /* ===== CINEMATIC HERO MICRO-MOTION (image only) ===== */
     :root{ --heroY: 0px; }
-
-    /* === CARDS === */
+    #heroBanner .heroImg{
+      transform: translate3d(var(--heroX, 0px), var(--heroY, 0px), 0) rotate(var(--heroR, 0deg)) scale(1.045);
+      transition: transform 420ms ease;
+      will-change: transform;
+    }
+    @media (prefers-reduced-motion: reduce){
+  #heroBanner .heroImg{ transform:none !important; transition:none !important; }
+}
+/* === CARDS === */
     .card{
       margin-top: 14px;
       border-radius: var(--r16);
@@ -444,17 +452,19 @@
       transform: translateX(-50%);
       bottom: 8px;
       width: min(92%, 420px);
-      border-radius: 16px;
+      border-radius: 18px;
 
-      /* noticeably-glassy, but still lets the hero image breathe */
-      background: rgba(255,255,255,.07);
-      border: 1px solid rgba(255,255,255,.14);
-      backdrop-filter: blur(16px) saturate(1.55);
-      -webkit-backdrop-filter: blur(16px) saturate(1.55);
+      /* ULTRA-THIN APPLE GLASS (more visible, not brown) */
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.16);
+      box-shadow:
+        0 10px 30px rgba(0,0,0,.18),
+        inset 0 1px 0 rgba(255,255,255,.10);
 
-      /* keep it airy (no muddy shadow) */
-      box-shadow: 0 8px 22px rgba(0,0,0,.16);
-      padding: 4px 6px;
+      backdrop-filter: blur(18px) saturate(1.55);
+      -webkit-backdrop-filter: blur(18px) saturate(1.55);
+
+      padding: 4px 6px; /* thinner */
       z-index: 50;
       pointer-events: none;
       overflow:hidden;
@@ -474,7 +484,7 @@
         rgba(212,175,55,.12) 72%,
         rgba(212,175,55,0) 100%
       );
-      opacity: .12;
+      opacity: .22;
       transform: translateX(-16%);
       filter: blur(.2px);
       animation: heroShimmer 10.5s ease-in-out infinite;
@@ -486,21 +496,30 @@
 
     .heroCdTop{
       text-align:center;
-      font-size: 10.5px;
-      font-weight: 950;
-      letter-spacing: .22em;
+      font-size: 10px;
+      letter-spacing: .28em;
+      font-weight: 900;
+      color: rgba(255,255,255,.75);
+      padding: 2px 0 4px;
       text-transform: uppercase;
-      color: rgba(255,255,255,.95);
-      margin: 10px 0 6px;
-      text-shadow: 0 10px 26px rgba(0,0,0,.32);
-      position: relative;
-      z-index: 1;
     }
     .heroCdRow{
-      display:flex; align-items:center; justify-content:center; gap: 10px;
-      position:relative; z-index:1;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      gap: 6px;
     }
-    .heroCdCell{ display:flex; flex-direction:column; align-items:center; min-width:48px; }
+    .heroCdCell{
+      flex: 1 1 0;
+      min-width: 0;
+      text-align:center;
+      padding: 6px 6px; /* thinner */
+      border-radius: 14px;
+
+      /* almost invisible inner cell glass */
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.10);
+    }
     .heroCdNum{
       font-variant-numeric: tabular-nums;
       font-weight: 980;
@@ -520,12 +539,10 @@
       text-shadow: 0 10px 24px rgba(0,0,0,.28);
     }
     .heroCdSep{
-      font-size: 18px;
+      opacity: .55;
+      font-size: 12px;
       line-height: 1;
-      opacity: .50;
-      color: rgba(255,255,255,.90);
-      transform: translateY(-2px);
-      text-shadow: 0 12px 26px rgba(0,0,0,.28);
+      color: rgba(255,255,255,.60);
     }
 
     /* ===== CINEMATIC HERO (SAFE, NOTICEABLE, PREMIUM) ===== */
@@ -917,28 +934,29 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       const sEl = document.getElementById('cdS');
       if(!dEl || !hEl || !mEl || !sEl) return;
 
-      const target = Date.parse(HERO_KICKOFF_ISO);
-      if(!Number.isFinite(target)){
-        dEl.textContent = hEl.textContent = mEl.textContent = sEl.textContent = '00';
-        return;
-      }
+      const target = new Date(HERO_KICKOFF_ISO).getTime();
+      const now = Date.now();
+      let diff = target - now;
 
-      let diff = target - Date.now();
-      if(diff <= 0){
-        dEl.textContent = hEl.textContent = mEl.textContent = sEl.textContent = '00';
+      if(!Number.isFinite(diff) || diff <= 0){
+        dEl.textContent = '00';
+        hEl.textContent = '00';
+        mEl.textContent = '00';
+        sEl.textContent = '00';
         return;
       }
 
       const sec = Math.floor(diff / 1000);
       const days = Math.floor(sec / 86400);
-      const hours = Math.floor((sec % 86400) / 3600);
+      const hrs  = Math.floor((sec % 86400) / 3600);
       const mins = Math.floor((sec % 3600) / 60);
       const secs = sec % 60;
 
-      dEl.textContent = String(days).padStart(2,'0');
-      hEl.textContent = String(hours).padStart(2,'0');
+      dEl.textContent = String(days);
+      hEl.textContent = String(hrs).padStart(2,'0');
       mEl.textContent = String(mins).padStart(2,'0');
       sEl.textContent = String(secs).padStart(2,'0');
+    }
     }
 
     function startHeroCountdown(){
@@ -1346,43 +1364,101 @@ systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP 
       setTimeout(prefetchAll, 250);
 
 
-    // === Hero cinematic micro-motion (safe) ===
+    // === Ambient parallax (micro) on hero image ===
     (function(){
-      const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if(prefersReduced) return;
-
       const img = document.querySelector('#heroBanner .heroImg');
       if(!img) return;
 
-      // 1) Scroll-based parallax (subtle)
-      let scrollYpx = 0;
       let ticking = false;
       function onScroll(){
-        scrollYpx = window.scrollY || 0;
         if(ticking) return;
         ticking = true;
         requestAnimationFrame(()=>{
-          const y = Math.min(10, Math.max(0, scrollYpx * 0.06));
-          document.documentElement.style.setProperty('--heroY', `${y.toFixed(2)}px`);
+          const y = Math.min(12, Math.max(0, window.scrollY * 0.06));
+          document.documentElement.style.setProperty('--heroY', `${y}px`);
           ticking = false;
         });
       }
       window.addEventListener('scroll', onScroll, {passive:true});
       onScroll();
+    })();
 
-      // 2) Idle drift (works even when you don't scroll)
-      const start = performance.now();
-      function drift(now){
-        const t = (now - start) / 1000;
-        const driftY = Math.sin(t * 0.65) * 2.2; // px
-        const driftX = Math.cos(t * 0.45) * 1.6; // px
-        img.style.transform = `translate3d(${driftX.toFixed(2)}px, calc(var(--heroY) + ${driftY.toFixed(2)}px), 0) scale(1.035)`;
-        requestAnimationFrame(drift);
-      }
-      requestAnimationFrame(drift);
-    })();if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+}
+
+    if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
     else boot();
   </script>
 
+
+<script>
+/* HERO CINEMATIC (single source of truth): scroll + gentle drift + optional tilt */
+(function(){
+  const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(prefersReduced) return;
+
+  const hero = document.getElementById('heroBanner');
+  const img  = hero ? hero.querySelector('.heroImg') : null;
+  if(!hero || !img) return;
+
+  // CSS vars consumed by #heroBanner .heroImg transform
+  // --heroY: vertical parallax in px, --heroX: subtle horizontal, --heroR: tiny rotate
+  document.documentElement.style.setProperty('--heroX', '0px');
+  document.documentElement.style.setProperty('--heroR', '0deg');
+
+  let scrollY = 0;
+  let tiltX = 0, tiltY = 0; // normalized -1..1
+  let raf = 0;
+
+  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+
+  function onScroll(){
+    scrollY = window.scrollY || 0;
+    if(!raf) raf = requestAnimationFrame(tick);
+  }
+
+  // Desktop pointer tilt (very subtle)
+  function onPointerMove(e){
+    const r = hero.getBoundingClientRect();
+    const cx = r.left + r.width/2;
+    const cy = r.top + r.height/2;
+    tiltX = clamp((e.clientX - cx) / (r.width/2), -1, 1);
+    tiltY = clamp((e.clientY - cy) / (r.height/2), -1, 1);
+    if(!raf) raf = requestAnimationFrame(tick);
+  }
+
+  // Mobile device orientation tilt (permission-dependent)
+  function onOrientation(e){
+    // beta: front-back (-180..180), gamma: left-right (-90..90)
+    const g = (typeof e.gamma === 'number') ? e.gamma : 0;
+    const b = (typeof e.beta  === 'number') ? e.beta  : 0;
+    tiltX = clamp(g / 25, -1, 1);
+    tiltY = clamp(b / 35, -1, 1);
+    if(!raf) raf = requestAnimationFrame(tick);
+  }
+
+  // Gentle “float” drift so it feels alive even when not scrolling
+  function tick(t){
+    raf = 0;
+    const drift = Math.sin((t||0)/1800) * 4;      // px
+    const driftX = Math.cos((t||0)/2400) * 2;     // px
+
+    const parallax = clamp(scrollY * 0.07, 0, 16); // px (more noticeable than 0–6)
+    const y = parallax + drift - (tiltY * 3);
+    const x = driftX + (tiltX * 3);
+    const r = (-tiltX * 0.6).toFixed(3); // deg
+
+    document.documentElement.style.setProperty('--heroY', y.toFixed(2) + 'px');
+    document.documentElement.style.setProperty('--heroX', x.toFixed(2) + 'px');
+    document.documentElement.style.setProperty('--heroR', r + 'deg');
+  }
+
+  window.addEventListener('scroll', onScroll, {passive:true});
+  hero.addEventListener('pointermove', onPointerMove, {passive:true});
+  hero.addEventListener('pointerleave', ()=>{ tiltX=0; tiltY=0; if(!raf) raf=requestAnimationFrame(tick); }, {passive:true});
+
+  window.addEventListener('deviceorientation', onOrientation, true);
+  onScroll();
+})();
+</script>
 </body>
 </html>
