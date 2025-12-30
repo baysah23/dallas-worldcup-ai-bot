@@ -2,9 +2,6 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
-  <meta http-equiv="Pragma" content="no-cache"/>
-  <meta http-equiv="Expires" content="0"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="format-detection" content="telephone=no"/>
   <title>World Cup Concierge</title>
@@ -81,10 +78,9 @@
       transition: transform 380ms ease;
     }
     @media (prefers-reduced-motion: reduce){
-      #heroBanner }
-
-    
-    /* === CARDS === */
+      /* Keep scroll parallax but stop looping animation */
+      #heroBanner .heroImg{ animation:none !important; transition:none; }
+    }/* === CARDS === */
     .card{
       margin-top: 14px;
       border-radius: var(--r16);
@@ -289,7 +285,7 @@
     .list{ display:flex; flex-direction:column; gap:10px; }
     .item{
       border-radius: 14px;
-      border: 1px solid rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.10);
       background: rgba(11,21,44,.55);
       padding: 10px 10px;
     }
@@ -457,16 +453,22 @@
       width: min(92%, 420px);
       border-radius: 18px;
 
-      /* ultra-glass: almost invisible */
-      border: 1px solid rgba(255,255,255,.08);
-      background: rgba(255,255,255,.008);
+      /* Neutral ultra-glass (avoid warm/brown tint from image) */
+      border: 1px solid rgba(255,255,255,.14);
+      background: linear-gradient(180deg,
+        rgba(255,255,255,.12) 0%,
+        rgba(255,255,255,.06) 55%,
+        rgba(255,255,255,.04) 100%
+      );
 
-      /* the "glass" comes from blur + saturation; avoid dark fills */
-      backdrop-filter: blur(22px) saturate(1.25) brightness(1.05);
-      -webkit-backdrop-filter: blur(22px) saturate(1.25) brightness(1.05);
+      backdrop-filter: blur(26px) saturate(1.85);
+      -webkit-backdrop-filter: blur(26px) saturate(1.85);
 
-      box-shadow: 0 6px 18px rgba(0,0,0,.10);
-      padding: 2px 6px 4px;
+      box-shadow:
+        0 10px 34px rgba(0,0,0,.22),
+        inset 0 1px 0 rgba(255,255,255,.16);
+
+      padding: 6px 10px 8px; /* thinner */
       z-index: 50;
       pointer-events: none;
       overflow:hidden;
@@ -474,7 +476,6 @@
 
     /* subtle premium highlight line (gold shimmer) */
     .heroCountdown::before{
-      display:none; /* disabled to keep hero image clean */
       content:"";
       position:absolute;
       left:14px; right:14px; top:8px;
@@ -492,7 +493,20 @@
       filter: blur(.2px);
       animation: heroShimmer 10.5s ease-in-out infinite;
     }
-    @keyframes heroShimmer{
+    
+    .heroCountdown::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      background: radial-gradient(900px 220px at 50% -40%,
+        rgba(255,255,255,.18),
+        rgba(255,255,255,0) 60%);
+      opacity: .55;
+      pointer-events:none;
+      z-index:0;
+    }
+    .heroCountdown > *{ position:relative; z-index:1; }
+@keyframes heroShimmer{
       0%,100%{ transform: translateX(-16%); opacity:.18; }
       50%{ transform: translateX(16%); opacity:.28; }
     }
@@ -544,7 +558,7 @@
     /* ===== CINEMATIC HERO (SAFE, NOTICEABLE, PREMIUM) ===== */
     :root{ --heroY: 0px; }
     #heroBanner .heroImg{
-      transform: translate3d(0, var(--heroY), 0) scale(1.07) !important;
+      transform: translate3d(0, var(--heroY), 0) scale(1.045) !important;
       transform-origin: 50% 38%;
       will-change: transform, filter;
       animation: heroBreathe 8.6s ease-in-out infinite;
@@ -941,18 +955,6 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
         sEl.textContent = '00';
         return;
       }
-
-      // breakdown
-      const totalSeconds = Math.floor(diff / 1000);
-      const days = Math.floor(totalSeconds / 86400);
-      const hours = Math.floor((totalSeconds % 86400) / 3600);
-      const mins = Math.floor((totalSeconds % 3600) / 60);
-      const secs = totalSeconds % 60;
-
-      dEl.textContent = String(days).padStart(2,'0');
-      hEl.textContent = String(hours).padStart(2,'0');
-      mEl.textContent = String(mins).padStart(2,'0');
-      sEl.textContent = String(secs).padStart(2,'0');
     }
 
     function startHeroCountdown(){
@@ -1361,6 +1363,27 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
       loadPresence();
       setTimeout(prefetchAll, 250);
+
+
+    // === Ambient parallax (micro) on hero image ===
+    (function(){
+      const img = document.querySelector('#heroBanner .heroImg');
+      if(!img) return;
+
+      let ticking = false;
+      function onScroll(){
+        if(ticking) return;
+        ticking = true;
+        requestAnimationFrame(()=>{
+          const y = Math.min(2, Math.max(0, window.scrollY * 0.02));
+          document.documentElement.style.setProperty('--heroY', `${y}px`);
+          ticking = false;
+        });
+      }
+      window.addEventListener('scroll', onScroll, {passive:true});
+      onScroll();
+    })();
+
 }
 
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
