@@ -708,9 +708,52 @@
 #sec-home .pillRow{ flex-wrap: wrap; justify-content: flex-end; }
 #sec-home .pillRow .pill{ white-space: nowrap; }
 
+
+/* ===== Ultra-top Broadcast Title ===== */
+.broadcast-title{
+  position: fixed;
+  top: env(safe-area-inset-top);
+  left: 0; right: 0;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 650;
+  letter-spacing: .14em;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.92);
+  background: linear-gradient(to bottom, rgba(8,12,22,.62), rgba(8,12,22,.14), rgba(8,12,22,0));
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 1000;
+  pointer-events: none;
+}
+
+
+/* Title: day vs night visibility */
+html[data-hero="day"] .broadcast-title{
+  background: linear-gradient(to bottom, rgba(245,250,255,.22), rgba(245,250,255,.08), rgba(245,250,255,0));
+  color: rgba(255,255,255,.98);
+  text-shadow: 0 2px 10px rgba(0,0,0,.18);
+}
+html[data-hero="night"] .broadcast-title{
+  background: linear-gradient(to bottom, rgba(8,12,22,.66), rgba(8,12,22,.16), rgba(8,12,22,0));
+  color: rgba(255,255,255,.92);
+  text-shadow: 0 2px 12px rgba(0,0,0,.32);
+}
+
+
+/* ===== LANDSCAPE HERO HEIGHT (reduce perceived crop) ===== */
+@media (orientation: landscape){
+  .heroMedia{ height: 260px; }
+}
+
 </style>
 </head>
 <body data-sec="home">
+<!-- Ultra-top Broadcast Title -->
+<div class=\"broadcast-title\">FIFA WORLD CUP™ 2026 · CONCIERGE</div>
 <div class="wrap">
 <!-- PURE HERO IMAGE (NO OVERLAYS) -->
 <section aria-label="World Cup 2026 banner" class="hero" id="heroBanner">
@@ -718,19 +761,6 @@
 <div class="heroCine" id="heroCine">
 <img alt="Stadium crowd under lights" class="heroImg" id="heroImg" src="/static/hero_stadium_night.png?v=20251230"/>
 </div>
-</div>
-</section>
-<!-- COUNTDOWN (ultra-thin Apple-glass, embedded under hero) -->
-<section aria-label="Live countdown" class="countdownGlass">
-<div class="cdTop">UNTIL KICKOFF</div>
-<div aria-live="polite" class="cdRow" role="timer">
-<div class="cdCell"><div class="cdNum" id="cdD">00</div><div class="cdLbl">DAYS</div></div>
-<div class="cdSep">•</div>
-<div class="cdCell"><div class="cdNum" id="cdH">00</div><div class="cdLbl">HRS</div></div>
-<div class="cdSep">•</div>
-<div class="cdCell"><div class="cdNum" id="cdM">00</div><div class="cdLbl">MINS</div></div>
-<div class="cdSep">•</div>
-<div class="cdCell"><div class="cdNum" id="cdS">00</div><div class="cdLbl">SECS</div></div>
 </div>
 </section>
 <main>
@@ -1028,6 +1058,7 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       const hour = now.getHours(); // user local time
       const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
       const isDay = prefersLight || (hour >= 7 && hour < 19);
+      try{ document.documentElement.setAttribute('data-hero', isDay ? 'day' : 'night'); }catch(e){}
       const src = isDay ? '/static/hero_stadium_day.png' : '/static/hero_stadium_night.png';
       // cache-bust daily to keep updates visible without hard-refresh
       const stamp = now.getFullYear().toString() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0');
@@ -1046,7 +1077,7 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
 
       const target = new Date(HERO_KICKOFF_ISO).getTime();
       const now = Date.now();
-      let diff = target - now;
+      const diff = target - now;
 
       if(!Number.isFinite(diff) || diff <= 0){
         dEl.textContent = '00';
@@ -1055,6 +1086,18 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
         sEl.textContent = '00';
         return;
       }
+
+      const totalSeconds = Math.floor(diff / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+
+      dEl.textContent = String(days).padStart(2,'0');
+      hEl.textContent = String(hours).padStart(2,'0');
+      mEl.textContent = String(minutes).padStart(2,'0');
+      sEl.textContent = String(seconds).padStart(2,'0');
+    }
     }
 
     function startHeroCountdown(){
@@ -1458,10 +1501,7 @@ const ctaChat = document.getElementById('ctaChat');
       });
 
       updatePills();
-      updateCountdownMini();
-      setInterval(updateCountdownMini, 30_000);
-
-      systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
+systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
       loadPresence();
       setTimeout(prefetchAll, 250);
 
@@ -1527,5 +1567,3 @@ const ctaChat = document.getElementById('ctaChat');
 </script>
 </body>
 </html>
-
-document.addEventListener('DOMContentLoaded', setHeroBannerImage);
