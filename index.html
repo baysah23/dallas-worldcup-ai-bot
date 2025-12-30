@@ -65,19 +65,33 @@
       will-change: transform;
       height:auto;
     }
-    #heroBanner{ min-height: 220px; margin: 10px 0 10px; }
+    #heroBanner{ }
 
-
-
-    
-
-    /* ===== CINEMATIC HERO MICRO-MOTION (image only) ===== */
-    :root{ --heroScrollY: 0px; --heroIdleY: 0px; }
-    #heroBanner .heroImg{
-      transform: translate3d(0, calc(var(--heroScrollY) + var(--heroIdleY)), 0) scale(1.035);
-      transition: transform 380ms ease;
-      will-change: transform;
+    /* ===== HERO: CINEMATIC (single source of truth) ===== */
+    :root{ --heroY: 0px; --heroIdle: 0px; }
+    #heroBanner{
+      height: clamp(190px, 26vh, 230px);
+      min-height: unset;
+      margin: 10px 0 10px;
     }
+    #heroBanner .heroImg{
+      height: 100%;
+      width: 100%;
+      object-fit: cover;
+      object-position: 50% 45%;
+      will-change: transform, filter;
+      transform: translate3d(0, calc(var(--heroY) + var(--heroIdle)), 0) scale(1.08);
+      transition: transform 380ms ease;
+      animation: heroBreathe 8.6s ease-in-out infinite;
+    }
+    @keyframes heroBreathe{
+      0%,100%{ filter: saturate(1.03) contrast(1.03); }
+      50%{ filter: saturate(1.12) contrast(1.06); }
+    }
+    @media (prefers-reduced-motion: reduce){
+      #heroBanner .heroImg{ transform: none; animation: none; }
+    }
+
 /* === CARDS === */
     .card{
       margin-top: 14px;
@@ -451,38 +465,21 @@
       width: min(92%, 420px);
       border-radius: 18px;
 
-      /* NOTICEABLE frosted glass (no color tint) */
+      /* ultra-glass: almost invisible */
       border: 1px solid rgba(255,255,255,.16);
-      background: rgba(255,255,255,.07);
-      backdrop-filter: blur(18px) saturate(1.8);
-      -webkit-backdrop-filter: blur(18px) saturate(1.8);
+background: rgba(255,255,255,.04);
+/* the "glass" comes from blur + saturation; avoid dark fills */
+      backdrop-filter: blur(10px) saturate(1.25);
+      -webkit-backdrop-filter: blur(10px) saturate(1.25);
 
-      box-shadow:
-        0 10px 34px rgba(0,0,0,.18),
-        inset 0 1px 0 rgba(255,255,255,.18);
-      padding: 5px 8px;
-      z-index: 50;
+      box-shadow: 0 6px 22px rgba(0,0,0,.10);
+padding: 4px 6px;
+z-index: 50;
       pointer-events: none;
       overflow:hidden;
     }
 
-
-    /* subtle premium highlight line (gold shimmer) */
-    .heroCountdown::before{
-      content:"";
-      position:absolute;
-      left: 10px; right: 10px; top: 0;
-      height: 1px;
-      background: linear-gradient(90deg,
-        rgba(255,255,255,0) 0%,
-        rgba(255,255,255,.24) 35%,
-        rgba(255,255,255,.18) 50%,
-        rgba(255,255,255,.24) 65%,
-        rgba(255,255,255,0) 100%
-      );
-      opacity: .65;
-    }
-      50%{ transform: translateX(16%); opacity:.28; }
+    50%{ transform: translateX(16%); opacity:.28; }
     }
 
     .heroCdTop{
@@ -911,8 +908,6 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
     // === HERO LIVE COUNTDOWN (real timer) ===
     const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z'; // 2026 World Cup kickoff (UTC)
 
-    function pad2(n){ return String(n).padStart(2,'0'); }
-
     function updateHeroCountdown(){
       const dEl = document.getElementById('cdD');
       const hEl = document.getElementById('cdH');
@@ -920,32 +915,17 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       const sEl = document.getElementById('cdS');
       if(!dEl || !hEl || !mEl || !sEl) return;
 
-      const target = Date.parse(HERO_KICKOFF_ISO);
-      if(!Number.isFinite(target)) return;
-
+      const target = new Date(HERO_KICKOFF_ISO).getTime();
       const now = Date.now();
       let diff = target - now;
 
-      if(diff <= 0){
+      if(!Number.isFinite(diff) || diff <= 0){
         dEl.textContent = '00';
         hEl.textContent = '00';
         mEl.textContent = '00';
         sEl.textContent = '00';
         return;
       }
-
-      // Compute time parts
-      const sec = Math.floor(diff / 1000);
-      const days = Math.floor(sec / 86400);
-      const hours = Math.floor((sec % 86400) / 3600);
-      const mins = Math.floor((sec % 3600) / 60);
-      const secs = sec % 60;
-
-      dEl.textContent = pad2(days);
-      hEl.textContent = pad2(hours);
-      mEl.textContent = pad2(mins);
-      sEl.textContent = pad2(secs);
-    }
     }
 
     function startHeroCountdown(){
@@ -1378,39 +1358,39 @@ systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP 
     else boot();
   </script>
 
+
 <script>
-/* HERO CINEMATIC PARALLAX SAFE (scroll + subtle idle drift) */
+/* HERO MOTION (single, safe): scroll parallax + subtle idle drift */
 (function(){
-  const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if(prefersReduced) return;
+  try{
+    const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if(prefersReduced) return;
 
-  const img = document.querySelector('#heroBanner .heroImg');
-  if(!img) return;
+    const img = document.querySelector('#heroBanner .heroImg');
+    if(!img) return;
 
-  let lastScrollY = window.scrollY || 0;
-  let rafId = null;
+    let ticking = false;
+    function onScroll(){
+      if(ticking) return;
+      ticking = true;
+      requestAnimationFrame(()=>{
+        const y = Math.min(10, Math.max(-2, window.scrollY * 0.06));
+        document.documentElement.style.setProperty('--heroY', y.toFixed(2) + 'px');
+        ticking = false;
+      });
+    }
+    window.addEventListener('scroll', onScroll, {passive:true});
+    onScroll();
 
-  function setVars(t){
-    // Scroll parallax: very subtle (0–7px)
-    const y = Math.min(7, Math.max(0, lastScrollY * 0.05));
-    document.documentElement.style.setProperty('--heroScrollY', y.toFixed(2) + 'px');
-
-    // Idle drift so it still feels "cinematic" even if you don't scroll
-    // +-1.6px over ~10s
-    const idle = Math.sin((t || performance.now()) / 1600) * 1.6;
-    document.documentElement.style.setProperty('--heroIdleY', idle.toFixed(2) + 'px');
-  }
-
-  function onScroll(){
-    lastScrollY = window.scrollY || 0;
-  }
-  window.addEventListener('scroll', onScroll, {passive:true});
-
-  function loop(t){
-    setVars(t);
-    rafId = requestAnimationFrame(loop);
-  }
-  rafId = requestAnimationFrame(loop);
+    let t0 = performance.now();
+    function idle(t){
+      const dt = (t - t0) / 1000;
+      const idleY = Math.sin(dt * 0.75) * 2.2;
+      document.documentElement.style.setProperty('--heroIdle', idleY.toFixed(2) + 'px');
+      requestAnimationFrame(idle);
+    }
+    requestAnimationFrame(idle);
+  }catch(e){}
 })();
 </script>
 
