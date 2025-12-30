@@ -1182,93 +1182,102 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
     }
 
 // === HERO LIVE COUNTDOWN (real timer) ===
-    const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z'; // 2026 World Cup kickoff (UTC)
+const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z'; // World Cup kickoff (UTC)
 
-    function updateHeroCountdown(){
-      const wrap = document.querySelector('.countdownGlass');
-      const dEl = document.getElementById('cdD');
-      const hEl = document.getElementById('cdH');
-      const mEl = document.getElementById('cdM');
-      const sEl = document.getElementById('cdS');
-      if(!wrap || !dEl || !hEl || !mEl || !sEl) return;
+function ensureMatchDayBadge(){
+  const wrap = document.querySelector('.countdownGlass');
+  if(!wrap) return null;
+  let badge = document.getElementById('cdBadge');
+  if(!badge){
+    badge = document.createElement('div');
+    badge.className = 'cdBadge';
+    badge.id = 'cdBadge';
+    badge.textContent = 'Match Day';
+    badge.setAttribute('aria-hidden','true');
+    // Prefer inside cdRow (for consistent layout), otherwise top of wrap
+    const row = wrap.querySelector('.cdRow');
+    if(row) row.prepend(badge);
+    else wrap.prepend(badge);
+  }
+  return badge;
+}
 
-      const targetDate = new Date(HERO_KICKOFF_ISO);
-      const targetMs = targetDate.getTime();
-      const now = new Date();
-      const nowMs = now.getTime();
-      const diff = targetMs - nowMs;
+function updateHeroCountdown(){
+  const wrap = document.querySelector('.countdownGlass');
+  const dEl = document.getElementById('cdD');
+  const hEl = document.getElementById('cdH');
+  const mEl = document.getElementById('cdM');
+  const sEl = document.getElementById('cdS');
+  if(!wrap || !dEl || !hEl || !mEl || !sEl) return;
 
-      // Ensure badge exists
-      let badge = document.getElementById('cdBadge');
-      if(!badge){
-        badge = document.createElement('div');
-        badge.className = 'cdBadge';
-        badge.id = 'cdBadge';
-        badge.textContent = 'Match Day';
-        badge.setAttribute('aria-hidden','true');
-        const row = wrap.querySelector('.cdRow');
-        if(row) row.prepend(badge);
-        else wrap.prepend(badge);
-      }
+  const badge = ensureMatchDayBadge();
 
-      const sameLocalDay =
-        (now.getFullYear() === targetDate.getFullYear() &&
-         now.getMonth() === targetDate.getMonth() &&
-         now.getDate() === targetDate.getDate());
+  const targetDate = new Date(HERO_KICKOFF_ISO);
+  const targetMs = targetDate.getTime();
+  const now = new Date();
+  const nowMs = now.getTime();
+  const diff = targetMs - nowMs;
 
-      if(sameLocalDay || diff <= 0){
-        wrap.classList.add('isMatchDay');
-        badge.setAttribute('aria-hidden','false');
-        return;
-      }else{
-        wrap.classList.remove('isMatchDay');
-        badge.setAttribute('aria-hidden','true');
-      }
+  const sameLocalDay =
+    (now.getFullYear() === targetDate.getFullYear() &&
+     now.getMonth() === targetDate.getMonth() &&
+     now.getDate() === targetDate.getDate());
 
-      if(!Number.isFinite(diff) || diff <= 0){
-        dEl.textContent = '00'; hEl.textContent = '00'; mEl.textContent = '00'; sEl.textContent = '00';
-        return;
-      }
+  const isMatchDay = sameLocalDay || (diff <= 0);
 
-      const totalSeconds = Math.floor(diff / 1000);
-      const days = Math.floor(totalSeconds / 86400);
-      const hours = Math.floor((totalSeconds % 86400) / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      const seconds = totalSeconds % 60;
+  if(isMatchDay){
+    wrap.classList.add('isMatchDay');
+    if(badge) badge.setAttribute('aria-hidden','false');
+    return;
+  }else{
+    wrap.classList.remove('isMatchDay');
+    if(badge) badge.setAttribute('aria-hidden','true');
+  }
 
-      const nextD = String(days).padStart(2,'0');
-      const nextH = String(hours).padStart(2,'0');
-      const nextM = String(minutes).padStart(2,'0');
-      const nextS = String(seconds).padStart(2,'0');
+  if(!Number.isFinite(diff) || diff <= 0){
+    dEl.textContent = '00'; hEl.textContent = '00'; mEl.textContent = '00'; sEl.textContent = '00';
+    return;
+  }
 
-      const tick = (el, next) => {
-        if(el.textContent !== next){
-          el.textContent = next;
-          el.classList.remove('tick');
-          void el.offsetWidth;
-          el.classList.add('tick');
-        }
-      };
+  const totalSeconds = Math.floor(diff / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
 
-      tick(dEl, nextD);
-      tick(hEl, nextH);
-      tick(mEl, nextM);
-      tick(sEl, nextS);
+  const nextD = String(days).padStart(2,'0');
+  const nextH = String(hours).padStart(2,'0');
+  const nextM = String(minutes).padStart(2,'0');
+  const nextS = String(seconds).padStart(2,'0');
+
+  const tick = (el, next) => {
+    if(el.textContent !== next){
+      el.textContent = next;
+      el.classList.remove('tick'); // restart animation
+      void el.offsetWidth;         // reflow
+      el.classList.add('tick');
     }
-    }
+  };
 
-    function startHeroCountdown(){
-      try{
-        updateHeroCountdown();
-        if(window.__heroCountdownTimer) clearInterval(window.__heroCountdownTimer);
-        window.__heroCountdownTimer = setInterval(updateHeroCountdown, 1000);
-        // Refresh immediately when returning to tab
-        document.addEventListener('visibilitychange', ()=>{
-          if(!document.hidden) updateHeroCountdown();
-        }, { passive:true });
-      }catch(e){}
-    }catch(e){}
-    }
+  tick(dEl, nextD);
+  tick(hEl, nextH);
+  tick(mEl, nextM);
+  tick(sEl, nextS);
+}
+
+function startHeroCountdown(){
+  try{ updateHeroCountdown(); }catch(e){}
+  try{
+    if(window.__heroCdTimer) clearInterval(window.__heroCdTimer);
+    window.__heroCdTimer = setInterval(()=>{ try{ updateHeroCountdown(); }catch(e){} }, 1000);
+    // Refresh immediately when returning to tab
+    document.addEventListener('visibilitychange', ()=>{
+      if(!document.hidden){ try{ updateHeroCountdown(); }catch(e){} }
+    }, { passive:true });
+  }catch(e){}
+}
+
+
 
 // === CHAT ===
     const chatLog = document.getElementById('chatLog');
