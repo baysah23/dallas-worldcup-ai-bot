@@ -19,7 +19,8 @@
       --green:#2ea043;
       --warn:#ffcc66;
       --shadow: 0 10px 30px rgba(0,0,0,.45);
-      --r16:16px;
+      --r16:18px;
+      --r20:20px;
 
       --glass: rgba(255,255,255,.08);
       --glass2: rgba(255,255,255,.04);
@@ -74,14 +75,24 @@
     
     /* === CARDS === */
     .card{
-      margin-top: 14px;
-      border-radius: var(--r16);
-      border: 1px solid var(--glass-border);
-      background: linear-gradient(180deg, var(--glass), var(--glass2));
-      backdrop-filter: blur(12px);
-      -webkit-backdrop-filter: blur(12px);
-      box-shadow: var(--shadow);
+      margin-top: 12px;
+      border-radius: var(--r20);
+      border: 1px solid rgba(255,255,255,.14);
+      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.025));
+      backdrop-filter: blur(16px) saturate(1.6);
+      -webkit-backdrop-filter: blur(16px) saturate(1.6);
+      box-shadow: 0 14px 40px rgba(0,0,0,.38);
       overflow:hidden;
+      position: relative;
+    }
+    .card::before{
+      content:"";
+      position:absolute;
+      left:0; right:0; top:0;
+      height:1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.24), transparent);
+      opacity:.9;
+      pointer-events:none;
     }
     .cardHead{ display:flex; align-items:center; justify-content:space-between; padding: 14px 14px 0; }
     .cardTitle{ margin:0; font-size: 16px; letter-spacing:-0.01em; }
@@ -101,9 +112,9 @@
       margin-top: 8px;
     }
     .flowStep{
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,.12);
-      background: rgba(11,21,44,.52);
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(11,21,44,.34);
       padding: 10px 10px;
       display:flex;
       align-items:center;
@@ -155,8 +166,8 @@
       align-items:center;
       flex-wrap:wrap;
     }
-    .cta{
-      height: 56px;
+    \.cta{
+      height: 54px;
       padding: 0 16px;
       border-radius: 16px;
       border: 1px solid rgba(255,255,255,.16);
@@ -403,7 +414,7 @@
     }
     .modalHead{
       display:flex; justify-content:space-between; align-items:center;
-      gap: 10px;
+      gap: 8px;
     }
     .modalHead h3{ margin:0; font-size: 15px; letter-spacing:.02em; }
     .iconBtn{ background:none; border:none; color:#fff; font-size:18px; padding: 6px 10px; border-radius: 12px; }
@@ -466,12 +477,13 @@
   animation: wcHeroCineVars 11.5s ease-in-out infinite;
 }
 @keyframes wcHeroCineVars{
-  0%   { --wcHeroDriftX: 0px; --wcHeroDriftY: 0px; --wcHeroZoom: 1.07; filter: saturate(1.10) contrast(1.04); }
+  0%   { --wcHeroDriftX: 0px; --wcHeroDriftY: 0px; --wcHeroZoom: 1.07; }
+  50%  { --wcHeroDriftX: 0px; --wcHeroDriftY: 6px; --wcHeroZoom: 1.10; }
+  100% { --wcHeroDriftX: 0px; --wcHeroDriftY: 0px; --wcHeroZoom: 1.07; }
+}
+
   50%  { --wcHeroDriftX: 0px; --wcHeroDriftY: 6px; --wcHeroZoom: 1.10; filter: saturate(1.16) contrast(1.06); }
   100% { --wcHeroDriftX: 0px; --wcHeroDriftY: 0px; --wcHeroZoom: 1.07; filter: saturate(1.10) contrast(1.04); }
-}
-50%  { --wcHeroDriftX: 0px;  --wcHeroDriftY: 6px;  --wcHeroZoom: 1.10; filter: saturate(1.16) contrast(1.06); }
-  100% { --wcHeroDriftX: 0px;  --wcHeroDriftY: 0px;  --wcHeroZoom: 1.07; filter: saturate(1.08) contrast(1.03); }
 }
 
 /* Respect reduced motion */
@@ -488,10 +500,11 @@
   z-index: 5;
 }
 .wcCountdownBar .wcCdInline{
+  position: relative;
   display:flex;
   align-items:center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
 
   /* match the hero width + rounding */
   border-radius: 0 0 var(--r16) var(--r16);
@@ -501,17 +514,17 @@
   /* ultra-thin glass */
   background:
     linear-gradient(180deg,
-      rgba(255,255,255,.10),
-      rgba(255,255,255,.04)
+      rgba(255,255,255,.07),
+      rgba(255,255,255,.018)
     );
-  backdrop-filter: blur(22px) saturate(2.0);
-  -webkit-backdrop-filter: blur(22px) saturate(2.0);
+  backdrop-filter: blur(26px) saturate(1.9);
+  -webkit-backdrop-filter: blur(26px) saturate(1.9);
 
   box-shadow:
     0 14px 40px rgba(0,0,0,.22),
     inset 0 1px 0 rgba(255,255,255,.22);
 
-  padding: 7px 12px calc(7px + env(safe-area-inset-bottom)/8);
+  padding: 6px 10px calc(6px + env(safe-area-inset-bottom)/10);
   overflow:hidden;
 }
 .wcCountdownBar .wcCdInline::before{
@@ -534,6 +547,17 @@
   opacity:.55;
   mix-blend-mode: overlay;
 }
+.wcCountdownBar .wcCdInline::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius: inherit;
+  pointer-events:none;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.18),
+    inset 0 -1px 0 rgba(0,0,0,.22);
+  opacity:.95;
+}
 .wcCdTag{
   flex:0 0 auto;
   font-size: 10px;
@@ -545,17 +569,22 @@
 }
 
 /* Reuse the countdown cell system but make it sleek/compact */
-.wcCountdownBar .heroCdRow{ margin:0; }
+.wcCountdownBar .heroCdRow{ margin:0; gap: 6px; }
 .wcCountdownBar .heroCdCell{
   min-width: auto;
-  padding: 4px 6px;
-  border-radius: 12px;
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.14);
+  padding: 3px 5px;
+  border-radius: 11px;
+  background: rgba(255,255,255,.045);
+  border: 1px solid rgba(255,255,255,.12);
 }
 .wcCountdownBar .heroCdNum{
   font-size: 14px;
   letter-spacing: .02em;
+  color: var(--gold);
+  background: linear-gradient(180deg, rgba(255,245,200,1), rgba(212,175,55,1), rgba(168,129,30,1));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 .wcCountdownBar .heroCdLbl{
   font-size: 9px;
