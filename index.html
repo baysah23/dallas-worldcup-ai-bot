@@ -71,14 +71,21 @@
 
     
 
-    /* ===== CINEMATIC HERO MICRO-MOTION (image only) ===== */
+        /* ===== CINEMATIC HERO MICRO-MOTION (image only) ===== */
     :root{ --heroY: 0px; }
     #heroBanner .heroImg{
-      transform: translate3d(0, var(--heroY), 0) scale(1.035);
-      transition: transform 380ms ease;
+      transform: translate3d(0, var(--heroY), 0) scale(1.06);
+      transform-origin: 50% 40%;
+      will-change: transform, filter;
+      animation: heroBreathe 8.8s ease-in-out infinite;
+    }
+    @keyframes heroBreathe{
+      0%,100%{ filter: saturate(1.02) contrast(1.02); }
+      50%{ filter: saturate(1.08) contrast(1.05); }
     }
     @media (prefers-reduced-motion: reduce){
-      #heroBanner .heroImg{ transition:none; transform:none; }
+      #heroBanner .heroImg{ animation:none; transform:none; filter:none; }
+    }
     }
 
     
@@ -90,16 +97,15 @@
       bottom: 8px;
       width: min(90%, 410px);
       border-radius: 18px;
-      border: 1px solid rgba(255,255,255,.12);
-
-      /* ultra-glass: very transparent */
+      border: 1px solid rgba(255,255,255,.10);
+/* ultra-glass: very transparent */
       background:
-        radial-gradient(140% 160% at 50% 0%, rgba(0,0,0,.08), rgba(0,0,0,.18) 70%),
-        linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.015));
+        radial-gradient(140% 160% at 50% 0%, rgba(0,0,0,.05), rgba(0,0,0,.10) 72%),
+        linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.012));
 
-      backdrop-filter: blur(22px) saturate(1.45);
-      -webkit-backdrop-filter: blur(22px) saturate(1.45);
-      box-shadow: 0 14px 44px rgba(0,0,0,.28);
+      backdrop-filter: blur(24px) saturate(1.6);
+      -webkit-backdrop-filter: blur(24px) saturate(1.6);
+      box-shadow: 0 12px 42px rgba(0,0,0,.22);
       padding: 7px 12px 9px;
       z-index: 8;
       pointer-events: none;
@@ -929,6 +935,7 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
     // === HERO LIVE COUNTDOWN (real timer) ===
     const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z'; // 2026 World Cup kickoff (UTC)
 
+    
     function updateHeroCountdown(){
       const dEl = document.getElementById('cdD');
       const hEl = document.getElementById('cdH');
@@ -947,6 +954,18 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
         sEl.textContent = '00';
         return;
       }
+
+      const totalSec = Math.floor(diff / 1000);
+      const days = Math.floor(totalSec / 86400);
+      const hrs  = Math.floor((totalSec % 86400) / 3600);
+      const mins = Math.floor((totalSec % 3600) / 60);
+      const secs = Math.floor(totalSec % 60);
+
+      dEl.textContent = String(days);
+      hEl.textContent = String(hrs).padStart(2,'0');
+      mEl.textContent = String(mins).padStart(2,'0');
+      sEl.textContent = String(secs).padStart(2,'0');
+    }
     }
 
     function startHeroCountdown(){
@@ -1367,7 +1386,7 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
         if(ticking) return;
         ticking = true;
         requestAnimationFrame(()=>{
-          const y = Math.min(2, Math.max(0, window.scrollY * 0.02));
+          const y = Math.min(4, Math.max(0, window.scrollY * 0.03));
           document.documentElement.style.setProperty('--heroY', `${y}px`);
           ticking = false;
         });
