@@ -5,8 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="format-detection" content="telephone=no"/>
   <title>World Cup Concierge</title>
-  <!-- WC_BUILD_VERSION: V1-LOCKED-MATERIAL-20251230-191122 -->
-  <style>
+  <!-- WC_BUILD_VERSION: V1-LOCKED-MATERIAL-20251230-191122<style>
     :root{
       --bg:#071022;
       --panel:#0f1b33;
@@ -1197,6 +1196,51 @@ html[data-hero="night"] .broadcast-title{
   filter: brightness(1.06);
 }
 
+
+    /* === Home actions: iPhone rhythm (stacked CTAs + chips) === */
+    .homeActions{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .homeActions .cta{
+      width:100%;
+      min-height:58px;
+      border-radius:16px;
+    }
+    .homeActions .cta.primary{
+      position:relative;
+      overflow:hidden;
+      box-shadow: 0 10px 22px rgba(0,0,0,.28);
+    }
+    .homeActions .cta.primary::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0) 40%);
+      mix-blend-mode: overlay;
+      pointer-events:none;
+    }
+    .quickChips{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:2px;
+    }
+    .chip{
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 10px 12px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .02em;
+      backdrop-filter: blur(var(--blur, 14px));
+      -webkit-backdrop-filter: blur(var(--blur, 14px));
+    }
+    .chip:active{ transform: translateY(1px); }
+
 </style>
 </head>
 
@@ -1240,22 +1284,59 @@ html[data-hero="night"] .broadcast-title{
           </div>
           <div class="cardBody">
             <p class="hint" style="margin-top:0">
-              Fan-first. Luxury feel. Zero friction. Tell us city + time + party size — we handle the rest.
-            </p>
+              Fan-first. Luxury feel. Zero friction. Tell us time + party size — we’ll handle the venue.</p>
 
-            <div class="heroActions" style="margin-top:12px" aria-label="Primary buttons">
+                        <div class="heroActions homeActions" style="margin-top:12px" aria-label="Primary buttons">
               <button class="cta primary" id="ctaReserve" type="button">Reserve now</button>
               <button class="cta" id="ctaChat" type="button">Chat concierge</button>
-              <button class="cta" id="ctaPlan" type="button">Build my matchday</button>
+
+              <div class="quickChips" aria-label="Quick reserve chips">
+                <button class="chip" type="button" data-q="Tonight at 7pm">Tonight · 7pm</button>
+                <button class="chip" type="button" data-q="Table for 4">Table for 4</button>
+                <button class="chip" type="button" data-q="Near me">Near me</button>
+              </div>
             </div>
 
             <p class="hint" style="margin-top:12px">
-              Tip: Try “Table for 4 • 7pm • Dallas” — or ask in Spanish/Portuguese/French.
+              Tip: Try “Table for 4 • tonight 7pm • near me” — or ask in Spanish/Portuguese/French.
             </p>
           </div>
         </div>
 
+</section>
 
+      <!-- CHAT -->
+      <section class="section" id="sec-chat" aria-label="Chat">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">Concierge chat</h2>
+            <button class="pill" id="clearChat" type="button">Clear</button>
+          </div>
+          <div class="cardBody">
+            <div id="chatLog" class="chatLog" aria-live="polite"></div>
+            <div class="chatInputRow">
+              <label class="srOnly" for="msg">Message</label>
+              <input id="msg" autocomplete="off" inputmode="text"
+                     placeholder="Ask anything (EN/ES/PT/FR)…"/>
+              <button id="sendBtn" type="button">Send</button>
+            </div>
+            <p class="hint">Tap the language pill to switch EN → ES → PT → FR.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- MENU -->
+      <section class="section" id="sec-menu" aria-label="Menu">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">Menu</h2>
+            <button class="pill" id="reloadMenu" type="button">Refresh</button>
+          </div>
+          <div class="cardBody">
+            <div id="menuBody" class="list"></div>
+            <div id="menuHint" class="hint">Tap Refresh to load menu items.</div>
+          </div>
+        </div>
 
         <div class="card" aria-label="Language support">
           <div class="cardHead">
@@ -1305,7 +1386,16 @@ html[data-hero="night"] .broadcast-title{
                 </div>
               </button>
 
-              <button class="tile" id="tileMenu" type="button" aria-label="Menu">
+              
+
+              <button class="tile" id="tilePlan" type="button" aria-label="Build my matchday">
+                <div class="tileIco">🗺️</div>
+                <div class="tileTxt">
+                  <div class="tileTitle">Build my matchday</div>
+                  <div class="tileSub">Pick a match → we route the plan</div>
+                </div>
+              </button>
+<button class="tile" id="tileMenu" type="button" aria-label="Menu">
                 <div class="tileIco">🍽️</div>
                 <div class="tileTxt">
                   <div class="tileTitle">Menu</div>
@@ -1319,42 +1409,8 @@ html[data-hero="night"] .broadcast-title{
             </p>
           </div>
         </div>
-</section>
 
-      <!-- CHAT -->
-      <section class="section" id="sec-chat" aria-label="Chat">
-        <div class="card">
-          <div class="cardHead">
-            <h2 class="cardTitle">Concierge chat</h2>
-            <button class="pill" id="clearChat" type="button">Clear</button>
-          </div>
-          <div class="cardBody">
-            <div id="chatLog" class="chatLog" aria-live="polite"></div>
-            <div class="chatInputRow">
-              <label class="srOnly" for="msg">Message</label>
-              <input id="msg" autocomplete="off" inputmode="text"
-                     placeholder="Ask anything (EN/ES/PT/FR)…"/>
-              <button id="sendBtn" type="button">Send</button>
-            </div>
-            <p class="hint">Tap the language pill to switch EN → ES → PT → FR.</p>
-          </div>
-        </div>
       </section>
-
-      <!-- MENU -->
-      <section class="section" id="sec-menu" aria-label="Menu">
-        <div class="card">
-          <div class="cardHead">
-            <h2 class="cardTitle">Menu</h2>
-            <button class="pill" id="reloadMenu" type="button">Refresh</button>
-          </div>
-          <div class="cardBody">
-            <div id="menuBody" class="list"></div>
-            <div id="menuHint" class="hint">Tap Refresh to load menu items.</div>
-          </div>
-        </div>
-
-        </section>
 
       <!-- SCHEDULE -->
       <section class="section" id="sec-schedule" aria-label="Schedule">
@@ -2001,7 +2057,7 @@ const ctaChat = document.getElementById('ctaChat');
       if(ctaReserve) ctaReserve.addEventListener('click', ()=>{
         haptic(10);
         setSection('chat');
-        systemMsg('Reservation request: tell me city/venue + date/time + party size.');
+        systemMsg('Reservation request: tell me time + party size — and any vibe (near me, quiet, lively).');
       });
 
       
@@ -2021,6 +2077,31 @@ const ctaChat = document.getElementById('ctaChat');
 
       const tileSchedule = document.getElementById('tileSchedule');
       if(tileSchedule) tileSchedule.addEventListener('click', ()=>{ haptic(8); setSection('schedule'); });
+
+      const tilePlan = document.getElementById('tilePlan');
+      if(tilePlan) tilePlan.addEventListener('click', ()=>{
+        haptic(8);
+        setSection('schedule');
+        toast('Pick a match, then tap Reserve.');
+      });
+
+      // Home: Quick reserve chips
+      const chips = document.querySelectorAll('.quickChips .chip');
+      if(chips && chips.length){
+        chips.forEach(ch=>{
+          ch.addEventListener('click', ()=>{
+            haptic(6);
+            const q = (ch.getAttribute('data-q') || ch.textContent || '').trim();
+            setSection('chat');
+            const input = document.getElementById('msg');
+            if(input){
+              input.value = `Reserve: ${q}`;
+              focusChatInput();
+            }
+          });
+        });
+      }
+
 
       const tileMenu = document.getElementById('tileMenu');
       if(tileMenu) tileMenu.addEventListener('click', ()=>{ haptic(8); setSection('menu'); });
