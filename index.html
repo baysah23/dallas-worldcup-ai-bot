@@ -65,15 +65,11 @@
       will-change: transform;
       height:auto;
     }
-    #heroBanner{ min-height: 220px; margin: 10px 0 10px; }
+    #heroBanner{ min-height: 220px; margin: 10px 0 0; border-bottom-left-radius:0; border-bottom-right-radius:0; border-bottom:0; }
 
 
 
     
-
-    
-    @media (prefers-reduced-motion: reduce){
-      #heroBanner }
 
     
     /* === CARDS === */
@@ -443,10 +439,7 @@
     /* ===== HERO RESET MODE: ultra-thin Apple glass + cinematic (self-contained) ===== */
 
 /* HERO CONTAINER */
-#heroBanner{
-  min-height: 220px;
-  margin: 10px 0 10px;
-}
+#heroBanner{ min-height: 220px; margin: 10px 0 0; border-bottom-left-radius:0; border-bottom-right-radius:0; border-bottom:0; }
 
 /* Cinematic motion lives ONLY on the image (no overlays on image). */
 /* JS updates --wcHeroX/--wcHeroY (micro parallax). CSS animates --wcHeroDrift/--wcHeroZoom. */
@@ -473,11 +466,11 @@
   animation: wcHeroCineVars 11.5s ease-in-out infinite;
 }
 @keyframes wcHeroCineVars{
-  0%   { --wcHeroDriftX: 0px; --wcHeroDriftY: 0px;  --wcHeroZoom: 1.07; }
-  50%  { --wcHeroDriftX: 0px; --wcHeroDriftY: 6px;  --wcHeroZoom: 1.10; }
-  100% { --wcHeroDriftX: 0px; --wcHeroDriftY: 0px;  --wcHeroZoom: 1.07; }
+  0%   { --wcHeroDriftX: 0px; --wcHeroDriftY: 0px; --wcHeroZoom: 1.07; filter: saturate(1.10) contrast(1.04); }
+  50%  { --wcHeroDriftX: 0px; --wcHeroDriftY: 6px; --wcHeroZoom: 1.10; filter: saturate(1.16) contrast(1.06); }
+  100% { --wcHeroDriftX: 0px; --wcHeroDriftY: 0px; --wcHeroZoom: 1.07; filter: saturate(1.10) contrast(1.04); }
 }
-  50%  { --wcHeroDriftX: 0px;  --wcHeroDriftY: 6px;  --wcHeroZoom: 1.10; filter: saturate(1.16) contrast(1.06); }
+50%  { --wcHeroDriftX: 0px;  --wcHeroDriftY: 6px;  --wcHeroZoom: 1.10; filter: saturate(1.16) contrast(1.06); }
   100% { --wcHeroDriftX: 0px;  --wcHeroDriftY: 0px;  --wcHeroZoom: 1.07; filter: saturate(1.08) contrast(1.03); }
 }
 
@@ -486,113 +479,102 @@
   #heroBanner .heroImg{ animation:none; transform: none; filter:none; }
 }
 
-/* COUNTDOWN GLASS BAR (ultra-thin Apple-glass; more obvious) */
-.heroCountdown{
-  position:absolute;
-  left: 50%;
-  transform: translateX(-50%) translateZ(0);
-  bottom: 10px;
-  width: min(94%, 440px);
-  border-radius: 18px;
-  padding: 8px 12px 10px;
-  z-index: 50;
-  pointer-events: none;
-  overflow:hidden;
+/* COUNTDOWN (below banner) — ultra-thin Apple-glass, embedded */
+.wcCountdownBar{
+  position: relative;
+  width: 100%;
+  margin-top: -10px;           /* visually “attached” to the banner */
+  padding: 0 0 2px;
+  z-index: 5;
+}
+.wcCountdownBar .wcCdInline{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 10px;
 
-  /* ultra-thin Apple glass (more transparent) */
-  border: 1px solid rgba(255,255,255,.16);
-  background: linear-gradient(180deg,
-    rgba(255,255,255,.14) 0%,
-    rgba(255,255,255,.08) 42%,
-    rgba(255,255,255,.05) 100%
-  );
+  /* match the hero width + rounding */
+  border-radius: 0 0 var(--r16) var(--r16);
+  border: 1px solid rgba(255,255,255,.14);
+  border-top: 0;
 
-  backdrop-filter: blur(34px) saturate(2.0);
-  -webkit-backdrop-filter: blur(34px) saturate(2.0);
+  /* ultra-thin glass */
+  background:
+    linear-gradient(180deg,
+      rgba(255,255,255,.10),
+      rgba(255,255,255,.04)
+    );
+  backdrop-filter: blur(22px) saturate(2.0);
+  -webkit-backdrop-filter: blur(22px) saturate(2.0);
 
   box-shadow:
-    0 16px 56px rgba(0,0,0,.26),
-    inset 0 1px 0 rgba(255,255,255,.22),
-    inset 0 -1px 0 rgba(0,0,0,.18);
+    0 14px 40px rgba(0,0,0,.22),
+    inset 0 1px 0 rgba(255,255,255,.22);
+
+  padding: 7px 12px calc(7px + env(safe-area-inset-bottom)/8);
+  overflow:hidden;
 }
-.heroCountdown::after{
+.wcCountdownBar .wcCdInline::before{
   content:"";
   position:absolute;
   inset:0;
   border-radius: inherit;
-  background: radial-gradient(120% 180% at 20% 0%,
-    rgba(255,255,255,.18) 0%,
-    rgba(255,255,255,0) 55%
-  );
-  opacity:.55;
   pointer-events:none;
-}
-.heroCountdown::before{
-  content:"";
-  position:absolute;
-  left:14px; right:14px; top:8px;
-  height: 2px;
-  border-radius: 999px;
-  background: linear-gradient(90deg,
-    rgba(212,175,55,0) 0%,
-    rgba(212,175,55,.12) 28%,
-    rgba(255,255,255,.12) 50%,
-    rgba(212,175,55,.12) 72%,
-    rgba(212,175,55,0) 100%
-  );
-  opacity: .22;
-  transform: translateX(-16%);
-  filter: blur(.2px);
-  animation: heroShimmer 10.5s ease-in-out infinite;
-}
-@keyframes heroShimmer{
-  0%,100%{ transform: translateX(-16%); opacity:.18; }
-  50%{ transform: translateX(16%); opacity:.28; }
-}
-/* Specular highlight + micro-noise INSIDE bar only */
-.heroCountdown::before{
-  content:"";
-  position:absolute;
-  inset:-1px;
-  border-radius: inherit;
   background:
-    linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0) 48%),
+    radial-gradient(120% 200% at 20% 0%,
+      rgba(255,255,255,.22) 0%,
+      rgba(255,255,255,0) 58%
+    ),
     repeating-linear-gradient(135deg,
-      rgba(255,255,255,.06) 0px,
-      rgba(255,255,255,.06) 1px,
+      rgba(255,255,255,.10) 0px,
+      rgba(255,255,255,.10) 1px,
       rgba(255,255,255,0) 3px,
-      rgba(255,255,255,0) 6px
+      rgba(255,255,255,0) 10px
     );
   opacity:.55;
-  pointer-events:none;
+  mix-blend-mode: overlay;
+}
+.wcCdTag{
+  flex:0 0 auto;
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.95);
+  white-space: nowrap;
 }
 
-/* Edge shimmer (subtle, premium, not gold-heavy) */
-.heroCountdown::after{
-  content:"";
-  position:absolute;
-  left:-40%;
-  top:0;
-  width: 180%;
-  height: 100%;
-  background: linear-gradient(90deg,
-    rgba(255,255,255,0) 0%,
-    rgba(255,255,255,.14) 18%,
-    rgba(255,255,255,0) 34%,
-    rgba(255,255,255,0) 66%,
-    rgba(255,255,255,.10) 78%,
-    rgba(255,255,255,0) 100%
-  );
-  transform: translateX(-18%);
-  animation: wcGlassSweep 12.5s ease-in-out infinite;
-  opacity:.22;
-  pointer-events:none;
+/* Reuse the countdown cell system but make it sleek/compact */
+.wcCountdownBar .heroCdRow{ margin:0; }
+.wcCountdownBar .heroCdCell{
+  min-width: auto;
+  padding: 4px 6px;
+  border-radius: 12px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.14);
 }
-@keyframes wcGlassSweep{
-  0%,100%{ transform: translateX(-18%); }
-  50%{ transform: translateX(18%); }
+.wcCountdownBar .heroCdNum{
+  font-size: 14px;
+  letter-spacing: .02em;
+}
+.wcCountdownBar .heroCdLbl{
+  font-size: 9px;
+  letter-spacing: .16em;
+  margin-top: 1px;
+  opacity: .9;
+}
+.wcCountdownBar .heroCdSep{
+  margin: 0 2px;
+  opacity: .55;
 }
 
+/* Keep the banner stable (no flashing). */
+#heroBanner .heroImg{
+  backface-visibility:hidden;
+  transform: translateZ(0);
+}
+
+/* (legacy; not used now) */
 .heroCdTop{
   text-align:center;
   font-size: 10.5px;
@@ -660,19 +642,24 @@
       <img class="heroImg" src="/static/hero_stadium.png?v=20251229" alt="Stadium crowd under lights">
     
       <!-- LIVE COUNTDOWN OVERLAY (covers the "fake" countdown printed on the image) -->
-      <div class="heroCountdown" aria-label="Live countdown">
-        <div class="heroCdTop">UNTIL KICKOFF</div>
+      </section>
+
+
+    <div class="wcCountdownBar" aria-label="Live countdown">
+      <div class="wcCdInline">
+        <div class="wcCdTag">UNTIL KICKOFF</div>
         <div class="heroCdRow" role="timer" aria-live="polite">
-          <div class="heroCdCell"><div class="heroCdNum" id="cdD">00</div><div class="heroCdLbl">DAYS</div></div>
+          <div class="heroCdCell"><div class="heroCdNum" id="cdD">00</div><div class="heroCdLbl">D</div></div>
           <div class="heroCdSep">•</div>
-          <div class="heroCdCell"><div class="heroCdNum" id="cdH">00</div><div class="heroCdLbl">HRS</div></div>
+          <div class="heroCdCell"><div class="heroCdNum" id="cdH">00</div><div class="heroCdLbl">H</div></div>
           <div class="heroCdSep">•</div>
-          <div class="heroCdCell"><div class="heroCdNum" id="cdM">00</div><div class="heroCdLbl">MINS</div></div>
+          <div class="heroCdCell"><div class="heroCdNum" id="cdM">00</div><div class="heroCdLbl">M</div></div>
           <div class="heroCdSep">•</div>
-          <div class="heroCdCell"><div class="heroCdNum" id="cdS">00</div><div class="heroCdLbl">SECS</div></div>
+          <div class="heroCdCell"><div class="heroCdNum" id="cdS">00</div><div class="heroCdLbl">S</div></div>
         </div>
       </div>
-    </section>
+    </div>
+
 
 <main>
       <!-- HOME -->
