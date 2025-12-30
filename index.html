@@ -65,7 +65,7 @@
 
     .hero{
       padding-top: 0;
-position: relative;
+      position: relative;
       border-radius: var(--r16);
       overflow: hidden;
       border: 1px solid rgba(255,255,255,.10);
@@ -75,7 +75,7 @@ position: relative;
 
     .heroMedia{
       position: relative;
-      height: 218px;
+      height: clamp(210px, 34vh, 320px);
       width: 100%;
       overflow: hidden;
     }
@@ -94,6 +94,7 @@ position: relative;
       height:100%;
       display:block;
       object-fit: cover;
+      object-position: center 55%;
       transform: translateZ(0);
     }
 
@@ -119,19 +120,8 @@ position: relative;
       .heroCine{ animation:none; transform: none; }
     }
 
-    /* Ultra-thin Apple-glass countdown bar (embedded) */
-    .countdownGlass{
-      margin: 8px 0 12px;
-      border-radius: 18px;
-      border: 1px solid rgba(255,255,255,.14);
-      background: rgba(18, 28, 48, .22); /* lower opacity */
-      backdrop-filter: blur(18px);
-      -webkit-backdrop-filter: blur(18px);
-      box-shadow: 0 10px 30px rgba(0,0,0,.40);
-      position: relative;
-      overflow: hidden;
-      padding: 10px 12px;
-    }
+    /* Countdown base (positioned on hero; no duplicate styling) */
+    .countdownGlass{ position:absolute; right:14px; bottom:14px; z-index:55; }
 
     /* Specular edge + soft internal highlight line */
     .countdownGlass::before{
@@ -226,62 +216,22 @@ position: relative;
       line-height: 1.35;
     }
 
-    /* === HOME PHASE 2: MATCHDAY FLOW === */
-    .flow{
-      display:flex;
-      flex-direction:column;
-      gap:10px;
-      margin-top: 8px;
-    }
-    .flowStep{
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,.12);
-      background: rgba(11,21,44,.52);
-      padding: 10px 10px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:10px;
-      min-height: 56px;
-    }
-    .flowLeft{
-      display:flex;
-      align-items:center;
-      gap:10px;
-      min-width: 0;
-    }
-    .stepNum{
-      width:28px; height:28px; border-radius: 10px;
-      display:flex; align-items:center; justify-content:center;
-      font-weight: 950;
-      font-size: 13px;
-      color: rgba(7,16,34,.98);
-      background: linear-gradient(180deg, rgba(212,175,55,1), rgba(168,129,30,1));
-      box-shadow: 0 10px 30px rgba(212,175,55,.18);
-      flex:0 0 auto;
-    }
-    .stepTxt{
-      min-width: 0;
-    }
-    .stepTitle{
-      font-weight: 950;
-      font-size: 13px;
-      margin:0;
-      letter-spacing:.01em;
-      white-space: nowrap;
-      overflow:hidden;
-      text-overflow: ellipsis;
-    }
-    .stepSub{
-      margin: 3px 0 0;
-      font-size: 12px;
-      color: rgba(185,199,238,.92);
-      white-space: nowrap;
-      overflow:hidden;
-      text-overflow: ellipsis;
-    }
-
     /* === BUTTONS (MICRO INTERACTIONS) === */
+    .pill{
+      height: 36px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(7,16,34,.45);
+      color: rgba(234,240,255,.92);
+      font-weight: 900;
+      font-size: 12px;
+      letter-spacing: .02em;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .pill:active{ transform: translateY(1px); }
+
     .heroActions{
       display:flex;
       gap:10px;
@@ -706,7 +656,7 @@ position: relative;
   right: 14px;
   left: auto;
   transform: none;
-  bottom: clamp(10px, 2.0vw, 16px);
+  bottom: 14px;
 
   width: auto;
   max-width: min(52vw, 300px);
@@ -850,43 +800,41 @@ html[data-hero="night"] .broadcast-title{
 
 
 /* Landscape fix: let content breathe so panels expand with the hero/background */
-
-
-/* ===== Ultra-top Broadcast Title ===== */
-.broadcast-title{
-  position: fixed;
-  top: env(safe-area-inset-top);
-  left: 0; right: 0;
-  height: 38px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-weight: 650;
-  letter-spacing: .14em;
-  font-size: 12px;
-  text-transform: uppercase;
-  color: rgba(255,255,255,.92);
-  background: linear-gradient(to bottom, rgba(8,12,22,.62), rgba(8,12,22,.14), rgba(8,12,22,0));
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  z-index: 1000;
-  pointer-events: none;
+@media (orientation: landscape){
+  body{ min-height: 100vh; }
+  .wrap, .container, .shell, main{ width: 100%; max-width: 100%; }
+  .hero{ min-height: 60vh; }
 }
 
-/* Day/Night title gradient variants */
-html[data-hero="day"] .broadcast-title{
-  background: linear-gradient(to bottom, rgba(245,250,255,.24), rgba(245,250,255,.08), rgba(245,250,255,0));
-  color: rgba(255,255,255,.98);
-  text-shadow: 0 2px 10px rgba(0,0,0,.18);
-}
-html[data-hero="night"] .broadcast-title{
-  background: linear-gradient(to bottom, rgba(8,12,22,.70), rgba(8,12,22,.18), rgba(8,12,22,0));
-  color: rgba(255,255,255,.92);
-  text-shadow: 0 2px 12px rgba(0,0,0,.34);
-}
 
-/* Keep content clear of fixed title */
-.wrap{ padding-top: 44px; }
+/* Landscape hero image: show full banner (avoid crop) */
+@media (orientation: landscape){
+  .hero{
+    min-height: 56vh;
+  }
+  /* Ensure the hero image shows fully in landscape */
+  #heroImg{
+    object-fit: contain !important;
+    object-position: center center !important;
+  }
+  /* If the hero uses background-image instead of <img>, cover that too */
+  .hero{
+    background-size: contain !important;
+    background-position: center center !important;
+    background-repeat: no-repeat !important;
+  }
+  /* Premium filler behind "contain" letterboxing */
+  .hero::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background: radial-gradient(120% 90% at 50% 20%, rgba(255,255,255,.06), rgba(0,0,0,.25));
+    pointer-events:none;
+    z-index:1;
+  }
+  /* Keep hero content above the vignette */
+  .hero > *{ position: relative; z-index: 2; }
+}
 
 </style>
 </head>
@@ -937,14 +885,34 @@ html[data-hero="night"] .broadcast-title{
             <div class="heroActions" style="margin-top:12px" aria-label="Primary buttons">
               <button class="cta primary" id="ctaReserve" type="button">Reserve now</button>
               <button class="cta" id="ctaChat" type="button">Chat concierge</button>
-</div>
+              <button class="cta" id="ctaPlan" type="button">Build my matchday</button>
+            </div>
 
             <p class="hint" style="margin-top:12px">
               Tip: Try “Table for 4 • 7pm • Dallas” — or ask in Spanish/Portuguese/French.
             </p>
           </div>
         </div>
-</section>
+
+        
+
+        <div class="card" aria-label="Explore">
+          <div class="cardHead">
+            <h2 class="cardTitle">Explore</h2>
+          </div>
+          <div class="cardBody">
+            <div class="heroActions" style="margin-top:0">
+              <button class="cta" id="homeSchedule" type="button">Schedule</button>
+              <button class="cta" id="homeFanzone" type="button">Fan Zone</button>
+            </div>
+            <div style="height:10px"></div>
+            <div class="heroActions" style="margin-top:0">
+              <button class="cta" id="homeVIP" type="button">VIP</button>
+              <button class="cta" id="homeMenu" type="button">Menu</button>
+            </div>
+          </div>
+        </div>
+      </section>
 
       <!-- CHAT -->
       <section class="section" id="sec-chat" aria-label="Chat">
@@ -1037,7 +1005,31 @@ html[data-hero="night"] .broadcast-title{
   </nav>
 
   <div id="toast" class="toast hidden" aria-live="polite"></div>
-</div>
+
+  <!-- Intake modal (used by "Build my matchday") -->
+  <div id="intakeModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Concierge intake">
+    <div class="modalCard" role="document">
+      <div class="modalHead">
+        <h3>Matchday request</h3>
+        <button class="iconBtn" id="closeModal" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="modalBody">
+        <label class="required" for="iCity">City</label>
+        <input id="iCity" placeholder="e.g., Dallas" />
+        <label class="required" for="iDate">Date</label>
+        <input id="iDate" type="date" />
+        <label class="required" for="iGroup">Party size</label>
+        <input id="iGroup" inputmode="numeric" placeholder="e.g., 4" />
+        <label for="iBudget">Budget (optional)</label>
+        <input id="iBudget" placeholder="e.g., $200–$400" />
+        <label class="required" for="iContact">Contact</label>
+        <input id="iContact" placeholder="Phone or email" />
+        <button class="ctaBtn" id="submitIntake" type="button">Submit request</button>
+        <div id="intakeMsg" class="hint"></div>
+        <div class="hint">We’ll route you to Chat next to refine venue area + time window.</div>
+      </div>
+    </div>
+  </div>
 
   <script>
     const state = { lang:'en', scope:'global', city:'' };
@@ -1106,19 +1098,7 @@ html[data-hero="night"] .broadcast-title{
       if(sec === 'fanzone'){
         if(!window.__fanzoneLoaded) loadFanzone();
       }
-    }
-
-    function updateFlowCopy(){
-      const sub = document.getElementById('flowCitySub');
-      if(!sub) return;
-      if(state.scope === 'city' && state.city){
-        sub.textContent = `City mode: ${state.city}`;
-      }else if(state.scope === 'city'){
-        sub.textContent = 'City mode (enter a city in Schedule)';
-      }else{
-        sub.textContent = 'Global view (tap Scope → City)';
-      }
-    }
+    }    }
 
     function updatePills(){
       const pillLang = document.getElementById('pillLang');
@@ -1130,8 +1110,6 @@ html[data-hero="night"] .broadcast-title{
       const citySearch = document.getElementById('citySearch');
       if(scopeSelect) scopeSelect.value = state.scope;
       if(citySearch) citySearch.value = state.city || '';
-
-      updateFlowCopy();
     }
 
     function cycleLang(){
@@ -1139,7 +1117,8 @@ html[data-hero="night"] .broadcast-title{
       state.lang = order[(order.indexOf(state.lang)+1) % order.length];
       updatePills();
       updateHeroCountdown();
-toast(`Language: ${state.lang.toUpperCase()}`);
+systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
+      toast(`Language: ${state.lang.toUpperCase()}`);
       haptic(8);
       if(document.body.dataset.sec === 'menu') loadMenu();
       if(document.body.dataset.sec === 'fanzone') loadFanzone();
@@ -1151,7 +1130,6 @@ toast(`Language: ${state.lang.toUpperCase()}`);
       systemMsg(state.scope === 'global' ? 'Global schedule enabled.' : 'City schedule enabled. Enter a city name in Schedule.');
       toast(state.scope === 'global' ? 'Scope: Global' : 'Scope: City');
       haptic(8);
-      loadPresence();
       if(document.body.dataset.sec === 'schedule') loadSchedule();
     }
 
@@ -1168,8 +1146,6 @@ toast(`Language: ${state.lang.toUpperCase()}`);
       const hour = now.getHours(); // user local time
       const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
       const isDay = prefersLight || (hour >= 7 && hour < 19);
-      // Expose day/night state for CSS (title gradients, etc.)
-      try{ document.documentElement.setAttribute('data-hero', isDay ? 'day' : 'night'); }catch(e){}
       const src = isDay ? '/static/hero_stadium_day.png' : '/static/hero_stadium_night.png';
       // cache-bust daily to keep updates visible without hard-refresh
       const stamp = now.getFullYear().toString() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0');
@@ -1439,26 +1415,7 @@ function startHeroCountdown(){
       }catch(e){
         hint.textContent = 'Fan Zone temporarily unavailable.';
       }
-    }
-
-    // === PRESENCE ===
-    async async function loadPresence(){
-      const el = document.getElementById('presenceText');
-      if(!el) return;
-      el.textContent = 'Loading…';
-      try{
-        const city = (state.scope === 'city') ? (state.city || '') : '';
-        const url = `/schedule.json?scope=${encodeURIComponent(state.scope)}&city=${encodeURIComponent(city)}`;
-        const r = await fetch(url, {cache:'no-store'});
-        const data = await r.json();
-        const isMatchDay = !!(data && (data.is_matchday || data.is_match_day || data.is_match));
-        el.innerHTML = isMatchDay
-          ? `<b style="color:var(--warn)">Match day</b> — reserve early. Ask Chat for best venues near you.`
-          : `No match today — plan ahead and reserve early.`;
-      }catch(e){
-        el.textContent = 'Status unavailable.';
-      }
-    }
+    }    }
 
     function prefetchAll(){
       try{ loadMenu(); }catch(e){}
@@ -1492,7 +1449,7 @@ function startHeroCountdown(){
       document.body.classList.remove('modalOpen');
     }
 
-    if(openBtn) if(openBtn) openBtn.addEventListener('click', openModal);
+    if(openBtn) openBtn.addEventListener('click', openModal);
     if(closeBtn) closeBtn.addEventListener('click', closeModal);
     if(modal) modal.addEventListener('click', (e)=>{ if(e.target === modal) closeModal(); });
     // stop clicks inside card from closing
@@ -1604,36 +1561,6 @@ const ctaChat = document.getElementById('ctaChat');
         systemMsg('Reservation request: tell me city/venue + date/time + party size.');
       });
 
-      // Matchday flow wiring
-      const flowCityBtn = document.getElementById('flowCityBtn');
-      if(flowCityBtn) if(flowCityBtn) flowCityBtn.addEventListener('click', ()=>{
-        haptic(8);
-        setSection('schedule');
-        state.scope = 'city';
-        updatePills();
-        toast('Tip: enter your city, then Refresh.');
-        setTimeout(()=>{ try{ document.getElementById('citySearch').focus(); }catch(e){} }, 180);
-      });
-
-      const flowMatchBtn = document.getElementById('flowMatchBtn');
-      if(flowMatchBtn) if(flowMatchBtn) flowMatchBtn.addEventListener('click', ()=>{
-        haptic(8);
-        setSection('schedule');
-      });
-
-      const flowReserveBtn = document.getElementById('flowReserveBtn');
-      if(flowReserveBtn) if(flowReserveBtn) flowReserveBtn.addEventListener('click', ()=>{
-        haptic(10);
-        openModal();
-      });
-
-      const flowQuick = document.getElementById('flowQuick');
-      if(flowQuick) if(flowQuick) flowQuick.addEventListener('click', ()=>{
-        haptic(8);
-        toast('Fast plan: 1) City  2) Match  3) Reserve');
-        setTimeout(()=>{ try{ document.getElementById('flowReserveBtn').scrollIntoView({block:'center', behavior:'smooth'});}catch(e){} }, 60);
-      });
-
       // Home Explore shortcuts
       const hs = document.getElementById('homeSchedule');
       if(hs) hs.addEventListener('click', ()=>{ haptic(8); setSection('schedule'); });
@@ -1656,14 +1583,10 @@ const ctaChat = document.getElementById('ctaChat');
       const reloadFanzone = document.getElementById('reloadFanzone');
       if(reloadFanzone) reloadFanzone.addEventListener('click', ()=>{ haptic(6); loadFanzone(); });
 
-      const refreshStatus = document.getElementById('refreshStatus');
-      if(refreshStatus) if(refreshStatus) refreshStatus.addEventListener('click', ()=>{ haptic(6); loadPresence(); });
-
       const scopeSelect = document.getElementById('scopeSelect');
       if(scopeSelect) scopeSelect.addEventListener('change', (e)=>{
         state.scope = (e.target.value === 'city') ? 'city' : 'global';
         updatePills();
-        loadPresence();
         loadSchedule();
       });
 
@@ -1672,7 +1595,6 @@ const ctaChat = document.getElementById('ctaChat');
         clearTimeout(window.__cityDeb);
         window.__cityDeb = setTimeout(()=>{
           if(state.scope === 'city') loadSchedule();
-          loadPresence();
           updatePills();
         }, 350);
       });
@@ -1686,7 +1608,6 @@ const ctaChat = document.getElementById('ctaChat');
 
       updatePills();
       systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
-      loadPresence();
       setTimeout(prefetchAll, 250);
 
 
