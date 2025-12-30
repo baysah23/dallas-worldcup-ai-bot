@@ -853,6 +853,7 @@
       <section class="countdownGlass" aria-label="Live countdown">
       <div class="cdTop">Countdown to Glory</div>
       <div class="cdRow" role="timer" aria-live="polite">
+        <div class="cdBadge" id="cdBadge" aria-hidden="true">Match Day</div>
         <div class="cdCell"><div class="cdNum" id="cdD">00</div><div class="cdLbl">D</div></div>
         <div class="cdSep">•</div>
         <div class="cdCell"><div class="cdNum" id="cdH">00</div><div class="cdLbl">H</div></div>
@@ -1231,26 +1232,74 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       const hEl = document.getElementById('cdH');
       const mEl = document.getElementById('cdM');
       const sEl = document.getElementById('cdS');
-      const badge = document.getElementById('cdBadge');
       if(!wrap || !dEl || !hEl || !mEl || !sEl) return;
 
       const targetDate = new Date(HERO_KICKOFF_ISO);
-      const target = targetDate.getTime();
+      const targetMs = targetDate.getTime();
       const now = new Date();
       const nowMs = now.getTime();
-      let diff = target - nowMs;
+      let diff = targetMs - nowMs;
 
-      // Match Day = same local calendar day as kickoff (or already started)
-      const isMatchDay =
+      // Ensure badge exists (so we never "disappear" on match day)
+      let badge = document.getElementById('cdBadge');
+      if(!badge){
+        badge = document.createElement('div');
+        badge.className = 'cdBadge';
+        badge.id = 'cdBadge';
+        badge.textContent = 'Match Day';
+        badge.setAttribute('aria-hidden','true');
+        const row = wrap.querySelector('.cdRow');
+        if(row) row.prepend(badge);
+        else wrap.prepend(badge);
+      }
+
+      // Match Day = same *local* calendar day as kickoff (or already started)
+      const sameLocalDay =
         (now.getFullYear() === targetDate.getFullYear() &&
          now.getMonth() === targetDate.getMonth() &&
-         now.getDate() === targetDate.getDate()) || (diff <= 0);
+         now.getDate() === targetDate.getDate());
+
+      const isMatchDay = sameLocalDay || (diff <= 0);
 
       if(isMatchDay){
         wrap.classList.add('isMatchDay');
-        if(badge) badge.setAttribute('aria-hidden','false');
+        badge.setAttribute('aria-hidden','false');
         return;
       }else{
+        wrap.classList.remove('isMatchDay');
+        badge.setAttribute('aria-hidden','true');
+      }
+
+      if(!Number.isFinite(diff) || diff <= 0){
+        dEl.textContent = '00'; hEl.textContent = '00'; mEl.textContent = '00'; sEl.textContent = '00';
+        return;
+      }
+
+      const totalSeconds = Math.floor(diff / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+
+      const nextD = String(days).padStart(2,'0');
+      const nextH = String(hours).padStart(2,'0');
+      const nextM = String(minutes).padStart(2,'0');
+      const nextS = String(seconds).padStart(2,'0');
+
+      const tick = (el, next) => {
+        if(el.textContent !== next){
+          el.textContent = next;
+          el.classList.remove('tick');
+          void el.offsetWidth;
+          el.classList.add('tick');
+        }
+      };
+
+      tick(dEl, nextD);
+      tick(hEl, nextH);
+      tick(mEl, nextM);
+      tick(sEl, nextS);
+    }else{
         wrap.classList.remove('isMatchDay');
         if(badge) badge.setAttribute('aria-hidden','true');
       }
