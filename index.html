@@ -857,6 +857,36 @@ html[data-hero="night"] .broadcast-title{
   .hero{ min-height: 60vh; }
 }
 
+
+/* Landscape hero image: show full banner (avoid crop) */
+@media (orientation: landscape){
+  .hero{
+    min-height: 56vh;
+  }
+  /* Ensure the hero image shows fully in landscape */
+  #heroImage{
+    object-fit: contain !important;
+    object-position: center center !important;
+  }
+  /* If the hero uses background-image instead of <img>, cover that too */
+  .hero{
+    background-size: contain !important;
+    background-position: center center !important;
+    background-repeat: no-repeat !important;
+  }
+  /* Premium filler behind "contain" letterboxing */
+  .hero::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background: radial-gradient(120% 90% at 50% 20%, rgba(255,255,255,.06), rgba(0,0,0,.25));
+    pointer-events:none;
+    z-index:1;
+  }
+  /* Keep hero content above the vignette */
+  .hero > *{ position: relative; z-index: 2; }
+}
+
 </style>
 </head>
 
