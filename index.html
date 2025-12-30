@@ -163,7 +163,7 @@
       display:flex;
       align-items: baseline;
       justify-content: center;
-      gap: 10px; /* tighter */
+      gap: 8px; /* tighter */
       flex-wrap: nowrap;
     }
 
@@ -535,7 +535,7 @@
     }
     .modalHead{
       display:flex; justify-content:space-between; align-items:center;
-      gap: 10px;
+      gap: 8px;
     }
     .modalHead h3{ margin:0; font-size: 15px; letter-spacing:.02em; }
     .iconBtn{ background:none; border:none; color:#fff; font-size:18px; padding: 6px 10px; border-radius: 12px; }
@@ -714,8 +714,8 @@
 
   /* Compact footprint */
   width: auto;
-  max-width: min(56vw, 320px);
-  padding: 10px 12px 9px;
+  max-width: min(52vw, 300px);
+  padding: 8px 10px 8px;
   border-radius: 18px;
 
   /* Ultra-clear glass: very light, minimal pigment */
@@ -759,7 +759,7 @@
   display:flex;
   align-items: baseline;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
   margin: 0;
 }
 .countdownGlass .cdSep{ display:none; }
@@ -773,15 +773,15 @@
   font-variant-numeric: tabular-nums;
   font-weight: 760;
   line-height: 1;
-  font-size: clamp(22px, 5.2vw, 34px);
+  font-size: clamp(20px, 4.8vw, 30px);
   letter-spacing: .01em;
-  color: rgba(255, 232, 170, .98);
-  text-shadow: 0 10px 22px rgba(0,0,0,.28);
+  color: rgba(255, 240, 200, 1);
+  text-shadow: 0 6px 18px rgba(0,0,0,.35), 0 0 6px rgba(255,220,140,.25);
 }
 .countdownGlass .cdLbl{
   font-size: 11px;
   letter-spacing: .01em;
-  opacity: .90;
+  opacity: .95;
   text-shadow: 0 10px 22px rgba(0,0,0,.18);
   white-space: nowrap;
 }
@@ -800,6 +800,43 @@
 
 }
 
+
+/* ===== Rolex-style tick + hierarchy + match-day badge ===== */
+.countdownGlass .cdNum{ will-change: transform, opacity; }
+
+/* Subtle tick: quick fade/slide down then settle */
+@keyframes cdTick{
+  0%   { opacity: .55; transform: translateY(-2px); }
+  60%  { opacity: 1;   transform: translateY(0); }
+  100% { opacity: 1;   transform: translateY(0); }
+}
+.countdownGlass .cdNum.tick{
+  animation: cdTick 320ms ease-out;
+}
+
+/* Hierarchy: D strongest, then H, then M, then S */
+.countdownGlass .cdCell:nth-of-type(1) .cdNum{ font-weight: 820; }
+.countdownGlass .cdCell:nth-of-type(2) .cdNum{ font-weight: 780; }
+.countdownGlass .cdCell:nth-of-type(3) .cdNum{ font-weight: 760; }
+.countdownGlass .cdCell:nth-of-type(4) .cdNum{ font-weight: 740; }
+
+/* Match day state */
+.countdownGlass .cdBadge{
+  display:none;
+  align-items:center;
+  justify-content:center;
+  width: 100%;
+  padding: 4px 0;
+  font-weight: 820;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: rgba(255, 240, 200, 1);
+  text-shadow: 0 10px 22px rgba(0,0,0,.28), 0 0 6px rgba(255,220,140,.18);
+}
+.countdownGlass.isMatchDay .cdRow{ display:none !important; }
+.countdownGlass.isMatchDay .cdBadge{ display:flex; }
+
 </style>
 </head>
 
@@ -816,13 +853,13 @@
       <section class="countdownGlass" aria-label="Live countdown">
       <div class="cdTop">Countdown to Glory</div>
       <div class="cdRow" role="timer" aria-live="polite">
-        <div class="cdCell"><div class="cdNum" id="cdD">00</div><div class="cdLbl">Days</div></div>
+        <div class="cdCell"><div class="cdNum" id="cdD">00</div><div class="cdLbl">D</div></div>
         <div class="cdSep">•</div>
-        <div class="cdCell"><div class="cdNum" id="cdH">00</div><div class="cdLbl">Hours</div></div>
+        <div class="cdCell"><div class="cdNum" id="cdH">00</div><div class="cdLbl">H</div></div>
         <div class="cdSep">•</div>
-        <div class="cdCell"><div class="cdNum" id="cdM">00</div><div class="cdLbl">Minutes</div></div>
+        <div class="cdCell"><div class="cdNum" id="cdM">00</div><div class="cdLbl">M</div></div>
         <div class="cdSep">•</div>
-        <div class="cdCell"><div class="cdNum" id="cdS">00</div><div class="cdLbl">Seconds</div></div>
+        <div class="cdCell"><div class="cdNum" id="cdS">00</div><div class="cdLbl">S</div></div>
       </div>
     </section>
 
@@ -1189,23 +1226,67 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
     const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z'; // 2026 World Cup kickoff (UTC)
 
     function updateHeroCountdown(){
+      const wrap = document.querySelector('.countdownGlass');
       const dEl = document.getElementById('cdD');
       const hEl = document.getElementById('cdH');
       const mEl = document.getElementById('cdM');
       const sEl = document.getElementById('cdS');
-      if(!dEl || !hEl || !mEl || !sEl) return;
+      const badge = document.getElementById('cdBadge');
+      if(!wrap || !dEl || !hEl || !mEl || !sEl) return;
 
-      const target = new Date(HERO_KICKOFF_ISO).getTime();
-      const now = Date.now();
-      let diff = target - now;
+      const targetDate = new Date(HERO_KICKOFF_ISO);
+      const target = targetDate.getTime();
+      const now = new Date();
+      const nowMs = now.getTime();
+      let diff = target - nowMs;
+
+      // Match Day = same local calendar day as kickoff (or already started)
+      const isMatchDay =
+        (now.getFullYear() === targetDate.getFullYear() &&
+         now.getMonth() === targetDate.getMonth() &&
+         now.getDate() === targetDate.getDate()) || (diff <= 0);
+
+      if(isMatchDay){
+        wrap.classList.add('isMatchDay');
+        if(badge) badge.setAttribute('aria-hidden','false');
+        return;
+      }else{
+        wrap.classList.remove('isMatchDay');
+        if(badge) badge.setAttribute('aria-hidden','true');
+      }
 
       if(!Number.isFinite(diff) || diff <= 0){
-        dEl.textContent = '00';
-        hEl.textContent = '00';
-        mEl.textContent = '00';
-        sEl.textContent = '00';
+        // Fallback (should be covered by match-day)
+        dEl.textContent = '00'; hEl.textContent = '00'; mEl.textContent = '00'; sEl.textContent = '00';
         return;
       }
+
+      const totalSeconds = Math.floor(diff / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+
+      const nextD = String(days).padStart(2,'0');
+      const nextH = String(hours).padStart(2,'0');
+      const nextM = String(minutes).padStart(2,'0');
+      const nextS = String(seconds).padStart(2,'0');
+
+      // Subtle tick animation only when value changes
+      const tick = (el, next) => {
+        if(el.textContent !== next){
+          el.textContent = next;
+          el.classList.remove('tick'); // restart animation
+          void el.offsetWidth;         // reflow
+          el.classList.add('tick');
+        }
+      };
+
+      tick(dEl, nextD);
+      tick(hEl, nextH);
+      tick(mEl, nextM);
+      tick(sEl, nextS);
+    }
 
       // Calculate remaining time parts
       const totalSeconds = Math.floor(diff / 1000);
