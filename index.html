@@ -64,9 +64,8 @@
     }
 
     .hero{
-  padding-top: 42px;
-
-      position: relative;
+      padding-top: 0;
+position: relative;
       border-radius: var(--r16);
       overflow: hidden;
       border: 1px solid rgba(255,255,255,.10);
@@ -851,36 +850,6 @@ html[data-hero="night"] .broadcast-title{
 
 
 /* Landscape fix: let content breathe so panels expand with the hero/background */
-@media (orientation: landscape){
-  body{ min-height: 100vh; }
-  .wrap, .container, .shell, main{ width: 100%; max-width: 100%; }
-  .hero{ min-height: 60vh; }
-}
-
-
-  /* Ensure the hero image shows fully in landscape */
-  #heroImage{
-    object-fit: contain !important;
-    object-position: center center !important;
-  }
-  /* If the hero uses background-image instead of <img>, cover that too */
-  .hero{
-    background-size: contain !important;
-    background-position: center center !important;
-    background-repeat: no-repeat !important;
-  }
-  /* Premium filler behind "contain" letterboxing */
-  .hero::before{
-    content:"";
-    position:absolute;
-    inset:0;
-    background: radial-gradient(120% 90% at 50% 20%, rgba(255,255,255,.06), rgba(0,0,0,.25));
-    pointer-events:none;
-    z-index:1;
-  }
-  /* Keep hero content above the vignette */
-  .hero > *{ position: relative; z-index: 2; }
-}
 
 
 /* ===== Ultra-top Broadcast Title ===== */
@@ -968,93 +937,14 @@ html[data-hero="night"] .broadcast-title{
             <div class="heroActions" style="margin-top:12px" aria-label="Primary buttons">
               <button class="cta primary" id="ctaReserve" type="button">Reserve now</button>
               <button class="cta" id="ctaChat" type="button">Chat concierge</button>
-              <button class="cta" id="ctaPlan" type="button">Build my matchday</button>
-            </div>
+</div>
 
             <p class="hint" style="margin-top:12px">
               Tip: Try “Table for 4 • 7pm • Dallas” — or ask in Spanish/Portuguese/French.
             </p>
           </div>
         </div>
-
-        <!-- PHASE 2: MATCHDAY FLOW -->
-        <div class="card" aria-label="Matchday flow">
-          <div class="cardHead">
-            <h2 class="cardTitle">Matchday flow</h2>
-            <button class="pill" id="flowQuick" type="button">Fast plan</button>
-          </div>
-          <div class="cardBody">
-            <div class="flow" aria-label="Steps">
-              <div class="flowStep">
-                <div class="flowLeft">
-                  <div class="stepNum">1</div>
-                  <div class="stepTxt">
-                    <p class="stepTitle">Pick your city</p>
-                    <p class="stepSub" id="flowCitySub">Global view (tap Scope → City)</p>
-                  </div>
-                </div>
-                <button class="cta small" id="flowCityBtn" type="button">Set city</button>
-              </div>
-
-              <div class="flowStep">
-                <div class="flowLeft">
-                  <div class="stepNum">2</div>
-                  <div class="stepTxt">
-                    <p class="stepTitle">Choose a match</p>
-                    <p class="stepSub">Search teams, venues, groups</p>
-                  </div>
-                </div>
-                <button class="cta small" id="flowMatchBtn" type="button">Browse</button>
-              </div>
-
-              <div class="flowStep">
-                <div class="flowLeft">
-                  <div class="stepNum">3</div>
-                  <div class="stepTxt">
-                    <p class="stepTitle">Reserve premium access</p>
-                    <p class="stepSub">Tables • watch parties • VIP</p>
-                  </div>
-                </div>
-                <button class="cta small primary" id="flowReserveBtn" type="button">Reserve</button>
-              </div>
-            </div>
-
-            <p class="hint" style="margin-top:10px" id="flowHint">
-              We’ll keep it simple: pick a match, we route you to the best options.
-            </p>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Today">
-          <div class="cardHead">
-            <h2 class="cardTitle">Today</h2>
-            <button class="pill" id="refreshStatus" type="button">Refresh</button>
-          </div>
-          <div class="cardBody">
-            <div id="presenceText" class="hint">Loading…</div>
-            <p class="hint" style="margin-top:10px">
-              Use <b>Schedule</b> for global matches or switch to <b>City</b> to build your local plan.
-            </p>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Explore">
-          <div class="cardHead">
-            <h2 class="cardTitle">Explore</h2>
-          </div>
-          <div class="cardBody">
-            <div class="heroActions" style="margin-top:0">
-              <button class="cta" id="homeSchedule" type="button">Schedule</button>
-              <button class="cta" id="homeFanzone" type="button">Fan Zone</button>
-            </div>
-            <div style="height:10px"></div>
-            <div class="heroActions" style="margin-top:0">
-              <button class="cta" id="homeVIP" type="button">VIP</button>
-              <button class="cta" id="homeMenu" type="button">Menu</button>
-            </div>
-          </div>
-        </div>
-      </section>
+</section>
 
       <!-- CHAT -->
       <section class="section" id="sec-chat" aria-label="Chat">
@@ -1147,31 +1037,7 @@ html[data-hero="night"] .broadcast-title{
   </nav>
 
   <div id="toast" class="toast hidden" aria-live="polite"></div>
-
-  <!-- Intake modal (used by "Build my matchday") -->
-  <div id="intakeModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Concierge intake">
-    <div class="modalCard" role="document">
-      <div class="modalHead">
-        <h3>Matchday request</h3>
-        <button class="iconBtn" id="closeModal" type="button" aria-label="Close">✕</button>
-      </div>
-      <div class="modalBody">
-        <label class="required" for="iCity">City</label>
-        <input id="iCity" placeholder="e.g., Dallas" />
-        <label class="required" for="iDate">Date</label>
-        <input id="iDate" type="date" />
-        <label class="required" for="iGroup">Party size</label>
-        <input id="iGroup" inputmode="numeric" placeholder="e.g., 4" />
-        <label for="iBudget">Budget (optional)</label>
-        <input id="iBudget" placeholder="e.g., $200–$400" />
-        <label class="required" for="iContact">Contact</label>
-        <input id="iContact" placeholder="Phone or email" />
-        <button class="ctaBtn" id="submitIntake" type="button">Submit request</button>
-        <div id="intakeMsg" class="hint"></div>
-        <div class="hint">We’ll route you to Chat next to refine venue area + time window.</div>
-      </div>
-    </div>
-  </div>
+</div>
 
   <script>
     const state = { lang:'en', scope:'global', city:'' };
@@ -1576,7 +1442,7 @@ function startHeroCountdown(){
     }
 
     // === PRESENCE ===
-    async function loadPresence(){
+    async async function loadPresence(){
       const el = document.getElementById('presenceText');
       if(!el) return;
       el.textContent = 'Loading…';
@@ -1626,7 +1492,7 @@ function startHeroCountdown(){
       document.body.classList.remove('modalOpen');
     }
 
-    if(openBtn) openBtn.addEventListener('click', openModal);
+    if(openBtn) if(openBtn) openBtn.addEventListener('click', openModal);
     if(closeBtn) closeBtn.addEventListener('click', closeModal);
     if(modal) modal.addEventListener('click', (e)=>{ if(e.target === modal) closeModal(); });
     // stop clicks inside card from closing
@@ -1740,7 +1606,7 @@ const ctaChat = document.getElementById('ctaChat');
 
       // Matchday flow wiring
       const flowCityBtn = document.getElementById('flowCityBtn');
-      if(flowCityBtn) flowCityBtn.addEventListener('click', ()=>{
+      if(flowCityBtn) if(flowCityBtn) flowCityBtn.addEventListener('click', ()=>{
         haptic(8);
         setSection('schedule');
         state.scope = 'city';
@@ -1750,19 +1616,19 @@ const ctaChat = document.getElementById('ctaChat');
       });
 
       const flowMatchBtn = document.getElementById('flowMatchBtn');
-      if(flowMatchBtn) flowMatchBtn.addEventListener('click', ()=>{
+      if(flowMatchBtn) if(flowMatchBtn) flowMatchBtn.addEventListener('click', ()=>{
         haptic(8);
         setSection('schedule');
       });
 
       const flowReserveBtn = document.getElementById('flowReserveBtn');
-      if(flowReserveBtn) flowReserveBtn.addEventListener('click', ()=>{
+      if(flowReserveBtn) if(flowReserveBtn) flowReserveBtn.addEventListener('click', ()=>{
         haptic(10);
         openModal();
       });
 
       const flowQuick = document.getElementById('flowQuick');
-      if(flowQuick) flowQuick.addEventListener('click', ()=>{
+      if(flowQuick) if(flowQuick) flowQuick.addEventListener('click', ()=>{
         haptic(8);
         toast('Fast plan: 1) City  2) Match  3) Reserve');
         setTimeout(()=>{ try{ document.getElementById('flowReserveBtn').scrollIntoView({block:'center', behavior:'smooth'});}catch(e){} }, 60);
@@ -1791,7 +1657,7 @@ const ctaChat = document.getElementById('ctaChat');
       if(reloadFanzone) reloadFanzone.addEventListener('click', ()=>{ haptic(6); loadFanzone(); });
 
       const refreshStatus = document.getElementById('refreshStatus');
-      if(refreshStatus) refreshStatus.addEventListener('click', ()=>{ haptic(6); loadPresence(); });
+      if(refreshStatus) if(refreshStatus) refreshStatus.addEventListener('click', ()=>{ haptic(6); loadPresence(); });
 
       const scopeSelect = document.getElementById('scopeSelect');
       if(scopeSelect) scopeSelect.addEventListener('change', (e)=>{
