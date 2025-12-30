@@ -759,8 +759,6 @@
 }
 
 /* Hide top label row for compact watch look */
-.countdownGlass .cdTop{ display:none; }
-
 .countdownGlass .cdRow{
   display:flex;
   align-items: baseline;
@@ -1253,6 +1251,24 @@ html[data-hero="night"] .broadcast-title{
     /* === Primary CTA text color (lock) === */
     .cta.primary{ color: rgba(255,255,255,.96) !important; }
 
+
+/* ===== v1.0 FIX (LOCK): UNTIL KICKOFF visibility + elite contrast ===== */
+.countdownGlass .cdTop{
+  display:block !important;
+  margin: 0 0 6px !important;
+  text-align: left !important;
+
+  font-size: 11px !important;
+  font-weight: 950 !important;
+  letter-spacing: .18em !important;
+  text-transform: uppercase !important;
+
+  color: rgba(255,255,255,.96) !important;
+  text-shadow:
+    0 2px 10px rgba(0,0,0,.75),
+    0 0 22px rgba(0,0,0,.45) !important;
+}
+
 </style>
 </head>
 
@@ -1305,8 +1321,7 @@ html[data-hero="night"] .broadcast-title{
               <div class="quickChips" aria-label="Quick reserve chips">
                 <button class="chip" type="button" data-q="VIP vibe">VIP vibe</button>
                 <button class="chip" type="button" data-q="Table for 4">Table for 4</button>
-                <button class="chip" type="button" data-q="VIP vibe">VIP vibe</button>
-              </div>
+                </div>
             </div>
 
             <p class="hint" style="margin-top:12px">
@@ -1676,9 +1691,6 @@ function updateHeroCountdown(){
 
   const badge = ensureMatchDayBadge();
 
-  // Pull match-day status from the schedule feed (non-blocking)
-  try{ refreshMatchDayStatus(); }catch(e){}
-
   const targetDate = new Date(HERO_KICKOFF_ISO);
   const targetMs = targetDate.getTime();
   const now = new Date();
@@ -1690,8 +1702,9 @@ function updateHeroCountdown(){
      now.getMonth() === targetDate.getMonth() &&
      now.getDate() === targetDate.getDate());
 
-  const isMatchDay = !!window.__isMatchDay;
-if(isMatchDay){
+  const isMatchDay = sameLocalDay || (diff <= 0);
+
+  if(isMatchDay){
     wrap.classList.add('isMatchDay');
     if(badge) badge.setAttribute('aria-hidden','false');
     return;
@@ -1913,31 +1926,7 @@ function startHeroCountdown(){
     }
 
     // === PRESENCE ===
-    
-// ===== Match-Day (badge) uses actual schedule feed =====
-window.__isMatchDay = false;
-window.__matchdayLastCheck = 0;
-
-async function refreshMatchDayStatus(){
-  // Keep this light: 1 request per 60s max (unless forced)
-  const now = Date.now();
-  if(now - (window.__matchdayLastCheck || 0) < 60_000) return window.__isMatchDay;
-  window.__matchdayLastCheck = now;
-
-  try{
-    const city = (state.scope === 'city') ? (state.city || '') : '';
-    const url = `/schedule.json?scope=${encodeURIComponent(state.scope)}&city=${encodeURIComponent(city)}&t=${now}`;
-    const r = await fetch(url, {cache:'no-store'});
-    const data = await r.json();
-    window.__isMatchDay = !!(data && (data.is_matchday || data.is_match_day || data.is_match));
-  }catch(e){
-    // If schedule can't load, do not force Match Day; keep countdown visible.
-    window.__isMatchDay = false;
-  }
-  return window.__isMatchDay;
-}
-
-async function loadPresence(){
+    async function loadPresence(){
       const el = document.getElementById('presenceText');
       if(!el) return;
       el.textContent = 'Loading…';
@@ -2206,9 +2195,7 @@ const ctaChat = document.getElementById('ctaChat');
       if(scopeSelect) scopeSelect.addEventListener('change', (e)=>{
         state.scope = (e.target.value === 'city') ? 'city' : 'global';
         updatePills();
-        try{ window.__matchdayLastCheck = 0; }catch(e){}
-       try{ refreshMatchDayStatus(); }catch(e){}
-       loadPresence();
+        loadPresence();
         loadSchedule();
       });
 
@@ -2217,9 +2204,7 @@ const ctaChat = document.getElementById('ctaChat');
         clearTimeout(window.__cityDeb);
         window.__cityDeb = setTimeout(()=>{
           if(state.scope === 'city') loadSchedule();
-          try{ window.__matchdayLastCheck = 0; }catch(e){}
-       try{ refreshMatchDayStatus(); }catch(e){}
-       loadPresence();
+          loadPresence();
           updatePills();
         }, 350);
       });
