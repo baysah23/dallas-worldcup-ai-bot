@@ -65,34 +65,15 @@
       will-change: transform;
       height:auto;
     }
-    #heroBanner{ }
+    #heroBanner{ min-height: 220px; margin: 10px 0 10px; }
 
-    /* ===== HERO: CINEMATIC (single source of truth) ===== */
-    :root{ --heroY: 0px; --heroIdle: 0px; }
-    #heroBanner{
-      height: clamp(190px, 26vh, 230px);
-      min-height: unset;
-      margin: 10px 0 10px;
-    }
-    #heroBanner .heroImg{
-      height: 100%;
-      width: 100%;
-      object-fit: cover;
-      object-position: 50% 45%;
-      will-change: transform, filter;
-      transform: translate3d(0, calc(var(--heroY) + var(--heroIdle)), 0) scale(1.08);
-      transition: transform 380ms ease;
-      animation: heroBreathe 8.6s ease-in-out infinite;
-    }
-    @keyframes heroBreathe{
-      0%,100%{ filter: saturate(1.03) contrast(1.03); }
-      50%{ filter: saturate(1.12) contrast(1.06); }
-    }
-    @media (prefers-reduced-motion: reduce){
-      #heroBanner .heroImg{ transform: none; animation: none; }
-    }
 
-/* === CARDS === */
+
+    
+
+    :root{ --heroY: 0px; }
+
+    /* === CARDS === */
     .card{
       margin-top: 14px;
       border-radius: var(--r16);
@@ -463,23 +444,44 @@
       transform: translateX(-50%);
       bottom: 8px;
       width: min(92%, 420px);
-      border-radius: 18px;
+      border-radius: 16px;
 
-      /* ultra-glass: almost invisible */
-      border: 1px solid rgba(255,255,255,.16);
-background: rgba(255,255,255,.04);
-/* the "glass" comes from blur + saturation; avoid dark fills */
-      backdrop-filter: blur(10px) saturate(1.25);
-      -webkit-backdrop-filter: blur(10px) saturate(1.25);
+      /* noticeably-glassy, but still lets the hero image breathe */
+      background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.14);
+      backdrop-filter: blur(16px) saturate(1.55);
+      -webkit-backdrop-filter: blur(16px) saturate(1.55);
 
-      box-shadow: 0 6px 22px rgba(0,0,0,.10);
-padding: 4px 6px;
-z-index: 50;
+      /* keep it airy (no muddy shadow) */
+      box-shadow: 0 8px 22px rgba(0,0,0,.16);
+      padding: 4px 6px;
+      z-index: 50;
       pointer-events: none;
       overflow:hidden;
     }
 
-    50%{ transform: translateX(16%); opacity:.28; }
+    /* subtle premium highlight line (gold shimmer) */
+    .heroCountdown::before{
+      content:"";
+      position:absolute;
+      left:14px; right:14px; top:8px;
+      height: 2px;
+      border-radius: 999px;
+      background: linear-gradient(90deg,
+        rgba(212,175,55,0) 0%,
+        rgba(212,175,55,.12) 28%,
+        rgba(255,255,255,.12) 50%,
+        rgba(212,175,55,.12) 72%,
+        rgba(212,175,55,0) 100%
+      );
+      opacity: .12;
+      transform: translateX(-16%);
+      filter: blur(.2px);
+      animation: heroShimmer 10.5s ease-in-out infinite;
+    }
+    @keyframes heroShimmer{
+      0%,100%{ transform: translateX(-16%); opacity:.18; }
+      50%{ transform: translateX(16%); opacity:.28; }
     }
 
     .heroCdTop{
@@ -915,17 +917,28 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       const sEl = document.getElementById('cdS');
       if(!dEl || !hEl || !mEl || !sEl) return;
 
-      const target = new Date(HERO_KICKOFF_ISO).getTime();
-      const now = Date.now();
-      let diff = target - now;
-
-      if(!Number.isFinite(diff) || diff <= 0){
-        dEl.textContent = '00';
-        hEl.textContent = '00';
-        mEl.textContent = '00';
-        sEl.textContent = '00';
+      const target = Date.parse(HERO_KICKOFF_ISO);
+      if(!Number.isFinite(target)){
+        dEl.textContent = hEl.textContent = mEl.textContent = sEl.textContent = '00';
         return;
       }
+
+      let diff = target - Date.now();
+      if(diff <= 0){
+        dEl.textContent = hEl.textContent = mEl.textContent = sEl.textContent = '00';
+        return;
+      }
+
+      const sec = Math.floor(diff / 1000);
+      const days = Math.floor(sec / 86400);
+      const hours = Math.floor((sec % 86400) / 3600);
+      const mins = Math.floor((sec % 3600) / 60);
+      const secs = sec % 60;
+
+      dEl.textContent = String(days).padStart(2,'0');
+      hEl.textContent = String(hours).padStart(2,'0');
+      mEl.textContent = String(mins).padStart(2,'0');
+      sEl.textContent = String(secs).padStart(2,'0');
     }
 
     function startHeroCountdown(){
@@ -1333,66 +1346,43 @@ systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP 
       setTimeout(prefetchAll, 250);
 
 
-    // === Ambient parallax (micro) on hero image ===
+    // === Hero cinematic micro-motion (safe) ===
     (function(){
+      const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if(prefersReduced) return;
+
       const img = document.querySelector('#heroBanner .heroImg');
       if(!img) return;
 
+      // 1) Scroll-based parallax (subtle)
+      let scrollYpx = 0;
       let ticking = false;
       function onScroll(){
+        scrollYpx = window.scrollY || 0;
         if(ticking) return;
         ticking = true;
         requestAnimationFrame(()=>{
-          const y = Math.min(12, Math.max(0, window.scrollY * 0.06));
-          document.documentElement.style.setProperty('--heroY', `${y}px`);
+          const y = Math.min(10, Math.max(0, scrollYpx * 0.06));
+          document.documentElement.style.setProperty('--heroY', `${y.toFixed(2)}px`);
           ticking = false;
         });
       }
       window.addEventListener('scroll', onScroll, {passive:true});
       onScroll();
-    })();
 
-}
-
-    if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+      // 2) Idle drift (works even when you don't scroll)
+      const start = performance.now();
+      function drift(now){
+        const t = (now - start) / 1000;
+        const driftY = Math.sin(t * 0.65) * 2.2; // px
+        const driftX = Math.cos(t * 0.45) * 1.6; // px
+        img.style.transform = `translate3d(${driftX.toFixed(2)}px, calc(var(--heroY) + ${driftY.toFixed(2)}px), 0) scale(1.035)`;
+        requestAnimationFrame(drift);
+      }
+      requestAnimationFrame(drift);
+    })();if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
     else boot();
   </script>
-
-
-<script>
-/* HERO MOTION (single, safe): scroll parallax + subtle idle drift */
-(function(){
-  try{
-    const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if(prefersReduced) return;
-
-    const img = document.querySelector('#heroBanner .heroImg');
-    if(!img) return;
-
-    let ticking = false;
-    function onScroll(){
-      if(ticking) return;
-      ticking = true;
-      requestAnimationFrame(()=>{
-        const y = Math.min(10, Math.max(-2, window.scrollY * 0.06));
-        document.documentElement.style.setProperty('--heroY', y.toFixed(2) + 'px');
-        ticking = false;
-      });
-    }
-    window.addEventListener('scroll', onScroll, {passive:true});
-    onScroll();
-
-    let t0 = performance.now();
-    function idle(t){
-      const dt = (t - t0) / 1000;
-      const idleY = Math.sin(dt * 0.75) * 2.2;
-      document.documentElement.style.setProperty('--heroIdle', idleY.toFixed(2) + 'px');
-      requestAnimationFrame(idle);
-    }
-    requestAnimationFrame(idle);
-  }catch(e){}
-})();
-</script>
 
 </body>
 </html>
