@@ -5,8 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="format-detection" content="telephone=no"/>
   <title>World Cup Concierge</title>
-  <!-- WC_BUILD_VERSION: V1-FIX-CSS-20251230-214639 -->
-  <style>
+  <!-- WC_BUILD_VERSION: V1-LOCKED-MATERIAL-20251230-191122<style>
     :root{
       --bg:#071022;
       --panel:#0f1b33;
@@ -1242,6 +1241,31 @@ html[data-hero="night"] .broadcast-title{
     }
     .chip:active{ transform: translateY(1px); }
 
+
+    /* ===== Home polish add-ons (v1.0) ===== */
+    @media (prefers-reduced-motion: no-preference){
+      .cta.primary.pulse{
+        animation: ctaPulse 1.8s ease-in-out 2;
+      }
+      @keyframes ctaPulse{
+        0%,100%{ filter: brightness(1); transform: translateY(0); }
+        50%{ filter: brightness(1.06); transform: translateY(-0.5px); }
+      }
+    }
+
+    /* VIP tile: slightly richer glass + a touch more specular */
+    .tileVIP{
+      background: linear-gradient(180deg, rgba(255,255,255,.11), rgba(255,255,255,.05)) !important;
+      border-color: rgba(255,255,255,.20) !important;
+      box-shadow: 0 16px 46px rgba(0,0,0,.20), inset 0 1px 0 rgba(255,255,255,.18) !important;
+    }
+    .tileVIP::after{
+      opacity: .55 !important;
+    }
+    .tileVIP .tileIco{
+      box-shadow: 0 14px 34px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.30) !important;
+    }
+
 </style>
 </head>
 
@@ -1285,7 +1309,7 @@ html[data-hero="night"] .broadcast-title{
           </div>
           <div class="cardBody">
             <p class="hint" style="margin-top:0">
-              Fan-first. Luxury feel. Zero friction. Tell us time + party size — we’ll handle the venue.</p>
+              <span id="homeSubcopy" data-day="Luxury reservations, instantly. Choose time + party size — we route the best venue." data-night="Late-night match vibes. Tell us time + party size — we’ll route the perfect table.">Fan-first. Luxury feel. Zero friction. Tell us time + party size — we’ll handle the venue.</span></p>
 
                         <div class="heroActions homeActions" style="margin-top:12px" aria-label="Primary buttons">
               <button class="cta primary" id="ctaReserve" type="button">Reserve now</button>
@@ -1299,45 +1323,12 @@ html[data-hero="night"] .broadcast-title{
             </div>
 
             <p class="hint" style="margin-top:12px">
-              Tip: Try “Table for 4 • tonight 7pm • near me” — or ask in Spanish/Portuguese/French.
-            </p>
+              <span id="homeTip" data-day="Tip: Try “Table for 4 • tonight 7pm • near me” — or ask in Spanish/Portuguese/French." data-night="Tip: Try “VIP table • tonight • near me” — or ask in Spanish/Portuguese/French.">Tip: Try “Table for 4 • tonight 7pm • near me” — or ask in Spanish/Portuguese/French.
+            </span></p>
           </div>
         </div>
 
-</section>
 
-      <!-- CHAT -->
-      <section class="section" id="sec-chat" aria-label="Chat">
-        <div class="card">
-          <div class="cardHead">
-            <h2 class="cardTitle">Concierge chat</h2>
-            <button class="pill" id="clearChat" type="button">Clear</button>
-          </div>
-          <div class="cardBody">
-            <div id="chatLog" class="chatLog" aria-live="polite"></div>
-            <div class="chatInputRow">
-              <label class="srOnly" for="msg">Message</label>
-              <input id="msg" autocomplete="off" inputmode="text"
-                     placeholder="Ask anything (EN/ES/PT/FR)…"/>
-              <button id="sendBtn" type="button">Send</button>
-            </div>
-            <p class="hint">Tap the language pill to switch EN → ES → PT → FR.</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- MENU -->
-      <section class="section" id="sec-menu" aria-label="Menu">
-        <div class="card">
-          <div class="cardHead">
-            <h2 class="cardTitle">Menu</h2>
-            <button class="pill" id="reloadMenu" type="button">Refresh</button>
-          </div>
-          <div class="cardBody">
-            <div id="menuBody" class="list"></div>
-            <div id="menuHint" class="hint">Tap Refresh to load menu items.</div>
-          </div>
-        </div>
 
         <div class="card" aria-label="Language support">
           <div class="cardHead">
@@ -1363,7 +1354,7 @@ html[data-hero="night"] .broadcast-title{
           </div>
           <div class="cardBody">
             <div class="exploreGrid" aria-label="Explore tiles">
-              <button class="tile" id="tileVIP" type="button" aria-label="VIP">
+              <button class="tile tileVIP" id="tileVIP" type="button" aria-label="VIP">
                 <div class="tileIco">⭐</div>
                 <div class="tileTxt">
                   <div class="tileTitle">VIP</div>
@@ -1410,8 +1401,42 @@ html[data-hero="night"] .broadcast-title{
             </p>
           </div>
         </div>
+</section>
 
+      <!-- CHAT -->
+      <section class="section" id="sec-chat" aria-label="Chat">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">Concierge chat</h2>
+            <button class="pill" id="clearChat" type="button">Clear</button>
+          </div>
+          <div class="cardBody">
+            <div id="chatLog" class="chatLog" aria-live="polite"></div>
+            <div class="chatInputRow">
+              <label class="srOnly" for="msg">Message</label>
+              <input id="msg" autocomplete="off" inputmode="text"
+                     placeholder="Ask anything (EN/ES/PT/FR)…"/>
+              <button id="sendBtn" type="button">Send</button>
+            </div>
+            <p class="hint">Tap the language pill to switch EN → ES → PT → FR.</p>
+          </div>
+        </div>
       </section>
+
+      <!-- MENU -->
+      <section class="section" id="sec-menu" aria-label="Menu">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">Menu</h2>
+            <button class="pill" id="reloadMenu" type="button">Refresh</button>
+          </div>
+          <div class="cardBody">
+            <div id="menuBody" class="list"></div>
+            <div id="menuHint" class="hint">Tap Refresh to load menu items.</div>
+          </div>
+        </div>
+
+        </section>
 
       <!-- SCHEDULE -->
       <section class="section" id="sec-schedule" aria-label="Schedule">
@@ -1729,6 +1754,113 @@ function startHeroCountdown(){
   }catch(e){}
 }
 
+
+
+
+    // ===== Home enhancements: CTA pulse, chip->intake prefill, day/night microcopy =====
+    function updateHomeCopyByHero(){
+      const sub = document.getElementById('homeSubcopy');
+      const tip = document.getElementById('homeTip');
+      const mode = document.documentElement.getAttribute('data-hero') || 'night';
+      if(sub){
+        const day = sub.getAttribute('data-day');
+        const night = sub.getAttribute('data-night');
+        sub.textContent = (mode === 'day' ? (day||sub.textContent) : (night||sub.textContent));
+      }
+      if(tip){
+        const day = tip.getAttribute('data-day');
+        const night = tip.getAttribute('data-night');
+        tip.textContent = (mode === 'day' ? (day||tip.textContent) : (night||tip.textContent));
+      }
+    }
+
+    function openIntake(prefill={}){
+      const modal = document.getElementById('intakeModal');
+      if(!modal) return;
+      modal.classList.remove('hidden');
+      document.body.classList.add('modalOpen');
+
+      const iCity = document.getElementById('iCity');
+      const iDate = document.getElementById('iDate');
+      const iGroup = document.getElementById('iGroup');
+      const intakeMsg = document.getElementById('intakeMsg');
+
+      // Prefill: no city mention; leave city blank unless you choose later
+      if(iCity && prefill.city) iCity.value = prefill.city;
+
+      if(iDate){
+        // default to today if "tonight"
+        if(prefill.tonight){
+          const d = new Date();
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth()+1).padStart(2,'0');
+          const dd = String(d.getDate()).padStart(2,'0');
+          iDate.value = `${yyyy}-${mm}-${dd}`;
+        }
+      }
+      if(iGroup && prefill.party) iGroup.value = String(prefill.party);
+
+      if(intakeMsg){
+        const bits = [];
+        if(prefill.time) bits.push(`Time: ${prefill.time}`);
+        if(prefill.nearMe) bits.push('Area: near me');
+        if(prefill.vibe) bits.push(`Vibe: ${prefill.vibe}`);
+        intakeMsg.textContent = bits.length ? `Prefilled from Quick Reserve · ${bits.join(' · ')}` : '';
+      }
+      try{ haptic(6); }catch(e){}
+    }
+
+    function wireHomeChips(){
+      const chips = document.querySelectorAll('.quickChips .chip');
+      if(!chips || !chips.length) return;
+      chips.forEach(ch=>{
+        ch.addEventListener('click', ()=>{
+          const q = (ch.getAttribute('data-q') || ch.textContent || '').toLowerCase();
+          const prefill = {};
+          if(q.includes('tonight')){ prefill.tonight = true; prefill.time = '7pm'; }
+          if(q.includes('table for 4') || q.includes('for 4')){ prefill.party = 4; }
+          if(q.includes('near')){ prefill.nearMe = true; }
+          openIntake(prefill);
+        });
+      });
+    }
+
+    function pulseReserveCTA(){
+      const btn = document.getElementById('ctaReserve');
+      if(!btn) return;
+      // only pulse once per session
+      try{
+        if(sessionStorage.getItem('wc_cta_pulsed')) return;
+        sessionStorage.setItem('wc_cta_pulsed','1');
+      }catch(e){}
+      btn.classList.add('pulse');
+      const stop = ()=>btn.classList.remove('pulse');
+      setTimeout(stop, 5200);
+      btn.addEventListener('click', stop, {once:true});
+      btn.addEventListener('pointerdown', stop, {once:true});
+    }
+
+    // Ensure home copy updates after hero image mode is set
+    const __origSetHeroBannerImage = setHeroBannerImage;
+    setHeroBannerImage = function(){
+      try{ __origSetHeroBannerImage(); }catch(e){}
+      try{ updateHomeCopyByHero(); }catch(e){}
+    };
+
+    document.addEventListener('DOMContentLoaded', ()=>{
+      const intakeModal = document.getElementById('intakeModal');
+      const closeModal = document.getElementById('closeModal');
+      if(closeModal && intakeModal){
+        closeModal.addEventListener('click', ()=>{
+          intakeModal.classList.add('hidden');
+          document.body.classList.remove('modalOpen');
+        });
+      }
+
+      try{ pulseReserveCTA(); }catch(e){}
+      try{ wireHomeChips(); }catch(e){}
+      try{ updateHomeCopyByHero(); }catch(e){}
+    });
 
 
 // === CHAT ===
