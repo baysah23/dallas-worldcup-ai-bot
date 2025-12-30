@@ -5,8 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="format-detection" content="telephone=no"/>
   <title>World Cup Concierge</title>
-  <!-- WC_BUILD_VERSION: STEP15-20251229-PHASE2 -->
-  <style>
+  <!-- WC_BUILD_VERSION: V1-LOCKED-MATERIAL-20251230-191122<style>
     :root{
       --bg:#071022;
       --panel:#0f1b33;
@@ -1058,6 +1057,143 @@ html[data-hero="night"] .broadcast-title{
 }
 @media (min-width: 420px){
   .exploreGrid{ grid-template-columns: 1fr 1fr; }
+}
+
+
+/* =========================================================
+   v1.0 iOS 26.1 "Material" System
+   - One token set controls blur/opacity/borders/highlights
+   - Specular sweep (faint) on hover/press ONLY
+   - Icon glass puck upgrade
+   ========================================================= */
+:root{
+  --mat-blur: 16px;
+  --mat-sat: 1.55;
+
+  --mat-bg: rgba(255,255,255,.085);
+  --mat-bg2: rgba(255,255,255,.035);
+  --mat-border: rgba(255,255,255,.16);
+
+  --mat-press: rgba(255,255,255,.10);
+  --mat-shadow: 0 14px 40px rgba(0,0,0,.18);
+
+  --specular: rgba(255,255,255,.12);  /* super faint */
+  --specular2: rgba(255,255,255,0);
+
+  --puck-bg: rgba(255,255,255,.10);
+  --puck-border: rgba(255,255,255,.18);
+  --puck-blur: 18px;
+}
+
+/* Material apply: cards / tiles / buttons / countdown share same "glass DNA" */
+.card,
+.tile,
+.cta,
+.countdownGlass{
+  border-color: var(--mat-border) !important;
+  backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-sat)) !important;
+  -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-sat)) !important;
+  box-shadow: var(--mat-shadow) !important;
+}
+
+/* Cards */
+.card{
+  background: linear-gradient(180deg, var(--mat-bg), var(--mat-bg2)) !important;
+}
+
+/* Tiles */
+.tile{
+  background: linear-gradient(180deg, var(--mat-bg), var(--mat-bg2)) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Buttons */
+.cta{
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(15,27,51,.82), rgba(15,27,51,.62)) !important;
+  border: 1px solid var(--mat-border) !important;
+}
+
+/* Keep primary CTA gold premium */
+.cta.primary{
+  box-shadow: 0 14px 30px rgba(212,175,55,.22) !important;
+}
+
+/* Countdown keeps your placement + shape; just aligns material */
+.countdownGlass{
+  background: linear-gradient(180deg, var(--mat-bg), var(--mat-bg2)) !important;
+}
+
+/* === Specular sweep (hover/press only) ===
+   - No constant motion
+   - Activates on :hover (desktop) and :active (mobile press)
+*/
+.tile::after,
+.cta::after{
+  content:"";
+  position:absolute;
+  inset:-2px;
+  transform: translateX(-140%);
+  background: linear-gradient(90deg, var(--specular2), var(--specular), var(--specular2));
+  opacity: .35;
+  pointer-events:none;
+  transition: transform .65s ease, opacity .35s ease;
+}
+
+/* desktop hover */
+@media (hover:hover){
+  .tile:hover::after,
+  .cta:hover::after{
+    transform: translateX(140%);
+    opacity: .55;
+  }
+}
+
+/* mobile press */
+.tile:active::after,
+.cta:active::after{
+  transform: translateX(140%);
+  opacity: .60;
+}
+
+/* === Icon glass puck upgrade === */
+.tileIco{
+  background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.06)) !important;
+  border: 1px solid var(--puck-border) !important;
+  backdrop-filter: blur(var(--puck-blur)) saturate(1.7) !important;
+  -webkit-backdrop-filter: blur(var(--puck-blur)) saturate(1.7) !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,.14), inset 0 1px 0 rgba(255,255,255,.26) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* brighter top edge line + subtle inner glow */
+.tileIco::before{
+  content:"";
+  position:absolute;
+  left:8px; right:8px; top:7px;
+  height: 1px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.55), rgba(255,255,255,0));
+  opacity: .55;
+  pointer-events:none;
+}
+.tileIco::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius: inherit;
+  background: radial-gradient(120% 120% at 20% 0%, rgba(255,255,255,.22), rgba(255,255,255,0) 60%);
+  opacity:.45;
+  pointer-events:none;
+}
+
+/* Slightly nicer "tap" feel */
+.tile:active,
+.cta:active{
+  filter: brightness(1.06);
 }
 
 </style>
