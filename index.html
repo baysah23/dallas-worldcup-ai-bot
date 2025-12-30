@@ -64,7 +64,8 @@
     }
 
     .hero{
-      padding-top: 0;
+  padding-top: 42px;
+
       position: relative;
       border-radius: var(--r16);
       overflow: hidden;
@@ -75,7 +76,7 @@
 
     .heroMedia{
       position: relative;
-      height: clamp(210px, 34vh, 320px);
+      height: 218px;
       width: 100%;
       overflow: hidden;
     }
@@ -94,7 +95,6 @@
       height:100%;
       display:block;
       object-fit: cover;
-      object-position: center 55%;
       transform: translateZ(0);
     }
 
@@ -120,8 +120,19 @@
       .heroCine{ animation:none; transform: none; }
     }
 
-    /* Countdown base (positioned on hero; no duplicate styling) */
-    .countdownGlass{ position:absolute; right:14px; bottom:14px; z-index:55; }
+    /* Ultra-thin Apple-glass countdown bar (embedded) */
+    .countdownGlass{
+      margin: 8px 0 12px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(18, 28, 48, .22); /* lower opacity */
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      box-shadow: 0 10px 30px rgba(0,0,0,.40);
+      position: relative;
+      overflow: hidden;
+      padding: 10px 12px;
+    }
 
     /* Specular edge + soft internal highlight line */
     .countdownGlass::before{
@@ -216,22 +227,62 @@
       line-height: 1.35;
     }
 
-    /* === BUTTONS (MICRO INTERACTIONS) === */
-    .pill{
-      height: 36px;
-      padding: 0 12px;
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,.14);
-      background: rgba(7,16,34,.45);
-      color: rgba(234,240,255,.92);
-      font-weight: 900;
-      font-size: 12px;
-      letter-spacing: .02em;
-      -webkit-tap-highlight-color: transparent;
-      touch-action: manipulation;
+    /* === HOME PHASE 2: MATCHDAY FLOW === */
+    .flow{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      margin-top: 8px;
     }
-    .pill:active{ transform: translateY(1px); }
+    .flowStep{
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(11,21,44,.52);
+      padding: 10px 10px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      min-height: 56px;
+    }
+    .flowLeft{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width: 0;
+    }
+    .stepNum{
+      width:28px; height:28px; border-radius: 10px;
+      display:flex; align-items:center; justify-content:center;
+      font-weight: 950;
+      font-size: 13px;
+      color: rgba(7,16,34,.98);
+      background: linear-gradient(180deg, rgba(212,175,55,1), rgba(168,129,30,1));
+      box-shadow: 0 10px 30px rgba(212,175,55,.18);
+      flex:0 0 auto;
+    }
+    .stepTxt{
+      min-width: 0;
+    }
+    .stepTitle{
+      font-weight: 950;
+      font-size: 13px;
+      margin:0;
+      letter-spacing:.01em;
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
+    }
+    .stepSub{
+      margin: 3px 0 0;
+      font-size: 12px;
+      color: rgba(185,199,238,.92);
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
+    }
 
+    /* === BUTTONS (MICRO INTERACTIONS) === */
     .heroActions{
       display:flex;
       gap:10px;
@@ -656,7 +707,7 @@
   right: 14px;
   left: auto;
   transform: none;
-  bottom: 14px;
+  bottom: clamp(10px, 2.0vw, 16px);
 
   width: auto;
   max-width: min(52vw, 300px);
@@ -813,7 +864,7 @@ html[data-hero="night"] .broadcast-title{
     min-height: 56vh;
   }
   /* Ensure the hero image shows fully in landscape */
-  #heroImg{
+  #heroImage{
     object-fit: contain !important;
     object-position: center center !important;
   }
@@ -894,7 +945,66 @@ html[data-hero="night"] .broadcast-title{
           </div>
         </div>
 
-        
+        <!-- PHASE 2: MATCHDAY FLOW -->
+        <div class="card" aria-label="Matchday flow">
+          <div class="cardHead">
+            <h2 class="cardTitle">Matchday flow</h2>
+            <button class="pill" id="flowQuick" type="button">Fast plan</button>
+          </div>
+          <div class="cardBody">
+            <div class="flow" aria-label="Steps">
+              <div class="flowStep">
+                <div class="flowLeft">
+                  <div class="stepNum">1</div>
+                  <div class="stepTxt">
+                    <p class="stepTitle">Pick your city</p>
+                    <p class="stepSub" id="flowCitySub">Global view (tap Scope → City)</p>
+                  </div>
+                </div>
+                <button class="cta small" id="flowCityBtn" type="button">Set city</button>
+              </div>
+
+              <div class="flowStep">
+                <div class="flowLeft">
+                  <div class="stepNum">2</div>
+                  <div class="stepTxt">
+                    <p class="stepTitle">Choose a match</p>
+                    <p class="stepSub">Search teams, venues, groups</p>
+                  </div>
+                </div>
+                <button class="cta small" id="flowMatchBtn" type="button">Browse</button>
+              </div>
+
+              <div class="flowStep">
+                <div class="flowLeft">
+                  <div class="stepNum">3</div>
+                  <div class="stepTxt">
+                    <p class="stepTitle">Reserve premium access</p>
+                    <p class="stepSub">Tables • watch parties • VIP</p>
+                  </div>
+                </div>
+                <button class="cta small primary" id="flowReserveBtn" type="button">Reserve</button>
+              </div>
+            </div>
+
+            <p class="hint" style="margin-top:10px" id="flowHint">
+              We’ll keep it simple: pick a match, we route you to the best options.
+            </p>
+          </div>
+        </div>
+
+        <div class="card" aria-label="Today">
+          <div class="cardHead">
+            <h2 class="cardTitle">Today</h2>
+            <button class="pill" id="refreshStatus" type="button">Refresh</button>
+          </div>
+          <div class="cardBody">
+            <div id="presenceText" class="hint">Loading…</div>
+            <p class="hint" style="margin-top:10px">
+              Use <b>Schedule</b> for global matches or switch to <b>City</b> to build your local plan.
+            </p>
+          </div>
+        </div>
 
         <div class="card" aria-label="Explore">
           <div class="cardHead">
@@ -1098,7 +1208,19 @@ html[data-hero="night"] .broadcast-title{
       if(sec === 'fanzone'){
         if(!window.__fanzoneLoaded) loadFanzone();
       }
-    }    }
+    }
+
+    function updateFlowCopy(){
+      const sub = document.getElementById('flowCitySub');
+      if(!sub) return;
+      if(state.scope === 'city' && state.city){
+        sub.textContent = `City mode: ${state.city}`;
+      }else if(state.scope === 'city'){
+        sub.textContent = 'City mode (enter a city in Schedule)';
+      }else{
+        sub.textContent = 'Global view (tap Scope → City)';
+      }
+    }
 
     function updatePills(){
       const pillLang = document.getElementById('pillLang');
@@ -1110,6 +1232,8 @@ html[data-hero="night"] .broadcast-title{
       const citySearch = document.getElementById('citySearch');
       if(scopeSelect) scopeSelect.value = state.scope;
       if(citySearch) citySearch.value = state.city || '';
+
+      updateFlowCopy();
     }
 
     function cycleLang(){
@@ -1130,6 +1254,7 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       systemMsg(state.scope === 'global' ? 'Global schedule enabled.' : 'City schedule enabled. Enter a city name in Schedule.');
       toast(state.scope === 'global' ? 'Scope: Global' : 'Scope: City');
       haptic(8);
+      loadPresence();
       if(document.body.dataset.sec === 'schedule') loadSchedule();
     }
 
@@ -1415,7 +1540,26 @@ function startHeroCountdown(){
       }catch(e){
         hint.textContent = 'Fan Zone temporarily unavailable.';
       }
-    }    }
+    }
+
+    // === PRESENCE ===
+    async function loadPresence(){
+      const el = document.getElementById('presenceText');
+      if(!el) return;
+      el.textContent = 'Loading…';
+      try{
+        const city = (state.scope === 'city') ? (state.city || '') : '';
+        const url = `/schedule.json?scope=${encodeURIComponent(state.scope)}&city=${encodeURIComponent(city)}`;
+        const r = await fetch(url, {cache:'no-store'});
+        const data = await r.json();
+        const isMatchDay = !!(data && (data.is_matchday || data.is_match_day || data.is_match));
+        el.innerHTML = isMatchDay
+          ? `<b style="color:var(--warn)">Match day</b> — reserve early. Ask Chat for best venues near you.`
+          : `No match today — plan ahead and reserve early.`;
+      }catch(e){
+        el.textContent = 'Status unavailable.';
+      }
+    }
 
     function prefetchAll(){
       try{ loadMenu(); }catch(e){}
@@ -1532,7 +1676,7 @@ function startHeroCountdown(){
       wireNav();
       startHeroCountdown();
 
-            setHeroBannerImage();
+            try{ setHeroBannerImage(); }catch(e){ console.warn('hero image error', e); }
 
       // Day/Night hero switch wiring (local time + OS preference)
       try{
@@ -1561,6 +1705,36 @@ const ctaChat = document.getElementById('ctaChat');
         systemMsg('Reservation request: tell me city/venue + date/time + party size.');
       });
 
+      // Matchday flow wiring
+      const flowCityBtn = document.getElementById('flowCityBtn');
+      if(flowCityBtn) flowCityBtn.addEventListener('click', ()=>{
+        haptic(8);
+        setSection('schedule');
+        state.scope = 'city';
+        updatePills();
+        toast('Tip: enter your city, then Refresh.');
+        setTimeout(()=>{ try{ document.getElementById('citySearch').focus(); }catch(e){} }, 180);
+      });
+
+      const flowMatchBtn = document.getElementById('flowMatchBtn');
+      if(flowMatchBtn) flowMatchBtn.addEventListener('click', ()=>{
+        haptic(8);
+        setSection('schedule');
+      });
+
+      const flowReserveBtn = document.getElementById('flowReserveBtn');
+      if(flowReserveBtn) flowReserveBtn.addEventListener('click', ()=>{
+        haptic(10);
+        openModal();
+      });
+
+      const flowQuick = document.getElementById('flowQuick');
+      if(flowQuick) flowQuick.addEventListener('click', ()=>{
+        haptic(8);
+        toast('Fast plan: 1) City  2) Match  3) Reserve');
+        setTimeout(()=>{ try{ document.getElementById('flowReserveBtn').scrollIntoView({block:'center', behavior:'smooth'});}catch(e){} }, 60);
+      });
+
       // Home Explore shortcuts
       const hs = document.getElementById('homeSchedule');
       if(hs) hs.addEventListener('click', ()=>{ haptic(8); setSection('schedule'); });
@@ -1583,10 +1757,14 @@ const ctaChat = document.getElementById('ctaChat');
       const reloadFanzone = document.getElementById('reloadFanzone');
       if(reloadFanzone) reloadFanzone.addEventListener('click', ()=>{ haptic(6); loadFanzone(); });
 
+      const refreshStatus = document.getElementById('refreshStatus');
+      if(refreshStatus) refreshStatus.addEventListener('click', ()=>{ haptic(6); loadPresence(); });
+
       const scopeSelect = document.getElementById('scopeSelect');
       if(scopeSelect) scopeSelect.addEventListener('change', (e)=>{
         state.scope = (e.target.value === 'city') ? 'city' : 'global';
         updatePills();
+        loadPresence();
         loadSchedule();
       });
 
@@ -1595,6 +1773,7 @@ const ctaChat = document.getElementById('ctaChat');
         clearTimeout(window.__cityDeb);
         window.__cityDeb = setTimeout(()=>{
           if(state.scope === 'city') loadSchedule();
+          loadPresence();
           updatePills();
         }, 350);
       });
@@ -1608,6 +1787,7 @@ const ctaChat = document.getElementById('ctaChat');
 
       updatePills();
       systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
+      loadPresence();
       setTimeout(prefetchAll, 250);
 
 
