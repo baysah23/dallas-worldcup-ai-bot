@@ -974,6 +974,30 @@ html[data-hero="night"] .broadcast-title{
   .hero > *{ position: relative; z-index: 2; }
 }
 
+
+/* ===== v1.0 Countdown override (applies to ALL numbers) ===== */
+.countdownGlass .cdNum,
+.cdNum{
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  /* couple sizes down from the prior white version */
+  font-size: clamp(16px, 3.6vw, 22px) !important;
+  line-height: 1 !important;
+  letter-spacing: -0.02em !important;
+
+  /* Broadcast Gold (Controlled FIFA Gold) */
+  color: #D4AF37 !important;
+
+  text-shadow: 0 8px 20px rgba(0,0,0,.58) !important;
+}
+.countdownGlass .cdLbl,
+.cdLbl{
+  font-size: 10px !important;
+  font-weight: 850 !important;
+  letter-spacing: .04em !important;
+  color: rgba(255,255,255,.88) !important;
+}
+
 </style>
 </head>
 
