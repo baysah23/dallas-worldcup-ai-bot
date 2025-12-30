@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="format-detection" content="telephone=no"/>
   <title>World Cup Concierge</title>
-  <!-- WC_BUILD_VERSION: V1-LOCKED-MATERIAL-20251230-191122<style>
+  <!-- WC_BUILD_VERSION: V1-BUSINESS-NOCITY-FIX-20251230-222355 -->
+  <style>
     :root{
       --bg:#071022;
       --panel:#0f1b33;
@@ -1248,6 +1249,10 @@ html[data-hero="night"] .broadcast-title{
       text-shadow: 0 1px 1px rgba(0,0,0,0.25);
     }
 
+
+    /* === Primary CTA text color (lock) === */
+    .cta.primary{ color: rgba(255,255,255,.96) !important; }
+
 </style>
 </head>
 
@@ -1298,52 +1303,19 @@ html[data-hero="night"] .broadcast-title{
               <button class="cta" id="ctaChat" type="button">Chat concierge</button>
 
               <div class="quickChips" aria-label="Quick reserve chips">
-                <button class="chip" type="button" data-q="Tonight at 7pm">Tonight · 7pm</button>
+                <button class="chip" type="button" data-q="VIP vibe">VIP vibe</button>
                 <button class="chip" type="button" data-q="Table for 4">Table for 4</button>
-                <button class="chip" type="button" data-q="Near me">Near me</button>
+                <button class="chip" type="button" data-q="VIP vibe">VIP vibe</button>
               </div>
             </div>
 
             <p class="hint" style="margin-top:12px">
-              Tip: Try “Table for 4 • tonight 7pm • near me” — or ask in Spanish/Portuguese/French.
+              Tip: Try “Table for 4 • tonight 7pm • VIP vibe” — or ask in Spanish/Portuguese/French.
             </p>
           </div>
         </div>
 
-</section>
 
-      <!-- CHAT -->
-      <section class="section" id="sec-chat" aria-label="Chat">
-        <div class="card">
-          <div class="cardHead">
-            <h2 class="cardTitle">Concierge chat</h2>
-            <button class="pill" id="clearChat" type="button">Clear</button>
-          </div>
-          <div class="cardBody">
-            <div id="chatLog" class="chatLog" aria-live="polite"></div>
-            <div class="chatInputRow">
-              <label class="srOnly" for="msg">Message</label>
-              <input id="msg" autocomplete="off" inputmode="text"
-                     placeholder="Ask anything (EN/ES/PT/FR)…"/>
-              <button id="sendBtn" type="button">Send</button>
-            </div>
-            <p class="hint">Tap the language pill to switch EN → ES → PT → FR.</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- MENU -->
-      <section class="section" id="sec-menu" aria-label="Menu">
-        <div class="card">
-          <div class="cardHead">
-            <h2 class="cardTitle">Menu</h2>
-            <button class="pill" id="reloadMenu" type="button">Refresh</button>
-          </div>
-          <div class="cardBody">
-            <div id="menuBody" class="list"></div>
-            <div id="menuHint" class="hint">Tap Refresh to load menu items.</div>
-          </div>
-        </div>
 
         <div class="card" aria-label="Language support">
           <div class="cardHead">
@@ -1416,8 +1388,42 @@ html[data-hero="night"] .broadcast-title{
             </p>
           </div>
         </div>
+</section>
 
+      <!-- CHAT -->
+      <section class="section" id="sec-chat" aria-label="Chat">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">Concierge chat</h2>
+            <button class="pill" id="clearChat" type="button">Clear</button>
+          </div>
+          <div class="cardBody">
+            <div id="chatLog" class="chatLog" aria-live="polite"></div>
+            <div class="chatInputRow">
+              <label class="srOnly" for="msg">Message</label>
+              <input id="msg" autocomplete="off" inputmode="text"
+                     placeholder="Ask anything (EN/ES/PT/FR)…"/>
+              <button id="sendBtn" type="button">Send</button>
+            </div>
+            <p class="hint">Tap the language pill to switch EN → ES → PT → FR.</p>
+          </div>
+        </div>
       </section>
+
+      <!-- MENU -->
+      <section class="section" id="sec-menu" aria-label="Menu">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">Menu</h2>
+            <button class="pill" id="reloadMenu" type="button">Refresh</button>
+          </div>
+          <div class="cardBody">
+            <div id="menuBody" class="list"></div>
+            <div id="menuHint" class="hint">Tap Refresh to load menu items.</div>
+          </div>
+        </div>
+
+        </section>
 
       <!-- SCHEDULE -->
       <section class="section" id="sec-schedule" aria-label="Schedule">
@@ -1429,7 +1435,7 @@ html[data-hero="night"] .broadcast-title{
                 <option value="global">Global</option>
                 <option value="city">City</option>
               </select>
-              <input class="search" id="citySearch" placeholder="City (optional)…"/>
+              <input class="search" id="citySearch" placeholder="Host city (optional)…"/>
               <input class="search" id="scheduleSearch" placeholder="Search team, group, venue…"/>
               <button class="pill" id="reloadSchedule" type="button">Refresh</button>
             </div>
@@ -1485,8 +1491,8 @@ html[data-hero="night"] .broadcast-title{
         <button class="iconBtn" id="closeModal" type="button" aria-label="Close">✕</button>
       </div>
       <div class="modalBody">
-        <label class="required" for="iCity">City</label>
-        <input id="iCity" placeholder="e.g., Dallas" />
+        <label for="iCity">Venue / Area (optional)</label>
+        <input id="iCity" placeholder="e.g., Stadium district, downtown, or a venue name (optional)" />
         <label class="required" for="iDate">Date</label>
         <input id="iDate" type="date" />
         <label class="required" for="iGroup">Party size</label>
@@ -1497,7 +1503,7 @@ html[data-hero="night"] .broadcast-title{
         <input id="iContact" placeholder="Phone or email" />
         <button class="ctaBtn" id="submitIntake" type="button">Submit request</button>
         <div id="intakeMsg" class="hint"></div>
-        <div class="hint">We’ll route you to Chat next to refine venue area + time window.</div>
+        <div class="hint">We’ll route you to Chat next to confirm time window + party size (and any preferences).</div>
       </div>
     </div>
   </div>
@@ -1612,7 +1618,7 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
     function toggleScope(){
       state.scope = (state.scope === 'global') ? 'city' : 'global';
       updatePills();
-      systemMsg(state.scope === 'global' ? 'Global schedule enabled.' : 'City schedule enabled. Enter a city name in Schedule.');
+      systemMsg(state.scope === 'global' ? 'Global schedule enabled.' : 'Local schedule enabled. Filter by host city only if you want.');
       toast(state.scope === 'global' ? 'Scope: Global' : 'Scope: City');
       haptic(8);
       loadPresence();
@@ -2064,7 +2070,7 @@ const ctaChat = document.getElementById('ctaChat');
       if(ctaReserve) ctaReserve.addEventListener('click', ()=>{
         haptic(10);
         setSection('chat');
-        systemMsg('Reservation request: tell me time + party size — and any vibe (near me, quiet, lively).');
+        systemMsg('Reservation request: tell me time + party size — and any vibe (VIP vibe, quiet, lively).');
       });
 
       
