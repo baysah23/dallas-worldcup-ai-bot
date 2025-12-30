@@ -1,13 +1,12 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1, viewport-fit=cover" name="viewport"/>
-<meta content="telephone=no" name="format-detection"/>
-<title>World Cup Concierge</title>
-<!-- WC_BUILD_VERSION: STEP15-20251229-PHASE2 -->
-<style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="format-detection" content="telephone=no"/>
+  <title>World Cup Concierge</title>
+  <!-- WC_BUILD_VERSION: STEP15-20251229-PHASE2 -->
+  <style>
     :root{
       --bg:#071022;
       --panel:#0f1b33;
@@ -65,6 +64,8 @@
     }
 
     .hero{
+  padding-top: 42px;
+
       position: relative;
       border-radius: var(--r16);
       overflow: hidden;
@@ -682,12 +683,7 @@
     }
 
     /* ===== CINEMATIC HERO (SAFE, NOTICEABLE, PREMIUM) ===== */
-    50%{ filter: saturate(1.10) contrast(1.06); }
-    }
-    @media (prefers-reduced-motion: reduce){
-      }
-
-    /* ===== CINEMATIC HERO MICRO-MOTION (single source of truth) ===== */
+/* ===== CINEMATIC HERO MICRO-MOTION (single source of truth) ===== */
     :root{ --heroY: 0px; }
     #heroBanner .heroImg{
       transform: translate3d(0, var(--heroY), 0) scale(1.055);
@@ -697,16 +693,194 @@
     }
     @keyframes heroBreathe{
       0%,100%{ filter: saturate(1.06) contrast(1.02); }
-      50%{ filter: saturate(1.12) contrast(1.05); }
     }
     @media (prefers-reduced-motion: reduce){
       #heroBanner .heroImg{ animation:none; transform: none; }
     }
 
 
-/* Home: pill row wrap */
-#sec-home .pillRow{ flex-wrap: wrap; justify-content: flex-end; }
-#sec-home .pillRow .pill{ white-space: nowrap; }
+/* ===== Countdown-on-hero (compact, right-aligned, ultra-clear) ===== */
+.hero{ position: relative; overflow: hidden; }
+
+.countdownGlass{
+  position: absolute;
+  right: 14px;
+  left: auto;
+  transform: none;
+  bottom: clamp(10px, 2.0vw, 16px);
+
+  width: auto;
+  max-width: min(52vw, 300px);
+  padding: 8px 10px 8px;
+  border-radius: 18px;
+
+  /* Ultra-clear glass (no muddy tint) */
+  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+  border: 1px solid rgba(255,255,255,.20);
+  box-shadow: 0 14px 40px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.25);
+  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+
+  pointer-events: none; /* never blocks taps */
+}
+.countdownGlass::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius: inherit;
+  background: radial-gradient(120% 80% at 20% 0%, rgba(255,255,255,.26) 0%, rgba(255,255,255,.06) 30%, rgba(255,255,255,0) 62%);
+  opacity:.9;
+  pointer-events:none;
+}
+
+/* Hide top label row for compact watch look */
+.countdownGlass .cdTop{ display:none; }
+
+.countdownGlass .cdRow{
+  display:flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
+}
+.countdownGlass .cdSep{ display:none; }
+.countdownGlass .cdCell{ display:flex; align-items: baseline; gap: 6px; }
+
+.countdownGlass .cdNum{
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  font-size: clamp(20px, 4.8vw, 30px);
+  letter-spacing: .01em;
+  color: rgba(255, 240, 200, 1);
+  text-shadow: 0 6px 18px rgba(0,0,0,.35), 0 0 6px rgba(255,220,140,.25);
+  will-change: transform, opacity;
+}
+.countdownGlass .cdLbl{
+  font-size: 11px;
+  letter-spacing: .01em;
+  opacity: .95;
+  text-shadow: 0 10px 22px rgba(0,0,0,.18);
+  white-space: nowrap;
+}
+
+/* Rolex-style subtle tick */
+@keyframes cdTick{
+  0%   { opacity: .55; transform: translateY(-2px); }
+  60%  { opacity: 1;   transform: translateY(0); }
+  100% { opacity: 1;   transform: translateY(0); }
+}
+.countdownGlass .cdNum.tick{ animation: cdTick 320ms ease-out; }
+
+/* Hierarchy: D strongest, then H, then M, then S */
+.countdownGlass .cdCell:nth-of-type(1) .cdNum{ font-weight: 820; }
+.countdownGlass .cdCell:nth-of-type(2) .cdNum{ font-weight: 780; }
+.countdownGlass .cdCell:nth-of-type(3) .cdNum{ font-weight: 760; }
+.countdownGlass .cdCell:nth-of-type(4) .cdNum{ font-weight: 740; }
+
+/* Match Day badge */
+.countdownGlass .cdBadge{
+  display:none;
+  align-items:center;
+  justify-content:center;
+  width: 100%;
+  padding: 4px 0;
+  font-weight: 820;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: rgba(255, 240, 200, 1);
+  text-shadow: 0 10px 22px rgba(0,0,0,.28), 0 0 6px rgba(255,220,140,.18);
+}
+.countdownGlass.isMatchDay .cdRow{ display:none !important; }
+.countdownGlass.isMatchDay .cdBadge{ display:flex; }
+
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))){
+  .countdownGlass{ background: rgba(255,255,255,.10); }
+}
+
+
+/* ===== Ultra-top Broadcast Title ===== */
+.broadcast-title{
+  position: fixed;
+  top: env(safe-area-inset-top);
+  left: 0;
+  right: 0;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  letter-spacing: .14em;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.92);
+  background: linear-gradient(
+    to bottom,
+    rgba(8,12,22,.65),
+    rgba(8,12,22,.15),
+    rgba(8,12,22,0)
+  );
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 1000;
+  pointer-events: none;
+}
+
+
+/* Day/Night gradient variants for title (tied to hero switch) */
+html[data-hero="day"] .broadcast-title{
+  background: linear-gradient(
+    to bottom,
+    rgba(245,250,255,.28),
+    rgba(245,250,255,.10),
+    rgba(245,250,255,0)
+  );
+  color: rgba(255,255,255,.96);
+  text-shadow: 0 2px 10px rgba(0,0,0,.22);
+}
+html[data-hero="night"] .broadcast-title{
+  background: linear-gradient(
+    to bottom,
+    rgba(8,12,22,.70),
+    rgba(8,12,22,.20),
+    rgba(8,12,22,0)
+  );
+  color: rgba(255,255,255,.92);
+  text-shadow: 0 2px 12px rgba(0,0,0,.35);
+}
+
+
+/* Landscape fix: let content breathe so panels expand with the hero/background */
+@media (orientation: landscape){
+  body{ min-height: 100vh; }
+  .wrap, .container, .shell, main{ width: 100%; max-width: 100%; }
+  .hero{ min-height: 60vh; }
+}
+
+
+  /* Ensure the hero image shows fully in landscape */
+  #heroImage{
+    object-fit: contain !important;
+    object-position: center center !important;
+  }
+  /* If the hero uses background-image instead of <img>, cover that too */
+  .hero{
+    background-size: contain !important;
+    background-position: center center !important;
+    background-repeat: no-repeat !important;
+  }
+  /* Premium filler behind "contain" letterboxing */
+  .hero::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background: radial-gradient(120% 90% at 50% 20%, rgba(255,255,255,.06), rgba(0,0,0,.25));
+    pointer-events:none;
+    z-index:1;
+  }
+  /* Keep hero content above the vignette */
+  .hero > *{ position: relative; z-index: 2; }
+}
 
 
 /* ===== Ultra-top Broadcast Title ===== */
@@ -715,9 +889,9 @@
   top: env(safe-area-inset-top);
   left: 0; right: 0;
   height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display:flex;
+  align-items:center;
+  justify-content:center;
   font-weight: 650;
   letter-spacing: .14em;
   font-size: 12px;
@@ -730,205 +904,276 @@
   pointer-events: none;
 }
 
-
-/* Title: day vs night visibility */
+/* Day/Night title gradient variants */
 html[data-hero="day"] .broadcast-title{
-  background: linear-gradient(to bottom, rgba(245,250,255,.22), rgba(245,250,255,.08), rgba(245,250,255,0));
+  background: linear-gradient(to bottom, rgba(245,250,255,.24), rgba(245,250,255,.08), rgba(245,250,255,0));
   color: rgba(255,255,255,.98);
   text-shadow: 0 2px 10px rgba(0,0,0,.18);
 }
 html[data-hero="night"] .broadcast-title{
-  background: linear-gradient(to bottom, rgba(8,12,22,.66), rgba(8,12,22,.16), rgba(8,12,22,0));
+  background: linear-gradient(to bottom, rgba(8,12,22,.70), rgba(8,12,22,.18), rgba(8,12,22,0));
   color: rgba(255,255,255,.92);
-  text-shadow: 0 2px 12px rgba(0,0,0,.32);
+  text-shadow: 0 2px 12px rgba(0,0,0,.34);
 }
 
-
-/* ===== LANDSCAPE HERO HEIGHT (reduce perceived crop) ===== */
-@media (orientation: landscape){
-  .heroMedia{ height: 260px; }
-}
+/* Keep content clear of fixed title */
+.wrap{ padding-top: 44px; }
 
 </style>
 </head>
+
 <body data-sec="home">
 <!-- Ultra-top Broadcast Title -->
-<div class=\"broadcast-title\">FIFA WORLD CUP™ 2026 · CONCIERGE</div>
-<div class="wrap">
-<!-- PURE HERO IMAGE (NO OVERLAYS) -->
-<section aria-label="World Cup 2026 banner" class="hero" id="heroBanner">
-<div aria-hidden="true" class="heroMedia">
-<div class="heroCine" id="heroCine">
-<img alt="Stadium crowd under lights" class="heroImg" id="heroImg" src="/static/hero_stadium_night.png?v=20251230"/>
+<div class="broadcast-title">
+  FIFA WORLD CUP™ 2026 · CONCIERGE
 </div>
-</div>
+
+  <div class="wrap">
+
+    <!-- PURE HERO IMAGE (NO OVERLAYS) -->
+    <section class="hero" id="heroBanner" aria-label="World Cup 2026 banner">
+      <div class="heroMedia" aria-hidden="true">
+        <div class="heroCine" id="heroCine">
+          <img class="heroImg" id="heroImg" src="/static/hero_stadium_night.png" alt="Stadium crowd under lights">
+        </div>
+      </div>
+      <section class="countdownGlass" aria-label="Live countdown">
+      <div class="cdTop">UNTIL KICKOFF</div>
+      <div class="cdRow" role="timer" aria-live="polite">
+        <div class="cdCell"><div class="cdNum" id="cdD">00</div><div class="cdLbl">D</div></div>
+        <div class="cdSep">•</div>
+        <div class="cdCell"><div class="cdNum" id="cdH">00</div><div class="cdLbl">H</div></div>
+        <div class="cdSep">•</div>
+        <div class="cdCell"><div class="cdNum" id="cdM">00</div><div class="cdLbl">M</div></div>
+        <div class="cdSep">•</div>
+        <div class="cdCell"><div class="cdNum" id="cdS">00</div><div class="cdLbl">S</div></div>
+      </div>
+    </section>
+
 </section>
-<main>
-<!-- HOME -->
-<section aria-label="Home" class="section" id="sec-home">
 
-<!-- PHASE 2: MATCHDAY FLOW -->
+    <!-- COUNTDOWN (ultra-thin Apple-glass, embedded under hero) -->
+    <main>
+      <!-- HOME -->
+      <section class="section" id="sec-home" aria-label="Home">
+        <div class="card" aria-label="Primary actions">
+          <div class="cardHead">
+            <h2 class="cardTitle">Reserve in seconds</h2>
+          </div>
+          <div class="cardBody">
+            <p class="hint" style="margin-top:0">
+              Fan-first. Luxury feel. Zero friction. Tell us city + time + party size — we handle the rest.
+            </p>
 
+            <div class="heroActions" style="margin-top:12px" aria-label="Primary buttons">
+              <button class="cta primary" id="ctaReserve" type="button">Reserve now</button>
+              <button class="cta" id="ctaChat" type="button">Chat concierge</button>
+              <button class="cta" id="ctaPlan" type="button">Build my matchday</button>
+            </div>
 
-
-<div aria-label="Primary actions" class="card">
-<div class="cardHead">
-<h2 class="cardTitle">Reservations, instantly</h2>
-</div>
-<div class="cardBody">
-<p class="hint" style="margin-top:0">Built for venues. Capture party size + time + notes in seconds — then route to your team to close the booking.</p>
-<div aria-label="Primary buttons" class="heroActions" style="margin-top:12px">
-<button class="cta primary" id="ctaReserve" type="button">Take a reservation</button>
-<button class="cta" id="ctaChat" type="button">Chat (guest-facing)</button>
-<button class="cta" id="ctaPlan" type="button">Quick intake</button>
-</div>
-<p class="hint" style="margin-top:12px">
+            <p class="hint" style="margin-top:12px">
               Tip: Try “Table for 4 • 7pm • Dallas” — or ask in Spanish/Portuguese/French.
             </p>
-</div>
-</div>
-<div aria-label="Language" class="card">
-<div class="cardHead">
-<h2 class="cardTitle">Guest language</h2>
-<div class="pillRow" style="display:flex; gap:10px; align-items:center;">
-<button class="pill" id="pillLang" title="Tap to switch language" type="button">EN · 4</button>
-</div>
-</div>
-<div class="cardBody">
-<p class="hint" style="margin-top:0">
-      Guests can message in <b>English, Spanish, Portuguese, or French</b>. Tap to preview the UI language.
-    </p>
-<div class="heroActions" style="margin-top:12px">
-<button class="cta" id="ctaLangPreview" type="button">Switch language</button>
-<button class="cta" id="ctaOpenChat" type="button">Open chat</button>
-</div>
-</div>
-</div>
-<div aria-label="Explore" class="card">
-<div class="cardHead">
-<h2 class="cardTitle">Venue tools</h2>
-</div>
-<div class="cardBody">
-<div class="heroActions" style="margin-top:0">
-<button class="cta" id="homeSchedule" type="button">Fixtures</button>
-<button class="cta" id="homeFanzone" type="button">Promos</button>
-</div>
-<div style="height:10px"></div>
-<div class="heroActions" style="margin-top:0">
-<button class="cta" id="homeVIP" type="button">VIP Requests</button>
-<button class="cta" id="homeMenu" type="button">Menu / Offers</button>
-</div>
-</div>
-</div></section>
-<!-- CHAT -->
-<section aria-label="Chat" class="section" id="sec-chat">
-<div class="card">
-<div class="cardHead">
-<h2 class="cardTitle">Concierge chat</h2>
-<button class="pill" id="clearChat" type="button">Clear</button>
-</div>
-<div class="cardBody">
-<div aria-live="polite" class="chatLog" id="chatLog"></div>
-<div class="chatInputRow">
-<label class="srOnly" for="msg">Message</label>
-<input autocomplete="off" id="msg" inputmode="text" placeholder="Ask anything (EN/ES/PT/FR)…"/>
-<button id="sendBtn" type="button">Send</button>
-</div>
-<p class="hint">Tap the language pill to switch EN → ES → PT → FR.</p>
-</div>
-</div>
-</section>
-<!-- MENU -->
-<section aria-label="Menu" class="section" id="sec-menu">
-<div class="card">
-<div class="cardHead">
-<h2 class="cardTitle">Menu</h2>
-<button class="pill" id="reloadMenu" type="button">Refresh</button>
-</div>
-<div class="cardBody">
-<div class="list" id="menuBody"></div>
-<div class="hint" id="menuHint">Tap Refresh to load menu items.</div>
-</div>
-</div>
-</section>
-<!-- SCHEDULE -->
-<section aria-label="Schedule" class="section" id="sec-schedule">
-<div class="card">
-<div class="cardHead"><h2 class="cardTitle">Schedule</h2></div>
-<div class="cardBody">
-<div class="tools">
-<select aria-label="Scope" class="select" id="scopeSelect">
-<option value="global">Global</option>
-<option value="city">City</option>
-</select>
-<input class="search" id="citySearch" placeholder="City (optional)…"/>
-<input class="search" id="scheduleSearch" placeholder="Search team, group, venue…"/>
-<button class="pill" id="reloadSchedule" type="button">Refresh</button>
-</div>
-<div style="height:10px"></div>
-<div class="list" id="scheduleBody"></div>
-<div class="hint" id="scheduleHint">Tap Refresh to load matches.</div>
-</div>
-</div>
-</section>
-<!-- FAN ZONE -->
-<section aria-label="Fan Zone" class="section" id="sec-fanzone">
-<div class="card">
-<div class="cardHead">
-<h2 class="cardTitle">Fan Zone</h2>
-<button class="pill" id="reloadFanzone" type="button">Refresh</button>
-</div>
-<div class="cardBody">
-<div class="list" id="fanzoneBody"></div>
-<div class="hint" id="fanzoneHint">Tap Refresh to load fan events.</div>
-</div>
-</div>
-</section>
-<!-- VIP -->
-<section aria-label="VIP" class="section" id="sec-vip">
-<div class="card">
-<div class="cardHead"><h2 class="cardTitle">VIP</h2></div>
-<div class="cardBody">
-<div class="hint">VIP inventory connects to your partners. For now, ask Chat: “VIP table near &lt;venue&gt; for &lt;party size&gt; at &lt;time&gt;”.</div>
-</div>
-</div>
-</section>
-</main>
-</div>
-<nav aria-label="Navigation" class="mobileNav" id="mobileNav">
-<button class="mnavBtn active" data-sec="home" type="button"><span class="ico">🏠</span><span>Home</span></button>
-<button class="mnavBtn" data-sec="chat" type="button"><span class="ico">💬</span><span>Chat</span></button>
-<button class="mnavBtn" data-sec="menu" type="button"><span class="ico">🍽️</span><span>Menu</span></button>
-<button class="mnavBtn" data-sec="schedule" type="button"><span class="ico">📅</span><span>Schedule</span></button>
-<button class="mnavBtn" data-sec="fanzone" type="button"><span class="ico">⚽</span><span>Fan Zone</span></button>
-<button class="mnavBtn" data-sec="vip" type="button"><span class="ico">⭐</span><span>VIP</span></button>
-</nav>
-<div aria-live="polite" class="toast hidden" id="toast"></div>
-<!-- Intake modal (used by "Build my matchday") -->
-<div aria-label="Concierge intake" aria-modal="true" class="modal hidden" id="intakeModal" role="dialog">
-<div class="modalCard" role="document">
-<div class="modalHead">
-<h3>Matchday request</h3>
-<button aria-label="Close" class="iconBtn" id="closeModal" type="button">✕</button>
-</div>
-<div class="modalBody">
-<label class="required" for="iCity">City</label>
-<input id="iCity" placeholder="e.g., Dallas"/>
-<label class="required" for="iDate">Date</label>
-<input id="iDate" type="date"/>
-<label class="required" for="iGroup">Party size</label>
-<input id="iGroup" inputmode="numeric" placeholder="e.g., 4"/>
-<label for="iBudget">Budget (optional)</label>
-<input id="iBudget" placeholder="e.g., $200–$400"/>
-<label class="required" for="iContact">Contact</label>
-<input id="iContact" placeholder="Phone or email"/>
-<button class="ctaBtn" id="submitIntake" type="button">Submit request</button>
-<div class="hint" id="intakeMsg"></div>
-<div class="hint">We’ll route you to Chat next to refine venue area + time window.</div>
-</div>
-</div>
-</div>
-<script>
+          </div>
+        </div>
+
+        <!-- PHASE 2: MATCHDAY FLOW -->
+        <div class="card" aria-label="Matchday flow">
+          <div class="cardHead">
+            <h2 class="cardTitle">Matchday flow</h2>
+            <button class="pill" id="flowQuick" type="button">Fast plan</button>
+          </div>
+          <div class="cardBody">
+            <div class="flow" aria-label="Steps">
+              <div class="flowStep">
+                <div class="flowLeft">
+                  <div class="stepNum">1</div>
+                  <div class="stepTxt">
+                    <p class="stepTitle">Pick your city</p>
+                    <p class="stepSub" id="flowCitySub">Global view (tap Scope → City)</p>
+                  </div>
+                </div>
+                <button class="cta small" id="flowCityBtn" type="button">Set city</button>
+              </div>
+
+              <div class="flowStep">
+                <div class="flowLeft">
+                  <div class="stepNum">2</div>
+                  <div class="stepTxt">
+                    <p class="stepTitle">Choose a match</p>
+                    <p class="stepSub">Search teams, venues, groups</p>
+                  </div>
+                </div>
+                <button class="cta small" id="flowMatchBtn" type="button">Browse</button>
+              </div>
+
+              <div class="flowStep">
+                <div class="flowLeft">
+                  <div class="stepNum">3</div>
+                  <div class="stepTxt">
+                    <p class="stepTitle">Reserve premium access</p>
+                    <p class="stepSub">Tables • watch parties • VIP</p>
+                  </div>
+                </div>
+                <button class="cta small primary" id="flowReserveBtn" type="button">Reserve</button>
+              </div>
+            </div>
+
+            <p class="hint" style="margin-top:10px" id="flowHint">
+              We’ll keep it simple: pick a match, we route you to the best options.
+            </p>
+          </div>
+        </div>
+
+        <div class="card" aria-label="Today">
+          <div class="cardHead">
+            <h2 class="cardTitle">Today</h2>
+            <button class="pill" id="refreshStatus" type="button">Refresh</button>
+          </div>
+          <div class="cardBody">
+            <div id="presenceText" class="hint">Loading…</div>
+            <p class="hint" style="margin-top:10px">
+              Use <b>Schedule</b> for global matches or switch to <b>City</b> to build your local plan.
+            </p>
+          </div>
+        </div>
+
+        <div class="card" aria-label="Explore">
+          <div class="cardHead">
+            <h2 class="cardTitle">Explore</h2>
+          </div>
+          <div class="cardBody">
+            <div class="heroActions" style="margin-top:0">
+              <button class="cta" id="homeSchedule" type="button">Schedule</button>
+              <button class="cta" id="homeFanzone" type="button">Fan Zone</button>
+            </div>
+            <div style="height:10px"></div>
+            <div class="heroActions" style="margin-top:0">
+              <button class="cta" id="homeVIP" type="button">VIP</button>
+              <button class="cta" id="homeMenu" type="button">Menu</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CHAT -->
+      <section class="section" id="sec-chat" aria-label="Chat">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">Concierge chat</h2>
+            <button class="pill" id="clearChat" type="button">Clear</button>
+          </div>
+          <div class="cardBody">
+            <div id="chatLog" class="chatLog" aria-live="polite"></div>
+            <div class="chatInputRow">
+              <label class="srOnly" for="msg">Message</label>
+              <input id="msg" autocomplete="off" inputmode="text"
+                     placeholder="Ask anything (EN/ES/PT/FR)…"/>
+              <button id="sendBtn" type="button">Send</button>
+            </div>
+            <p class="hint">Tap the language pill to switch EN → ES → PT → FR.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- MENU -->
+      <section class="section" id="sec-menu" aria-label="Menu">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">Menu</h2>
+            <button class="pill" id="reloadMenu" type="button">Refresh</button>
+          </div>
+          <div class="cardBody">
+            <div id="menuBody" class="list"></div>
+            <div id="menuHint" class="hint">Tap Refresh to load menu items.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- SCHEDULE -->
+      <section class="section" id="sec-schedule" aria-label="Schedule">
+        <div class="card">
+          <div class="cardHead"><h2 class="cardTitle">Schedule</h2></div>
+          <div class="cardBody">
+            <div class="tools">
+              <select class="select" id="scopeSelect" aria-label="Scope">
+                <option value="global">Global</option>
+                <option value="city">City</option>
+              </select>
+              <input class="search" id="citySearch" placeholder="City (optional)…"/>
+              <input class="search" id="scheduleSearch" placeholder="Search team, group, venue…"/>
+              <button class="pill" id="reloadSchedule" type="button">Refresh</button>
+            </div>
+            <div style="height:10px"></div>
+            <div id="scheduleBody" class="list"></div>
+            <div id="scheduleHint" class="hint">Tap Refresh to load matches.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAN ZONE -->
+      <section class="section" id="sec-fanzone" aria-label="Fan Zone">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle">Fan Zone</h2>
+            <button class="pill" id="reloadFanzone" type="button">Refresh</button>
+          </div>
+          <div class="cardBody">
+            <div id="fanzoneBody" class="list"></div>
+            <div id="fanzoneHint" class="hint">Tap Refresh to load fan events.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIP -->
+      <section class="section" id="sec-vip" aria-label="VIP">
+        <div class="card">
+          <div class="cardHead"><h2 class="cardTitle">VIP</h2></div>
+          <div class="cardBody">
+            <div class="hint">VIP inventory connects to your partners. For now, ask Chat: “VIP table near &lt;venue&gt; for &lt;party size&gt; at &lt;time&gt;”.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <nav class="mobileNav" id="mobileNav" aria-label="Navigation">
+    <button class="mnavBtn active" data-sec="home" type="button"><span class="ico">🏠</span><span>Home</span></button>
+    <button class="mnavBtn" data-sec="chat" type="button"><span class="ico">💬</span><span>Chat</span></button>
+    <button class="mnavBtn" data-sec="menu" type="button"><span class="ico">🍽️</span><span>Menu</span></button>
+    <button class="mnavBtn" data-sec="schedule" type="button"><span class="ico">📅</span><span>Schedule</span></button>
+    <button class="mnavBtn" data-sec="fanzone" type="button"><span class="ico">⚽</span><span>Fan Zone</span></button>
+    <button class="mnavBtn" data-sec="vip" type="button"><span class="ico">⭐</span><span>VIP</span></button>
+  </nav>
+
+  <div id="toast" class="toast hidden" aria-live="polite"></div>
+
+  <!-- Intake modal (used by "Build my matchday") -->
+  <div id="intakeModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Concierge intake">
+    <div class="modalCard" role="document">
+      <div class="modalHead">
+        <h3>Matchday request</h3>
+        <button class="iconBtn" id="closeModal" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="modalBody">
+        <label class="required" for="iCity">City</label>
+        <input id="iCity" placeholder="e.g., Dallas" />
+        <label class="required" for="iDate">Date</label>
+        <input id="iDate" type="date" />
+        <label class="required" for="iGroup">Party size</label>
+        <input id="iGroup" inputmode="numeric" placeholder="e.g., 4" />
+        <label for="iBudget">Budget (optional)</label>
+        <input id="iBudget" placeholder="e.g., $200–$400" />
+        <label class="required" for="iContact">Contact</label>
+        <input id="iContact" placeholder="Phone or email" />
+        <button class="ctaBtn" id="submitIntake" type="button">Submit request</button>
+        <div id="intakeMsg" class="hint"></div>
+        <div class="hint">We’ll route you to Chat next to refine venue area + time window.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
     const state = { lang:'en', scope:'global', city:'' };
 
     // Toast helper
@@ -1028,8 +1273,7 @@ html[data-hero="night"] .broadcast-title{
       state.lang = order[(order.indexOf(state.lang)+1) % order.length];
       updatePills();
       updateHeroCountdown();
-systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
-      toast(`Language: ${state.lang.toUpperCase()}`);
+toast(`Language: ${state.lang.toUpperCase()}`);
       haptic(8);
       if(document.body.dataset.sec === 'menu') loadMenu();
       if(document.body.dataset.sec === 'fanzone') loadFanzone();
@@ -1058,6 +1302,7 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       const hour = now.getHours(); // user local time
       const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
       const isDay = prefersLight || (hour >= 7 && hour < 19);
+      // Expose day/night state for CSS (title gradients, etc.)
       try{ document.documentElement.setAttribute('data-hero', isDay ? 'day' : 'night'); }catch(e){}
       const src = isDay ? '/static/hero_stadium_day.png' : '/static/hero_stadium_night.png';
       // cache-bust daily to keep updates visible without hard-refresh
@@ -1066,47 +1311,102 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
     }
 
 // === HERO LIVE COUNTDOWN (real timer) ===
-    const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z'; // 2026 World Cup kickoff (UTC)
+const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z'; // World Cup kickoff (UTC)
 
-    function updateHeroCountdown(){
-      const dEl = document.getElementById('cdD');
-      const hEl = document.getElementById('cdH');
-      const mEl = document.getElementById('cdM');
-      const sEl = document.getElementById('cdS');
-      if(!dEl || !hEl || !mEl || !sEl) return;
+function ensureMatchDayBadge(){
+  const wrap = document.querySelector('.countdownGlass');
+  if(!wrap) return null;
+  let badge = document.getElementById('cdBadge');
+  if(!badge){
+    badge = document.createElement('div');
+    badge.className = 'cdBadge';
+    badge.id = 'cdBadge';
+    badge.textContent = 'Match Day';
+    badge.setAttribute('aria-hidden','true');
+    // Prefer inside cdRow (for consistent layout), otherwise top of wrap
+    const row = wrap.querySelector('.cdRow');
+    if(row) row.prepend(badge);
+    else wrap.prepend(badge);
+  }
+  return badge;
+}
 
-      const target = new Date(HERO_KICKOFF_ISO).getTime();
-      const now = Date.now();
-      const diff = target - now;
+function updateHeroCountdown(){
+  const wrap = document.querySelector('.countdownGlass');
+  const dEl = document.getElementById('cdD');
+  const hEl = document.getElementById('cdH');
+  const mEl = document.getElementById('cdM');
+  const sEl = document.getElementById('cdS');
+  if(!wrap || !dEl || !hEl || !mEl || !sEl) return;
 
-      if(!Number.isFinite(diff) || diff <= 0){
-        dEl.textContent = '00';
-        hEl.textContent = '00';
-        mEl.textContent = '00';
-        sEl.textContent = '00';
-        return;
-      }
+  const badge = ensureMatchDayBadge();
 
-      const totalSeconds = Math.floor(diff / 1000);
-      const days = Math.floor(totalSeconds / 86400);
-      const hours = Math.floor((totalSeconds % 86400) / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      const seconds = totalSeconds % 60;
+  const targetDate = new Date(HERO_KICKOFF_ISO);
+  const targetMs = targetDate.getTime();
+  const now = new Date();
+  const nowMs = now.getTime();
+  const diff = targetMs - nowMs;
 
-      dEl.textContent = String(days).padStart(2,'0');
-      hEl.textContent = String(hours).padStart(2,'0');
-      mEl.textContent = String(minutes).padStart(2,'0');
-      sEl.textContent = String(seconds).padStart(2,'0');
+  const sameLocalDay =
+    (now.getFullYear() === targetDate.getFullYear() &&
+     now.getMonth() === targetDate.getMonth() &&
+     now.getDate() === targetDate.getDate());
+
+  const isMatchDay = sameLocalDay || (diff <= 0);
+
+  if(isMatchDay){
+    wrap.classList.add('isMatchDay');
+    if(badge) badge.setAttribute('aria-hidden','false');
+    return;
+  }else{
+    wrap.classList.remove('isMatchDay');
+    if(badge) badge.setAttribute('aria-hidden','true');
+  }
+
+  if(!Number.isFinite(diff) || diff <= 0){
+    dEl.textContent = '00'; hEl.textContent = '00'; mEl.textContent = '00'; sEl.textContent = '00';
+    return;
+  }
+
+  const totalSeconds = Math.floor(diff / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const nextD = String(days).padStart(2,'0');
+  const nextH = String(hours).padStart(2,'0');
+  const nextM = String(minutes).padStart(2,'0');
+  const nextS = String(seconds).padStart(2,'0');
+
+  const tick = (el, next) => {
+    if(el.textContent !== next){
+      el.textContent = next;
+      el.classList.remove('tick'); // restart animation
+      void el.offsetWidth;         // reflow
+      el.classList.add('tick');
     }
-    }
+  };
 
-    function startHeroCountdown(){
-      try{ updateHeroCountdown(); }catch(e){}
-      try{
-        if(window.__heroCdTimer) clearInterval(window.__heroCdTimer);
-        window.__heroCdTimer = setInterval(()=>{ try{ updateHeroCountdown(); }catch(e){} }, 1000);
-      }catch(e){}
-    }
+  tick(dEl, nextD);
+  tick(hEl, nextH);
+  tick(mEl, nextM);
+  tick(sEl, nextS);
+}
+
+function startHeroCountdown(){
+  try{ updateHeroCountdown(); }catch(e){}
+  try{
+    if(window.__heroCdTimer) clearInterval(window.__heroCdTimer);
+    window.__heroCdTimer = setInterval(()=>{ try{ updateHeroCountdown(); }catch(e){} }, 1000);
+    // Refresh immediately when returning to tab
+    document.addEventListener('visibilitychange', ()=>{
+      if(!document.hidden){ try{ updateHeroCountdown(); }catch(e){} }
+    }, { passive:true });
+  }catch(e){}
+}
+
+
 
 // === CHAT ===
     const chatLog = document.getElementById('chatLog');
@@ -1410,6 +1710,24 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       startHeroCountdown();
 
             setHeroBannerImage();
+
+      // Day/Night hero switch wiring (local time + OS preference)
+      try{
+        if(!window.__heroDayNightWired && window.matchMedia){
+          window.__heroDayNightWired = true;
+          const mq = window.matchMedia('(prefers-color-scheme: light)');
+          const onChange = ()=>{ try{ setHeroBannerImage(); }catch(e){} };
+          if(mq.addEventListener) mq.addEventListener('change', onChange);
+          else if(mq.addListener) mq.addListener(onChange);
+        }
+      }catch(e){}
+
+      // Re-check every 10 minutes (covers crossing sunrise/sunset while app stays open)
+      try{
+        if(window.__heroDayNightTimer) clearInterval(window.__heroDayNightTimer);
+        window.__heroDayNightTimer = setInterval(()=>{ try{ setHeroBannerImage(); }catch(e){} }, 10 * 60 * 1000);
+      }catch(e){}
+
 const ctaChat = document.getElementById('ctaChat');
       if(ctaChat) ctaChat.addEventListener('click', ()=>{ haptic(8); setSection('chat'); });
 
@@ -1501,7 +1819,7 @@ const ctaChat = document.getElementById('ctaChat');
       });
 
       updatePills();
-systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
+      systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
       loadPresence();
       setTimeout(prefetchAll, 250);
 
@@ -1527,21 +1845,12 @@ systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP 
 
 
 
-      // Home: language card
-      const pillLang = document.getElementById('pillLang');
-      if(pillLang) pillLang.addEventListener('click', ()=>{ cycleLang(); });
-
-      const ctaLangPreview = document.getElementById('ctaLangPreview');
-      if(ctaLangPreview) ctaLangPreview.addEventListener('click', ()=>{ cycleLang(); });
-
-      const ctaOpenChat = document.getElementById('ctaOpenChat');
-      if(ctaOpenChat) ctaOpenChat.addEventListener('click', ()=>{ setSection('chat'); });
-
 }
 
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
     else boot();
   </script>
+
 <script>
 /* HERO CINEMATIC PARALLAX SAFE */
 (function(){
@@ -1565,5 +1874,6 @@ systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP 
   onScroll();
 })();
 </script>
+
 </body>
 </html>
