@@ -71,17 +71,7 @@
 
     
 
-    /* ===== CINEMATIC HERO MICRO-MOTION (image only) ===== */
-    :root{ --heroY: 0px; }
-    #heroBanner .heroImg{
-      transform: translate3d(0, var(--heroY), 0) scale(1.035);
-      transition: transform 380ms ease;
-    }
-    @media (prefers-reduced-motion: reduce){
-      #heroBanner }
-
-    
-    /* === CARDS === */
+        /* === CARDS === */
     .card{
       margin-top: 14px;
       border-radius: var(--r16);
@@ -456,13 +446,13 @@
 
       /* ultra-glass: almost invisible */
       border: 1px solid rgba(255,255,255,.08);
-      background: rgba(7,16,34,.10);
+      background: rgba(255,255,255,.05);
 /* the "glass" comes from blur + saturation; avoid dark fills */
       backdrop-filter: blur(10px) saturate(1.25);
       -webkit-backdrop-filter: blur(10px) saturate(1.25);
 
       box-shadow: 0 10px 36px rgba(0,0,0,.18);
-      padding: 6px 8px;
+      padding: 4px 6px;
       z-index: 50;
       pointer-events: none;
       overflow:hidden;
@@ -546,12 +536,11 @@
     }
     @keyframes heroBreathe{
       0%,100%{ filter: saturate(1.02) contrast(1.02); }
-      50%{ filter: saturate(1.10) contrast(1.06); }
+      50%{ filter: saturate(1.12) contrast(1.06); }
     }
     @media (prefers-reduced-motion: reduce){
       #heroBanner .heroImg{ animation:none; transform:none !important; filter:none; }
     }
-
 </style>
 </head>
 
@@ -560,7 +549,7 @@
 
     <!-- PURE HERO IMAGE (NO OVERLAYS) -->
     <section class="hero" id="heroBanner" aria-label="World Cup 2026 banner">
-      <img class="heroImg" src="/static/hero_stadium.png?v=20251229" alt="Stadium crowd under lights">
+      <img class="heroImg" src="/static/hero_stadium.png?v=20251229r3" alt="Stadium crowd under lights">
     
       <!-- LIVE COUNTDOWN OVERLAY (covers the "fake" countdown printed on the image) -->
       <div class="heroCountdown" aria-label="Live countdown">
@@ -936,6 +925,18 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
         sEl.textContent = '00';
         return;
       }
+
+      const sec = Math.floor(diff / 1000);
+      const days = Math.floor(sec / 86400);
+      const hrs  = Math.floor((sec % 86400) / 3600);
+      const mins = Math.floor((sec % 3600) / 60);
+      const secs = sec % 60;
+
+      // Days can be 3+ digits; keep it natural but pad 2 for < 10
+      dEl.textContent = String(days).padStart(2,'0');
+      hEl.textContent = String(hrs).padStart(2,'0');
+      mEl.textContent = String(mins).padStart(2,'0');
+      sEl.textContent = String(secs).padStart(2,'0');
     }
 
     function startHeroCountdown(){
@@ -1367,30 +1368,6 @@ systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP 
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
     else boot();
   </script>
-
-<script>
-/* HERO CINEMATIC PARALLAX SAFE */
-(function(){
-  const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if(prefersReduced) return;
-
-  const img = document.querySelector('#heroBanner .heroImg');
-  if(!img) return;
-
-  let ticking = false;
-  function onScroll(){
-    if(ticking) return;
-    ticking = true;
-    requestAnimationFrame(()=>{
-      const y = Math.min(6, Math.max(0, window.scrollY * 0.05)); // 0–6px
-      document.documentElement.style.setProperty('--heroY', y.toFixed(2) + 'px');
-      ticking = false;
-    });
-  }
-  window.addEventListener('scroll', onScroll, {passive:true});
-  onScroll();
-})();
-</script>
 
 </body>
 </html>
