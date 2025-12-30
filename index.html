@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+  <meta http-equiv="Pragma" content="no-cache"/>
+  <meta http-equiv="Expires" content="0"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="format-detection" content="telephone=no"/>
   <title>World Cup Concierge</title>
@@ -455,15 +458,15 @@
       border-radius: 18px;
 
       /* ultra-glass: almost invisible */
-      border: 1px solid rgba(255,255,255,.10);
-      background: rgba(255,255,255,.016);
+      border: 1px solid rgba(255,255,255,.08);
+      background: rgba(255,255,255,.008);
 
       /* the "glass" comes from blur + saturation; avoid dark fills */
-      backdrop-filter: blur(28px) saturate(1.9);
-      -webkit-backdrop-filter: blur(28px) saturate(1.9);
+      backdrop-filter: blur(22px) saturate(1.25) brightness(1.05);
+      -webkit-backdrop-filter: blur(22px) saturate(1.25) brightness(1.05);
 
-      box-shadow: 0 8px 28px rgba(0,0,0,.14);
-      padding: 4px 8px 6px;
+      box-shadow: 0 6px 18px rgba(0,0,0,.10);
+      padding: 2px 6px 4px;
       z-index: 50;
       pointer-events: none;
       overflow:hidden;
