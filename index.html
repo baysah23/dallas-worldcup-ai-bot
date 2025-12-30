@@ -64,8 +64,6 @@
     }
 
     .hero{
-  padding-top: 42px;
-
       position: relative;
       border-radius: var(--r16);
       overflow: hidden;
@@ -683,7 +681,12 @@
     }
 
     /* ===== CINEMATIC HERO (SAFE, NOTICEABLE, PREMIUM) ===== */
-/* ===== CINEMATIC HERO MICRO-MOTION (single source of truth) ===== */
+    50%{ filter: saturate(1.10) contrast(1.06); }
+    }
+    @media (prefers-reduced-motion: reduce){
+      }
+
+    /* ===== CINEMATIC HERO MICRO-MOTION (single source of truth) ===== */
     :root{ --heroY: 0px; }
     #heroBanner .heroImg{
       transform: translate3d(0, var(--heroY), 0) scale(1.055);
@@ -693,235 +696,87 @@
     }
     @keyframes heroBreathe{
       0%,100%{ filter: saturate(1.06) contrast(1.02); }
+      50%{ filter: saturate(1.12) contrast(1.05); }
     }
     @media (prefers-reduced-motion: reduce){
       #heroBanner .heroImg{ animation:none; transform: none; }
     }
 
 
-/* ===== Countdown-on-hero (compact, right-aligned, ultra-clear) ===== */
-.hero{ position: relative; overflow: hidden; }
-
-.countdownGlass{
-  position: absolute;
-  right: 14px;
-  left: auto;
-  transform: none;
-  bottom: clamp(10px, 2.0vw, 16px);
-
-  width: auto;
-  max-width: min(52vw, 300px);
-  padding: 8px 10px 8px;
-  border-radius: 18px;
-
-  /* Ultra-clear glass (no muddy tint) */
-  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
-  border: 1px solid rgba(255,255,255,.20);
-  box-shadow: 0 14px 40px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.25);
-  backdrop-filter: blur(18px) saturate(1.5);
-  -webkit-backdrop-filter: blur(18px) saturate(1.5);
-
-  pointer-events: none; /* never blocks taps */
-}
-.countdownGlass::before{
-  content:"";
-  position:absolute;
-  inset:0;
-  border-radius: inherit;
-  background: radial-gradient(120% 80% at 20% 0%, rgba(255,255,255,.26) 0%, rgba(255,255,255,.06) 30%, rgba(255,255,255,0) 62%);
-  opacity:.9;
-  pointer-events:none;
-}
-
-/* Hide top label row for compact watch look */
-.countdownGlass .cdTop{ display:none; }
-
-.countdownGlass .cdRow{
-  display:flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: 8px;
-  margin: 0;
-}
-.countdownGlass .cdSep{ display:none; }
-.countdownGlass .cdCell{ display:flex; align-items: baseline; gap: 6px; }
-
-.countdownGlass .cdNum{
-  font-variant-numeric: tabular-nums;
-  line-height: 1;
-  font-size: clamp(20px, 4.8vw, 30px);
-  letter-spacing: .01em;
-  color: rgba(255, 240, 200, 1);
-  text-shadow: 0 6px 18px rgba(0,0,0,.35), 0 0 6px rgba(255,220,140,.25);
-  will-change: transform, opacity;
-}
-.countdownGlass .cdLbl{
-  font-size: 11px;
-  letter-spacing: .01em;
-  opacity: .95;
-  text-shadow: 0 10px 22px rgba(0,0,0,.18);
-  white-space: nowrap;
-}
-
-/* Rolex-style subtle tick */
-@keyframes cdTick{
-  0%   { opacity: .55; transform: translateY(-2px); }
-  60%  { opacity: 1;   transform: translateY(0); }
-  100% { opacity: 1;   transform: translateY(0); }
-}
-.countdownGlass .cdNum.tick{ animation: cdTick 320ms ease-out; }
-
-/* Hierarchy: D strongest, then H, then M, then S */
-.countdownGlass .cdCell:nth-of-type(1) .cdNum{ font-weight: 820; }
-.countdownGlass .cdCell:nth-of-type(2) .cdNum{ font-weight: 780; }
-.countdownGlass .cdCell:nth-of-type(3) .cdNum{ font-weight: 760; }
-.countdownGlass .cdCell:nth-of-type(4) .cdNum{ font-weight: 740; }
-
-/* Match Day badge */
-.countdownGlass .cdBadge{
-  display:none;
-  align-items:center;
-  justify-content:center;
-  width: 100%;
-  padding: 4px 0;
-  font-weight: 820;
-  letter-spacing: .14em;
-  text-transform: uppercase;
-  font-size: 12px;
-  color: rgba(255, 240, 200, 1);
-  text-shadow: 0 10px 22px rgba(0,0,0,.28), 0 0 6px rgba(255,220,140,.18);
-}
-.countdownGlass.isMatchDay .cdRow{ display:none !important; }
-.countdownGlass.isMatchDay .cdBadge{ display:flex; }
-
-@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))){
-  .countdownGlass{ background: rgba(255,255,255,.10); }
-}
-
-
-/* ===== Ultra-top Broadcast Title ===== */
-.broadcast-title{
-  position: fixed;
-  top: env(safe-area-inset-top);
-  left: 0;
-  right: 0;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  letter-spacing: .14em;
-  font-size: 12px;
-  text-transform: uppercase;
-  color: rgba(255,255,255,.92);
-  background: linear-gradient(
-    to bottom,
-    rgba(8,12,22,.65),
-    rgba(8,12,22,.15),
-    rgba(8,12,22,0)
-  );
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  z-index: 1000;
-  pointer-events: none;
-}
-
-
-/* Day/Night gradient variants for title (tied to hero switch) */
-html[data-hero="day"] .broadcast-title{
-  background: linear-gradient(
-    to bottom,
-    rgba(245,250,255,.28),
-    rgba(245,250,255,.10),
-    rgba(245,250,255,0)
-  );
-  color: rgba(255,255,255,.96);
-  text-shadow: 0 2px 10px rgba(0,0,0,.22);
-}
-html[data-hero="night"] .broadcast-title{
-  background: linear-gradient(
-    to bottom,
-    rgba(8,12,22,.70),
-    rgba(8,12,22,.20),
-    rgba(8,12,22,0)
-  );
-  color: rgba(255,255,255,.92);
-  text-shadow: 0 2px 12px rgba(0,0,0,.35);
-}
-
-
-/* Landscape fix: let content breathe so panels expand with the hero/background */
+/* ===== Landscape: preserve full hero image like portrait (no crop) ===== */
 @media (orientation: landscape){
-  body{ min-height: 100vh; }
-  .wrap, .container, .shell, main{ width: 100%; max-width: 100%; }
-  .hero{ min-height: 60vh; }
-}
-
-
-/* Landscape hero image: show full banner (avoid crop) */
-@media (orientation: landscape){
-  .hero{
-    min-height: 56vh;
+  .heroMedia{
+    height: min(62vh, 340px) !important; /* give the image room */
   }
-  /* Ensure the hero image shows fully in landscape */
-  #heroImage{
+  /* Show full image */
+  .heroImg, #heroImg{
     object-fit: contain !important;
     object-position: center center !important;
+    background: transparent !important;
   }
-  /* If the hero uses background-image instead of <img>, cover that too */
-  .hero{
-    background-size: contain !important;
-    background-position: center center !important;
-    background-repeat: no-repeat !important;
+
+  /* Premium fill behind letterboxing: blurred version of the same hero */
+  .heroMedia::before{
+    content:"";
+    position:absolute;
+    inset:-10px;
+    background-image: var(--hero-url);
+    background-size: cover;
+    background-position: center;
+    filter: blur(18px) saturate(1.1);
+    transform: scale(1.08);
+    opacity: .55;
+    pointer-events:none;
+    z-index: 0;
   }
-  /* Premium filler behind "contain" letterboxing */
-  .hero::before{
+  .heroMedia::after{
     content:"";
     position:absolute;
     inset:0;
-    background: radial-gradient(120% 90% at 50% 20%, rgba(255,255,255,.06), rgba(0,0,0,.25));
+    background: radial-gradient(120% 90% at 50% 20%, rgba(255,255,255,.06), rgba(0,0,0,.28));
     pointer-events:none;
-    z-index:1;
+    z-index: 1;
   }
-  /* Keep hero content above the vignette */
-  .hero > *{ position: relative; z-index: 2; }
+  .heroMedia > *{ position: relative; z-index: 2; }
+
+  /* Keep the countdown tucked to the right and smaller so it never competes with the trophy */
+  .countdownGlass{
+    right: 10px !important;
+    bottom: 10px !important;
+    max-width: 260px !important;
+  }
 }
 
 </style>
 </head>
 
 <body data-sec="home">
-<!-- Ultra-top Broadcast Title -->
-<div class="broadcast-title">
-  FIFA WORLD CUP™ 2026 · CONCIERGE
-</div>
-
   <div class="wrap">
 
     <!-- PURE HERO IMAGE (NO OVERLAYS) -->
     <section class="hero" id="heroBanner" aria-label="World Cup 2026 banner">
       <div class="heroMedia" aria-hidden="true">
         <div class="heroCine" id="heroCine">
-          <img class="heroImg" id="heroImg" src="/static/hero_stadium_night.png" alt="Stadium crowd under lights">
+          <img class="heroImg" id="heroImg" src="/static/hero_stadium_night.png?v=20251230" alt="Stadium crowd under lights">
         </div>
-      </div>
-      <section class="countdownGlass" aria-label="Live countdown">
-      <div class="cdTop">UNTIL KICKOFF</div>
-      <div class="cdRow" role="timer" aria-live="polite">
-        <div class="cdCell"><div class="cdNum" id="cdD">00</div><div class="cdLbl">D</div></div>
-        <div class="cdSep">•</div>
-        <div class="cdCell"><div class="cdNum" id="cdH">00</div><div class="cdLbl">H</div></div>
-        <div class="cdSep">•</div>
-        <div class="cdCell"><div class="cdNum" id="cdM">00</div><div class="cdLbl">M</div></div>
-        <div class="cdSep">•</div>
-        <div class="cdCell"><div class="cdNum" id="cdS">00</div><div class="cdLbl">S</div></div>
       </div>
     </section>
 
-</section>
-
     <!-- COUNTDOWN (ultra-thin Apple-glass, embedded under hero) -->
-    <main>
+    <section class="countdownGlass" aria-label="Live countdown">
+      <div class="cdTop">UNTIL KICKOFF</div>
+      <div class="cdRow" role="timer" aria-live="polite">
+        <div class="cdCell"><div class="cdNum" id="cdD">00</div><div class="cdLbl">DAYS</div></div>
+        <div class="cdSep">•</div>
+        <div class="cdCell"><div class="cdNum" id="cdH">00</div><div class="cdLbl">HRS</div></div>
+        <div class="cdSep">•</div>
+        <div class="cdCell"><div class="cdNum" id="cdM">00</div><div class="cdLbl">MINS</div></div>
+        <div class="cdSep">•</div>
+        <div class="cdCell"><div class="cdNum" id="cdS">00</div><div class="cdLbl">SECS</div></div>
+      </div>
+    </section>
+
+<main>
       <!-- HOME -->
       <section class="section" id="sec-home" aria-label="Home">
         <div class="card" aria-label="Primary actions">
@@ -1275,105 +1130,41 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       // cache-bust daily to keep updates visible without hard-refresh
       const stamp = now.getFullYear().toString() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0');
       img.src = src + '?v=' + stamp;
+      // Expose hero image URL to CSS (for landscape blur/backdrop)
+      try{ document.documentElement.style.setProperty('--hero-url', `url('${img.src}')`); }catch(e){}
+
     }
 
 // === HERO LIVE COUNTDOWN (real timer) ===
-const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z'; // World Cup kickoff (UTC)
+    const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z'; // 2026 World Cup kickoff (UTC)
 
-function ensureMatchDayBadge(){
-  const wrap = document.querySelector('.countdownGlass');
-  if(!wrap) return null;
-  let badge = document.getElementById('cdBadge');
-  if(!badge){
-    badge = document.createElement('div');
-    badge.className = 'cdBadge';
-    badge.id = 'cdBadge';
-    badge.textContent = 'Match Day';
-    badge.setAttribute('aria-hidden','true');
-    // Prefer inside cdRow (for consistent layout), otherwise top of wrap
-    const row = wrap.querySelector('.cdRow');
-    if(row) row.prepend(badge);
-    else wrap.prepend(badge);
-  }
-  return badge;
-}
+    function updateHeroCountdown(){
+      const dEl = document.getElementById('cdD');
+      const hEl = document.getElementById('cdH');
+      const mEl = document.getElementById('cdM');
+      const sEl = document.getElementById('cdS');
+      if(!dEl || !hEl || !mEl || !sEl) return;
 
-function updateHeroCountdown(){
-  const wrap = document.querySelector('.countdownGlass');
-  const dEl = document.getElementById('cdD');
-  const hEl = document.getElementById('cdH');
-  const mEl = document.getElementById('cdM');
-  const sEl = document.getElementById('cdS');
-  if(!wrap || !dEl || !hEl || !mEl || !sEl) return;
+      const target = new Date(HERO_KICKOFF_ISO).getTime();
+      const now = Date.now();
+      let diff = target - now;
 
-  const badge = ensureMatchDayBadge();
-
-  const targetDate = new Date(HERO_KICKOFF_ISO);
-  const targetMs = targetDate.getTime();
-  const now = new Date();
-  const nowMs = now.getTime();
-  const diff = targetMs - nowMs;
-
-  const sameLocalDay =
-    (now.getFullYear() === targetDate.getFullYear() &&
-     now.getMonth() === targetDate.getMonth() &&
-     now.getDate() === targetDate.getDate());
-
-  const isMatchDay = sameLocalDay || (diff <= 0);
-
-  if(isMatchDay){
-    wrap.classList.add('isMatchDay');
-    if(badge) badge.setAttribute('aria-hidden','false');
-    return;
-  }else{
-    wrap.classList.remove('isMatchDay');
-    if(badge) badge.setAttribute('aria-hidden','true');
-  }
-
-  if(!Number.isFinite(diff) || diff <= 0){
-    dEl.textContent = '00'; hEl.textContent = '00'; mEl.textContent = '00'; sEl.textContent = '00';
-    return;
-  }
-
-  const totalSeconds = Math.floor(diff / 1000);
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  const nextD = String(days).padStart(2,'0');
-  const nextH = String(hours).padStart(2,'0');
-  const nextM = String(minutes).padStart(2,'0');
-  const nextS = String(seconds).padStart(2,'0');
-
-  const tick = (el, next) => {
-    if(el.textContent !== next){
-      el.textContent = next;
-      el.classList.remove('tick'); // restart animation
-      void el.offsetWidth;         // reflow
-      el.classList.add('tick');
+      if(!Number.isFinite(diff) || diff <= 0){
+        dEl.textContent = '00';
+        hEl.textContent = '00';
+        mEl.textContent = '00';
+        sEl.textContent = '00';
+        return;
+      }
     }
-  };
 
-  tick(dEl, nextD);
-  tick(hEl, nextH);
-  tick(mEl, nextM);
-  tick(sEl, nextS);
-}
-
-function startHeroCountdown(){
-  try{ updateHeroCountdown(); }catch(e){}
-  try{
-    if(window.__heroCdTimer) clearInterval(window.__heroCdTimer);
-    window.__heroCdTimer = setInterval(()=>{ try{ updateHeroCountdown(); }catch(e){} }, 1000);
-    // Refresh immediately when returning to tab
-    document.addEventListener('visibilitychange', ()=>{
-      if(!document.hidden){ try{ updateHeroCountdown(); }catch(e){} }
-    }, { passive:true });
-  }catch(e){}
-}
-
-
+    function startHeroCountdown(){
+      try{ updateHeroCountdown(); }catch(e){}
+      try{
+        if(window.__heroCdTimer) clearInterval(window.__heroCdTimer);
+        window.__heroCdTimer = setInterval(()=>{ try{ updateHeroCountdown(); }catch(e){} }, 1000);
+      }catch(e){}
+    }
 
 // === CHAT ===
     const chatLog = document.getElementById('chatLog');
@@ -1677,24 +1468,6 @@ function startHeroCountdown(){
       startHeroCountdown();
 
             setHeroBannerImage();
-
-      // Day/Night hero switch wiring (local time + OS preference)
-      try{
-        if(!window.__heroDayNightWired && window.matchMedia){
-          window.__heroDayNightWired = true;
-          const mq = window.matchMedia('(prefers-color-scheme: light)');
-          const onChange = ()=>{ try{ setHeroBannerImage(); }catch(e){} };
-          if(mq.addEventListener) mq.addEventListener('change', onChange);
-          else if(mq.addListener) mq.addListener(onChange);
-        }
-      }catch(e){}
-
-      // Re-check every 10 minutes (covers crossing sunrise/sunset while app stays open)
-      try{
-        if(window.__heroDayNightTimer) clearInterval(window.__heroDayNightTimer);
-        window.__heroDayNightTimer = setInterval(()=>{ try{ setHeroBannerImage(); }catch(e){} }, 10 * 60 * 1000);
-      }catch(e){}
-
 const ctaChat = document.getElementById('ctaChat');
       if(ctaChat) ctaChat.addEventListener('click', ()=>{ haptic(8); setSection('chat'); });
 
@@ -1786,6 +1559,9 @@ const ctaChat = document.getElementById('ctaChat');
       });
 
       updatePills();
+      updateCountdownMini();
+      setInterval(updateCountdownMini, 30_000);
+
       systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
       loadPresence();
       setTimeout(prefetchAll, 250);
@@ -1844,3 +1620,5 @@ const ctaChat = document.getElementById('ctaChat');
 
 </body>
 </html>
+
+document.addEventListener('DOMContentLoaded', setHeroBannerImage);
