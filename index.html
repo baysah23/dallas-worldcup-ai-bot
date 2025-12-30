@@ -110,8 +110,8 @@
   pointer-events:none;
   /* cinema-grade vignette: subtle edge falloff, zero mud */
   background:
-    radial-gradient(120% 85% at 50% 20%, rgba(255,255,255,.04), rgba(0,0,0,0) 55%),
-    radial-gradient(140% 120% at 50% 50%, rgba(0,0,0,0), rgba(0,0,0,.28) 88%);
+    radial-gradient(120% 85% at 50% 20%, rgba(255,255,255,.04), rgba(0,0,0,.00) 55%),
+    radial-gradient(140% 120% at 50% 50%, rgba(0,0,0,.00), rgba(0,0,0,.28) 88%);
 }
 
     @keyframes heroCinePan{
@@ -143,7 +143,7 @@
       content:"";
       position:absolute;
       inset:-2px;
-      background: linear-gradient(140deg, rgba(255,255,255,.26), rgba(255,255,255,0) 35%, rgba(255,255,255,.12) 60%, rgba(255,255,255,0));
+      background: linear-gradient(140deg, rgba(255,255,255,.26), rgba(255,255,255,.00) 35%, rgba(255,255,255,.12) 60%, rgba(255,255,255,.00));
       opacity:.55;
       pointer-events:none;
     }
@@ -152,7 +152,7 @@
       position:absolute;
       left:10px; right:10px; top:9px;
       height: 1px;
-      background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.40), rgba(255,255,255,0));
+      background: linear-gradient(90deg, rgba(255,255,255,.00), rgba(255,255,255,.40), rgba(255,255,255,.00));
       opacity:.55;
       pointer-events:none;
     }
@@ -270,7 +270,7 @@
       font-weight: 950;
       font-size: 13px;
       color: rgba(7,16,34,.98);
-      background: linear-gradient(180deg, rgba(212,175,55,1), rgba(168,129,30,1));
+      background: linear-gradient(180deg, rgba(212,175,55,.01), rgba(168,129,30,.01));
       box-shadow: 0 10px 30px rgba(212,175,55,.18);
       flex:0 0 auto;
     }
@@ -338,7 +338,7 @@
     .cta:focus-visible{ outline:none; box-shadow: 0 0 0 4px rgba(31,111,235,.18); }
 
     .cta.primary{
-      background: linear-gradient(180deg, rgba(212,175,55,1), rgba(168,129,30,1));
+      background: linear-gradient(180deg, rgba(212,175,55,.01), rgba(168,129,30,.01));
       color: #070f1f;
       border: 0;
       box-shadow: 0 14px 30px rgba(212,175,55,.22);
@@ -620,7 +620,7 @@
       border-radius: inherit;
       background: radial-gradient(120% 180% at 20% 0%,
         rgba(255,255,255,.18) 0%,
-        rgba(255,255,255,0) 55%
+        rgba(255,255,255,.00) 55%
       );
       opacity:.55;
       pointer-events:none;
@@ -635,11 +635,11 @@
       height: 2px;
       border-radius: 999px;
       background: linear-gradient(90deg,
-        rgba(212,175,55,0) 0%,
+        rgba(212,175,55,.00) 0%,
         rgba(212,175,55,.12) 28%,
         rgba(255,255,255,.12) 50%,
         rgba(212,175,55,.12) 72%,
-        rgba(212,175,55,0) 100%
+        rgba(212,175,55,.00) 100%
       );
       opacity: .22;
       transform: translateX(-16%);
@@ -752,7 +752,7 @@
   position:absolute;
   inset:0;
   border-radius: inherit;
-  background: radial-gradient(120% 80% at 20% 0%, rgba(255,255,255,.26) 0%, rgba(255,255,255,.06) 30%, rgba(255,255,255,0) 62%);
+  background: radial-gradient(120% 80% at 20% 0%, rgba(255,255,255,.26) 0%, rgba(255,255,255,.06) 30%, rgba(255,255,255,.00) 62%);
   opacity:.9;
   pointer-events:none;
 }
@@ -844,7 +844,7 @@
   letter-spacing: .14em;
   text-transform: uppercase;
   font-size: 12px;
-  color: rgba(255, 240, 200, 1);
+  color: rgba(255,240,200,.01);
   text-shadow: 0 10px 22px rgba(0,0,0,.28), 0 0 6px rgba(255,220,140,.18);
 }
 .countdownGlass.isMatchDay .cdRow{ display:none !important; }
@@ -873,7 +873,7 @@
     to bottom,
     rgba(0,0,0,.78),
     rgba(0,0,0,.48),
-    rgba(0,0,0,0)
+    rgba(0,0,0,.00)
   );
   text-shadow: 0 3px 18px rgba(0,0,0,.85);
   backdrop-filter: blur(2px);
@@ -901,7 +901,7 @@ html[data-hero="day"] .broadcast-title{
     to bottom,
     rgba(0,0,0,.78),
     rgba(0,0,0,.48),
-    rgba(0,0,0,0)
+    rgba(0,0,0,.00)
   );
   text-shadow: 0 3px 18px rgba(0,0,0,.85);
   backdrop-filter: blur(2px);
@@ -926,7 +926,7 @@ html[data-hero="night"] .broadcast-title{
     to bottom,
     rgba(0,0,0,.78),
     rgba(0,0,0,.48),
-    rgba(0,0,0,0)
+    rgba(0,0,0,.00)
   );
   text-shadow: 0 3px 18px rgba(0,0,0,.85);
   backdrop-filter: blur(2px);
@@ -1078,7 +1078,7 @@ html[data-hero="night"] .broadcast-title{
   --mat-shadow: 0 14px 40px rgba(0,0,0,.18);
 
   --specular: rgba(255,255,255,.12);  /* super faint */
-  --specular2: rgba(255,255,255,0);
+  --specular2: rgba(255,255,255,.00);
 
   --puck-bg: rgba(255,255,255,.10);
   --puck-border: rgba(255,255,255,.18);
@@ -1176,7 +1176,7 @@ html[data-hero="night"] .broadcast-title{
   left:8px; right:8px; top:7px;
   height: 1px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.55), rgba(255,255,255,0));
+  background: linear-gradient(90deg, rgba(255,255,255,.00), rgba(255,255,255,.55), rgba(255,255,255,.00));
   opacity: .55;
   pointer-events:none;
 }
@@ -1185,7 +1185,7 @@ html[data-hero="night"] .broadcast-title{
   position:absolute;
   inset:0;
   border-radius: inherit;
-  background: radial-gradient(120% 120% at 20% 0%, rgba(255,255,255,.22), rgba(255,255,255,0) 60%);
+  background: radial-gradient(120% 120% at 20% 0%, rgba(255,255,255,.22), rgba(255,255,255,.00) 60%);
   opacity:.45;
   pointer-events:none;
 }
