@@ -83,7 +83,8 @@
 
     
 
-    /* ===== HERO COUNTDOWN (ULTRA-GLASS, SAFE) ===== */
+    
+    /* ===== HERO COUNTDOWN (ULTRA-TRANSPARENT GLASS) ===== */
     .heroCountdown{
       position:absolute;
       left: 50%;
@@ -91,23 +92,23 @@
       bottom: 8px;
       width: min(92%, 420px);
       border-radius: 18px;
+
+      /* ultra-transparent: almost invisible glass */
       border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.045); /* key: no muddy dark fill */
 
-      /* super transparent glass so the banner stays visible */
-      background:
-        radial-gradient(140% 170% at 50% 0%, rgba(0,0,0,.03), rgba(0,0,0,.10) 70%),
-        linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.012));
+      /* keep text readable WITHOUT darkening the whole bar */
+      box-shadow: 0 10px 36px rgba(0,0,0,.16);
+      backdrop-filter: blur(26px) saturate(1.85) brightness(1.08);
+      -webkit-backdrop-filter: blur(26px) saturate(1.85) brightness(1.08);
 
-      backdrop-filter: blur(26px) saturate(1.7);
-      -webkit-backdrop-filter: blur(26px) saturate(1.7);
-      box-shadow: 0 12px 42px rgba(0,0,0,.22);
       padding: 7px 12px 10px;
-      z-index: 50; /* above image only */
+      z-index: 50;
       pointer-events: none;
       overflow:hidden;
     }
 
-    /* subtle gold shimmer line */
+    /* very subtle highlight line (gold shimmer) */
     .heroCountdown::before{
       content:"";
       position:absolute;
@@ -116,18 +117,31 @@
       border-radius: 999px;
       background: linear-gradient(90deg,
         rgba(212,175,55,0) 0%,
-        rgba(212,175,55,.16) 24%,
+        rgba(212,175,55,.14) 28%,
         rgba(255,255,255,.14) 50%,
-        rgba(212,175,55,.16) 76%,
+        rgba(212,175,55,.14) 72%,
         rgba(212,175,55,0) 100%
       );
-      opacity: .38;
-      transform: translateX(-20%);
-      animation: heroShimmer 9s ease-in-out infinite;
+      opacity: .28;
+      transform: translateX(-18%);
+      filter: blur(.2px);
+      animation: heroShimmer 10s ease-in-out infinite;
     }
     @keyframes heroShimmer{
-      0%,100%{ transform: translateX(-20%); opacity:.32; }
-      50%{ transform: translateX(20%); opacity:.44; }
+      0%,100%{ transform: translateX(-18%); opacity:.22; }
+      50%{ transform: translateX(18%); opacity:.32; }
+    }
+
+    /* local readability helper: tiny inner vignette ONLY behind text, not muddy */
+    .heroCountdown::after{
+      content:"";
+      position:absolute; inset:0;
+      background: radial-gradient(120% 140% at 50% 0%,
+        rgba(0,0,0,.06) 0%,
+        rgba(0,0,0,.02) 55%,
+        rgba(0,0,0,0) 85%
+      );
+      pointer-events:none;
     }
 
     .heroCdTop{
@@ -136,13 +150,16 @@
       font-weight: 950;
       letter-spacing: .22em;
       text-transform: uppercase;
-      color: rgba(255,255,255,.92);
+      color: rgba(255,255,255,.95);
       margin: 10px 0 6px;
-      text-shadow: 0 10px 30px rgba(0,0,0,.42);
+      text-shadow: 0 10px 30px rgba(0,0,0,.35);
       position: relative;
       z-index: 1;
     }
-    .heroCdRow{ display:flex; align-items:center; justify-content:center; gap:10px; position:relative; z-index:1; }
+    .heroCdRow{
+      display:flex; align-items:center; justify-content:center; gap:10px;
+      position:relative; z-index:1;
+    }
     .heroCdCell{ display:flex; flex-direction:column; align-items:center; min-width:48px; }
     .heroCdNum{
       font-variant-numeric: tabular-nums;
@@ -151,7 +168,7 @@
       font-size: 24px;
       line-height: 1;
       color: rgba(255,255,255,.98);
-      text-shadow: 0 14px 40px rgba(0,0,0,.42);
+      text-shadow: 0 12px 34px rgba(0,0,0,.35);
       transition: opacity 180ms ease;
     }
     .heroCdLbl{
@@ -160,16 +177,16 @@
       font-weight: 900;
       letter-spacing: .20em;
       text-transform: uppercase;
-      color: rgba(255,255,255,.74);
-      text-shadow: 0 10px 30px rgba(0,0,0,.42);
+      color: rgba(255,255,255,.78);
+      text-shadow: 0 10px 30px rgba(0,0,0,.32);
     }
     .heroCdSep{
       font-size: 18px;
       line-height: 1;
-      opacity: .55;
-      color: rgba(255,255,255,.86);
+      opacity: .52;
+      color: rgba(255,255,255,.90);
       transform: translateY(-2px);
-      text-shadow: 0 14px 40px rgba(0,0,0,.42);
+      text-shadow: 0 12px 34px rgba(0,0,0,.30);
     }
 
 
