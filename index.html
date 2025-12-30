@@ -64,8 +64,6 @@
     }
 
     .hero{
-  padding-top: 42px;
-
       position: relative;
       border-radius: var(--r16);
       overflow: hidden;
@@ -799,103 +797,14 @@
 }
 
 
-/* ===== Ultra-top Broadcast Title ===== */
-.broadcast-title{
-  position: fixed;
-  top: env(safe-area-inset-top);
-  left: 0;
-  right: 0;
-  height: 38px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  letter-spacing: .14em;
-  font-size: 12px;
-  text-transform: uppercase;
-  color: rgba(255,255,255,.92);
-  background: linear-gradient(
-    to bottom,
-    rgba(8,12,22,.65),
-    rgba(8,12,22,.15),
-    rgba(8,12,22,0)
-  );
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  z-index: 1000;
-  pointer-events: none;
-}
-
-
-/* Day/Night gradient variants for title (tied to hero switch) */
-html[data-hero="day"] .broadcast-title{
-  background: linear-gradient(
-    to bottom,
-    rgba(245,250,255,.28),
-    rgba(245,250,255,.10),
-    rgba(245,250,255,0)
-  );
-  color: rgba(255,255,255,.96);
-  text-shadow: 0 2px 10px rgba(0,0,0,.22);
-}
-html[data-hero="night"] .broadcast-title{
-  background: linear-gradient(
-    to bottom,
-    rgba(8,12,22,.70),
-    rgba(8,12,22,.20),
-    rgba(8,12,22,0)
-  );
-  color: rgba(255,255,255,.92);
-  text-shadow: 0 2px 12px rgba(0,0,0,.35);
-}
-
-
-/* Landscape fix: let content breathe so panels expand with the hero/background */
-@media (orientation: landscape){
-  body{ min-height: 100vh; }
-  .wrap, .container, .shell, main{ width: 100%; max-width: 100%; }
-  .hero{ min-height: 60vh; }
-}
-
-
-/* Landscape hero image: show full banner (avoid crop) */
-@media (orientation: landscape){
-  .hero{
-    min-height: 56vh;
-  }
-  /* Ensure the hero image shows fully in landscape */
-  #heroImage{
-    object-fit: contain !important;
-    object-position: center center !important;
-  }
-  /* If the hero uses background-image instead of <img>, cover that too */
-  .hero{
-    background-size: contain !important;
-    background-position: center center !important;
-    background-repeat: no-repeat !important;
-  }
-  /* Premium filler behind "contain" letterboxing */
-  .hero::before{
-    content:"";
-    position:absolute;
-    inset:0;
-    background: radial-gradient(120% 90% at 50% 20%, rgba(255,255,255,.06), rgba(0,0,0,.25));
-    pointer-events:none;
-    z-index:1;
-  }
-  /* Keep hero content above the vignette */
-  .hero > *{ position: relative; z-index: 2; }
-}
+/* Home Language card tweaks */
+#sec-home .pillRow{ flex-wrap: wrap; justify-content: flex-end; }
+#sec-home .pillRow .pill{ white-space: nowrap; }
 
 </style>
 </head>
 
 <body data-sec="home">
-<!-- Ultra-top Broadcast Title -->
-<div class="broadcast-title">
-  FIFA WORLD CUP™ 2026 · CONCIERGE
-</div>
-
   <div class="wrap">
 
     <!-- PURE HERO IMAGE (NO OVERLAYS) -->
@@ -926,31 +835,24 @@ html[data-hero="night"] .broadcast-title{
       <section class="section" id="sec-home" aria-label="Home">
         <div class="card" aria-label="Primary actions">
           <div class="cardHead">
-            <h2 class="cardTitle">Reserve in seconds</h2>
+            <h2 class="cardTitle">Reservations, instantly</h2>
           </div>
           <div class="cardBody">
             <p class="hint" style="margin-top:0">
-              Fan-first. Luxury feel. Zero friction. Tell us city + time + party size — we handle the rest.
+              Built for venues. Capture party size + time + notes in seconds — then route to your team to close the booking.
             </p>
 
             <div class="heroActions" style="margin-top:12px" aria-label="Primary buttons">
-              <button class="cta primary" id="ctaReserve" type="button">Reserve now</button>
-              <button class="cta" id="ctaChat" type="button">Chat concierge</button>
-              <button class="cta" id="ctaPlan" type="button">Build my matchday</button>
+              <button class="cta primary" id="ctaReserve" type="button">Take a reservation</button>
+              <button class="cta" id="ctaChat" type="button">Chat (guest-facing)</button>
+              <button class="cta" id="ctaPlan" type="button">Quick intake</button>
             </div>
 
             <p class="hint" style="margin-top:12px">
-              Tip: Try “Table for 4 • 7pm • Dallas” — or ask in Spanish/Portuguese/French.
+              Tip: Try “Table for 4 · 7pm · Name + phone” — guests can chat in EN/ES/PT/FR.
             </p>
           </div>
         </div>
-
-        <!-- PHASE 2: MATCHDAY FLOW -->
-        <div class="card" aria-label="Matchday flow">
-          <div class="cardHead">
-            <h2 class="cardTitle">Matchday flow</h2>
-            <button class="pill" id="flowQuick" type="button">Fast plan</button>
-          </div>
           <div class="cardBody">
             <div class="flow" aria-label="Steps">
               <div class="flowStep">
@@ -992,12 +894,6 @@ html[data-hero="night"] .broadcast-title{
             </p>
           </div>
         </div>
-
-        <div class="card" aria-label="Today">
-          <div class="cardHead">
-            <h2 class="cardTitle">Today</h2>
-            <button class="pill" id="refreshStatus" type="button">Refresh</button>
-          </div>
           <div class="cardBody">
             <div id="presenceText" class="hint">Loading…</div>
             <p class="hint" style="margin-top:10px">
@@ -1005,20 +901,39 @@ html[data-hero="night"] .broadcast-title{
             </p>
           </div>
         </div>
+        <div class="card" aria-label="Language">
+          <div class="cardHead">
+            <h2 class="cardTitle">Guest language</h2>
+            <div class="pillRow" style="display:flex; gap:10px; align-items:center;">
+              <button class="pill" id="pillLang" type="button" title="Tap to switch language">EN · 4</button>
+            </div>
+          </div>
+          <div class="cardBody">
+            <p class="hint" style="margin-top:0">
+              Guests can message in <b>English, Spanish, Portuguese, or French</b>. Tap the pill to preview the UI language.
+            </p>
+
+            <div class="heroActions" style="margin-top:12px">
+              <button class="cta" id="ctaLangPreview" type="button">Switch language</button>
+              <button class="cta" id="ctaOpenChat" type="button">Open chat</button>
+            </div>
+          </div>
+        </div>
+
 
         <div class="card" aria-label="Explore">
           <div class="cardHead">
-            <h2 class="cardTitle">Explore</h2>
+            <h2 class="cardTitle">Venue tools</h2>
           </div>
           <div class="cardBody">
             <div class="heroActions" style="margin-top:0">
-              <button class="cta" id="homeSchedule" type="button">Schedule</button>
-              <button class="cta" id="homeFanzone" type="button">Fan Zone</button>
+              <button class="cta" id="homeSchedule" type="button">Fixtures</button>
+              <button class="cta" id="homeFanzone" type="button">Promos</button>
             </div>
             <div style="height:10px"></div>
             <div class="heroActions" style="margin-top:0">
-              <button class="cta" id="homeVIP" type="button">VIP</button>
-              <button class="cta" id="homeMenu" type="button">Menu</button>
+              <button class="cta" id="homeVIP" type="button">VIP Requests</button>
+              <button class="cta" id="homeMenu" type="button">Menu / Offers</button>
             </div>
           </div>
         </div>
@@ -1240,7 +1155,13 @@ html[data-hero="night"] .broadcast-title{
       const order = ['en','es','pt','fr'];
       state.lang = order[(order.indexOf(state.lang)+1) % order.length];
       updatePills();
-      updateHeroCountdown();
+      
+      const pillLang = document.getElementById('pillLang');
+      if(pillLang && !pillLang.__wired){
+        pillLang.__wired = true;
+        pillLang.addEventListener('click', ()=>{ cycleLang(); });
+      }
+updateHeroCountdown();
 systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       toast(`Language: ${state.lang.toUpperCase()}`);
       haptic(8);
@@ -1278,102 +1199,93 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
     }
 
 // === HERO LIVE COUNTDOWN (real timer) ===
-const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z'; // World Cup kickoff (UTC)
+    const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z'; // 2026 World Cup kickoff (UTC)
 
-function ensureMatchDayBadge(){
-  const wrap = document.querySelector('.countdownGlass');
-  if(!wrap) return null;
-  let badge = document.getElementById('cdBadge');
-  if(!badge){
-    badge = document.createElement('div');
-    badge.className = 'cdBadge';
-    badge.id = 'cdBadge';
-    badge.textContent = 'Match Day';
-    badge.setAttribute('aria-hidden','true');
-    // Prefer inside cdRow (for consistent layout), otherwise top of wrap
-    const row = wrap.querySelector('.cdRow');
-    if(row) row.prepend(badge);
-    else wrap.prepend(badge);
-  }
-  return badge;
-}
+    function updateHeroCountdown(){
+      const wrap = document.querySelector('.countdownGlass');
+      const dEl = document.getElementById('cdD');
+      const hEl = document.getElementById('cdH');
+      const mEl = document.getElementById('cdM');
+      const sEl = document.getElementById('cdS');
+      if(!wrap || !dEl || !hEl || !mEl || !sEl) return;
 
-function updateHeroCountdown(){
-  const wrap = document.querySelector('.countdownGlass');
-  const dEl = document.getElementById('cdD');
-  const hEl = document.getElementById('cdH');
-  const mEl = document.getElementById('cdM');
-  const sEl = document.getElementById('cdS');
-  if(!wrap || !dEl || !hEl || !mEl || !sEl) return;
+      const targetDate = new Date(HERO_KICKOFF_ISO);
+      const targetMs = targetDate.getTime();
+      const now = new Date();
+      const nowMs = now.getTime();
+      const diff = targetMs - nowMs;
 
-  const badge = ensureMatchDayBadge();
+      // Ensure badge exists
+      let badge = document.getElementById('cdBadge');
+      if(!badge){
+        badge = document.createElement('div');
+        badge.className = 'cdBadge';
+        badge.id = 'cdBadge';
+        badge.textContent = 'Match Day';
+        badge.setAttribute('aria-hidden','true');
+        const row = wrap.querySelector('.cdRow');
+        if(row) row.prepend(badge);
+        else wrap.prepend(badge);
+      }
 
-  const targetDate = new Date(HERO_KICKOFF_ISO);
-  const targetMs = targetDate.getTime();
-  const now = new Date();
-  const nowMs = now.getTime();
-  const diff = targetMs - nowMs;
+      const sameLocalDay =
+        (now.getFullYear() === targetDate.getFullYear() &&
+         now.getMonth() === targetDate.getMonth() &&
+         now.getDate() === targetDate.getDate());
 
-  const sameLocalDay =
-    (now.getFullYear() === targetDate.getFullYear() &&
-     now.getMonth() === targetDate.getMonth() &&
-     now.getDate() === targetDate.getDate());
+      if(sameLocalDay || diff <= 0){
+        wrap.classList.add('isMatchDay');
+        badge.setAttribute('aria-hidden','false');
+        return;
+      }else{
+        wrap.classList.remove('isMatchDay');
+        badge.setAttribute('aria-hidden','true');
+      }
 
-  const isMatchDay = sameLocalDay || (diff <= 0);
+      if(!Number.isFinite(diff) || diff <= 0){
+        dEl.textContent = '00'; hEl.textContent = '00'; mEl.textContent = '00'; sEl.textContent = '00';
+        return;
+      }
 
-  if(isMatchDay){
-    wrap.classList.add('isMatchDay');
-    if(badge) badge.setAttribute('aria-hidden','false');
-    return;
-  }else{
-    wrap.classList.remove('isMatchDay');
-    if(badge) badge.setAttribute('aria-hidden','true');
-  }
+      const totalSeconds = Math.floor(diff / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
 
-  if(!Number.isFinite(diff) || diff <= 0){
-    dEl.textContent = '00'; hEl.textContent = '00'; mEl.textContent = '00'; sEl.textContent = '00';
-    return;
-  }
+      const nextD = String(days).padStart(2,'0');
+      const nextH = String(hours).padStart(2,'0');
+      const nextM = String(minutes).padStart(2,'0');
+      const nextS = String(seconds).padStart(2,'0');
 
-  const totalSeconds = Math.floor(diff / 1000);
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
+      const tick = (el, next) => {
+        if(el.textContent !== next){
+          el.textContent = next;
+          el.classList.remove('tick');
+          void el.offsetWidth;
+          el.classList.add('tick');
+        }
+      };
 
-  const nextD = String(days).padStart(2,'0');
-  const nextH = String(hours).padStart(2,'0');
-  const nextM = String(minutes).padStart(2,'0');
-  const nextS = String(seconds).padStart(2,'0');
-
-  const tick = (el, next) => {
-    if(el.textContent !== next){
-      el.textContent = next;
-      el.classList.remove('tick'); // restart animation
-      void el.offsetWidth;         // reflow
-      el.classList.add('tick');
+      tick(dEl, nextD);
+      tick(hEl, nextH);
+      tick(mEl, nextM);
+      tick(sEl, nextS);
     }
-  };
+    }
 
-  tick(dEl, nextD);
-  tick(hEl, nextH);
-  tick(mEl, nextM);
-  tick(sEl, nextS);
-}
-
-function startHeroCountdown(){
-  try{ updateHeroCountdown(); }catch(e){}
-  try{
-    if(window.__heroCdTimer) clearInterval(window.__heroCdTimer);
-    window.__heroCdTimer = setInterval(()=>{ try{ updateHeroCountdown(); }catch(e){} }, 1000);
-    // Refresh immediately when returning to tab
-    document.addEventListener('visibilitychange', ()=>{
-      if(!document.hidden){ try{ updateHeroCountdown(); }catch(e){} }
-    }, { passive:true });
-  }catch(e){}
-}
-
-
+    function startHeroCountdown(){
+      try{
+        updateHeroCountdown();
+        if(window.__heroCountdownTimer) clearInterval(window.__heroCountdownTimer);
+        window.__heroCountdownTimer = setInterval(updateHeroCountdown, 1000);
+        // Refresh immediately when returning to tab
+        document.addEventListener('visibilitychange', ()=>{
+          if(!document.hidden) updateHeroCountdown();
+        }, { passive:true });
+      }catch(e){}
+    }catch(e){}
+    }
 
 // === CHAT ===
     const chatLog = document.getElementById('chatLog');
