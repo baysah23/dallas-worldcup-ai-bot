@@ -71,142 +71,109 @@
 
     
 
-        /* ===== CINEMATIC HERO MICRO-MOTION (image only) ===== */
+    /* ===== CINEMATIC HERO MICRO-MOTION (image only) ===== */
     :root{ --heroY: 0px; }
     #heroBanner .heroImg{
-      transform: translate3d(0, var(--heroY), 0) scale(1.06);
-      transform-origin: 50% 40%;
-      will-change: transform, filter;
-      animation: heroBreathe 8.8s ease-in-out infinite;
-    }
-    @keyframes heroBreathe{
-      0%,100%{ filter: saturate(1.02) contrast(1.02); }
-      50%{ filter: saturate(1.08) contrast(1.05); }
+      transform: translate3d(0, var(--heroY), 0) scale(1.035);
+      transition: transform 380ms ease;
     }
     @media (prefers-reduced-motion: reduce){
-      #heroBanner .heroImg{ animation:none; transform:none; filter:none; }
-    }
+      #heroBanner .heroImg{ transition:none; transform:none; }
     }
 
     
-    /* ===== HERO LIVE COUNTDOWN OVERLAY (STYLE B: Bottom-Center Glass Bar) ===== */
+
+    /* ===== HERO COUNTDOWN (ULTRA-GLASS, SAFE) ===== */
     .heroCountdown{
       position:absolute;
       left: 50%;
       transform: translateX(-50%);
       bottom: 8px;
-      width: min(90%, 410px);
+      width: min(92%, 420px);
       border-radius: 18px;
       border: 1px solid rgba(255,255,255,.10);
-/* ultra-glass: very transparent */
+
+      /* super transparent glass so the banner stays visible */
       background:
-        radial-gradient(140% 160% at 50% 0%, rgba(0,0,0,.05), rgba(0,0,0,.10) 72%),
+        radial-gradient(140% 170% at 50% 0%, rgba(0,0,0,.03), rgba(0,0,0,.10) 70%),
         linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.012));
 
-      backdrop-filter: blur(24px) saturate(1.6);
-      -webkit-backdrop-filter: blur(24px) saturate(1.6);
+      backdrop-filter: blur(26px) saturate(1.7);
+      -webkit-backdrop-filter: blur(26px) saturate(1.7);
       box-shadow: 0 12px 42px rgba(0,0,0,.22);
-      padding: 7px 12px 9px;
-      z-index: 8;
+      padding: 7px 12px 10px;
+      z-index: 50; /* above image only */
       pointer-events: none;
       overflow:hidden;
     }
 
-    /* Subtle gold shimmer line (premium highlight) */
+    /* subtle gold shimmer line */
     .heroCountdown::before{
       content:"";
       position:absolute;
-      left:14px; right:14px; top:7px;
+      left:14px; right:14px; top:8px;
       height: 2px;
       border-radius: 999px;
       background: linear-gradient(90deg,
         rgba(212,175,55,0) 0%,
-        rgba(212,175,55,.14) 24%,
+        rgba(212,175,55,.16) 24%,
         rgba(255,255,255,.14) 50%,
-        rgba(212,175,55,.14) 76%,
+        rgba(212,175,55,.16) 76%,
         rgba(212,175,55,0) 100%
       );
-      opacity: .33;
-      transform: translateX(-18%);
-      filter: blur(.15px);
-      animation: shimmerLine 9.2s ease-in-out infinite;
+      opacity: .38;
+      transform: translateX(-20%);
+      animation: heroShimmer 9s ease-in-out infinite;
     }
-
-    /* Micro grain texture inside bar only */
-    .heroCountdown::after{
-      content:"";
-      position:absolute; inset:0;
-      background:
-        radial-gradient(140% 120% at 50% 20%, rgba(255,255,255,.05), transparent 60%);
-      opacity:.06;
-            pointer-events:none;
-    }
-
-    @keyframes shimmerLine{
-      0%,100%{ transform: translateX(-18%); opacity:.28; }
-      50%{ transform: translateX(18%); opacity:.40; }
+    @keyframes heroShimmer{
+      0%,100%{ transform: translateX(-20%); opacity:.32; }
+      50%{ transform: translateX(20%); opacity:.44; }
     }
 
     .heroCdTop{
       text-align:center;
-      font-size: 10px;
+      font-size: 10.5px;
       font-weight: 950;
       letter-spacing: .22em;
       text-transform: uppercase;
       color: rgba(255,255,255,.92);
-      margin: 10px 0 5px;
-      text-shadow: 0 10px 28px rgba(0,0,0,.34);
+      margin: 10px 0 6px;
+      text-shadow: 0 10px 30px rgba(0,0,0,.42);
       position: relative;
       z-index: 1;
     }
-
-    .heroCdRow{
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      gap: 10px;
-      position: relative;
-      z-index: 1;
-    }
-
-    .heroCdCell{
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      min-width: 46px;
-    }
-
+    .heroCdRow{ display:flex; align-items:center; justify-content:center; gap:10px; position:relative; z-index:1; }
+    .heroCdCell{ display:flex; flex-direction:column; align-items:center; min-width:48px; }
     .heroCdNum{
       font-variant-numeric: tabular-nums;
       font-weight: 980;
       letter-spacing: .02em;
-      font-size: 22px;
+      font-size: 24px;
       line-height: 1;
       color: rgba(255,255,255,.98);
-      text-shadow:
-        0 12px 34px rgba(0,0,0,.32),
-        0 0 14px rgba(255,255,255,.08);
+      text-shadow: 0 14px 40px rgba(0,0,0,.42);
+      transition: opacity 180ms ease;
     }
-
     .heroCdLbl{
-      margin-top: 4px;
-      font-size: 9.5px;
+      margin-top: 5px;
+      font-size: 10px;
       font-weight: 900;
       letter-spacing: .20em;
       text-transform: uppercase;
       color: rgba(255,255,255,.74);
-      text-shadow: 0 10px 24px rgba(0,0,0,.32);
+      text-shadow: 0 10px 30px rgba(0,0,0,.42);
     }
-
     .heroCdSep{
-      font-size: 16px;
+      font-size: 18px;
       line-height: 1;
-      opacity: .45;
+      opacity: .55;
       color: rgba(255,255,255,.86);
       transform: translateY(-2px);
-      text-shadow: 0 12px 34px rgba(0,0,0,.32);
+      text-shadow: 0 14px 40px rgba(0,0,0,.42);
     }
-/* === CARDS === */
+
+
+    /* === CARDS === */
     .card{
       margin-top: 14px;
       border-radius: var(--r16);
@@ -935,7 +902,6 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
     // === HERO LIVE COUNTDOWN (real timer) ===
     const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z'; // 2026 World Cup kickoff (UTC)
 
-    
     function updateHeroCountdown(){
       const dEl = document.getElementById('cdD');
       const hEl = document.getElementById('cdH');
@@ -954,18 +920,6 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
         sEl.textContent = '00';
         return;
       }
-
-      const totalSec = Math.floor(diff / 1000);
-      const days = Math.floor(totalSec / 86400);
-      const hrs  = Math.floor((totalSec % 86400) / 3600);
-      const mins = Math.floor((totalSec % 3600) / 60);
-      const secs = Math.floor(totalSec % 60);
-
-      dEl.textContent = String(days);
-      hEl.textContent = String(hrs).padStart(2,'0');
-      mEl.textContent = String(mins).padStart(2,'0');
-      sEl.textContent = String(secs).padStart(2,'0');
-    }
     }
 
     function startHeroCountdown(){
@@ -1386,7 +1340,7 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
         if(ticking) return;
         ticking = true;
         requestAnimationFrame(()=>{
-          const y = Math.min(4, Math.max(0, window.scrollY * 0.03));
+          const y = Math.min(2, Math.max(0, window.scrollY * 0.02));
           document.documentElement.style.setProperty('--heroY', `${y}px`);
           ticking = false;
         });
@@ -1400,5 +1354,58 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
     else boot();
   </script>
+
+<script>
+/* HERO COUNTDOWN SAFE (independent of the rest of the app) */
+(function(){
+  const KICKOFF_ISO = "2026-06-11T00:00:00Z";
+
+  function el(id){ return document.getElementById(id); }
+  function pad2(n){ return String(n).padStart(2,'0'); }
+
+  function update(){
+    const dEl = el('cdD'), hEl = el('cdH'), mEl = el('cdM'), sEl = el('cdS');
+    if(!dEl || !hEl || !mEl || !sEl) return;
+
+    const target = Date.parse(KICKOFF_ISO);
+    const now = Date.now();
+    let diff = target - now;
+
+    if(!Number.isFinite(diff) || diff <= 0){
+      dEl.textContent = "00"; hEl.textContent = "00"; mEl.textContent = "00"; sEl.textContent = "00";
+      return;
+    }
+
+    const total = Math.floor(diff/1000);
+    const days = Math.floor(total/86400);
+    const hrs  = Math.floor((total%86400)/3600);
+    const mins = Math.floor((total%3600)/60);
+    const secs = Math.floor(total%60);
+
+    // micro "broadcast tick"
+    sEl.style.opacity = "0.75";
+    requestAnimationFrame(()=>{ sEl.style.opacity = "1"; });
+
+    dEl.textContent = String(days);
+    hEl.textContent = pad2(hrs);
+    mEl.textContent = pad2(mins);
+    sEl.textContent = pad2(secs);
+  }
+
+  function start(){
+    update();
+    if(window.__HERO_CDTIMER) clearInterval(window.__HERO_CDTIMER);
+    window.__HERO_CDTIMER = setInterval(update, 1000);
+  }
+
+  // Start as soon as possible
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', start, {once:true});
+  }else{
+    start();
+  }
+})();
+</script>
+
 </body>
 </html>
