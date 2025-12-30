@@ -71,17 +71,12 @@
 
     
 
-    /* ===== CINEMATIC HERO MICRO-MOTION (image only) ===== */
-    :root{ --heroY: 0px; }
-    #heroBanner .heroImg{
-      transform: translate3d(var(--heroX, 0px), var(--heroY, 0px), 0) rotate(var(--heroR, 0deg)) scale(1.045);
-      transition: transform 420ms ease;
-      will-change: transform;
-    }
+    
     @media (prefers-reduced-motion: reduce){
-  #heroBanner .heroImg{ transform:none !important; transition:none !important; }
-}
-/* === CARDS === */
+      #heroBanner }
+
+    
+    /* === CARDS === */
     .card{
       margin-top: 14px;
       border-radius: var(--r16);
@@ -452,23 +447,42 @@
       transform: translateX(-50%);
       bottom: 8px;
       width: min(92%, 420px);
-      border-radius: 18px;
+      border-radius: 16px;
 
-      /* ULTRA-THIN APPLE GLASS (more visible, not brown) */
-      background: rgba(255,255,255,.06);
+      /* ultra-thin Apple-glass */
       border: 1px solid rgba(255,255,255,.16);
+      background: linear-gradient(180deg,
+        rgba(255,255,255,.16) 0%,
+        rgba(255,255,255,.08) 40%,
+        rgba(255,255,255,.06) 100%
+      );
+
+      backdrop-filter: blur(34px) saturate(2.0);
+      -webkit-backdrop-filter: blur(34px) saturate(2.0);
+
       box-shadow:
-        0 10px 30px rgba(0,0,0,.18),
-        inset 0 1px 0 rgba(255,255,255,.10);
+        0 14px 44px rgba(0,0,0,.22),
+        inset 0 1px 0 rgba(255,255,255,.20),
+        inset 0 -1px 0 rgba(0,0,0,.18);
 
-      backdrop-filter: blur(18px) saturate(1.55);
-      -webkit-backdrop-filter: blur(18px) saturate(1.55);
-
-      padding: 4px 6px; /* thinner */
+      padding: 6px 10px 9px;
       z-index: 50;
       pointer-events: none;
       overflow:hidden;
     }
+    .heroCountdown::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      border-radius: inherit;
+      background: radial-gradient(120% 180% at 20% 0%,
+        rgba(255,255,255,.18) 0%,
+        rgba(255,255,255,0) 55%
+      );
+      opacity:.55;
+      pointer-events:none;
+    }
+
 
     /* subtle premium highlight line (gold shimmer) */
     .heroCountdown::before{
@@ -496,30 +510,21 @@
 
     .heroCdTop{
       text-align:center;
-      font-size: 10px;
-      letter-spacing: .28em;
-      font-weight: 900;
-      color: rgba(255,255,255,.75);
-      padding: 2px 0 4px;
+      font-size: 10.5px;
+      font-weight: 950;
+      letter-spacing: .22em;
       text-transform: uppercase;
+      color: rgba(255,255,255,.95);
+      margin: 10px 0 6px;
+      text-shadow: 0 10px 26px rgba(0,0,0,.32);
+      position: relative;
+      z-index: 1;
     }
     .heroCdRow{
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      gap: 6px;
+      display:flex; align-items:center; justify-content:center; gap:10px;
+      position:relative; z-index:1;
     }
-    .heroCdCell{
-      flex: 1 1 0;
-      min-width: 0;
-      text-align:center;
-      padding: 6px 6px; /* thinner */
-      border-radius: 14px;
-
-      /* almost invisible inner cell glass */
-      background: rgba(255,255,255,.04);
-      border: 1px solid rgba(255,255,255,.10);
-    }
+    .heroCdCell{ display:flex; flex-direction:column; align-items:center; min-width:48px; }
     .heroCdNum{
       font-variant-numeric: tabular-nums;
       font-weight: 980;
@@ -539,26 +544,34 @@
       text-shadow: 0 10px 24px rgba(0,0,0,.28);
     }
     .heroCdSep{
-      opacity: .55;
-      font-size: 12px;
+      font-size: 18px;
       line-height: 1;
-      color: rgba(255,255,255,.60);
+      opacity: .50;
+      color: rgba(255,255,255,.90);
+      transform: translateY(-2px);
+      text-shadow: 0 12px 26px rgba(0,0,0,.28);
     }
 
     /* ===== CINEMATIC HERO (SAFE, NOTICEABLE, PREMIUM) ===== */
-    :root{ --heroY: 0px; }
-    #heroBanner .heroImg{
-      transform: translate3d(0, var(--heroY), 0) scale(1.07) !important;
-      transform-origin: 50% 38%;
-      will-change: transform, filter;
-      animation: heroBreathe 8.6s ease-in-out infinite;
-    }
-    @keyframes heroBreathe{
-      0%,100%{ filter: saturate(1.02) contrast(1.02); }
-      50%{ filter: saturate(1.10) contrast(1.06); }
+    50%{ filter: saturate(1.10) contrast(1.06); }
     }
     @media (prefers-reduced-motion: reduce){
-      #heroBanner .heroImg{ animation:none; transform:none !important; filter:none; }
+      }
+
+    /* ===== CINEMATIC HERO MICRO-MOTION (single source of truth) ===== */
+    :root{ --heroY: 0px; }
+    #heroBanner .heroImg{
+      transform: translate3d(0, var(--heroY), 0) scale(1.055);
+      transform-origin: 50% 38%;
+      will-change: transform, filter;
+      animation: heroBreathe 9.5s ease-in-out infinite;
+    }
+    @keyframes heroBreathe{
+      0%,100%{ filter: saturate(1.06) contrast(1.02); }
+      50%{ filter: saturate(1.12) contrast(1.05); }
+    }
+    @media (prefers-reduced-motion: reduce){
+      #heroBanner .heroImg{ animation:none; transform: none; }
     }
 
 </style>
@@ -945,18 +958,6 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
         sEl.textContent = '00';
         return;
       }
-
-      const sec = Math.floor(diff / 1000);
-      const days = Math.floor(sec / 86400);
-      const hrs  = Math.floor((sec % 86400) / 3600);
-      const mins = Math.floor((sec % 3600) / 60);
-      const secs = sec % 60;
-
-      dEl.textContent = String(days);
-      hEl.textContent = String(hrs).padStart(2,'0');
-      mEl.textContent = String(mins).padStart(2,'0');
-      sEl.textContent = String(secs).padStart(2,'0');
-    }
     }
 
     function startHeroCountdown(){
@@ -1359,7 +1360,10 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       });
 
       updatePills();
-systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
+      updateCountdownMini();
+      setInterval(updateCountdownMini, 30_000);
+
+      systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
       loadPresence();
       setTimeout(prefetchAll, 250);
 
@@ -1374,7 +1378,7 @@ systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP 
         if(ticking) return;
         ticking = true;
         requestAnimationFrame(()=>{
-          const y = Math.min(12, Math.max(0, window.scrollY * 0.06));
+          const y = Math.min(2, Math.max(0, window.scrollY * 0.02));
           document.documentElement.style.setProperty('--heroY', `${y}px`);
           ticking = false;
         });
@@ -1383,82 +1387,37 @@ systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP 
       onScroll();
     })();
 
+
+
 }
 
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
     else boot();
   </script>
 
-
 <script>
-/* HERO CINEMATIC (single source of truth): scroll + gentle drift + optional tilt */
+/* HERO CINEMATIC PARALLAX SAFE */
 (function(){
   const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if(prefersReduced) return;
 
-  const hero = document.getElementById('heroBanner');
-  const img  = hero ? hero.querySelector('.heroImg') : null;
-  if(!hero || !img) return;
+  const img = document.querySelector('#heroBanner .heroImg');
+  if(!img) return;
 
-  // CSS vars consumed by #heroBanner .heroImg transform
-  // --heroY: vertical parallax in px, --heroX: subtle horizontal, --heroR: tiny rotate
-  document.documentElement.style.setProperty('--heroX', '0px');
-  document.documentElement.style.setProperty('--heroR', '0deg');
-
-  let scrollY = 0;
-  let tiltX = 0, tiltY = 0; // normalized -1..1
-  let raf = 0;
-
-  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
-
+  let ticking = false;
   function onScroll(){
-    scrollY = window.scrollY || 0;
-    if(!raf) raf = requestAnimationFrame(tick);
+    if(ticking) return;
+    ticking = true;
+    requestAnimationFrame(()=>{
+      const y = Math.min(6, Math.max(0, window.scrollY * 0.05)); // 0–6px
+      document.documentElement.style.setProperty('--heroY', y.toFixed(2) + 'px');
+      ticking = false;
+    });
   }
-
-  // Desktop pointer tilt (very subtle)
-  function onPointerMove(e){
-    const r = hero.getBoundingClientRect();
-    const cx = r.left + r.width/2;
-    const cy = r.top + r.height/2;
-    tiltX = clamp((e.clientX - cx) / (r.width/2), -1, 1);
-    tiltY = clamp((e.clientY - cy) / (r.height/2), -1, 1);
-    if(!raf) raf = requestAnimationFrame(tick);
-  }
-
-  // Mobile device orientation tilt (permission-dependent)
-  function onOrientation(e){
-    // beta: front-back (-180..180), gamma: left-right (-90..90)
-    const g = (typeof e.gamma === 'number') ? e.gamma : 0;
-    const b = (typeof e.beta  === 'number') ? e.beta  : 0;
-    tiltX = clamp(g / 25, -1, 1);
-    tiltY = clamp(b / 35, -1, 1);
-    if(!raf) raf = requestAnimationFrame(tick);
-  }
-
-  // Gentle “float” drift so it feels alive even when not scrolling
-  function tick(t){
-    raf = 0;
-    const drift = Math.sin((t||0)/1800) * 4;      // px
-    const driftX = Math.cos((t||0)/2400) * 2;     // px
-
-    const parallax = clamp(scrollY * 0.07, 0, 16); // px (more noticeable than 0–6)
-    const y = parallax + drift - (tiltY * 3);
-    const x = driftX + (tiltX * 3);
-    const r = (-tiltX * 0.6).toFixed(3); // deg
-
-    document.documentElement.style.setProperty('--heroY', y.toFixed(2) + 'px');
-    document.documentElement.style.setProperty('--heroX', x.toFixed(2) + 'px');
-    document.documentElement.style.setProperty('--heroR', r + 'deg');
-  }
-
   window.addEventListener('scroll', onScroll, {passive:true});
-  hero.addEventListener('pointermove', onPointerMove, {passive:true});
-  hero.addEventListener('pointerleave', ()=>{ tiltX=0; tiltY=0; if(!raf) raf=requestAnimationFrame(tick); }, {passive:true});
-
-  window.addEventListener('deviceorientation', onOrientation, true);
   onScroll();
 })();
 </script>
+
 </body>
 </html>
