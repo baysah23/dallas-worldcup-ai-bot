@@ -462,17 +462,21 @@
   width:100%;
   height:auto;
   transform-origin: 50% 40%;
-  will-change: transform, filter;
+  will-change: transform;
   transform:
     translate3d(calc(var(--wcHeroX) + var(--wcHeroDriftX)),
                 calc(var(--wcHeroY) + var(--wcHeroDriftY)),
                 0)
     scale(var(--wcHeroZoom));
-  filter: saturate(1.08) contrast(1.03);
+  /* keep a steady grade to avoid flicker */
+  filter: saturate(1.10) contrast(1.04);
   animation: wcHeroCineVars 11.5s ease-in-out infinite;
 }
 @keyframes wcHeroCineVars{
-  0%   { --wcHeroDriftX: 0px;  --wcHeroDriftY: 0px;  --wcHeroZoom: 1.07; filter: saturate(1.08) contrast(1.03); }
+  0%   { --wcHeroDriftX: 0px; --wcHeroDriftY: 0px;  --wcHeroZoom: 1.07; }
+  50%  { --wcHeroDriftX: 0px; --wcHeroDriftY: 6px;  --wcHeroZoom: 1.10; }
+  100% { --wcHeroDriftX: 0px; --wcHeroDriftY: 0px;  --wcHeroZoom: 1.07; }
+}
   50%  { --wcHeroDriftX: 0px;  --wcHeroDriftY: 6px;  --wcHeroZoom: 1.10; filter: saturate(1.16) contrast(1.06); }
   100% { --wcHeroDriftX: 0px;  --wcHeroDriftY: 0px;  --wcHeroZoom: 1.07; filter: saturate(1.08) contrast(1.03); }
 }
@@ -486,7 +490,7 @@
 .heroCountdown{
   position:absolute;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateZ(0);
   bottom: 10px;
   width: min(94%, 440px);
   border-radius: 18px;
@@ -495,25 +499,56 @@
   pointer-events: none;
   overflow:hidden;
 
-  /* glass */
-  border: 1px solid rgba(255,255,255,.26);
-  background:
-    radial-gradient(140% 180% at 18% 0%,
-      rgba(255,255,255,.30) 0%,
-      rgba(255,255,255,.12) 38%,
-      rgba(255,255,255,.07) 68%,
-      rgba(255,255,255,.06) 100%
-    );
-  backdrop-filter: blur(48px) saturate(2.25);
-  -webkit-backdrop-filter: blur(48px) saturate(2.25);
+  /* ultra-thin Apple glass (more transparent) */
+  border: 1px solid rgba(255,255,255,.16);
+  background: linear-gradient(180deg,
+    rgba(255,255,255,.14) 0%,
+    rgba(255,255,255,.08) 42%,
+    rgba(255,255,255,.05) 100%
+  );
 
-  /* depth + crisp edge */
+  backdrop-filter: blur(34px) saturate(2.0);
+  -webkit-backdrop-filter: blur(34px) saturate(2.0);
+
   box-shadow:
-    0 18px 60px rgba(0,0,0,.30),
-    inset 0 1px 0 rgba(255,255,255,.30),
-    inset 0 -1px 0 rgba(0,0,0,.22);
+    0 16px 56px rgba(0,0,0,.26),
+    inset 0 1px 0 rgba(255,255,255,.22),
+    inset 0 -1px 0 rgba(0,0,0,.18);
 }
-
+.heroCountdown::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius: inherit;
+  background: radial-gradient(120% 180% at 20% 0%,
+    rgba(255,255,255,.18) 0%,
+    rgba(255,255,255,0) 55%
+  );
+  opacity:.55;
+  pointer-events:none;
+}
+.heroCountdown::before{
+  content:"";
+  position:absolute;
+  left:14px; right:14px; top:8px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg,
+    rgba(212,175,55,0) 0%,
+    rgba(212,175,55,.12) 28%,
+    rgba(255,255,255,.12) 50%,
+    rgba(212,175,55,.12) 72%,
+    rgba(212,175,55,0) 100%
+  );
+  opacity: .22;
+  transform: translateX(-16%);
+  filter: blur(.2px);
+  animation: heroShimmer 10.5s ease-in-out infinite;
+}
+@keyframes heroShimmer{
+  0%,100%{ transform: translateX(-16%); opacity:.18; }
+  50%{ transform: translateX(16%); opacity:.28; }
+}
 /* Specular highlight + micro-noise INSIDE bar only */
 .heroCountdown::before{
   content:"";
