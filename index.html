@@ -64,6 +64,8 @@
     }
 
     .hero{
+  padding-top: 42px;
+
       position: relative;
       border-radius: var(--r16);
       overflow: hidden;
@@ -703,29 +705,68 @@
     }
 
 
-/* ===== Landscape: preserve full hero image like portrait (no crop) ===== */
+/* ===== Ultra-top Broadcast Title ===== */
+.broadcast-title{
+  position: fixed;
+  top: env(safe-area-inset-top);
+  left: 0; right: 0;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  letter-spacing: .14em;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,.92);
+  background: linear-gradient(to bottom, rgba(8,12,22,.60), rgba(8,12,22,.14), rgba(8,12,22,0));
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 1000;
+  pointer-events: none;
+}
+
+
+/* Day/Night title gradient variants */
+html[data-hero="day"] .broadcast-title{
+  background: linear-gradient(to bottom, rgba(245,250,255,.22), rgba(245,250,255,.08), rgba(245,250,255,0));
+  color: rgba(255,255,255,.98);
+  text-shadow: 0 2px 10px rgba(0,0,0,.18);
+}
+html[data-hero="night"] .broadcast-title{
+  background: linear-gradient(to bottom, rgba(8,12,22,.64), rgba(8,12,22,.16), rgba(8,12,22,0));
+  color: rgba(255,255,255,.92);
+  text-shadow: 0 2px 12px rgba(0,0,0,.32);
+}
+
+
+/* ===== LANDSCAPE: keep same premium feel as portrait (no crop + filled backdrop) ===== */
 @media (orientation: landscape){
+  /* Give the hero media more height so it doesn't feel "smaller than the background" */
   .heroMedia{
-    height: min(62vh, 340px) !important; /* give the image room */
-  }
-  /* Show full image */
-  .heroImg, #heroImg{
-    object-fit: contain !important;
-    object-position: center center !important;
-    background: transparent !important;
+    height: min(78vh, 440px) !important;
+    position: relative;
   }
 
-  /* Premium fill behind letterboxing: blurred version of the same hero */
+  /* Show full banner image */
+  .heroImg, #heroImage, #heroImg{
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+    object-position: center center !important;
+  }
+
+  /* Fill any letterbox with a blurred version of the same image */
   .heroMedia::before{
     content:"";
     position:absolute;
-    inset:-10px;
+    inset:-12px;
     background-image: var(--hero-url);
     background-size: cover;
     background-position: center;
-    filter: blur(18px) saturate(1.1);
+    filter: blur(22px) saturate(1.15);
     transform: scale(1.08);
-    opacity: .55;
+    opacity: .60;
     pointer-events:none;
     z-index: 0;
   }
@@ -733,17 +774,19 @@
     content:"";
     position:absolute;
     inset:0;
-    background: radial-gradient(120% 90% at 50% 20%, rgba(255,255,255,.06), rgba(0,0,0,.28));
+    background: radial-gradient(120% 90% at 50% 20%, rgba(255,255,255,.06), rgba(0,0,0,.30));
     pointer-events:none;
     z-index: 1;
   }
   .heroMedia > *{ position: relative; z-index: 2; }
 
-  /* Keep the countdown tucked to the right and smaller so it never competes with the trophy */
+  /* Keep countdown compact + right so it never collides with trophy */
   .countdownGlass{
     right: 10px !important;
+    left: auto !important;
+    transform: none !important;
     bottom: 10px !important;
-    max-width: 260px !important;
+    max-width: min(46vw, 280px) !important;
   }
 }
 
@@ -751,6 +794,9 @@
 </head>
 
 <body data-sec="home">
+<!-- Ultra-top Broadcast Title -->
+<div class="broadcast-title">FIFA WORLD CUP™ 2026 · CONCIERGE</div>
+
   <div class="wrap">
 
     <!-- PURE HERO IMAGE (NO OVERLAYS) -->
@@ -1130,7 +1176,8 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       // cache-bust daily to keep updates visible without hard-refresh
       const stamp = now.getFullYear().toString() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0');
       img.src = src + '?v=' + stamp;
-      // Expose hero image URL to CSS (for landscape blur/backdrop)
+      // Expose day/night + hero URL for CSS (safe)
+      try{ document.documentElement.setAttribute('data-hero', isDay ? 'day' : 'night'); }catch(e){}
       try{ document.documentElement.style.setProperty('--hero-url', `url('${img.src}')`); }catch(e){}
 
     }
