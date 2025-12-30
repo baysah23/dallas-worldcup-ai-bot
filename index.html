@@ -44,7 +44,8 @@
     .wrap{
       max-width: 560px;
       margin: 0 auto;
-      padding: 14px 14px calc(84px + env(safe-area-inset-bottom));
+      /* tighter top so the broadcast title sits directly over the hero (no gap) */
+      padding: 0 14px calc(84px + env(safe-area-inset-bottom));
     }
 
     
@@ -59,12 +60,14 @@
     }
 
     #heroBanner{
-      margin: 10px 0 8px;
+      /* no top gap between the broadcast title and hero */
+      margin: 0 0 8px;
       border-radius: var(--r16);
     }
 
     .hero{
-  padding-top: 42px;
+      /* remove internal top padding that was making the banner look "cut off" */
+      padding-top: 0;
 
       position: relative;
       border-radius: var(--r16);
