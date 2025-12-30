@@ -105,15 +105,15 @@
 
     /* Subtle, non-muddy legibility lift (no heavy dark wash) */
     .heroMedia::after{
-      content:"";
-      position:absolute;
-      inset:0;
-      pointer-events:none;
-      background:
-        radial-gradient(1000px 260px at 30% 0%, rgba(255,255,255,.18), rgba(255,255,255,0) 60%),
-        linear-gradient(180deg, rgba(0,0,0,.10), rgba(0,0,0,.22));
-      mix-blend-mode: soft-light;
-    }
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  /* cinema-grade vignette: subtle edge falloff, zero mud */
+  background:
+    radial-gradient(120% 85% at 50% 20%, rgba(255,255,255,.04), rgba(0,0,0,0) 55%),
+    radial-gradient(140% 120% at 50% 50%, rgba(0,0,0,0), rgba(0,0,0,.28) 88%);
+}
 
     @keyframes heroCinePan{
       0%   { transform: translate3d(-1.0%, -0.8%, 0) scale(1.10); }
@@ -766,10 +766,11 @@
   font-variant-numeric: tabular-nums;
   font-size: clamp(22px,5vw,32px);
   font-weight: 900;
-  color: #FFD36A;
+  /* Rolex-gold: warmer, richer, less yellow */
+  color: #E6B35C;
   text-shadow:
-    0 6px 20px rgba(0,0,0,.75),
-    0 0 10px rgba(212,175,55,.55);
+    0 6px 20px rgba(0,0,0,.78),
+    0 0 8px rgba(230,179,92,.35);
 }
 .countdownGlass .cdLbl{
   font-size: 11px;
