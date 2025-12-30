@@ -455,15 +455,15 @@
       border-radius: 18px;
 
       /* ultra-glass: almost invisible */
-      border: 1px solid rgba(255,255,255,.08);
-      background: rgba(255,255,255,.014);
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.016);
 
       /* the "glass" comes from blur + saturation; avoid dark fills */
-      backdrop-filter: blur(22px) saturate(1.8);
-      -webkit-backdrop-filter: blur(22px) saturate(1.8);
+      backdrop-filter: blur(28px) saturate(1.9);
+      -webkit-backdrop-filter: blur(28px) saturate(1.9);
 
-      box-shadow: 0 8px 28px rgba(0,0,0,.12);
-      padding: 5px 10px 7px;
+      box-shadow: 0 8px 28px rgba(0,0,0,.14);
+      padding: 4px 8px 6px;
       z-index: 50;
       pointer-events: none;
       overflow:hidden;
@@ -471,6 +471,7 @@
 
     /* subtle premium highlight line (gold shimmer) */
     .heroCountdown::before{
+      display:none; /* disabled to keep hero image clean */
       content:"";
       position:absolute;
       left:14px; right:14px; top:8px;
@@ -937,6 +938,18 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
         sEl.textContent = '00';
         return;
       }
+
+      // breakdown
+      const totalSeconds = Math.floor(diff / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const mins = Math.floor((totalSeconds % 3600) / 60);
+      const secs = totalSeconds % 60;
+
+      dEl.textContent = String(days).padStart(2,'0');
+      hEl.textContent = String(hours).padStart(2,'0');
+      mEl.textContent = String(mins).padStart(2,'0');
+      sEl.textContent = String(secs).padStart(2,'0');
     }
 
     function startHeroCountdown(){
@@ -1345,11 +1358,6 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
       loadPresence();
       setTimeout(prefetchAll, 250);
-
-
-    // === Ambient parallax (micro) on hero image ===
-    
-
 }
 
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
