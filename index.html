@@ -948,84 +948,7 @@ html[data-hero="night"] .broadcast-title{
           </div>
         </div>
 
-        <!-- PHASE 2: MATCHDAY FLOW -->
-        <div class="card" aria-label="Matchday flow">
-          <div class="cardHead">
-            <h2 class="cardTitle">Matchday flow</h2>
-            <button class="pill" id="flowQuick" type="button">Fast plan</button>
-          </div>
-          <div class="cardBody">
-            <div class="flow" aria-label="Steps">
-              <div class="flowStep">
-                <div class="flowLeft">
-                  <div class="stepNum">1</div>
-                  <div class="stepTxt">
-                    <p class="stepTitle">Pick your city</p>
-                    <p class="stepSub" id="flowCitySub">Global view (tap Scope → City)</p>
-                  </div>
-                </div>
-                <button class="cta small" id="flowCityBtn" type="button">Set city</button>
-              </div>
-
-              <div class="flowStep">
-                <div class="flowLeft">
-                  <div class="stepNum">2</div>
-                  <div class="stepTxt">
-                    <p class="stepTitle">Choose a match</p>
-                    <p class="stepSub">Search teams, venues, groups</p>
-                  </div>
-                </div>
-                <button class="cta small" id="flowMatchBtn" type="button">Browse</button>
-              </div>
-
-              <div class="flowStep">
-                <div class="flowLeft">
-                  <div class="stepNum">3</div>
-                  <div class="stepTxt">
-                    <p class="stepTitle">Reserve premium access</p>
-                    <p class="stepSub">Tables • watch parties • VIP</p>
-                  </div>
-                </div>
-                <button class="cta small primary" id="flowReserveBtn" type="button">Reserve</button>
-              </div>
-            </div>
-
-            <p class="hint" style="margin-top:10px" id="flowHint">
-              We’ll keep it simple: pick a match, we route you to the best options.
-            </p>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Today">
-          <div class="cardHead">
-            <h2 class="cardTitle">Today</h2>
-            <button class="pill" id="refreshStatus" type="button">Refresh</button>
-          </div>
-          <div class="cardBody">
-            <div id="presenceText" class="hint">Loading…</div>
-            <p class="hint" style="margin-top:10px">
-              Use <b>Schedule</b> for global matches or switch to <b>City</b> to build your local plan.
-            </p>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Explore">
-          <div class="cardHead">
-            <h2 class="cardTitle">Explore</h2>
-          </div>
-          <div class="cardBody">
-            <div class="heroActions" style="margin-top:0">
-              <button class="cta" id="homeSchedule" type="button">Schedule</button>
-              <button class="cta" id="homeFanzone" type="button">Fan Zone</button>
-            </div>
-            <div style="height:10px"></div>
-            <div class="heroActions" style="margin-top:0">
-              <button class="cta" id="homeVIP" type="button">VIP</button>
-              <button class="cta" id="homeMenu" type="button">Menu</button>
-            </div>
-          </div>
-        </div>
-      </section>
+</section>
 
       <!-- CHAT -->
       <section class="section" id="sec-chat" aria-label="Chat">
@@ -1275,7 +1198,8 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
       const isDay = prefersLight || (hour >= 7 && hour < 19);
       const src = isDay ? '/static/hero_stadium_day.png' : '/static/hero_stadium_night.png';
-      // cache-bust daily to keep updates visible without hard-refresh
+            try{ document.documentElement.setAttribute("data-hero", isDay ? "day" : "night"); }catch(e){}
+// cache-bust daily to keep updates visible without hard-refresh
       const stamp = now.getFullYear().toString() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0');
       img.src = src + '?v=' + stamp;
     }
