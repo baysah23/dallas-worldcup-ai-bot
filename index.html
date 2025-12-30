@@ -696,6 +696,65 @@
       #heroBanner .heroImg{ animation:none; transform: none; }
     }
 
+
+/* ===== Countdown-on-hero (matches screenshot vibe: stylish, clear banner, safe layers) ===== */
+.hero{ position: relative; overflow: hidden; }
+.countdownGlass{
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: clamp(12px, 2.2vw, 18px);
+  width: min(92vw, 560px);
+  margin: 0;
+  padding: 14px 16px 12px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(10,16,28,.18), rgba(10,16,28,.10));
+  border: 1px solid rgba(255,255,255,.18);
+  box-shadow: 0 18px 50px rgba(0,0,0,.28);
+  backdrop-filter: blur(18px) saturate(1.6);
+  -webkit-backdrop-filter: blur(18px) saturate(1.6);
+  pointer-events: none; /* never blocks taps on hero/menus */
+}
+.countdownGlass .cdTop{
+  font-weight: 700;
+  letter-spacing: .18em;
+  font-size: 11px;
+  opacity: .9;
+  margin: 0 0 10px;
+}
+.countdownGlass .cdRow{
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 12px;
+}
+.countdownGlass .cdSep{ display:none; } /* cleaner, like the screenshot */
+.countdownGlass .cdCell{
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.countdownGlass .cdNum{
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  line-height: 1;
+  font-size: clamp(34px, 7.5vw, 52px);
+  letter-spacing: .02em;
+  color: rgba(255, 232, 170, .96);
+  text-shadow: 0 8px 24px rgba(0,0,0,.35);
+}
+.countdownGlass .cdLbl{
+  font-size: 13px;
+  letter-spacing: .02em;
+  text-transform: none;
+  opacity: .88;
+}
+
+/* Extra safety: if blur isn't supported, keep it light and non-muddy */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))){
+  .countdownGlass{ background: rgba(10,16,28,.28); }
+}
+
 </style>
 </head>
 
@@ -709,23 +768,23 @@
           <img class="heroImg" id="heroImg" src="/static/hero_stadium_night.png" alt="Stadium crowd under lights">
         </div>
       </div>
-    </section>
-
-    <!-- COUNTDOWN (ultra-thin Apple-glass, embedded under hero) -->
-    <section class="countdownGlass" aria-label="Live countdown">
-      <div class="cdTop">UNTIL KICKOFF</div>
+      <section class="countdownGlass" aria-label="Live countdown">
+      <div class="cdTop">Countdown to Glory</div>
       <div class="cdRow" role="timer" aria-live="polite">
-        <div class="cdCell"><div class="cdNum" id="cdD">00</div><div class="cdLbl">DAYS</div></div>
+        <div class="cdCell"><div class="cdNum" id="cdD">00</div><div class="cdLbl">Days</div></div>
         <div class="cdSep">•</div>
-        <div class="cdCell"><div class="cdNum" id="cdH">00</div><div class="cdLbl">HRS</div></div>
+        <div class="cdCell"><div class="cdNum" id="cdH">00</div><div class="cdLbl">Hours</div></div>
         <div class="cdSep">•</div>
-        <div class="cdCell"><div class="cdNum" id="cdM">00</div><div class="cdLbl">MINS</div></div>
+        <div class="cdCell"><div class="cdNum" id="cdM">00</div><div class="cdLbl">Minutes</div></div>
         <div class="cdSep">•</div>
-        <div class="cdCell"><div class="cdNum" id="cdS">00</div><div class="cdLbl">SECS</div></div>
+        <div class="cdCell"><div class="cdNum" id="cdS">00</div><div class="cdLbl">Seconds</div></div>
       </div>
     </section>
 
-<main>
+</section>
+
+    <!-- COUNTDOWN (ultra-thin Apple-glass, embedded under hero) -->
+    <main>
       <!-- HOME -->
       <section class="section" id="sec-home" aria-label="Home">
         <div class="card" aria-label="Primary actions">
