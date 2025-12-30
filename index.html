@@ -1006,6 +1006,60 @@ html[data-hero="night"] .broadcast-title{
   color: #EAE6DC !important; /* Warm Platinum */
 }
 
+
+/* === EXPLORE TILES (iOS-glass) === */
+.exploreGrid{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.tile{
+  width:100%;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 14px 36px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.14);
+  padding: 12px 12px;
+  display:flex;
+  align-items:center;
+  gap: 12px;
+  color: var(--text);
+  text-align:left;
+  cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform .12s ease, filter .12s ease;
+}
+.tile:active{ transform: translateY(1px) scale(.99); filter: brightness(1.06); }
+.tileIco{
+  width: 40px; height: 40px;
+  border-radius: 14px;
+  display:flex; align-items:center; justify-content:center;
+  background: rgba(31,111,235,.14);
+  border: 1px solid rgba(31,111,235,.20);
+  font-size: 18px;
+  flex: 0 0 auto;
+}
+.tileTxt{ min-width:0; }
+.tileTitle{
+  font-weight: 950;
+  font-size: 14px;
+  letter-spacing: .01em;
+}
+.tileSub{
+  margin-top: 3px;
+  font-size: 12px;
+  color: rgba(185,199,238,.92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (min-width: 420px){
+  .exploreGrid{ grid-template-columns: 1fr 1fr; }
+}
+
 </style>
 </head>
 
@@ -1098,6 +1152,70 @@ html[data-hero="night"] .broadcast-title{
             <div id="menuHint" class="hint">Tap Refresh to load menu items.</div>
           </div>
         </div>
+
+        <div class="card" aria-label="Language support">
+          <div class="cardHead">
+            <h2 class="cardTitle">4 languages, same concierge</h2>
+          </div>
+          <div class="cardBody">
+            <p class="hint" style="margin-top:0">
+              Chat naturally in <b>English</b>, <b>Spanish</b>, <b>Portuguese</b>, or <b>French</b> — we keep the reservation details consistent.
+            </p>
+            <div class="heroActions" style="margin-top:12px">
+              <button class="cta small" id="pillLang" type="button" aria-label="Change language">EN · 4</button>
+              <button class="cta small" id="pillScope" type="button" aria-label="Toggle schedule scope">Scope: Global</button>
+            </div>
+            <p class="hint" style="margin-top:12px">
+              Switch language any time — your chat thread stays intact.
+            </p>
+          </div>
+        </div>
+
+        <div class="card" aria-label="Explore">
+          <div class="cardHead">
+            <h2 class="cardTitle">Explore</h2>
+          </div>
+          <div class="cardBody">
+            <div class="exploreGrid" aria-label="Explore tiles">
+              <button class="tile" id="tileVIP" type="button" aria-label="VIP">
+                <div class="tileIco">⭐</div>
+                <div class="tileTxt">
+                  <div class="tileTitle">VIP</div>
+                  <div class="tileSub">Premium tables & hosted moments</div>
+                </div>
+              </button>
+
+              <button class="tile" id="tileFanzone" type="button" aria-label="Fan Zone">
+                <div class="tileIco">⚽</div>
+                <div class="tileTxt">
+                  <div class="tileTitle">Fan Zone</div>
+                  <div class="tileSub">Official events & watch parties</div>
+                </div>
+              </button>
+
+              <button class="tile" id="tileSchedule" type="button" aria-label="Schedule">
+                <div class="tileIco">📅</div>
+                <div class="tileTxt">
+                  <div class="tileTitle">Schedule</div>
+                  <div class="tileSub">Matches, venues, groups</div>
+                </div>
+              </button>
+
+              <button class="tile" id="tileMenu" type="button" aria-label="Menu">
+                <div class="tileIco">🍽️</div>
+                <div class="tileTxt">
+                  <div class="tileTitle">Menu</div>
+                  <div class="tileSub">What your venue offers</div>
+                </div>
+              </button>
+            </div>
+
+            <p class="hint" style="margin-top:12px">
+              Built for businesses. Loved by fans — every tap routes to a venue experience.
+            </p>
+          </div>
+        </div>
+
       </section>
 
       <!-- SCHEDULE -->
@@ -1748,7 +1866,30 @@ const ctaChat = document.getElementById('ctaChat');
         systemMsg('Reservation request: tell me city/venue + date/time + party size.');
       });
 
-      // Matchday flow wiring
+      
+      // Home: language + scope pills
+      const pillLang = document.getElementById('pillLang');
+      if(pillLang) pillLang.addEventListener('click', ()=>{ haptic(8); cycleLang(); });
+
+      const pillScope = document.getElementById('pillScope');
+      if(pillScope) pillScope.addEventListener('click', ()=>{ haptic(8); toggleScope(); });
+
+      // Home: Explore tiles
+      const tileVIP = document.getElementById('tileVIP');
+      if(tileVIP) tileVIP.addEventListener('click', ()=>{ haptic(8); setSection('vip'); });
+
+      const tileFanzone = document.getElementById('tileFanzone');
+      if(tileFanzone) tileFanzone.addEventListener('click', ()=>{ haptic(8); setSection('fanzone'); });
+
+      const tileSchedule = document.getElementById('tileSchedule');
+      if(tileSchedule) tileSchedule.addEventListener('click', ()=>{ haptic(8); setSection('schedule'); });
+
+      const tileMenu = document.getElementById('tileMenu');
+      if(tileMenu) tileMenu.addEventListener('click', ()=>{ haptic(8); setSection('menu'); });
+
+      // Initial pill text
+      try{ updatePills(); }catch(e){}
+// Matchday flow wiring
       const flowCityBtn = document.getElementById('flowCityBtn');
       if(flowCityBtn) flowCityBtn.addEventListener('click', ()=>{
         haptic(8);
