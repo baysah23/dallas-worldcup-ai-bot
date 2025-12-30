@@ -242,11 +242,14 @@ def schedule_json():
     if scope == "city" and city:
         matches = [m for m in matches if city in str(m.get("city","")).lower() or city in str(m.get("venue","")).lower()]
 
-    # Basic match-day signal: any match today in the current scope
-    today = time.strftime("%Y-%m-%d", time.gmtime())
-    is_matchday = any((m.get("date") == today) for m in matches)
+    # Basic match-day signal: any match today (UTC) in the current scope.
+    # Matches are normalized with m["date"] as YYYY-MM-DD in _parse_fixture_feed().
+    today_utc = time.strftime("%Y-%m-%d", time.gmtime())
 
-    return jsonify({"matches": matches, "is_matchday": is_matchday})
+    # If a feed provides time, we still treat "match day" as the date bucket.
+    is_matchday = any((str(m.get("date") or "") == today_utc) for m in matches)
+
+    return jsonify({"matches": matches, "is_matchday": is_matchday, "today_utc": today_utc})
 
 # ============================================================
 # Chat (simple; uses OpenAI if key exists, else a premium fallback)

@@ -159,10 +159,10 @@
     }
 
     .cdTop{
-      font-size: 10.5px;
+      font-size: 11px;
       letter-spacing: .18em;
       text-transform: uppercase;
-      color: rgba(232,230,220,.88);
+      color: rgba(232,240,255,.86);
       margin: 0 0 6px;
     }
 
@@ -195,7 +195,7 @@
     .cdLbl{
       font-size: 11px;
       letter-spacing: .10em;
-      color: rgba(232,230,220,.88);
+      color: rgba(232,240,255,.86);
       transform: translateY(-1px);
       white-space: nowrap;
     }
@@ -1253,24 +1253,6 @@ html[data-hero="night"] .broadcast-title{
     /* === Primary CTA text color (lock) === */
     .cta.primary{ color: rgba(255,255,255,.96) !important; }
 
-
-/* ===== v1.0 Elite visibility upgrade — UNTIL KICKOFF ===== */
-.countdownGlass .cdTop{
-  display:block !important;
-  font-size: 10.5px !important;
-  font-weight: 900 !important;
-  letter-spacing: .16em !important;
-  text-transform: uppercase !important;
-
-  color: rgba(255,255,255,.95) !important;
-
-  text-shadow:
-    0 1px 2px rgba(0,0,0,.55),
-    0 0 12px rgba(0,0,0,.35) !important;
-
-  margin-bottom: 6px !important;
-}
-
 </style>
 </head>
 
@@ -1323,6 +1305,7 @@ html[data-hero="night"] .broadcast-title{
               <div class="quickChips" aria-label="Quick reserve chips">
                 <button class="chip" type="button" data-q="VIP vibe">VIP vibe</button>
                 <button class="chip" type="button" data-q="Table for 4">Table for 4</button>
+                <button class="chip" type="button" data-q="VIP vibe">VIP vibe</button>
               </div>
             </div>
 
@@ -1693,6 +1676,9 @@ function updateHeroCountdown(){
 
   const badge = ensureMatchDayBadge();
 
+  // Pull match-day status from the schedule feed (non-blocking)
+  try{ refreshMatchDayStatus(); }catch(e){}
+
   const targetDate = new Date(HERO_KICKOFF_ISO);
   const targetMs = targetDate.getTime();
   const now = new Date();
@@ -1704,9 +1690,8 @@ function updateHeroCountdown(){
      now.getMonth() === targetDate.getMonth() &&
      now.getDate() === targetDate.getDate());
 
-  const isMatchDay = sameLocalDay || (diff <= 0);
-
-  if(isMatchDay){
+  const isMatchDay = !!window.__isMatchDay;
+if(isMatchDay){
     wrap.classList.add('isMatchDay');
     if(badge) badge.setAttribute('aria-hidden','false');
     return;
@@ -1928,7 +1913,31 @@ function startHeroCountdown(){
     }
 
     // === PRESENCE ===
-    async function loadPresence(){
+    
+// ===== Match-Day (badge) uses actual schedule feed =====
+window.__isMatchDay = false;
+window.__matchdayLastCheck = 0;
+
+async function refreshMatchDayStatus(){
+  // Keep this light: 1 request per 60s max (unless forced)
+  const now = Date.now();
+  if(now - (window.__matchdayLastCheck || 0) < 60_000) return window.__isMatchDay;
+  window.__matchdayLastCheck = now;
+
+  try{
+    const city = (state.scope === 'city') ? (state.city || '') : '';
+    const url = `/schedule.json?scope=${encodeURIComponent(state.scope)}&city=${encodeURIComponent(city)}&t=${now}`;
+    const r = await fetch(url, {cache:'no-store'});
+    const data = await r.json();
+    window.__isMatchDay = !!(data && (data.is_matchday || data.is_match_day || data.is_match));
+  }catch(e){
+    // If schedule can't load, do not force Match Day; keep countdown visible.
+    window.__isMatchDay = false;
+  }
+  return window.__isMatchDay;
+}
+
+async function loadPresence(){
       const el = document.getElementById('presenceText');
       if(!el) return;
       el.textContent = 'Loading…';
@@ -2197,7 +2206,9 @@ const ctaChat = document.getElementById('ctaChat');
       if(scopeSelect) scopeSelect.addEventListener('change', (e)=>{
         state.scope = (e.target.value === 'city') ? 'city' : 'global';
         updatePills();
-        loadPresence();
+        try{ window.__matchdayLastCheck = 0; }catch(e){}
+       try{ refreshMatchDayStatus(); }catch(e){}
+       loadPresence();
         loadSchedule();
       });
 
@@ -2206,7 +2217,9 @@ const ctaChat = document.getElementById('ctaChat');
         clearTimeout(window.__cityDeb);
         window.__cityDeb = setTimeout(()=>{
           if(state.scope === 'city') loadSchedule();
-          loadPresence();
+          try{ window.__matchdayLastCheck = 0; }catch(e){}
+       try{ refreshMatchDayStatus(); }catch(e){}
+       loadPresence();
           updatePills();
         }, 350);
       });
