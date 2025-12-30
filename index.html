@@ -1253,6 +1253,21 @@ html[data-hero="night"] .broadcast-title{
     /* === Primary CTA text color (lock) === */
     .cta.primary{ color: rgba(255,255,255,.96) !important; }
 
+
+/* ===== v1.0 FIX: show "UNTIL KICKOFF" label on the hero countdown =====
+   Root cause: an earlier rule hid it:
+   .countdownGlass .cdTop{ display:none; }
+*/
+.countdownGlass .cdTop{
+  display:block !important;
+  margin: 0 0 6px !important;
+  text-align: left;
+  font-size: 10.5px !important;
+  letter-spacing: .18em !important;
+  text-transform: uppercase !important;
+  color: rgba(232,230,220,.88) !important; /* Warm Platinum */
+}
+
 </style>
 </head>
 
