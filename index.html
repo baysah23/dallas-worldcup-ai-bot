@@ -163,7 +163,7 @@
       display:flex;
       align-items: baseline;
       justify-content: center;
-      gap: 8px; /* tighter */
+      gap: 10px; /* tighter */
       flex-wrap: nowrap;
     }
 
@@ -535,7 +535,7 @@
     }
     .modalHead{
       display:flex; justify-content:space-between; align-items:center;
-      gap: 8px;
+      gap: 10px;
     }
     .modalHead h3{ margin:0; font-size: 15px; letter-spacing:.02em; }
     .iconBtn{ background:none; border:none; color:#fff; font-size:18px; padding: 6px 10px; border-radius: 12px; }
@@ -697,62 +697,41 @@
     }
 
 
-
-
 /* ===== Countdown-on-hero (compact, right-aligned, ultra-clear) ===== */
 .hero{ position: relative; overflow: hidden; }
 
-/* Keep the banner bright: NO contrast filter (it can deepen darks) */
 .countdownGlass{
   position: absolute;
   right: 14px;
   left: auto;
   transform: none;
-
-  /* Place it low but not over the trophy */
   bottom: clamp(10px, 2.0vw, 16px);
 
-  /* Compact footprint */
   width: auto;
   max-width: min(52vw, 300px);
   padding: 8px 10px 8px;
   border-radius: 18px;
 
-  /* Ultra-clear glass: very light, minimal pigment */
-  background: linear-gradient(180deg,
-    rgba(255,255,255,.08),
-    rgba(255,255,255,.03)
-  );
+  /* Ultra-clear glass (no muddy tint) */
+  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
   border: 1px solid rgba(255,255,255,.20);
-
-  /* Lighter shadow so it doesn't "muddy" the image */
-  box-shadow:
-    0 14px 40px rgba(0,0,0,.18),
-    inset 0 1px 0 rgba(255,255,255,.25);
-
+  box-shadow: 0 14px 40px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.25);
   backdrop-filter: blur(18px) saturate(1.5);
   -webkit-backdrop-filter: blur(18px) saturate(1.5);
 
   pointer-events: none; /* never blocks taps */
 }
-
-/* Gentle specular highlight (no blend-modes that can behave differently across browsers) */
 .countdownGlass::before{
   content:"";
   position:absolute;
-  inset: 0;
+  inset:0;
   border-radius: inherit;
-  background:
-    radial-gradient(120% 80% at 20% 0%,
-      rgba(255,255,255,.26) 0%,
-      rgba(255,255,255,.06) 30%,
-      rgba(255,255,255,0) 62%
-    );
-  opacity: .9;
+  background: radial-gradient(120% 80% at 20% 0%, rgba(255,255,255,.26) 0%, rgba(255,255,255,.06) 30%, rgba(255,255,255,0) 62%);
+  opacity:.9;
   pointer-events:none;
 }
 
-/* Make it compact: remove top label row */
+/* Hide top label row for compact watch look */
 .countdownGlass .cdTop{ display:none; }
 
 .countdownGlass .cdRow{
@@ -763,20 +742,16 @@
   margin: 0;
 }
 .countdownGlass .cdSep{ display:none; }
+.countdownGlass .cdCell{ display:flex; align-items: baseline; gap: 6px; }
 
-.countdownGlass .cdCell{
-  display:flex;
-  align-items: baseline;
-  gap: 6px;
-}
 .countdownGlass .cdNum{
   font-variant-numeric: tabular-nums;
-  font-weight: 760;
   line-height: 1;
   font-size: clamp(20px, 4.8vw, 30px);
   letter-spacing: .01em;
   color: rgba(255, 240, 200, 1);
   text-shadow: 0 6px 18px rgba(0,0,0,.35), 0 0 6px rgba(255,220,140,.25);
+  will-change: transform, opacity;
 }
 .countdownGlass .cdLbl{
   font-size: 11px;
@@ -786,33 +761,13 @@
   white-space: nowrap;
 }
 
-/* If the hero is very short, pin it a bit higher */
-@media (max-height: 760px){
-  .countdownGlass{ bottom: 10px; }
-}
-
-/* Extra safety: if blur isn't supported, keep it light and non-muddy */
-@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))){
-  .countdownGlass{ background: rgba(255,255,255,.10); }
-}
-
-}
-
-}
-
-
-/* ===== Rolex-style tick + hierarchy + match-day badge ===== */
-.countdownGlass .cdNum{ will-change: transform, opacity; }
-
-/* Subtle tick: quick fade/slide down then settle */
+/* Rolex-style subtle tick */
 @keyframes cdTick{
   0%   { opacity: .55; transform: translateY(-2px); }
   60%  { opacity: 1;   transform: translateY(0); }
   100% { opacity: 1;   transform: translateY(0); }
 }
-.countdownGlass .cdNum.tick{
-  animation: cdTick 320ms ease-out;
-}
+.countdownGlass .cdNum.tick{ animation: cdTick 320ms ease-out; }
 
 /* Hierarchy: D strongest, then H, then M, then S */
 .countdownGlass .cdCell:nth-of-type(1) .cdNum{ font-weight: 820; }
@@ -820,7 +775,7 @@
 .countdownGlass .cdCell:nth-of-type(3) .cdNum{ font-weight: 760; }
 .countdownGlass .cdCell:nth-of-type(4) .cdNum{ font-weight: 740; }
 
-/* Match day state */
+/* Match Day badge */
 .countdownGlass .cdBadge{
   display:none;
   align-items:center;
@@ -837,6 +792,10 @@
 .countdownGlass.isMatchDay .cdRow{ display:none !important; }
 .countdownGlass.isMatchDay .cdBadge{ display:flex; }
 
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))){
+  .countdownGlass{ background: rgba(255,255,255,.10); }
+}
+
 </style>
 </head>
 
@@ -851,9 +810,8 @@
         </div>
       </div>
       <section class="countdownGlass" aria-label="Live countdown">
-      <div class="cdTop">Countdown to Glory</div>
+      <div class="cdTop">UNTIL KICKOFF</div>
       <div class="cdRow" role="timer" aria-live="polite">
-        <div class="cdBadge" id="cdBadge" aria-hidden="true">Match Day</div>
         <div class="cdCell"><div class="cdNum" id="cdD">00</div><div class="cdLbl">D</div></div>
         <div class="cdSep">•</div>
         <div class="cdCell"><div class="cdNum" id="cdH">00</div><div class="cdLbl">H</div></div>
@@ -1238,9 +1196,9 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       const targetMs = targetDate.getTime();
       const now = new Date();
       const nowMs = now.getTime();
-      let diff = targetMs - nowMs;
+      const diff = targetMs - nowMs;
 
-      // Ensure badge exists (so we never "disappear" on match day)
+      // Ensure badge exists
       let badge = document.getElementById('cdBadge');
       if(!badge){
         badge = document.createElement('div');
@@ -1253,15 +1211,12 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
         else wrap.prepend(badge);
       }
 
-      // Match Day = same *local* calendar day as kickoff (or already started)
       const sameLocalDay =
         (now.getFullYear() === targetDate.getFullYear() &&
          now.getMonth() === targetDate.getMonth() &&
          now.getDate() === targetDate.getDate());
 
-      const isMatchDay = sameLocalDay || (diff <= 0);
-
-      if(isMatchDay){
+      if(sameLocalDay || diff <= 0){
         wrap.classList.add('isMatchDay');
         badge.setAttribute('aria-hidden','false');
         return;
@@ -1299,64 +1254,20 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       tick(hEl, nextH);
       tick(mEl, nextM);
       tick(sEl, nextS);
-    }else{
-        wrap.classList.remove('isMatchDay');
-        if(badge) badge.setAttribute('aria-hidden','true');
-      }
-
-      if(!Number.isFinite(diff) || diff <= 0){
-        // Fallback (should be covered by match-day)
-        dEl.textContent = '00'; hEl.textContent = '00'; mEl.textContent = '00'; sEl.textContent = '00';
-        return;
-      }
-
-      const totalSeconds = Math.floor(diff / 1000);
-      const days = Math.floor(totalSeconds / 86400);
-      const hours = Math.floor((totalSeconds % 86400) / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      const seconds = totalSeconds % 60;
-
-      const nextD = String(days).padStart(2,'0');
-      const nextH = String(hours).padStart(2,'0');
-      const nextM = String(minutes).padStart(2,'0');
-      const nextS = String(seconds).padStart(2,'0');
-
-      // Subtle tick animation only when value changes
-      const tick = (el, next) => {
-        if(el.textContent !== next){
-          el.textContent = next;
-          el.classList.remove('tick'); // restart animation
-          void el.offsetWidth;         // reflow
-          el.classList.add('tick');
-        }
-      };
-
-      tick(dEl, nextD);
-      tick(hEl, nextH);
-      tick(mEl, nextM);
-      tick(sEl, nextS);
     }
-
-      // Calculate remaining time parts
-      const totalSeconds = Math.floor(diff / 1000);
-      const days = Math.floor(totalSeconds / 86400);
-      const hours = Math.floor((totalSeconds % 86400) / 3600);
-      const minutes = Math.floor((totalSeconds % 3600) / 60);
-      const seconds = totalSeconds % 60;
-
-      // Pad for consistent width
-      dEl.textContent = String(days).padStart(2,'0');
-      hEl.textContent = String(hours).padStart(2,'0');
-      mEl.textContent = String(minutes).padStart(2,'0');
-      sEl.textContent = String(seconds).padStart(2,'0');
     }
 
     function startHeroCountdown(){
-      try{ updateHeroCountdown(); }catch(e){}
       try{
-        if(window.__heroCdTimer) clearInterval(window.__heroCdTimer);
-        window.__heroCdTimer = setInterval(()=>{ try{ updateHeroCountdown(); }catch(e){} }, 1000);
+        updateHeroCountdown();
+        if(window.__heroCountdownTimer) clearInterval(window.__heroCountdownTimer);
+        window.__heroCountdownTimer = setInterval(updateHeroCountdown, 1000);
+        // Refresh immediately when returning to tab
+        document.addEventListener('visibilitychange', ()=>{
+          if(!document.hidden) updateHeroCountdown();
+        }, { passive:true });
       }catch(e){}
+    }catch(e){}
     }
 
 // === CHAT ===
@@ -1660,10 +1571,9 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       wireNav();
       startHeroCountdown();
 
-      // Day/Night hero switch (local time + OS preference)
-      setHeroBannerImage();
+            setHeroBannerImage();
 
-      // Refresh on OS color-scheme change
+      // Day/Night hero switch wiring (local time + OS preference)
       try{
         if(!window.__heroDayNightWired && window.matchMedia){
           window.__heroDayNightWired = true;
@@ -1680,8 +1590,7 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
         window.__heroDayNightTimer = setInterval(()=>{ try{ setHeroBannerImage(); }catch(e){} }, 10 * 60 * 1000);
       }catch(e){}
 
-
-      const ctaChat = document.getElementById('ctaChat');
+const ctaChat = document.getElementById('ctaChat');
       if(ctaChat) ctaChat.addEventListener('click', ()=>{ haptic(8); setSection('chat'); });
 
       const ctaReserve = document.getElementById('ctaReserve');
