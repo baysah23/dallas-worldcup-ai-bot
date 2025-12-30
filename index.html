@@ -681,12 +681,7 @@
     }
 
     /* ===== CINEMATIC HERO (SAFE, NOTICEABLE, PREMIUM) ===== */
-    50%{ filter: saturate(1.10) contrast(1.06); }
-    }
-    @media (prefers-reduced-motion: reduce){
-      }
-
-    /* ===== CINEMATIC HERO MICRO-MOTION (single source of truth) ===== */
+/* ===== CINEMATIC HERO MICRO-MOTION (single source of truth) ===== */
     :root{ --heroY: 0px; }
     #heroBanner .heroImg{
       transform: translate3d(0, var(--heroY), 0) scale(1.055);
@@ -696,7 +691,6 @@
     }
     @keyframes heroBreathe{
       0%,100%{ filter: saturate(1.06) contrast(1.02); }
-      50%{ filter: saturate(1.12) contrast(1.05); }
     }
     @media (prefers-reduced-motion: reduce){
       #heroBanner .heroImg{ animation:none; transform: none; }
@@ -712,7 +706,7 @@
     <section class="hero" id="heroBanner" aria-label="World Cup 2026 banner">
       <div class="heroMedia" aria-hidden="true">
         <div class="heroCine" id="heroCine">
-          <img class="heroImg" id="heroImg" src="/static/hero_stadium_night.png?v=20251230" alt="Stadium crowd under lights">
+          <img class="heroImg" id="heroImg" src="/static/hero_stadium_night.png" alt="Stadium crowd under lights">
         </div>
       </div>
     </section>
@@ -1108,6 +1102,19 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
         sEl.textContent = '00';
         return;
       }
+
+      // Calculate remaining time parts
+      const totalSeconds = Math.floor(diff / 1000);
+      const days = Math.floor(totalSeconds / 86400);
+      const hours = Math.floor((totalSeconds % 86400) / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+
+      // Pad for consistent width
+      dEl.textContent = String(days).padStart(2,'0');
+      hEl.textContent = String(hours).padStart(2,'0');
+      mEl.textContent = String(minutes).padStart(2,'0');
+      sEl.textContent = String(seconds).padStart(2,'0');
     }
 
     function startHeroCountdown(){
@@ -1419,8 +1426,28 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
       wireNav();
       startHeroCountdown();
 
-            setHeroBannerImage();
-const ctaChat = document.getElementById('ctaChat');
+      // Day/Night hero switch (local time + OS preference)
+      setHeroBannerImage();
+
+      // Refresh on OS color-scheme change
+      try{
+        if(!window.__heroDayNightWired && window.matchMedia){
+          window.__heroDayNightWired = true;
+          const mq = window.matchMedia('(prefers-color-scheme: light)');
+          const onChange = ()=>{ try{ setHeroBannerImage(); }catch(e){} };
+          if(mq.addEventListener) mq.addEventListener('change', onChange);
+          else if(mq.addListener) mq.addListener(onChange);
+        }
+      }catch(e){}
+
+      // Re-check every 10 minutes (covers crossing sunrise/sunset while app stays open)
+      try{
+        if(window.__heroDayNightTimer) clearInterval(window.__heroDayNightTimer);
+        window.__heroDayNightTimer = setInterval(()=>{ try{ setHeroBannerImage(); }catch(e){} }, 10 * 60 * 1000);
+      }catch(e){}
+
+
+      const ctaChat = document.getElementById('ctaChat');
       if(ctaChat) ctaChat.addEventListener('click', ()=>{ haptic(8); setSection('chat'); });
 
       const ctaReserve = document.getElementById('ctaReserve');
@@ -1511,9 +1538,6 @@ const ctaChat = document.getElementById('ctaChat');
       });
 
       updatePills();
-      updateCountdownMini();
-      setInterval(updateCountdownMini, 30_000);
-
       systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
       loadPresence();
       setTimeout(prefetchAll, 250);
@@ -1572,5 +1596,3 @@ const ctaChat = document.getElementById('ctaChat');
 
 </body>
 </html>
-
-document.addEventListener('DOMContentLoaded', setHeroBannerImage);
