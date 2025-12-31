@@ -3733,7 +3733,7 @@ qsa('.tabbtn').forEach(btn=>{{
       if(!pane) return;
       pane.classList.toggle('hidden', x!==t);
     }});
-    if(t==='ops'){ loadOps(); loadAuditOps(); }
+    if(t==='ops'){{ loadOps(); loadAuditOps(); }}
     if(t==='rules') loadRules();
     if(t==='menu') loadMenu();
     if(t==='audit') loadAudit();
@@ -3890,31 +3890,31 @@ function esc(s){{
 }}
 
 
-async function loadAuditOps(){
+async function loadAuditOps(){{
   const msg = qs('#audit-msg-ops'); if(msg) msg.textContent='Loading...';
   const out = qs('#audit-out-ops');
   let limit = 200;
-  try{
+  try{{
     limit = parseInt((qs('#audit-limit-ops') && qs('#audit-limit-ops').value) || '200', 10) || 200;
     limit = Math.max(1, Math.min(limit, 1000));
-  }catch(e){ limit = 200; }
+  }}catch(e){{ limit = 200; }}
 
   const res = await fetch('/admin/api/audit?key='+encodeURIComponent(KEY)+'&limit='+limit);
   const j = await res.json().catch(()=>null);
-  if(!j || !j.ok){
+  if(!j || !j.ok){{
     if(msg) msg.textContent='Failed to load';
     if(out) out.textContent='(empty)';
     return;
-  }
+  }}
   const entries = Array.isArray(j.entries) ? j.entries : [];
-  if(!entries.length){
+  if(!entries.length){{
     if(out) out.textContent='(empty)';
     if(msg) msg.textContent='';
     return;
-  }
+  }}
   // Render compact lines; keep full JSON in case fields vary.
-  const lines = entries.map(e=>{
-    try{
+  const lines = entries.map(e=>{{
+    try{{
       const ts = e.ts || e.time || e.at || '';
       const who = (e.actor && (e.actor.email || e.actor.name || e.actor)) || e.user || e.by || '';
       const act = e.action || e.event || e.type || '';
@@ -3922,13 +3922,13 @@ async function loadAuditOps(){
       const parts = [ts, who, act].filter(Boolean);
       const head = parts.join('  ');
       return meta ? (head + '  ' + meta) : head;
-    }catch(err){
+    }}catch(err){{
       return JSON.stringify(e);
-    }
-  });
+    }}
+  }});
   if(out) out.textContent = lines.join('\n');
   if(msg) msg.textContent='';
-}
+}}
 
 async function loadAudit(){{
   const msg = qs('#audit-msg'); if(msg) msg.textContent='Loading...';
