@@ -984,6 +984,10 @@ def extract_name_candidate(text: str) -> Optional[str]:
     if lower in ["reservation", "reserva", "réservation", "reserve", "book", "book a table"]:
         return None
 
+
+    # Don't treat VIP intents/buttons as names
+    if (lower == 'vip' or lower.startswith('vip ') or 'vip table' in lower or 'vip hold' in lower) and ('reservation' in lower or 'reserve' in lower or 'table' in lower or 'hold' in lower or lower == 'vip'):
+        return None
     # Remove phone numbers (many formats)
     s = re.sub(r"\b(?:\+?1\s*)?\(?\d{3}\)?[-.\s]*\d{3}[-.\s]*\d{4}\b", " ", s)
 
@@ -1984,6 +1988,9 @@ def chat():
         if sess["mode"] == "idle" and want_reservation(msg):
             sess["mode"] = "reserving"
 
+            # Mark VIP if user clicked a VIP button or mentions VIP
+            if re.search(r"\bvip\b", msg.lower()):
+                sess["lead"]["vip"] = "Yes"
             # IMPORTANT: do NOT treat the word "reservation" as the name.
             if msg.lower().strip() in ["reservation", "reserva", "réservation"]:
                 sess["lead"]["name"] = ""
@@ -1993,6 +2000,9 @@ def chat():
 
         # If reserving, keep collecting fields deterministically
         if sess["mode"] == "reserving":
+            # Allow VIP to be set at any time during reservation flow
+            if re.search(r"\bvip\b", msg.lower()):
+                sess["lead"]["vip"] = "Yes"
             d_iso = extract_date(msg)
             if d_iso:
                 if validate_date_iso(d_iso):

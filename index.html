@@ -1633,7 +1633,7 @@ html[data-hero="night"] .broadcast-title{
       state.lang = lang;
       updatePills();
       updateHeroCountdown();
-      systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
+      try{ ensureWelcomeBubble(); }catch(_e){}
       toast(`Language: ${state.lang.toUpperCase()}`);
       haptic(8);
       // reload localized feeds
@@ -1646,7 +1646,7 @@ html[data-hero="night"] .broadcast-title{
       state.lang = order[(order.indexOf(state.lang)+1) % order.length];
       updatePills();
       updateHeroCountdown();
-systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
+try{ ensureWelcomeBubble(); }catch(_e){}
       toast(`Language: ${state.lang.toUpperCase()}`);
       haptic(8);
       if(document.body.dataset.sec === 'menu') loadMenu();
@@ -1793,6 +1793,34 @@ function startHeroCountdown(){
       chatLog.scrollTop = chatLog.scrollHeight;
     }
     function systemMsg(t){ appendBubble(t, 'bot'); }
+    const WELCOME_TEXT = {
+      en: "⚽ Welcome, World Cup fan! I'm your Dallas Match-Day ... table, or ask about Dallas matches, all matches, or the menu.",
+      es: "⚽ ¡Bienvenido, fan del Mundial! Soy tu concierge de días de p... mesa, o pregunta por los partidos (Dallas / todos) o el menú.",
+      pt: "⚽ Bem-vindo, fã da Copa do Mundo! Sou seu concierge de dias d... pergunte sobre jogos em Dallas, todos os jogos ou o cardápio.",
+      fr: "⚽ Bienvenue, fan de la Coupe du Monde ! Je suis votre concier...une table, ou demandez les matchs (Dallas / tous) ou le menu."
+    };
+
+    function ensureWelcomeBubble(){
+      if(!chatLog) return;
+      let w = chatLog.querySelector('.bubble.bot[data-welcome="1"]');
+      if(!w){
+        w = document.createElement('div');
+        w.className = 'bubble bot';
+        w.dataset.welcome = "1";
+        // keep it pinned as the first message
+        if(chatLog.firstChild) chatLog.insertBefore(w, chatLog.firstChild);
+        else chatLog.appendChild(w);
+      }
+      w.textContent = WELCOME_TEXT[state.lang] || WELCOME_TEXT.en;
+    }
+
+    function clearChatPreserveWelcome(){
+      if(!chatLog) return;
+      chatLog.innerHTML = "";
+      ensureWelcomeBubble();
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
 
     async function sendChat(){
       const input = document.getElementById('msg');
@@ -2206,6 +2234,13 @@ const ctaChat = document.getElementById('ctaChat');
       if(sendBtn) sendBtn.addEventListener('click', sendChat);
       const msg = document.getElementById('msg');
       if(msg) msg.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') sendChat(); });
+
+      const clearChatBtn = document.getElementById('clearChat');
+      if(clearChatBtn) clearChatBtn.addEventListener('click', ()=>{ haptic(6); clearChatPreserveWelcome(); });
+
+      // Ensure chat always has a single welcome bubble (in current language)
+      try{ ensureWelcomeBubble(); }catch(_e){}
+
 
       const reloadMenu = document.getElementById('reloadMenu');
       if(reloadMenu) reloadMenu.addEventListener('click', ()=>{ haptic(6); loadMenu(); });
