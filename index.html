@@ -3262,14 +3262,19 @@ function chatAppend(role, text, opts){
   const log = $('chatLog');
   if(!log) return;
   const wrap = document.createElement('div');
-  wrap.className = `chatLine ${role}`;
+  wrap.className = 'chatLine ' + role;
   if(opts && opts.welcome) wrap.setAttribute('data-welcome','1');
-  wrap.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = (text ?? '').toString();
+  wrap.appendChild(bubble);
+
   log.appendChild(wrap);
   log.scrollTop = log.scrollHeight;
 }
 `;
-  wrap.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
+  wrap.innerHTML = `<div class="bubble">${(text)}</div>`;
   log.appendChild(wrap);
   log.scrollTop = log.scrollHeight;
 }
@@ -3312,7 +3317,7 @@ function clearChatPreserveWelcome(){
   if(!log) return;
   log.innerHTML = '';
   log.dataset.hasWelcome = '';
-  ensureChatWelcome();
+  try{ ensureChatWelcome(); }catch(e){}
 }
 
 async function sendChatMessage(text){
@@ -3579,11 +3584,11 @@ function renderFixtures(matches){
   const slice = matches.slice(start, start+perPage);
 
   list.innerHTML = slice.map(m=>{
-    const dt = escapeHtml(m.date || m.datetime_local || m.datetime_utc || '');
-    const home = escapeHtml(m.home || '');
-    const away = escapeHtml(m.away || '');
-    const venue = escapeHtml(m.venue || '');
-    const stage = escapeHtml(m.stage || '');
+    const dt = (m.date || m.datetime_local || m.datetime_utc || '');
+    const home = (m.home || '');
+    const away = (m.away || '');
+    const venue = (m.venue || '');
+    const stage = (m.stage || '');
     return `<div class="matchRow">
       <div class="mTop">
         <div class="mStage">${stage}</div>
@@ -3612,10 +3617,10 @@ function renderLive(matches){
   if(!list) return;
 
   list.innerHTML = (matches || []).map(m=>{
-    const home = escapeHtml(m.home || '');
-    const away = escapeHtml(m.away || '');
-    const score = escapeHtml(m.score || m.result || '');
-    const status = escapeHtml(m.status || 'Live');
+    const home = (m.home || '');
+    const away = (m.away || '');
+    const score = (m.score || m.result || '');
+    const status = (m.status || 'Live');
     return `<div class="matchRow">
       <div class="mTop"><div class="mStage">${status}</div></div>
       <div class="mTeams">${home} <span class="vs">vs</span> ${away}</div>
@@ -3633,12 +3638,12 @@ function renderStandings(data){
 
   const groups = data.groups || [];
   list.innerHTML = groups.map(g=>{
-    const name = escapeHtml(g.group || g.name || '');
+    const name = (g.group || g.name || '');
     const rows = (g.table || g.teams || []).map(t=>{
       return `<tr>
-        <td>${escapeHtml(t.team || t.name || '')}</td>
-        <td>${escapeHtml(t.p || t.played || 0)}</td>
-        <td>${escapeHtml(t.pts ?? t.points ?? 0)}</td>
+        <td>${(t.team || t.name || '')}</td>
+        <td>${(t.p || t.played || 0)}</td>
+        <td>${(t.pts ?? t.points ?? 0)}</td>
       </tr>`;
     }).join('');
     return `<div class="standBlock">
@@ -3695,11 +3700,11 @@ async function loadMenu(){
     }
     if(body){
       body.innerHTML = sections.map(sec=>{
-        const title = escapeHtml(sec.title || sec.name || '');
+        const title = (sec.title || sec.name || '');
         const items = (sec.items || []).map(it=>{
-          const nm = escapeHtml(it.name || '');
-          const ds = escapeHtml(it.desc || it.description || '');
-          const pr = escapeHtml(it.price || '');
+          const nm = (it.name || '');
+          const ds = (it.desc || it.description || '');
+          const pr = (it.price || '');
           return `<div class="menuItem">
             <div class="miTop"><div class="miName">${nm}</div><div class="miPrice">${pr}</div></div>
             <div class="miDesc">${ds}</div>
@@ -3723,9 +3728,9 @@ async function loadFanzone(){
     const data = await fetchJSON('/fanzone.json');
     const items = data.items || data.events || [];
     box.innerHTML = items.map(it=>`<div class="fzItem">
-      <div class="fzTitle">${escapeHtml(it.title||it.name||'')}</div>
-      <div class="fzMeta">${escapeHtml(it.when||it.date||'')}</div>
-      <div class="fzDesc">${escapeHtml(it.desc||it.description||'')}</div>
+      <div class="fzTitle">${(it.title||it.name||'')}</div>
+      <div class="fzMeta">${(it.when||it.date||'')}</div>
+      <div class="fzDesc">${(it.desc||it.description||'')}</div>
     </div>`).join('') || `<div class="hint">No events right now.</div>`;
   }catch(e){
     box.innerHTML = `<div class="hint">Fan Zone unavailable.</div>`;
