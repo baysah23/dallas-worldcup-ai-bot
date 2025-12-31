@@ -3072,6 +3072,8 @@ function setSection(sec){
   if(sec === 'schedule'){ try{ loadSchedule(); }catch(e){} }
   if(sec === 'menu'){ try{ loadMenu(); }catch(e){} }
   if(sec === 'fanzone'){ try{ loadFanzone(); }catch(e){} }
+  // After Fan Zone renders, move Match-Day Ops Toggles into Ops panel (admin-only)
+  if(sec === 'fanzone'){ try{ setTimeout(()=>relocateMatchDayOpsToggles(), 50); }catch(e){} }
   if(sec === 'vip'){ try{ loadVIP(); }catch(e){} }
   if(sec === 'chat'){ try{ focusChatInput(); }catch(e){} }
 
@@ -3751,10 +3753,25 @@ function init(){
 
 
 <script>
-// Ensure Match-Day Ops Toggles are relocated under Ops panel after render
-document.addEventListener('DOMContentLoaded', () => {
-  try { relocateMatchDayOpsToggles(); } catch(e){}
-});
+(function(){
+  function scheduleRelocate(){
+    try{
+      if(typeof relocateMatchDayOpsToggles !== 'function') return;
+      // only in admin debug; function itself enforces it
+      relocateMatchDayOpsToggles();
+    }catch(e){}
+  }
+  document.addEventListener('DOMContentLoaded', ()=>{
+    scheduleRelocate();
+    // If Fan Zone content re-renders later, relocate again
+    const fz = document.getElementById('sec-fanzone');
+    if(fz && 'MutationObserver' in window){
+      const obs = new MutationObserver(()=>{ scheduleRelocate(); });
+      obs.observe(fz, {subtree:true, childList:true});
+    }
+  });
+})();
 </script>
+
 </body>
 </html>
