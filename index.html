@@ -1656,12 +1656,6 @@ body.fz-collapsed .fz-rail-title{ display:none; }
 body.fz-collapsed .fz-minirow{ justify-content:center; }
 
 
-/* Luxury glow ONLY when Dallas plays */
-body.has-dallas-today .fanzone-left,
-body.has-dallas-today .fanzone-right{
-  box-shadow: 0 0 0 1px rgba(255,204,102,.18) inset, 0 10px 35px rgba(255,204,102,.08);
-}
-
 
 /* Rails: slimmer + glass + premium border */
 .fanzone-left, .fanzone-right{
@@ -1758,8 +1752,8 @@ body.fz-collapsed .fanzone-right .fz-actions{
   align-items:center !important;
 }
 
-body.has-dallas-today .fanzone-left,
-body.has-dallas-today .fanzone-right{
+body.has-match-today .fanzone-left,
+body.has-match-today .fanzone-right{
   border-color: rgba(255,204,102,.32) !important;
   animation: fzPulse 2.2s ease-in-out infinite;
 }
@@ -2794,9 +2788,7 @@ body[data-msec="schedule"] #scheduleCard{
 <div class="sidepad" style="padding-top:10px; padding-bottom:0;">
 <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
 <div class="pill" style="padding:6px 10px;">Schedule</div>
-<div class="langbar" style="gap:6px;">
-<div class="langbtn active" id="scopeDallas">Dallas</div>
-<div class="langbtn" id="scopeAll">All Matches</div></div>
+<div class="pill" style="display:inline-block;">All Matches (Global)</div>
 </div>
 <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
 <input id="teamSearch" list="teamSuggestions" placeholder="Search team / venue / date (e.g., June 13 or 2026-06-13)..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;"/>
@@ -3056,7 +3048,7 @@ try{ ensureWelcomeBubble(); }catch(_e){}
     }
 
     function toggleScope(){
-      // Global-only schedule (Dallas/City modes removed)
+      // Global-only schedule (city-specific modes removed)
       state.scope = 'global';
       updatePills();
       if(document.body.dataset.sec === 'schedule') loadSchedule();
@@ -3751,8 +3743,6 @@ function startHeroCountdown(){
   // --------------------------
   const scheduleEl = $("schedule");
   const tabsEl = $("scheduleTabs");
-  const scopeDallasBtn = $("scopeDallas");
-  const scopeAllBtn = $("scopeAll");
   const teamSearchEl = $("teamSearch");
   const teamSuggestions = $("teamSuggestions");
   const matchCountEl = $("matchCount");
@@ -3764,7 +3754,7 @@ function startHeroCountdown(){
 
   const PAGE_SIZE = 5;
   let scheduleView = localStorage.getItem("schedule_view") || "fixtures"; // fixtures | live | groups
-  let scope = localStorage.getItem("schedule_scope") || "dallas"; // dallas | all
+  let scope = "all"; // Global-only
   let scheduleQuery = "";
   let currentPage = 1;
 
@@ -3788,243 +3778,6 @@ function startHeroCountdown(){
   }
 
   function setScopeButtons(){
-    if(scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope==="dallas");
-    if(scopeAllBtn) scopeAllBtn.classList.toggle("active", scope==="all");
-  }
-
-  async function fetchJSON(url){
-    const r = await fetch(url, {cache:"no-store"});
-    if(!r.ok) throw new Error("HTTP "+r.status);
-    return r.json();
-  }
-
-  async function loadSchedule(){
-    if(!scheduleEl) return;
-    setMeta("Updating…");
-    try{
-      const u = new URL("/schedule.json", location.origin);
-      u.searchParams.set("scope", scope);
-      if(scheduleQuery) u.searchParams.set("q", scheduleQuery);
-      scheduleData = await fetchJSON(u.toString());
-      setMeta("Updated");
-      hydrateSuggestions();
-      renderSchedule();
-      // update feed status line if available
-      try{
-        const fs = await fetchJSON("/worldcup/feed_status.json");
-        if(fs && fs.ok && fs.updated_at){
-          setMeta("Updated • feed " + fs.updated_at);
-        }
-      }catch(e){}
-    }catch(e){
-      setMeta("Couldn’t load schedule.");
-      scheduleEl.innerHTML = `<div class="hint">Schedule unavailable. Please refresh.</div>`;
-      if(matchCountEl) matchCountEl.textContent = "0";
-      if(pagerEl) pagerEl.style.display="none";
-    }
-  }
-
-  function hydrateSuggestions(){
-    if(!teamSuggestions || !scheduleData || !Array.isArray(scheduleData.matches)) return;
-    const set = new Set();
-    scheduleData.matches.forEach(m=>{
-      if(m.home) set.add(m.home);
-      if(m.away) set.add(m.away);
-      if(m.venue) set.add(m.venue);
-      if(m.city) set.add(m.city);
-      if(m.group) set.add(m.group);
-    });
-    teamSuggestions.innerHTML = Array.from(set).sort().slice(0, 150).map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}"></option>`).join("");
-  }
-
-  function highlightNext(matches){
-    // backend may provide next_match id; otherwise pick first future by datetime_utc
-    const nowIso = new Date().toISOString().slice(0,19)+"Z";
-    let nextId = scheduleData && scheduleData.next_match && scheduleData.next_match.id;
-    if(!nextId){
-      const nxt = matches.find(m => (m.datetime_utc||"") >= nowIso);
-      nextId = nxt ? nxt.id : null;
-    }
-    return nextId;
-  }
-
-  function renderFixtures(){
-    const matches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches : [];
-    const total = matches.length;
-    if(matchCountEl) matchCountEl.textContent = String(total);
-
-    const nextId = highlightNext(matches);
-
-    // pagination
-    const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-    currentPage = Math.min(Math.max(1, currentPage), pages);
-    const start = (currentPage-1)*PAGE_SIZE;
-    const slice = matches.slice(start, start+PAGE_SIZE);
-
-    if(pagerEl){
-      pagerEl.style.display = (pages>1) ? "block" : "none";
-    }
-    if(pageIndicatorEl){
-      pageIndicatorEl.textContent = `Page ${currentPage} of ${pages}`;
-    }
-    if(prevPageBtn) prevPageBtn.disabled = currentPage<=1;
-    if(nextPageBtn) nextPageBtn.disabled = currentPage>=pages;
-
-    if(!slice.length){
-      scheduleEl.innerHTML = `<div class="hint">No matches found.</div>`;
-      return;
-    }
-
-    scheduleEl.innerHTML = slice.map(m=>{
-      const cls = ["match-card"];
-      if(nextId && m.id === nextId) cls.push("next");
-      const round = (m.round || m.stage || "").toLowerCase();
-      if(round.includes("group")) cls.push("group");
-      if(round.includes("round") || round.includes("ro16")) cls.push("knockout");
-      if(round.includes("semi") || round.includes("final")) cls.push("finals");
-      return `
-        <div class="${cls.join(" ")}">
-          <div class="match-top">
-            <div class="match-date">${safeText(m.date || "")}</div>
-            <div class="pill">${safeText(m.group || m.round || "")}</div>
-          </div>
-          <div class="match-mid">
-            <div class="team">${safeText(m.home || "")}</div>
-            <div class="vs">vs</div>
-            <div class="team">${safeText(m.away || "")}</div>
-          </div>
-          <div class="match-bot">
-            <div class="muted">${safeText(m.venue || "")}${m.city ? " · "+safeText(m.city) : ""}</div>
-            <div class="muted">${fmtKickoff(m)}</div>
-          </div>
-        </div>
-      `;
-    }).join("");
-  }
-
-  function renderLive(){
-    scheduleEl.innerHTML = `<div class="hint">Loading live matches…</div>`;
-    fetchJSON("/worldcup/live.json").then(d=>{
-      liveData = d;
-      const items = (d && d.matches) ? d.matches : (Array.isArray(d) ? d : []);
-      if(!items || !items.length){
-        scheduleEl.innerHTML = `<div class="hint">No live matches right now.</div>`;
-        return;
-      }
-      scheduleEl.innerHTML = items.map(x=>{
-        const home = safeText(x.home || x.team_home || x.home_team);
-        const away = safeText(x.away || x.team_away || x.away_team);
-        const score = safeText(x.score || x.result || `${x.home_score ?? ""}-${x.away_score ?? ""}`.replace(/^-|-$/g,""));
-        const status = safeText(x.status || x.phase || x.time || "");
-        return `
-          <div class="match-card">
-            <div class="match-top">
-              <div class="match-date">${status || "Live"}</div>
-              <div class="pill">${score || ""}</div>
-            </div>
-            <div class="match-mid">
-              <div class="team">${home}</div>
-              <div class="vs">vs</div>
-              <div class="team">${away}</div>
-            </div>
-          </div>
-        `;
-      }).join("");
-    }).catch(()=>{
-      scheduleEl.innerHTML = `<div class="hint">Live feed unavailable.</div>`;
-    });
-  }
-
-  function renderGroups(){
-    scheduleEl.innerHTML = `<div class="hint">Loading groups…</div>`;
-    fetchJSON("/worldcup/standings.json").then(d=>{
-      standingsData = d;
-      const groups = (d && d.groups) ? d.groups : d;
-      if(!groups || (Array.isArray(groups) && !groups.length)){
-        scheduleEl.innerHTML = `<div class="hint">Groups not available yet.</div>`;
-        return;
-      }
-      // Expect shape: {groups:[{name:"Group A", table:[{team, pld, pts, gd}]}]}
-      const list = Array.isArray(groups) ? groups : (groups.groups || []);
-      scheduleEl.innerHTML = list.map(g=>{
-        const name = safeText(g.name || g.group || "");
-        const table = g.table || g.standings || [];
-        const rows = Array.isArray(table) ? table : [];
-        const body = rows.map(r=>`
-          <tr>
-            <td style="text-align:left">${safeText(r.team || r.name || "")}</td>
-            <td>${safeText(r.pld ?? r.played ?? "")}</td>
-            <td>${safeText(r.w ?? r.wins ?? "")}</td>
-            <td>${safeText(r.d ?? r.draws ?? "")}</td>
-            <td>${safeText(r.l ?? r.losses ?? "")}</td>
-            <td>${safeText(r.gd ?? r.goal_diff ?? "")}</td>
-            <td><b>${safeText(r.pts ?? r.points ?? "")}</b></td>
-          </tr>`).join("");
-        return `
-          <div class="match-card">
-            <div class="match-top">
-              <div class="match-date">${name}</div>
-            </div>
-            <div style="overflow:auto; margin-top:8px;">
-              <table style="width:100%; border-collapse:collapse; font-size:12px;">
-                <thead>
-                  <tr style="opacity:.8">
-                    <th style="text-align:left">Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th>
-                  </tr>
-                </thead>
-                <tbody>${body}</tbody>
-              </table>
-            </div>
-          </div>
-        `;
-      }).join("");
-    }).catch(()=>{
-      scheduleEl.innerHTML = `<div class="hint">Groups unavailable.</div>`;
-    });
-  }
-
-  function renderSchedule(){
-    if(!scheduleEl) return;
-    if(pagerEl) pagerEl.style.display = (scheduleView==="fixtures") ? (pagerEl.style.display||"block") : "none";
-    if(scheduleView==="fixtures") renderFixtures();
-    else if(scheduleView==="live") renderLive();
-    else renderGroups();
-  }
-
-  function initTabs(){
-    if(!tabsEl) return;
-    const btns = qsa("button.segbtn", tabsEl);
-    btns.forEach(b=>{
-      b.addEventListener("click", ()=>{
-        scheduleView = b.dataset.view || "fixtures";
-        localStorage.setItem("schedule_view", scheduleView);
-        btns.forEach(x=>x.setAttribute("aria-selected", String(x===b)));
-        if(pagerEl) pagerEl.style.display = (scheduleView==="fixtures") ? "block" : "none";
-        renderSchedule();
-      });
-    });
-    // initial state
-    btns.forEach(b=> b.setAttribute("aria-selected", String((b.dataset.view||"fixtures")===scheduleView)) );
-    if(pagerEl) pagerEl.style.display = (scheduleView==="fixtures") ? "block" : "none";
-  }
-
-  function initScheduleHandlers(){
-    if(!scheduleEl) return;
-    initTabs();
-    setScopeButtons();
-
-    if(scopeDallasBtn){
-      scopeDallasBtn.addEventListener("click", ()=>{
-        scope="dallas"; localStorage.setItem("schedule_scope", scope);
-        currentPage=1; setScopeButtons(); loadSchedule();
-      });
-    }
-    if(scopeAllBtn){
-      scopeAllBtn.addEventListener("click", ()=>{
-        scope="all"; localStorage.setItem("schedule_scope", scope);
-        currentPage=1; setScopeButtons(); loadSchedule();
-      });
-    }
     if(teamSearchEl){
       const go = ()=>{
         scheduleQuery = (teamSearchEl.value||"").trim();

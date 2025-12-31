@@ -1404,10 +1404,10 @@ def fanzone_json():
 def schedule_json():
     """
     Query params:
-      scope= dallas | all   (default: dallas)
+      scope= all   (Dallas-only removed)
       q= search text (team, venue, group, date)
     """
-    scope = (request.args.get("scope") or "dallas").lower().strip()
+    scope = "all"  # Global app: always show all matches
     q = request.args.get("q") or ""
 
     try:
@@ -1415,7 +1415,7 @@ def schedule_json():
 
         today = datetime.now().date()
         if scope == "all":
-            # "match day" for Dallas means: any Dallas match today
+            # "match day" means: any match today (global)
             is_match = any(m.get("date") == today.isoformat() and is_dallas_match(m) for m in load_all_matches())
         else:
             is_match = any(m.get("date") == today.isoformat() for m in matches)
