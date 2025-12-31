@@ -3580,10 +3580,23 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
         <label class="small"><input type="checkbox" id="ops-viponly"> VIP-only</label><br/>
         <label class="small"><input type="checkbox" id="ops-waitlist"> Waitlist mode</label>
         <div style="margin-top:10px">
-          <button class="btn" onclick="saveOps()">Save Ops</button>
+          <button class="btn" onclick="saveOps()">Save ops toggles</button>
           <span id="ops-msg" class="note"></span>
         </div>
       </div>
+    <div class="row" style="margin-top:14px">
+      <div class="card" style="margin:0">
+        <div class="h2" style="margin-bottom:6px">Audit Log</div>
+        <div class="small">Shows who changed rules/menu/ops and when.</div>
+        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <input id="audit-limit-ops" class="inp" style="max-width:90px" value="200"/>
+          <button class="btn2" onclick="loadAuditOps()">Refresh</button>
+          <span id="audit-msg-ops" class="note"></span>
+        </div>
+        <div id="audit-out-ops" class="small" style="white-space:pre-wrap;font-size:12px;margin-top:10px;max-height:260px;overflow:auto">(empty)</div>
+      </div>
+    </div>
+
 
       <div class="card" style="margin:0">
         <div class="h2" style="margin-bottom:6px">Match-Day Presets</div>
@@ -3720,7 +3733,7 @@ qsa('.tabbtn').forEach(btn=>{{
       if(!pane) return;
       pane.classList.toggle('hidden', x!==t);
     }});
-    if(t==='ops') loadOps();
+    if(t==='ops'){ loadOps(); loadAuditOps(); }
     if(t==='rules') loadRules();
     if(t==='menu') loadMenu();
     if(t==='audit') loadAudit();
@@ -3876,6 +3889,47 @@ function esc(s){{
     .replaceAll("'","&#39;");
 }}
 
+
+async function loadAuditOps(){
+  const msg = qs('#audit-msg-ops'); if(msg) msg.textContent='Loading...';
+  const out = qs('#audit-out-ops');
+  let limit = 200;
+  try{
+    limit = parseInt((qs('#audit-limit-ops') && qs('#audit-limit-ops').value) || '200', 10) || 200;
+    limit = Math.max(1, Math.min(limit, 1000));
+  }catch(e){ limit = 200; }
+
+  const res = await fetch('/admin/api/audit?key='+encodeURIComponent(KEY)+'&limit='+limit);
+  const j = await res.json().catch(()=>null);
+  if(!j || !j.ok){
+    if(msg) msg.textContent='Failed to load';
+    if(out) out.textContent='(empty)';
+    return;
+  }
+  const entries = Array.isArray(j.entries) ? j.entries : [];
+  if(!entries.length){
+    if(out) out.textContent='(empty)';
+    if(msg) msg.textContent='';
+    return;
+  }
+  // Render compact lines; keep full JSON in case fields vary.
+  const lines = entries.map(e=>{
+    try{
+      const ts = e.ts || e.time || e.at || '';
+      const who = (e.actor && (e.actor.email || e.actor.name || e.actor)) || e.user || e.by || '';
+      const act = e.action || e.event || e.type || '';
+      const meta = e.meta ? JSON.stringify(e.meta) : (e.details ? JSON.stringify(e.details) : '');
+      const parts = [ts, who, act].filter(Boolean);
+      const head = parts.join('  ');
+      return meta ? (head + '  ' + meta) : head;
+    }catch(err){
+      return JSON.stringify(e);
+    }
+  });
+  if(out) out.textContent = lines.join('\n');
+  if(msg) msg.textContent='';
+}
+
 async function loadAudit(){{
   const msg = qs('#audit-msg'); if(msg) msg.textContent='Loading...';
   const lim = parseInt((qs('#audit-limit') && qs('#audit-limit').value) || '200', 10) || 200;
@@ -4009,45 +4063,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 </div> <!-- end tab-menu -->
 
 <div id="tab-ops" class="tabpane hidden">
-  <div class="card">
-    <div class="h2">Match-Day Ops Toggles</div>
-    <div class="small">These controls change behavior immediately in the chat reservation flow (fan UI untouched).</div>
-    <div style="margin-top:10px" class="row">
-      <label style="display:flex;gap:10px;align-items:center">
-        <input id="ops-pause" type="checkbox"/>
-        <span><b>Pause Reservations</b> — blocks new reservations</span>
-      </label>
-    </div>
-    <div style="margin-top:10px" class="row">
-      <label style="display:flex;gap:10px;align-items:center">
-        <input id="ops-vip" type="checkbox"/>
-        <span><b>VIP-only</b> — require VIP keyword to proceed</span>
-      </label>
-    </div>
-    <div style="margin-top:10px" class="row">
-      <label style="display:flex;gap:10px;align-items:center">
-        <input id="ops-wait" type="checkbox"/>
-        <span><b>Waitlist Mode</b> — saves captures as Status=Waitlist</span>
-      </label>
-    </div>
-    <button id="btnSaveOps" class="btn" style="margin-top:12px">Save ops toggles</button>
-    <div id="ops-status" class="small" style="margin-top:10px;opacity:.9"></div>
-  </div>
-</div>
-
-<div id="tab-audit" class="tabpane hidden">
-  <div class="card">
-    <div class="h2">Audit Log</div>
-    <div class="small">Shows who changed rules/menu/ops and when.</div>
-    <div style="margin-top:10px" class="row">
-      <input id="audit-limit" class="inp" style="max-width:140px" value="200"/>
-      <button id="btnLoadAudit" class="btn">Refresh</button>
-    </div>
-    <pre id="audit-out" style="white-space:pre-wrap; font-size:12px; margin-top:12px; background:rgba(0,0,0,.25); padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,.12); max-height:44vh; overflow:auto;"></pre>
-  </div>
-</div>
-
-<script>
+  <script>
 (function(){
   const ADMIN_KEY = (new URLSearchParams(location.search)).get("key") || "";
 
