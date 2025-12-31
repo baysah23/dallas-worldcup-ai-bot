@@ -1416,8 +1416,7 @@ html[data-hero="night"] .broadcast-title{
               <button class="pill mini lang" data-lang="pt" type="button">PT</button>
               <button class="pill mini lang" data-lang="fr" type="button">FR</button>
             </div>
-            <button class="pill" id="clearChat" type="button">Clear</button>
-          </div>
+</div>
           <div class="cardBody">
             <div id="chatLog" class="chatLog" aria-live="polite"></div>
             <div class="chatInputRow">
@@ -1425,6 +1424,7 @@ html[data-hero="night"] .broadcast-title{
               <input id="msg" autocomplete="off" inputmode="text"
                      placeholder="Ask anything (EN/ES/PT/FR)…"/>
               <button id="sendBtn" type="button">Send</button>
+              <button id="btnClear" class="secondary" type="button">Clear</button>
             </div>
             <p class="hint">Tap the language pill to switch EN → ES → PT → FR.</p>
           </div>
@@ -2231,11 +2231,15 @@ const ctaChat = document.getElementById('ctaChat');
       if(hm) hm.addEventListener('click', ()=>{ haptic(8); setSection('menu'); });
 
       const sendBtn = document.getElementById('sendBtn');
-      if(sendBtn) sendBtn.addEventListener('click', sendChat);
-      const msg = document.getElementById('msg');
+      
+      const btnClear = document.getElementById('btnClear');
+if(sendBtn) sendBtn.addEventListener('click', sendChat);
+      
+      if(btnClear){ btnClear.addEventListener('click', clearChatPreserveWelcome); }
+const msg = document.getElementById('msg');
       if(msg) msg.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') sendChat(); });
 
-      const clearChatBtn = document.getElementById('clearChat');
+      const clearChatBtn = document.getElementById('btnClear');
       if(clearChatBtn) clearChatBtn.addEventListener('click', ()=>{ haptic(6); clearChatPreserveWelcome(); });
 
       // Ensure chat always has a single welcome bubble (in current language)
