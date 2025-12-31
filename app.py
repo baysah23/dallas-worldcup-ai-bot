@@ -1416,7 +1416,7 @@ def schedule_json():
         today = datetime.now().date()
         if scope == "all":
             # "match day" means: any match today (global)
-            is_match = any(m.get("date") == today.isoformat() and is_dallas_match(m) for m in load_all_matches())
+            is_match = any(m.get("date") == today.isoformat() for m in matches)
         else:
             is_match = any(m.get("date") == today.isoformat() for m in matches)
 

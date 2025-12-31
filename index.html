@@ -2770,49 +2770,22 @@ body[data-msec="schedule"] #scheduleCard{
 
       <!-- SCHEDULE -->
       <section class="section" id="sec-schedule" aria-label="Schedule">
-<div class="sidepad" style="padding-top:10px;">
-  <div class="card schedulecard lux-reveal" id="scheduleCard" style="display:flex;flex-direction:column;min-height:0;">
-<div class="cardhead">
-<div class="title" id="sideTitle">World Cup Schedule</div>
-<div class="pill" id="pillLang">EN</div></div>
-<div class="countdown">
-<div>
-<div class="label" id="countLabel">World Cup countdown</div>
-<div class="sub" id="countSub" style="margin:4px 0 0;">All host cities</div></div>
-<div class="nums" id="countNums">
-<span><b id="d">0</b>d</span>
-<span><b id="h">0</b>h</span>
-<span><b id="m">0</b>m</span>
-<span><b id="s">0</b>s</span></div>
-</div>
-<div class="sidepad" style="padding-top:10px; padding-bottom:0;">
-<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-<div class="pill" style="padding:6px 10px;">Schedule</div>
-<div class="pill" style="display:inline-block;">All Matches (Global)</div>
-</div>
-<div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
-<input id="teamSearch" list="teamSuggestions" placeholder="Search team / venue / date (e.g., June 13 or 2026-06-13)..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;"/>
-<datalist id="teamSuggestions"></datalist>
-<div class="pill" id="matchCount">0</div></div>
-</div>
-<div class="sidepad" style="padding-bottom:0;">
-<div class="pill" id="nextHint" style="display:inline-block;">Next upcoming match is highlighted</div></div>
-<div class="sidepad" style="padding-top:8px; padding-bottom:0;">
-  <div class="segbar" id="scheduleTabs" role="tablist" aria-label="Schedule views">
-    <button class="segbtn" type="button" data-view="fixtures" aria-selected="true">Fixtures</button>
-    <button class="segbtn" type="button" data-view="live" aria-selected="false">Live</button>
-    <button class="segbtn" type="button" data-view="groups" aria-selected="false">Groups</button>
+  <div class="sidepad" style="padding-top:10px;">
+    <div class="segbar" id="scheduleTabs" role="tablist" aria-label="Schedule views">
+      <button class="segbtn" type="button" data-view="fixtures" aria-selected="true">Fixtures</button>
+      <button class="segbtn" type="button" data-view="live" aria-selected="false">Live</button>
+      <button class="segbtn" type="button" data-view="groups" aria-selected="false">Groups</button>
+    </div>
+    <div class="metaLine" id="scheduleMetaLine" aria-live="polite"></div>
+    <div class="schedule" id="schedule"></div>
+    <div class="sidepad" id="pager" style="display:none; padding-top:10px;">
+      <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
+        <button class="secondary" id="prevPage" style="min-width:88px;">Prev</button>
+        <div class="pill" id="pageIndicator">Page 1 of 1</div>
+        <button class="secondary" id="nextPage" style="min-width:88px;">Next</button>
+      </div>
+    </div>
   </div>
-</div>
-  <div class="metaLine" id="scheduleMetaLine" aria-live="polite">Updating…</div>
-<div class="schedule" id="schedule"></div>
-<div class="sidepad" id="pager" style="display:none; padding-top:10px;">
-<div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
-<button class="secondary" id="prevPage" style="min-width:88px;">Prev</button>
-<div class="pill" id="pageIndicator">Page 1 of 1</div>
-<button class="secondary" id="nextPage" style="min-width:88px;">Next</button></div>
-</div></div>
-</div>
 </section>
 
       <!-- FAN ZONE -->
@@ -3543,86 +3516,11 @@ function startHeroCountdown(){
       }
     }
 
-    async function loadSchedule(){
-      try{
-        const body = document.getElementById('scheduleBody');
-        const hint = document.getElementById('scheduleHint');
-        if(hint) hint.textContent = 'Loading…';
-        if(body) body.innerHTML = '';
-        const q = (document.getElementById('scheduleSearch')?.value || '').trim();
-        const r = await fetch(`/schedule.json?q=${encodeURIComponent(q)}`, {cache:'no-store'});
-        const data = await r.json();
+    
 
-        const matches = Array.isArray(data.matches) ? data.matches : [];
-        if(!body) return;
+    // (legacy loadSchedule removed)
 
-        // Render next match banner (if provided)
-        if(data.next_match){
-          const nxt = data.next_match;
-          const card = document.createElement('div');
-          card.className = 'item';
-          card.innerHTML = `
-            <div class="itemTop"><span>Next match</span><span>${escapeHtml(nxt.stage || '')}</span></div>
-            <div class="itemTitle">${escapeHtml(nxt.home || '')} vs ${escapeHtml(nxt.away || '')}</div>
-            <div class="itemMeta">${escapeHtml(nxt.date || '')} • ${escapeHtml(nxt.time || '')} • ${escapeHtml(nxt.city || '')} • ${escapeHtml(nxt.venue || '')}</div>
-          `;
-          body.appendChild(card);
-        }
-
-        // Render match list
-        matches.forEach(m=>{
-          const card = document.createElement('div');
-          card.className = 'item';
-          const group = m.group ? ` • ${m.group}` : '';
-          card.innerHTML = `
-            <div class="itemTop"><span>${escapeHtml(m.stage || 'Match')}</span><span>${escapeHtml((m.city || '') + (m.round ? (' • ' + m.round) : ''))}</span></div>
-            <div class="itemTitle">${escapeHtml(m.home || '')} vs ${escapeHtml(m.away || '')}</div>
-            <div class="itemMeta">${escapeHtml(m.date || '')} • ${escapeHtml(m.time || '')} • ${escapeHtml(m.venue || '')}${escapeHtml(group)}</div>
-          `;
-          body.appendChild(card);
-        });
-
-        window.__scheduleLoaded = true;
-        if(hint) hint.textContent = matches.length ? '' : 'No matches found. Try a different search.';
-      }catch(e){
-        console.error(e);
-        const hint = document.getElementById('scheduleHint');
-        if(hint) hint.textContent = 'Schedule failed to load. Tap Refresh.';
-      }
-    }
-
-    async function loadFanzone(){
-      try{
-        const body = document.getElementById('fanzoneBody');
-        const hint = document.getElementById('fanzoneHint');
-        if(hint) hint.textContent = 'Loading…';
-        if(body) body.innerHTML = '';
-        const r = await fetch(`/fanzone.json?lang=${encodeURIComponent(state.lang)}`, {cache:'no-store'});
-        const data = await r.json();
-        const events = Array.isArray(data.events) ? data.events : [];
-        if(!body) return;
-
-        events.forEach(ev=>{
-          const card = document.createElement('div');
-          card.className = 'item';
-          card.innerHTML = `
-            <div class="itemTop"><span>${escapeHtml(ev.date || '')}</span><span>${escapeHtml(ev.city || '')}</span></div>
-            <div class="itemTitle">${escapeHtml(ev.title || '')}</div>
-            <div class="itemMeta">${escapeHtml(ev.location || '')} • ${escapeHtml(ev.description || '')}</div>
-          `;
-          body.appendChild(card);
-        });
-
-        window.__fanzoneLoaded = true;
-        if(hint) hint.textContent = events.length ? '' : 'No events yet.';
-      }catch(e){
-        console.error(e);
-        const hint = document.getElementById('fanzoneHint');
-        if(hint) hint.textContent = 'Fan Zone failed to load. Tap Refresh.';
-      }
-    }
-
-    function loadVIP(){
+function loadVIP(){
       // Keep VIP simple + functional: route to VIP prompts in chat
       const wrap = document.getElementById('vipBody');
       if(!wrap) return;
@@ -3651,181 +3549,7 @@ function startHeroCountdown(){
       const rm = document.getElementById('reloadMenu');
       if(rm) rm.addEventListener('click', ()=>{ haptic(6); loadMenu(); }, {passive:true});
 
-      // Schedule controls (force global; city UI remains but ignored)
-      const rs = document.getElementById('reloadSchedule');
-      if(rs) rs.addEventListener('click', ()=>{ haptic(6); loadSchedule(); }, {passive:true});
-      const ss = document.getElementById('scheduleSearch');
-      if(ss) ss.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); loadSchedule(); } });
-
-      // Fan Zone refresh (if exists)
-      const rf = document.getElementById('reloadFanzone');
-      if(rf) rf.addEventListener('click', ()=>{ haptic(6); loadFanzone(); }, {passive:true});
-
-      // Disable city scope in UI if present (per global app requirement)
-      const scope = document.getElementById('scopeSelect');
-      const city = document.getElementById('citySearch');
-      if(scope){ scope.value = 'global'; scope.disabled = true; }
-      if(city){ city.value = ''; city.disabled = true; city.placeholder = 'Global schedule'; }
-    }
-
-    function boot(){
-      try{
-        bindNav();
-        bindGlobalDelegates();
-        bindHome();
-        if (typeof bindChat === 'function') bindChat(); // if present in your file
-        bindPageControls();
-
-        // Start countdown ticker
-        try{
-          updateHeroCountdown();
-          clearInterval(window.__cdInt);
-          window.__cdInt = setInterval(updateHeroCountdown, 1000);
-        }catch(e){}
-
-        // Initial welcome bubble
-        try{ ensureWelcomeBubble(); }catch(e){}
-
-        // Render VIP page content once
-        try{ loadVIP(); }catch(e){}
-
-        // Default section (home)
-        setSection('home');
-      }catch(e){
-        console.error(e);
-        try{ toast('Init error — refresh.'); }catch(_e){}
-      }
-    }
-
-
-    if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-    else boot();
-  </script>
-
-<script>
-/* HERO CINEMATIC PARALLAX SAFE */
-(function(){
-  const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if(prefersReduced) return;
-
-  const img = document.querySelector('#heroBanner .heroImg');
-  if(!img) return;
-
-  let ticking = false;
-  function onScroll(){
-    if(ticking) return;
-    ticking = true;
-    requestAnimationFrame(()=>{
-      const y = Math.min(6, Math.max(0, window.scrollY * 0.05)); // 0–6px
-      document.documentElement.style.setProperty('--heroY', y.toFixed(2) + 'px');
-      ticking = false;
-    });
-  }
-  window.addEventListener('scroll', onScroll, {passive:true});
-  onScroll();
-})();
-</script>
-
-
-<script>
-/* =========================
-   Legacy Schedule / Fan Zone / VIP logic (restored)
-   - Matches old app behavior for these pages
-   - Defensive: runs only if the relevant elements exist
-   ========================= */
-(function(){
-  const $ = (id)=>document.getElementById(id);
-  const qs = (sel,root=document)=>root.querySelector(sel);
-  const qsa = (sel,root=document)=>Array.from(root.querySelectorAll(sel));
-
-  // --------------------------
-  // Schedule
-  // --------------------------
-  const scheduleEl = $("schedule");
-  const tabsEl = $("scheduleTabs");
-  const teamSearchEl = $("teamSearch");
-  const teamSuggestions = $("teamSuggestions");
-  const matchCountEl = $("matchCount");
-  const pagerEl = $("pager");
-  const prevPageBtn = $("prevPage");
-  const nextPageBtn = $("nextPage");
-  const pageIndicatorEl = $("pageIndicator");
-  const metaLineEl = $("scheduleMetaLine");
-
-  const PAGE_SIZE = 5;
-  let scheduleView = localStorage.getItem("schedule_view") || "fixtures"; // fixtures | live | groups
-  let scope = "all"; // Global-only
-  let scheduleQuery = "";
-  let currentPage = 1;
-
-  let scheduleData = null;
-  let liveData = null;
-  let standingsData = null;
-
-  function fmtKickoff(m){
-    // prefer local time string if provided by backend
-    if(m.kickoff_local) return m.kickoff_local;
-    if(m.datetime_local) return m.datetime_local;
-    if(m.datetime_utc) return m.datetime_utc.replace("T"," ").replace("Z"," UTC");
-    if(m.time) return m.time;
-    return "";
-  }
-  function safeText(s){ return (s==null) ? "" : String(s); }
-
-  function setMeta(text){
-    if(!metaLineEl) return;
-    metaLineEl.textContent = text || "";
-  }
-
-  function setScopeButtons(){
-    if(teamSearchEl){
-      const go = ()=>{
-        scheduleQuery = (teamSearchEl.value||"").trim();
-        currentPage=1;
-        loadSchedule();
-      };
-      teamSearchEl.addEventListener("change", go);
-      teamSearchEl.addEventListener("keydown", (e)=>{
-        if(e.key==="Enter"){ e.preventDefault(); go(); }
-      });
-    }
-    if(prevPageBtn) prevPageBtn.addEventListener("click", ()=>{ currentPage=Math.max(1,currentPage-1); renderFixtures(); });
-    if(nextPageBtn) nextPageBtn.addEventListener("click", ()=>{ currentPage=currentPage+1; renderFixtures(); });
-
-    loadSchedule();
-  }
-
-  // --------------------------
-  // Fan Zone (supporter + poll)
-  // --------------------------
-  const supporterLabel = $("supporterLabel");
-  const supporterFlag = $("supporterFlag");
-  const supporterChip = $("supporterChip");
-  const btnPickCountry = $("btnPickCountry");
-  const fzIconCountry = $("fzIconCountry");
-
-  const pollCard = $("pollCard");
-  const pollList = $("pollList");
-  const btnOpenPoll = $("btnOpenPoll");
-  const fzIconPoll = $("fzIconPoll");
-
-  function getSupporter(){
-    try{ return JSON.parse(localStorage.getItem("supporter")||"null"); }catch(e){ return null; }
-  }
-  function setSupporter(obj){
-    try{ localStorage.setItem("supporter", JSON.stringify(obj)); }catch(e){}
-  }
-  function renderSupporter(){
-    const s = getSupporter();
-    if(!supporterLabel) return;
-    if(!s){
-      supporterLabel.textContent = "Not set";
-      if(supporterFlag) supporterFlag.textContent = "🏁";
-      return;
-    }
-    supporterLabel.textContent = s.name || "Selected";
-    if(supporterFlag) supporterFlag.textContent = s.flag || "🏁";
-  }
+      // Schedule handled below
 
   const COUNTRIES = [
     {name:"USA", flag:"🇺🇸"},
@@ -3935,6 +3659,209 @@ function startHeroCountdown(){
       if(sendBtn) sendBtn.focus();
     });
   }
+
+  
+  // --------------------------
+  // Schedule (Fixtures / Live / Groups)
+  // --------------------------
+  const scheduleEl = $("schedule");
+  const tabsEl = $("scheduleTabs");
+  const pagerEl = $("pager");
+  const prevPageBtn = $("prevPage");
+  const nextPageBtn = $("nextPage");
+  const pageIndicatorEl = $("pageIndicator");
+  const metaLineEl = $("scheduleMetaLine");
+
+  const PAGE_SIZE = 8;
+  let scheduleView = localStorage.getItem("schedule_view") || "fixtures"; // fixtures | live | groups
+  let currentPage = 1;
+
+  function safeText(s){ return (s==null) ? "" : String(s); }
+  function setMeta(text){ if(metaLineEl) metaLineEl.textContent = text || ""; }
+
+  function setTabSelected(view){
+    if(!tabsEl) return;
+    $$(".segbtn", tabsEl).forEach(btn=>{
+      const v = btn.getAttribute("data-view");
+      btn.setAttribute("aria-selected", v === view ? "true" : "false");
+    });
+  }
+
+  function showPager(show, page=1, totalPages=1){
+    if(!pagerEl) return;
+    pagerEl.style.display = show ? "" : "none";
+    if(pageIndicatorEl) pageIndicatorEl.textContent = `Page ${page} of ${totalPages}`;
+    if(prevPageBtn) prevPageBtn.disabled = page <= 1;
+    if(nextPageBtn) nextPageBtn.disabled = page >= totalPages;
+  }
+
+  function renderFixtures(matches){
+    if(!scheduleEl) return;
+    const items = Array.isArray(matches) ? matches : [];
+    if(!items.length){
+      scheduleEl.innerHTML = `<div class="hint">No matches found.</div>`;
+      showPager(false);
+      return;
+    }
+    const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+    const page = Math.min(Math.max(1, currentPage), totalPages);
+    currentPage = page;
+
+    const start = (page-1) * PAGE_SIZE;
+    const pageItems = items.slice(start, start + PAGE_SIZE);
+
+    scheduleEl.innerHTML = pageItems.map(m=>{
+      const stage = safeText(m.stage || "Match");
+      const date = safeText(m.date || "");
+      const time = safeText(m.time || "");
+      const venue = safeText(m.venue || "");
+      const home = safeText(m.home || "");
+      const away = safeText(m.away || "");
+      return `
+        <div class="item">
+          <div class="itemTop"><span>${escapeHtml(stage)}</span></div>
+          <div class="itemTitle">${escapeHtml(home)} vs ${escapeHtml(away)}</div>
+          <div class="itemMeta">${escapeHtml(date)}${time ? " • "+escapeHtml(time) : ""}${venue ? " • "+escapeHtml(venue) : ""}</div>
+        </div>`;
+    }).join("");
+
+    showPager(totalPages > 1, page, totalPages);
+  }
+
+  function renderLive(rows){
+    if(!scheduleEl) return;
+    const items = Array.isArray(rows) ? rows : [];
+    if(!items.length){
+      scheduleEl.innerHTML = `<div class="hint">No live or recent matches right now.</div>`;
+      showPager(false);
+      return;
+    }
+    scheduleEl.innerHTML = items.map(m=>{
+      const stage = safeText(m.stage || m.round || "Live");
+      const home = safeText(m.home || "");
+      const away = safeText(m.away || "");
+      const score = (m.home_score!=null || m.away_score!=null) ? `${safeText(m.home_score)}–${safeText(m.away_score)}` : "";
+      const status = safeText(m.status || m.state || "");
+      const venue = safeText(m.venue || "");
+      const ko = safeText(m.kickoff_local || m.time || m.datetime_utc || "");
+      return `
+        <div class="item">
+          <div class="itemTop"><span>${escapeHtml(stage)}</span>${status ? `<span class="pill" style="margin-left:8px;">${escapeHtml(status)}</span>`:""}</div>
+          <div class="itemTitle">${escapeHtml(home)} vs ${escapeHtml(away)} ${score ? `<span class="pill" style="margin-left:8px;">${escapeHtml(score)}</span>`:""}</div>
+          <div class="itemMeta">${escapeHtml(ko)}${venue ? " • "+escapeHtml(venue) : ""}</div>
+        </div>`;
+    }).join("");
+    showPager(false);
+  }
+
+  function renderGroups(groups){
+    if(!scheduleEl) return;
+    const g = groups && typeof groups === "object" ? groups : null;
+
+    // Accept either:
+    //  - { groups: { "Group A": [ {team, pts, ...}, ... ] } }
+    //  - [ {group:"Group A", table:[...]}, ... ]
+    let list = [];
+    if(Array.isArray(g)){
+      list = g;
+    }else if(g && g.groups){
+      list = Object.keys(g.groups).map(k=>({group:k, table:g.groups[k]}));
+    }
+
+    if(!list.length){
+      scheduleEl.innerHTML = `<div class="hint">Standings unavailable.</div>`;
+      showPager(false);
+      return;
+    }
+
+    scheduleEl.innerHTML = list.map(gr=>{
+      const name = safeText(gr.group || gr.name || "Group");
+      const table = Array.isArray(gr.table) ? gr.table : (Array.isArray(gr.teams) ? gr.teams : []);
+      const rows = table.map(t=>{
+        const team = safeText(t.team || t.name || "");
+        const mp = safeText(t.played ?? t.mp ?? "");
+        const w = safeText(t.w ?? t.wins ?? "");
+        const d = safeText(t.d ?? t.draws ?? "");
+        const l = safeText(t.l ?? t.losses ?? "");
+        const gd = safeText(t.gd ?? t.goal_diff ?? "");
+        const pts = safeText(t.pts ?? t.points ?? "");
+        return `<tr><td>${escapeHtml(team)}</td><td>${escapeHtml(mp)}</td><td>${escapeHtml(w)}</td><td>${escapeHtml(d)}</td><td>${escapeHtml(l)}</td><td>${escapeHtml(gd)}</td><td><b>${escapeHtml(pts)}</b></td></tr>`;
+      }).join("");
+
+      return `
+        <div class="item" style="padding:14px 14px 10px;">
+          <div class="itemTop"><span>${escapeHtml(name)}</span></div>
+          <div style="overflow:auto; margin-top:8px;">
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+              <thead>
+                <tr style="opacity:.8;">
+                  <th style="text-align:left; padding:6px 4px;">Team</th>
+                  <th style="text-align:right; padding:6px 4px;">MP</th>
+                  <th style="text-align:right; padding:6px 4px;">W</th>
+                  <th style="text-align:right; padding:6px 4px;">D</th>
+                  <th style="text-align:right; padding:6px 4px;">L</th>
+                  <th style="text-align:right; padding:6px 4px;">GD</th>
+                  <th style="text-align:right; padding:6px 4px;">Pts</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        </div>`;
+    }).join("");
+
+    showPager(false);
+  }
+
+  async function loadSchedule(){
+    try{
+      setMeta("Updating…");
+      if(scheduleView === "fixtures"){
+        const r = await fetch(`/schedule.json?q=`, {cache:"no-store"});
+        const data = await r.json();
+        renderFixtures(data.matches || []);
+        setMeta("");
+      }else if(scheduleView === "live"){
+        const r = await fetch(`/worldcup/live.json?scope=all&window_hours=12`, {cache:"no-store"});
+        const data = await r.json();
+        renderLive(data.matches || data.live || []);
+        setMeta("");
+      }else if(scheduleView === "groups"){
+        const r = await fetch(`/worldcup/standings.json?scope=all`, {cache:"no-store"});
+        const data = await r.json();
+        renderGroups(data.groups || data);
+        setMeta("");
+      }
+    }catch(e){
+      console.error(e);
+      if(scheduleEl) scheduleEl.innerHTML = `<div class="hint">Schedule unavailable.</div>`;
+      showPager(false);
+      setMeta("");
+    }
+  }
+
+  function initScheduleHandlers(){
+    // tab clicks
+    if(tabsEl){
+      $$(".segbtn", tabsEl).forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          scheduleView = btn.getAttribute("data-view") || "fixtures";
+          localStorage.setItem("schedule_view", scheduleView);
+          currentPage = 1;
+          setTabSelected(scheduleView);
+          loadSchedule();
+        });
+      });
+      setTabSelected(scheduleView);
+    }
+
+    if(prevPageBtn) prevPageBtn.addEventListener("click", ()=>{ currentPage=Math.max(1, currentPage-1); loadSchedule(); });
+    if(nextPageBtn) nextPageBtn.addEventListener("click", ()=>{ currentPage=currentPage+1; loadSchedule(); });
+
+    // initial
+    loadSchedule();
+  }
+
 
   // Boot
   document.addEventListener("DOMContentLoaded", ()=>{
