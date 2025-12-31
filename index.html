@@ -2066,108 +2066,31 @@ function startHeroCountdown(){
 
 
     function bindGlobalDelegates(){
-  // Robust click delegation so buttons keep working even if sections re-render.
-  // Use capture so we win over any accidental overlays/handlers.
-  document.addEventListener('click', (e)=>{
-    const el = e.target.closest('button, a, [role="button"]');
-    if(!el) return;
+      // Fallback: event delegation so clicks still work even if elements are re-rendered
+      document.addEventListener('click', (e)=>{
+        const btn = e.target.closest('button, a');
+        if(!btn) return;
 
-    // Ensure buttons don't submit forms by default
-    if(el.tagName === 'BUTTON' && !el.getAttribute('type')){
-      el.setAttribute('type','button');
+        // Bottom nav + any element that declares data-sec
+        const sec = btn.dataset ? btn.dataset.sec : null;
+        if(sec){
+          e.preventDefault();
+          haptic(6);
+          setSection(sec);
+          return;
+        }
+
+        // Generic: prevent accidental form submits if any
+        if(btn.tagName === 'BUTTON' && !btn.getAttribute('type')){
+          btn.setAttribute('type','button');
+        }
+      }, {passive:false});
+    }
+, {passive:false});
+      });
     }
 
-    // Section routing (bottom nav + tiles)
-    const sec = (el.dataset && el.dataset.sec) ? el.dataset.sec : null;
-    if(sec){
-      e.preventDefault();
-      try{ haptic(6); }catch(_e){}
-      try{ setSection(sec); }catch(_e){}
-      return;
-    }
-
-    // ID-based routing for critical CTAs (works even if bindHome/bindPageControls fails)
-    const id = el.id || '';
-    switch(id){
-      case 'ctaReserve':
-        e.preventDefault();
-        try{ haptic(10); }catch(_e){}
-        try{ openChatWithPrefill('Reserve a table — party size, date/time, and preferred venue.', false); }catch(_e){}
-        return;
-      case 'ctaChat':
-        e.preventDefault();
-        try{ haptic(8); }catch(_e){}
-        try{ openChatWithPrefill('Hi! Help me with reservations and matchday plans.', false); }catch(_e){}
-        return;
-
-      case 'tileVIP': case 'tileFanzone': case 'tileSchedule': case 'tileMenu': case 'tilePlan':
-        e.preventDefault();
-        try{ haptic(8); }catch(_e){}
-        try{ setSection(id.replace('tile','').toLowerCase()); }catch(_e){}
-        return;
-
-      case 'reloadMenu':
-        e.preventDefault();
-        try{ haptic(6); }catch(_e){}
-        try{ loadMenu(true); }catch(_e){}
-        return;
-      case 'reloadSchedule':
-        e.preventDefault();
-        try{ haptic(6); }catch(_e){}
-        try{ loadSchedule(true); }catch(_e){}
-        return;
-      case 'reloadFanzone':
-        e.preventDefault();
-        try{ haptic(6); }catch(_e){}
-        try{ loadFanzone(true); }catch(_e){}
-        return;
-
-      case 'vipChefBtn':
-        e.preventDefault();
-        try{ haptic(8); }catch(_e){}
-        try{ openChatWithPrefill('VIP: Book a chef’s table / tasting menu. Party size, date/time, budget, dietary needs.', true); }catch(_e){}
-        return;
-      case 'vipLoungeBtn':
-        e.preventDefault();
-        try{ haptic(8); }catch(_e){}
-        try{ openChatWithPrefill('VIP: Book a premium lounge / bottle service. Party size, date/time, budget, vibe.', true); }catch(_e){}
-        return;
-
-      case 'closeModal':
-        // Let existing handler run if present, but also support closing here
-        try{ haptic(4); }catch(_e){}
-        try{ closeIntakeModal && closeIntakeModal(); }catch(_e){}
-        try{
-          const m = document.getElementById('intakeModal');
-          if(m) m.classList.add('hidden');
-          document.body.classList.remove('modalOpen');
-        }catch(_e){}
-        return;
-
-      case 'submitIntake':
-        // Allow existing submit handler to run; don't block.
-        try{ haptic(6); }catch(_e){}
-        return;
-
-      case 'sendBtn':
-        // Allow existing send handler to run; don't block.
-        return;
-      case 'btnClear':
-        // Allow existing clear handler to run; don't block.
-        return;
-    }
-
-    // Quick chips (prefill chat)
-    if(el.classList && el.classList.contains('chip') && el.dataset && el.dataset.q){
-      e.preventDefault();
-      try{ haptic(6); }catch(_e){}
-      try{ openChatWithPrefill(el.dataset.q, false); }catch(_e){}
-      return;
-    }
-  }, {capture:true, passive:false});
-}
-
-function bindHome(){
+    function bindHome(){
       const byId = (id)=>document.getElementById(id);
 
       const ctaReserve = byId('ctaReserve');
@@ -2357,57 +2280,40 @@ function bindHome(){
     }
 
     function boot(){
-      try{
-        bindNav();
-        bindGlobalDelegates();
-        bindHome();
-        if (typeof bindChat === 'function') bindChat(); // safe call (no optional chaining)
-        bindPageControls();
+      // Never let one missing element or minor script error kill all interactions.
+      const safe = (fn)=>{ try{ fn(); }catch(e){ /* console.warn(e); */ } };
 
-        // Start hero banner + countdown (robust across browsers)
-        try{ setHeroBannerImage(); }catch(e){}
-        try{ startHeroCountdown(); }catch(e){}
-// Initial welcome bubble
-        try{ ensureWelcomeBubble(); }catch(e){}
+      safe(()=>bindGlobalDelegates && bindGlobalDelegates());
+      safe(()=>bindNav && bindNav());
+      safe(()=>bindHome && bindHome());
+      safe(()=> (typeof bindChat === 'function') && bindChat());
+      safe(()=>bindPageControls && bindPageControls());
 
-        // Render VIP page content once
-        try{ loadVIP(); }catch(e){}
+      // Start hero banner + countdown
+      safe(()=>setHeroBannerImage && setHeroBannerImage());
+      safe(()=>startHeroCountdown && startHeroCountdown());
 
-        // Default section (home)
-        setSection('home');
-      }catch(e){
-        console.error(e);
-        try{ toast('Init error — refresh.'); }catch(_e){}
-      }
-    }
+      // Initial renders
+      safe(()=>setSection && setSection('home'));
+      safe(()=>updateMenuTitle && updateMenuTitle());
+      safe(()=>ensureWelcomeBubble && ensureWelcomeBubble());
+      safe(()=>loadData && loadData());
 
+      // Extras
+      safe(()=>setupDayNightAuto && setupDayNightAuto());
+      safe(()=>bindDeepLinks && bindDeepLinks());
+      safe(()=>bindDismisses && bindDismisses());
 
-    if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-    else boot();
-  </script>
-
-<script>
-/* HERO CINEMATIC PARALLAX SAFE */
-(function(){
-  const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if(prefersReduced) return;
-
-  const img = document.querySelector('#heroBanner .heroImg');
-  if(!img) return;
-
-  let ticking = false;
-  function onScroll(){
-    if(ticking) return;
-    ticking = true;
-    requestAnimationFrame(()=>{
-      const y = Math.min(6, Math.max(0, window.scrollY * 0.05)); // 0–6px
-      document.documentElement.style.setProperty('--heroY', y.toFixed(2) + 'px');
-      ticking = false;
-    });
-  }
-  window.addEventListener('scroll', onScroll, {passive:true});
-  onScroll();
-})();
+      // Scroll effects (safe even if hero missing)
+      safe(()=>{
+        const onScroll = ()=>{
+          const y = window.scrollY || 0;
+          document.documentElement.style.setProperty('--scrollY', String(y));
+        };
+        window.addEventListener('scroll', onScroll, {passive:true});
+        onScroll();
+      });
+    })();
 </script>
 
 
