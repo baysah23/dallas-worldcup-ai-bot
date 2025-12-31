@@ -557,6 +557,43 @@
       padding: 18px;
     }
     .modal.hidden{ display:none; }
+
+/* =========================
+   MODAL CONTRAST FIX (v2)
+   - Stronger dark+blur scrim behind modal
+   - Modal card gets true opaque glass (~0.82) so fields pop
+   ========================= */
+body.modalOpen{ overflow:hidden; }
+
+/* Overlay scrim + blur */
+.modal{
+  background: rgba(5, 8, 16, 0.78) !important;
+  backdrop-filter: blur(10px) saturate(0.9) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(0.9) !important;
+}
+
+/* Modal surface (the card) */
+.modalCard{
+  background: rgba(12, 18, 34, 0.82) !important; /* target 0.8-ish */
+  backdrop-filter: blur(18px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.2) !important;
+  border: 1px solid rgba(255,255,255,0.22) !important;
+  box-shadow: 0 26px 90px rgba(0,0,0,0.62) !important;
+}
+
+/* Inputs: slightly darker so text contrast stays crisp */
+.modalBody input,
+.modalBody select{
+  background: rgba(0,0,0,0.34) !important;
+  border-color: rgba(255,255,255,0.22) !important;
+}
+
+/* Improve label + helper readability */
+.modalHead h3,
+.modalBody label{
+  color: rgba(245,248,255,0.95) !important;
+}
+
     .modalCard{
       width: 100%;
       max-width: 440px;
@@ -2996,15 +3033,27 @@ const $$ = (sel, root=document)=>Array.from((root||document).querySelectorAll(se
 const escapeHtml = (s)=>String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 
-// ---------- concierge welcome copy ----------
-const WELCOME_PRIMARY = "Greetings World Cup fans. I\u2019m your concierge \u2014 here to assist with reservations, VIP experiences, and match-day planning for your business and guests. Tell me what you need, and I\u2019ll take care of the details.";
-const WELCOME_GAMEDAY = "Greetings World Cup fans. It\u2019s game day. I\u2019m your concierge \u2014 here to assist with reservations, VIP experiences, and real-time match-day needs for your business and guests. Tell me what you need, and I\u2019ll take care of the details.";
+// ---------- concierge welcome copy (localized) ----------
+const WELCOME_PRIMARY_BY_LANG = {
+  en: "Greetings World Cup fans. I’m your concierge — here to assist with reservations, VIP experiences, and match-day planning for your business and guests. Tell me what you need, and I’ll take care of the details.",
+  es: "Saludos, fans del Mundial. Soy tu concierge — aquí para ayudarte con reservaciones, experiencias VIP y la planificación del día de partido para tu negocio y tus invitados. Dime qué necesitas y me encargo de los detalles.",
+  pt: "Saudações, fãs da Copa do Mundo. Sou seu concierge — aqui para ajudar com reservas, experiências VIP e o planejamento do dia do jogo para o seu negócio e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
+  fr: "Bonjour, fans de la Coupe du Monde. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et l’organisation du jour de match pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
+};
+const WELCOME_GAMEDAY_BY_LANG = {
+  en: "Greetings World Cup fans. It’s game day. I’m your concierge — here to assist with reservations, VIP experiences, and real-time match-day needs for your business and guests. Tell me what you need, and I’ll take care of the details.",
+  es: "Saludos, fans del Mundial. Hoy es día de partido. Soy tu concierge — aquí para ayudarte con reservaciones, experiencias VIP y necesidades en tiempo real para tu negocio y tus invitados. Dime qué necesitas y me encargo de los detalles.",
+  pt: "Saudações, fãs da Copa do Mundo. Hoje é dia de jogo. Sou seu concierge — aqui para ajudar com reservas, experiências VIP e necessidades em tempo real para o seu negócio e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
+  fr: "Bonjour, fans de la Coupe du Monde. C’est jour de match. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et les besoins en temps réel pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
+};
 
-function getWelcomeForState(){
+function getWelcomeForState(lang){
   const k = window.__wcCountdownStateKind || '';
-  return (k === 'game_day') ? WELCOME_GAMEDAY : WELCOME_PRIMARY;
+  const L = (lang || state.lang || 'en').toLowerCase();
+  const primary = WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
+  const gameday = WELCOME_GAMEDAY_BY_LANG[L] || WELCOME_GAMEDAY_BY_LANG.en;
+  return (k === 'game_day') ? gameday : primary;
 }
-
 // ---------- admin-only countdown indicator ----------
 function isAdminDebug(){
   try{
@@ -3158,18 +3207,13 @@ function setLang(lang){
     homePill.setAttribute('aria-label', `Change language (current ${lang.toUpperCase()})`);
   }
 
-  // Chat pills
-  $$('.pill.mini.lang').forEach(p=>{
-    p.classList.toggle('active', (p.dataset?.lang||'').toLowerCase() === lang);
-  });
-  // Update chat language selector active state
+  // Chat language selector
   $$('#chatLangRow [data-lang]').forEach(btn=>{
-    const b = (btn.dataset.lang||'').toLowerCase();
+    const b = (btn.dataset?.lang||'').toLowerCase();
     btn.classList.toggle('active', b === (state.lang||'en').toLowerCase());
   });
-  // Keep exactly one welcome message in selected language
+  // Keep single welcome updated
   try{ normalizeChatWelcome(); }catch(e){}
-
 }
 
 function cycleLang(){
@@ -3219,40 +3263,15 @@ function chatAppend(role, text, opts){
 
   log.appendChild(wrap);
   log.scrollTop = log.scrollHeight;
-}
-/* welcome logic replaced */
-const WELCOME_PRIMARY_BY_LANG = {
-  en: "Greetings World Cup fans. I’m your concierge — here to assist with reservations, VIP experiences, and match-day planning for your business and guests. Tell me what you need, and I’ll take care of the details.",
-  es: "Saludos, fans del Mundial. Soy tu concierge — aquí para ayudarte con reservaciones, experiencias VIP y la planificación del día de partido para tu negocio y tus invitados. Dime qué necesitas y me encargo de los detalles.",
-  pt: "Saudações, fãs da Copa do Mundo. Sou seu concierge — aqui para ajudar com reservas, experiências VIP e o planejamento do dia do jogo para o seu negócio e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
-  fr: "Bonjour, fans de la Coupe du Monde. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et l’organisation du jour de match pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
-};
-const WELCOME_GAMEDAY_BY_LANG = {
-  en: "Greetings World Cup fans. It’s game day. I’m your concierge — here to assist with reservations, VIP experiences, and real-time match-day needs for your business and guests. Tell me what you need, and I’ll take care of the details.",
-  es: "Saludos, fans del Mundial. Hoy es día de partido. Soy tu concierge — aquí para ayudarte con reservaciones, experiencias VIP y necesidades en tiempo real para tu negocio y tus invitados. Dime qué necesitas y me encargo de los detalles.",
-  pt: "Saudações, fãs da Copa do Mundo. Hoje é dia de jogo. Sou seu concierge — aqui para ajudar com reservas, experiências VIP e necessidades em tempo real para o seu negócio e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
-  fr: "Bonjour, fans de la Coupe du Monde. C’est jour de match. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et les besoins en temps réel pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
-};
-
-function getWelcomeForState(lang){
-  const k = window.__wcCountdownStateKind || '';
-  const L = (lang || state.lang || 'en').toLowerCase();
-  const primary = WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
-  const gameday = WELCOME_GAMEDAY_BY_LANG[L] || WELCOME_GAMEDAY_BY_LANG.en;
-  return (k === 'game_day') ? gameday : primary;
-}
-
-function normalizeChatWelcome(){
+}function normalizeChatWelcome(){
   const log = $('chatLog');
   if(!log) return;
 
   const welcomeText = getWelcomeForState(state.lang);
 
-  // Marked welcomes
   const welcomes = Array.from(log.querySelectorAll('.chatLine.bot[data-welcome="1"]'));
   let keeper = welcomes[0] || null;
 
-  // Reuse first bot line if none marked
   if(!keeper){
     const firstBot = log.querySelector('.chatLine.bot');
     if(firstBot){
@@ -3261,18 +3280,23 @@ function normalizeChatWelcome(){
     }
   }
 
-  // Create if still none
   if(!keeper){
-    chatAppend('bot', welcomeText, {welcome:true});
+    // prepend instead of append so it stays at the top
+    const wrap = document.createElement('div');
+    wrap.className = 'chatLine bot';
+    wrap.setAttribute('data-welcome','1');
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = welcomeText;
+    wrap.appendChild(bubble);
+    log.prepend(wrap);
     log.dataset.hasWelcome = '1';
     return;
   }
 
-  // Remove extras
   welcomes.slice(1).forEach(x=>x.remove());
 
-  // Update keeper text
-  const bubble = keeper.querySelector('.bubble') || keeper;
+  const bubble = keeper.querySelector('.bubble');
   if(bubble) bubble.textContent = welcomeText;
 
   log.dataset.hasWelcome = '1';
@@ -3822,21 +3846,13 @@ function bindChat(){
     clearChatPreserveWelcome();
   });
 
-  // language mini pills
-  $$('.pill.mini.lang').forEach(p=>{
-    p.addEventListener('click', ()=>{
-      setLang((p.dataset?.lang||'en'));
-    });
-  });
-
   // language selector
   $$('#chatLangRow [data-lang]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      setLang(btn.dataset.lang || 'en');
+      setLang((btn.dataset?.lang||'en'));
       try{ normalizeChatWelcome(); }catch(e){}
     });
-  });
-
+});
 }
 
 // ---------- modal bindings ----------
