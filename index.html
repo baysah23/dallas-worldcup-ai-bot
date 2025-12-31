@@ -557,6 +557,43 @@
       padding: 18px;
     }
     .modal.hidden{ display:none; }
+
+/* =========================
+   MODAL CONTRAST FIX (v2)
+   - Stronger dark+blur scrim behind modal
+   - Modal card gets true opaque glass (~0.82) so fields pop
+   ========================= */
+body.modalOpen{ overflow:hidden; }
+
+/* Overlay scrim + blur */
+.modal{
+  background: rgba(5, 8, 16, 0.78) !important;
+  backdrop-filter: blur(10px) saturate(0.9) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(0.9) !important;
+}
+
+/* Modal surface (the card) */
+.modalCard{
+  background: rgba(12, 18, 34, 0.82) !important; /* target 0.8-ish */
+  backdrop-filter: blur(18px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.2) !important;
+  border: 1px solid rgba(255,255,255,0.22) !important;
+  box-shadow: 0 26px 90px rgba(0,0,0,0.62) !important;
+}
+
+/* Inputs: slightly darker so text contrast stays crisp */
+.modalBody input,
+.modalBody select{
+  background: rgba(0,0,0,0.34) !important;
+  border-color: rgba(255,255,255,0.22) !important;
+}
+
+/* Improve label + helper readability */
+.modalHead h3,
+.modalBody label{
+  color: rgba(245,248,255,0.95) !important;
+}
+
     .modalCard{
       width: 100%;
       max-width: 440px;
@@ -2609,11 +2646,68 @@ body[data-msec="schedule"] #scheduleCard{
   padding-top: 10px;
 }
 
+/* =========================
+   CHAT LANGUAGE SELECTOR (iOS-like segmented)
+   ========================= */
+#chatLangRow{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+#chatLangRow .langLabel{
+  font-size:12px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color: rgba(235,245,255,.70);
+}
+#chatLangRow .langSegWrap{
+  display:flex;
+  gap:8px;
+  padding:6px;
+  border-radius:14px;
+  background: rgba(0,0,0,.22);
+  border: 1px solid rgba(255,255,255,.14);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+#chatLangRow .langSeg{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 12px;
+  min-height:44px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  color: rgba(244,248,255,.92);
+  font-weight:800;
+  cursor:pointer;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+#chatLangRow .langSeg:active{ transform: translateY(1px); }
+#chatLangRow .langSeg .langCode{
+  font-size:12px;
+  letter-spacing:.08em;
+  padding:4px 8px;
+  border-radius:10px;
+  background: rgba(0,0,0,.26);
+  border:1px solid rgba(255,255,255,.12);
+}
+#chatLangRow .langSeg .langName{ font-size:13px; opacity:.92; }
+#chatLangRow .langSeg.active{
+  background: rgba(255,255,255,.16);
+  border-color: rgba(255,255,255,.22);
+  box-shadow: 0 10px 24px rgba(0,0,0,.30);
+}
+
 
 /* =========================
-   CHAT LANGUAGE + HEADER POLISH
+   CHAT UI POLISH (safe overrides)
    ========================= */
-#chatLangRow{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:6px; }
+#chatLangRow{
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:8px;
+}
 #chatLangRow .langLabel{
   font-size:11px;
   letter-spacing:.08em;
@@ -2670,18 +2764,19 @@ body[data-msec="schedule"] #scheduleCard{
 /* Chat input row alignment */
 .chatInputRow{
   display:flex;
-  align-items:center;
+  align-items:stretch;
   gap:10px;
 }
-#msg{ flex:1; min-height:44px; }
-#sendBtn, #btnClear{ min-height:44px; border-radius:14px; }
-
-/* Prevent wrap weirdness on small screens */
-@media (max-width: 420px){
-  #chatLangRow .langName{ display:none; } /* keep clean, show codes only */
-  #chatLangRow .langSeg{ padding:8px 10px; }
+.chatInputRow input#msg{
+  flex:1;
+  min-height:44px;
 }
-
+.chatInputRow #sendBtn,
+.chatInputRow #btnClear{
+  min-height:44px;
+  border-radius:14px;
+  white-space:nowrap;
+}
 </style>
 </head>
 
@@ -2826,11 +2921,20 @@ body[data-msec="schedule"] #scheduleCard{
             <div class="pillRow" id="chatLangRow" aria-label="Chat language">
   <div class="langLabel">Language</div>
   <div class="langSegWrap" role="tablist" aria-label="Chat language selector">
-    <button class="langSeg pill mini lang" data-lang="en" type="button" title="English"><span class="langCode">EN</span><span class="langName">English</span></button>
-    <button class="langSeg pill mini lang" data-lang="es" type="button" title="Español"><span class="langCode">ES</span><span class="langName">Español</span></button>
-    <button class="langSeg pill mini lang" data-lang="pt" type="button" title="Português"><span class="langCode">PT</span><span class="langName">Português</span></button>
-    <button class="langSeg pill mini lang" data-lang="fr" type="button" title="Français"><span class="langCode">FR</span><span class="langName">Français</span></button>
+    <button class="langSeg" data-lang="en" type="button" title="English" aria-label="English">
+      <span class="langCode">EN</span><span class="langName">English</span>
+    </button>
+    <button class="langSeg" data-lang="es" type="button" title="Español" aria-label="Español">
+      <span class="langCode">ES</span><span class="langName">Español</span>
+    </button>
+    <button class="langSeg" data-lang="pt" type="button" title="Português" aria-label="Português">
+      <span class="langCode">PT</span><span class="langName">Português</span>
+    </button>
+    <button class="langSeg" data-lang="fr" type="button" title="Français" aria-label="Français">
+      <span class="langCode">FR</span><span class="langName">Français</span>
+    </button>
   </div>
+</div>
 </div>
 </div>
           <div class="cardBody">
@@ -2842,7 +2946,7 @@ body[data-msec="schedule"] #scheduleCard{
               <button id="sendBtn" type="button">Send</button>
               <button id="btnClear" class="secondary" type="button">Clear</button>
             </div>
-            <p class="hint">Tap the language pill to switch EN → ES → PT → FR.</p>
+            <p class="hint">Choose a language above — we’ll keep chat + the welcome message in that language.</p>
           </div>
         </div>
       </section>
@@ -3019,15 +3123,27 @@ const $$ = (sel, root=document)=>Array.from((root||document).querySelectorAll(se
 const escapeHtml = (s)=>String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 
-// ---------- concierge welcome copy ----------
-const WELCOME_PRIMARY = "Greetings World Cup fans. I\u2019m your concierge \u2014 here to assist with reservations, VIP experiences, and match-day planning for your business and guests. Tell me what you need, and I\u2019ll take care of the details.";
-const WELCOME_GAMEDAY = "Greetings World Cup fans. It\u2019s game day. I\u2019m your concierge \u2014 here to assist with reservations, VIP experiences, and real-time match-day needs for your business and guests. Tell me what you need, and I\u2019ll take care of the details.";
+// ---------- concierge welcome copy (localized) ----------
+const WELCOME_PRIMARY_BY_LANG = {
+  en: "Greetings World Cup fans. I’m your concierge — here to assist with reservations, VIP experiences, and match-day planning for your business and guests. Tell me what you need, and I’ll take care of the details.",
+  es: "Saludos, fans del Mundial. Soy tu concierge — aquí para ayudarte con reservaciones, experiencias VIP y la planificación del día de partido para tu negocio y tus invitados. Dime qué necesitas y me encargo de los detalles.",
+  pt: "Saudações, fãs da Copa do Mundo. Sou seu concierge — aqui para ajudar com reservas, experiências VIP e o planejamento do dia do jogo para o seu negócio e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
+  fr: "Bonjour, fans de la Coupe du Monde. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et l’organisation du jour de match pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
+};
+const WELCOME_GAMEDAY_BY_LANG = {
+  en: "Greetings World Cup fans. It’s game day. I’m your concierge — here to assist with reservations, VIP experiences, and real-time match-day needs for your business and guests. Tell me what you need, and I’ll take care of the details.",
+  es: "Saludos, fans del Mundial. Hoy es día de partido. Soy tu concierge — aquí para ayudarte con reservaciones, experiencias VIP y necesidades en tiempo real para tu negocio y tus invitados. Dime qué necesitas y me encargo de los detalles.",
+  pt: "Saudações, fãs da Copa do Mundo. Hoje é dia de jogo. Sou seu concierge — aqui para ajudar com reservas, experiências VIP e necessidades em tempo real para o seu negócio e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
+  fr: "Bonjour, fans de la Coupe du Monde. C’est jour de match. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et les besoins en temps réel pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
+};
 
-function getWelcomeForState(){
+function getWelcomeForState(lang){
   const k = window.__wcCountdownStateKind || '';
-  return (k === 'game_day') ? WELCOME_GAMEDAY : WELCOME_PRIMARY;
+  const L = (lang || state.lang || 'en').toLowerCase();
+  const primary = WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
+  const gameday = WELCOME_GAMEDAY_BY_LANG[L] || WELCOME_GAMEDAY_BY_LANG.en;
+  return (k === 'game_day') ? gameday : primary;
 }
-
 // ---------- admin-only countdown indicator ----------
 function isAdminDebug(){
   try{
@@ -3181,10 +3297,13 @@ function setLang(lang){
     homePill.setAttribute('aria-label', `Change language (current ${lang.toUpperCase()})`);
   }
 
-  // Chat pills
-  $$('.pill.mini.lang').forEach(p=>{
-    p.classList.toggle('active', (p.dataset?.lang||'').toLowerCase() === lang);
+  // Chat language selector
+  $$('#chatLangRow [data-lang]').forEach(btn=>{
+    const b = (btn.dataset?.lang||'').toLowerCase();
+    btn.classList.toggle('active', b === (state.lang||'en').toLowerCase());
   });
+  // Keep single welcome updated
+  try{ normalizeChatWelcome(); }catch(e){}
 }
 
 function cycleLang(){
@@ -3219,22 +3338,62 @@ function focusChatInput(){
   try{ input.focus({preventScroll:true}); }catch(e){ input.focus(); }
 }
 
-function chatAppend(role, text){
+function chatAppend(role, text, opts){
   const log = $('chatLog');
   if(!log) return;
+
   const wrap = document.createElement('div');
-  wrap.className = `chatLine ${role}`;
-  wrap.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
+  wrap.className = 'chatLine ' + role;
+  if(opts && opts.welcome) wrap.setAttribute('data-welcome','1');
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = (text ?? '').toString();
+  wrap.appendChild(bubble);
+
   log.appendChild(wrap);
   log.scrollTop = log.scrollHeight;
+}function normalizeChatWelcome(){
+  const log = $('chatLog');
+  if(!log) return;
+
+  const welcomeText = getWelcomeForState(state.lang);
+
+  const welcomes = Array.from(log.querySelectorAll('.chatLine.bot[data-welcome="1"]'));
+  let keeper = welcomes[0] || null;
+
+  if(!keeper){
+    const firstBot = log.querySelector('.chatLine.bot');
+    if(firstBot){
+      keeper = firstBot;
+      keeper.setAttribute('data-welcome','1');
+    }
+  }
+
+  if(!keeper){
+    // prepend instead of append so it stays at the top
+    const wrap = document.createElement('div');
+    wrap.className = 'chatLine bot';
+    wrap.setAttribute('data-welcome','1');
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = welcomeText;
+    wrap.appendChild(bubble);
+    log.prepend(wrap);
+    log.dataset.hasWelcome = '1';
+    return;
+  }
+
+  welcomes.slice(1).forEach(x=>x.remove());
+
+  const bubble = keeper.querySelector('.bubble');
+  if(bubble) bubble.textContent = welcomeText;
+
+  log.dataset.hasWelcome = '1';
 }
 
 function ensureChatWelcome(){
-  const log = $('chatLog');
-  if(!log) return;
-  if(log.dataset.hasWelcome === '1') return;
-  log.dataset.hasWelcome = '1';
-  chatAppend('bot', getWelcomeForState());
+  normalizeChatWelcome();
 }
 
 function clearChatPreserveWelcome(){
@@ -3242,7 +3401,7 @@ function clearChatPreserveWelcome(){
   if(!log) return;
   log.innerHTML = '';
   log.dataset.hasWelcome = '';
-  ensureChatWelcome();
+  try{ ensureChatWelcome(); }catch(e){ console.warn('chat welcome failed', e); }
 }
 
 async function sendChatMessage(text){
@@ -3777,12 +3936,13 @@ function bindChat(){
     clearChatPreserveWelcome();
   });
 
-  // language mini pills
-  $$('.pill.mini.lang').forEach(p=>{
-    p.addEventListener('click', ()=>{
-      setLang((p.dataset?.lang||'en'));
+  // language selector
+  $$('#chatLangRow [data-lang]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      setLang((btn.dataset?.lang||'en'));
+      try{ normalizeChatWelcome(); }catch(e){}
     });
-  });
+});
 }
 
 // ---------- modal bindings ----------
