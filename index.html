@@ -2608,6 +2608,47 @@ body[data-msec="schedule"] #scheduleCard{
   background: rgba(10,18,40,.92);
   padding-top: 10px;
 }
+
+/* =========================
+   MODAL CONTRAST FIX
+   ========================= */
+
+/* Backdrop scrim */
+.modal-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 10, 20, 0.65);
+  backdrop-filter: blur(6px) saturate(80%);
+  -webkit-backdrop-filter: blur(6px) saturate(80%);
+  z-index: 900;
+}
+
+/* Modal surface */
+.modal{
+  background: rgba(22, 30, 55, 0.80) !important;
+  box-shadow:
+    0 20px 60px rgba(0,0,0,0.55),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.18);
+}
+
+/* Modal text clarity */
+.modal h1,
+.modal h2,
+.modal h3,
+.modal label{
+  color: #f3f6ff;
+}
+
+.modal .helper,
+.modal .muted{
+  color: rgba(230,235,255,0.75);
+}
+
+/* Lock background when modal is open */
+body.modal-open{
+  overflow: hidden;
+}
 </style>
 </head>
 
