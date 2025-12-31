@@ -2899,6 +2899,13 @@ body[data-msec="schedule"] #scheduleCard{
         <input id="iDate" type="date" />
         <label class="required" for="iGroup">Party size</label>
         <input id="iGroup" inputmode="numeric" placeholder="e.g., 4" />
+        <label class="required" for="iTime">Time window</label>
+        <input id="iTime" placeholder="e.g., 7–9pm" />
+        <label for="iVibe">Experience / vibe (optional)</label>
+        <input id="iVibe" placeholder="e.g., VIP, quiet lounge, lively, premium" />
+        <label for="iNotes">Notes (optional)</label>
+        <textarea id="iNotes" rows="3" placeholder="Any preferences, constraints, or special requests"></textarea>
+
         <label for="iBudget">Budget (optional)</label>
         <input id="iBudget" placeholder="e.g., $200–$400" />
         <label class="required" for="iContact">Contact</label>
@@ -2925,6 +2932,81 @@ const LANGS = ['en','es','pt','fr'];
 const $ = (id)=>document.getElementById(id);
 const $$ = (sel, root=document)=>Array.from((root||document).querySelectorAll(sel));
 const escapeHtml = (s)=>String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+
+// ---------- concierge welcome copy ----------
+const WELCOME_PRIMARY = "Greetings World Cup fans. I\u2019m your concierge \u2014 here to assist with reservations, VIP experiences, and match-day planning for your business and guests. Tell me what you need, and I\u2019ll take care of the details.";
+const WELCOME_GAMEDAY = "Greetings World Cup fans. It\u2019s game day. I\u2019m your concierge \u2014 here to assist with reservations, VIP experiences, and real-time match-day needs for your business and guests. Tell me what you need, and I\u2019ll take care of the details.";
+
+function getWelcomeForState(){
+  const k = window.__wcCountdownStateKind || '';
+  return (k === 'game_day') ? WELCOME_GAMEDAY : WELCOME_PRIMARY;
+}
+
+// ---------- admin-only countdown indicator ----------
+function isAdminDebug(){
+  try{
+    const q = new URLSearchParams(location.search);
+    if(q.get('admin') === '1' || q.get('debug') === '1') return true;
+    if(localStorage.getItem('wc_admin') === '1') return true;
+  }catch(e){}
+  return false;
+}
+function ensureAdminBadge(){
+  if(!isAdminDebug()) return null;
+  let el = document.getElementById('adminCountdownState');
+  if(el) return el;
+  el = document.createElement('div');
+  el.id = 'adminCountdownState';
+  el.style.position = 'fixed';
+  el.style.right = '10px';
+  el.style.bottom = '10px';
+  el.style.zIndex = '9999';
+  el.style.padding = '6px 10px';
+  el.style.borderRadius = '10px';
+  el.style.fontSize = '12px';
+  el.style.letterSpacing = '.04em';
+  el.style.backdropFilter = 'blur(10px)';
+  el.style.webkitBackdropFilter = 'blur(10px)';
+  el.style.background = 'rgba(0,0,0,.35)';
+  el.style.border = '1px solid rgba(255,255,255,.18)';
+  el.style.color = '#fff';
+  el.textContent = 'STATE: …';
+  document.body.appendChild(el);
+  return el;
+}
+function updateAdminCountdownState(kind){
+  const el = ensureAdminBadge();
+  if(!el) return;
+  const map = {
+    pre_tournament: 'PRE_TOURNAMENT',
+    pre_game_day: 'BETWEEN_DAYS',
+    between_days: 'BETWEEN_DAYS',
+    post_day: 'BETWEEN_DAYS',
+    game_day: 'GAME_DAY',
+    complete: 'COMPLETE',
+    fallback: 'FALLBACK'
+  };
+  el.textContent = 'STATE: ' + (map[kind] || String(kind||'UNKNOWN').toUpperCase());
+}
+
+// ---------- proactive game-day chat prompt ----------
+function maybeTriggerGameDayMessage(kind){
+  if(kind !== 'game_day') return;
+  try{
+    const dayKey = new Date().toISOString().slice(0,10);
+    const k = 'wc_gameday_prompt_'+dayKey;
+    if(localStorage.getItem(k) === '1') return;
+    localStorage.setItem(k,'1');
+
+    // Only append if chat exists; do not force navigation.
+    const log = $('chatLog');
+    if(!log) return;
+
+    // If a non-game-day welcome is already present, append the game-day welcome once.
+    chatAppend('bot', WELCOME_GAMEDAY);
+  }catch(e){}
+}
 const clamp = (n,min,max)=>Math.max(min, Math.min(max, n));
 
 // ---------- SW cleanup (fix "buttons work sometimes" due to stale cached shell) ----------
@@ -3042,7 +3124,7 @@ function ensureChatWelcome(){
   if(!log) return;
   if(log.dataset.hasWelcome === '1') return;
   log.dataset.hasWelcome = '1';
-  chatAppend('bot', 'Hi — tell me what you need and I’ll take care of the details. Party size + time window is perfect.');
+  chatAppend('bot', getWelcomeForState());
 }
 
 function clearChatPreserveWelcome(){
@@ -3118,6 +3200,35 @@ function startHeroCountdown(){
   const MATCH_DURATION_MIN = 150; // conservative default for "day complete" logic
 
   const isoDayUTC = (d)=> new Date(d).toISOString().slice(0,10);
+
+  const FIXTURE_CACHE_KEY = 'wc_fixtures_cache_v1';
+  const FIXTURE_CACHE_TTL_MS = 24*60*60*1000;
+
+  function readFixtureCache(){
+    try{
+      const raw = localStorage.getItem(FIXTURE_CACHE_KEY);
+      if(!raw) return null;
+      const obj = JSON.parse(raw);
+      if(!obj || !obj.ts || !obj.data) return null;
+      if((Date.now() - obj.ts) > FIXTURE_CACHE_TTL_MS) return null;
+      return obj.data;
+    }catch(e){ return null; }
+  }
+  function writeFixtureCache(data){
+    try{ localStorage.setItem(FIXTURE_CACHE_KEY, JSON.stringify({ts:Date.now(), data})); }catch(e){}
+  }
+
+  async function fetchJSONWithTimeout(url, timeoutMs=4500){
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort(), timeoutMs);
+    try{
+      const r = await fetch(url, {cache:'no-store', signal: ctrl.signal});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return await r.json();
+    } finally {
+      clearTimeout(t);
+    }
+  }
 
   function parseKickoff(m){
     const iso = m?.datetime_utc || m?.kickoff_utc || m?.kickoffUtc || m?.datetimeUtc;
@@ -3203,6 +3314,9 @@ function startHeroCountdown(){
   function tick(){
     const now = new Date();
     const st = computeState(now, matches);
+    window.__wcCountdownStateKind = st.kind;
+    updateAdminCountdownState(st.kind);
+    maybeTriggerGameDayMessage(st.kind);
     setTop(st.top, st.badge);
     if(st.kind === 'complete'){
       // Freeze at 00:00:00:00
@@ -3213,8 +3327,16 @@ function startHeroCountdown(){
   }
 
   async function boot(){
+    // 1) Try network quickly (timeout)  2) Fallback to last-known-good cache (24h)
+    let data = null;
     try{
-      const data = await fetchJSON('/schedule.json');
+      data = await fetchJSONWithTimeout('/schedule.json', 4500);
+      if(data) writeFixtureCache(data);
+    }catch(e){
+      data = readFixtureCache();
+    }
+
+    try{
       const raw = Array.isArray(data?.matches) ? data.matches : [];
       const ms = [];
       for(const m of raw){
@@ -3482,17 +3604,42 @@ async function submitIntake(){
 // ---------- home bindings ----------
 function bindHome(){
   // Primary CTAs
-  $('ctaChat')?.addEventListener('click', ()=>openChatPrefill(''));
-  $('ctaReserve')?.addEventListener('click', ()=>openChatPrefill('Reservation request: '));
+  $('ctaChat')?.addEventListener('click', ()=>{
+    // Chat concierge shows the welcome message (primary or game-day variant)
+    openChatPrefill('');
+  });
 
-  // Quick chips -> prefill
+  $('ctaReserve')?.addEventListener('click', ()=>{
+    // Reserve now opens the intake modal (concierge form style)
+    openModal();
+  });
+
+  function applyQuickPrefill(q){
+    const s = String(q||'').toLowerCase();
+    if(s.includes('table for 4')){
+      const g = $('iGroup');
+      if(g) g.value = '4';
+    }
+    if(s.includes('vip')){
+      const v = $('iVibe');
+      if(v && !v.value) v.value = 'VIP';
+      const n = $('iNotes');
+      if(n){
+        const cur = (n.value||'').trim();
+        n.value = cur ? (cur + ' | VIP reservation') : 'VIP reservation';
+      }
+    }
+  }
+
+  // Quick chips -> prefill intake modal
   $$('.quickChips .chip').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      openChatPrefill(btn.dataset?.q ? `${btn.dataset.q} — ` : '');
+      openModal();
+      applyQuickPrefill(btn.dataset?.q || '');
     });
   });
 
-  // Explore tiles
+// Explore tiles
   $('tileVIP')?.addEventListener('click', ()=>setSection('vip'));
   $('tileFanzone')?.addEventListener('click', ()=>setSection('fanzone'));
   $('tileSchedule')?.addEventListener('click', ()=>setSection('schedule'));
