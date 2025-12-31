@@ -3142,32 +3142,16 @@ function focusChatInput(){
   try{ input.focus({preventScroll:true}); }catch(e){ input.focus(); }
 }
 
-
-function escapeHtml(s){
-  return (s ?? '').toString()
-    .replaceAll('&','&amp;')
-    .replaceAll('<','&lt;')
-    .replaceAll('>','&gt;')
-    .replaceAll('"','&quot;')
-    .replaceAll("'","&#39;");
-}
-
-
 function chatAppend(role, text){
   const log = $('chatLog');
   if(!log) return;
-
   const wrap = document.createElement('div');
-  wrap.className = 'chatLine ' + role;
-
-  const bubble = document.createElement('div');
-  bubble.className = 'bubble';
-  bubble.textContent = (text ?? '').toString();
-  wrap.appendChild(bubble);
-
+  wrap.className = `chatLine ${role}`;
+  wrap.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
   log.appendChild(wrap);
   log.scrollTop = log.scrollHeight;
 }
+
 function ensureChatWelcome(){
   const log = $('chatLog');
   if(!log) return;
@@ -3181,7 +3165,7 @@ function clearChatPreserveWelcome(){
   if(!log) return;
   log.innerHTML = '';
   log.dataset.hasWelcome = '';
-  try{ ensureChatWelcome(); }catch(e){ console.warn('chat welcome failed', e); }
+  ensureChatWelcome();
 }
 
 async function sendChatMessage(text){
@@ -3644,7 +3628,11 @@ async function submitIntake(){
   if(msg) msg.textContent = 'Sending…';
 
   // keep it in-chat (premium + fast)
-  const summary = `Reservation request: date ${iDate}, party ${iGroup}, time ${iTime}${iVibe?`, vibe ${iVibe}`:''}${iBudget?`, budget ${iBudget}`:''}${iNotes?`, notes ${iNotes}`:''}. Contact: ${iContact}.`;
+  let summary = `Reservation request: date ${iDate}, party ${iGroup}, time window ${iTime}`;
+  if(iVibe) summary += `, vibe ${iVibe}`;
+  if(iBudget) summary += `, budget ${iBudget}`;
+  if(iNotes) summary += `, notes ${iNotes}`;
+  summary += `. Contact: ${iContact}.`;
   closeModal();
   openChatPrefill(summary);
   if(msg) msg.textContent = '';
