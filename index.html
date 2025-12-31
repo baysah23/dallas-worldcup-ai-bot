@@ -164,7 +164,24 @@
       text-transform: uppercase;
       color: rgba(232,240,255,.86);
       margin: 0 0 6px;
+          display:flex; align-items:center; justify-content:center; gap:10px;
     }
+    .cdBadge{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:4px 10px;
+      border-radius:999px;
+      font-size:10px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      font-weight:900;
+      border:1px solid rgba(212,175,55,.55);
+      background: rgba(212,175,55,.16);
+      color: rgba(255,255,255,.95);
+      box-shadow: 0 10px 22px rgba(0,0,0,.20);
+    }
+
 
     .cdRow{
       display:flex;
@@ -2594,7 +2611,7 @@ body[data-msec="schedule"] #scheduleCard{
 </style>
 </head>
 
-<body data-sec="home">
+<body data-sec="home" data-kickoff-utc="2026-06-11T00:00:00Z">
 <!-- Ultra-top Broadcast Title -->
 <div class="broadcast-title">
   FIFA WORLD CUP™ 2026 · CONCIERGE
@@ -2610,7 +2627,7 @@ body[data-msec="schedule"] #scheduleCard{
         </div>
       </div>
       <section class="countdownGlass" aria-label="Live countdown">
-      <div class="cdTop">UNTIL KICKOFF</div>
+      <div class="cdTop"><span id="cdTopText">UNTIL KICKOFF</span><span id="cdBadge" class="cdBadge" hidden>GAME DAY</span></div>
       <div class="cdRow" role="timer" aria-live="polite">
         <div class="cdCell"><div class="cdNum" id="cdD">00</div><div class="cdLbl">D</div></div>
         <div class="cdSep">•</div>
@@ -3087,18 +3104,45 @@ function pad2(n){ return String(n).padStart(2,'0'); }
 
 function startHeroCountdown(){
   const dEl = $('cdD'), hEl = $('cdH'), mEl = $('cdM'), sEl = $('cdS');
-  const targetISO = document.body?.dataset?.kickoffUtc || '';
-  if(!dEl || !hEl || !mEl || !sEl || !targetISO) return;
+  const topTextEl = $('cdTopText') || document.querySelector('.cdTop');
+  const badgeEl = $('cdBadge');
 
-  const target = new Date(targetISO);
-  if(isNaN(+target)) return;
+  // Fallback static target if fixtures can't be loaded
+  const fallbackISO = document.body?.dataset?.kickoffUtc || "2026-06-11T00:00:00Z";
 
-  function tick(){
+  if(!dEl || !hEl || !mEl || !sEl) return;
+
+  let matches = null;
+  let timerId = null;
+
+  const MATCH_DURATION_MIN = 150; // conservative default for "day complete" logic
+
+  const isoDayUTC = (d)=> new Date(d).toISOString().slice(0,10);
+
+  function parseKickoff(m){
+    const iso = m?.datetime_utc || m?.kickoff_utc || m?.kickoffUtc || m?.datetimeUtc;
+    if(!iso) return null;
+    const dt = new Date(iso);
+    return isNaN(+dt) ? null : dt;
+  }
+
+  function setTop(text, showBadge){
+    if(topTextEl){
+      // If we have a dedicated span, only set its text; otherwise set the container's text.
+      if(topTextEl.id === 'cdTopText') topTextEl.textContent = text;
+      else topTextEl.textContent = text;
+    }
+    if(badgeEl){
+      badgeEl.hidden = !showBadge;
+    }
+  }
+
+  function renderDiff(target){
     const now = new Date();
     let diff = Math.max(0, target - now);
     const sec = Math.floor(diff/1000);
     const days = Math.floor(sec/86400);
-    const hrs = Math.floor((sec%86400)/3600);
+    const hrs  = Math.floor((sec%86400)/3600);
     const mins = Math.floor((sec%3600)/60);
     const secs = sec%60;
     dEl.textContent = pad2(days);
@@ -3106,8 +3150,95 @@ function startHeroCountdown(){
     mEl.textContent = pad2(mins);
     sEl.textContent = pad2(secs);
   }
-  tick();
-  setInterval(tick, 1000);
+
+  function computeState(now, ms){
+    // ms: array of {kickoff:Date, end:Date, dateKey:string}
+    if(!ms || !ms.length){
+      return { kind:'fallback', target:new Date(fallbackISO), top:'UNTIL KICKOFF', badge:false };
+    }
+
+    const first = ms[0];
+    const last  = ms[ms.length - 1];
+
+    if(now < first.kickoff){
+      return { kind:'pre_tournament', target:first.kickoff, top:'UNTIL KICKOFF', badge:false };
+    }
+    if(now >= last.end){
+      // tournament complete
+      return { kind:'complete', target:now, top:'TOURNAMENT COMPLETE', badge:false };
+    }
+
+    const todayKey = isoDayUTC(now);
+    const today = ms.filter(x => x.dateKey === todayKey);
+
+    if(today.length){
+      const firstKick = today[0].kickoff;
+      const lastEnd   = today[today.length-1].end;
+
+      if(now < firstKick){
+        return { kind:'pre_game_day', target:firstKick, top:'UNTIL TODAY\'S FIRST MATCH', badge:false };
+      }
+
+      if(now >= firstKick && now < lastEnd){
+        // GAME DAY: countdown to end-of-day (after all games complete)
+        return { kind:'game_day', target:lastEnd, top:'GAMES IN PROGRESS', badge:true };
+      }
+
+      // Post-day: next day / next match
+      const next = ms.find(x => x.kickoff > now);
+      if(next){
+        return { kind:'post_day', target:next.kickoff, top:'UNTIL NEXT MATCH', badge:false };
+      }
+      return { kind:'fallback', target:new Date(fallbackISO), top:'UNTIL KICKOFF', badge:false };
+    }
+
+    // No games today: count down to the next match kickoff
+    const next = ms.find(x => x.kickoff > now);
+    if(next){
+      return { kind:'between_days', target:next.kickoff, top:'UNTIL NEXT MATCH', badge:false };
+    }
+    return { kind:'fallback', target:new Date(fallbackISO), top:'UNTIL KICKOFF', badge:false };
+  }
+
+  function tick(){
+    const now = new Date();
+    const st = computeState(now, matches);
+    setTop(st.top, st.badge);
+    if(st.kind === 'complete'){
+      // Freeze at 00:00:00:00
+      dEl.textContent = '00'; hEl.textContent = '00'; mEl.textContent = '00'; sEl.textContent = '00';
+      return;
+    }
+    renderDiff(st.target);
+  }
+
+  async function boot(){
+    try{
+      const data = await fetchJSON('/schedule.json');
+      const raw = Array.isArray(data?.matches) ? data.matches : [];
+      const ms = [];
+      for(const m of raw){
+        const kickoff = parseKickoff(m);
+        if(!kickoff) continue;
+
+        // Prefer provided date field; otherwise derive from UTC kickoff.
+        const dateKey = (m.date && /^\d{4}-\d{2}-\d{2}$/.test(m.date)) ? m.date : isoDayUTC(kickoff);
+
+        const end = new Date(kickoff.getTime() + MATCH_DURATION_MIN*60*1000);
+        ms.push({ kickoff, end, dateKey });
+      }
+      ms.sort((a,b)=>a.kickoff-b.kickoff);
+      matches = ms.length ? ms : null;
+    }catch(e){
+      matches = null;
+    }finally{
+      if(timerId) clearInterval(timerId);
+      tick();
+      timerId = setInterval(tick, 1000);
+    }
+  }
+
+  boot();
 }
 
 let scheduleView = 'fixtures';
