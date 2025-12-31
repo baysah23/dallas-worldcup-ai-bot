@@ -90,6 +90,14 @@ def add_no_cache_headers(response):
 # ENV + Config
 # ============================================================
 ADMIN_KEY = os.environ.get("ADMIN_KEY", "")  # required to view /admin
+# Role-based admin keys (Owner vs Manager)
+# - Back-compat: ADMIN_KEY continues to work as the Owner key.
+# - Provide managers a separate key so they can view ops/leads without editing rules/menu.
+ADMIN_OWNER_KEY = (os.environ.get("ADMIN_OWNER_KEY") or ADMIN_KEY or "").strip()
+# Either a single key via ADMIN_MANAGER_KEY, or a comma-separated list via ADMIN_MANAGER_KEYS
+_ADMIN_MANAGER_KEYS_RAW = (os.environ.get("ADMIN_MANAGER_KEYS") or os.environ.get("ADMIN_MANAGER_KEY") or "").strip()
+ADMIN_MANAGER_KEYS = [k.strip() for k in _ADMIN_MANAGER_KEYS_RAW.split(",") if k.strip()]
+
 RATE_LIMIT_PER_MIN = int(os.environ.get("RATE_LIMIT_PER_MIN", "30"))
 
 SHEET_NAME = os.environ.get("GOOGLE_SHEET_NAME", "World Cup AI Reservations")
@@ -180,14 +188,60 @@ try:
 except Exception:
     _MENU_OVERRIDE = None
 
-def _admin_key_ok() -> bool:
-    key = request.args.get("key", "")
-    return bool(ADMIN_KEY) and (key == ADMIN_KEY)
+def _admin_auth() -> Dict[str, str]:
+    """Return admin auth context: {ok, role, actor}.
 
-def _require_admin():
-    if not _admin_key_ok():
+    Auth mechanism stays compatible with your current deployment: ?key=...
+    - If key matches ADMIN_OWNER_KEY => role=owner
+    - If key matches any ADMIN_MANAGER_KEYS => role=manager
+    """
+    key = (request.args.get("key", "") or "").strip()
+    if not key:
+        return {"ok": False, "role": "", "actor": ""}
+
+    role = ""
+    if ADMIN_OWNER_KEY and key == ADMIN_OWNER_KEY:
+        role = "owner"
+    elif ADMIN_MANAGER_KEYS and key in ADMIN_MANAGER_KEYS:
+        role = "manager"
+
+    if not role:
+        return {"ok": False, "role": "", "actor": ""}
+
+    actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+    return {"ok": True, "role": role, "actor": actor}
+
+def _require_admin(min_role: str = "manager"):
+    """Enforce admin access.
+
+    min_role:
+      - "manager": owner or manager
+      - "owner": owner only
+    """
+    ctx = _admin_auth()
+    if not ctx.get("ok"):
         return False, (jsonify({"ok": False, "error": "Unauthorized"}), 401)
+
+    if (min_role or "manager") == "owner" and ctx.get("role") != "owner":
+        return False, (jsonify({"ok": False, "error": "Forbidden"}), 403)
+
+    try:
+        request._admin_ctx = ctx  # type: ignore[attr-defined]
+    except Exception:
+        pass
     return True, None
+
+def _admin_ctx() -> Dict[str, str]:
+    try:
+        ctx = getattr(request, "_admin_ctx", None)
+        if isinstance(ctx, dict):
+            return ctx
+    except Exception:
+        pass
+    ctx = _admin_auth()
+    if isinstance(ctx, dict) and ctx.get("ok"):
+        return ctx
+    return {"ok": False, "role": "", "actor": ""}
 
 def get_menu_for_lang(lang: str) -> Dict[str, Any]:
     """Return menu payload for a given language, using admin override if present."""
@@ -2284,7 +2338,20 @@ def chat():
 
         # Start reservation flow if user indicates intent
         if sess["mode"] == "idle" and want_reservation(msg):
+            ops = get_ops()
+
+            # Match-day ops toggles
+            if ops.get("vip_only") and not re.search(r"\bvip\b", msg.lower()):
+                return jsonify({"reply": "🔒 Reservations are VIP-only right now. If you have VIP access, type **VIP** to continue. Otherwise, I can add you to the waitlist.", "rate_limit_remaining": remaining})
+
+            if ops.get("pause_reservations") and not ops.get("waitlist_mode"):
+                return jsonify({"reply": "⏸️ Reservations are temporarily paused. Please check back soon, or ask a staff member for help.", "rate_limit_remaining": remaining})
+
             sess["mode"] = "reserving"
+
+            # If we are in waitlist mode, capture the same details but save as Waitlist (keeps fan UI unchanged).
+            if ops.get("waitlist_mode"):
+                sess["lead"]["status"] = "Waitlist"
 
             # Mark VIP if user clicked a VIP button or mentions VIP
             if re.search(r"\bvip\b", msg.lower()):
@@ -2338,6 +2405,13 @@ def chat():
             # If complete, save + confirm
             lead = sess["lead"]
             if lead.get("date") and lead.get("time") and lead.get("party_size") and lead.get("name") and lead.get("phone"):
+                ops2 = get_ops()
+                if ops2.get("pause_reservations") and not ops2.get("waitlist_mode"):
+                    sess["mode"] = "idle"
+                    return jsonify({"reply": "⏸️ Reservations were just paused. Please check back soon.", "rate_limit_remaining": remaining})
+                if ops2.get("vip_only") and str(lead.get("vip","No")).strip().lower() != "yes":
+                    sess["mode"] = "idle"
+                    return jsonify({"reply": "🔒 VIP-only is active right now. Type VIP and start again to continue.", "rate_limit_remaining": remaining})
                 try:
                     append_lead_to_sheet(lead)
                     sess["mode"] = "idle"
@@ -2439,6 +2513,27 @@ DATA_DIR = os.environ.get("DATA_DIR", os.path.join("/tmp", "worldcup_app_data"))
 # Store small JSON state in a writable directory (Render slug is read-only)
 os.makedirs(DATA_DIR, exist_ok=True)
 CONFIG_FILE = os.path.join(DATA_DIR, "app_config.json")
+AUDIT_LOG_FILE = os.path.join(DATA_DIR, "audit_log.jsonl")
+
+def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
+    """Append a single-line JSON audit entry (best-effort, non-blocking)."""
+    try:
+        ctx = _admin_ctx()
+        entry = {
+            "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            "event": str(event),
+            "role": ctx.get("role", ""),
+            "actor": ctx.get("actor", ""),
+            "ip": client_ip() if request else "",
+            "path": getattr(request, "path", ""),
+            "details": details or {},
+        }
+        os.makedirs(os.path.dirname(AUDIT_LOG_FILE), exist_ok=True)
+        with open(AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
 
 # -----------------------------
 # Lightweight in-process caches
@@ -2493,6 +2588,9 @@ def get_config() -> Dict[str, str]:
         "motd_away": "",
         "motd_datetime_utc": "",
         "poll_lock_mode": "auto",
+        "ops_pause_reservations": "false",
+        "ops_vip_only": "false",
+        "ops_waitlist_mode": "false",
     }
 
     local = _safe_read_json(CONFIG_FILE)
@@ -2519,6 +2617,29 @@ def get_config() -> Dict[str, str]:
     _CONFIG_CACHE["cfg"] = dict(cfg)
     return cfg
 
+
+
+def _cfg_bool(cfg: Dict[str, Any], key: str, default: bool = False) -> bool:
+    try:
+        v = cfg.get(key)
+        if isinstance(v, bool):
+            return v
+        s = str(v or "").strip().lower()
+        if s in ("1","true","yes","y","on"):
+            return True
+        if s in ("0","false","no","n","off",""):
+            return False
+    except Exception:
+        pass
+    return bool(default)
+
+def get_ops(cfg: Optional[Dict[str, Any]] = None) -> Dict[str, bool]:
+    cfg = cfg or get_config()
+    return {
+        "pause_reservations": _cfg_bool(cfg, "ops_pause_reservations", False),
+        "vip_only": _cfg_bool(cfg, "ops_vip_only", False),
+        "waitlist_mode": _cfg_bool(cfg, "ops_waitlist_mode", False),
+    }
 def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
     """Persist config.
 
@@ -2871,14 +2992,13 @@ def api_poll_vote():
 
 @app.route("/admin/update-config", methods=["POST"])
 def admin_update_config():
-    key = request.args.get("key", "")
-    if not ADMIN_KEY or key != ADMIN_KEY:
-        return jsonify({"ok": False, "error": "Unauthorized"}), 401
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
 
     data = request.get_json(silent=True) or {}
 
     try:
-
         # Allow clearing values by sending empty strings.
         sponsor = (data.get("poll_sponsor_text") if data.get("poll_sponsor_text") is not None else "")
         match_id = (data.get("match_of_day_id") if data.get("match_of_day_id") is not None else "")
@@ -2894,6 +3014,21 @@ def admin_update_config():
 
         poll_lock_mode = (data.get("poll_lock_mode") if data.get("poll_lock_mode") is not None else "auto")
 
+        # Ops toggles (match-day controls)
+        ops_pause = data.get("ops_pause_reservations")
+        ops_vip = data.get("ops_vip_only")
+        ops_wait = data.get("ops_waitlist_mode")
+
+        def _norm_bool(v) -> str:
+            if isinstance(v, bool):
+                return "true" if v else "false"
+            s = str(v or "").strip().lower()
+            if s in ("1","true","yes","y","on"):
+                return "true"
+            if s in ("0","false","no","n","off",""):
+                return "false"
+            return "false"
+
         pairs = {
             "poll_sponsor_text": str(sponsor).strip(),
             "match_of_day_id": match_id_norm,
@@ -2901,9 +3036,13 @@ def admin_update_config():
             "motd_away": str(motd_away).strip(),
             "motd_datetime_utc": str(motd_datetime_utc).strip(),
             "poll_lock_mode": (str(poll_lock_mode).strip() or "auto"),
+            "ops_pause_reservations": _norm_bool(ops_pause),
+            "ops_vip_only": _norm_bool(ops_vip),
+            "ops_waitlist_mode": _norm_bool(ops_wait),
         }
 
         cfg = set_config(pairs)
+        _audit("config.update", {"keys": list(pairs.keys())})
         return jsonify({"ok": True, "config": {
             "poll_sponsor_text": cfg.get("poll_sponsor_text",""),
             "match_of_day_id": cfg.get("match_of_day_id",""),
@@ -2911,116 +3050,25 @@ def admin_update_config():
             "motd_away": cfg.get("motd_away",""),
             "motd_datetime_utc": cfg.get("motd_datetime_utc",""),
             "poll_lock_mode": cfg.get("poll_lock_mode","auto"),
+            "ops_pause_reservations": cfg.get("ops_pause_reservations","false"),
+            "ops_vip_only": cfg.get("ops_vip_only","false"),
+            "ops_waitlist_mode": cfg.get("ops_waitlist_mode","false"),
         }})
-
-
-
-
     except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-# ============================================================
-# Admin API: Business Rules + Menu Manager (Steps 1–3)
-# ============================================================
-
-def _coerce_rules(payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Validate and normalize business rules payload."""
-    out: Dict[str, Any] = {}
-
-    # max_party_size
-    if "max_party_size" in payload:
-        try:
-            out["max_party_size"] = int(payload.get("max_party_size") or 0) or BUSINESS_RULES.get("max_party_size", 12)
-        except Exception:
-            out["max_party_size"] = BUSINESS_RULES.get("max_party_size", 12)
-
-    # match_day_banner
-    if "match_day_banner" in payload:
-        out["match_day_banner"] = str(payload.get("match_day_banner") or "").strip()
-
-    # closed_dates: allow list or newline/comma separated string
-    if "closed_dates" in payload:
-        cd = payload.get("closed_dates")
-        dates: List[str] = []
-        if isinstance(cd, list):
-            dates = [str(x).strip() for x in cd if str(x).strip()]
-        elif isinstance(cd, str):
-            raw = re.split(r"[\n,]+", cd)
-            dates = [x.strip() for x in raw if x.strip()]
-        # Keep only YYYY-MM-DD-ish
-        dates2 = []
-        for d in dates:
-            if re.match(r"^20\d{2}-\d{2}-\d{2}$", d):
-                dates2.append(d)
-        out["closed_dates"] = sorted(list(dict.fromkeys(dates2)))
-
-    # hours: dict of mon..sun -> 'HH:MM-HH:MM'
-    if "hours" in payload:
-        hrs = payload.get("hours")
-        if isinstance(hrs, dict):
-            ok = {}
-            for k, v in hrs.items():
-                dk = (k or "").lower().strip()[:3]
-                if dk in ["mon","tue","wed","thu","fri","sat","sun"]:
-                    sv = str(v or "").strip()
-                    if re.match(r"^\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}$", sv):
-                        ok[dk] = sv.replace(" ", "")
-            if ok:
-                out["hours"] = _deep_merge(BUSINESS_RULES.get("hours", {}), ok)
-
-    return out
-
-def _persist_rules(updated: Dict[str, Any]) -> None:
-    payload = _deep_merge(BUSINESS_RULES, updated)
-    _safe_write_json_file(BUSINESS_RULES_FILE, payload)
-
-def _normalize_menu_payload(payload: Any) -> Dict[str, Any]:
-    """Validate menu payload. Expected: {lang: {title, items:[...]}}"""
-    if not isinstance(payload, dict):
-        raise ValueError("Menu payload must be a JSON object")
-    out: Dict[str, Any] = {}
-
-    for lang in SUPPORTED_LANGS:
-        if lang not in payload:
-            continue
-        block = payload.get(lang)
-        if not isinstance(block, dict):
-            continue
-        title = str(block.get("title") or MENU.get(lang, {}).get("title") or "Menu").strip()
-        items = block.get("items")
-        if not isinstance(items, list):
-            continue
-        norm_items = []
-        for it in items:
-            if not isinstance(it, dict):
-                continue
-            name = str(it.get("name") or "").strip()
-            price = str(it.get("price") or "").strip()
-            desc = str(it.get("desc") or "").strip()
-            tag = str(it.get("tag") or "").strip()
-            category_id = str(it.get("category_id") or "").strip()
-            if not name:
-                continue
-            norm_items.append({
-                "category_id": category_id or "items",
-                "name": name,
-                "price": price,
-                "desc": desc,
-                "tag": tag,
-            })
-        if norm_items:
-            out[lang] = {"title": title, "items": norm_items}
-
-    if not out:
-        raise ValueError("Menu payload did not contain any valid language blocks with items")
-    return out
+        return jsonify({"ok": False, "error": str(e)}), 400
 
 @app.route("/admin/api/rules", methods=["GET","POST"])
 def admin_api_rules():
-    ok, resp = _require_admin()
+    ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
+
+
+    # Managers can view; only Owners can modify.
+    if request.method != "GET":
+        ok2, resp2 = _require_admin(min_role="owner")
+        if not ok2:
+            return resp2
 
     global BUSINESS_RULES
     if request.method == "GET":
@@ -3034,13 +3082,21 @@ def admin_api_rules():
     # Update in-memory + persist
     BUSINESS_RULES = _deep_merge(BUSINESS_RULES, updated)
     _persist_rules(updated)
+    _audit("rules.update", {"keys": list(updated.keys())})
     return jsonify({"ok": True, "rules": BUSINESS_RULES})
 
 @app.route("/admin/api/menu", methods=["GET","POST"])
 def admin_api_menu():
-    ok, resp = _require_admin()
+    ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
+
+
+    # Managers can view; only Owners can modify.
+    if request.method != "GET":
+        ok2, resp2 = _require_admin(min_role="owner")
+        if not ok2:
+            return resp2
 
     global _MENU_OVERRIDE
     if request.method == "GET":
@@ -3057,11 +3113,12 @@ def admin_api_menu():
 
     _MENU_OVERRIDE = normed
     _safe_write_json_file(MENU_FILE, _MENU_OVERRIDE)
+    _audit("menu.update", {"langs": list(_MENU_OVERRIDE.keys())})
     return jsonify({"ok": True, "menu": _MENU_OVERRIDE})
 
 @app.route("/admin/api/menu-upload", methods=["POST"])
 def admin_api_menu_upload():
-    ok, resp = _require_admin()
+    ok, resp = _require_admin(min_role="owner")
     if not ok:
         return resp
 
@@ -3079,14 +3136,74 @@ def admin_api_menu_upload():
 
     _MENU_OVERRIDE = normed
     _safe_write_json_file(MENU_FILE, _MENU_OVERRIDE)
+    _audit("menu.upload", {"size_bytes": len(raw)})
     return jsonify({"ok": True, "menu": _MENU_OVERRIDE})
 
 
+
+@app.route("/admin/api/ops", methods=["GET", "POST"])
+def admin_api_ops():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    if request.method == "GET":
+        cfg = get_config()
+        return jsonify({"ok": True, "ops": get_ops(cfg)})
+
+    data = request.get_json(silent=True) or {}
+    def _norm_bool(v) -> str:
+        if isinstance(v, bool):
+            return "true" if v else "false"
+        s = str(v or "").strip().lower()
+        if s in ("1","true","yes","y","on"):
+            return "true"
+        if s in ("0","false","no","n","off",""):
+            return "false"
+        return "false"
+
+    pairs = {
+        "ops_pause_reservations": _norm_bool(data.get("pause_reservations")),
+        "ops_vip_only": _norm_bool(data.get("vip_only")),
+        "ops_waitlist_mode": _norm_bool(data.get("waitlist_mode")),
+    }
+    cfg = set_config(pairs)
+    _audit("ops.update", {"ops": get_ops(cfg)})
+    return jsonify({"ok": True, "ops": get_ops(cfg)})
+
+
+@app.route("/admin/api/audit", methods=["GET"])
+def admin_api_audit():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    try:
+        limit = int(request.args.get("limit", "200") or 200)
+        limit = max(1, min(limit, 1000))
+    except Exception:
+        limit = 200
+    entries: List[Dict[str, Any]] = []
+    try:
+        if os.path.exists(AUDIT_LOG_FILE):
+            with open(AUDIT_LOG_FILE, "r", encoding="utf-8") as f:
+                lines = f.readlines()[-limit:]
+            for ln in lines:
+                ln = (ln or "").strip()
+                if not ln:
+                    continue
+                try:
+                    entries.append(json.loads(ln))
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return jsonify({"ok": True, "entries": entries})
+
 @app.route("/admin/update-lead", methods=["POST"])
 def admin_update_lead():
-    key = request.args.get("key", "")
-    if not ADMIN_KEY or key != ADMIN_KEY:
-        return jsonify({"ok": False, "error": "Unauthorized"}), 401
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
 
     data = request.get_json(silent=True) or {}
     row_num = int(data.get("row") or 0)
@@ -3127,13 +3244,14 @@ def admin_update_lead():
             ws.update_cell(row_num, col, vip)
             updates += 1
 
+    _audit("lead.update", {"row": row_num})
     return jsonify({"ok": True, "updated": updates})
 
 
 @app.route("/admin/export.csv")
 def admin_export_csv():
-    key = request.args.get("key", "")
-    if not ADMIN_KEY or key != ADMIN_KEY:
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
         return "Unauthorized", 401
 
     gc = get_gspread_client()
@@ -3169,8 +3287,8 @@ def admin():
     - Rules config persists to BUSINESS_RULES_FILE
     - Menu upload persists to MENU_FILE and updates /menu.json (fan UI unchanged)
     """
-    key = request.args.get("key", "")
-    if not ADMIN_KEY or key != ADMIN_KEY:
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
         return "Unauthorized", 401
 
     # Leads (best-effort)
@@ -3284,8 +3402,10 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     html.append(r"""
 <div class="tabs">
   <button class="tabbtn active" data-tab="leads">Leads</button>
+  <button class="tabbtn" data-tab="ops">Ops</button>
   <button class="tabbtn" data-tab="rules">Rules</button>
   <button class="tabbtn" data-tab="menu">Menu</button>
+  <button class="tabbtn" data-tab="audit">Audit</button>
 </div>
 
 <div id="tab-leads" class="tabpane">
@@ -3549,8 +3669,8 @@ async function uploadMenu(){{
 
 @app.route("/admin/fanzone")
 def admin_fanzone():
-    key = request.args.get("key", "")
-    if not ADMIN_KEY or key != ADMIN_KEY:
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
         return "Unauthorized", 401
 
     html = []
@@ -3646,7 +3766,48 @@ tr:hover td{background:rgba(255,255,255,.03)}
   <div id="pollStatus" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
     <div class="sub">Loading poll status…</div>
   </div>
+
+</div> <!-- end tab-menu -->
+
+<div id="tab-ops" class="tabpane hidden">
+  <div class="card">
+    <div class="h2">Match-Day Ops Toggles</div>
+    <div class="small">These controls change behavior immediately in the chat reservation flow (fan UI untouched).</div>
+    <div style="margin-top:10px" class="row">
+      <label style="display:flex;gap:10px;align-items:center">
+        <input id="ops-pause" type="checkbox"/>
+        <span><b>Pause Reservations</b> — blocks new reservations</span>
+      </label>
+    </div>
+    <div style="margin-top:10px" class="row">
+      <label style="display:flex;gap:10px;align-items:center">
+        <input id="ops-vip" type="checkbox"/>
+        <span><b>VIP-only</b> — require VIP keyword to proceed</span>
+      </label>
+    </div>
+    <div style="margin-top:10px" class="row">
+      <label style="display:flex;gap:10px;align-items:center">
+        <input id="ops-wait" type="checkbox"/>
+        <span><b>Waitlist Mode</b> — saves captures as Status=Waitlist</span>
+      </label>
+    </div>
+    <button id="btnSaveOps" class="btn" style="margin-top:12px">Save ops toggles</button>
+    <div id="ops-status" class="small" style="margin-top:10px;opacity:.9"></div>
+  </div>
 </div>
+
+<div id="tab-audit" class="tabpane hidden">
+  <div class="card">
+    <div class="h2">Audit Log</div>
+    <div class="small">Shows who changed rules/menu/ops and when.</div>
+    <div style="margin-top:10px" class="row">
+      <input id="audit-limit" class="inp" style="max-width:140px" value="200"/>
+      <button id="btnLoadAudit" class="btn">Refresh</button>
+    </div>
+    <pre id="audit-out" style="white-space:pre-wrap; font-size:12px; margin-top:12px; background:rgba(0,0,0,.25); padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,.12); max-height:44vh; overflow:auto;"></pre>
+  </div>
+</div>
+
 <script>
 (function(){
   const ADMIN_KEY = (new URLSearchParams(location.search)).get("key") || "";
@@ -3824,9 +3985,78 @@ tr:hover td{background:rgba(255,255,255,.03)}
     }
   }
 
+
+  async function loadOps(){
+    try{
+      const r = await fetch("/admin/api/ops?key="+__ADMIN_KEY__, {cache:"no-store"});
+      const out = await r.json();
+      if(out && out.ok && out.ops){
+        $("ops-pause").checked = !!out.ops.pause_reservations;
+        $("ops-vip").checked   = !!out.ops.vip_only;
+        $("ops-wait").checked  = !!out.ops.waitlist_mode;
+        $("ops-status").textContent = "Loaded.";
+      } else {
+        $("ops-status").textContent = "Failed to load ops.";
+      }
+    }catch(e){
+      $("ops-status").textContent = "Failed to load ops.";
+    }
+  }
+  async function saveOps(){
+    try{
+      const btn = $("btnSaveOps");
+      if(btn){ btn.disabled = true; btn.textContent = "Saving..."; }
+      const body = {
+        pause_reservations: $("ops-pause").checked,
+        vip_only: $("ops-vip").checked,
+        waitlist_mode: $("ops-wait").checked,
+      };
+      const r = await fetch("/admin/api/ops?key="+__ADMIN_KEY__, {
+        method:"POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify(body),
+      });
+      const out = await r.json();
+      if(out && out.ok){
+        $("ops-status").textContent = "Saved.";
+        await loadOps();
+      } else {
+        $("ops-status").textContent = "Save failed: " + (out.error||"unknown");
+      }
+    }catch(e){
+      $("ops-status").textContent = "Save failed.";
+    }finally{
+      const btn = $("btnSaveOps");
+      if(btn){ btn.disabled = false; btn.textContent = "Save ops toggles"; }
+    }
+  }
+  $("btnSaveOps")?.addEventListener("click", saveOps);
+
+  async function loadAudit(){
+    try{
+      const limit = parseInt(($("audit-limit").value||"200"),10) || 200;
+      const r = await fetch("/admin/api/audit?key="+__ADMIN_KEY__+"&limit="+encodeURIComponent(limit), {cache:"no-store"});
+      const out = await r.json();
+      if(out && out.ok && Array.isArray(out.entries)){
+        const lines = out.entries.map(e => {
+          const who = (e.role? e.role.toUpperCase():"") + (e.actor? "("+e.actor+")":"");
+          return `[${e.ts||""}] ${who} ${e.event||""} ${(e.path||"")}\n  ${JSON.stringify(e.details||{})}`;
+        }).join("\n\n");
+        $("audit-out").textContent = lines || "(empty)";
+      } else {
+        $("audit-out").textContent = "Failed to load audit.";
+      }
+    }catch(e){
+      $("audit-out").textContent = "Failed to load audit.";
+    }
+  }
+  $("btnLoadAudit")?.addEventListener("click", loadAudit);
+
   $("btnSaveConfig")?.addEventListener("click", saveConfig);
 
   loadConfig().then(loadPoll);
+  loadOps();
+  loadAudit();
   setInterval(loadPoll, 5000);
 })();
 </script>
