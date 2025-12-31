@@ -2406,6 +2406,12 @@ def chat():
             lead = sess["lead"]
             if lead.get("date") and lead.get("time") and lead.get("party_size") and lead.get("name") and lead.get("phone"):
                 ops2 = get_ops()
+                # If waitlist is enabled, tag the reservation as Waitlist (still saved to the same sheet).
+                if ops2.get("waitlist_mode"):
+                    lead["status"] = (lead.get("status") or "Waitlist").strip() or "Waitlist"
+                    if lead["status"].lower() == "new":
+                        lead["status"] = "Waitlist"
+
                 if ops2.get("pause_reservations") and not ops2.get("waitlist_mode"):
                     sess["mode"] = "idle"
                     return jsonify({"reply": "⏸️ Reservations were just paused. Please check back soon.", "rate_limit_remaining": remaining})
@@ -2415,7 +2421,7 @@ def chat():
                 try:
                     append_lead_to_sheet(lead)
                     sess["mode"] = "idle"
-                    saved_msg = LANG[lang]["saved"]
+                    saved_msg = ("✅ Added to waitlist!" if str(lead.get("status","")).strip().lower() == "waitlist" else LANG[lang]["saved"])
                     confirm = (
                         f"{saved_msg}\n"
                         f"Name: {lead['name']}\n"
