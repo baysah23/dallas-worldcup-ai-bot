@@ -138,6 +138,68 @@ BUSINESS_RULES = {
     "match_day_banner": "🏟️ Match-day mode: Opening at 11am on match days!",
 }
 
+
+# ============================================================
+# Admin-persisted overrides (Rules + Menu)
+# ============================================================
+BUSINESS_RULES_FILE = os.environ.get("BUSINESS_RULES_FILE", "/tmp/wc26_business_rules.json")
+MENU_FILE = os.environ.get("MENU_FILE", "/tmp/wc26_menu_override.json")
+
+def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+    """Shallow+deep merge for dicts (override wins)."""
+    out = dict(base or {})
+    for k, v in (override or {}).items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _deep_merge(out.get(k) or {}, v)
+        else:
+            out[k] = v
+    return out
+
+def _load_rules_from_disk() -> None:
+    global BUSINESS_RULES
+    payload = _safe_read_json_file(BUSINESS_RULES_FILE)
+    if isinstance(payload, dict) and payload:
+        # Merge on top of defaults so missing keys don't break anything.
+        BUSINESS_RULES = _deep_merge(BUSINESS_RULES, payload)
+
+def _load_menu_from_disk() -> Optional[Dict[str, Any]]:
+    payload = _safe_read_json_file(MENU_FILE)
+    if isinstance(payload, dict) and payload:
+        return payload
+    return None
+
+# Load persisted overrides at boot (best effort)
+try:
+    _load_rules_from_disk()
+except Exception:
+    pass
+
+_MENU_OVERRIDE: Optional[Dict[str, Any]] = None
+try:
+    _MENU_OVERRIDE = _load_menu_from_disk()
+except Exception:
+    _MENU_OVERRIDE = None
+
+def _admin_key_ok() -> bool:
+    key = request.args.get("key", "")
+    return bool(ADMIN_KEY) and (key == ADMIN_KEY)
+
+def _require_admin():
+    if not _admin_key_ok():
+        return False, (jsonify({"ok": False, "error": "Unauthorized"}), 401)
+    return True, None
+
+def get_menu_for_lang(lang: str) -> Dict[str, Any]:
+    """Return menu payload for a given language, using admin override if present."""
+    global _MENU_OVERRIDE
+    lang = norm_lang(lang)
+    if isinstance(_MENU_OVERRIDE, dict):
+        m = _MENU_OVERRIDE.get(lang)
+        if isinstance(m, dict) and m.get("items"):
+            return m
+    return MENU[lang]
+
+
 # ============================================================
 # World Cup 2026 schedule data
 # - We load ALL matches from a public JSON feed (no API key).
@@ -1365,7 +1427,7 @@ def health():
 @app.route("/menu.json")
 def menu_json():
     lang = norm_lang(request.args.get("lang", "en"))
-    return jsonify({"lang": lang, "menu": MENU[lang]})
+    return jsonify({"lang": lang, "menu": get_menu_for_lang(lang)})
 
 
 
@@ -2857,6 +2919,169 @@ def admin_update_config():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+
+# ============================================================
+# Admin API: Business Rules + Menu Manager (Steps 1–3)
+# ============================================================
+
+def _coerce_rules(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate and normalize business rules payload."""
+    out: Dict[str, Any] = {}
+
+    # max_party_size
+    if "max_party_size" in payload:
+        try:
+            out["max_party_size"] = int(payload.get("max_party_size") or 0) or BUSINESS_RULES.get("max_party_size", 12)
+        except Exception:
+            out["max_party_size"] = BUSINESS_RULES.get("max_party_size", 12)
+
+    # match_day_banner
+    if "match_day_banner" in payload:
+        out["match_day_banner"] = str(payload.get("match_day_banner") or "").strip()
+
+    # closed_dates: allow list or newline/comma separated string
+    if "closed_dates" in payload:
+        cd = payload.get("closed_dates")
+        dates: List[str] = []
+        if isinstance(cd, list):
+            dates = [str(x).strip() for x in cd if str(x).strip()]
+        elif isinstance(cd, str):
+            raw = re.split(r"[\n,]+", cd)
+            dates = [x.strip() for x in raw if x.strip()]
+        # Keep only YYYY-MM-DD-ish
+        dates2 = []
+        for d in dates:
+            if re.match(r"^20\d{2}-\d{2}-\d{2}$", d):
+                dates2.append(d)
+        out["closed_dates"] = sorted(list(dict.fromkeys(dates2)))
+
+    # hours: dict of mon..sun -> 'HH:MM-HH:MM'
+    if "hours" in payload:
+        hrs = payload.get("hours")
+        if isinstance(hrs, dict):
+            ok = {}
+            for k, v in hrs.items():
+                dk = (k or "").lower().strip()[:3]
+                if dk in ["mon","tue","wed","thu","fri","sat","sun"]:
+                    sv = str(v or "").strip()
+                    if re.match(r"^\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}$", sv):
+                        ok[dk] = sv.replace(" ", "")
+            if ok:
+                out["hours"] = _deep_merge(BUSINESS_RULES.get("hours", {}), ok)
+
+    return out
+
+def _persist_rules(updated: Dict[str, Any]) -> None:
+    payload = _deep_merge(BUSINESS_RULES, updated)
+    _safe_write_json_file(BUSINESS_RULES_FILE, payload)
+
+def _normalize_menu_payload(payload: Any) -> Dict[str, Any]:
+    """Validate menu payload. Expected: {lang: {title, items:[...]}}"""
+    if not isinstance(payload, dict):
+        raise ValueError("Menu payload must be a JSON object")
+    out: Dict[str, Any] = {}
+
+    for lang in SUPPORTED_LANGS:
+        if lang not in payload:
+            continue
+        block = payload.get(lang)
+        if not isinstance(block, dict):
+            continue
+        title = str(block.get("title") or MENU.get(lang, {}).get("title") or "Menu").strip()
+        items = block.get("items")
+        if not isinstance(items, list):
+            continue
+        norm_items = []
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            name = str(it.get("name") or "").strip()
+            price = str(it.get("price") or "").strip()
+            desc = str(it.get("desc") or "").strip()
+            tag = str(it.get("tag") or "").strip()
+            category_id = str(it.get("category_id") or "").strip()
+            if not name:
+                continue
+            norm_items.append({
+                "category_id": category_id or "items",
+                "name": name,
+                "price": price,
+                "desc": desc,
+                "tag": tag,
+            })
+        if norm_items:
+            out[lang] = {"title": title, "items": norm_items}
+
+    if not out:
+        raise ValueError("Menu payload did not contain any valid language blocks with items")
+    return out
+
+@app.route("/admin/api/rules", methods=["GET","POST"])
+def admin_api_rules():
+    ok, resp = _require_admin()
+    if not ok:
+        return resp
+
+    global BUSINESS_RULES
+    if request.method == "GET":
+        return jsonify({"ok": True, "rules": BUSINESS_RULES})
+
+    payload = request.get_json(silent=True) or {}
+    updated = _coerce_rules(payload)
+    if not updated:
+        return jsonify({"ok": False, "error": "No valid rule fields provided"}), 400
+
+    # Update in-memory + persist
+    BUSINESS_RULES = _deep_merge(BUSINESS_RULES, updated)
+    _persist_rules(updated)
+    return jsonify({"ok": True, "rules": BUSINESS_RULES})
+
+@app.route("/admin/api/menu", methods=["GET","POST"])
+def admin_api_menu():
+    ok, resp = _require_admin()
+    if not ok:
+        return resp
+
+    global _MENU_OVERRIDE
+    if request.method == "GET":
+        return jsonify({"ok": True, "menu": _MENU_OVERRIDE or MENU})
+
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return jsonify({"ok": False, "error": "Expected JSON body"}), 400
+
+    try:
+        normed = _normalize_menu_payload(payload)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+    _MENU_OVERRIDE = normed
+    _safe_write_json_file(MENU_FILE, _MENU_OVERRIDE)
+    return jsonify({"ok": True, "menu": _MENU_OVERRIDE})
+
+@app.route("/admin/api/menu-upload", methods=["POST"])
+def admin_api_menu_upload():
+    ok, resp = _require_admin()
+    if not ok:
+        return resp
+
+    global _MENU_OVERRIDE
+    if "file" not in request.files:
+        return jsonify({"ok": False, "error": "Missing file field 'file'"}), 400
+
+    f = request.files["file"]
+    raw = f.read()
+    try:
+        payload = json.loads(raw.decode("utf-8", errors="strict"))
+        normed = _normalize_menu_payload(payload)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Invalid menu file: {e}"}), 400
+
+    _MENU_OVERRIDE = normed
+    _safe_write_json_file(MENU_FILE, _MENU_OVERRIDE)
+    return jsonify({"ok": True, "menu": _MENU_OVERRIDE})
+
+
 @app.route("/admin/update-lead", methods=["POST"])
 def admin_update_lead():
     key = request.args.get("key", "")
@@ -2938,26 +3163,34 @@ def admin_export_csv():
 
 @app.route("/admin")
 def admin():
+    """
+    Admin Dashboard v1 (Steps 1–3)
+    - Tabs: Leads | Rules | Menu
+    - Rules config persists to BUSINESS_RULES_FILE
+    - Menu upload persists to MENU_FILE and updates /menu.json (fan UI unchanged)
+    """
     key = request.args.get("key", "")
     if not ADMIN_KEY or key != ADMIN_KEY:
         return "Unauthorized", 401
 
+    # Leads (best-effort)
+    rows = []
+    leads_err = None
     try:
-        rows = read_leads(limit=600)
+        rows = read_leads(limit=600) or []
     except Exception as e:
-        return f"Error reading leads: {repr(e)}", 500
+        leads_err = repr(e)
+        rows = []
 
-    if not rows:
-        return "<h2>No leads yet.</h2>"
+    header = rows[0] if rows else []
+    body = rows[1:] if len(rows) > 1 else []
 
-    header = rows[0]
-    body = rows[1:]
-
-    # Build header indices (best effort even if header labels differ)
-    hnorm = [_normalize_header(h) for h in header]
     def idx(name: str) -> int:
-        n = _normalize_header(name)
-        return hnorm.index(n) if n in hnorm else -1
+        name = _normalize_header(name)
+        for i, h in enumerate(header):
+            if _normalize_header(h) == name:
+                return i
+        return -1
 
     i_ts = idx("timestamp")
     i_name = idx("name")
@@ -2969,246 +3202,349 @@ def admin():
     i_status = idx("status")
     i_vip = idx("vip")
 
-    # Metrics
     def colval(r, i, default=""):
         return (r[i] if 0 <= i < len(r) else default).strip() if isinstance(r, list) else default
 
+    # Metrics
     status_counts = {"New": 0, "Confirmed": 0, "Seated": 0, "No-Show": 0}
     vip_count = 0
     for r in body:
         s = colval(r, i_status, "New") or "New"
-        if s not in status_counts:
-            status_counts[s] = 0
-        status_counts[s] += 1
+        status_counts[s] = status_counts.get(s, 0) + 1
         if colval(r, i_vip, "No").lower() in ["yes", "true", "1", "y"]:
             vip_count += 1
 
-    # Render newest first but keep correct sheet row numbers
-    # body is oldest->newest, sheet rows start at 2
+    # Render newest first but keep correct sheet row numbers (row 1 header, leads start at 2)
     numbered = [(i + 2, r) for i, r in enumerate(body)]
     numbered = list(reversed(numbered))
 
+    admin_key_q = f"?key={key}"
+
     html = []
-    html.append("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'/>")
-    html.append("<title>Leads Admin</title>")
-    html.append("""
+    html.append("<!doctype html><html><head><meta charset='utf-8'>")
+    html.append("<meta name='viewport' content='width=device-width, initial-scale=1'/>")
+    html.append("<title>Admin Dashboard</title>")
+    html.append(r"""
 <style>
 :root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
-body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(1200px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);color:var(--text);}
+body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(900px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);color:var(--text);}
 .wrap{max-width:1200px;margin:0 auto;padding:18px;}
-.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
+.topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;}
 .h1{font-size:18px;font-weight:800;letter-spacing:.3px}
-.sub{color:var(--muted);font-size:12px}
-.pills{display:flex;gap:8px;flex-wrap:wrap}
+.sub{color:var(--muted);font-size:12px;margin-top:4px}
+.pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .pill{border:1px solid var(--line);background:rgba(255,255,255,.03);padding:8px 10px;border-radius:999px;font-size:12px}
 .pill b{color:var(--gold)}
-.controls{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
-.inp, select{background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px 10px;font-size:12px;outline:none}
-select option{background:rgba(15,27,51,1);color:var(--text)}
-select option:hover{background:rgba(255,255,255,.12)}
-.btn{cursor:pointer;background:linear-gradient(180deg, rgba(212,175,55,.18), rgba(212,175,55,.06));border:1px solid rgba(212,175,55,.35);color:var(--text);border-radius:12px;padding:9px 12px;font-size:12px}
-.btn:active{transform:translateY(1px)}
-.tablewrap{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:rgba(255,255,255,.03);box-shadow:0 10px 35px rgba(0,0,0,.35)}
-table{border-collapse:collapse;width:100%}
-thead th{position:sticky;top:0;background:rgba(10,16,34,.95);backdrop-filter: blur(6px);z-index:2}
-th,td{border-bottom:1px solid var(--line);padding:10px 10px;font-size:12px;vertical-align:top}
-th{color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:11px}
-tr:hover td{background:rgba(255,255,255,.03)}
-.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:11px}
-.badge.vip{border-color:rgba(212,175,55,.5);box-shadow:0 0 0 1px rgba(212,175,55,.18) inset}
-.dot{width:7px;height:7px;border-radius:999px;background:var(--muted);display:inline-block}
-.dot.new{background:var(--warn)}
-.dot.confirmed{background:var(--good)}
-.dot.seated{background:#7aa7ff}
-.dot.noshow{background:var(--bad)}
-.small{font-size:11px;color:var(--muted)}
-.right{text-align:right}
-.tel{color:var(--text);text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
-.toast{position:fixed;right:14px;bottom:14px;background:rgba(0,0,0,.55);border:1px solid var(--line);padding:10px 12px;border-radius:12px;font-size:12px;display:none}
+.tabs{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
+.tabbtn{border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);padding:10px 12px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer}
+.tabbtn.active{border-color:rgba(212,175,55,.6);box-shadow:0 0 0 1px rgba(212,175,55,.25) inset}
+.card{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:14px;padding:12px 12px;margin:10px 0}
+.h2{font-size:14px;font-weight:800;margin:0 0 8px}
+.small{font-size:12px;color:var(--muted)}
+.tablewrap{overflow:auto;border-radius:12px;border:1px solid var(--line)}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.08);vertical-align:top}
+th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
+.badge{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.03);font-size:11px}
+.badge.good{border-color:rgba(46,160,67,.35)}
+.badge.warn{border-color:rgba(255,204,102,.35)}
+.badge.bad{border-color:rgba(255,93,93,.35)}
+.inp,textarea,select{width:100%;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--text);padding:10px;border-radius:12px;font-size:13px;outline:none}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:900px){.row{grid-template-columns:1fr}}
+.btn{border:1px solid rgba(212,175,55,.45);background:rgba(212,175,55,.12);color:var(--text);padding:10px 12px;border-radius:12px;font-size:13px;font-weight:800;cursor:pointer}
+.btn2{border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);padding:10px 12px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer}
+.note{margin-top:8px;font-size:12px;color:var(--muted)}
+.hidden{display:none}
+.code{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-size:12px}
 </style>
 """)
-
     html.append("</head><body><div class='wrap'>")
+
     html.append("<div class='topbar'>")
-    html.append(f"<div><div class='h1'>Leads Admin — {_hesc(SHEET_NAME)}</div><div class='sub'>Rows shown: {len(body)} • Key required • CRM-lite</div></div>")
+    html.append("<div>")
+    html.append("<div class='h1'>Admin Dashboard v1</div>")
+    html.append("<div class='sub'>Tabs + Rules Config + Menu Upload (fan UI unchanged)</div>")
     html.append("<div class='pills'>")
-    html.append(f"<div class='pill'><b>VIP</b> {vip_count}</div>")
-    html.append(f"<div class='pill'><b>New</b> {status_counts.get('New',0)}</div>")
-    html.append(f"<div class='pill'><b>Confirmed</b> {status_counts.get('Confirmed',0)}</div>")
-    html.append(f"<div class='pill'><b>Seated</b> {status_counts.get('Seated',0)}</div>")
-    html.append(f"<div class='pill'><b>No‑Show</b> {status_counts.get('No-Show',0)}</div>")
-    html.append("</div></div>")
-
-    html.append("<div class='controls'>")
-    html.append("<input class='inp' id='q' placeholder='Search name / phone / date / notes...' style='min-width:260px'/>")
-    html.append("""
-<select id="fStatus">
-  <option value="">All Status</option>
-  <option>New</option>
-  <option>Confirmed</option>
-  <option>Seated</option>
-  <option>No-Show</option>
-</select>
-<label class="small" style="display:flex;align-items:center;gap:6px">
-  <input type="checkbox" id="fVip"/> VIP only
-</label>
-""")
-    html.append(f"<a class='btn' href='/admin/export.csv?key={_hesc(key)}'>Export CSV</a>")
-    html.append(f"<button class='btn' onclick='location.reload()'>Refresh</button>")
+    html.append(f"<span class='pill'><b>Leads</b> {len(body)}</span>")
+    html.append(f"<span class='pill'><b>VIP</b> {vip_count}</span>")
+    for k, v in status_counts.items():
+        html.append(f"<span class='pill'><b>{k}</b> {v}</span>")
     html.append("</div>")
-    html.append(f"<div style=\"display:flex;gap:8px;margin:10px 0 14px 0;flex-wrap:wrap;\"><a href=\"/admin?key={key}\" style=\"text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);font-weight:800\">Leads</a><a href=\"/admin/fanzone?key={key}\" style=\"text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid rgba(212,175,55,.35);border-radius:999px;background:rgba(212,175,55,.10);font-weight:900\">Fan Zone</a></div>")
+    html.append("</div>")
+    html.append("<div style='text-align:right'>")
+    html.append(f"<div class='small'>Admin key: <span class='code'>••••••</span></div>")
+    html.append(f"<div style='margin-top:8px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap'>"
+                f"<a class='btn2' style='text-decoration:none' href='/admin/export.csv{admin_key_q}'>Export CSV</a>"
+                f"<a class='btn2' style='text-decoration:none' href='/admin/fanzone{admin_key_q}'>Fan Zone</a>"
+                f"</div>")
+    html.append("</div>")
+    html.append("</div>")  # topbar
 
-    # Fan Zone controls moved to /admin/fanzone
+    html.append(r"""
+<div class="tabs">
+  <button class="tabbtn active" data-tab="leads">Leads</button>
+  <button class="tabbtn" data-tab="rules">Rules</button>
+  <button class="tabbtn" data-tab="menu">Menu</button>
+</div>
 
-
-    html.append("<div class='tablewrap'><table id='tbl'><thead><tr>")
-    # Show a clean set of columns (not every raw column), but keep the raw order if indices missing
-    cols = [
-        ("Timestamp", i_ts),
-        ("Name", i_name),
-        ("Phone", i_phone),
-        ("Date", i_date),
-        ("Time", i_time),
-        ("Party", i_party),
-        ("Lang", i_lang),
-        ("Status", i_status),
-        ("VIP", i_vip),
-        ("Actions", -999),
-    ]
-    for label, _ in cols:
-        html.append(f"<th>{_hesc(label)}</th>")
-    html.append("</tr></thead><tbody>")
-
-    def status_dot(s: str) -> str:
-        s2 = (s or "").lower()
-        if s2 == "confirmed": return "confirmed"
-        if s2 == "seated": return "seated"
-        if s2 in ["no-show", "noshow", "no_show"]: return "noshow"
-        return "new"
-
-    for row_num, r in numbered:
-        name = colval(r, i_name)
-        phone = colval(r, i_phone)
-        d = colval(r, i_date)
-        t = colval(r, i_time)
-        ps = colval(r, i_party)
-        lang = colval(r, i_lang)
-        status = colval(r, i_status, "New") or "New"
-        vip = colval(r, i_vip, "No") or "No"
-        ts = colval(r, i_ts)
-
-        is_vip = vip.lower() in ["yes", "true", "1", "y"]
-        badge = f"<span class='badge{' vip' if is_vip else ''}'><span class='dot {status_dot(status)}'></span>{_hesc(status)}{' • VIP' if is_vip else ''}</span>"
-
-        html.append(f"<tr data-row='{row_num}' data-status='{_hesc(status)}' data-vip='{ '1' if is_vip else '0' }'>")
-        html.append(f"<td class='small'>{_hesc(ts)}</td>")
-        html.append(f"<td><b>{_hesc(name)}</b></td>")
-        html.append(f"<td><a class='tel' href='tel:{_hesc(phone)}'>{_hesc(phone)}</a></td>")
-        html.append(f"<td>{_hesc(d)}</td>")
-        html.append(f"<td>{_hesc(t)}</td>")
-        html.append(f"<td class='right'>{_hesc(ps)}</td>")
-        html.append(f"<td class='right'>{_hesc(lang)}</td>")
-
-        # Status dropdown
-        html.append("<td>")
-        html.append(f"{badge}<div style='height:6px'></div>")
-        html.append(f"""
-<select onchange="updateLead({row_num}, this.value, null)">
-  <option {'selected' if status=='New' else ''}>New</option>
-  <option {'selected' if status=='Confirmed' else ''}>Confirmed</option>
-  <option {'selected' if status=='Seated' else ''}>Seated</option>
-  <option {'selected' if status=='No-Show' else ''}>No-Show</option>
-</select>
+<div id="tab-leads" class="tabpane">
 """)
-        html.append("</td>")
 
-        # VIP toggle
-        checked = "checked" if is_vip else ""
-        html.append("<td class='right'>")
-        html.append(f"<label class='small' style='display:inline-flex;align-items:center;gap:6px;justify-content:flex-end'><input type='checkbox' {checked} onchange=\"updateLead({row_num}, null, this.checked)\"/> VIP</label>")
-        html.append("</td>")
+    # Leads table
+    if leads_err:
+        html.append(f"<div class='card'><div class='h2'>Leads</div><div class='small'>Error reading leads: {leads_err}</div></div>")
+    elif not body:
+        html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>No leads yet.</div></div>")
+    else:
+        html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>Newest first. Update Status/VIP and save.</div></div>")
+        html.append("<div class='tablewrap'><table>")
+        html.append("<thead><tr>"
+                    "<th>Sheet Row</th><th>Timestamp</th><th>Name</th><th>Phone</th><th>Date</th><th>Time</th><th>Party</th><th>Lang</th><th>Status</th><th>VIP</th><th>Save</th>"
+                    "</tr></thead><tbody>")
+        for sheet_row, r in numbered:
+            ts = colval(r, i_ts, "")
+            nm = colval(r, i_name, "")
+            ph = colval(r, i_phone, "")
+            d = colval(r, i_date, "")
+            t = colval(r, i_time, "")
+            ps = colval(r, i_party, "")
+            lg = colval(r, i_lang, "en")
+            st = colval(r, i_status, "New") or "New"
+            vip = colval(r, i_vip, "No") or "No"
 
-        # Quick actions
-        html.append("<td class='right'>")
-        html.append(f"<button class='btn' style='padding:7px 10px' onclick=\"updateLead({row_num}, 'Confirmed', true)\">Confirm</button> ")
-        html.append(f"<button class='btn' style='padding:7px 10px' onclick=\"updateLead({row_num}, 'Seated', true)\">Seat</button>")
-        html.append("</td>")
+            def opt(selected, label):
+                sel = "selected" if selected else ""
+                return f"<option {sel}>{label}</option>"
 
-        html.append("</tr>")
+            html.append("<tr>")
+            html.append(f"<td class='code'>{sheet_row}</td>")
+            html.append(f"<td>{ts}</td>")
+            html.append(f"<td>{nm}</td>")
+            html.append(f"<td>{ph}</td>")
+            html.append(f"<td>{d}</td>")
+            html.append(f"<td>{t}</td>")
+            html.append(f"<td>{ps}</td>")
+            html.append(f"<td>{lg}</td>")
 
-    html.append("</tbody></table></div>")
-    html.append("<div class='toast' id='toast'></div>")
+            html.append("<td>")
+            html.append(f"<select class='inp' id='status-{sheet_row}'>"
+                        f"{opt(st=='New','New')}{opt(st=='Confirmed','Confirmed')}{opt(st=='Seated','Seated')}{opt(st=='No-Show','No-Show')}"
+                        "</select>")
+            html.append("</td>")
 
-    html.append("""
+            html.append("<td>")
+            html.append(f"<select class='inp' id='vip-{sheet_row}'>"
+                        f"{opt(vip.lower() in ['yes','true','1','y'], 'Yes')}{opt(vip.lower() in ['no','false','0','n',''], 'No')}"
+                        "</select>")
+            html.append("</td>")
+
+            html.append("<td>")
+            html.append(f"<button class='btn2' onclick='saveLead({sheet_row})'>Save</button>")
+            html.append("</td>")
+
+            html.append("</tr>")
+        html.append("</tbody></table></div>")
+
+    html.append("</div>")  # tab-leads
+
+    # Rules tab
+    html.append(r"""
+<div id="tab-rules" class="tabpane hidden">
+  <div class="card">
+    <div class="h2">Business Rules</div>
+    <div class="small">These rules power reservation guardrails (max party size, closed dates, hours, banner). Saved rules persist on the server.</div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label class="small">Max party size</label>
+        <input id="rules-max-party" class="inp" type="number" min="1" step="1"/>
+      </div>
+      <div>
+        <label class="small">Match-day banner</label>
+        <input id="rules-banner" class="inp" placeholder="🏟️ Match-day mode..."/>
+      </div>
+    </div>
+
+    <div style="margin-top:10px">
+      <label class="small">Closed dates (YYYY-MM-DD, one per line)</label>
+      <textarea id="rules-closed" class="inp" rows="5" placeholder="2026-06-11&#10;2026-06-12"></textarea>
+    </div>
+
+    <div style="margin-top:10px">
+      <div class="small" style="font-weight:800;margin-bottom:8px">Hours (HH:MM-HH:MM)</div>
+      <div class="row">
+        <div><label class="small">Mon</label><input id="h-mon" class="inp" placeholder="11:00-22:00"/></div>
+        <div><label class="small">Tue</label><input id="h-tue" class="inp" placeholder="11:00-22:00"/></div>
+        <div><label class="small">Wed</label><input id="h-wed" class="inp" placeholder="11:00-22:00"/></div>
+        <div><label class="small">Thu</label><input id="h-thu" class="inp" placeholder="11:00-23:00"/></div>
+        <div><label class="small">Fri</label><input id="h-fri" class="inp" placeholder="11:00-01:00"/></div>
+        <div><label class="small">Sat</label><input id="h-sat" class="inp" placeholder="10:00-01:00"/></div>
+        <div><label class="small">Sun</label><input id="h-sun" class="inp" placeholder="10:00-22:00"/></div>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn" onclick="saveRules()">Save Rules</button>
+      <button class="btn2" onclick="loadRules()">Reload</button>
+      <span id="rules-msg" class="note"></span>
+    </div>
+  </div>
+</div>
+""")
+
+    # Menu tab
+    html.append(r"""
+<div id="tab-menu" class="tabpane hidden">
+  <div class="card">
+    <div class="h2">Menu Manager</div>
+    <div class="small">Upload a JSON menu file to update <span class="code">/menu.json</span> (fan UI stays the same). Supports en/es/pt/fr blocks.</div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label class="small">Upload menu JSON file</label>
+        <input id="menu-file" class="inp" type="file" accept="application/json"/>
+        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn" onclick="uploadMenu()">Upload</button>
+          <button class="btn2" onclick="loadMenu()">Load Current</button>
+          <span id="menu-msg" class="note"></span>
+        </div>
+      </div>
+      <div>
+        <label class="small">Or paste menu JSON</label>
+        <textarea id="menu-json" class="inp code" rows="12" placeholder='{"en":{"title":"Menu","items":[{"category_id":"bites","name":"Nachos","price":"$16","desc":"...","tag":"Share"}]}}'></textarea>
+        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn2" onclick="saveMenuJson()">Save JSON</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+""")
+
+    # Scripts
+    html.append(f"""
 <script>
-const ADMIN_KEY = __ADMIN_KEY__;
-function toast(msg){
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.style.display = 'block';
-  clearTimeout(window.__toastTimer);
-  window.__toastTimer = setTimeout(()=>t.style.display='none', 1400);
-}
+const KEY = {json.dumps(key)};
 
-async function updateLead(row, status, vipBool){
-  const payload = {row: row};
-  if(status !== null){ payload.status = status; }
-  if(vipBool !== null){
-    payload.vip = vipBool ? "Yes" : "No";
-  }
-  try{
-    const res = await fetch(`/admin/update-lead?key=${encodeURIComponent(ADMIN_KEY)}`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-    if(!data.ok) throw new Error(data.error || 'Update failed');
-    toast('Saved ✓');
-    // Update row dataset for filtering
-    const tr = document.querySelector(`tr[data-row="${row}"]`);
-    if(tr){
-      if(payload.status){ tr.dataset.status = payload.status; }
-      if(payload.vip !== undefined){ tr.dataset.vip = payload.vip === "Yes" ? "1" : "0"; }
-    }
-  }catch(err){
-    console.error(err);
-    toast('Error: ' + err.message);
-  }
-}
+function qs(sel){{return document.querySelector(sel);}}
+function qsa(sel){{return Array.from(document.querySelectorAll(sel));}}
 
-// Filters
-const qEl = document.getElementById('q');
-const fStatus = document.getElementById('fStatus');
-const fVip = document.getElementById('fVip');
+qsa('.tabbtn').forEach(btn=>{{
+  btn.addEventListener('click', ()=>{{
+    qsa('.tabbtn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const t = btn.dataset.tab;
+    ['leads','rules','menu'].forEach(x=>{{
+      const pane = document.getElementById('tab-'+x);
+      if(!pane) return;
+      pane.classList.toggle('hidden', x!==t);
+    }});
+    if(t==='rules') loadRules();
+    if(t==='menu') loadMenu();
+  }});
+}});
 
-function applyFilters(){
-  const q = (qEl.value || '').toLowerCase().trim();
-  const st = (fStatus.value || '').trim();
-  const vipOnly = fVip.checked;
+async function saveLead(sheetRow){{
+  const status = qs('#status-'+sheetRow).value;
+  const vip = qs('#vip-'+sheetRow).value;
+  const res = await fetch('/admin/update-lead?key='+encodeURIComponent(KEY), {{
+    method:'POST',
+    headers:{{'Content-Type':'application/json'}},
+    body: JSON.stringify({{sheet_row: sheetRow, status, vip}})
+  }});
+  const j = await res.json().catch(()=>{{}});
+  if(j && j.ok) alert('Saved');
+  else alert('Save failed: ' + (j.error||res.status));
+}}
 
-  const rows = Array.from(document.querySelectorAll('#tbl tbody tr'));
-  for(const tr of rows){
-    const text = tr.innerText.toLowerCase();
-    const okQ = !q || text.includes(q);
-    const okS = !st || (tr.dataset.status === st);
-    const okV = !vipOnly || (tr.dataset.vip === "1");
-    tr.style.display = (okQ && okS && okV) ? '' : 'none';
-  }
-}
+async function loadRules(){{
+  const msg = qs('#rules-msg'); if(msg) msg.textContent='';
+  const res = await fetch('/admin/api/rules?key='+encodeURIComponent(KEY));
+  const j = await res.json().catch(()=>null);
+  if(!j || !j.ok){{ if(msg) msg.textContent='Failed to load rules'; return; }}
+  const r = j.rules || {{}};
+  qs('#rules-max-party').value = r.max_party_size || '';
+  qs('#rules-banner').value = r.match_day_banner || '';
+  qs('#rules-closed').value = (r.closed_dates||[]).join('\\n');
+  const h = r.hours || {{}};
+  ['mon','tue','wed','thu','fri','sat','sun'].forEach(d=>{{
+    const el = qs('#h-'+d);
+    if(el) el.value = (h[d]||'');
+  }});
+}}
 
-qEl.addEventListener('input', applyFilters);
-fStatus.addEventListener('change', applyFilters);
-fVip.addEventListener('change', applyFilters);
+async function saveRules(){{
+  const msg = qs('#rules-msg'); if(msg) msg.textContent='Saving...';
+  const hours={{}};
+  ['mon','tue','wed','thu','fri','sat','sun'].forEach(d=>hours[d]=qs('#h-'+d).value);
+  const payload={{
+    max_party_size: parseInt(qs('#rules-max-party').value || '0', 10),
+    match_day_banner: qs('#rules-banner').value || '',
+    closed_dates: qs('#rules-closed').value || '',
+    hours: hours
+  }};
+  const res = await fetch('/admin/api/rules?key='+encodeURIComponent(KEY), {{
+    method:'POST',
+    headers:{{'Content-Type':'application/json'}},
+    body: JSON.stringify(payload)
+  }});
+  const j = await res.json().catch(()=>null);
+  if(j && j.ok){{ if(msg) msg.textContent='Saved ✔'; }}
+  else {{ if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }}
+}}
+
+async function loadMenu(){{
+  const msg = qs('#menu-msg'); if(msg) msg.textContent='';
+  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY));
+  const j = await res.json().catch(()=>null);
+  if(j && j.ok){{
+    qs('#menu-json').value = JSON.stringify(j.menu || {{}}, null, 2);
+    if(msg) msg.textContent='Loaded ✔';
+  }} else {{
+    if(msg) msg.textContent='Failed to load';
+  }}
+}}
+
+async function saveMenuJson(){{
+  const msg = qs('#menu-msg'); if(msg) msg.textContent='Saving...';
+  let payload=null;
+  try {{ payload = JSON.parse(qs('#menu-json').value || '{{}}'); }} catch(e) {{
+    alert('Invalid JSON'); if(msg) msg.textContent='Invalid JSON'; return;
+  }}
+  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY), {{
+    method:'POST',
+    headers:{{'Content-Type':'application/json'}},
+    body: JSON.stringify(payload)
+  }});
+  const j = await res.json().catch(()=>null);
+  if(j && j.ok){{ if(msg) msg.textContent='Saved ✔'; }}
+  else {{ if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }}
+}}
+
+async function uploadMenu(){{
+  const msg = qs('#menu-msg'); if(msg) msg.textContent='Uploading...';
+  const f = qs('#menu-file').files[0];
+  if(!f){{ alert('Choose a JSON file'); if(msg) msg.textContent='No file'; return; }}
+  const fd = new FormData();
+  fd.append('file', f);
+  const res = await fetch('/admin/api/menu-upload?key='+encodeURIComponent(KEY), {{
+    method:'POST',
+    body: fd
+  }});
+  const j = await res.json().catch(()=>null);
+  if(j && j.ok){{ qs('#menu-json').value = JSON.stringify(j.menu || {{}}, null, 2); if(msg) msg.textContent='Uploaded ✔'; }}
+  else {{ if(msg) msg.textContent='Upload failed'; alert('Upload failed: '+(j && j.error ? j.error : res.status)); }}
+}}
 </script>
-""".replace("__ADMIN_KEY__", json.dumps(key)))
-
+""")
 
     html.append("</div></body></html>")
     return "".join(html)
-
-
-
 
 
 @app.route("/admin/fanzone")
