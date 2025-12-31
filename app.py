@@ -102,21 +102,24 @@ SCOPES = [
 ]
 
 # ============================================================
-# Business Profile
+# Business Profile (optional)
 # ============================================================
+# Old versions required business_profile.txt. For portability (Render + local),
+# we treat it as optional and fall back to an env var or a small default profile.
 BUSINESS_PROFILE_PATH = "business_profile.txt"
-BUSINESS_PROFILE = ""
-try:
-    if os.path.exists(BUSINESS_PROFILE_PATH):
+BUSINESS_PROFILE = os.environ.get("BUSINESS_PROFILE", "").strip()
+if not BUSINESS_PROFILE and os.path.exists(BUSINESS_PROFILE_PATH):
+    try:
         with open(BUSINESS_PROFILE_PATH, "r", encoding="utf-8") as f:
             BUSINESS_PROFILE = f.read().strip()
-except Exception:
-    BUSINESS_PROFILE = ""
-
-
+    except Exception:
+        BUSINESS_PROFILE = ""
+if not BUSINESS_PROFILE:
+    BUSINESS_PROFILE = "You are World Cup Concierge — a premium reservation assistant for World Cup fans. Keep replies concise, helpful, and action-oriented."
 
 # ============================================================
 # Business Rules (edit here)
+# ============================================================
 # ============================================================
 BUSINESS_RULES = {
     # hours in 24h local time; for simplicity we only enforce "open/closed" by day
@@ -429,12 +432,12 @@ def is_dallas_match(m: Dict[str, Any]) -> bool:
 
 
 def filter_matches(scope: str, q: str = "") -> List[Dict[str, Any]]:
-    # Global app: ignore city-specific scope; always serve ALL matches
     scope = (scope or "all").lower().strip()
     q = (q or "").strip().lower()
 
     matches = load_all_matches()
-    # (city filtering removed)
+    if scope != "all":
+        matches = [m for m in matches if is_dallas_match(m)]
 
     if q:
         def hit(m):
@@ -1100,6 +1103,20 @@ def home():
     return resp
 
 
+
+@app.route("/<path:path>")
+def catch_all(path):
+    # Serve static files if they exist; otherwise serve the SPA shell.
+    try:
+        if os.path.exists(path) and os.path.isfile(path):
+            return send_from_directory(".", path)
+        # allow /static/...
+        if path.startswith("static/") and os.path.exists(path):
+            return send_from_directory(".", path)
+    except Exception:
+        pass
+    return home()
+
 @app.route("/health")
 def health():
     return jsonify({"status": "ok"})
@@ -1114,25 +1131,54 @@ def menu_json():
     return jsonify({"lang": lang, "menu": MENU[lang]})
 
 
+
+# ============================================================
+# Fan Zone (public demo JSON for the UI)
+# ============================================================
+FANZONE_DEMO = {
+    "en": [
+        {"date": "2026-06-11", "city": "Host City", "title": "Official Fan Festival", "location": "City Center", "description": "Live screenings, music, and food."},
+        {"date": "2026-06-12", "city": "Host City", "title": "Watch Party Night", "location": "Partner Venue", "description": "Reservations recommended."},
+    ],
+    "es": [
+        {"date": "2026-06-11", "city": "Ciudad Sede", "title": "Festival Oficial de Aficionados", "location": "Centro", "description": "Pantallas, música y comida."},
+        {"date": "2026-06-12", "city": "Ciudad Sede", "title": "Noche de Partido", "location": "Lugar Asociado", "description": "Se recomienda reservar."},
+    ],
+    "pt": [
+        {"date": "2026-06-11", "city": "Cidade-Sede", "title": "Festival Oficial do Torcedor", "location": "Centro", "description": "Transmissão ao vivo, música e comida."},
+        {"date": "2026-06-12", "city": "Cidade-Sede", "title": "Noite de Jogo", "location": "Local Parceiro", "description": "Reservas recomendadas."},
+    ],
+    "fr": [
+        {"date": "2026-06-11", "city": "Ville Hôte", "title": "Festival Officiel des Fans", "location": "Centre-ville", "description": "Diffusion live, musique et food."},
+        {"date": "2026-06-12", "city": "Ville Hôte", "title": "Soirée Match", "location": "Lieu Partenaire", "description": "Réservation conseillée."},
+    ],
+}
+
+def norm_lang(lang: str) -> str:
+    lang = (lang or "en").lower().strip()
+    return lang if lang in ("en","es","pt","fr") else "en"
+
+@app.route("/fanzone.json")
+def fanzone_json():
+    lang = norm_lang(request.args.get("lang"))
+    return jsonify({"lang": lang, "events": FANZONE_DEMO.get(lang, FANZONE_DEMO["en"])})
+
 @app.route("/schedule.json")
 def schedule_json():
     """
     Query params:
-      scope= dallas | all   (default: dallas)
+      scope= dallas | all   (default: all)
       q= search text (team, venue, group, date)
     """
-    scope = (request.args.get("scope") or "dallas").lower().strip()
+    scope = "all"  # Global schedule only (Dallas-only removed)
     q = request.args.get("q") or ""
 
     try:
         matches = filter_matches(scope=scope, q=q)
 
         today = datetime.now().date()
-        if scope == "all":
-            # "match day" for Dallas means: any Dallas match today
-            is_match = any(m.get("date") == today.isoformat() and is_dallas_match(m) for m in load_all_matches())
-        else:
-            is_match = any(m.get("date") == today.isoformat() for m in matches)
+        # Match-day indicator for global view: any match today.
+        is_match = any(m.get("date") == today.isoformat() for m in matches)
 
         # next match (by datetime_utc already sorted in load_all_matches/filter_matches)
         nxt = None
@@ -3206,6 +3252,75 @@ tr:hover td{background:rgba(255,255,255,.03)}
 
     html.append("</div></body></html>")
     return "".join(html)
+
+
+
+# ============================================================
+# Leads intake (used by the new UI)
+# - Stores locally to static/data/leads.jsonl
+# - Optionally appends to Google Sheets if configured (same creds as admin/chat)
+# ============================================================
+LEADS_STORE_PATH = os.environ.get("LEADS_STORE_PATH", "static/data/leads.jsonl")
+GOOGLE_SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "").strip()
+
+def _append_lead_local(row: dict) -> None:
+    try:
+        os.makedirs(os.path.dirname(LEADS_STORE_PATH), exist_ok=True)
+        with open(LEADS_STORE_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+def _append_lead_google_sheet(row: dict) -> bool:
+    try:
+        gc = get_gspread_client()
+        if GOOGLE_SHEET_ID:
+            sh = gc.open_by_key(GOOGLE_SHEET_ID)
+        else:
+            sh = gc.open(SHEET_NAME)
+        # Use a dedicated Leads worksheet if present; fall back to first sheet
+        try:
+            ws = sh.worksheet("Leads")
+        except Exception:
+            ws = sh.sheet1
+        ws.append_row([
+            row.get("ts",""),
+            row.get("page",""),
+            row.get("intent",""),
+            row.get("contact",""),
+            row.get("budget",""),
+            row.get("party_size",""),
+            row.get("datetime",""),
+            row.get("notes",""),
+            row.get("lang",""),
+            row.get("ip",""),
+            row.get("ua",""),
+        ], value_input_option="USER_ENTERED")
+        return True
+    except Exception:
+        return False
+
+@app.route("/lead", methods=["POST"])
+def lead():
+    payload = request.get_json(silent=True) or {}
+    row = {
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "page": (payload.get("page") or "").strip(),
+        "intent": (payload.get("intent") or "").strip(),
+        "contact": (payload.get("contact") or "").strip(),
+        "budget": (payload.get("budget") or "").strip(),
+        "party_size": (payload.get("party_size") or "").strip(),
+        "datetime": (payload.get("datetime") or "").strip(),
+        "notes": (payload.get("notes") or "").strip(),
+        "lang": (payload.get("lang") or "").strip(),
+        "ip": request.headers.get("X-Forwarded-For", request.remote_addr),
+        "ua": request.headers.get("User-Agent",""),
+    }
+    _append_lead_local(row)
+    ok = False
+    if GOOGLE_SHEET_ID or os.environ.get("GOOGLE_CREDS_JSON") or os.path.exists("google_creds.json"):
+        ok = _append_lead_google_sheet(row)
+    return jsonify({"ok": True, "sheet_ok": bool(ok)})
 
 
 if __name__ == "__main__":
