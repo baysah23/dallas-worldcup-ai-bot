@@ -557,6 +557,43 @@
       padding: 18px;
     }
     .modal.hidden{ display:none; }
+
+/* =========================
+   MODAL CONTRAST FIX (v2)
+   - Stronger dark+blur scrim behind modal
+   - Modal card gets true opaque glass (~0.82) so fields pop
+   ========================= */
+body.modalOpen{ overflow:hidden; }
+
+/* Overlay scrim + blur */
+.modal{
+  background: rgba(5, 8, 16, 0.78) !important;
+  backdrop-filter: blur(10px) saturate(0.9) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(0.9) !important;
+}
+
+/* Modal surface (the card) */
+.modalCard{
+  background: rgba(12, 18, 34, 0.82) !important; /* target 0.8-ish */
+  backdrop-filter: blur(18px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.2) !important;
+  border: 1px solid rgba(255,255,255,0.22) !important;
+  box-shadow: 0 26px 90px rgba(0,0,0,0.62) !important;
+}
+
+/* Inputs: slightly darker so text contrast stays crisp */
+.modalBody input,
+.modalBody select{
+  background: rgba(0,0,0,0.34) !important;
+  border-color: rgba(255,255,255,0.22) !important;
+}
+
+/* Improve label + helper readability */
+.modalHead h3,
+.modalBody label{
+  color: rgba(245,248,255,0.95) !important;
+}
+
     .modalCard{
       width: 100%;
       max-width: 440px;
@@ -3628,11 +3665,7 @@ async function submitIntake(){
   if(msg) msg.textContent = 'Sending…';
 
   // keep it in-chat (premium + fast)
-  let summary = `Reservation request: date ${iDate}, party ${iGroup}, time window ${iTime}`;
-  if(iVibe) summary += `, vibe ${iVibe}`;
-  if(iBudget) summary += `, budget ${iBudget}`;
-  if(iNotes) summary += `, notes ${iNotes}`;
-  summary += `. Contact: ${iContact}.`;
+  const summary = `Reservation request: date ${iDate}, party ${iGroup}, time ${iTime}${iVibe?`, vibe ${iVibe}`:''}${iBudget?`, budget ${iBudget}`:''}${iNotes?`, notes ${iNotes}`:''}. Contact: ${iContact}.`;
   closeModal();
   openChatPrefill(summary);
   if(msg) msg.textContent = '';
