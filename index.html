@@ -2894,7 +2894,54 @@ body[data-msec="schedule"] #scheduleCard{
   </div>
 
   <script>
-    const state = { lang:'en', scope:'global', city:'' };
+    const state = { lang:'en', scope:'global', city:'' };// =========================================================
+// Helpers (missing in prior build)
+// =========================================================
+const $  = (id) => document.getElementById(id);
+const $$ = (sel, root=document) => Array.from((root || document).querySelectorAll(sel));
+const qsa = (sel, root=document) => Array.from((root || document).querySelectorAll(sel));
+
+async function fetchJSON(url){
+  const r = await fetch(url, { cache: "no-store" });
+  return r.json();
+}
+
+// Fan Zone: supporter persistence
+function setSupporter(c){
+  try{ localStorage.setItem("wc_supporter", JSON.stringify(c||{})); }catch(e){}
+  try{ document.body.classList.add("has-support"); }catch(e){}
+}
+function getSupporter(){
+  try{ return JSON.parse(localStorage.getItem("wc_supporter") || "null"); }catch(e){ return null; }
+}
+function renderSupporter(){
+  const chip = $("supporterChip");
+  const flag = $("supporterFlag");
+  const label = $("supporterLabel");
+  const s = getSupporter();
+  if(!chip || !flag || !label) return;
+  if(s && (s.name || s.flag)){
+    flag.textContent = s.flag || "🏁";
+    label.textContent = s.name || "Supporter";
+    document.body.classList.add("has-support");
+  }else{
+    flag.textContent = "🏁";
+    label.textContent = "Not set";
+    document.body.classList.remove("has-support");
+  }
+}
+
+// Cache commonly-used Fan Zone elements (used by initFanZone/loadPoll)
+const supporterChip = $("supporterChip");
+const btnPickCountry = $("btnPickCountry");
+const fzIconCountry = $("fzIconCountry");
+const fzIconPoll = $("fzIconPoll");
+const pollCard = $("pollCard");
+const pollList = $("pollList");
+const btnOpenPoll = $("btnOpenPoll");
+const qrCard = $("qrCard");
+const qrImg = $("qrImg");
+const qrLink = $("qrLink");
 
     // Toast helper
     function toast(msg){
@@ -3863,12 +3910,25 @@ function loadVIP(){
   }
 
 
-  // Boot
-  document.addEventListener("DOMContentLoaded", ()=>{
-    initScheduleHandlers();
-    initFanZone();
-  });
-})();
+  // Boot (restores countdown + navigation + page loads)
+document.addEventListener("DOMContentLoaded", ()=>{
+  try{ setHeroBannerImage(); }catch(e){}
+  try{ startHeroCountdown(); }catch(e){}
+  try{ bindNav(); }catch(e){}
+  try{ bindGlobalDelegates(); }catch(e){}
+  try{ bindHome(); }catch(e){}
+
+  try{ updatePills(); }catch(e){}
+  try{ ensureWelcomeBubble(); }catch(e){}
+
+  // Page-specific init (keeps legacy functionality)
+  try{ initScheduleHandlers(); }catch(e){}
+  try{ initFanZone(); }catch(e){}
+  try{ loadVIP(); window.__vipLoaded = true; }catch(e){}
+
+  // Default section
+  try{ setSection('home'); }catch(e){}
+});
 </script>
 
 </body>
