@@ -2042,29 +2042,20 @@ function startHeroCountdown(){
 
 
     
-    // === BOOTSTRAP (fix: missing boot() caused nav/buttons to break) ===
-    function go(sec){ try{ setSection(sec); }catch(e){} } // backward compat for older handlers
-
-    function setActiveLangPill(){
-      document.querySelectorAll('#chatLangRow .lang').forEach(btn=>{
-        btn.classList.toggle('active', (btn.dataset.lang || 'en') === state.lang);
-      });
-    }
-
-    function setChatLanguage(lang){
-      state.lang = (lang || 'en');
-      setActiveLangPill();
-      // Requirement: switching language should reset to one-liner welcome (not append)
-      try{ clearChatPreserveWelcome(); }catch(e){ try{ ensureWelcomeBubble(); }catch(_e){} }
-    }
+    // =========================================================
+    // FIX: Missing boot() + page loaders caused:
+    // - countdown not ticking
+    // - nav + home card buttons not working
+    // - menu/schedule/fanzone pages empty
+    // =========================================================
 
     function bindNav(){
-      document.querySelectorAll('#mobileNav .mnavBtn').forEach(btn=>{
-        // touch-action improves iOS responsiveness; prevents "stuck" feel
+      const nav = document.getElementById('mobileNav');
+      if(!nav) return;
+      nav.querySelectorAll('.mnavBtn').forEach(btn=>{
         btn.style.touchAction = 'manipulation';
         btn.addEventListener('click', (e)=>{
-          e.preventDefault();
-          e.stopPropagation();
+          e.preventDefault(); e.stopPropagation();
           haptic(8);
           const sec = btn.dataset.sec || 'home';
           setSection(sec);
@@ -2072,41 +2063,220 @@ function startHeroCountdown(){
       });
     }
 
-    function bindChat(){
-      const sendBtn = document.getElementById('sendBtn');
-      const input = document.getElementById('msg');
-      if(sendBtn) sendBtn.addEventListener('click', ()=>{ haptic(6); sendChat(); }, {passive:true});
-      if(input){
-        input.addEventListener('keydown', (e)=>{
-          if(e.key === 'Enter'){
-            e.preventDefault();
-            sendChat();
-          }
-        });
-      }
-      // Language pills
-      document.querySelectorAll('#chatLangRow .lang').forEach(btn=>{
-        btn.addEventListener('click', ()=>{
-          haptic(6);
-          setChatLanguage(btn.dataset.lang || 'en');
+    function bindHome(){
+      const byId = (id)=>document.getElementById(id);
+
+      const ctaReserve = byId('ctaReserve');
+      if(ctaReserve){
+        ctaReserve.style.touchAction = 'manipulation';
+        ctaReserve.addEventListener('click', ()=>{
+          haptic(10);
+          // Reserve CTA routes to chat with a clean prefill
+          openChatWithPrefill('Reserve a table — party size, date/time, and preferred venue.', false);
         }, {passive:true});
+      }
+
+      const map = [
+        ['tileVIP', 'vip'],
+        ['tileFanzone', 'fanzone'],
+        ['tileSchedule', 'schedule'],
+        ['tileMenu', 'menu'],
+      ];
+      map.forEach(([id, sec])=>{
+        const el = byId(id);
+        if(!el) return;
+        el.style.touchAction = 'manipulation';
+        el.addEventListener('click', (e)=>{
+          e.preventDefault();
+          haptic(8);
+          setSection(sec);
+        }, {passive:false});
       });
-      setActiveLangPill();
-      // Ensure we always have a welcome bubble once
-      try{ ensureWelcomeBubble(); }catch(e){}
+
+      const tilePlan = byId('tilePlan');
+      if(tilePlan){
+        tilePlan.style.touchAction = 'manipulation';
+        tilePlan.addEventListener('click', ()=>{
+          haptic(8);
+          openChatWithPrefill('Build my matchday plan — tickets, where to watch, dining, and transportation.', false);
+        }, {passive:true});
+      }
+    }
+
+    async function loadMenu(){
+      try{
+        const body = document.getElementById('menuBody');
+        const hint = document.getElementById('menuHint');
+        if(hint) hint.textContent = 'Loading…';
+        const r = await fetch(`/menu.json?lang=${encodeURIComponent(state.lang)}`, {cache:'no-store'});
+        const data = await r.json();
+        const items = (data && data.menu && data.menu.items) ? data.menu.items : [];
+        // Update title if available
+        try{
+          const t = document.getElementById('menuTitle');
+          const title = (data && data.menu && data.menu.title) ? data.menu.title : 'Menu';
+          if(t) t.textContent = title;
+        }catch(e){}
+        renderMenu(items);
+        window.__menuLoaded = true;
+        if(hint) hint.textContent = items.length ? '' : 'No menu items yet.';
+      }catch(e){
+        console.error(e);
+        const hint = document.getElementById('menuHint');
+        if(hint) hint.textContent = 'Menu failed to load. Tap Refresh.';
+      }
+    }
+
+    async function loadSchedule(){
+      try{
+        const body = document.getElementById('scheduleBody');
+        const hint = document.getElementById('scheduleHint');
+        if(hint) hint.textContent = 'Loading…';
+        if(body) body.innerHTML = '';
+        const q = (document.getElementById('scheduleSearch')?.value || '').trim();
+        const r = await fetch(`/schedule.json?q=${encodeURIComponent(q)}`, {cache:'no-store'});
+        const data = await r.json();
+
+        const matches = Array.isArray(data.matches) ? data.matches : [];
+        if(!body) return;
+
+        // Render next match banner (if provided)
+        if(data.next_match){
+          const nxt = data.next_match;
+          const card = document.createElement('div');
+          card.className = 'item';
+          card.innerHTML = `
+            <div class="itemTop"><span>Next match</span><span>${escapeHtml(nxt.stage || '')}</span></div>
+            <div class="itemTitle">${escapeHtml(nxt.home || '')} vs ${escapeHtml(nxt.away || '')}</div>
+            <div class="itemMeta">${escapeHtml(nxt.date || '')} • ${escapeHtml(nxt.time || '')} • ${escapeHtml(nxt.city || '')} • ${escapeHtml(nxt.venue || '')}</div>
+          `;
+          body.appendChild(card);
+        }
+
+        // Render match list
+        matches.forEach(m=>{
+          const card = document.createElement('div');
+          card.className = 'item';
+          const group = m.group ? ` • ${m.group}` : '';
+          card.innerHTML = `
+            <div class="itemTop"><span>${escapeHtml(m.stage || 'Match')}</span><span>${escapeHtml((m.city || '') + (m.round ? (' • ' + m.round) : ''))}</span></div>
+            <div class="itemTitle">${escapeHtml(m.home || '')} vs ${escapeHtml(m.away || '')}</div>
+            <div class="itemMeta">${escapeHtml(m.date || '')} • ${escapeHtml(m.time || '')} • ${escapeHtml(m.venue || '')}${escapeHtml(group)}</div>
+          `;
+          body.appendChild(card);
+        });
+
+        window.__scheduleLoaded = true;
+        if(hint) hint.textContent = matches.length ? '' : 'No matches found. Try a different search.';
+      }catch(e){
+        console.error(e);
+        const hint = document.getElementById('scheduleHint');
+        if(hint) hint.textContent = 'Schedule failed to load. Tap Refresh.';
+      }
+    }
+
+    async function loadFanzone(){
+      try{
+        const body = document.getElementById('fanzoneBody');
+        const hint = document.getElementById('fanzoneHint');
+        if(hint) hint.textContent = 'Loading…';
+        if(body) body.innerHTML = '';
+        const r = await fetch(`/fanzone.json?lang=${encodeURIComponent(state.lang)}`, {cache:'no-store'});
+        const data = await r.json();
+        const events = Array.isArray(data.events) ? data.events : [];
+        if(!body) return;
+
+        events.forEach(ev=>{
+          const card = document.createElement('div');
+          card.className = 'item';
+          card.innerHTML = `
+            <div class="itemTop"><span>${escapeHtml(ev.date || '')}</span><span>${escapeHtml(ev.city || '')}</span></div>
+            <div class="itemTitle">${escapeHtml(ev.title || '')}</div>
+            <div class="itemMeta">${escapeHtml(ev.location || '')} • ${escapeHtml(ev.description || '')}</div>
+          `;
+          body.appendChild(card);
+        });
+
+        window.__fanzoneLoaded = true;
+        if(hint) hint.textContent = events.length ? '' : 'No events yet.';
+      }catch(e){
+        console.error(e);
+        const hint = document.getElementById('fanzoneHint');
+        if(hint) hint.textContent = 'Fan Zone failed to load. Tap Refresh.';
+      }
+    }
+
+    function loadVIP(){
+      // Keep VIP simple + functional: route to VIP prompts in chat
+      const wrap = document.getElementById('vipBody');
+      if(!wrap) return;
+      wrap.innerHTML = `
+        <div class="vipGrid">
+          <div class="vipCard">
+            <div class="vipTitle">VIP Chef Table</div>
+            <div class="vipMeta">Private chef experience for matchday.</div>
+            <button class="pill" type="button" id="vipChefBtn">Ask about VIP Chef Table</button>
+          </div>
+          <div class="vipCard">
+            <div class="vipTitle">VIP Lounge + Bottle Service</div>
+            <div class="vipMeta">Premium seating, private entry, curated list.</div>
+            <button class="pill" type="button" id="vipLoungeBtn">Ask about VIP Lounge</button>
+          </div>
+        </div>
+      `;
+      const a = document.getElementById('vipChefBtn');
+      const b = document.getElementById('vipLoungeBtn');
+      if(a) a.addEventListener('click', ()=> openChatWithPrefill('I want VIP Chef Table — please share options and pricing.', true), {passive:true});
+      if(b) b.addEventListener('click', ()=> openChatWithPrefill('I want VIP Lounge + Bottle Service — please share options and pricing.', true), {passive:true});
+    }
+
+    function bindPageControls(){
+      // Menu refresh
+      const rm = document.getElementById('reloadMenu');
+      if(rm) rm.addEventListener('click', ()=>{ haptic(6); loadMenu(); }, {passive:true});
+
+      // Schedule controls (force global; city UI remains but ignored)
+      const rs = document.getElementById('reloadSchedule');
+      if(rs) rs.addEventListener('click', ()=>{ haptic(6); loadSchedule(); }, {passive:true});
+      const ss = document.getElementById('scheduleSearch');
+      if(ss) ss.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); loadSchedule(); } });
+
+      // Fan Zone refresh (if exists)
+      const rf = document.getElementById('reloadFanzone');
+      if(rf) rf.addEventListener('click', ()=>{ haptic(6); loadFanzone(); }, {passive:true});
+
+      // Disable city scope in UI if present (per global app requirement)
+      const scope = document.getElementById('scopeSelect');
+      const city = document.getElementById('citySearch');
+      if(scope){ scope.value = 'global'; scope.disabled = true; }
+      if(city){ city.value = ''; city.disabled = true; city.placeholder = 'Global schedule'; }
     }
 
     function boot(){
       try{
         bindNav();
-        bindChat();
-        // Default section
-        const initial = (document.body.getAttribute('data-sec') || 'home').trim() || 'home';
-        setSection(initial);
+        bindHome();
+        bindChat?.(); // if present in your file
+        bindPageControls();
+
+        // Start countdown ticker
+        try{
+          updateHeroCountdown();
+          clearInterval(window.__cdInt);
+          window.__cdInt = setInterval(updateHeroCountdown, 1000);
+        }catch(e){}
+
+        // Initial welcome bubble
+        try{ ensureWelcomeBubble(); }catch(e){}
+
+        // Render VIP page content once
+        try{ loadVIP(); }catch(e){}
+
+        // Default section (home)
+        setSection('home');
       }catch(e){
-        // If something breaks, show a small toast instead of silently failing
-        try{ toast('UI init failed — refresh.'); }catch(_e){}
         console.error(e);
+        try{ toast('Init error — refresh.'); }catch(_e){}
       }
     }
 
