@@ -2041,6 +2041,76 @@ function startHeroCountdown(){
     }
 
 
+    
+    // === BOOTSTRAP (fix: missing boot() caused nav/buttons to break) ===
+    function go(sec){ try{ setSection(sec); }catch(e){} } // backward compat for older handlers
+
+    function setActiveLangPill(){
+      document.querySelectorAll('#chatLangRow .lang').forEach(btn=>{
+        btn.classList.toggle('active', (btn.dataset.lang || 'en') === state.lang);
+      });
+    }
+
+    function setChatLanguage(lang){
+      state.lang = (lang || 'en');
+      setActiveLangPill();
+      // Requirement: switching language should reset to one-liner welcome (not append)
+      try{ clearChatPreserveWelcome(); }catch(e){ try{ ensureWelcomeBubble(); }catch(_e){} }
+    }
+
+    function bindNav(){
+      document.querySelectorAll('#mobileNav .mnavBtn').forEach(btn=>{
+        // touch-action improves iOS responsiveness; prevents "stuck" feel
+        btn.style.touchAction = 'manipulation';
+        btn.addEventListener('click', (e)=>{
+          e.preventDefault();
+          e.stopPropagation();
+          haptic(8);
+          const sec = btn.dataset.sec || 'home';
+          setSection(sec);
+        }, {passive:false});
+      });
+    }
+
+    function bindChat(){
+      const sendBtn = document.getElementById('sendBtn');
+      const input = document.getElementById('msg');
+      if(sendBtn) sendBtn.addEventListener('click', ()=>{ haptic(6); sendChat(); }, {passive:true});
+      if(input){
+        input.addEventListener('keydown', (e)=>{
+          if(e.key === 'Enter'){
+            e.preventDefault();
+            sendChat();
+          }
+        });
+      }
+      // Language pills
+      document.querySelectorAll('#chatLangRow .lang').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          haptic(6);
+          setChatLanguage(btn.dataset.lang || 'en');
+        }, {passive:true});
+      });
+      setActiveLangPill();
+      // Ensure we always have a welcome bubble once
+      try{ ensureWelcomeBubble(); }catch(e){}
+    }
+
+    function boot(){
+      try{
+        bindNav();
+        bindChat();
+        // Default section
+        const initial = (document.body.getAttribute('data-sec') || 'home').trim() || 'home';
+        setSection(initial);
+      }catch(e){
+        // If something breaks, show a small toast instead of silently failing
+        try{ toast('UI init failed — refresh.'); }catch(_e){}
+        console.error(e);
+      }
+    }
+
+
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
     else boot();
   </script>
