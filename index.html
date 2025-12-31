@@ -1832,7 +1832,7 @@ function startHeroCountdown(){
       updateMenuTitle(); }catch(e){} }, 1000);
     // Refresh immediately when returning to tab
     document.addEventListener('visibilitychange', ()=>{
-      if(!document.hidden){ try{ updateHeroCountdown();
+      if(!document.hidden){ try{ setHeroBannerImage(); }catch(e){} try{ updateHeroCountdown();
       updateMenuTitle(); }catch(e){} }
     }, { passive:true });
   }catch(e){}
@@ -2256,17 +2256,13 @@ function startHeroCountdown(){
       try{
         bindNav();
         bindHome();
-        bindChat?.(); // if present in your file
+        if (typeof bindChat === 'function') bindChat(); // safe call (no optional chaining)
         bindPageControls();
 
-        // Start countdown ticker
-        try{
-          updateHeroCountdown();
-          clearInterval(window.__cdInt);
-          window.__cdInt = setInterval(updateHeroCountdown, 1000);
-        }catch(e){}
-
-        // Initial welcome bubble
+        // Start hero banner + countdown (robust across browsers)
+        try{ setHeroBannerImage(); }catch(e){}
+        try{ startHeroCountdown(); }catch(e){}
+// Initial welcome bubble
         try{ ensureWelcomeBubble(); }catch(e){}
 
         // Render VIP page content once
