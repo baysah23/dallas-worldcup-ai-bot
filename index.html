@@ -2746,7 +2746,7 @@ body[data-msec="schedule"] #scheduleCard{
               <input id="msg" autocomplete="off" inputmode="text"
                      placeholder="Ask anything (EN/ES/PT/FR)…"/>
               <button id="sendBtn" type="button">Send</button>
-              <button id="btnClear" class="secondary" type="button" onclick="clearChatPreserveWelcome()">Clear</button>
+              <button id="btnClear" class="secondary" type="button">Clear</button>
             </div>
             <p class="hint">Tap the language pill to switch EN → ES → PT → FR.</p>
           </div>
@@ -2876,8 +2876,8 @@ body[data-msec="schedule"] #scheduleCard{
         <button class="iconBtn" id="closeModal" type="button" aria-label="Close">✕</button>
       </div>
       <div class="modalBody">
-        <label for="iCity">Venue / Area (optional)</label>
-        <input id="iCity" placeholder="e.g., Stadium district, downtown, or a venue name (optional)" />
+        <label for="iCity">Business context (optional)</label>
+        <input id="iCity" placeholder="e.g., client name, suite name, or event context (optional)" />
         <label class="required" for="iDate">Date</label>
         <input id="iDate" type="date" />
         <label class="required" for="iGroup">Party size</label>
@@ -2894,13 +2894,35 @@ body[data-msec="schedule"] #scheduleCard{
   </div>
 
   <script>
-/* World Cup Concierge — robust boot script (nav + countdown + schedule) */
-const state = { sec:'home' };
+
+/* World Cup Concierge — boot (nav + countdown + chat + menu + schedule) */
+const state = {
+  sec: 'home',
+  lang: (localStorage.getItem('wc_lang') || 'en'),
+  scope: (localStorage.getItem('wc_scope') || 'all'), // 'all' | 'featured' (future-proof)
+};
+
+const LANGS = ['en','es','pt','fr'];
 
 // ---------- helpers ----------
 const $ = (id)=>document.getElementById(id);
 const $$ = (sel, root=document)=>Array.from((root||document).querySelectorAll(sel));
 const escapeHtml = (s)=>String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const clamp = (n,min,max)=>Math.max(min, Math.min(max, n));
+
+// ---------- SW cleanup (fix "buttons work sometimes" due to stale cached shell) ----------
+async function cleanupServiceWorker(){
+  try{
+    if(!('serviceWorker' in navigator)) return;
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r=>r.unregister().catch(()=>{})));
+  }catch(e){}
+  try{
+    if(!('caches' in window)) return;
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k=>caches.delete(k).catch(()=>{})));
+  }catch(e){}
+}
 
 // ---------- navigation ----------
 function setActiveNav(sec){
@@ -2932,209 +2954,273 @@ function bindNav(){
       e.preventDefault();
       e.stopPropagation();
       setSection(btn.dataset?.sec || 'home');
-    });
+    }, {passive:false});
   });
 }
 
-// ---------- countdown ----------
-const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z';
+// ---------- language ----------
+function setLang(lang){
+  lang = (lang || 'en').toLowerCase().trim();
+  if(!LANGS.includes(lang)) lang = 'en';
+  state.lang = lang;
+  localStorage.setItem('wc_lang', lang);
 
-function updateHeroCountdown(){
-  const dEl=$('cdD'), hEl=$('cdH'), mEl=$('cdM'), sEl=$('cdS');
-  if(!dEl||!hEl||!mEl||!sEl) return;
+  // Home pill
+  const homePill = $('pillLang');
+  if(homePill){
+    homePill.textContent = `${lang.toUpperCase()} · 4`;
+    homePill.setAttribute('aria-label', `Change language (current ${lang.toUpperCase()})`);
+  }
 
-  const target = new Date(HERO_KICKOFF_ISO).getTime();
-  const now = Date.now();
-  let diff = target - now;
-  if(!Number.isFinite(diff) || diff < 0) diff = 0;
-
-  const total = Math.floor(diff/1000);
-  const days = Math.floor(total/86400);
-  const hours = Math.floor((total%86400)/3600);
-  const mins = Math.floor((total%3600)/60);
-  const secs = total%60;
-
-  dEl.textContent = String(days).padStart(2,'0');
-  hEl.textContent = String(hours).padStart(2,'0');
-  mEl.textContent = String(mins).padStart(2,'0');
-  sEl.textContent = String(secs).padStart(2,'0');
+  // Chat pills
+  $$('.pill.mini.lang').forEach(p=>{
+    p.classList.toggle('active', (p.dataset?.lang||'').toLowerCase() === lang);
+  });
 }
 
-function startHeroCountdown(){
-  updateHeroCountdown();
-  if(window.__heroCdTimer) clearInterval(window.__heroCdTimer);
-  window.__heroCdTimer = setInterval(updateHeroCountdown, 1000);
-  document.addEventListener('visibilitychange', ()=>{
-    if(!document.hidden) updateHeroCountdown();
-  }, {passive:true});
+function cycleLang(){
+  const i = LANGS.indexOf(state.lang);
+  setLang(LANGS[(i+1) % LANGS.length]);
 }
 
-// ---------- chat helpers ----------
+// ---------- scope (kept generic; no city/location) ----------
+function setScope(scope){
+  scope = (scope || 'all').toLowerCase().trim();
+  if(!['all','featured'].includes(scope)) scope = 'all';
+  state.scope = scope;
+  localStorage.setItem('wc_scope', scope);
+
+  const pill = $('pillScope');
+  if(pill){
+    pill.textContent = (scope === 'all') ? 'Scope: Global' : 'Scope: Featured';
+  }
+
+  // refresh schedule/standings if user is currently there
+  if(state.sec === 'schedule'){ try{ loadSchedule(true); }catch(e){} }
+}
+
+function toggleScope(){
+  setScope(state.scope === 'all' ? 'featured' : 'all');
+}
+
+// ---------- chat ----------
 function focusChatInput(){
   const input = $('msg');
   if(!input) return;
   try{ input.focus({preventScroll:true}); }catch(e){ input.focus(); }
 }
 
-// ---------- fetch ----------
+function chatAppend(role, text){
+  const log = $('chatLog');
+  if(!log) return;
+  const wrap = document.createElement('div');
+  wrap.className = `chatLine ${role}`;
+  wrap.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
+  log.appendChild(wrap);
+  log.scrollTop = log.scrollHeight;
+}
+
+function ensureChatWelcome(){
+  const log = $('chatLog');
+  if(!log) return;
+  if(log.dataset.hasWelcome === '1') return;
+  log.dataset.hasWelcome = '1';
+  chatAppend('bot', 'Hi — tell me what you need and I’ll take care of the details. Party size + time window is perfect.');
+}
+
+function clearChatPreserveWelcome(){
+  const log = $('chatLog');
+  if(!log) return;
+  log.innerHTML = '';
+  log.dataset.hasWelcome = '';
+  ensureChatWelcome();
+}
+
+async function sendChatMessage(text){
+  const msg = (text ?? $('msg')?.value ?? '').trim();
+  if(!msg) return;
+  const input = $('msg');
+  if(input) input.value = '';
+
+  ensureChatWelcome();
+  chatAppend('user', msg);
+
+  // disable send to prevent "stuck double-click" feeling
+  const sendBtn = $('sendBtn');
+  if(sendBtn){ sendBtn.disabled = true; sendBtn.classList.add('busy'); }
+
+  try{
+    const r = await fetch('/chat', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ message: msg, language: state.lang })
+    });
+    const data = await r.json().catch(()=>({reply:'Sorry — something went wrong.'}));
+    chatAppend('bot', data.reply || '…');
+  }catch(e){
+    chatAppend('bot', 'Network issue — please try again.');
+  }finally{
+    if(sendBtn){ sendBtn.disabled = false; sendBtn.classList.remove('busy'); }
+    focusChatInput();
+  }
+}
+
+function openChatPrefill(text){
+  setSection('chat');
+  ensureChatWelcome();
+  const input = $('msg');
+  if(input){
+    input.value = text || '';
+    focusChatInput();
+  }
+}
+
+// ---------- fetch helpers ----------
 async function fetchJSON(url){
   const r = await fetch(url, {cache:'no-store'});
   if(!r.ok) throw new Error('HTTP '+r.status);
   return r.json();
 }
 
-// ---------- menu ----------
-async function loadMenu(){
-  if(window.__menuLoaded) return;
-  const box = $('menuBody');
-  const hint = $('menuHint');
-  if(hint) hint.textContent = 'Loading…';
-  try{
-    const data = await fetchJSON('/menu.json');
-    const items = data.items || data.menu || [];
-    if(box){
-      box.innerHTML = items.length ? items.map(it=>{
-        const name = escapeHtml(it.name || it.title || '');
-        const desc = escapeHtml(it.desc || it.description || '');
-        const price = escapeHtml(it.price || '');
-        return `<div class="rowCard"><div style="display:flex;justify-content:space-between;gap:10px;">
-                  <div style="font-weight:900">${name}</div>
-                  <div style="opacity:.9;font-weight:900">${price}</div>
-                </div>
-                ${desc?`<div class="hint" style="margin-top:4px">${desc}</div>`:''}
-              </div>`;
-      }).join('') : `<div class="hint">No menu items yet.</div>`;
-    }
-    if(hint) hint.textContent = '';
-    window.__menuLoaded = true;
-  }catch(e){
-    console.error(e);
-    if(hint) hint.textContent = 'Menu unavailable.';
+// ---------- countdown ----------
+function pad2(n){ return String(n).padStart(2,'0'); }
+
+function startHeroCountdown(){
+  const dEl = $('cdD'), hEl = $('cdH'), mEl = $('cdM'), sEl = $('cdS');
+  const targetISO = document.body?.dataset?.kickoffUtc || '';
+  if(!dEl || !hEl || !mEl || !sEl || !targetISO) return;
+
+  const target = new Date(targetISO);
+  if(isNaN(+target)) return;
+
+  function tick(){
+    const now = new Date();
+    let diff = Math.max(0, target - now);
+    const sec = Math.floor(diff/1000);
+    const days = Math.floor(sec/86400);
+    const hrs = Math.floor((sec%86400)/3600);
+    const mins = Math.floor((sec%3600)/60);
+    const secs = sec%60;
+    dEl.textContent = pad2(days);
+    hEl.textContent = pad2(hrs);
+    mEl.textContent = pad2(mins);
+    sEl.textContent = pad2(secs);
   }
+  tick();
+  setInterval(tick, 1000);
 }
+
+let scheduleView = 'fixtures';
+let fixturesCache = null;
+let currentPage = 1;
 
 // ---------- schedule ----------
-let scheduleView = (()=>{
-  try{ return localStorage.getItem('schedule_view') || 'fixtures'; }catch(e){ return 'fixtures'; }
-})();
-let currentPage = 1;
-const PAGE_SIZE = 10;
-let fixturesCache = null;
-
-function setTabSelected(view){
+function initScheduleHandlers(){
   const tabs = $('scheduleTabs');
   if(!tabs) return;
-  $$('.segbtn', tabs).forEach(btn=>{
-    const v = btn.getAttribute('data-view');
-    const active = v === view;
-    btn.setAttribute('aria-selected', active ? 'true' : 'false');
-    btn.classList.toggle('active', active);
+
+  $$('.tabBtn', tabs).forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      scheduleView = btn.dataset.view || 'fixtures';
+      $$('.tabBtn', tabs).forEach(b=>b.classList.toggle('active', b === btn));
+      loadSchedule(true);
+    });
   });
-}
 
-function showPager(show){
-  const pager = $('pager');
-  if(pager) pager.style.display = show ? 'flex' : 'none';
-}
-
-function setPageIndicator(page, totalPages){
-  const el = $('pageIndicator');
-  if(el) el.textContent = `Page ${page} of ${totalPages}`;
-  const prev = $('prevPage'), next = $('nextPage');
-  if(prev) prev.disabled = page <= 1;
-  if(next) next.disabled = page >= totalPages;
+  $('prevPage')?.addEventListener('click', ()=>{ currentPage = Math.max(1, currentPage-1); loadSchedule(); });
+  $('nextPage')?.addEventListener('click', ()=>{ currentPage = currentPage+1; loadSchedule(); });
 }
 
 function renderFixtures(matches){
   const list = $('schedule');
+  const meta = $('scheduleMetaLine');
   if(!list) return;
 
-  if(!matches.length){
-    list.innerHTML = `<div class="hint">No matches found.</div>`;
-    showPager(false);
-    return;
+  // basic paging
+  const perPage = 12;
+  const total = matches.length;
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  currentPage = clamp(currentPage, 1, pages);
+
+  const start = (currentPage-1)*perPage;
+  const slice = matches.slice(start, start+perPage);
+
+  list.innerHTML = slice.map(m=>{
+    const dt = escapeHtml(m.date || m.datetime_local || m.datetime_utc || '');
+    const home = escapeHtml(m.home || '');
+    const away = escapeHtml(m.away || '');
+    const venue = escapeHtml(m.venue || '');
+    const stage = escapeHtml(m.stage || '');
+    return `<div class="matchRow">
+      <div class="mTop">
+        <div class="mStage">${stage}</div>
+        <div class="mDate">${dt}</div>
+      </div>
+      <div class="mTeams">${home} <span class="vs">vs</span> ${away}</div>
+      <div class="mVenue">${venue}</div>
+    </div>`;
+  }).join('') || `<div class="hint">No fixtures found.</div>`;
+
+  const pager = $('pager');
+  const pi = $('pageIndicator');
+  if(pager && pi){
+    pager.style.display = pages > 1 ? '' : 'none';
+    pi.textContent = `Page ${currentPage} / ${pages}`;
   }
 
-  const totalPages = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
-  if(currentPage > totalPages) currentPage = totalPages;
-
-  const slice = matches.slice((currentPage-1)*PAGE_SIZE, currentPage*PAGE_SIZE);
-  list.innerHTML = slice.map(m=>{
-    const dt = escapeHtml(m.datetime_local || m.date || m.datetime || '');
-    const a = escapeHtml(m.home || m.team1 || m.a || '');
-    const b = escapeHtml(m.away || m.team2 || m.b || '');
-    const venue = escapeHtml(m.venue || m.stadium || '');
-    const city = escapeHtml(m.city || '');
-    const group = escapeHtml(m.group || m.stage || '');
-    const line2 = [venue, city].filter(Boolean).join(' • ');
-    return `<div class="rowCard">
-              <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
-                <div style="font-weight:900">${a} vs ${b}</div>
-                <div class="pill" style="white-space:nowrap">${dt || 'TBD'}</div>
-              </div>
-              ${group?`<div class="hint" style="margin-top:4px">${group}</div>`:''}
-              ${line2?`<div class="hint" style="margin-top:4px">${line2}</div>`:''}
-            </div>`;
-  }).join('');
-
-  showPager(true);
-  setPageIndicator(currentPage, totalPages);
+  if(meta){
+    meta.textContent = `${total} fixtures`;
+  }
 }
 
 function renderLive(matches){
   const list = $('schedule');
+  const meta = $('scheduleMetaLine');
   if(!list) return;
-  if(!matches.length){
-    list.innerHTML = `<div class="hint">No live matches right now.</div>`;
-    showPager(false);
-    return;
-  }
-  showPager(false);
-  list.innerHTML = matches.map(m=>{
-    const a = escapeHtml(m.home || m.team1 || '');
-    const b = escapeHtml(m.away || m.team2 || '');
+
+  list.innerHTML = (matches || []).map(m=>{
+    const home = escapeHtml(m.home || '');
+    const away = escapeHtml(m.away || '');
     const score = escapeHtml(m.score || m.result || '');
-    const status = escapeHtml(m.status || m.minute || 'Live');
-    return `<div class="rowCard">
-              <div style="display:flex;justify-content:space-between;gap:10px;">
-                <div style="font-weight:900">${a} vs ${b}</div>
-                <div class="pill">${status}</div>
-              </div>
-              ${score?`<div class="hint" style="margin-top:4px">Score: ${score}</div>`:''}
-            </div>`;
-  }).join('');
+    const status = escapeHtml(m.status || 'Live');
+    return `<div class="matchRow">
+      <div class="mTop"><div class="mStage">${status}</div></div>
+      <div class="mTeams">${home} <span class="vs">vs</span> ${away}</div>
+      <div class="mVenue">${score}</div>
+    </div>`;
+  }).join('') || `<div class="hint">No live matches right now.</div>`;
+
+  if(meta){ meta.textContent = `Live updates`; }
 }
 
-function renderGroups(groups){
+function renderStandings(data){
   const list = $('schedule');
+  const meta = $('scheduleMetaLine');
   if(!list) return;
-  showPager(false);
 
-  const arr = Array.isArray(groups) ? groups : (groups?.groups || []);
-  if(!arr.length){
-    list.innerHTML = `<div class="hint">Groups unavailable.</div>`;
-    return;
-  }
-
-  list.innerHTML = arr.map(g=>{
-    const name = escapeHtml(g.name || g.group || 'Group');
-    const rows = (g.teams || g.table || []).map(t=>{
-      const team = escapeHtml(t.team || t.name || '');
-      const pts = escapeHtml(t.pts ?? t.points ?? '');
-      const pld = escapeHtml(t.p ?? t.played ?? '');
-      return `<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.08)">
-                <div style="font-weight:800">${team}</div>
-                <div class="hint">${pld?`${pld}P`:""} ${pts!==''?` • ${pts} pts`:""}</div>
-              </div>`;
+  const groups = data.groups || [];
+  list.innerHTML = groups.map(g=>{
+    const name = escapeHtml(g.group || g.name || '');
+    const rows = (g.table || g.teams || []).map(t=>{
+      return `<tr>
+        <td>${escapeHtml(t.team || t.name || '')}</td>
+        <td>${escapeHtml(t.p || t.played || 0)}</td>
+        <td>${escapeHtml(t.pts ?? t.points ?? 0)}</td>
+      </tr>`;
     }).join('');
-    return `<div class="rowCard">
-              <div style="font-weight:900;margin-bottom:6px">${name}</div>
-              ${rows || `<div class="hint">No standings yet.</div>`}
-            </div>`;
-  }).join('');
+    return `<div class="standBlock">
+      <div class="standTitle">${name}</div>
+      <table class="standTable">
+        <thead><tr><th>Team</th><th>P</th><th>Pts</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+  }).join('') || `<div class="hint">Standings unavailable.</div>`;
+
+  if(meta){ meta.textContent = `Standings · ${data.count_groups || groups.length} groups`; }
 }
 
-async function loadSchedule(){
+async function loadSchedule(force=false){
   const list = $('schedule');
   const meta = $('scheduleMetaLine');
   if(list) list.innerHTML = `<div class="hint">Loading…</div>`;
@@ -3142,7 +3228,7 @@ async function loadSchedule(){
 
   try{
     if(scheduleView === 'fixtures'){
-      if(!fixturesCache){
+      if(!fixturesCache || force){
         const data = await fetchJSON('/schedule.json');
         fixturesCache = data.matches || [];
       }
@@ -3151,60 +3237,204 @@ async function loadSchedule(){
       const data = await fetchJSON('/worldcup/live.json');
       renderLive(data.matches || data.live || []);
     }else if(scheduleView === 'groups'){
-      const data = await fetchJSON('/worldcup/standings.json?scope=all');
-      renderGroups(data.groups || data);
+      const scope = (state.scope === 'featured') ? 'featured' : 'all';
+      const data = await fetchJSON(`/worldcup/standings.json?scope=${encodeURIComponent(scope)}`);
+      renderStandings(data);
     }
   }catch(e){
-    console.error(e);
     if(list) list.innerHTML = `<div class="hint">Schedule unavailable.</div>`;
-    showPager(false);
   }
 }
 
-function initScheduleHandlers(){
-  const tabs = $('scheduleTabs');
-  if(tabs){
-    $$('.segbtn', tabs).forEach(btn=>{
-      btn.addEventListener('click', ()=>{
-        scheduleView = btn.getAttribute('data-view') || 'fixtures';
-        try{ localStorage.setItem('schedule_view', scheduleView); }catch(e){}
-        currentPage = 1;
-        setTabSelected(scheduleView);
-        loadSchedule();
-      });
-    });
-    setTabSelected(scheduleView);
-  }
+// ---------- menu ----------
+async function loadMenu(){
+  const body = $('menuBody');
+  const hint = $('menuHint');
+  if(body) body.innerHTML = `<div class="hint">Loading…</div>`;
+  if(hint) hint.textContent = '';
 
-  $('prevPage')?.addEventListener('click', ()=>{ currentPage = Math.max(1, currentPage-1); loadSchedule(); });
-  $('nextPage')?.addEventListener('click', ()=>{ currentPage = currentPage+1; loadSchedule(); });
+  try{
+    const data = await fetchJSON('/menu.json');
+    const sections = data.sections || data.menu || [];
+    if(!sections.length){
+      if(body) body.innerHTML = `<div class="hint">Menu unavailable.</div>`;
+      return;
+    }
+    if(body){
+      body.innerHTML = sections.map(sec=>{
+        const title = escapeHtml(sec.title || sec.name || '');
+        const items = (sec.items || []).map(it=>{
+          const nm = escapeHtml(it.name || '');
+          const ds = escapeHtml(it.desc || it.description || '');
+          const pr = escapeHtml(it.price || '');
+          return `<div class="menuItem">
+            <div class="miTop"><div class="miName">${nm}</div><div class="miPrice">${pr}</div></div>
+            <div class="miDesc">${ds}</div>
+          </div>`;
+        }).join('');
+        return `<div class="menuSection"><div class="menuTitle">${title}</div>${items}</div>`;
+      }).join('');
+    }
+  }catch(e){
+    if(body) body.innerHTML = `<div class="hint">Menu unavailable.</div>`;
+    if(hint) hint.textContent = 'Menu unavailable.';
+  }
 }
 
-// ---------- fanzone & vip ----------
+// ---------- fanzone / vip (placeholders if routes return data) ----------
 async function loadFanzone(){
-  if(window.__fanzoneLoaded) return;
-  try{ await fetchJSON('/fanzone.json'); window.__fanzoneLoaded = true; }catch(e){ console.error(e); }
+  const box = $('fanzoneBody');
+  if(!box) return;
+  box.innerHTML = `<div class="hint">Loading…</div>`;
+  try{
+    const data = await fetchJSON('/fanzone.json');
+    const items = data.items || data.events || [];
+    box.innerHTML = items.map(it=>`<div class="fzItem">
+      <div class="fzTitle">${escapeHtml(it.title||it.name||'')}</div>
+      <div class="fzMeta">${escapeHtml(it.when||it.date||'')}</div>
+      <div class="fzDesc">${escapeHtml(it.desc||it.description||'')}</div>
+    </div>`).join('') || `<div class="hint">No events right now.</div>`;
+  }catch(e){
+    box.innerHTML = `<div class="hint">Fan Zone unavailable.</div>`;
+  }
 }
 
 async function loadVIP(){
-  if(window.__vipLoaded) return;
-  try{ await fetchJSON('/api/config'); window.__vipLoaded = true; }catch(e){ console.error(e); }
+  const box = $('vipBody');
+  if(!box) return;
+  box.innerHTML = `<div class="hint">Loading…</div>`;
+  try{
+    const data = await fetchJSON('/worldcup/qualified.json').catch(()=>null);
+    box.innerHTML = `<div class="hint">Tell us the vibe (VIP, private table, hosted moment) and your time window — we’ll handle the rest.</div>`;
+  }catch(e){
+    box.innerHTML = `<div class="hint">VIP unavailable.</div>`;
+  }
+}
+
+// ---------- intake modal ----------
+function openModal(){
+  const m = $('intakeModal');
+  if(!m) return;
+  m.classList.remove('hidden');
+  document.body.classList.add('modalOpen');
+  try{ $('iDate')?.focus(); }catch(e){}
+}
+function closeModal(){
+  const m = $('intakeModal');
+  if(!m) return;
+  m.classList.add('hidden');
+  document.body.classList.remove('modalOpen');
+}
+async function submitIntake(){
+  const msg = $('intakeMsg');
+  const iDate = $('iDate')?.value || '';
+  const iGroup = $('iGroup')?.value || '';
+  const iTime = $('iTime')?.value || '';
+  const iVibe = $('iVibe')?.value || '';
+  const iBudget = $('iBudget')?.value || '';
+  const iNotes = $('iNotes')?.value || '';
+  const iContact = $('iContact')?.value || '';
+
+  if(!iDate || !iGroup || !iTime || !iContact){
+    if(msg) msg.textContent = 'Please fill Date, Party size, Time window, and Contact.';
+    return;
+  }
+  if(msg) msg.textContent = 'Sending…';
+
+  // keep it in-chat (premium + fast)
+  const summary = `Reservation request: date ${iDate}, party ${iGroup}, time ${iTime}${iVibe?`, vibe ${iVibe}`:''}${iBudget?`, budget ${iBudget}`:''}${iNotes?`, notes ${iNotes}`:''}. Contact: ${iContact}.`;
+  closeModal();
+  openChatPrefill(summary);
+  if(msg) msg.textContent = '';
 }
 
 // ---------- home bindings ----------
 function bindHome(){
-  $('ctaChat')?.addEventListener('click', ()=>setSection('chat'));
-  $('ctaReserve')?.addEventListener('click', ()=>setSection('chat'));
+  // Primary CTAs
+  $('ctaChat')?.addEventListener('click', ()=>openChatPrefill(''));
+  $('ctaReserve')?.addEventListener('click', ()=>openChatPrefill('Reservation request: '));
+
+  // Quick chips -> prefill
+  $$('.quickChips .chip').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      openChatPrefill(btn.dataset?.q ? `${btn.dataset.q} — ` : '');
+    });
+  });
+
+  // Explore tiles
+  $('tileVIP')?.addEventListener('click', ()=>setSection('vip'));
+  $('tileFanzone')?.addEventListener('click', ()=>setSection('fanzone'));
+  $('tileSchedule')?.addEventListener('click', ()=>setSection('schedule'));
+  $('tileMenu')?.addEventListener('click', ()=>setSection('menu'));
+  $('tilePlan')?.addEventListener('click', ()=>openModal());
+
+  // Pills
+  $('pillLang')?.addEventListener('click', ()=>cycleLang());
+  $('pillScope')?.addEventListener('click', ()=>toggleScope());
+}
+
+// ---------- chat bindings ----------
+function bindChat(){
+  $('sendBtn')?.addEventListener('click', ()=>sendChatMessage());
+  $('msg')?.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      sendChatMessage();
+    }
+  });
+
+  // clear button (remove reliance on inline onclick)
+  $('btnClear')?.addEventListener('click', (e)=>{
+    e.preventDefault();
+    clearChatPreserveWelcome();
+  });
+
+  // language mini pills
+  $$('.pill.mini.lang').forEach(p=>{
+    p.addEventListener('click', ()=>{
+      setLang((p.dataset?.lang||'en'));
+    });
+  });
+}
+
+// ---------- modal bindings ----------
+function bindModal(){
+  $('closeModal')?.addEventListener('click', ()=>closeModal());
+  $('submitIntake')?.addEventListener('click', ()=>submitIntake());
+  $('intakeModal')?.addEventListener('click', (e)=>{
+    if(e.target && e.target.id === 'intakeModal') closeModal();
+  });
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape') closeModal();
+  });
 }
 
 // ---------- boot ----------
-document.addEventListener('DOMContentLoaded', ()=>{
+function init(){
+  // state-derived UI
+  setLang(state.lang);
+  setScope(state.scope);
+
   bindNav();
   bindHome();
+  bindChat();
+  bindModal();
   initScheduleHandlers();
   startHeroCountdown();
   setSection('home');
-});
+  ensureChatWelcome();
+}
+
+// run init reliably even if DOMContentLoaded already fired
+(async ()=>{
+  await cleanupServiceWorker();
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init, {once:true});
+  }else{
+    init();
+  }
+})();
+
 </script>
 
 </body>
