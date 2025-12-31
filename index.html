@@ -480,6 +480,8 @@
       z-index: 50;
     }
     .mnavBtn{
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
       appearance:none;
       border: 0;
       background: transparent;
@@ -1270,8 +1272,28 @@ html[data-hero="night"] .broadcast-title{
 }
 
 
-/* Hide Dallas scope for global app */
-#scopeDallasBtn{display:none!important}
+    /* Chat language toggle */
+    .langToggle{ display:flex; gap:6px; align-items:center; }
+    .langBtn{
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.18);
+      color: var(--text);
+      padding:6px 8px;
+      border-radius:10px;
+      font-size:12px;
+      font-weight:800;
+      cursor:pointer;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .langBtn.active{
+      background: rgba(46,160,67,.18);
+      border-color: rgba(46,160,67,.45);
+    }
+    @media (max-width:520px){
+      .langBtn{ font-size:11px; padding:6px 7px; }
+    }
+
 </style>
 </head>
 
@@ -1413,6 +1435,13 @@ html[data-hero="night"] .broadcast-title{
         <div class="card">
           <div class="cardHead">
             <h2 class="cardTitle">Concierge chat</h2>
+            
+            <div class="langToggle" id="chatLangToggle" role="tablist" aria-label="Chat language">
+              <button class="langBtn active" data-lang="en" type="button">EN</button>
+              <button class="langBtn" data-lang="es" type="button">ES</button>
+              <button class="langBtn" data-lang="pt" type="button">PT</button>
+              <button class="langBtn" data-lang="fr" type="button">FR</button>
+            </div>
             <button class="pill" id="clearChat" type="button">Clear</button>
           </div>
           <div class="cardBody">
@@ -1527,7 +1556,19 @@ html[data-hero="night"] .broadcast-title{
   </div>
 
   <script>
-    const state = { lang:'en', scope:'global', city:'' };
+    const state = { lang:'en', scope:'global', city:'' }
+
+
+    function setLang(lang){
+      state.lang = (lang || 'en');
+      try{ localStorage.setItem('wc_lang', state.lang); }catch(e){}
+      document.querySelectorAll('#chatLangToggle .langBtn').forEach(b=>{
+        b.classList.toggle('active', b.getAttribute('data-lang') === state.lang);
+      });
+      // refresh language-dependent panels
+      try{ loadMenu(); }catch(e){}
+    }
+;
 
     // Toast helper
     function toast(msg){
@@ -1636,6 +1677,13 @@ systemMsg(`Language set to ${state.lang.toUpperCase()}.`);
     function toggleScope(){
       state.scope = (state.scope === 'global') ? 'city' : 'global';
       updatePills();
+      // Restore last language
+      try{ const saved = localStorage.getItem('wc_lang'); if(saved) state.lang = saved; }catch(e){}
+      // Wire chat language toggle
+      document.querySelectorAll('#chatLangToggle .langBtn').forEach(btn=>{
+        btn.addEventListener('click', ()=> setLang(btn.getAttribute('data-lang')));
+      });
+      setLang(state.lang);
       systemMsg(state.scope === 'global' ? 'Global schedule enabled.' : 'Local schedule enabled. Filter by host city only if you want.');
       toast(state.scope === 'global' ? 'Scope: Global' : 'Scope: City');
       haptic(8);
@@ -2220,7 +2268,15 @@ const ctaChat = document.getElementById('ctaChat');
       });
 
       updatePills();
-      systemMsg('Welcome. Ask about reservations, match schedules, fan events, or VIP options.');
+      // Restore last language
+      try{ const saved = localStorage.getItem('wc_lang'); if(saved) state.lang = saved; }catch(e){}
+      // Wire chat language toggle
+      document.querySelectorAll('#chatLangToggle .langBtn').forEach(btn=>{
+        btn.addEventListener('click', ()=> setLang(btn.getAttribute('data-lang')));
+      });
+      setLang(state.lang);
+      systemMsg('⚽ Welcome, World Cup fan! I\'m your World Cup Concierge.
+Type "reservation" to book a table, or ask about matches, fan events, VIP, or the menu.');
       loadPresence();
       setTimeout(prefetchAll, 250);
 

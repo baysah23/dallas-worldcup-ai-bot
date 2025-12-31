@@ -105,11 +105,14 @@ SCOPES = [
 # Business Profile
 # ============================================================
 BUSINESS_PROFILE_PATH = "business_profile.txt"
-if not os.path.exists(BUSINESS_PROFILE_PATH):
-    raise FileNotFoundError("business_profile.txt not found in the same folder as app.py.")
+BUSINESS_PROFILE = ""
+try:
+    if os.path.exists(BUSINESS_PROFILE_PATH):
+        with open(BUSINESS_PROFILE_PATH, "r", encoding="utf-8") as f:
+            BUSINESS_PROFILE = f.read().strip()
+except Exception:
+    BUSINESS_PROFILE = ""
 
-with open(BUSINESS_PROFILE_PATH, "r", encoding="utf-8") as f:
-    BUSINESS_PROFILE = f.read().strip()
 
 
 # ============================================================
@@ -426,12 +429,12 @@ def is_dallas_match(m: Dict[str, Any]) -> bool:
 
 
 def filter_matches(scope: str, q: str = "") -> List[Dict[str, Any]]:
-    scope = (scope or "dallas").lower().strip()
+    # Global app: ignore city-specific scope; always serve ALL matches
+    scope = (scope or "all").lower().strip()
     q = (q or "").strip().lower()
 
     matches = load_all_matches()
-    if scope != "all":
-        matches = [m for m in matches if is_dallas_match(m)]
+    # (city filtering removed)
 
     if q:
         def hit(m):
@@ -3203,24 +3206,6 @@ tr:hover td{background:rgba(255,255,255,.03)}
 
     html.append("</div></body></html>")
     return "".join(html)
-
-
-
-# ============================================================
-# SPA fallback (serve index.html for unknown paths)
-# ============================================================
-@app.route("/<path:path>")
-def catch_all(path):
-    # If the path is a real file, try to serve it (static assets)
-    try:
-        if os.path.isfile(path):
-            return send_file(path)
-    except Exception:
-        pass
-    # Otherwise serve the SPA shell
-    resp = make_response(send_from_directory(".", "index.html"))
-    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    return resp
 
 
 if __name__ == "__main__":
