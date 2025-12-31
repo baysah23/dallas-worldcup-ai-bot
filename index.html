@@ -3312,7 +3312,7 @@ function clearChatPreserveWelcome(){
   if(!log) return;
   log.innerHTML = '';
   log.dataset.hasWelcome = '';
-  ensureChatWelcome();();
+  ensureChatWelcome();
 }
 
 async function sendChatMessage(text){
@@ -3321,7 +3321,7 @@ async function sendChatMessage(text){
   const input = $('msg');
   if(input) input.value = '';
 
-  ensureChatWelcome();();
+  ensureChatWelcome();
   chatAppend('user', msg);
 
   // disable send to prevent "stuck double-click" feeling
@@ -3346,7 +3346,7 @@ async function sendChatMessage(text){
 
 function openChatPrefill(text){
   setSection('chat');
-  ensureChatWelcome();();
+  ensureChatWelcome();
   const input = $('msg');
   if(input){
     input.value = text || '';
@@ -3881,7 +3881,7 @@ function init(){
   startHeroCountdown();
   relocateMatchDayOpsToggles();
   setSection('home');
-  ensureChatWelcome();();
+  ensureChatWelcome();
 }
 
 // run init reliably even if DOMContentLoaded already fired
