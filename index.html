@@ -3749,5 +3749,12 @@ function init(){
 
 </script>
 
+
+<script>
+// Ensure Match-Day Ops Toggles are relocated under Ops panel after render
+document.addEventListener('DOMContentLoaded', () => {
+  try { relocateMatchDayOpsToggles(); } catch(e){}
+});
+</script>
 </body>
 </html>
