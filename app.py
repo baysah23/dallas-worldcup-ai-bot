@@ -45,8 +45,6 @@ app = Flask(__name__)
 
 
 
-client = OpenAI()
-
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
 
@@ -257,7 +255,7 @@ def _fetch_fixture_feed() -> List[Dict[str, Any]]:
         headers={"User-Agent": "worldcup-concierge/1.0"},
         method="GET",
     )
-        # Network can be slow/unreliable on some hosts. Use a safer timeout + small retry.
+    # Network can be slow/unreliable on some hosts. Use a safer timeout + small retry.
     last_err = None
     for _attempt in range(3):
         try:
@@ -377,8 +375,7 @@ def load_all_matches(force: bool = False) -> List[Dict[str, Any]]:
 
         match_num = int(m.get("MatchNumber") or 0) or None
         match_id = f"wc-{match_num:03d}" if match_num else f"wc-{len(norm)+1:03d}"
-
-                # Scores (best-effort; feed includes finals once matches are completed)
+        # Scores (best-effort; feed includes finals once matches are completed)
         def _to_int(x):
             try:
                 if x is None or x == "":
@@ -413,7 +410,7 @@ def load_all_matches(force: bool = False) -> List[Dict[str, Any]]:
             "away_score": as_,
             "status": status,
         })
-# Sort by kickoff UTC
+    # Sort by kickoff UTC
     norm.sort(key=lambda x: x.get("datetime_utc") or "")
     _fixtures_cache["loaded_at"] = now
     _fixtures_cache["matches"] = norm
