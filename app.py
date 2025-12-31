@@ -3178,6 +3178,71 @@ def admin_api_ops():
     return jsonify({"ok": True, "ops": get_ops(cfg)})
 
 
+
+# ============================================================
+# Match-Day Presets (Admin)
+# - One-click bundles that flip multiple Ops toggles + Rule values
+# - Logged to audit
+# ============================================================
+MATCHDAY_PRESETS: Dict[str, Dict[str, Any]] = {
+    "Kickoff Rush": {
+        "ops": {"pause_reservations": False, "vip_only": True, "waitlist_mode": True},
+        "rules": {"max_party_size": 6, "match_day_banner": "🏟️ Kickoff Rush: VIP priority + waitlist enabled"},
+    },
+    "Halftime Surge": {
+        "ops": {"pause_reservations": False, "vip_only": False, "waitlist_mode": True},
+        "rules": {"max_party_size": 4, "match_day_banner": "⏱️ Halftime Surge: fast seating + waitlist enabled"},
+    },
+    "Post-game": {
+        "ops": {"pause_reservations": False, "vip_only": False, "waitlist_mode": False},
+        "rules": {"max_party_size": 10, "match_day_banner": "🌙 Post-game: larger groups welcome"},
+    },
+}
+
+@app.route("/admin/api/presets", methods=["GET"])
+def admin_api_presets():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    return jsonify({"ok": True, "presets": list(MATCHDAY_PRESETS.keys())})
+
+@app.route("/admin/api/presets/apply", methods=["POST"])
+def admin_api_presets_apply():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    data = request.get_json(silent=True) or {}
+    name = (data.get("name") or "").strip()
+    preset = MATCHDAY_PRESETS.get(name)
+    if not preset:
+        return jsonify({"ok": False, "error": "Unknown preset"}), 400
+
+    # Apply Ops (manager allowed)
+    ops = preset.get("ops") or {}
+    def _b(v):
+        return "true" if bool(v) else "false"
+    pairs = {
+        "ops_pause_reservations": _b(ops.get("pause_reservations", False)),
+        "ops_vip_only": _b(ops.get("vip_only", False)),
+        "ops_waitlist_mode": _b(ops.get("waitlist_mode", False)),
+    }
+    cfg = set_config(pairs)
+
+    # Apply Rules (owner only)
+    rules_patch = preset.get("rules") or {}
+    if rules_patch:
+        ok2, resp2 = _require_admin(min_role="owner")
+        if not ok2:
+            return resp2
+        global BUSINESS_RULES
+        BUSINESS_RULES = _deep_merge(BUSINESS_RULES, rules_patch)
+        _persist_rules(rules_patch)
+
+    _audit("preset.apply", {"name": name, "ops": get_ops(cfg), "rules_patch": rules_patch})
+    return jsonify({"ok": True, "name": name, "ops": get_ops(cfg), "rules": BUSINESS_RULES})
+
+
 @app.route("/admin/api/audit", methods=["GET"])
 def admin_api_audit():
     ok, resp = _require_admin(min_role="manager")
@@ -3259,6 +3324,8 @@ def admin_export_csv():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return "Unauthorized", 401
+
+    key = (request.args.get("key","") or "").strip()
 
     gc = get_gspread_client()
     ws = gc.open(SHEET_NAME).sheet1
@@ -3474,6 +3541,42 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
     html.append("</div>")  # tab-leads
 
+    # Ops tab (match-day controls)
+    html.append(r"""
+<div id="tab-ops" class="tabpane hidden">
+  <div class="card">
+    <div class="h2">Match-Day Ops</div>
+    <div class="small">Fast switches that reduce staff load on game day. Saved instantly; logged in Audit.</div>
+
+    <div class="row" style="margin-top:10px">
+      <div class="card" style="margin:0">
+        <div class="h2" style="margin-bottom:6px">Ops toggles</div>
+        <label class="small"><input type="checkbox" id="ops-pause"> Pause reservations</label><br/>
+        <label class="small"><input type="checkbox" id="ops-viponly"> VIP-only</label><br/>
+        <label class="small"><input type="checkbox" id="ops-waitlist"> Waitlist mode</label>
+        <div style="margin-top:10px">
+          <button class="btn" onclick="saveOps()">Save Ops</button>
+          <span id="ops-msg" class="note"></span>
+        </div>
+      </div>
+
+      <div class="card" style="margin:0">
+        <div class="h2" style="margin-bottom:6px">Match-Day Presets</div>
+        <div class="small">One click = flip multiple toggles + rule values.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          <button class="btn2" onclick="applyPreset('Kickoff Rush')">Kickoff Rush</button>
+          <button class="btn2" onclick="applyPreset('Halftime Surge')">Halftime Surge</button>
+          <button class="btn2" onclick="applyPreset('Post-game')">Post-game</button>
+        </div>
+        <div class="note" id="preset-msg"></div>
+        <div class="small" style="margin-top:10px">Note: Presets can change Rules too — Owners only.</div>
+      </div>
+    </div>
+  </div>
+</div>
+""")
+
+
     # Rules tab
     html.append(r"""
 <div id="tab-rules" class="tabpane hidden">
@@ -3552,6 +3655,28 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 </div>
 """)
 
+
+    # Audit tab
+    html.append(r"""
+<div id="tab-audit" class="tabpane hidden">
+  <div class="card">
+    <div class="h2">Audit Log</div>
+    <div class="small">Shows who changed ops/rules/menu and when.</div>
+    <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <input class="inp" id="audit-limit" type="number" min="10" max="500" value="200" style="width:120px" />
+      <button class="btn2" onclick="loadAudit()">Refresh</button>
+      <span id="audit-msg" class="note"></span>
+    </div>
+    <div class="tablewrap" style="margin-top:10px">
+      <table>
+        <thead><tr><th>Time</th><th>Actor</th><th>Role</th><th>Action</th><th>Details</th></tr></thead>
+        <tbody id="audit-body"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+""")
+
     # Scripts
     html.append(f"""
 <script>
@@ -3565,13 +3690,15 @@ qsa('.tabbtn').forEach(btn=>{{
     qsa('.tabbtn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     const t = btn.dataset.tab;
-    ['leads','rules','menu'].forEach(x=>{{
+    ['leads','ops','rules','menu','audit'].forEach(x=>{{
       const pane = document.getElementById('tab-'+x);
       if(!pane) return;
       pane.classList.toggle('hidden', x!==t);
     }});
+    if(t==='ops') loadOps();
     if(t==='rules') loadRules();
     if(t==='menu') loadMenu();
+    if(t==='audit') loadAudit();
   }});
 }});
 
@@ -3666,6 +3793,86 @@ async function uploadMenu(){{
   if(j && j.ok){{ qs('#menu-json').value = JSON.stringify(j.menu || {{}}, null, 2); if(msg) msg.textContent='Uploaded ✔'; }}
   else {{ if(msg) msg.textContent='Upload failed'; alert('Upload failed: '+(j && j.error ? j.error : res.status)); }}
 }}
+
+async function loadOps(){{
+  const msg = qs('#ops-msg'); if(msg) msg.textContent='Loading...';
+  const res = await fetch('/admin/api/ops?key='+encodeURIComponent(KEY));
+  const j = await res.json().catch(()=>null);
+  if(!j || !j.ok){{ if(msg) msg.textContent='Failed to load ops'; return; }}
+  const o = j.ops || {{}};
+  const pause = qs('#ops-pause'); if(pause) pause.checked = (o.pause_reservations===true || o.pause_reservations==='true');
+  const vip = qs('#ops-viponly'); if(vip) vip.checked = (o.vip_only===true || o.vip_only==='true');
+  const wl = qs('#ops-waitlist'); if(wl) wl.checked = (o.waitlist_mode===true || o.waitlist_mode==='true');
+  if(msg) msg.textContent='';
+}}
+
+async function saveOps(){{
+  const msg = qs('#ops-msg'); if(msg) msg.textContent='Saving...';
+  const payload = {{
+    pause_reservations: !!(qs('#ops-pause') && qs('#ops-pause').checked),
+    vip_only: !!(qs('#ops-viponly') && qs('#ops-viponly').checked),
+    waitlist_mode: !!(qs('#ops-waitlist') && qs('#ops-waitlist').checked),
+  }};
+  const res = await fetch('/admin/api/ops?key='+encodeURIComponent(KEY), {{
+    method:'POST',
+    headers:{{'Content-Type':'application/json'}},
+    body: JSON.stringify(payload)
+  }});
+  const j = await res.json().catch(()=>null);
+  if(j && j.ok){{ if(msg) msg.textContent='Saved ✔'; }}
+  else {{ if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }}
+}}
+
+async function applyPreset(name){{
+  const msg = qs('#preset-msg'); if(msg) msg.textContent='Applying "'+name+'" ...';
+  const res = await fetch('/admin/api/presets/apply?key='+encodeURIComponent(KEY), {{
+    method:'POST',
+    headers:{{'Content-Type':'application/json'}},
+    body: JSON.stringify({{name}})
+  }});
+  const j = await res.json().catch(()=>null);
+  if(j && j.ok){{
+    if(msg) msg.textContent='Applied ✔ (logged)';
+    await loadOps();
+    // If you are owner and preset touched rules, refresh rules form for visibility.
+    if(j.rules) await loadRules();
+  }} else {{
+    if(msg) msg.textContent='Apply failed';
+    alert('Preset failed: '+(j && j.error ? j.error : res.status));
+  }}
+}}
+
+function esc(s){{
+  return (s==null?'':String(s))
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'","&#39;");
+}}
+
+async function loadAudit(){{
+  const msg = qs('#audit-msg'); if(msg) msg.textContent='Loading...';
+  const lim = parseInt((qs('#audit-limit') && qs('#audit-limit').value) || '200', 10) || 200;
+  const res = await fetch('/admin/api/audit?key='+encodeURIComponent(KEY)+'&limit='+encodeURIComponent(lim));
+  const j = await res.json().catch(()=>null);
+  if(!j || !j.ok){{ if(msg) msg.textContent='Failed to load audit'; return; }}
+  const body = qs('#audit-body');
+  if(body){{
+    body.innerHTML = '';
+    (j.items || []).forEach(it=>{{
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td>'+esc(it.ts||'')+'</td>'
+        +'<td><span class="code">'+esc(it.actor||'')+'</span></td>'
+        +'<td>'+esc(it.role||'')+'</td>'
+        +'<td>'+esc(it.action||'')+'</td>'
+        +'<td><span class="code">'+esc(JSON.stringify(it.meta||{{}}))+'</span></td>';
+      body.appendChild(tr);
+    }});
+  }}
+  if(msg) msg.textContent='';
+}}
+
 </script>
 """)
 
