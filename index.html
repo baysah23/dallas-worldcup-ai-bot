@@ -557,43 +557,6 @@
       padding: 18px;
     }
     .modal.hidden{ display:none; }
-
-/* =========================
-   MODAL CONTRAST FIX (v2)
-   - Stronger dark+blur scrim behind modal
-   - Modal card gets true opaque glass (~0.82) so fields pop
-   ========================= */
-body.modalOpen{ overflow:hidden; }
-
-/* Overlay scrim + blur */
-.modal{
-  background: rgba(5, 8, 16, 0.78) !important;
-  backdrop-filter: blur(10px) saturate(0.9) !important;
-  -webkit-backdrop-filter: blur(10px) saturate(0.9) !important;
-}
-
-/* Modal surface (the card) */
-.modalCard{
-  background: rgba(12, 18, 34, 0.82) !important; /* target 0.8-ish */
-  backdrop-filter: blur(18px) saturate(1.2) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(1.2) !important;
-  border: 1px solid rgba(255,255,255,0.22) !important;
-  box-shadow: 0 26px 90px rgba(0,0,0,0.62) !important;
-}
-
-/* Inputs: slightly darker so text contrast stays crisp */
-.modalBody input,
-.modalBody select{
-  background: rgba(0,0,0,0.34) !important;
-  border-color: rgba(255,255,255,0.22) !important;
-}
-
-/* Improve label + helper readability */
-.modalHead h3,
-.modalBody label{
-  color: rgba(245,248,255,0.95) !important;
-}
-
     .modalCard{
       width: 100%;
       max-width: 440px;
@@ -2645,65 +2608,6 @@ body[data-msec="schedule"] #scheduleCard{
   background: rgba(10,18,40,.92);
   padding-top: 10px;
 }
-
-
-/* =========================
-   CHAT LANGUAGE TOGGLES (obvious)
-   ========================= */
-#chatLangRow{ display:flex; align-items:center; gap:10px; }
-#chatLangRow .langLabel{
-  font-size:12px;
-  letter-spacing:.06em;
-  text-transform:uppercase;
-  color: rgba(235,245,255,.70);
-  margin-right:2px;
-}
-
-#chatLangRow .langSegWrap{
-  display:flex;
-  gap:8px;
-  padding:6px;
-  border-radius:14px;
-  background: rgba(0,0,0,.22);
-  border: 1px solid rgba(255,255,255,.14);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-#chatLangRow .langSeg{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding:10px 12px;
-  border-radius:12px;
-  border:1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.06);
-  color: rgba(244,248,255,.92);
-  font-weight:700;
-  cursor:pointer;
-  transition: transform .12s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
-}
-#chatLangRow .langSeg:active{ transform: translateY(1px); }
-
-#chatLangRow .langSeg .langCode{
-  font-size:12px;
-  letter-spacing:.08em;
-  padding:4px 8px;
-  border-radius:10px;
-  background: rgba(0,0,0,.26);
-  border:1px solid rgba(255,255,255,.12);
-}
-#chatLangRow .langSeg .langName{
-  font-size:13px;
-  opacity:.92;
-}
-
-#chatLangRow .langSeg.active{
-  background: rgba(255,255,255,.14);
-  border-color: rgba(255,255,255,.22);
-  box-shadow: 0 8px 22px rgba(0,0,0,.28);
-}
-
 </style>
 </head>
 
@@ -2846,14 +2750,11 @@ body[data-msec="schedule"] #scheduleCard{
           <div class="cardHead">
             <h2 class="cardTitle">Concierge chat</h2>
             <div class="pillRow" id="chatLangRow" aria-label="Chat language">
-              <div class="langLabel">Language</div>
-<div class="langSegWrap" role="tablist" aria-label="Chat language selector">
-<button class="langSeg" data-lang="en" type="button" aria-label="Switch chat language to English" title="English / English"><span class="langCode">EN</span><span class="langName">English</span></button>
-<button class="langSeg" data-lang="es" type="button" aria-label="Switch chat language to Spanish" title="Spanish / Español"><span class="langCode">ES</span><span class="langName">Español</span></button>
-<button class="langSeg" data-lang="pt" type="button" aria-label="Switch chat language to Portuguese" title="Portuguese / Português"><span class="langCode">PT</span><span class="langName">Português</span></button>
-<button class="langSeg" data-lang="fr" type="button" aria-label="Switch chat language to French" title="French / Français"><span class="langCode">FR</span><span class="langName">Français</span></button>
-</div>
-</div>
+              <button class="pill mini lang" data-lang="en" type="button">EN</button>
+              <button class="pill mini lang" data-lang="es" type="button">ES</button>
+              <button class="pill mini lang" data-lang="pt" type="button">PT</button>
+              <button class="pill mini lang" data-lang="fr" type="button">FR</button>
+            </div>
 </div>
           <div class="cardBody">
             <div id="chatLog" class="chatLog" aria-live="polite"></div>
@@ -3041,28 +2942,15 @@ const $$ = (sel, root=document)=>Array.from((root||document).querySelectorAll(se
 const escapeHtml = (s)=>String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 
-// ---------- concierge welcome copy (localized) ----------
-const WELCOME_PRIMARY_BY_LANG = {
-  en: "Greetings World Cup fans. I’m your concierge — here to assist with reservations, VIP experiences, and match-day planning for your business and guests. Tell me what you need, and I’ll take care of the details.",
-  es: "Saludos, fans del Mundial. Soy tu concierge — aquí para ayudarte con reservaciones, experiencias VIP y la planificación del día de partido para tu negocio y tus invitados. Dime qué necesitas y me encargo de los detalles.",
-  pt: "Saudações, fãs da Copa do Mundo. Sou seu concierge — aqui para ajudar com reservas, experiências VIP e o planejamento do dia do jogo para o seu negócio e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
-  fr: "Bonjour, fans de la Coupe du Monde. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et l’organisation du jour de match pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
-};
+// ---------- concierge welcome copy ----------
+const WELCOME_PRIMARY = "Greetings World Cup fans. I\u2019m your concierge \u2014 here to assist with reservations, VIP experiences, and match-day planning for your business and guests. Tell me what you need, and I\u2019ll take care of the details.";
+const WELCOME_GAMEDAY = "Greetings World Cup fans. It\u2019s game day. I\u2019m your concierge \u2014 here to assist with reservations, VIP experiences, and real-time match-day needs for your business and guests. Tell me what you need, and I\u2019ll take care of the details.";
 
-const WELCOME_GAMEDAY_BY_LANG = {
-  en: "Greetings World Cup fans. It’s game day. I’m your concierge — here to assist with reservations, VIP experiences, and real-time match-day needs for your business and guests. Tell me what you need, and I’ll take care of the details.",
-  es: "Saludos, fans del Mundial. Hoy es día de partido. Soy tu concierge — aquí para ayudarte con reservaciones, experiencias VIP y necesidades en tiempo real para tu negocio y tus invitados. Dime qué necesitas y me encargo de los detalles.",
-  pt: "Saudações, fãs da Copa do Mundo. Hoje é dia de jogo. Sou seu concierge — aqui para ajudar com reservas, experiências VIP e necessidades em tempo real para o seu negócio e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
-  fr: "Bonjour, fans de la Coupe du Monde. C’est jour de match. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et les besoins en temps réel pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
-};
-
-function getWelcomeForState(lang){
+function getWelcomeForState(){
   const k = window.__wcCountdownStateKind || '';
-  const L = (lang || state.lang || 'en').toLowerCase();
-  const primary = WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
-  const gameday = WELCOME_GAMEDAY_BY_LANG[L] || WELCOME_GAMEDAY_BY_LANG.en;
-  return (k === 'game_day') ? gameday : primary;
+  return (k === 'game_day') ? WELCOME_GAMEDAY : WELCOME_PRIMARY;
 }
+
 // ---------- admin-only countdown indicator ----------
 function isAdminDebug(){
   try{
@@ -3216,14 +3104,10 @@ function setLang(lang){
     homePill.setAttribute('aria-label', `Change language (current ${lang.toUpperCase()})`);
   }
 
-  // Chat language buttons
-  $$('#chatLangRow [data-lang]').forEach(btn=>{
-    const bLang = (btn.dataset?.lang||'').toLowerCase();
-    btn.classList.toggle('active', bLang === lang);
+  // Chat pills
+  $$('.pill.mini.lang').forEach(p=>{
+    p.classList.toggle('active', (p.dataset?.lang||'').toLowerCase() === lang);
   });
-
-  // Update welcome bubble to selected language (no duplicates)
-  try{ updateChatWelcome(); }catch(e){}
 }
 
 function cycleLang(){
@@ -3258,12 +3142,23 @@ function focusChatInput(){
   try{ input.focus({preventScroll:true}); }catch(e){ input.focus(); }
 }
 
-function chatAppend(role, text, opts){
+
+function escapeHtml(s){
+  return (s ?? '').toString()
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;')
+    .replaceAll("'","&#39;");
+}
+
+
+function chatAppend(role, text){
   const log = $('chatLog');
   if(!log) return;
+
   const wrap = document.createElement('div');
   wrap.className = 'chatLine ' + role;
-  if(opts && opts.welcome) wrap.setAttribute('data-welcome','1');
 
   const bubble = document.createElement('div');
   bubble.className = 'bubble';
@@ -3273,51 +3168,20 @@ function chatAppend(role, text, opts){
   log.appendChild(wrap);
   log.scrollTop = log.scrollHeight;
 }
-`;
-  wrap.innerHTML = `<div class="bubble">${(text)}</div>`;
-  log.appendChild(wrap);
-  log.scrollTop = log.scrollHeight;
-}
-
-function updateChatWelcome(){
-  const log = $('chatLog');
-  if(!log) return;
-  const welcomeText = getWelcomeForState(state.lang);
-  // Prefer an existing welcome bubble and update it in place.
-  let welcomeLine = log.querySelector('.chatLine.bot[data-welcome="1"] .bubble');
-  if(!welcomeLine){
-    // If the first message is a bot bubble, reuse it.
-    welcomeLine = log.querySelector('.chatLine.bot .bubble');
-  }
-  if(welcomeLine){
-    welcomeLine.textContent = welcomeText;
-    // Mark the parent line as the welcome line for future updates
-    const parent = welcomeLine.closest('.chatLine.bot');
-    if(parent) parent.setAttribute('data-welcome','1');
-    log.dataset.hasWelcome = '1';
-    return;
-  }
-  // Otherwise append a single welcome message
-  chatAppend('bot', welcomeText, {welcome:true});
-  log.dataset.hasWelcome = '1';
-}
-
 function ensureChatWelcome(){
   const log = $('chatLog');
   if(!log) return;
-  if(log.dataset.hasWelcome === '1'){
-    // keep welcome aligned with current language/state
-    updateChatWelcome();
-    return;
-  }
-  updateChatWelcome();
+  if(log.dataset.hasWelcome === '1') return;
+  log.dataset.hasWelcome = '1';
+  chatAppend('bot', getWelcomeForState());
 }
+
 function clearChatPreserveWelcome(){
   const log = $('chatLog');
   if(!log) return;
   log.innerHTML = '';
   log.dataset.hasWelcome = '';
-  try{ ensureChatWelcome(); }catch(e){}
+  try{ ensureChatWelcome(); }catch(e){ console.warn('chat welcome failed', e); }
 }
 
 async function sendChatMessage(text){
@@ -3584,11 +3448,11 @@ function renderFixtures(matches){
   const slice = matches.slice(start, start+perPage);
 
   list.innerHTML = slice.map(m=>{
-    const dt = (m.date || m.datetime_local || m.datetime_utc || '');
-    const home = (m.home || '');
-    const away = (m.away || '');
-    const venue = (m.venue || '');
-    const stage = (m.stage || '');
+    const dt = escapeHtml(m.date || m.datetime_local || m.datetime_utc || '');
+    const home = escapeHtml(m.home || '');
+    const away = escapeHtml(m.away || '');
+    const venue = escapeHtml(m.venue || '');
+    const stage = escapeHtml(m.stage || '');
     return `<div class="matchRow">
       <div class="mTop">
         <div class="mStage">${stage}</div>
@@ -3617,10 +3481,10 @@ function renderLive(matches){
   if(!list) return;
 
   list.innerHTML = (matches || []).map(m=>{
-    const home = (m.home || '');
-    const away = (m.away || '');
-    const score = (m.score || m.result || '');
-    const status = (m.status || 'Live');
+    const home = escapeHtml(m.home || '');
+    const away = escapeHtml(m.away || '');
+    const score = escapeHtml(m.score || m.result || '');
+    const status = escapeHtml(m.status || 'Live');
     return `<div class="matchRow">
       <div class="mTop"><div class="mStage">${status}</div></div>
       <div class="mTeams">${home} <span class="vs">vs</span> ${away}</div>
@@ -3638,12 +3502,12 @@ function renderStandings(data){
 
   const groups = data.groups || [];
   list.innerHTML = groups.map(g=>{
-    const name = (g.group || g.name || '');
+    const name = escapeHtml(g.group || g.name || '');
     const rows = (g.table || g.teams || []).map(t=>{
       return `<tr>
-        <td>${(t.team || t.name || '')}</td>
-        <td>${(t.p || t.played || 0)}</td>
-        <td>${(t.pts ?? t.points ?? 0)}</td>
+        <td>${escapeHtml(t.team || t.name || '')}</td>
+        <td>${escapeHtml(t.p || t.played || 0)}</td>
+        <td>${escapeHtml(t.pts ?? t.points ?? 0)}</td>
       </tr>`;
     }).join('');
     return `<div class="standBlock">
@@ -3700,11 +3564,11 @@ async function loadMenu(){
     }
     if(body){
       body.innerHTML = sections.map(sec=>{
-        const title = (sec.title || sec.name || '');
+        const title = escapeHtml(sec.title || sec.name || '');
         const items = (sec.items || []).map(it=>{
-          const nm = (it.name || '');
-          const ds = (it.desc || it.description || '');
-          const pr = (it.price || '');
+          const nm = escapeHtml(it.name || '');
+          const ds = escapeHtml(it.desc || it.description || '');
+          const pr = escapeHtml(it.price || '');
           return `<div class="menuItem">
             <div class="miTop"><div class="miName">${nm}</div><div class="miPrice">${pr}</div></div>
             <div class="miDesc">${ds}</div>
@@ -3728,9 +3592,9 @@ async function loadFanzone(){
     const data = await fetchJSON('/fanzone.json');
     const items = data.items || data.events || [];
     box.innerHTML = items.map(it=>`<div class="fzItem">
-      <div class="fzTitle">${(it.title||it.name||'')}</div>
-      <div class="fzMeta">${(it.when||it.date||'')}</div>
-      <div class="fzDesc">${(it.desc||it.description||'')}</div>
+      <div class="fzTitle">${escapeHtml(it.title||it.name||'')}</div>
+      <div class="fzMeta">${escapeHtml(it.when||it.date||'')}</div>
+      <div class="fzDesc">${escapeHtml(it.desc||it.description||'')}</div>
     </div>`).join('') || `<div class="hint">No events right now.</div>`;
   }catch(e){
     box.innerHTML = `<div class="hint">Fan Zone unavailable.</div>`;
