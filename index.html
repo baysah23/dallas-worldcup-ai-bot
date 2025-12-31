@@ -1317,6 +1317,1286 @@ html[data-hero="night"] .broadcast-title{
     }
     /* ===== END MENU ===== */
 
+
+
+/* =========================
+   Legacy Schedule / Fan Zone / VIP styles (restored)
+   ========================= */
+
+
+
+    /* Keep pagination controls visible (fix: pager off-screen in regular mode) */
+    #pager{
+      position: sticky;
+      bottom: 0;
+      z-index: 6;
+      background: rgba(7,16,34,.92);
+      backdrop-filter: blur(8px);
+      border-top: 1px solid rgba(255,255,255,.12);
+      margin-top: auto;
+    }
+
+
+/* Gold accent rules */
+.match-card.dallas{ border:1px solid rgba(255,204,102,.55) !important; box-shadow: 0 0 0 1px rgba(255,204,102,.15) inset; }
+
+.match-card.knockout{ border:1px solid rgba(255,204,102,.35) !important; }
+
+.match-card.finals{ border:1px solid rgba(255,204,102,.65) !important; box-shadow: 0 0 0 1px rgba(255,204,102,.22) inset; }
+
+
+/* Fan Zone panel */
+.fanzone{
+  margin: 14px 0 0 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+  padding: 12px;
+}
+
+.fz-row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+
+.fz-chip{
+  display:inline-flex; align-items:center; gap:8px;
+  border:1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: rgba(0,0,0,.15);
+}
+
+.fz-chip b{ font-weight:700; }
+
+
+/* Ensure supporter chip handles long country names gracefully */
+#supporterChip{ max-width:100%; min-width:0; flex-wrap:wrap; }
+
+#supporterChip b#supporterLabel{
+  display:inline-block;
+  max-width: 180px;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.1;
+}
+
+body.has-support #supporterChip{
+  background:
+    radial-gradient(220px 120px at 12% 18%, var(--supportA), transparent 60%),
+    linear-gradient(135deg, rgba(0,0,0,.18), rgba(0,0,0,.08));
+  border-color: color-mix(in srgb, var(--supportA) 55%, var(--supportBorder));
+  box-shadow: 0 14px 38px color-mix(in srgb, var(--supportGlow) 45%, transparent);
+}
+
+body.has-support #supporterChip span#supporterFlag{
+  filter: drop-shadow(0 8px 18px rgba(0,0,0,.35));
+}
+
+body.has-support .fz-modal .panel{
+  border-color: color-mix(in srgb, var(--supportA) 55%, rgba(255,255,255,.12));
+  box-shadow: 0 18px 55px rgba(0,0,0,.55);
+}
+
+body.has-support .fz-country:hover{
+  border-color: color-mix(in srgb, var(--supportA) 65%, rgba(255,255,255,.14));
+}
+
+.fz-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+
+.fz-btn{
+  border:1px solid var(--line);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor:pointer;
+}
+
+.fz-btn:hover{ transform: translateY(-1px); }
+
+
+.fz-grid{
+  display:grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 10px;
+  margin-top:10px;
+}
+
+.fz-card{
+  grid-column: span 12;
+  border:1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(0,0,0,.14);
+}
+
+  .fz-card.third{ grid-column: span 4; }
+
+.fz-card h3{ margin:0 0 8px 0; font-size: 14px; color: var(--text); }
+
+.fz-muted{ color: var(--muted); font-size: 12px; }
+
+
+/* Modal */
+.fz-modal{
+  position:fixed; inset:0;
+  display:flex;
+  align-items:center; justify-content:center;
+  background: rgba(0,0,0,.55);
+  z-index: 9999;
+
+  /* Hidden by default, but still transitionable */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+}
+
+.fz-modal.show{
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.fz-modal .panel{
+  width:min(720px, 92vw);
+  border:1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(10,18,40,.92);
+  padding: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.55);
+
+  /* Premium open motion */
+  transform: translateY(12px) scale(.99);
+  opacity: 0;
+  transition: transform 240ms cubic-bezier(.2,.9,.2,1), opacity 240ms ease;
+}
+
+.fz-modal.show .panel{
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.fz-modal.show{
+  backdrop-filter: blur(2px);
+}
+
+.fz-modal.show .panel{
+  animation: fzModalIn 420ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.fz-modal .panel h2{ margin:0 0 10px 0; font-size: 16px; }
+
+
+.fz-country-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; }
+
+.fz-country{
+  border:1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255,255,255,.04);
+  cursor:pointer;
+  display:flex; gap:8px; align-items:center; justify-content:center;
+}
+
+.fz-country:hover{ outline: 1px solid rgba(255,204,102,.35); }
+
+.fz-flag{ font-size: 18px; }
+
+.fz-footer{ display:flex; justify-content:space-between; gap:10px; margin-top:10px; flex-wrap:wrap; }
+
+
+
+/* --- Fan Zone side rails (desktop) --- */
+/* --- Left rail stack (VIP above Fan Zone) --- */
+@media(min-width: 1200px){
+  .fz-left-stack{
+    position: fixed;
+    left: 16px;
+    top: 84px; /* below header */
+    width: 220px;
+    max-height: calc(100vh - 110px);
+    display: flex;
+    flex-direction: column;
+    gap: 12px; /* SPACE between VIP + Fan Zone */
+    z-index: 55;
+  }
+
+  /* Fan zone left becomes normal inside the stack */
+  #fanZoneLeft.fanzone-left{
+    position: static;
+    width: 100%;
+    max-height: none;
+    overflow: auto;
+  }
+
+  /* VIP rail matches width and never affects main layout */
+  #vipHoldRail{
+    position: static;
+    width: 100%;
+  }
+
+
+.fanzone-left, .fanzone-right{ width: 320px; }
+
+  .fanzone-left, .fanzone-right{
+    position: fixed;
+    top: 92px; /* below header */
+    max-height: calc(100vh - 110px);
+    overflow: auto;
+    z-index: 50;
+  }
+
+  .fanzone-left{ left: 16px; }
+
+  .fanzone-right{ right: 16px; }
+
+  .fanzone-left, .fanzone-right{
+    width: auto;
+    position: static;
+    margin-top: 12px;
+  }
+
+
+
+/* --- Fan Zone size reduction (compact rails) --- */
+.fanzone-left, .fanzone-right{
+  width: 260px;
+  font-size: 12px;
+}
+
+.fz-chip{
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.fz-btn{
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.fz-card{
+  padding: 8px;
+}
+
+.fz-card h3{
+  font-size: 13px;
+}
+
+
+
+/* =======================
+   FAN ZONE: ultra-compact + luxury rails
+   ======================= */
+.fanzone-left, .fanzone-right{
+  width: 220px;
+  font-size: 11px;
+  border-radius: 18px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.02));
+}
+
+.fz-card{ border-radius: 16px; background: rgba(0,0,0,.10); }
+
+.fz-btn{
+  border-radius: 999px;
+  background: rgba(255,255,255,.035);
+}
+
+.fz-actions{ gap:6px; }
+
+.fz-chip{ border-radius: 999px; background: rgba(0,0,0,.10); }
+
+  .fanzone-left, .fanzone-right{ top: 84px; }
+
+/* Auto-hide rails on scroll */
+body.fz-hidden .fanzone-left{ transform: translateX(-110%); opacity:0; pointer-events:none; }
+
+body.fz-hidden .fanzone-right{ transform: translateX(110%); opacity:0; pointer-events:none; }
+
+.fanzone-left, .fanzone-right{ transition: transform .22s ease, opacity .22s ease, box-shadow .22s ease; }
+
+/* Collapse to icon-only mode */
+.fz-iconbtn{
+  width: 34px; height: 34px;
+  border-radius: 999px;
+  border:1px solid var(--line);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center;
+}
+
+.fz-iconbtn:hover{ transform: translateY(-1px); }
+
+.fz-minirow{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+
+
+body.fz-collapsed .fanzone-left,
+body.fz-collapsed .fanzone-right{ width: 56px; padding: 10px; }
+
+
+body.fz-collapsed .fanzone-left .fz-actions,
+body.fz-collapsed .fanzone-right .fz-actions{ justify-content:center; }
+
+
+body.fz-collapsed .fanzone-left .fz-btn,
+body.fz-collapsed .fanzone-right .fz-btn{ display:none; }
+
+
+body.fz-collapsed .fanzone-left .fz-card,
+body.fz-collapsed .fanzone-right .fz-card,
+body.fz-collapsed #supporterChip,
+body.fz-collapsed .fz-muted{ display:none !important; }
+
+
+body.fz-collapsed .fz-rail-title{ display:none; }
+
+body.fz-collapsed .fz-minirow{ justify-content:center; }
+
+
+/* Luxury glow ONLY when Dallas plays */
+body.has-dallas-today .fanzone-left,
+body.has-dallas-today .fanzone-right{
+  box-shadow: 0 0 0 1px rgba(255,204,102,.18) inset, 0 10px 35px rgba(255,204,102,.08);
+}
+
+
+/* Rails: slimmer + glass + premium border */
+.fanzone-left, .fanzone-right{
+  width: var(--fzW) !important;
+  font-size: 11px !important;
+  border-radius: 18px !important;
+  background: linear-gradient(180deg, var(--fzGlass), rgba(255,255,255,.02)) !important;
+  border: 1px solid var(--fzEdge) !important;
+  box-shadow:
+    0 14px 38px rgba(0,0,0,.30),
+    0 0 0 1px rgba(255,255,255,.06) inset !important;
+  backdrop-filter: blur(12px) saturate(1.15);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  overflow: hidden;
+}
+
+  .fanzone-left, .fanzone-right{ top: 84px !important; }
+
+
+/* Inner cards: tighter, more luxury */
+.fz-card{
+  border-radius: 16px !important;
+  padding: 8px !important;
+  background: linear-gradient(180deg, rgba(0,0,0,.30), rgba(0,0,0,.18)) !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+}
+
+.fz-card h3{ font-size: 12px !important; letter-spacing: .02em; }
+
+
+/* Buttons/chips: slimmer */
+.fz-actions{ gap: 6px !important; }
+
+.fz-btn{
+  padding: 6px 8px !important;
+  font-size: 11px !important;
+  border-radius: 999px !important;
+  background: rgba(255,255,255,.08) !important;
+  border: 1px solid rgba(255,255,255,.14) !important;
+}
+
+.fz-chip{
+  padding: 6px 8px !important;
+  font-size: 11px !important;
+  border-radius: 999px !important;
+  background: rgba(0,0,0,.22) !important;
+  border: 1px solid rgba(255,255,255,.12) !important;
+}
+
+
+/* Icon buttons: premium round + subtle shine */
+.fz-iconbtn{
+  width: 34px !important; height: 34px !important;
+  border-radius: 999px !important;
+  background: radial-gradient(120px 60px at 30% 20%, rgba(255,255,255,.14), rgba(255,255,255,.06)) !important;
+  border: 1px solid rgba(255,255,255,.16) !important;
+  box-shadow: 0 10px 22px rgba(0,0,0,.22) !important;
+}
+
+.fz-iconbtn:hover{ transform: translateY(-1px); }
+
+
+/* Auto-hide rails on scroll: smoother */
+body.fz-hidden .fanzone-left{ transform: translateX(-120%) !important; opacity:0 !important; pointer-events:none !important; }
+
+body.fz-hidden .fanzone-right{ transform: translateX(120%) !important; opacity:0 !important; pointer-events:none !important; }
+
+.fanzone-left, .fanzone-right{ transition: transform .24s ease, opacity .24s ease, box-shadow .24s ease !important; }
+
+
+/* Collapsed: icon-only “luxury strip” */
+body.fz-collapsed .fanzone-left,
+body.fz-collapsed .fanzone-right{
+  width: 56px !important;
+  padding: 10px 8px !important;
+}
+
+body.fz-collapsed .fanzone-left .fz-btn,
+body.fz-collapsed .fanzone-right .fz-btn,
+body.fz-collapsed .fanzone-left .fz-chip,
+body.fz-collapsed .fanzone-right .fz-chip,
+body.fz-collapsed .fanzone-left .fz-muted,
+body.fz-collapsed .fanzone-right .fz-muted,
+body.fz-collapsed .fanzone-left #pollCard,
+body.fz-collapsed .fanzone-right #drinkCard{
+  display:none !important;
+}
+
+body.fz-collapsed .fanzone-left .fz-actions,
+body.fz-collapsed .fanzone-right .fz-actions{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:10px !important;
+  align-items:center !important;
+}
+
+body.has-dallas-today .fanzone-left,
+body.has-dallas-today .fanzone-right{
+  border-color: rgba(255,204,102,.32) !important;
+  animation: fzPulse 2.2s ease-in-out infinite;
+}
+
+
+
+/* =======================
+   FAN ZONE (RIGHT RAIL) — fit + no overflow
+   ======================= */
+.fanzone-left, .fanzone-right,
+.fanzone-left *, .fanzone-right *{
+  box-sizing: border-box;
+}
+
+
+.fanzone-left, .fanzone-right{
+  overflow-x: hidden;
+}
+
+
+.fanzone-left .fz-card, .fanzone-right .fz-card{
+  width: 100%;
+  max-width: 100%;
+}
+
+
+.fanzone-left .fz-grid, .fanzone-right .fz-grid{
+  width: 100%;
+}
+
+
+/* Stack QR + text so it never spills outside the rail */
+.fanzone-right .qrWrap{
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+
+.fanzone-right #qrImg{
+  width: 92px;
+  height: 92px;
+  max-width: 100%;
+}
+
+
+.fanzone-right .qrText{
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+
+.fanzone-right .qrText a{
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* If any long labels appear, wrap them cleanly */
+.fanzone-right, .fanzone-right .fz-muted{
+  word-break: break-word;
+}
+
+
+
+/* =======================
+   FAN ZONE RIGHT: overflow hardening (no horizontal scroll)
+   ======================= */
+.fanzone-right{ overflow-x:hidden; }
+
+.fanzone-right *{ max-width:100%; box-sizing:border-box; }
+
+.fanzone-right h3,
+.fanzone-right .fz-muted,
+.fanzone-right #drinkHighlight,
+.fanzone-right #drinkHighlight *{
+  overflow-wrap:anywhere;
+  word-break:break-word;
+  hyphens:auto;
+}
+
+.fanzone-right .qrWrap{ flex-direction:column; align-items:flex-start; }
+
+.fanzone-right #qrImg{ width:96px; height:96px; }
+
+.fanzone-right .qrText a{ display:block; overflow-wrap:anywhere; word-break:break-all; }
+
+
+
+/* =======================
+   FAN ZONE RIGHT RAIL — overflow hard-fix (no horizontal scroll)
+   ======================= */
+.fanzone-left, .fanzone-right{
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+}
+
+.fz-card, .fanzone, .fz-row, .fz-grid, .qrWrap{ max-width: 100%; }
+
+.fz-card{ overflow: hidden; }
+
+.fz-muted, .fz-card, .fz-chip, .fz-btn, .qrText{
+  min-width: 0;
+}
+
+
+/* Make the right rail content "taller" instead of wider */
+.fanzone-right .fz-card{ padding-bottom: 12px; }
+
+.fanzone-right .qrWrap{
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.fanzone-right #qrImg{
+  width: 92px;
+  height: 92px;
+}
+
+
+/* Right rail: stack content vertically to avoid cramped horizontal layouts */
+.fanzone-right .fz-row{ flex-direction: column; align-items: stretch; gap: 8px; }
+
+.fanzone-right .fz-actions{ width:100%; justify-content: flex-start; }
+
+.fanzone-right .fz-grid{ grid-template-columns: 1fr !important; }
+
+.fanzone-right .fz-card{ width:100%; }
+
+.fanzone-right .fz-card *{ max-width:100%; min-width:0; }
+
+
+/* Drink highlight: always vertical */
+.fz-drink{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  width:100%;
+}
+
+.fz-drinkTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+
+.fz-drinkName{
+  font-weight:900;
+  letter-spacing:.02em;
+}
+
+.fz-drinkMeta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+
+.fz-miniPill{
+  font-size:10.5px;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.14);
+  color: var(--muted);
+}
+
+
+/* Any long strings must break rather than create scroll */
+.fanzone-right, .fanzone-right *{
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+
+
+
+/* =======================
+   FAN ZONE: drink highlight (vertical stack, zero overflow)
+   ======================= */
+.fz-drinkStack{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:0;
+}
+
+
+
+/* Last-resort: never allow a horizontal scrollbar anywhere */
+body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
+
+
+/* Sticky pager stays visible within schedule panel */
+#pager{ position: sticky; bottom: 0; }
+
+
+
+/* =======================
+   PAGER MINI (doesn't block schedule)
+   ======================= */
+#pager{
+  padding: 8px 10px !important;
+  border-top: 1px solid rgba(255,255,255,.10) !important;
+}
+
+#pager button{
+  padding: 7px 10px !important;
+  min-width: 66px !important;
+  border-radius: 10px !important;
+  font-size: 12px !important;
+}
+
+#pager .secondary{
+  padding: 7px 10px !important;
+}
+
+#pager .pill, #pager .pageLabel, #pager #pageIndicator{
+  font-size: 11px !important;
+  padding: 4px 8px !important;
+}
+
+
+
+/* =======================
+   ULTRA-SLEEK PAGER (icon-only, never blocks scrollbars)
+   ======================= */
+#pager{
+  position: sticky !important;
+  bottom: 6px !important;
+  margin: 0 8px 8px !important;
+  width: calc(100% - 16px) !important;
+  border-radius: 14px !important;
+  padding: 6px 8px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  background: rgba(7,16,34,.72) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  box-shadow: 0 10px 26px rgba(0,0,0,.22) !important;
+}
+
+
+/* Icon buttons */
+#pager button{
+  min-width: 34px !important;
+  width: 34px !important;
+  height: 30px !important;
+  padding: 0 !important;
+  border-radius: 12px !important;
+  font-size: 0 !important;            /* hide text */
+  line-height: 0 !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
+
+
+/* Page indicator compact */
+#pageIndicator, .pageLabel, #pager .pill{
+  font-size: 11px !important;
+  padding: 4px 8px !important;
+  border-radius: 999px !important;
+  white-space: nowrap !important;
+}
+
+#pager .pill{ margin: 0 !important; }
+
+
+
+/* =======================
+   COMPACT TEXT PAGER (Prev/Next visible, ultra-sleek)
+   ======================= */
+#pager{
+  position: sticky !important;
+  bottom: 6px !important;
+  margin: 0 10px 8px !important;
+  width: calc(100% - 20px) !important;
+  border-radius: 14px !important;
+  padding: 6px 8px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  background: rgba(7,16,34,.70) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  box-shadow: 0 10px 24px rgba(0,0,0,.20) !important;
+  pointer-events:auto;
+}
+
+
+/* Buttons: small, readable */
+#pager button{
+  min-width: 64px !important;
+  height: 28px !important;
+  padding: 0 10px !important;
+  border-radius: 12px !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  letter-spacing: .06em !important;
+  line-height: 1 !important;
+}
+
+
+/* Page indicator tiny */
+#pageIndicator, .pageLabel, #pager .pill{
+  font-size: 10.5px !important;
+  padding: 4px 8px !important;
+  border-radius: 999px !important;
+  white-space: nowrap !important;
+}
+
+
+/* Keep pager slightly above bottom so it doesn't sit on scrollbar edge */
+#pager{
+  bottom: 10px !important;
+}
+
+
+/* Pager sits below the scroll area (no sticky overlay) */
+#pager{
+  position: relative !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  width: auto !important;
+  border-radius: 0 0 16px 16px !important;
+  box-shadow: none !important;
+}
+
+
+
+/* =======================
+   VIP TABLE HOLD (UI-only) — sleek + luxury
+   ======================= */
+.vip-gap{
+  height: 14px;
+  margin-top: 10px;
+}
+
+.vip-gap::after{
+  content:"";
+  display:block;
+  height:1px;
+  width:100%;
+  background: linear-gradient(90deg, transparent, rgba(255,204,102,.35), transparent);
+}
+
+
+.vip-rail{ width:220px; max-width:220px; }
+
+.vip-rail .vip-card{ width:100%; }
+
+
+
+.vip-hold{
+  margin-top: 18px;              /* space from Fan Zone card above */
+  padding: 10px 10px 11px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(0,0,0,.12));
+  border: 1px solid rgba(255,204,102,.28);
+  box-shadow:
+    0 18px 40px rgba(0,0,0,.28),
+    0 0 0 1px rgba(255,204,102,.10) inset;
+  position: relative;
+  overflow: hidden;
+}
+
+.vip-hold::before{
+  content:"";
+  position:absolute; inset:-2px;
+  background:
+    radial-gradient(220px 120px at 18% 18%, rgba(255,204,102,.22), transparent 60%),
+    radial-gradient(260px 160px at 85% 65%, rgba(31,111,235,.12), transparent 62%),
+    linear-gradient(135deg, rgba(255,204,102,.10), rgba(0,0,0,0) 45%);
+  pointer-events:none;
+}
+
+.vip-hold h3{
+  margin: 0 0 6px 0;
+  font-size: 12.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.vip-hold .fz-muted{
+  font-size: 11px;
+  line-height: 1.25;
+  color: rgba(234,240,255,.78);
+}
+
+.vip-hold .fz-actions{
+  margin-top: 8px !important;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.vip-hold .fz-btn{
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 999px;
+  border: 1px solid rgba(255,204,102,.22);
+  background: rgba(255,255,255,.035);
+}
+
+.vip-hold .fz-btn:hover{
+  outline: 1px solid rgba(255,204,102,.30);
+}
+
+.vip-hold .fz-btn#vipHoldBtn{
+  background: linear-gradient(135deg, rgba(255,204,102,.22), rgba(46,160,67,.10));
+  border-color: rgba(255,204,102,.30);
+}
+
+
+
+/* =======================
+   VIP HOLD RAIL (separate from Fan Zone)
+   ======================= */
+.vip-rail{
+  margin-top: 12px;
+}
+
+.vip-rail .vip-hold{
+  border-radius: 16px;
+}
+
+.vip-rail .vip-hold h3{ font-size: 13px; margin:0 0 6px 0; }
+
+.vip-rail .fz-actions{ margin-top: 8px !important; gap:6px; }
+
+.vip-rail .fz-btn{ padding: 6px 10px; font-size: 12px; border-radius: 999px; }
+
+.vip-rail .fz-muted{ font-size: 11px; }
+
+
+/* Desktop: pin VIP rail above Fan Zone rails, then push Fan Zone down */
+@media(min-width: 1200px){
+  .vip-rail{
+    position: fixed;
+    top: 84px; /* below header */
+    left: 16px;
+    width: 220px;
+    z-index: 60;
+    max-height: 160px;
+    overflow: hidden;
+  }
+
+  /* Fan Zone rails start below VIP rail with clear separation */
+  .fanzone-left{ top: 264px !important; }
+
+
+
+/* ===== VIP HOLD (layout-safe, luxury compact) ===== */
+.vip-rail{
+  margin: 0 0 14px 0; /* space below VIP, before Fan Zone */
+  width: 220px;
+}
+
+.vip-card{
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 18px;
+  padding: 10px 10px 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.02));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 18px 45px rgba(0,0,0,.25);
+}
+
+.vip-card h3{
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.vip-card .fz-muted{ font-size: 11px; line-height: 1.25; }
+
+.vip-card label{ font-size: 11px; color: var(--muted); }
+
+.vip-card input, .vip-card select, .vip-card textarea{
+  width: 100%;
+  font-size: 12px;
+  padding: 8px 9px;
+  border-radius: 12px;
+}
+
+.vip-card button, .vip-card .fz-btn{
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 12px;
+  border-radius: 999px;
+}
+
+.fanzone-left .fanzone{ margin-top: 14px; }
+ /* ensures visible gap even if VIP collapses */
+
+/* =========================
+   HERO 3D POP (SAFE, UI-only)
+   - Adds subtle depth to rotating star images
+   - No JS changes; respects reduced-motion
+/* ========================= */
+.hero{
+  perspective: 900px;
+  perspective-origin: 50% 45%;
+}
+
+
+  /* Fan Zone rails become normal cards (no fixed positioning) */
+  .fz-left-stack, .fanzone-left, .fanzone-right, #vipHoldRail{
+    position: static !important;
+    top:auto !important; left:auto !important; right:auto !important;
+    width: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    transform:none !important;
+    z-index: auto !important;
+  }
+
+
+  /* Pager should not be fixed on mobile (can block taps) */
+  #pager{ position: static !important; }
+
+
+  /* Reduce blur that looks “fuzzy” on iOS */
+  .cardhead, .devicebar, #pager, .heroCaption{
+    backdrop-filter:none !important;
+    -webkit-backdrop-filter:none !important;
+  }
+
+  body[data-msec="home"] .chatcard,
+  body[data-msec="home"] .menucard,
+  body[data-msec="home"] #fanZoneLeft,
+  body[data-msec="home"] #fanZoneRight,
+  body[data-msec="home"] #scheduleCard,
+  body[data-msec="home"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="chat"] .menucard,
+  body[data-msec="chat"] #fanZoneLeft,
+  body[data-msec="chat"] #fanZoneRight,
+  body[data-msec="chat"] #scheduleCard,
+  body[data-msec="chat"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="menu"] .chatcard,
+  body[data-msec="menu"] #fanZoneLeft,
+  body[data-msec="menu"] #fanZoneRight,
+  body[data-msec="menu"] #scheduleCard,
+  body[data-msec="menu"] #vipHoldRail{ display:none !important; }
+
+
+  body[data-msec="fanzone"] #fanZoneLeft{ display:block !important; }
+
+  body[data-msec="fanzone"] .chatcard,
+  body[data-msec="fanzone"] .menucard,
+  body[data-msec="fanzone"] #fanZoneRight,
+  body[data-msec="fanzone"] #scheduleCard{ display:none !important; }
+
+
+  body[data-msec="extras"] #fanZoneRight{ display:block !important; }
+
+  body[data-msec="extras"] .chatcard,
+  body[data-msec="extras"] .menucard,
+  body[data-msec="extras"] #fanZoneLeft,
+  body[data-msec="extras"] #scheduleCard{ display:none !important; }
+
+
+  body[data-msec="schedule"] #scheduleCard{ display:block !important; }
+
+  body[data-msec="schedule"] .chatcard,
+  body[data-msec="schedule"] .menucard,
+  body[data-msec="schedule"] #fanZoneLeft,
+  body[data-msec="schedule"] #fanZoneRight{ display:none !important; }
+
+
+  /* VIP shown alongside Fan Zone (if you want it there) */
+  body[data-msec="fanzone"] #vipHoldRail{ display:block !important; }
+
+  body[data-msec="extras"] #vipHoldRail{ display:none !important; }
+
+  #pager{ position: static !important; }
+
+  body[data-msec="vip"] .chatcard,
+  body[data-msec="vip"] .menucard,
+  body[data-msec="vip"] #fanZoneLeft,
+  body[data-msec="vip"] #fanZoneRight,
+  body[data-msec="vip"] #scheduleCard{ display:none !important; }
+
+  body[data-msec="fanzone"] #vipHoldRail{ display:block !important; }
+
+    body.msec-anim .chatcard,
+    body.msec-anim .menucard,
+    body.msec-anim #scheduleCard,
+    body.msec-anim #fanZoneLeft,
+    body.msec-anim #vipHoldRail{
+      animation: msecFade .18s ease both;
+      will-change: transform, opacity;
+    }
+
+
+  /* Rails: remove fixed/absolute positioning so they don't overlay and block taps */
+  .vip-rail, .fanzone, .fanzone-left, .fanzone-right, .fanzoneRail,
+  #vipHoldRail, #fanZoneLeft, #fanZoneRight{
+    position: static !important;
+    left: auto !important; right: auto !important; top: auto !important; bottom: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    transform: none !important;
+    margin: 10px 0 !important;
+    pointer-events: auto !important;
+  }
+
+
+  /* Schedule card: keep list scrollable in viewport and ensure last row visible */
+  #scheduleCard{ min-height: 0 !important; }
+
+  #pager{
+    position: static !important;
+    margin-top: 10px !important;
+  }
+
+  #scheduleCard, .menucard, .chatcard, #fanZoneLeft, #fanZoneRight, #vipHoldRail{ margin-bottom: 110px; }
+
+
+  /* Schedule/Menu panels: ensure they stay on-screen and scroll properly */
+  #scheduleCard{ max-height: none !important; overflow: visible !important; }
+
+
+/* Section visibility (mobile only): show one “primary” section at a time
+   - chat: chatcard
+   - menu: menucard
+   - schedule: scheduleCard
+   - fanzone: fanZoneLeft + fanZoneRight
+   - vip: vipHoldRail
+*/
+@media (max-width: 950px){
+  /* default: chat */
+  body[data-msec="chat"] .chatcard{ display:block !important; }
+
+  body[data-msec="chat"] .menucard,
+  body[data-msec="chat"] #scheduleCard,
+  body[data-msec="chat"] #fanZoneLeft,
+  body[data-msec="chat"] #fanZoneRight,
+  body[data-msec="chat"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="menu"] .chatcard,
+  body[data-msec="menu"] #scheduleCard,
+  body[data-msec="menu"] #fanZoneLeft,
+  body[data-msec="menu"] #fanZoneRight,
+  body[data-msec="menu"] #vipHoldRail{ display:none !important; }
+
+
+  body[data-msec="schedule"] #scheduleCard{ display:block !important; }
+
+  body[data-msec="schedule"] .chatcard,
+  body[data-msec="schedule"] .menucard,
+  body[data-msec="schedule"] #fanZoneLeft,
+  body[data-msec="schedule"] #fanZoneRight,
+  body[data-msec="schedule"] #vipHoldRail{ display:none !important; }
+
+
+  body[data-msec="fanzone"] #fanZoneLeft,
+  body[data-msec="fanzone"] #fanZoneRight{ display:block !important; }
+
+  body[data-msec="fanzone"] .chatcard,
+  body[data-msec="fanzone"] .menucard,
+  body[data-msec="fanzone"] #scheduleCard,
+  body[data-msec="fanzone"] #vipHoldRail{ display:none !important; }
+
+
+  body[data-msec="vip"] #vipHoldRail{ display:block !important; }
+
+  body[data-msec="vip"] .chatcard,
+  body[data-msec="vip"] .menucard,
+  body[data-msec="vip"] #scheduleCard,
+  body[data-msec="vip"] #fanZoneLeft,
+  body[data-msec="vip"] #fanZoneRight{ display:none !important; }
+
+
+  /* Schedule/Menu: ensure they don't render off-screen */
+  #scheduleCard, .menucard{ overflow:visible !important; }
+
+  #pager, .pager{ position:sticky; bottom:0; z-index:5; }
+
+
+  /* Premium tap/press states (no layout shift) */
+  button, .langbtn, .fz-btn{
+    transition: transform 120ms ease, filter 120ms ease, background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:active, .langbtn:active, .fz-btn:active{
+    transform: translateY(1px) scale(.99);
+    filter: brightness(1.06);
+  }
+
+  button:focus-visible, .langbtn:focus-visible, textarea:focus-visible, .fz-btn:focus-visible{
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(212,175,55,.22), 0 0 0 1px rgba(212,175,55,.45) inset;
+    border-color: rgba(212,175,55,.45) !important;
+  }
+
+  button:active, .langbtn:active, .fz-btn:active{ transform:none !important; }
+
+
+      /* Raise touch quality: minimum comfortable hit area */
+      button, .btn, .pill, .chip, .langbtn, .segBtn, .navBtn, .tabBtn {
+        min-height: 44px;
+      }
+
+
+    /* Buttons and chips: premium feel, consistent across devices */
+    button, .btn, .pill, .chip, .langbtn, .segBtn, .navBtn, .tabBtn {
+      border-radius: 999px;
+      border: 1px solid var(--lux-stroke);
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
+      box-shadow: 0 10px 22px rgba(0,0,0,.28);
+      transition: transform .12s ease, filter .12s ease, box-shadow .18s ease;
+      will-change: transform;
+    }
+
+    button:active, .btn:active, .pill:active, .chip:active, .langbtn:active, .segBtn:active, .navBtn:active, .tabBtn:active {
+      transform: translateY(1px) scale(.99);
+      filter: brightness(1.03);
+      box-shadow: 0 6px 14px rgba(0,0,0,.22);
+    }
+
+    button:hover, .btn:hover, .pill:hover, .chip:hover, .langbtn:hover, .segBtn:hover, .navBtn:hover, .tabBtn:hover {
+      filter: brightness(1.06);
+    }
+
+
+  /* Make sure the schedule card sits directly under the hero */
+  body[data-msec="schedule"] #scheduleCard{ margin-top: 0 !important; }
+
+
+  /* Small scroll offset so sticky header feels nicer */
+  body[data-msec="schedule"] #scheduleCard{ scroll-margin-top: 8px; }
+
+/* =======================
+   MOBILE SCHEDULE GAP FIX (v5 - definitive)
+   Problem: Schedule tab hides the contents inside .leftcol, but .leftcol still participates
+   in the grid and can consume the full "1fr" row (especially on mobile where columns collapse),
+   creating a large blank gap before #scheduleCard.
+   Fix: remove .leftcol from layout in schedule mode, and make the grid auto-height (no 1fr stretch).
+   ======================= */
+body[data-msec="schedule"] .leftcol{ display:none !important; }
+
+
+body[data-msec="schedule"] #scheduleCard{
+  display:block !important;
+  grid-column: 1 / -1 !important;
+  grid-row: 2 !important;
+  margin-top: 0 !important;
+}
+
+
+
+
+/* Schedule sub-tabs (Fixtures / Live / Groups) — mobile & desktop safe */
+.metaLine{margin:8px 0 0; font-size:12px; letter-spacing:.2px; opacity:.72}
+
+.metaLine strong{opacity:.95}
+
+.segbar{
+  display:flex;
+  gap:6px;
+  padding:6px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.03);
+  border-radius: 999px;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.segbar::-webkit-scrollbar{ height: 0; }
+
+.segbtn{
+  appearance:none;
+  border:0;
+  cursor:pointer;
+  padding:8px 12px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: .02em;
+  color: rgba(255,255,255,.82);
+  background: transparent;
+  white-space: nowrap;
+}
+
+.segbtn[aria-selected="true"]{
+  color: rgba(0,0,0,.88);
+  background: rgba(212,175,55,.95);
+  box-shadow: 0 10px 26px rgba(0,0,0,.30), inset 0 0 0 1px rgba(0,0,0,.22);
+}
+
+  .segbtn{ flex: 1; text-align:center; }
+
+
+
+
+/* =======================
+   FAN ZONE MODAL MOBILE SCROLL FIX
+   Ensures long lists (countries, polls) never render off-screen.
+   Keeps footer buttons reachable without awkward scrolling.
+======================= */
+.fz-modal .panel{
+  max-height: 88vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#countryGrid,
+#pollList,
+#pollResults{
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.fz-footer{
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  background: rgba(10,18,40,.92);
+  padding-top: 10px;
+}
 </style>
 </head>
 
@@ -1496,48 +2776,119 @@ html[data-hero="night"] .broadcast-title{
 
       <!-- SCHEDULE -->
       <section class="section" id="sec-schedule" aria-label="Schedule">
-        <div class="card">
-          <div class="cardHead"><h2 class="cardTitle">Schedule</h2></div>
-          <div class="cardBody">
-            <div class="tools">
-              <select class="select" id="scopeSelect" aria-label="Scope">
-                <option value="global">Global</option>
-                <option value="city">City</option>
-              </select>
-              <input class="search" id="citySearch" placeholder="Host city (optional)…"/>
-              <input class="search" id="scheduleSearch" placeholder="Search team, group, venue…"/>
-              <button class="pill" id="reloadSchedule" type="button">Refresh</button>
-            </div>
-            <div style="height:10px"></div>
-            <div id="scheduleBody" class="list"></div>
-            <div id="scheduleHint" class="hint">Tap Refresh to load matches.</div>
-          </div>
-        </div>
-      </section>
+<div class="sidepad" style="padding-top:10px;">
+  <div class="card schedulecard lux-reveal" id="scheduleCard" style="display:flex;flex-direction:column;min-height:0;">
+<div class="cardhead">
+<div class="title" id="sideTitle">World Cup Schedule</div>
+<div class="pill" id="pillLang">EN</div></div>
+<div class="countdown">
+<div>
+<div class="label" id="countLabel">World Cup countdown</div>
+<div class="sub" id="countSub" style="margin:4px 0 0;">All host cities</div></div>
+<div class="nums" id="countNums">
+<span><b id="d">0</b>d</span>
+<span><b id="h">0</b>h</span>
+<span><b id="m">0</b>m</span>
+<span><b id="s">0</b>s</span></div>
+</div>
+<div class="sidepad" style="padding-top:10px; padding-bottom:0;">
+<div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+<div class="pill" style="padding:6px 10px;">Schedule</div>
+<div class="langbar" style="gap:6px;">
+<div class="langbtn active" id="scopeDallas">Dallas</div>
+<div class="langbtn" id="scopeAll">All Matches</div></div>
+</div>
+<div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
+<input id="teamSearch" list="teamSuggestions" placeholder="Search team / venue / date (e.g., June 13 or 2026-06-13)..." style="flex:1; height:40px; border-radius:12px; border:1px solid rgba(255,255,255,.14); background: rgba(0,0,0,.22); color:var(--text); padding:0 12px; font-size:13px; outline:none;"/>
+<datalist id="teamSuggestions"></datalist>
+<div class="pill" id="matchCount">0</div></div>
+</div>
+<div class="sidepad" style="padding-bottom:0;">
+<div class="pill" id="nextHint" style="display:inline-block;">Next upcoming match is highlighted</div></div>
+<div class="sidepad" style="padding-top:8px; padding-bottom:0;">
+  <div class="segbar" id="scheduleTabs" role="tablist" aria-label="Schedule views">
+    <button class="segbtn" type="button" data-view="fixtures" aria-selected="true">Fixtures</button>
+    <button class="segbtn" type="button" data-view="live" aria-selected="false">Live</button>
+    <button class="segbtn" type="button" data-view="groups" aria-selected="false">Groups</button>
+  </div>
+</div>
+  <div class="metaLine" id="scheduleMetaLine" aria-live="polite">Updating…</div>
+<div class="schedule" id="schedule"></div>
+<div class="sidepad" id="pager" style="display:none; padding-top:10px;">
+<div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
+<button class="secondary" id="prevPage" style="min-width:88px;">Prev</button>
+<div class="pill" id="pageIndicator">Page 1 of 1</div>
+<button class="secondary" id="nextPage" style="min-width:88px;">Next</button></div>
+</div></div>
+</div>
+</section>
 
       <!-- FAN ZONE -->
       <section class="section" id="sec-fanzone" aria-label="Fan Zone">
-        <div class="card">
-          <div class="cardHead">
-            <h2 class="cardTitle">Fan Zone</h2>
-            <button class="pill" id="reloadFanzone" type="button">Refresh</button>
-          </div>
-          <div class="cardBody">
-            <div id="fanzoneBody" class="list"></div>
-            <div id="fanzoneHint" class="hint">Tap Refresh to load fan events.</div>
-          </div>
-        </div>
-      </section>
+<div class="sidepad" style="padding-top:10px;">
+  <div style="display:grid; gap:12px;">
+    <aside aria-label="Fan Zone Left Panel" class="fanzone fanzone-left" id="fanZoneLeft">
+<div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
+<span class="fz-muted fz-rail-title">Fan Zone</span>
+<button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button></div>
+<div class="fz-row" style="justify-content:flex-start;">
+<div class="fz-chip" id="supporterChip" title="Personalization stored on this device only">
+<span id="supporterFlag" aria-hidden="true">🏁</span><span>Supporting:</span> <b id="supporterLabel">Not set</b></div>
+</div>
+<div class="fz-actions" style="margin-top:10px;">
+<button class="fz-iconbtn" id="fzIconCountry" title="Pick country">🏁</button>
+<button class="fz-iconbtn" id="fzIconPoll" title="Fan poll">📊</button>
+<button class="fz-btn" id="btnPickCountry">Which country are you supporting?</button>
+<button class="fz-btn" id="btnOpenPoll">Match poll</button></div>
+<div class="fz-card lux-reveal" id="pollCard" style="display:none; margin-top:10px; max-height:52vh; overflow:auto;">
+<h3>⚔️ Match of the Day Poll</h3>
+<div class="fz-muted">Vote for who you think will win.</div>
+<div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
+</div>
+</aside>
+    <aside aria-label="Fan Zone Right Panel" class="fanzone fanzone-right" id="fanZoneRight">
+<div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
+<span class="fz-muted fz-rail-title">Extras</span>
+<button class="fz-iconbtn" id="fzCollapseToggle2" title="Collapse / expand">⫶</button></div>
+<div class="fz-actions" style="justify-content:flex-end;">
+<button class="fz-iconbtn" id="fzIconDrinks" title="Drink highlight">🍹</button>
+<button class="fz-iconbtn" id="fzIconQR" title="QR poster">📱</button>
+<button class="fz-btn" id="btnSharePoster">QR poster</button></div>
+<div class="fz-card lux-reveal" id="drinkCard" style="margin-top:10px;">
+<h3>🍹 Drink highlights</h3>
+<div id="drinkHighlight" style="margin-top:10px;">
+      <div style="border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:10px; background: rgba(0,0,0,.10);">
+        <div id="drinkName" style="font-weight:900;">Country-themed drink</div>
+        <div id="drinkDesc" class="fz-muted" style="margin-top:4px;"></div>
+      </div></div>
+</div>
+<div class="fz-card lux-reveal" id="qrCard" style="display:none; margin-top:10px;">
+<h3>📱 QR poster</h3>
+<div class="fz-muted">Print/display at the entrance. Scan to open the app.</div>
+<div class="qrWrap" style="margin-top:10px;">
+<img id="qrImg" alt="QR code" style="width:220px;height:220px;border-radius:12px;background:#fff;padding:10px;display:block;margin:0 auto;" />
+<div class="qrText">
+<div class="fz-muted" style="margin-bottom:6px;">Link:</div>
+<div><a href="#" id="qrLink" rel="noopener" target="_blank">Open app</a></div>
+</div>
+</div></div>
+</aside>
+  </div>
+</div>
+</section>
 
       <!-- VIP -->
       <section class="section" id="sec-vip" aria-label="VIP">
-        <div class="card">
-          <div class="cardHead"><h2 class="cardTitle">VIP</h2></div>
-          <div class="cardBody">
-            <div class="hint">VIP inventory connects to your partners. For now, ask Chat: “VIP table near &lt;venue&gt; for &lt;party size&gt; at &lt;time&gt;”.</div>
-          </div>
-        </div>
-      </section>
+<div class="sidepad" style="padding-top:10px;">
+  <div class="fz-card vip-hold vip-card lux-reveal" id="vipHoldCard">
+<h3>⭐ VIP Table Hold</h3>
+<div class="fz-muted" style="margin-top:6px;">Fast-track your best tables for big matches.</div>
+<div class="vip-actions" style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+  <button class="fz-btn" id="vipHoldBtn">Hold VIP table</button>
+  <button class="fz-btn" id="vipHoldInfoBtn">How it works</button></div>
+</div>
+</div>
+</section>
     </main>
   </div>
 
@@ -2380,6 +3731,463 @@ function startHeroCountdown(){
   }
   window.addEventListener('scroll', onScroll, {passive:true});
   onScroll();
+})();
+</script>
+
+
+<script>
+/* =========================
+   Legacy Schedule / Fan Zone / VIP logic (restored)
+   - Matches old app behavior for these pages
+   - Defensive: runs only if the relevant elements exist
+   ========================= */
+(function(){
+  const $ = (id)=>document.getElementById(id);
+  const qs = (sel,root=document)=>root.querySelector(sel);
+  const qsa = (sel,root=document)=>Array.from(root.querySelectorAll(sel));
+
+  // --------------------------
+  // Schedule
+  // --------------------------
+  const scheduleEl = $("schedule");
+  const tabsEl = $("scheduleTabs");
+  const scopeDallasBtn = $("scopeDallas");
+  const scopeAllBtn = $("scopeAll");
+  const teamSearchEl = $("teamSearch");
+  const teamSuggestions = $("teamSuggestions");
+  const matchCountEl = $("matchCount");
+  const pagerEl = $("pager");
+  const prevPageBtn = $("prevPage");
+  const nextPageBtn = $("nextPage");
+  const pageIndicatorEl = $("pageIndicator");
+  const metaLineEl = $("scheduleMetaLine");
+
+  const PAGE_SIZE = 5;
+  let scheduleView = localStorage.getItem("schedule_view") || "fixtures"; // fixtures | live | groups
+  let scope = localStorage.getItem("schedule_scope") || "dallas"; // dallas | all
+  let scheduleQuery = "";
+  let currentPage = 1;
+
+  let scheduleData = null;
+  let liveData = null;
+  let standingsData = null;
+
+  function fmtKickoff(m){
+    // prefer local time string if provided by backend
+    if(m.kickoff_local) return m.kickoff_local;
+    if(m.datetime_local) return m.datetime_local;
+    if(m.datetime_utc) return m.datetime_utc.replace("T"," ").replace("Z"," UTC");
+    if(m.time) return m.time;
+    return "";
+  }
+  function safeText(s){ return (s==null) ? "" : String(s); }
+
+  function setMeta(text){
+    if(!metaLineEl) return;
+    metaLineEl.textContent = text || "";
+  }
+
+  function setScopeButtons(){
+    if(scopeDallasBtn) scopeDallasBtn.classList.toggle("active", scope==="dallas");
+    if(scopeAllBtn) scopeAllBtn.classList.toggle("active", scope==="all");
+  }
+
+  async function fetchJSON(url){
+    const r = await fetch(url, {cache:"no-store"});
+    if(!r.ok) throw new Error("HTTP "+r.status);
+    return r.json();
+  }
+
+  async function loadSchedule(){
+    if(!scheduleEl) return;
+    setMeta("Updating…");
+    try{
+      const u = new URL("/schedule.json", location.origin);
+      u.searchParams.set("scope", scope);
+      if(scheduleQuery) u.searchParams.set("q", scheduleQuery);
+      scheduleData = await fetchJSON(u.toString());
+      setMeta("Updated");
+      hydrateSuggestions();
+      renderSchedule();
+      // update feed status line if available
+      try{
+        const fs = await fetchJSON("/worldcup/feed_status.json");
+        if(fs && fs.ok && fs.updated_at){
+          setMeta("Updated • feed " + fs.updated_at);
+        }
+      }catch(e){}
+    }catch(e){
+      setMeta("Couldn’t load schedule.");
+      scheduleEl.innerHTML = `<div class="hint">Schedule unavailable. Please refresh.</div>`;
+      if(matchCountEl) matchCountEl.textContent = "0";
+      if(pagerEl) pagerEl.style.display="none";
+    }
+  }
+
+  function hydrateSuggestions(){
+    if(!teamSuggestions || !scheduleData || !Array.isArray(scheduleData.matches)) return;
+    const set = new Set();
+    scheduleData.matches.forEach(m=>{
+      if(m.home) set.add(m.home);
+      if(m.away) set.add(m.away);
+      if(m.venue) set.add(m.venue);
+      if(m.city) set.add(m.city);
+      if(m.group) set.add(m.group);
+    });
+    teamSuggestions.innerHTML = Array.from(set).sort().slice(0, 150).map(v=>`<option value="${String(v).replace(/"/g,'&quot;')}"></option>`).join("");
+  }
+
+  function highlightNext(matches){
+    // backend may provide next_match id; otherwise pick first future by datetime_utc
+    const nowIso = new Date().toISOString().slice(0,19)+"Z";
+    let nextId = scheduleData && scheduleData.next_match && scheduleData.next_match.id;
+    if(!nextId){
+      const nxt = matches.find(m => (m.datetime_utc||"") >= nowIso);
+      nextId = nxt ? nxt.id : null;
+    }
+    return nextId;
+  }
+
+  function renderFixtures(){
+    const matches = (scheduleData && Array.isArray(scheduleData.matches)) ? scheduleData.matches : [];
+    const total = matches.length;
+    if(matchCountEl) matchCountEl.textContent = String(total);
+
+    const nextId = highlightNext(matches);
+
+    // pagination
+    const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    currentPage = Math.min(Math.max(1, currentPage), pages);
+    const start = (currentPage-1)*PAGE_SIZE;
+    const slice = matches.slice(start, start+PAGE_SIZE);
+
+    if(pagerEl){
+      pagerEl.style.display = (pages>1) ? "block" : "none";
+    }
+    if(pageIndicatorEl){
+      pageIndicatorEl.textContent = `Page ${currentPage} of ${pages}`;
+    }
+    if(prevPageBtn) prevPageBtn.disabled = currentPage<=1;
+    if(nextPageBtn) nextPageBtn.disabled = currentPage>=pages;
+
+    if(!slice.length){
+      scheduleEl.innerHTML = `<div class="hint">No matches found.</div>`;
+      return;
+    }
+
+    scheduleEl.innerHTML = slice.map(m=>{
+      const cls = ["match-card"];
+      if(nextId && m.id === nextId) cls.push("next");
+      const round = (m.round || m.stage || "").toLowerCase();
+      if(round.includes("group")) cls.push("group");
+      if(round.includes("round") || round.includes("ro16")) cls.push("knockout");
+      if(round.includes("semi") || round.includes("final")) cls.push("finals");
+      return `
+        <div class="${cls.join(" ")}">
+          <div class="match-top">
+            <div class="match-date">${safeText(m.date || "")}</div>
+            <div class="pill">${safeText(m.group || m.round || "")}</div>
+          </div>
+          <div class="match-mid">
+            <div class="team">${safeText(m.home || "")}</div>
+            <div class="vs">vs</div>
+            <div class="team">${safeText(m.away || "")}</div>
+          </div>
+          <div class="match-bot">
+            <div class="muted">${safeText(m.venue || "")}${m.city ? " · "+safeText(m.city) : ""}</div>
+            <div class="muted">${fmtKickoff(m)}</div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function renderLive(){
+    scheduleEl.innerHTML = `<div class="hint">Loading live matches…</div>`;
+    fetchJSON("/worldcup/live.json").then(d=>{
+      liveData = d;
+      const items = (d && d.matches) ? d.matches : (Array.isArray(d) ? d : []);
+      if(!items || !items.length){
+        scheduleEl.innerHTML = `<div class="hint">No live matches right now.</div>`;
+        return;
+      }
+      scheduleEl.innerHTML = items.map(x=>{
+        const home = safeText(x.home || x.team_home || x.home_team);
+        const away = safeText(x.away || x.team_away || x.away_team);
+        const score = safeText(x.score || x.result || `${x.home_score ?? ""}-${x.away_score ?? ""}`.replace(/^-|-$/g,""));
+        const status = safeText(x.status || x.phase || x.time || "");
+        return `
+          <div class="match-card">
+            <div class="match-top">
+              <div class="match-date">${status || "Live"}</div>
+              <div class="pill">${score || ""}</div>
+            </div>
+            <div class="match-mid">
+              <div class="team">${home}</div>
+              <div class="vs">vs</div>
+              <div class="team">${away}</div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }).catch(()=>{
+      scheduleEl.innerHTML = `<div class="hint">Live feed unavailable.</div>`;
+    });
+  }
+
+  function renderGroups(){
+    scheduleEl.innerHTML = `<div class="hint">Loading groups…</div>`;
+    fetchJSON("/worldcup/standings.json").then(d=>{
+      standingsData = d;
+      const groups = (d && d.groups) ? d.groups : d;
+      if(!groups || (Array.isArray(groups) && !groups.length)){
+        scheduleEl.innerHTML = `<div class="hint">Groups not available yet.</div>`;
+        return;
+      }
+      // Expect shape: {groups:[{name:"Group A", table:[{team, pld, pts, gd}]}]}
+      const list = Array.isArray(groups) ? groups : (groups.groups || []);
+      scheduleEl.innerHTML = list.map(g=>{
+        const name = safeText(g.name || g.group || "");
+        const table = g.table || g.standings || [];
+        const rows = Array.isArray(table) ? table : [];
+        const body = rows.map(r=>`
+          <tr>
+            <td style="text-align:left">${safeText(r.team || r.name || "")}</td>
+            <td>${safeText(r.pld ?? r.played ?? "")}</td>
+            <td>${safeText(r.w ?? r.wins ?? "")}</td>
+            <td>${safeText(r.d ?? r.draws ?? "")}</td>
+            <td>${safeText(r.l ?? r.losses ?? "")}</td>
+            <td>${safeText(r.gd ?? r.goal_diff ?? "")}</td>
+            <td><b>${safeText(r.pts ?? r.points ?? "")}</b></td>
+          </tr>`).join("");
+        return `
+          <div class="match-card">
+            <div class="match-top">
+              <div class="match-date">${name}</div>
+            </div>
+            <div style="overflow:auto; margin-top:8px;">
+              <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                <thead>
+                  <tr style="opacity:.8">
+                    <th style="text-align:left">Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th>
+                  </tr>
+                </thead>
+                <tbody>${body}</tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }).catch(()=>{
+      scheduleEl.innerHTML = `<div class="hint">Groups unavailable.</div>`;
+    });
+  }
+
+  function renderSchedule(){
+    if(!scheduleEl) return;
+    if(pagerEl) pagerEl.style.display = (scheduleView==="fixtures") ? (pagerEl.style.display||"block") : "none";
+    if(scheduleView==="fixtures") renderFixtures();
+    else if(scheduleView==="live") renderLive();
+    else renderGroups();
+  }
+
+  function initTabs(){
+    if(!tabsEl) return;
+    const btns = qsa("button.segbtn", tabsEl);
+    btns.forEach(b=>{
+      b.addEventListener("click", ()=>{
+        scheduleView = b.dataset.view || "fixtures";
+        localStorage.setItem("schedule_view", scheduleView);
+        btns.forEach(x=>x.setAttribute("aria-selected", String(x===b)));
+        if(pagerEl) pagerEl.style.display = (scheduleView==="fixtures") ? "block" : "none";
+        renderSchedule();
+      });
+    });
+    // initial state
+    btns.forEach(b=> b.setAttribute("aria-selected", String((b.dataset.view||"fixtures")===scheduleView)) );
+    if(pagerEl) pagerEl.style.display = (scheduleView==="fixtures") ? "block" : "none";
+  }
+
+  function initScheduleHandlers(){
+    if(!scheduleEl) return;
+    initTabs();
+    setScopeButtons();
+
+    if(scopeDallasBtn){
+      scopeDallasBtn.addEventListener("click", ()=>{
+        scope="dallas"; localStorage.setItem("schedule_scope", scope);
+        currentPage=1; setScopeButtons(); loadSchedule();
+      });
+    }
+    if(scopeAllBtn){
+      scopeAllBtn.addEventListener("click", ()=>{
+        scope="all"; localStorage.setItem("schedule_scope", scope);
+        currentPage=1; setScopeButtons(); loadSchedule();
+      });
+    }
+    if(teamSearchEl){
+      const go = ()=>{
+        scheduleQuery = (teamSearchEl.value||"").trim();
+        currentPage=1;
+        loadSchedule();
+      };
+      teamSearchEl.addEventListener("change", go);
+      teamSearchEl.addEventListener("keydown", (e)=>{
+        if(e.key==="Enter"){ e.preventDefault(); go(); }
+      });
+    }
+    if(prevPageBtn) prevPageBtn.addEventListener("click", ()=>{ currentPage=Math.max(1,currentPage-1); renderFixtures(); });
+    if(nextPageBtn) nextPageBtn.addEventListener("click", ()=>{ currentPage=currentPage+1; renderFixtures(); });
+
+    loadSchedule();
+  }
+
+  // --------------------------
+  // Fan Zone (supporter + poll)
+  // --------------------------
+  const supporterLabel = $("supporterLabel");
+  const supporterFlag = $("supporterFlag");
+  const supporterChip = $("supporterChip");
+  const btnPickCountry = $("btnPickCountry");
+  const fzIconCountry = $("fzIconCountry");
+
+  const pollCard = $("pollCard");
+  const pollList = $("pollList");
+  const btnOpenPoll = $("btnOpenPoll");
+  const fzIconPoll = $("fzIconPoll");
+
+  function getSupporter(){
+    try{ return JSON.parse(localStorage.getItem("supporter")||"null"); }catch(e){ return null; }
+  }
+  function setSupporter(obj){
+    try{ localStorage.setItem("supporter", JSON.stringify(obj)); }catch(e){}
+  }
+  function renderSupporter(){
+    const s = getSupporter();
+    if(!supporterLabel) return;
+    if(!s){
+      supporterLabel.textContent = "Not set";
+      if(supporterFlag) supporterFlag.textContent = "🏁";
+      return;
+    }
+    supporterLabel.textContent = s.name || "Selected";
+    if(supporterFlag) supporterFlag.textContent = s.flag || "🏁";
+  }
+
+  const COUNTRIES = [
+    {name:"USA", flag:"🇺🇸"},
+    {name:"Mexico", flag:"🇲🇽"},
+    {name:"Canada", flag:"🇨🇦"},
+    {name:"Brazil", flag:"🇧🇷"},
+    {name:"Argentina", flag:"🇦🇷"},
+    {name:"England", flag:"🏴"},
+    {name:"France", flag:"🇫🇷"},
+    {name:"Germany", flag:"🇩🇪"},
+    {name:"Spain", flag:"🇪🇸"},
+    {name:"Portugal", flag:"🇵🇹"},
+    {name:"Japan", flag:"🇯🇵"},
+    {name:"Nigeria", flag:"🇳🇬"},
+    {name:"Ghana", flag:"🇬🇭"},
+    {name:"Morocco", flag:"🇲🇦"},
+    {name:"Senegal", flag:"🇸🇳"}
+  ];
+
+  function pickCountry(){
+    const names = COUNTRIES.map((c,i)=>`${i+1}. ${c.flag} ${c.name}`).join("\n");
+    const ans = prompt("Which country are you supporting?\n\n"+names+"\n\nType a number:", "1");
+    const n = parseInt(ans||"",10);
+    if(!Number.isFinite(n) || n<1 || n>COUNTRIES.length) return;
+    const c = COUNTRIES[n-1];
+    setSupporter(c);
+    renderSupporter();
+  }
+
+  async function loadPoll(){
+    if(!pollCard || !pollList) return;
+    pollCard.style.display = "block";
+    pollList.innerHTML = `<div class="hint">Loading poll…</div>`;
+    try{
+      const st = await fetchJSON("/api/poll/state");
+      if(!st || !st.ok){
+        pollList.innerHTML = `<div class="hint">Poll unavailable.</div>`;
+        return;
+      }
+      const match = st.match || {};
+      const teams = Object.keys(st.counts || {});
+      const locked = !!st.locked;
+      const total = st.total_votes ?? st.total ?? 0;
+
+      pollList.innerHTML = teams.map(team=>{
+        const pct = (st.percentages && st.percentages[team]) ? st.percentages[team] : (st.percent && st.percent[team]) ? st.percent[team] : 0;
+        const cnt = (st.counts && st.counts[team]) ? st.counts[team] : 0;
+        return `
+          <button class="fz-btn" data-team="${team.replace(/"/g,'&quot;')}" ${locked?'disabled':''} style="text-align:left; display:flex; justify-content:space-between; gap:10px;">
+            <span>${team}</span>
+            <span style="opacity:.85">${pct.toFixed ? pct.toFixed(0) : pct}% · ${cnt}</span>
+          </button>
+        `;
+      }).join("") + `<div class="fz-muted" style="margin-top:10px;">${safeText(match.home||"")} vs ${safeText(match.away||"")} ${match.kickoff?("· "+safeText(match.kickoff)):""} • Total votes: ${total}</div>`;
+
+      qsa("button.fz-btn[data-team]", pollList).forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const team = btn.getAttribute("data-team");
+          try{
+            const r = await fetch("/api/poll/vote", {
+              method:"POST",
+              headers:{"Content-Type":"application/json"},
+              body: JSON.stringify({ team })
+            });
+            await r.json().catch(()=>null);
+          }catch(e){}
+          loadPoll();
+        });
+      });
+    }catch(e){
+      pollList.innerHTML = `<div class="hint">Poll unavailable.</div>`;
+    }
+  }
+
+  function initFanZone(){
+    if(btnPickCountry) btnPickCountry.addEventListener("click", pickCountry);
+    if(fzIconCountry) fzIconCountry.addEventListener("click", pickCountry);
+    if(supporterChip) supporterChip.addEventListener("click", pickCountry);
+
+    const openPoll = ()=>loadPoll();
+    if(btnOpenPoll) btnOpenPoll.addEventListener("click", openPoll);
+    if(fzIconPoll) fzIconPoll.addEventListener("click", openPoll);
+
+    renderSupporter();
+  }
+
+  // --------------------------
+  // VIP
+  // --------------------------
+  const vipHoldBtn = $("vipHoldBtn");
+  const vipHoldInfoBtn = $("vipHoldInfoBtn");
+  if(vipHoldInfoBtn){
+    vipHoldInfoBtn.addEventListener("click", ()=>{
+      alert("VIP Hold = fast-start the reservation flow.\n\nClick Hold VIP table, then use Chat to answer:\n• name\n• phone\n• date/time\n• party size\n\nWe’ll route you to the best options.");
+    });
+  }
+  if(vipHoldBtn){
+    vipHoldBtn.addEventListener("click", ()=>{
+      // Switch to chat section if your SPA supports it
+      try{
+        const chatTab = document.querySelector('[data-sec="chat"], [data-msec="chat"], a[href="#chat"]');
+        if(chatTab) chatTab.click();
+      }catch(e){}
+      const msg = $("msg");
+      if(msg){ msg.value = "VIP table hold — reservation"; msg.focus(); }
+      const sendBtn = $("sendBtn");
+      if(sendBtn) sendBtn.focus();
+    });
+  }
+
+  // Boot
+  document.addEventListener("DOMContentLoaded", ()=>{
+    initScheduleHandlers();
+    initFanZone();
+  });
 })();
 </script>
 
