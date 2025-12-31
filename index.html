@@ -2822,6 +2822,14 @@ body[data-msec="schedule"] #scheduleCard{
 <button class="fz-iconbtn" id="fzIconPoll" title="Fan poll">📊</button>
 <button class="fz-btn" id="btnPickCountry">Which country are you supporting?</button>
 <button class="fz-btn" id="btnOpenPoll">Match poll</button></div>
+<div class="fz-card lux-reveal" id="opsPanelMount" style="display:none; margin-top:10px;">
+  <div class="fz-minirow" style="justify-content:space-between; margin-bottom:6px;">
+    <span class="fz-muted fz-rail-title">Ops</span>
+    <span class="fz-muted" style="font-size:12px;">Admin</span>
+  </div>
+  <div id="opsPanelBody" style="display:grid; gap:10px;"></div>
+</div>
+</div>
 <div class="fz-card lux-reveal" id="pollCard" style="display:none; margin-top:10px; max-height:52vh; overflow:auto;">
 <h3>⚔️ Match of the Day Poll</h3>
 <div class="fz-muted">Vote for who you think will win.</div>
@@ -2988,6 +2996,31 @@ function updateAdminCountdownState(kind){
     fallback: 'FALLBACK'
   };
   el.textContent = 'STATE: ' + (map[kind] || String(kind||'UNKNOWN').toUpperCase());
+}
+
+
+// ---------- admin ops panel: relocate Match-Day Ops Toggles ----------
+function relocateMatchDayOpsToggles(){
+  if(!isAdminDebug()) return;
+  const mount = $('opsPanelMount');
+  const body = $('opsPanelBody');
+  if(!mount || !body) return;
+  // Try common ids first
+  let block = document.getElementById('matchDayOpsToggles')
+           || document.getElementById('matchDayOps')
+           || document.getElementById('matchDayOpsPanel');
+  // Fallback: find a card whose header includes the label
+  if(!block){
+    const nodes = Array.from(document.querySelectorAll('.fz-card, .card, .panel, aside, section, div'));
+    block = nodes.find(el => {
+      const t = (el.textContent || '').trim();
+      return t.includes('Match-Day Ops Toggles');
+    }) || null;
+  }
+  if(block){
+    try{ body.appendChild(block); }catch(e){}
+    mount.style.display = '';
+  }
 }
 
 // ---------- proactive game-day chat prompt ----------
@@ -3699,6 +3732,7 @@ function init(){
   bindModal();
   initScheduleHandlers();
   startHeroCountdown();
+  relocateMatchDayOpsToggles();
   setSection('home');
   ensureChatWelcome();
 }
