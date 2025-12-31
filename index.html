@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="format-detection" content="telephone=no"/>
   <title>World Cup Concierge</title>
-  <!-- WC_BUILD_VERSION: 20251230_buttons_fix2 -->
+  <!-- WC_BUILD_VERSION: V1-BUSINESS-NOCITY-FIX-20251230-222355 -->
   <style>
     :root{
       --bg:#071022;
@@ -856,7 +856,6 @@
 
 /* ===== Ultra-top Broadcast Title ===== */
 .broadcast-title{
-  pointer-events:none;
   position: fixed;
   top: env(safe-area-inset-top);
   left: 0; right: 0;
@@ -885,7 +884,6 @@
 
 /* Day/Night gradient variants for title (tied to hero switch) */
 html[data-hero="day"] .broadcast-title{
-  pointer-events:none;
   position: fixed;
   top: env(safe-area-inset-top);
   left: 0; right: 0;
@@ -911,7 +909,6 @@ html[data-hero="day"] .broadcast-title{
   pointer-events:none;
 }
 html[data-hero="night"] .broadcast-title{
-  pointer-events:none;
   position: fixed;
   top: env(safe-area-inset-top);
   left: 0; right: 0;
@@ -1835,7 +1832,7 @@ function startHeroCountdown(){
       updateMenuTitle(); }catch(e){} }, 1000);
     // Refresh immediately when returning to tab
     document.addEventListener('visibilitychange', ()=>{
-      if(!document.hidden){ try{ setHeroBannerImage(); }catch(e){} try{ updateHeroCountdown();
+      if(!document.hidden){ try{ updateHeroCountdown();
       updateMenuTitle(); }catch(e){} }
     }, { passive:true });
   }catch(e){}
@@ -2052,42 +2049,60 @@ function startHeroCountdown(){
     // - menu/schedule/fanzone pages empty
     // =========================================================
 
+    
     function bindNav(){
       const nav = document.getElementById('mobileNav');
       if(!nav) return;
-      nav.querySelectorAll('.mnavBtn').forEach(btn=>{
+
+      nav.querySelectorAll('.mnavBtn').forEach((btn)=>{
         btn.style.touchAction = 'manipulation';
         btn.addEventListener('click', (e)=>{
-          e.preventDefault(); e.stopPropagation();
-          haptic(8);
-          const sec = btn.dataset.sec || 'home';
-          setSection(sec);
-        }
-
+          e.preventDefault();
+          e.stopPropagation();
+          try{ haptic(8); }catch(_){}
+          const sec = btn.getAttribute('data-sec') || (btn.dataset ? btn.dataset.sec : null) || 'home';
+          try{ setSection(sec); }catch(_){}
+        }, {passive:false});
+      });
+    }
 
     function bindGlobalDelegates(){
-      // Fallback: event delegation so clicks still work even if elements are re-rendered
-      document.addEventListener('click', (e)=>{
-        const btn = e.target.closest('button, a');
-        if(!btn) return;
+      // Event delegation so clicks keep working even if content is re-rendered.
+      if(window.__wcDelegatesBound) return;
+      window.__wcDelegatesBound = true;
 
-        // Bottom nav + any element that declares data-sec
-        const sec = btn.dataset ? btn.dataset.sec : null;
-        if(sec){
+      document.addEventListener('click', (e)=>{
+        const el = e.target.closest('.chip[data-q],[data-sec],[data-action],button,a');
+        if(!el) return;
+
+        // Chips → prefill (reserve + chat)
+        if(el.classList && el.classList.contains('chip') && el.hasAttribute('data-q')){
           e.preventDefault();
-          haptic(6);
-          setSection(sec);
+          const q = el.getAttribute('data-q') || '';
+          try{ if(typeof prefillReserveFromChip === 'function') prefillReserveFromChip(q); }catch(_){}
+          try{ const inp = document.getElementById('chatInput'); if(inp) inp.value = q; }catch(_){}
+          try{ if(typeof openReserveModal === 'function') openReserveModal(); }catch(_){}
           return;
         }
 
-        // Generic: prevent accidental form submits if any
-        if(btn.tagName === 'BUTTON' && !btn.getAttribute('type')){
-          btn.setAttribute('type','button');
+        // Section navigation
+        const sec = el.getAttribute('data-sec');
+        if(sec){
+          e.preventDefault();
+          try{ haptic(6); }catch(_){}
+          try{ setSection(sec); }catch(_){}
+          return;
+        }
+
+        // Action buttons
+        const action = el.getAttribute('data-action');
+        if(action){
+          e.preventDefault();
+          try{ haptic(8); }catch(_){}
+          try{ if(typeof window[action] === 'function') window[action](); }catch(_){}
+          return;
         }
       }, {passive:false});
-    }
-, {passive:false});
-      });
     }
 
     function bindHome(){
@@ -2160,7 +2175,7 @@ function startHeroCountdown(){
         const hint = document.getElementById('scheduleHint');
         if(hint) hint.textContent = 'Loading…';
         if(body) body.innerHTML = '';
-        const q = ((document.getElementById('scheduleSearch') && document.getElementById('scheduleSearch').value) || '').trim();
+        const q = (document.getElementById('scheduleSearch')?.value || '').trim();
         const r = await fetch(`/schedule.json?q=${encodeURIComponent(q)}`, {cache:'no-store'});
         const data = await r.json();
 
@@ -2280,61 +2295,62 @@ function startHeroCountdown(){
     }
 
     function boot(){
-      // Never let one missing element or minor script error kill all interactions.
-      const safe = (fn)=>{ try{ fn(); }catch(e){ /* console.warn(e); */ } };
+      try{
+        bindNav();
+        bindGlobalDelegates();
+        bindHome();
+        bindChat?.(); // if present in your file
+        bindPageControls();
 
-      // Global click routing (nav + cards + toggles)
-      safe(()=>bindGlobalDelegates && bindGlobalDelegates());
+        // Start countdown ticker
+        try{
+          updateHeroCountdown();
+          clearInterval(window.__cdInt);
+          window.__cdInt = setInterval(updateHeroCountdown, 1000);
+        }catch(e){}
 
-      // Page binders
-      safe(()=>bindNav && bindNav());
-      safe(()=>bindHome && bindHome());
-      safe(()=> (typeof bindChat === 'function') && bindChat());
-      safe(()=>bindPageControls && bindPageControls());
+        // Initial welcome bubble
+        try{ ensureWelcomeBubble(); }catch(e){}
 
-      // Hero banner + countdown
-      safe(()=>setHeroBannerImage && setHeroBannerImage());
-      safe(()=>startHeroCountdown && startHeroCountdown());
+        // Render VIP page content once
+        try{ loadVIP(); }catch(e){}
 
-      // Initial renders
-      safe(()=>setSection && setSection('home'));
-      safe(()=>updateMenuTitle && updateMenuTitle());
-      safe(()=>ensureWelcomeBubble && ensureWelcomeBubble());
-      safe(()=>loadData && loadData());
-
-      // Extras
-      safe(()=>setupDayNightAuto && setupDayNightAuto());
-      safe(()=>bindDeepLinks && bindDeepLinks());
-      safe(()=>bindDismisses && bindDismisses());
-
-      // Scroll effects (safe even if hero missing)
-      safe(()=>{
-        const onScroll = ()=>{
-          const y = window.scrollY || 0;
-          document.documentElement.style.setProperty('--scrollY', String(y));
-        };
-        window.addEventListener('scroll', onScroll, {passive:true});
-        onScroll();
-      });
+        // Default section (home)
+        setSection('home');
+      }catch(e){
+        console.error(e);
+        try{ toast('Init error — refresh.'); }catch(_e){}
+      }
     }
 
-    // Ensure boot runs even if the script executes before DOM is fully ready
-    if(document.readyState === 'loading'){
-      document.addEventListener('DOMContentLoaded', boot, {once:true});
-    }else{
-      boot();
-    }
 
-    // iOS/Safari bfcache restore: re-run key UI wiring
-    window.addEventListener('pageshow', ()=>{
-      try{ bindGlobalDelegates && bindGlobalDelegates(); }catch(e){}
-      try{ startHeroCountdown && startHeroCountdown(); }catch(e){}
+    if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+    else boot();
+  </script>
+
+<script>
+/* HERO CINEMATIC PARALLAX SAFE */
+(function(){
+  const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(prefersReduced) return;
+
+  const img = document.querySelector('#heroBanner .heroImg');
+  if(!img) return;
+
+  let ticking = false;
+  function onScroll(){
+    if(ticking) return;
+    ticking = true;
+    requestAnimationFrame(()=>{
+      const y = Math.min(6, Math.max(0, window.scrollY * 0.05)); // 0–6px
+      document.documentElement.style.setProperty('--heroY', y.toFixed(2) + 'px');
+      ticking = false;
     });
-
-    )();
+  }
+  window.addEventListener('scroll', onScroll, {passive:true});
+  onScroll();
+})();
 </script>
 
-
-<div id="wcBuildTag" style="position:fixed;left:-9999px;top:-9999px;opacity:0">20251230_buttons_fix2</div>
 </body>
 </html>
