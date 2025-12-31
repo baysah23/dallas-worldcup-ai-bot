@@ -856,6 +856,7 @@
 
 /* ===== Ultra-top Broadcast Title ===== */
 .broadcast-title{
+  pointer-events:none;
   position: fixed;
   top: env(safe-area-inset-top);
   left: 0; right: 0;
@@ -884,6 +885,7 @@
 
 /* Day/Night gradient variants for title (tied to hero switch) */
 html[data-hero="day"] .broadcast-title{
+  pointer-events:none;
   position: fixed;
   top: env(safe-area-inset-top);
   left: 0; right: 0;
@@ -909,6 +911,7 @@ html[data-hero="day"] .broadcast-title{
   pointer-events:none;
 }
 html[data-hero="night"] .broadcast-title{
+  pointer-events:none;
   position: fixed;
   top: env(safe-area-inset-top);
   left: 0; right: 0;
@@ -2059,7 +2062,31 @@ function startHeroCountdown(){
           haptic(8);
           const sec = btn.dataset.sec || 'home';
           setSection(sec);
-        }, {passive:false});
+        }
+
+
+    function bindGlobalDelegates(){
+      // Fallback: event delegation so clicks still work even if elements are re-rendered
+      document.addEventListener('click', (e)=>{
+        const btn = e.target.closest('button, a');
+        if(!btn) return;
+
+        // Bottom nav + any element that declares data-sec
+        const sec = btn.dataset ? btn.dataset.sec : null;
+        if(sec){
+          e.preventDefault();
+          haptic(6);
+          setSection(sec);
+          return;
+        }
+
+        // Generic: prevent accidental form submits if any
+        if(btn.tagName === 'BUTTON' && !btn.getAttribute('type')){
+          btn.setAttribute('type','button');
+        }
+      }, {passive:false});
+    }
+, {passive:false});
       });
     }
 
@@ -2133,7 +2160,7 @@ function startHeroCountdown(){
         const hint = document.getElementById('scheduleHint');
         if(hint) hint.textContent = 'Loading…';
         if(body) body.innerHTML = '';
-        const q = (document.getElementById('scheduleSearch')?.value || '').trim();
+        const q = ((document.getElementById('scheduleSearch') && document.getElementById('scheduleSearch').value) || '').trim();
         const r = await fetch(`/schedule.json?q=${encodeURIComponent(q)}`, {cache:'no-store'});
         const data = await r.json();
 
@@ -2255,6 +2282,7 @@ function startHeroCountdown(){
     function boot(){
       try{
         bindNav();
+        bindGlobalDelegates();
         bindHome();
         if (typeof bindChat === 'function') bindChat(); // safe call (no optional chaining)
         bindPageControls();
