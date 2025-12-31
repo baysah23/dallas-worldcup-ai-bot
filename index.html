@@ -2894,1042 +2894,317 @@ body[data-msec="schedule"] #scheduleCard{
   </div>
 
   <script>
-    const state = { lang:'en', scope:'global', city:'' };// =========================================================
-// Helpers (missing in prior build)
-// =========================================================
-const $  = (id) => document.getElementById(id);
-const $$ = (sel, root=document) => Array.from((root || document).querySelectorAll(sel));
-const qsa = (sel, root=document) => Array.from((root || document).querySelectorAll(sel));
+/* World Cup Concierge — robust boot script (nav + countdown + schedule) */
+const state = { sec:'home' };
 
-async function fetchJSON(url){
-  const r = await fetch(url, { cache: "no-store" });
-  return r.json();
+// ---------- helpers ----------
+const $ = (id)=>document.getElementById(id);
+const $$ = (sel, root=document)=>Array.from((root||document).querySelectorAll(sel));
+const escapeHtml = (s)=>String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+// ---------- navigation ----------
+function setActiveNav(sec){
+  $$('#mobileNav .mnavBtn').forEach(btn=>{
+    btn.classList.toggle('active', (btn.dataset?.sec||'') === sec);
+  });
 }
 
-// Fan Zone: supporter persistence
-function setSupporter(c){
-  try{ localStorage.setItem("wc_supporter", JSON.stringify(c||{})); }catch(e){}
-  try{ document.body.classList.add("has-support"); }catch(e){}
-}
-function getSupporter(){
-  try{ return JSON.parse(localStorage.getItem("wc_supporter") || "null"); }catch(e){ return null; }
-}
-function renderSupporter(){
-  const chip = $("supporterChip");
-  const flag = $("supporterFlag");
-  const label = $("supporterLabel");
-  const s = getSupporter();
-  if(!chip || !flag || !label) return;
-  if(s && (s.name || s.flag)){
-    flag.textContent = s.flag || "🏁";
-    label.textContent = s.name || "Supporter";
-    document.body.classList.add("has-support");
-  }else{
-    flag.textContent = "🏁";
-    label.textContent = "Not set";
-    document.body.classList.remove("has-support");
-  }
+function setSection(sec){
+  state.sec = sec;
+  document.body.setAttribute('data-sec', sec);
+  setActiveNav(sec);
+
+  // lazy loads
+  if(sec === 'schedule'){ try{ loadSchedule(); }catch(e){} }
+  if(sec === 'menu'){ try{ loadMenu(); }catch(e){} }
+  if(sec === 'fanzone'){ try{ loadFanzone(); }catch(e){} }
+  if(sec === 'vip'){ try{ loadVIP(); }catch(e){} }
+  if(sec === 'chat'){ try{ focusChatInput(); }catch(e){} }
+
+  try{ window.scrollTo(0,0); }catch(e){}
 }
 
-// Cache commonly-used Fan Zone elements (used by initFanZone/loadPoll)
-const supporterChip = $("supporterChip");
-const btnPickCountry = $("btnPickCountry");
-const fzIconCountry = $("fzIconCountry");
-const fzIconPoll = $("fzIconPoll");
-const pollCard = $("pollCard");
-const pollList = $("pollList");
-const btnOpenPoll = $("btnOpenPoll");
-const qrCard = $("qrCard");
-const qrImg = $("qrImg");
-const qrLink = $("qrLink");
-
-    // Toast helper
-    function toast(msg){
-      const t = document.getElementById('toast');
-      if(!t) return;
-      t.textContent = msg;
-      t.classList.remove('hidden');
-      clearTimeout(window.__toastT);
-      window.__toastT = setTimeout(()=>t.classList.add('hidden'), 2800);
-    }
-
-    function haptic(ms=10){
-      try{ if(navigator.vibrate) navigator.vibrate(ms); }catch(e){}
-    }
-
-    function escapeHtml(s){
-      return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-    }
-
-    function to12Hour(t){
-      const s = String(t || '').trim();
-      const m = /^([01]?\d|2[0-3]):([0-5]\d)/.exec(s);
-      if(!m) return s;
-      let hh = parseInt(m[1], 10);
-      const mm = m[2];
-      const ampm = hh >= 12 ? 'PM' : 'AM';
-      hh = hh % 12;
-      if(hh === 0) hh = 12;
-      return `${hh}:${mm} ${ampm}`;
-    }
-
-    function setActiveNav(sec){
-      document.querySelectorAll('#mobileNav .mnavBtn').forEach(b=>{
-        b.classList.toggle('active', b.dataset.sec === sec);
-      });
-    }
-
-    function focusChatInput(){
-      const input = document.getElementById('msg');
-      if(!input) return;
-      try{
-        input.focus({preventScroll:true});
-        input.scrollIntoView({block:'center', behavior:'smooth'});
-        const v = input.value || '';
-        input.setSelectionRange(v.length, v.length);
-      }catch(e){}
-    }
-
-    function setSection(sec){
-      try{ window.scrollTo(0,0); }catch(e){}
-      document.body.setAttribute('data-sec', sec);
-      setActiveNav(sec);
-
-      if(sec === 'chat'){
-        focusChatInput();
-      }
-      if(sec === 'menu'){
-        if(!window.__menuLoaded) loadMenu();
-      }
-      if(sec === 'schedule'){
-        if(!window.__scheduleLoaded) loadSchedule();
-      }
-      if(sec === 'fanzone'){
-        if(!window.__fanzoneLoaded) loadFanzone();
-      }
-    }
-
-    function updateFlowCopy(){
-      const sub = document.getElementById('flowCitySub');
-      if(!sub) return;
-      if(state.scope === 'city' && state.city){
-        sub.textContent = `City mode: ${state.city}`;
-      }else if(state.scope === 'city'){
-        sub.textContent = 'City mode (enter a city in Schedule)';
-      }else{
-        sub.textContent = 'Global view (tap Scope → City)';
-      }
-    }
-
-    function updatePills(){
-      const pillLang = document.getElementById('pillLang');
-      const pillScope = document.getElementById('pillScope');
-      if(pillLang) pillLang.innerHTML = `<strong>${state.lang.toUpperCase()}</strong> · 4`;
-      if(pillScope) pillScope.innerHTML = `Scope: <strong>${state.scope === 'city' ? 'City' : 'Global'}</strong>`;
-
-      const scopeSelect = document.getElementById('scopeSelect');
-      const citySearch = document.getElementById('citySearch');
-      if(scopeSelect) scopeSelect.value = state.scope;
-      if(citySearch) citySearch.value = state.city || '';
-
-      updateFlowCopy();
-    
-      document.querySelectorAll('#chatLangRow .pill.lang').forEach(b=>b.classList.toggle('active', b.dataset.lang===state.lang));
-    }
-
-    
-    function setLang(lang){
-      const allowed = ['en','es','pt','fr'];
-      if(!allowed.includes(lang)) return;
-      state.lang = lang;
-      updatePills();
-      updateMenuTitle();
-      updateHeroCountdown();
-      updateMenuTitle();
-      try{ ensureWelcomeBubble(); }catch(_e){}
-      toast(`Language: ${state.lang.toUpperCase()}`);
-      haptic(8);
-      // reload localized feeds
-      if(document.body.dataset.sec === 'menu') loadMenu();
-      if(document.body.dataset.sec === 'fanzone') loadFanzone();
-    }
-    
-    function cycleLang(){
-      const order = ['en','es','pt','fr'];
-      state.lang = order[(order.indexOf(state.lang)+1) % order.length];
-      updatePills();
-      updateHeroCountdown();
-      updateMenuTitle();
-try{ ensureWelcomeBubble(); }catch(_e){}
-      toast(`Language: ${state.lang.toUpperCase()}`);
-      haptic(8);
-      if(document.body.dataset.sec === 'menu') loadMenu();
-      if(document.body.dataset.sec === 'fanzone') loadFanzone();
-    }
-
-    function toggleScope(){
-      // Global-only schedule (city-specific modes removed)
-      state.scope = 'global';
-      updatePills();
-      if(document.body.dataset.sec === 'schedule') loadSchedule();
-    }
-
-    
-    
-    // === HERO BANNER IMAGE (AUTO DAY/NIGHT) ===
-    // Uses your files:
-    //   Night (default): /static/hero_stadium_night.png
-    //   Day (auto):      /static/hero_stadium_day.png
-    function setHeroBannerImage(){
-      const img = document.getElementById('heroImg');
-      if(!img) return;
-      const now = new Date();
-      const hour = now.getHours(); // user local time
-      const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
-      const isDay = prefersLight || (hour >= 7 && hour < 19);
-      const src = isDay ? '/static/hero_stadium_day.png' : '/static/hero_stadium_night.png';
-            try{ document.documentElement.setAttribute("data-hero", isDay ? "day" : "night"); }catch(e){}
-// cache-bust daily to keep updates visible without hard-refresh
-      const stamp = now.getFullYear().toString() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0');
-      img.src = src + '?v=' + stamp;
-    }
-
-// === HERO LIVE COUNTDOWN (real timer) ===
-const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z'; // World Cup kickoff (UTC)
-
-function ensureMatchDayBadge(){
-  const wrap = document.querySelector('.countdownGlass');
-  if(!wrap) return null;
-  let badge = document.getElementById('cdBadge');
-  if(!badge){
-    badge = document.createElement('div');
-    badge.className = 'cdBadge';
-    badge.id = 'cdBadge';
-    badge.textContent = 'Match Day';
-    badge.setAttribute('aria-hidden','true');
-    // Prefer inside cdRow (for consistent layout), otherwise top of wrap
-    const row = wrap.querySelector('.cdRow');
-    if(row) row.prepend(badge);
-    else wrap.prepend(badge);
-  }
-  return badge;
+function bindNav(){
+  const nav = $('mobileNav');
+  if(!nav) return;
+  $$('.mnavBtn', nav).forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      setSection(btn.dataset?.sec || 'home');
+    });
+  });
 }
 
-    function updateMenuTitle(){
-      const el = document.getElementById('menuTitle');
-      if(!el) return;
-      const ui = (MENU_UI && MENU_UI[state.lang]) ? MENU_UI[state.lang] : MENU_UI.en;
-      el.textContent = ui.title || 'Menu';
-    }
-
+// ---------- countdown ----------
+const HERO_KICKOFF_ISO = '2026-06-11T00:00:00Z';
 
 function updateHeroCountdown(){
-  const wrap = document.querySelector('.countdownGlass');
-  const dEl = document.getElementById('cdD');
-  const hEl = document.getElementById('cdH');
-  const mEl = document.getElementById('cdM');
-  const sEl = document.getElementById('cdS');
-  if(!wrap || !dEl || !hEl || !mEl || !sEl) return;
+  const dEl=$('cdD'), hEl=$('cdH'), mEl=$('cdM'), sEl=$('cdS');
+  if(!dEl||!hEl||!mEl||!sEl) return;
 
-  const badge = ensureMatchDayBadge();
+  const target = new Date(HERO_KICKOFF_ISO).getTime();
+  const now = Date.now();
+  let diff = target - now;
+  if(!Number.isFinite(diff) || diff < 0) diff = 0;
 
-  const targetDate = new Date(HERO_KICKOFF_ISO);
-  const targetMs = targetDate.getTime();
-  const now = new Date();
-  const nowMs = now.getTime();
-  const diff = targetMs - nowMs;
+  const total = Math.floor(diff/1000);
+  const days = Math.floor(total/86400);
+  const hours = Math.floor((total%86400)/3600);
+  const mins = Math.floor((total%3600)/60);
+  const secs = total%60;
 
-  const sameLocalDay =
-    (now.getFullYear() === targetDate.getFullYear() &&
-     now.getMonth() === targetDate.getMonth() &&
-     now.getDate() === targetDate.getDate());
-
-  const isMatchDay = sameLocalDay || (diff <= 0);
-
-  if(isMatchDay){
-    wrap.classList.add('isMatchDay');
-    if(badge) badge.setAttribute('aria-hidden','false');
-    return;
-  }else{
-    wrap.classList.remove('isMatchDay');
-    if(badge) badge.setAttribute('aria-hidden','true');
-  }
-
-  if(!Number.isFinite(diff) || diff <= 0){
-    dEl.textContent = '00'; hEl.textContent = '00'; mEl.textContent = '00'; sEl.textContent = '00';
-    return;
-  }
-
-  const totalSeconds = Math.floor(diff / 1000);
-  const days = Math.floor(totalSeconds / 86400);
-  const hours = Math.floor((totalSeconds % 86400) / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-
-  const nextD = String(days).padStart(2,'0');
-  const nextH = String(hours).padStart(2,'0');
-  const nextM = String(minutes).padStart(2,'0');
-  const nextS = String(seconds).padStart(2,'0');
-
-  const tick = (el, next) => {
-    if(el.textContent !== next){
-      el.textContent = next;
-      el.classList.remove('tick'); // restart animation
-      void el.offsetWidth;         // reflow
-      el.classList.add('tick');
-    }
-  };
-
-  tick(dEl, nextD);
-  tick(hEl, nextH);
-  tick(mEl, nextM);
-  tick(sEl, nextS);
+  dEl.textContent = String(days).padStart(2,'0');
+  hEl.textContent = String(hours).padStart(2,'0');
+  mEl.textContent = String(mins).padStart(2,'0');
+  sEl.textContent = String(secs).padStart(2,'0');
 }
 
 function startHeroCountdown(){
-  try{ updateHeroCountdown();
-      updateMenuTitle(); }catch(e){}
-  try{
-    if(window.__heroCdTimer) clearInterval(window.__heroCdTimer);
-    window.__heroCdTimer = setInterval(()=>{ try{ updateHeroCountdown();
-      updateMenuTitle(); }catch(e){} }, 1000);
-    // Refresh immediately when returning to tab
-    document.addEventListener('visibilitychange', ()=>{
-      if(!document.hidden){ try{ updateHeroCountdown();
-      updateMenuTitle(); }catch(e){} }
-    }, { passive:true });
-  }catch(e){}
+  updateHeroCountdown();
+  if(window.__heroCdTimer) clearInterval(window.__heroCdTimer);
+  window.__heroCdTimer = setInterval(updateHeroCountdown, 1000);
+  document.addEventListener('visibilitychange', ()=>{
+    if(!document.hidden) updateHeroCountdown();
+  }, {passive:true});
 }
 
+// ---------- chat helpers ----------
+function focusChatInput(){
+  const input = $('msg');
+  if(!input) return;
+  try{ input.focus({preventScroll:true}); }catch(e){ input.focus(); }
+}
 
+// ---------- fetch ----------
+async function fetchJSON(url){
+  const r = await fetch(url, {cache:'no-store'});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
 
-// === CHAT ===
-    const chatLog = document.getElementById('chatLog');
-    const sessionId = (()=>{ try{ return localStorage.getItem('wc_session_id') || crypto.randomUUID(); }catch(e){ return String(Date.now()); } })();
-    try{ localStorage.setItem('wc_session_id', sessionId); }catch(e){}
-
-    function appendBubble(text, who){
-      if(!chatLog) return;
-      const div = document.createElement('div');
-      div.className = 'bubble ' + (who === 'me' ? 'me' : 'bot');
-      div.textContent = text;
-      if(!chatLog) return;
-      chatLog.appendChild(div);
-      chatLog.scrollTop = chatLog.scrollHeight;
+// ---------- menu ----------
+async function loadMenu(){
+  if(window.__menuLoaded) return;
+  const box = $('menuBody');
+  const hint = $('menuHint');
+  if(hint) hint.textContent = 'Loading…';
+  try{
+    const data = await fetchJSON('/menu.json');
+    const items = data.items || data.menu || [];
+    if(box){
+      box.innerHTML = items.length ? items.map(it=>{
+        const name = escapeHtml(it.name || it.title || '');
+        const desc = escapeHtml(it.desc || it.description || '');
+        const price = escapeHtml(it.price || '');
+        return `<div class="rowCard"><div style="display:flex;justify-content:space-between;gap:10px;">
+                  <div style="font-weight:900">${name}</div>
+                  <div style="opacity:.9;font-weight:900">${price}</div>
+                </div>
+                ${desc?`<div class="hint" style="margin-top:4px">${desc}</div>`:''}
+              </div>`;
+      }).join('') : `<div class="hint">No menu items yet.</div>`;
     }
-    function systemMsg(t){ appendBubble(t, 'bot'); }
-    const MENU_UI = {
-  "en": {
-    "title": "Menu",
-    "chef": "Chef Specials",
-    "bites": "Matchday Bites",
-    "classics": "Stadium Classics",
-    "sweets": "Sweet Finish",
-    "drinks": "Drinks",
-    "cta": "Ask about VIP Chef Table",
-    "chefTitle": "Chef’s Table",
-    "chefSub": "Seasonal specials, crafted for matchday energy."
-  },
-  "es": {
-    "title": "Menú",
-    "chef": "Especiales del Chef",
-    "bites": "Bocados de Partido",
-    "classics": "Clásicos del Estadio",
-    "sweets": "Postres",
-    "drinks": "Bebidas",
-    "cta": "Pregunta por la Mesa VIP del Chef",
-    "chefTitle": "Mesa del Chef",
-    "chefSub": "Especiales de temporada para el día del partido."
-  },
-  "pt": {
-    "title": "Cardápio",
-    "chef": "Especiais do Chef",
-    "bites": "Petiscos de Jogo",
-    "classics": "Clássicos do Estádio",
-    "sweets": "Sobremesas",
-    "drinks": "Bebidas",
-    "cta": "Pergunte sobre a Mesa VIP do Chef",
-    "chefTitle": "Mesa do Chef",
-    "chefSub": "Especiais sazonais para a energia do jogo."
-  },
-  "fr": {
-    "title": "Menu",
-    "chef": "Spécialités du Chef",
-    "bites": "Snacks de Match",
-    "classics": "Classiques du Stade",
-    "sweets": "Desserts",
-    "drinks": "Boissons",
-    "cta": "Demandez la Table VIP du Chef",
-    "chefTitle": "Table du Chef",
-    "chefSub": "Spécialités de saison, pensées pour le jour de match."
+    if(hint) hint.textContent = '';
+    window.__menuLoaded = true;
+  }catch(e){
+    console.error(e);
+    if(hint) hint.textContent = 'Menu unavailable.';
   }
-};
+}
 
-    const WELCOME_TEXT = {
-      en: "\u26bd Welcome to World Cup Concierge. Tell me what you need\u2014reservations, VIP experiences, fan zones, match schedules, or the menu. Try: \u201cReserve a table for 4 at 7pm.\u201d",
-      es: "\u26bd Bienvenido a World Cup Concierge. Dime qu\u00e9 necesitas: reservas, experiencias VIP, fan zone, calendario de partidos o el men\u00fa. Prueba: \u201cReserva una mesa para 4 a las 7pm.\u201d",
-      pt: "\u26bd Bem-vindo ao World Cup Concierge. Diga o que voc\u00ea precisa: reservas, experi\u00eancias VIP, fan zone, agenda de jogos ou o card\u00e1pio. Ex.: \u201cReserve uma mesa para 4 \u00e0s 19h.\u201d",
-      fr: "\u26bd Bienvenue sur World Cup Concierge. Dites-moi ce qu\u2019il vous faut : r\u00e9servations, exp\u00e9riences VIP, fan zone, calendrier des matchs ou menu. Essayez : \u00ab R\u00e9serve une table pour 4 \u00e0 19h. \u00bb",
-    };
+// ---------- schedule ----------
+let scheduleView = (()=>{
+  try{ return localStorage.getItem('schedule_view') || 'fixtures'; }catch(e){ return 'fixtures'; }
+})();
+let currentPage = 1;
+const PAGE_SIZE = 10;
+let fixturesCache = null;
 
-    function ensureWelcomeBubble(){
-      if(!chatLog) return;
-      let w = chatLog.querySelector('.bubble.bot[data-welcome="1"]');
-      if(!w){
-        w = document.createElement('div');
-        w.className = 'bubble bot';
-        w.dataset.welcome = "1";
-        // keep it pinned as the first message
-        if(chatLog.firstChild) chatLog.insertBefore(w, chatLog.firstChild);
-        else chatLog.appendChild(w);
+function setTabSelected(view){
+  const tabs = $('scheduleTabs');
+  if(!tabs) return;
+  $$('.segbtn', tabs).forEach(btn=>{
+    const v = btn.getAttribute('data-view');
+    const active = v === view;
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    btn.classList.toggle('active', active);
+  });
+}
+
+function showPager(show){
+  const pager = $('pager');
+  if(pager) pager.style.display = show ? 'flex' : 'none';
+}
+
+function setPageIndicator(page, totalPages){
+  const el = $('pageIndicator');
+  if(el) el.textContent = `Page ${page} of ${totalPages}`;
+  const prev = $('prevPage'), next = $('nextPage');
+  if(prev) prev.disabled = page <= 1;
+  if(next) next.disabled = page >= totalPages;
+}
+
+function renderFixtures(matches){
+  const list = $('schedule');
+  if(!list) return;
+
+  if(!matches.length){
+    list.innerHTML = `<div class="hint">No matches found.</div>`;
+    showPager(false);
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(matches.length / PAGE_SIZE));
+  if(currentPage > totalPages) currentPage = totalPages;
+
+  const slice = matches.slice((currentPage-1)*PAGE_SIZE, currentPage*PAGE_SIZE);
+  list.innerHTML = slice.map(m=>{
+    const dt = escapeHtml(m.datetime_local || m.date || m.datetime || '');
+    const a = escapeHtml(m.home || m.team1 || m.a || '');
+    const b = escapeHtml(m.away || m.team2 || m.b || '');
+    const venue = escapeHtml(m.venue || m.stadium || '');
+    const city = escapeHtml(m.city || '');
+    const group = escapeHtml(m.group || m.stage || '');
+    const line2 = [venue, city].filter(Boolean).join(' • ');
+    return `<div class="rowCard">
+              <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+                <div style="font-weight:900">${a} vs ${b}</div>
+                <div class="pill" style="white-space:nowrap">${dt || 'TBD'}</div>
+              </div>
+              ${group?`<div class="hint" style="margin-top:4px">${group}</div>`:''}
+              ${line2?`<div class="hint" style="margin-top:4px">${line2}</div>`:''}
+            </div>`;
+  }).join('');
+
+  showPager(true);
+  setPageIndicator(currentPage, totalPages);
+}
+
+function renderLive(matches){
+  const list = $('schedule');
+  if(!list) return;
+  if(!matches.length){
+    list.innerHTML = `<div class="hint">No live matches right now.</div>`;
+    showPager(false);
+    return;
+  }
+  showPager(false);
+  list.innerHTML = matches.map(m=>{
+    const a = escapeHtml(m.home || m.team1 || '');
+    const b = escapeHtml(m.away || m.team2 || '');
+    const score = escapeHtml(m.score || m.result || '');
+    const status = escapeHtml(m.status || m.minute || 'Live');
+    return `<div class="rowCard">
+              <div style="display:flex;justify-content:space-between;gap:10px;">
+                <div style="font-weight:900">${a} vs ${b}</div>
+                <div class="pill">${status}</div>
+              </div>
+              ${score?`<div class="hint" style="margin-top:4px">Score: ${score}</div>`:''}
+            </div>`;
+  }).join('');
+}
+
+function renderGroups(groups){
+  const list = $('schedule');
+  if(!list) return;
+  showPager(false);
+
+  const arr = Array.isArray(groups) ? groups : (groups?.groups || []);
+  if(!arr.length){
+    list.innerHTML = `<div class="hint">Groups unavailable.</div>`;
+    return;
+  }
+
+  list.innerHTML = arr.map(g=>{
+    const name = escapeHtml(g.name || g.group || 'Group');
+    const rows = (g.teams || g.table || []).map(t=>{
+      const team = escapeHtml(t.team || t.name || '');
+      const pts = escapeHtml(t.pts ?? t.points ?? '');
+      const pld = escapeHtml(t.p ?? t.played ?? '');
+      return `<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.08)">
+                <div style="font-weight:800">${team}</div>
+                <div class="hint">${pld?`${pld}P`:""} ${pts!==''?` • ${pts} pts`:""}</div>
+              </div>`;
+    }).join('');
+    return `<div class="rowCard">
+              <div style="font-weight:900;margin-bottom:6px">${name}</div>
+              ${rows || `<div class="hint">No standings yet.</div>`}
+            </div>`;
+  }).join('');
+}
+
+async function loadSchedule(){
+  const list = $('schedule');
+  const meta = $('scheduleMetaLine');
+  if(list) list.innerHTML = `<div class="hint">Loading…</div>`;
+  if(meta) meta.textContent = '';
+
+  try{
+    if(scheduleView === 'fixtures'){
+      if(!fixturesCache){
+        const data = await fetchJSON('/schedule.json');
+        fixturesCache = data.matches || [];
       }
-      w.textContent = WELCOME_TEXT[state.lang] || WELCOME_TEXT.en;
+      renderFixtures(fixturesCache);
+    }else if(scheduleView === 'live'){
+      const data = await fetchJSON('/worldcup/live.json');
+      renderLive(data.matches || data.live || []);
+    }else if(scheduleView === 'groups'){
+      const data = await fetchJSON('/worldcup/standings.json?scope=all');
+      renderGroups(data.groups || data);
     }
-
-    function clearChatPreserveWelcome(){
-      if(!chatLog) return;
-      chatLog.innerHTML = "";
-      ensureWelcomeBubble();
-      chatLog.scrollTop = chatLog.scrollHeight;
-    }
-
-
-    async function sendChat(){
-      const input = document.getElementById('msg');
-      const txt = (input.value || '').trim();
-      if(!txt) return;
-      input.value = '';
-      appendBubble(txt, 'me');
-      focusChatInput();
-      haptic(8);
-
-      try{
-        const r = await fetch('/chat', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ message: txt, session_id: sessionId, language: state.lang, vip: !!state.isVip })
-        });
-        const data = await r.json();
-        appendBubble(data.reply || '…', 'bot');
-      }catch(e){
-        appendBubble('Chat is temporarily unavailable. Please try again.', 'bot');
-      }
-    }
-
-    // === MENU ===
-    function renderMenu(items){
-      const body = document.getElementById('menuBody');
-      const hint = document.getElementById('menuHint');
-      body.innerHTML = '';
-      const ui = (MENU_UI && MENU_UI[state.lang]) ? MENU_UI[state.lang] : MENU_UI.en;
-
-      // Chef card (always on top)
-      const chefCard = document.createElement('div');
-      chefCard.className = 'chefCard';
-      chefCard.innerHTML = `
-        <div class="chefRow">
-          <div class="chefPhoto" aria-label="Chef photo placeholder">
-            <svg viewBox="0 0 64 64" role="img" aria-label="Chef">
-              <path d="M14 26c0-7 5-12 12-12 2 0 3 0 5 1 1-6 6-10 13-10 8 0 14 6 14 14 0 5-3 9-7 11v6c0 2-2 4-4 4H25c-2 0-4-2-4-4v-6c-4-2-7-6-7-10Z" fill="rgba(255,255,255,.10)"/>
-              <path d="M22 44c0-4 3-7 7-7h6c4 0 7 3 7 7v8H22v-8Z" fill="rgba(255,255,255,.08)"/>
-            </svg>
-          </div>
-          <div class="chefMeta">
-            <div class="chefTitle">${escapeHtml(ui.chefTitle)}</div>
-            <div class="chefSub">${escapeHtml(ui.chefSub)}</div>
-            <button class="chefCTA" type="button" onclick="openChatWithPrefill('I want VIP Chef Table — please share options and pricing.', true)">${escapeHtml(ui.cta)}</button>
-          </div>
-        </div>
-      `;
-      body.appendChild(chefCard);
-
-      if(!items || !items.length){
-        hint.textContent = 'No menu items yet.';
-        return;
-      }
-      hint.textContent = '';
-
-      // Group by category_id
-      const groups = {};
-      items.forEach(it=>{
-        const cid = (it.category_id || it.category || 'menu').toString();
-        (groups[cid] ||= []).push(it);
-      });
-
-      const order = ['chef','bites','classics','sweets','drinks','menu'];
-      order.forEach(cid=>{
-        const arr = groups[cid];
-        if(!arr || !arr.length) return;
-
-        const section = document.createElement('div');
-        section.className = 'menuSection';
-
-        const h = document.createElement('div');
-        h.className = 'menuSectionHead';
-        const label = ui[cid] || cid;
-        h.textContent = label;
-        section.appendChild(h);
-
-        arr.forEach(it=>{
-          const name = it.name || it.title || 'Item';
-          const price = it.price ? ` • ${it.price}` : '';
-          const desc = it.description || it.desc || '';
-          const tag = it.tag || '';
-          const node = document.createElement('div');
-          node.className = 'item';
-          node.innerHTML = `
-            <div class="itemTop"><span>${escapeHtml(label)}</span><span>${escapeHtml(tag)}</span></div>
-            <div class="itemTitle">${escapeHtml(name)}${escapeHtml(price)}</div>
-            <div class="itemMeta">${escapeHtml(desc)}</div>
-          `;
-          section.appendChild(node);
-        });
-
-        body.appendChild(section);
-      });
-    }
-
-    function openChatWithPrefill(text, markVip){
-      try{
-        if(markVip){ state.isVip = true; }
-        go('chat');
-        const input = document.getElementById('msg');
-        if(input){
-          input.value = text || '';
-          input.focus();
-        }
-        // keep welcome pinned in the chosen language
-        try{ ensureWelcomeBubble(); }catch(_e){}
-      }catch(_e){}
-    }
-
-
-    
-    // =========================================================
-    // FIX: Missing boot() + page loaders caused:
-    // - countdown not ticking
-    // - nav + home card buttons not working
-    // - menu/schedule/fanzone pages empty
-    // =========================================================
-
-    
-    // =========================================================
-    // Navigation + Global Click Routing (syntax-safe)
-    // =========================================================
-
-    function bindNav(){
-      const nav = document.getElementById('mobileNav');
-      if(!nav) return;
-
-      nav.querySelectorAll('.mnavBtn').forEach((btn)=>{
-        btn.style.touchAction = 'manipulation';
-        btn.addEventListener('click', (e)=>{
-          e.preventDefault();
-          e.stopPropagation();
-          try{ haptic(8); }catch(_){}
-          const sec = (btn.dataset && btn.dataset.sec) ? btn.dataset.sec : 'home';
-          try{ setSection(sec); }catch(_){}
-        }, {passive:false});
-      });
-    }
-
-    function bindGlobalDelegates(){
-      // Event delegation so clicks keep working even if content is rebuilt.
-      if(window.__wcDelegatesBound) return;
-      window.__wcDelegatesBound = true;
-
-      // Click routing for: data-sec navigation, data-action functions, chips, and common CTAs
-      document.addEventListener('click', (e)=>{
-        const el = e.target.closest('.chip[data-q],[data-sec],[data-action],#ctaReserve,#ctaChat,#pillLang,#pillScope,.mnavBtn,button,a');
-        if(!el) return;
-
-        // Chips → prefill + open reserve
-        if(el.classList && el.classList.contains('chip') && el.hasAttribute('data-q')){
-          e.preventDefault();
-          const q = el.getAttribute('data-q') || '';
-          try{ if(typeof prefillReserveFromChip === 'function') prefillReserveFromChip(q); }catch(_){}
-          try{ const inp = document.getElementById('chatInput'); if(inp) inp.value = q; }catch(_){}
-          try{ if(typeof openReserveModal === 'function') openReserveModal(); }catch(_){}
-          return;
-        }
-
-        // Bottom nav + elements declaring a target section
-        const sec = el.getAttribute('data-sec') || (el.dataset ? el.dataset.sec : null);
-        if(sec){
-          e.preventDefault();
-          try{ haptic(6); }catch(_){}
-          try{ setSection(sec); }catch(_){}
-          return;
-        }
-
-        // Home CTAs if present
-        if(el.id === 'ctaReserve'){
-          e.preventDefault();
-          try{ haptic(8); }catch(_){}
-          try{ openReserveModal(); }catch(_){}
-          return;
-        }
-        if(el.id === 'ctaChat'){
-          e.preventDefault();
-          try{ haptic(6); }catch(_){}
-          try{ setSection('chat'); }catch(_){}
-          return;
-        }
-
-        // Chat page toggles
-        if(el.id === 'pillLang'){
-          e.preventDefault();
-          try{ openLangSheet(); }catch(_){}
-          return;
-        }
-        if(el.id === 'pillScope'){
-          e.preventDefault();
-          try{ toggleScope(); }catch(_){}
-          return;
-        }
-
-        // Generic function actions
-        const action = el.getAttribute('data-action');
-        if(action){
-          e.preventDefault();
-          try{ haptic(8); }catch(_){}
-          try{ if(typeof window[action] === 'function') window[action](); }catch(_){}
-          return;
-        }
-      }, {passive:false});
-    }
-
-    function bindHome(){
-      const byId = (id)=>document.getElementById(id);
-
-      const ctaReserve = byId('ctaReserve');
-      if(ctaReserve){
-        ctaReserve.style.touchAction = 'manipulation';
-        ctaReserve.addEventListener('click', ()=>{
-          haptic(10);
-          // Reserve CTA routes to chat with a clean prefill
-          openChatWithPrefill('Reserve a table — party size, date/time, and preferred venue.', false);
-        }, {passive:true});
-      }
-
-      const map = [
-        ['tileVIP', 'vip'],
-        ['tileFanzone', 'fanzone'],
-        ['tileSchedule', 'schedule'],
-        ['tileMenu', 'menu'],
-      ];
-      map.forEach(([id, sec])=>{
-        const el = byId(id);
-        if(!el) return;
-        el.style.touchAction = 'manipulation';
-        el.addEventListener('click', (e)=>{
-          e.preventDefault();
-          haptic(8);
-          setSection(sec);
-        }, {passive:false});
-      });
-
-      const tilePlan = byId('tilePlan');
-      if(tilePlan){
-        tilePlan.style.touchAction = 'manipulation';
-        tilePlan.addEventListener('click', ()=>{
-          haptic(8);
-          openChatWithPrefill('Build my matchday plan — tickets, where to watch, dining, and transportation.', false);
-        }, {passive:true});
-      }
-    }
-
-    async function loadMenu(){
-      try{
-        const body = document.getElementById('menuBody');
-        const hint = document.getElementById('menuHint');
-        if(hint) hint.textContent = 'Loading…';
-        const r = await fetch(`/menu.json?lang=${encodeURIComponent(state.lang)}`, {cache:'no-store'});
-        const data = await r.json();
-        const items = (data && data.menu && data.menu.items) ? data.menu.items : [];
-        // Update title if available
-        try{
-          const t = document.getElementById('menuTitle');
-          const title = (data && data.menu && data.menu.title) ? data.menu.title : 'Menu';
-          if(t) t.textContent = title;
-        }catch(e){}
-        renderMenu(items);
-        window.__menuLoaded = true;
-        if(hint) hint.textContent = items.length ? '' : 'No menu items yet.';
-      }catch(e){
-        console.error(e);
-        const hint = document.getElementById('menuHint');
-        if(hint) hint.textContent = 'Menu failed to load. Tap Refresh.';
-      }
-    }
-
-    
-
-    // (legacy loadSchedule removed)
-
-function loadVIP(){
-      // Keep VIP simple + functional: route to VIP prompts in chat
-      const wrap = document.getElementById('vipBody');
-      if(!wrap) return;
-      wrap.innerHTML = `
-        <div class="vipGrid">
-          <div class="vipCard">
-            <div class="vipTitle">VIP Chef Table</div>
-            <div class="vipMeta">Private chef experience for matchday.</div>
-            <button class="pill" type="button" id="vipChefBtn">Ask about VIP Chef Table</button>
-          </div>
-          <div class="vipCard">
-            <div class="vipTitle">VIP Lounge + Bottle Service</div>
-            <div class="vipMeta">Premium seating, private entry, curated list.</div>
-            <button class="pill" type="button" id="vipLoungeBtn">Ask about VIP Lounge</button>
-          </div>
-        </div>
-      `;
-      const a = document.getElementById('vipChefBtn');
-      const b = document.getElementById('vipLoungeBtn');
-      if(a) a.addEventListener('click', ()=> openChatWithPrefill('I want VIP Chef Table — please share options and pricing.', true), {passive:true});
-      if(b) b.addEventListener('click', ()=> openChatWithPrefill('I want VIP Lounge + Bottle Service — please share options and pricing.', true), {passive:true});
-    }
-
-    function bindPageControls(){
-      // Menu refresh
-      const rm = document.getElementById('reloadMenu');
-      if(rm) rm.addEventListener('click', ()=>{ haptic(6); loadMenu(); }, {passive:true});
-
-      // Schedule handled below
-
-  const COUNTRIES = [
-    {name:"USA", flag:"🇺🇸"},
-    {name:"Mexico", flag:"🇲🇽"},
-    {name:"Canada", flag:"🇨🇦"},
-    {name:"Brazil", flag:"🇧🇷"},
-    {name:"Argentina", flag:"🇦🇷"},
-    {name:"England", flag:"🏴"},
-    {name:"France", flag:"🇫🇷"},
-    {name:"Germany", flag:"🇩🇪"},
-    {name:"Spain", flag:"🇪🇸"},
-    {name:"Portugal", flag:"🇵🇹"},
-    {name:"Japan", flag:"🇯🇵"},
-    {name:"Nigeria", flag:"🇳🇬"},
-    {name:"Ghana", flag:"🇬🇭"},
-    {name:"Morocco", flag:"🇲🇦"},
-    {name:"Senegal", flag:"🇸🇳"}
-  ];
-
-  function pickCountry(){
-    const names = COUNTRIES.map((c,i)=>`${i+1}. ${c.flag} ${c.name}`).join("\n");
-    const ans = prompt("Which country are you supporting?\n\n"+names+"\n\nType a number:", "1");
-    const n = parseInt(ans||"",10);
-    if(!Number.isFinite(n) || n<1 || n>COUNTRIES.length) return;
-    const c = COUNTRIES[n-1];
-    setSupporter(c);
-    renderSupporter();
-  }
-
-  async function loadPoll(){
-    if(!pollCard || !pollList) return;
-    pollCard.style.display = "block";
-    pollList.innerHTML = `<div class="hint">Loading poll…</div>`;
-    try{
-      const st = await fetchJSON("/api/poll/state");
-      if(!st || !st.ok){
-        pollList.innerHTML = `<div class="hint">Poll unavailable.</div>`;
-        return;
-      }
-      const match = st.match || {};
-      const teams = Object.keys(st.counts || {});
-      const locked = !!st.locked;
-      const total = st.total_votes ?? st.total ?? 0;
-
-      pollList.innerHTML = teams.map(team=>{
-        const pct = (st.percentages && st.percentages[team]) ? st.percentages[team] : (st.percent && st.percent[team]) ? st.percent[team] : 0;
-        const cnt = (st.counts && st.counts[team]) ? st.counts[team] : 0;
-        return `
-          <button class="fz-btn" data-team="${team.replace(/"/g,'&quot;')}" ${locked?'disabled':''} style="text-align:left; display:flex; justify-content:space-between; gap:10px;">
-            <span>${team}</span>
-            <span style="opacity:.85">${pct.toFixed ? pct.toFixed(0) : pct}% · ${cnt}</span>
-          </button>
-        `;
-      }).join("") + `<div class="fz-muted" style="margin-top:10px;">${safeText(match.home||"")} vs ${safeText(match.away||"")} ${match.kickoff?("· "+safeText(match.kickoff)):""} • Total votes: ${total}</div>`;
-
-      qsa("button.fz-btn[data-team]", pollList).forEach(btn=>{
-        btn.addEventListener("click", async ()=>{
-          const team = btn.getAttribute("data-team");
-          try{
-            const r = await fetch("/api/poll/vote", {
-              method:"POST",
-              headers:{"Content-Type":"application/json"},
-              body: JSON.stringify({ team })
-            });
-            await r.json().catch(()=>null);
-          }catch(e){}
-          loadPoll();
-        });
-      });
-    }catch(e){
-      pollList.innerHTML = `<div class="hint">Poll unavailable.</div>`;
-    }
-  }
-
-  function initFanZone(){
-    if(btnPickCountry) btnPickCountry.addEventListener("click", pickCountry);
-    if(fzIconCountry) fzIconCountry.addEventListener("click", pickCountry);
-    if(supporterChip) supporterChip.addEventListener("click", pickCountry);
-
-    const openPoll = ()=>loadPoll();
-    if(btnOpenPoll) btnOpenPoll.addEventListener("click", openPoll);
-    if(fzIconPoll) fzIconPoll.addEventListener("click", openPoll);
-
-    renderSupporter();
-  }
-
-  // --------------------------
-  // VIP
-  // --------------------------
-  const vipHoldBtn = $("vipHoldBtn");
-  const vipHoldInfoBtn = $("vipHoldInfoBtn");
-  if(vipHoldInfoBtn){
-    vipHoldInfoBtn.addEventListener("click", ()=>{
-      alert("VIP Hold = fast-start the reservation flow.\n\nClick Hold VIP table, then use Chat to answer:\n• name\n• phone\n• date/time\n• party size\n\nWe’ll route you to the best options.");
-    });
-  }
-  if(vipHoldBtn){
-    vipHoldBtn.addEventListener("click", ()=>{
-      // Switch to chat section if your SPA supports it
-      try{
-        const chatTab = document.querySelector('[data-sec="chat"], [data-msec="chat"], a[href="#chat"]');
-        if(chatTab) chatTab.click();
-      }catch(e){}
-      const msg = $("msg");
-      if(msg){ msg.value = "VIP table hold — reservation"; msg.focus(); }
-      const sendBtn = $("sendBtn");
-      if(sendBtn) sendBtn.focus();
-    });
-  }
-
-  
-  // --------------------------
-  // Schedule (Fixtures / Live / Groups)
-  // --------------------------
-  const scheduleEl = $("schedule");
-  const tabsEl = $("scheduleTabs");
-  const pagerEl = $("pager");
-  const prevPageBtn = $("prevPage");
-  const nextPageBtn = $("nextPage");
-  const pageIndicatorEl = $("pageIndicator");
-  const metaLineEl = $("scheduleMetaLine");
-
-  const PAGE_SIZE = 8;
-  let scheduleView = localStorage.getItem("schedule_view") || "fixtures"; // fixtures | live | groups
-  let currentPage = 1;
-
-  function safeText(s){ return (s==null) ? "" : String(s); }
-  function setMeta(text){ if(metaLineEl) metaLineEl.textContent = text || ""; }
-
-  function setTabSelected(view){
-    if(!tabsEl) return;
-    $$(".segbtn", tabsEl).forEach(btn=>{
-      const v = btn.getAttribute("data-view");
-      btn.setAttribute("aria-selected", v === view ? "true" : "false");
-    });
-  }
-
-  function showPager(show, page=1, totalPages=1){
-    if(!pagerEl) return;
-    pagerEl.style.display = show ? "" : "none";
-    if(pageIndicatorEl) pageIndicatorEl.textContent = `Page ${page} of ${totalPages}`;
-    if(prevPageBtn) prevPageBtn.disabled = page <= 1;
-    if(nextPageBtn) nextPageBtn.disabled = page >= totalPages;
-  }
-
-  function renderFixtures(matches){
-    if(!scheduleEl) return;
-    const items = Array.isArray(matches) ? matches : [];
-    if(!items.length){
-      scheduleEl.innerHTML = `<div class="hint">No matches found.</div>`;
-      showPager(false);
-      return;
-    }
-    const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
-    const page = Math.min(Math.max(1, currentPage), totalPages);
-    currentPage = page;
-
-    const start = (page-1) * PAGE_SIZE;
-    const pageItems = items.slice(start, start + PAGE_SIZE);
-
-    scheduleEl.innerHTML = pageItems.map(m=>{
-      const stage = safeText(m.stage || "Match");
-      const date = safeText(m.date || "");
-      const time = safeText(m.time || "");
-      const venue = safeText(m.venue || "");
-      const home = safeText(m.home || "");
-      const away = safeText(m.away || "");
-      return `
-        <div class="item">
-          <div class="itemTop"><span>${escapeHtml(stage)}</span></div>
-          <div class="itemTitle">${escapeHtml(home)} vs ${escapeHtml(away)}</div>
-          <div class="itemMeta">${escapeHtml(date)}${time ? " • "+escapeHtml(time) : ""}${venue ? " • "+escapeHtml(venue) : ""}</div>
-        </div>`;
-    }).join("");
-
-    showPager(totalPages > 1, page, totalPages);
-  }
-
-  function renderLive(rows){
-    if(!scheduleEl) return;
-    const items = Array.isArray(rows) ? rows : [];
-    if(!items.length){
-      scheduleEl.innerHTML = `<div class="hint">No live or recent matches right now.</div>`;
-      showPager(false);
-      return;
-    }
-    scheduleEl.innerHTML = items.map(m=>{
-      const stage = safeText(m.stage || m.round || "Live");
-      const home = safeText(m.home || "");
-      const away = safeText(m.away || "");
-      const score = (m.home_score!=null || m.away_score!=null) ? `${safeText(m.home_score)}–${safeText(m.away_score)}` : "";
-      const status = safeText(m.status || m.state || "");
-      const venue = safeText(m.venue || "");
-      const ko = safeText(m.kickoff_local || m.time || m.datetime_utc || "");
-      return `
-        <div class="item">
-          <div class="itemTop"><span>${escapeHtml(stage)}</span>${status ? `<span class="pill" style="margin-left:8px;">${escapeHtml(status)}</span>`:""}</div>
-          <div class="itemTitle">${escapeHtml(home)} vs ${escapeHtml(away)} ${score ? `<span class="pill" style="margin-left:8px;">${escapeHtml(score)}</span>`:""}</div>
-          <div class="itemMeta">${escapeHtml(ko)}${venue ? " • "+escapeHtml(venue) : ""}</div>
-        </div>`;
-    }).join("");
+  }catch(e){
+    console.error(e);
+    if(list) list.innerHTML = `<div class="hint">Schedule unavailable.</div>`;
     showPager(false);
   }
+}
 
-  function renderGroups(groups){
-    if(!scheduleEl) return;
-    const g = groups && typeof groups === "object" ? groups : null;
-
-    // Accept either:
-    //  - { groups: { "Group A": [ {team, pts, ...}, ... ] } }
-    //  - [ {group:"Group A", table:[...]}, ... ]
-    let list = [];
-    if(Array.isArray(g)){
-      list = g;
-    }else if(g && g.groups){
-      list = Object.keys(g.groups).map(k=>({group:k, table:g.groups[k]}));
-    }
-
-    if(!list.length){
-      scheduleEl.innerHTML = `<div class="hint">Standings unavailable.</div>`;
-      showPager(false);
-      return;
-    }
-
-    scheduleEl.innerHTML = list.map(gr=>{
-      const name = safeText(gr.group || gr.name || "Group");
-      const table = Array.isArray(gr.table) ? gr.table : (Array.isArray(gr.teams) ? gr.teams : []);
-      const rows = table.map(t=>{
-        const team = safeText(t.team || t.name || "");
-        const mp = safeText(t.played ?? t.mp ?? "");
-        const w = safeText(t.w ?? t.wins ?? "");
-        const d = safeText(t.d ?? t.draws ?? "");
-        const l = safeText(t.l ?? t.losses ?? "");
-        const gd = safeText(t.gd ?? t.goal_diff ?? "");
-        const pts = safeText(t.pts ?? t.points ?? "");
-        return `<tr><td>${escapeHtml(team)}</td><td>${escapeHtml(mp)}</td><td>${escapeHtml(w)}</td><td>${escapeHtml(d)}</td><td>${escapeHtml(l)}</td><td>${escapeHtml(gd)}</td><td><b>${escapeHtml(pts)}</b></td></tr>`;
-      }).join("");
-
-      return `
-        <div class="item" style="padding:14px 14px 10px;">
-          <div class="itemTop"><span>${escapeHtml(name)}</span></div>
-          <div style="overflow:auto; margin-top:8px;">
-            <table style="width:100%; border-collapse:collapse; font-size:13px;">
-              <thead>
-                <tr style="opacity:.8;">
-                  <th style="text-align:left; padding:6px 4px;">Team</th>
-                  <th style="text-align:right; padding:6px 4px;">MP</th>
-                  <th style="text-align:right; padding:6px 4px;">W</th>
-                  <th style="text-align:right; padding:6px 4px;">D</th>
-                  <th style="text-align:right; padding:6px 4px;">L</th>
-                  <th style="text-align:right; padding:6px 4px;">GD</th>
-                  <th style="text-align:right; padding:6px 4px;">Pts</th>
-                </tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </div>
-        </div>`;
-    }).join("");
-
-    showPager(false);
-  }
-
-  async function loadSchedule(){
-    try{
-      setMeta("Updating…");
-      if(scheduleView === "fixtures"){
-        const r = await fetch(`/schedule.json?q=`, {cache:"no-store"});
-        const data = await r.json();
-        renderFixtures(data.matches || []);
-        setMeta("");
-      }else if(scheduleView === "live"){
-        const r = await fetch(`/worldcup/live.json?scope=all&window_hours=12`, {cache:"no-store"});
-        const data = await r.json();
-        renderLive(data.matches || data.live || []);
-        setMeta("");
-      }else if(scheduleView === "groups"){
-        const r = await fetch(`/worldcup/standings.json?scope=all`, {cache:"no-store"});
-        const data = await r.json();
-        renderGroups(data.groups || data);
-        setMeta("");
-      }
-    }catch(e){
-      console.error(e);
-      if(scheduleEl) scheduleEl.innerHTML = `<div class="hint">Schedule unavailable.</div>`;
-      showPager(false);
-      setMeta("");
-    }
-  }
-
-  function initScheduleHandlers(){
-    // tab clicks
-    if(tabsEl){
-      $$(".segbtn", tabsEl).forEach(btn=>{
-        btn.addEventListener("click", ()=>{
-          scheduleView = btn.getAttribute("data-view") || "fixtures";
-          localStorage.setItem("schedule_view", scheduleView);
-          currentPage = 1;
-          setTabSelected(scheduleView);
-          loadSchedule();
-        });
+function initScheduleHandlers(){
+  const tabs = $('scheduleTabs');
+  if(tabs){
+    $$('.segbtn', tabs).forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        scheduleView = btn.getAttribute('data-view') || 'fixtures';
+        try{ localStorage.setItem('schedule_view', scheduleView); }catch(e){}
+        currentPage = 1;
+        setTabSelected(scheduleView);
+        loadSchedule();
       });
-      setTabSelected(scheduleView);
-    }
-
-    if(prevPageBtn) prevPageBtn.addEventListener("click", ()=>{ currentPage=Math.max(1, currentPage-1); loadSchedule(); });
-    if(nextPageBtn) nextPageBtn.addEventListener("click", ()=>{ currentPage=currentPage+1; loadSchedule(); });
-
-    // initial
-    loadSchedule();
+    });
+    setTabSelected(scheduleView);
   }
 
+  $('prevPage')?.addEventListener('click', ()=>{ currentPage = Math.max(1, currentPage-1); loadSchedule(); });
+  $('nextPage')?.addEventListener('click', ()=>{ currentPage = currentPage+1; loadSchedule(); });
+}
 
-  // Boot (restores countdown + navigation + page loads)
-document.addEventListener("DOMContentLoaded", ()=>{
-  try{ setHeroBannerImage(); }catch(e){}
-  try{ startHeroCountdown(); }catch(e){}
-  try{ bindNav(); }catch(e){}
-  try{ bindGlobalDelegates(); }catch(e){}
-  try{ bindHome(); }catch(e){}
+// ---------- fanzone & vip ----------
+async function loadFanzone(){
+  if(window.__fanzoneLoaded) return;
+  try{ await fetchJSON('/fanzone.json'); window.__fanzoneLoaded = true; }catch(e){ console.error(e); }
+}
 
-  try{ updatePills(); }catch(e){}
-  try{ ensureWelcomeBubble(); }catch(e){}
+async function loadVIP(){
+  if(window.__vipLoaded) return;
+  try{ await fetchJSON('/api/config'); window.__vipLoaded = true; }catch(e){ console.error(e); }
+}
 
-  // Page-specific init (keeps legacy functionality)
-  try{ initScheduleHandlers(); }catch(e){}
-  try{ initFanZone(); }catch(e){}
-  try{ loadVIP(); window.__vipLoaded = true; }catch(e){}
+// ---------- home bindings ----------
+function bindHome(){
+  $('ctaChat')?.addEventListener('click', ()=>setSection('chat'));
+  $('ctaReserve')?.addEventListener('click', ()=>setSection('chat'));
+}
 
-  // Default section
-  try{ setSection('home'); }catch(e){}
+// ---------- boot ----------
+document.addEventListener('DOMContentLoaded', ()=>{
+  bindNav();
+  bindHome();
+  initScheduleHandlers();
+  startHeroCountdown();
+  setSection('home');
 });
-
 </script>
 
 </body>
