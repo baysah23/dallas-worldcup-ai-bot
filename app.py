@@ -3387,6 +3387,7 @@ def admin():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return "Unauthorized", 401
+    key = (request.args.get("key", "") or "").strip()
 
     # Leads (best-effort)
     rows = []
@@ -3909,6 +3910,7 @@ def admin_fanzone():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return "Unauthorized", 401
+    key = (request.args.get("key", "") or "").strip()
 
     html = []
     html.append("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'/>")
