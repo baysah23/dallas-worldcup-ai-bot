@@ -2050,6 +2050,10 @@ function startHeroCountdown(){
     // =========================================================
 
     
+    // =========================================================
+    // Navigation + Global Click Routing (syntax-safe)
+    // =========================================================
+
     function bindNav(){
       const nav = document.getElementById('mobileNav');
       if(!nav) return;
@@ -2060,22 +2064,23 @@ function startHeroCountdown(){
           e.preventDefault();
           e.stopPropagation();
           try{ haptic(8); }catch(_){}
-          const sec = btn.getAttribute('data-sec') || (btn.dataset ? btn.dataset.sec : null) || 'home';
+          const sec = (btn.dataset && btn.dataset.sec) ? btn.dataset.sec : 'home';
           try{ setSection(sec); }catch(_){}
         }, {passive:false});
       });
     }
 
     function bindGlobalDelegates(){
-      // Event delegation so clicks keep working even if content is re-rendered.
+      // Event delegation so clicks keep working even if content is rebuilt.
       if(window.__wcDelegatesBound) return;
       window.__wcDelegatesBound = true;
 
+      // Click routing for: data-sec navigation, data-action functions, chips, and common CTAs
       document.addEventListener('click', (e)=>{
-        const el = e.target.closest('.chip[data-q],[data-sec],[data-action],button,a');
+        const el = e.target.closest('.chip[data-q],[data-sec],[data-action],#ctaReserve,#ctaChat,#pillLang,#pillScope,.mnavBtn,button,a');
         if(!el) return;
 
-        // Chips → prefill (reserve + chat)
+        // Chips → prefill + open reserve
         if(el.classList && el.classList.contains('chip') && el.hasAttribute('data-q')){
           e.preventDefault();
           const q = el.getAttribute('data-q') || '';
@@ -2085,8 +2090,8 @@ function startHeroCountdown(){
           return;
         }
 
-        // Section navigation
-        const sec = el.getAttribute('data-sec');
+        // Bottom nav + elements declaring a target section
+        const sec = el.getAttribute('data-sec') || (el.dataset ? el.dataset.sec : null);
         if(sec){
           e.preventDefault();
           try{ haptic(6); }catch(_){}
@@ -2094,7 +2099,33 @@ function startHeroCountdown(){
           return;
         }
 
-        // Action buttons
+        // Home CTAs if present
+        if(el.id === 'ctaReserve'){
+          e.preventDefault();
+          try{ haptic(8); }catch(_){}
+          try{ openReserveModal(); }catch(_){}
+          return;
+        }
+        if(el.id === 'ctaChat'){
+          e.preventDefault();
+          try{ haptic(6); }catch(_){}
+          try{ setSection('chat'); }catch(_){}
+          return;
+        }
+
+        // Chat page toggles
+        if(el.id === 'pillLang'){
+          e.preventDefault();
+          try{ openLangSheet(); }catch(_){}
+          return;
+        }
+        if(el.id === 'pillScope'){
+          e.preventDefault();
+          try{ toggleScope(); }catch(_){}
+          return;
+        }
+
+        // Generic function actions
         const action = el.getAttribute('data-action');
         if(action){
           e.preventDefault();
@@ -2299,7 +2330,7 @@ function startHeroCountdown(){
         bindNav();
         bindGlobalDelegates();
         bindHome();
-        bindChat?.(); // if present in your file
+        if (typeof bindChat === 'function') bindChat(); // if present in your file
         bindPageControls();
 
         // Start countdown ticker
