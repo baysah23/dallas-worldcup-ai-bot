@@ -458,39 +458,275 @@ MENU = {
     "en": {
         "title": "Menu",
         "items": [
-            {"name": "Spicy Chicken Sandwich", "price": "$14", "desc": "Crispy chicken, spicy sauce, pickles, fries optional."},
-            {"name": "Wings (6/12)", "price": "$10/$18", "desc": "Buffalo, lemon pepper, BBQ."},
-            {"name": "Nachos", "price": "$12", "desc": "Cheese, jalapeño, pico, crema."},
-            {"name": "Burger & Fries", "price": "$15", "desc": "Angus beef, cheddar, lettuce, tomato."},
-        ],
+            {
+                "category_id": "chef",
+                "name": "Chef’s Wagyu Sliders",
+                "price": "$24",
+                "desc": "A5-style sear, truffle aioli, brioche. Limited matchday batch.",
+                "tag": "Chef Special"
+            },
+            {
+                "category_id": "chef",
+                "name": "Citrus Ceviche Bowl",
+                "price": "$19",
+                "desc": "Fresh catch, lime, chili, avocado, crunchy tostadas.",
+                "tag": "Chef Special"
+            },
+            {
+                "category_id": "bites",
+                "name": "Stadium Nachos XL",
+                "price": "$16",
+                "desc": "Three-cheese blend, jalapeño, pico, crema, choice of protein.",
+                "tag": "Share"
+            },
+            {
+                "category_id": "bites",
+                "name": "Peri-Peri Wings (8/16)",
+                "price": "$14/$24",
+                "desc": "Crispy wings, peri-peri glaze, citrus salt.",
+                "tag": "Hot"
+            },
+            {
+                "category_id": "classics",
+                "name": "Concierge Burger",
+                "price": "$18",
+                "desc": "Angus, cheddar, lettuce, tomato, house sauce, fries.",
+                "tag": "Classic"
+            },
+            {
+                "category_id": "classics",
+                "name": "Spicy Chicken Sandwich",
+                "price": "$16",
+                "desc": "Crispy chicken, spicy sauce, pickles, fries optional.",
+                "tag": "Fan Favorite"
+            },
+            {
+                "category_id": "sweets",
+                "name": "Gold Medal Churros",
+                "price": "$10",
+                "desc": "Cinnamon sugar, chocolate dip.",
+                "tag": "Sweet"
+            },
+            {
+                "category_id": "drinks",
+                "name": "Matchday Mocktail",
+                "price": "$9",
+                "desc": "Citrus, mint, sparkling finish.",
+                "tag": "Zero Proof"
+            },
+            {
+                "category_id": "drinks",
+                "name": "Premium Espresso",
+                "price": "$5",
+                "desc": "Double shot, smooth crema.",
+                "tag": "Coffee"
+            }
+        ]
     },
     "es": {
         "title": "Menú",
         "items": [
-            {"name": "Sándwich de Pollo Picante", "price": "$14", "desc": "Pollo crujiente, salsa picante, pepinillos; papas opcionales."},
-            {"name": "Alitas (6/12)", "price": "$10/$18", "desc": "Buffalo, limón pimienta, BBQ."},
-            {"name": "Nachos", "price": "$12", "desc": "Queso, jalapeño, pico, crema."},
-            {"name": "Hamburguesa y Papas", "price": "$15", "desc": "Carne Angus, cheddar, lechuga, tomate."},
-        ],
+            {
+                "category_id": "chef",
+                "name": "Mini hamburguesas Wagyu del Chef",
+                "price": "$24",
+                "desc": "Sellado estilo A5, alioli de trufa, brioche. Lote limitado.",
+                "tag": "Especial del Chef"
+            },
+            {
+                "category_id": "chef",
+                "name": "Bowl de Ceviche Cítrico",
+                "price": "$19",
+                "desc": "Pesca fresca, lima, chile, aguacate, tostadas.",
+                "tag": "Especial del Chef"
+            },
+            {
+                "category_id": "bites",
+                "name": "Nachos XL del Estadio",
+                "price": "$16",
+                "desc": "Tres quesos, jalapeño, pico, crema, proteína a elección.",
+                "tag": "Para compartir"
+            },
+            {
+                "category_id": "bites",
+                "name": "Alitas Peri-Peri (8/16)",
+                "price": "$14/$24",
+                "desc": "Alitas crujientes, glaseado peri-peri, sal cítrica.",
+                "tag": "Picante"
+            },
+            {
+                "category_id": "classics",
+                "name": "Hamburguesa Concierge",
+                "price": "$18",
+                "desc": "Angus, cheddar, lechuga, tomate, salsa de la casa, papas.",
+                "tag": "Clásico"
+            },
+            {
+                "category_id": "classics",
+                "name": "Sándwich de Pollo Picante",
+                "price": "$16",
+                "desc": "Pollo crujiente, salsa picante, pepinillos, papas opcionales.",
+                "tag": "Favorito"
+            },
+            {
+                "category_id": "sweets",
+                "name": "Churros Medalla de Oro",
+                "price": "$10",
+                "desc": "Azúcar y canela, dip de chocolate.",
+                "tag": "Dulce"
+            },
+            {
+                "category_id": "drinks",
+                "name": "Mocktail de Partido",
+                "price": "$9",
+                "desc": "Cítricos, menta, final espumoso.",
+                "tag": "Sin alcohol"
+            },
+            {
+                "category_id": "drinks",
+                "name": "Espresso Premium",
+                "price": "$5",
+                "desc": "Doble shot, crema suave.",
+                "tag": "Café"
+            }
+        ]
     },
     "pt": {
         "title": "Cardápio",
         "items": [
-            {"name": "Sanduíche de Frango Apimentado", "price": "$14", "desc": "Frango crocante, molho picante, picles; batatas opcionais."},
-            {"name": "Asinhas (6/12)", "price": "$10/$18", "desc": "Buffalo, limão com pimenta, BBQ."},
-            {"name": "Nachos", "price": "$12", "desc": "Queijo, jalapeño, pico, creme."},
-            {"name": "Hambúrguer e Batatas", "price": "$15", "desc": "Carne Angus, cheddar, alface, tomate."},
-        ],
+            {
+                "category_id": "chef",
+                "name": "Mini Burgers Wagyu do Chef",
+                "price": "$24",
+                "desc": "Selagem estilo A5, aioli de trufa, brioche. Lote limitado.",
+                "tag": "Especial do Chef"
+            },
+            {
+                "category_id": "chef",
+                "name": "Bowl de Ceviche Cítrico",
+                "price": "$19",
+                "desc": "Peixe fresco, limão, pimenta, abacate, tostadas.",
+                "tag": "Especial do Chef"
+            },
+            {
+                "category_id": "bites",
+                "name": "Nachos XL do Estádio",
+                "price": "$16",
+                "desc": "Três queijos, jalapeño, pico, creme, proteína à escolha.",
+                "tag": "Compartilhar"
+            },
+            {
+                "category_id": "bites",
+                "name": "Asinhas Peri-Peri (8/16)",
+                "price": "$14/$24",
+                "desc": "Asinhas crocantes, glaze peri-peri, sal cítrico.",
+                "tag": "Picante"
+            },
+            {
+                "category_id": "classics",
+                "name": "Burger Concierge",
+                "price": "$18",
+                "desc": "Angus, cheddar, alface, tomate, molho da casa, fritas.",
+                "tag": "Clássico"
+            },
+            {
+                "category_id": "classics",
+                "name": "Sanduíche de Frango Picante",
+                "price": "$16",
+                "desc": "Frango crocante, molho picante, picles, fritas opcionais.",
+                "tag": "Favorito"
+            },
+            {
+                "category_id": "sweets",
+                "name": "Churros Medalha de Ouro",
+                "price": "$10",
+                "desc": "Canela e açúcar, molho de chocolate.",
+                "tag": "Doce"
+            },
+            {
+                "category_id": "drinks",
+                "name": "Mocktail de Jogo",
+                "price": "$9",
+                "desc": "Cítricos, hortelã, final com gás.",
+                "tag": "Sem álcool"
+            },
+            {
+                "category_id": "drinks",
+                "name": "Espresso Premium",
+                "price": "$5",
+                "desc": "Dose dupla, crema suave.",
+                "tag": "Café"
+            }
+        ]
     },
     "fr": {
         "title": "Menu",
         "items": [
-            {"name": "Sandwich Poulet Épicé", "price": "$14", "desc": "Poulet croustillant, sauce épicée, cornichons; frites en option."},
-            {"name": "Ailes (6/12)", "price": "$10/$18", "desc": "Buffalo, citron-poivre, BBQ."},
-            {"name": "Nachos", "price": "$12", "desc": "Fromage, jalapeño, pico, crème."},
-            {"name": "Burger & Frites", "price": "$15", "desc": "Bœuf Angus, cheddar, laitue, tomate."},
-        ],
-    },
+            {
+                "category_id": "chef",
+                "name": "Mini-burgers Wagyu du Chef",
+                "price": "$24",
+                "desc": "Saisie style A5, aïoli à la truffe, brioche. Série limitée.",
+                "tag": "Spécialité du Chef"
+            },
+            {
+                "category_id": "chef",
+                "name": "Bol de Ceviche aux Agrumes",
+                "price": "$19",
+                "desc": "Poisson frais, citron vert, piment, avocat, tostadas.",
+                "tag": "Spécialité du Chef"
+            },
+            {
+                "category_id": "bites",
+                "name": "Nachos XL du Stade",
+                "price": "$16",
+                "desc": "Trois fromages, jalapeño, pico, crème, protéine au choix.",
+                "tag": "À partager"
+            },
+            {
+                "category_id": "bites",
+                "name": "Ailes Peri-Peri (8/16)",
+                "price": "$14/$24",
+                "desc": "Ailes croustillantes, glaçage peri-peri, sel aux agrumes.",
+                "tag": "Épicé"
+            },
+            {
+                "category_id": "classics",
+                "name": "Burger Concierge",
+                "price": "$18",
+                "desc": "Angus, cheddar, salade, tomate, sauce maison, frites.",
+                "tag": "Classique"
+            },
+            {
+                "category_id": "classics",
+                "name": "Sandwich Poulet Épicé",
+                "price": "$16",
+                "desc": "Poulet croustillant, sauce épicée, pickles, frites en option.",
+                "tag": "Favori"
+            },
+            {
+                "category_id": "sweets",
+                "name": "Churros Médaille d’Or",
+                "price": "$10",
+                "desc": "Cannelle-sucre, sauce chocolat.",
+                "tag": "Sucré"
+            },
+            {
+                "category_id": "drinks",
+                "name": "Mocktail de Match",
+                "price": "$9",
+                "desc": "Agrumes, menthe, touche pétillante.",
+                "tag": "Sans alcool"
+            },
+            {
+                "category_id": "drinks",
+                "name": "Espresso Premium",
+                "price": "$5",
+                "desc": "Double, crème onctueuse.",
+                "tag": "Café"
+            }
+        ]
+    }
 }
 
 # ============================================================
