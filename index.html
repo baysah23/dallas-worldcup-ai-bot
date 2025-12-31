@@ -2055,42 +2055,40 @@ function startHeroCountdown(){
     function bindNav(){
       const nav = document.getElementById('mobileNav');
       if(!nav) return;
-      nav.querySelectorAll('.mnavBtn').forEach(btn=>{
+      nav.querySelectorAll('.mnavBtn').forEach((btn)=>{
         btn.style.touchAction = 'manipulation';
         btn.addEventListener('click', (e)=>{
-          e.preventDefault(); e.stopPropagation();
+          e.preventDefault(); 
+          e.stopPropagation();
           haptic(8);
-          const sec = btn.dataset.sec || 'home';
+          const sec = (btn.dataset && btn.dataset.sec) ? btn.dataset.sec : 'home';
           setSection(sec);
-        }
-
+        }, {passive:false});
+      });
+    }
 
     function bindGlobalDelegates(){
       // Fallback: event delegation so clicks still work even if elements are re-rendered
       document.addEventListener('click', (e)=>{
-        const btn = e.target.closest('button, a');
-        if(!btn) return;
+        const t = e.target;
+        if(!t) return;
 
-        // Bottom nav + any element that declares data-sec
-        const sec = btn.dataset ? btn.dataset.sec : null;
-        if(sec){
+        // Ensure buttons don't accidentally submit forms
+        const btn = t.closest('button');
+        if(btn && !btn.getAttribute('type')) btn.setAttribute('type','button');
+
+        // Any element that declares data-sec should navigate
+        const navEl = t.closest('[data-sec]');
+        if(navEl && navEl.dataset && navEl.dataset.sec){
           e.preventDefault();
           haptic(6);
-          setSection(sec);
+          setSection(navEl.dataset.sec);
           return;
-        }
-
-        // Generic: prevent accidental form submits if any
-        if(btn.tagName === 'BUTTON' && !btn.getAttribute('type')){
-          btn.setAttribute('type','button');
         }
       }, {passive:false});
     }
-, {passive:false});
-      });
-    }
 
-    function bindHome(){
+function bindHome(){
       const byId = (id)=>document.getElementById(id);
 
       const ctaReserve = byId('ctaReserve');
