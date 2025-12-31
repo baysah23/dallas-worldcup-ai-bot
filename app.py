@@ -13,30 +13,52 @@ from typing import Dict, Any, Optional, List, Tuple
 from flask import Flask, request, jsonify, send_from_directory, send_file, make_response
 
 # OpenAI client (compat: works with both newer and older openai python packages)
+# NOTE: We keep the server running even if OpenAI SDK isn't installed.
+# Chat endpoints will return a clear config error instead of crashing the whole app.
+client = None
+_OPENAI_MODE = "missing"
+_OPENAI_AVAILABLE = False
 try:
     from openai import OpenAI  # new SDK
     client = OpenAI()
     _OPENAI_MODE = "new"
+    _OPENAI_AVAILABLE = True
 except Exception:
-    import openai  # legacy SDK
-    _OPENAI_MODE = "legacy"
+    try:
+        import openai  # legacy SDK
+        _OPENAI_MODE = "legacy"
+        _OPENAI_AVAILABLE = True
 
-    class _CompatResponses:
-        @staticmethod
-        def create(model: str, input):
-            messages = input
-            r = openai.ChatCompletion.create(model=model, messages=messages)
-            class _Resp: pass
-            resp = _Resp()
-            resp.output_text = (r["choices"][0]["message"]["content"] or "")
-            return resp
+        class _CompatResponses:
+            @staticmethod
+            def create(model: str, input):
+                messages = input
+                r = openai.ChatCompletion.create(model=model, messages=messages)
 
-    class _CompatClient:
-        responses = _CompatResponses()
+                class _Resp:
+                    pass
 
-    client = _CompatClient()
-import gspread
-from google.oauth2.service_account import Credentials
+                resp = _Resp()
+                resp.output_text = (r["choices"][0]["message"]["content"] or "")
+                return resp
+
+        class _CompatClient:
+            responses = _CompatResponses()
+
+        client = _CompatClient()
+    except Exception:
+        # Keep app alive; chat will gracefully error.
+        client = None
+        _OPENAI_MODE = "missing"
+        _OPENAI_AVAILABLE = False
+try:
+    import gspread
+    from google.oauth2.service_account import Credentials
+    _GSPREAD_AVAILABLE = True
+except Exception:
+    gspread = None
+    Credentials = None
+    _GSPREAD_AVAILABLE = False
 
 # ============================================================
 # App + cache-busting (helps Render show latest index.html)
@@ -2469,6 +2491,8 @@ def chat():
     """
 
         try:
+            if not _OPENAI_AVAILABLE or client is None:
+                raise RuntimeError('OpenAI SDK not installed / not configured')
             resp = client.responses.create(
                 model=os.environ.get("CHAT_MODEL", "gpt-4o-mini"),
                 input=[
