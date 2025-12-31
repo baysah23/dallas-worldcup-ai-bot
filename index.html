@@ -2283,13 +2283,16 @@ function startHeroCountdown(){
       // Never let one missing element or minor script error kill all interactions.
       const safe = (fn)=>{ try{ fn(); }catch(e){ /* console.warn(e); */ } };
 
+      // Global click routing (nav + cards + toggles)
       safe(()=>bindGlobalDelegates && bindGlobalDelegates());
+
+      // Page binders
       safe(()=>bindNav && bindNav());
       safe(()=>bindHome && bindHome());
       safe(()=> (typeof bindChat === 'function') && bindChat());
       safe(()=>bindPageControls && bindPageControls());
 
-      // Start hero banner + countdown
+      // Hero banner + countdown
       safe(()=>setHeroBannerImage && setHeroBannerImage());
       safe(()=>startHeroCountdown && startHeroCountdown());
 
@@ -2313,7 +2316,22 @@ function startHeroCountdown(){
         window.addEventListener('scroll', onScroll, {passive:true});
         onScroll();
       });
-    })();
+    }
+
+    // Ensure boot runs even if the script executes before DOM is fully ready
+    if(document.readyState === 'loading'){
+      document.addEventListener('DOMContentLoaded', boot, {once:true});
+    }else{
+      boot();
+    }
+
+    // iOS/Safari bfcache restore: re-run key UI wiring
+    window.addEventListener('pageshow', ()=>{
+      try{ bindGlobalDelegates && bindGlobalDelegates(); }catch(e){}
+      try{ startHeroCountdown && startHeroCountdown(); }catch(e){}
+    });
+
+    )();
 </script>
 
 
