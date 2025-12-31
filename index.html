@@ -2645,6 +2645,65 @@ body[data-msec="schedule"] #scheduleCard{
   background: rgba(10,18,40,.92);
   padding-top: 10px;
 }
+
+
+/* =========================
+   CHAT LANGUAGE TOGGLES (obvious)
+   ========================= */
+#chatLangRow{ display:flex; align-items:center; gap:10px; }
+#chatLangRow .langLabel{
+  font-size:12px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color: rgba(235,245,255,.70);
+  margin-right:2px;
+}
+
+#chatLangRow .langSegWrap{
+  display:flex;
+  gap:8px;
+  padding:6px;
+  border-radius:14px;
+  background: rgba(0,0,0,.22);
+  border: 1px solid rgba(255,255,255,.14);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+#chatLangRow .langSeg{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  color: rgba(244,248,255,.92);
+  font-weight:700;
+  cursor:pointer;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+#chatLangRow .langSeg:active{ transform: translateY(1px); }
+
+#chatLangRow .langSeg .langCode{
+  font-size:12px;
+  letter-spacing:.08em;
+  padding:4px 8px;
+  border-radius:10px;
+  background: rgba(0,0,0,.26);
+  border:1px solid rgba(255,255,255,.12);
+}
+#chatLangRow .langSeg .langName{
+  font-size:13px;
+  opacity:.92;
+}
+
+#chatLangRow .langSeg.active{
+  background: rgba(255,255,255,.14);
+  border-color: rgba(255,255,255,.22);
+  box-shadow: 0 8px 22px rgba(0,0,0,.28);
+}
+
 </style>
 </head>
 
@@ -2787,11 +2846,14 @@ body[data-msec="schedule"] #scheduleCard{
           <div class="cardHead">
             <h2 class="cardTitle">Concierge chat</h2>
             <div class="pillRow" id="chatLangRow" aria-label="Chat language">
-              <button class="pill mini lang" data-lang="en" type="button">EN</button>
-              <button class="pill mini lang" data-lang="es" type="button">ES</button>
-              <button class="pill mini lang" data-lang="pt" type="button">PT</button>
-              <button class="pill mini lang" data-lang="fr" type="button">FR</button>
-            </div>
+              <div class="langLabel">Language</div>
+<div class="langSegWrap" role="tablist" aria-label="Chat language selector">
+<button class="langSeg" data-lang="en" type="button" aria-label="Switch chat language to English" title="English / English"><span class="langCode">EN</span><span class="langName">English</span></button>
+<button class="langSeg" data-lang="es" type="button" aria-label="Switch chat language to Spanish" title="Spanish / Español"><span class="langCode">ES</span><span class="langName">Español</span></button>
+<button class="langSeg" data-lang="pt" type="button" aria-label="Switch chat language to Portuguese" title="Portuguese / Português"><span class="langCode">PT</span><span class="langName">Português</span></button>
+<button class="langSeg" data-lang="fr" type="button" aria-label="Switch chat language to French" title="French / Français"><span class="langCode">FR</span><span class="langName">Français</span></button>
+</div>
+</div>
 </div>
           <div class="cardBody">
             <div id="chatLog" class="chatLog" aria-live="polite"></div>
@@ -2979,15 +3041,28 @@ const $$ = (sel, root=document)=>Array.from((root||document).querySelectorAll(se
 const escapeHtml = (s)=>String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
 
-// ---------- concierge welcome copy ----------
-const WELCOME_PRIMARY = "Greetings World Cup fans. I\u2019m your concierge \u2014 here to assist with reservations, VIP experiences, and match-day planning for your business and guests. Tell me what you need, and I\u2019ll take care of the details.";
-const WELCOME_GAMEDAY = "Greetings World Cup fans. It\u2019s game day. I\u2019m your concierge \u2014 here to assist with reservations, VIP experiences, and real-time match-day needs for your business and guests. Tell me what you need, and I\u2019ll take care of the details.";
+// ---------- concierge welcome copy (localized) ----------
+const WELCOME_PRIMARY_BY_LANG = {
+  en: "Greetings World Cup fans. I’m your concierge — here to assist with reservations, VIP experiences, and match-day planning for your business and guests. Tell me what you need, and I’ll take care of the details.",
+  es: "Saludos, fans del Mundial. Soy tu concierge — aquí para ayudarte con reservaciones, experiencias VIP y la planificación del día de partido para tu negocio y tus invitados. Dime qué necesitas y me encargo de los detalles.",
+  pt: "Saudações, fãs da Copa do Mundo. Sou seu concierge — aqui para ajudar com reservas, experiências VIP e o planejamento do dia do jogo para o seu negócio e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
+  fr: "Bonjour, fans de la Coupe du Monde. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et l’organisation du jour de match pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
+};
 
-function getWelcomeForState(){
+const WELCOME_GAMEDAY_BY_LANG = {
+  en: "Greetings World Cup fans. It’s game day. I’m your concierge — here to assist with reservations, VIP experiences, and real-time match-day needs for your business and guests. Tell me what you need, and I’ll take care of the details.",
+  es: "Saludos, fans del Mundial. Hoy es día de partido. Soy tu concierge — aquí para ayudarte con reservaciones, experiencias VIP y necesidades en tiempo real para tu negocio y tus invitados. Dime qué necesitas y me encargo de los detalles.",
+  pt: "Saudações, fãs da Copa do Mundo. Hoje é dia de jogo. Sou seu concierge — aqui para ajudar com reservas, experiências VIP e necessidades em tempo real para o seu negócio e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
+  fr: "Bonjour, fans de la Coupe du Monde. C’est jour de match. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et les besoins en temps réel pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
+};
+
+function getWelcomeForState(lang){
   const k = window.__wcCountdownStateKind || '';
-  return (k === 'game_day') ? WELCOME_GAMEDAY : WELCOME_PRIMARY;
+  const L = (lang || state.lang || 'en').toLowerCase();
+  const primary = WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
+  const gameday = WELCOME_GAMEDAY_BY_LANG[L] || WELCOME_GAMEDAY_BY_LANG.en;
+  return (k === 'game_day') ? gameday : primary;
 }
-
 // ---------- admin-only countdown indicator ----------
 function isAdminDebug(){
   try{
@@ -3141,10 +3216,14 @@ function setLang(lang){
     homePill.setAttribute('aria-label', `Change language (current ${lang.toUpperCase()})`);
   }
 
-  // Chat pills
-  $$('.pill.mini.lang').forEach(p=>{
-    p.classList.toggle('active', (p.dataset?.lang||'').toLowerCase() === lang);
+  // Chat language buttons
+  $$('#chatLangRow [data-lang]').forEach(btn=>{
+    const bLang = (btn.dataset?.lang||'').toLowerCase();
+    btn.classList.toggle('active', bLang === lang);
   });
+
+  // Update welcome bubble to selected language (no duplicates)
+  try{ updateChatWelcome(); }catch(e){}
 }
 
 function cycleLang(){
@@ -3179,30 +3258,61 @@ function focusChatInput(){
   try{ input.focus({preventScroll:true}); }catch(e){ input.focus(); }
 }
 
-function chatAppend(role, text){
+function chatAppend(role, text, opts){
   const log = $('chatLog');
   if(!log) return;
   const wrap = document.createElement('div');
   wrap.className = `chatLine ${role}`;
+  if(opts && opts.welcome) wrap.setAttribute('data-welcome','1');
+  wrap.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
+  log.appendChild(wrap);
+  log.scrollTop = log.scrollHeight;
+}
+`;
   wrap.innerHTML = `<div class="bubble">${escapeHtml(text)}</div>`;
   log.appendChild(wrap);
   log.scrollTop = log.scrollHeight;
 }
 
+function updateChatWelcome(){
+  const log = $('chatLog');
+  if(!log) return;
+  const welcomeText = getWelcomeForState(state.lang);
+  // Prefer an existing welcome bubble and update it in place.
+  let welcomeLine = log.querySelector('.chatLine.bot[data-welcome="1"] .bubble');
+  if(!welcomeLine){
+    // If the first message is a bot bubble, reuse it.
+    welcomeLine = log.querySelector('.chatLine.bot .bubble');
+  }
+  if(welcomeLine){
+    welcomeLine.textContent = welcomeText;
+    // Mark the parent line as the welcome line for future updates
+    const parent = welcomeLine.closest('.chatLine.bot');
+    if(parent) parent.setAttribute('data-welcome','1');
+    log.dataset.hasWelcome = '1';
+    return;
+  }
+  // Otherwise append a single welcome message
+  chatAppend('bot', welcomeText, {welcome:true});
+  log.dataset.hasWelcome = '1';
+}
+
 function ensureChatWelcome(){
   const log = $('chatLog');
   if(!log) return;
-  if(log.dataset.hasWelcome === '1') return;
-  log.dataset.hasWelcome = '1';
-  chatAppend('bot', getWelcomeForState());
+  if(log.dataset.hasWelcome === '1'){
+    // keep welcome aligned with current language/state
+    updateChatWelcome();
+    return;
+  }
+  updateChatWelcome();
 }
-
 function clearChatPreserveWelcome(){
   const log = $('chatLog');
   if(!log) return;
   log.innerHTML = '';
   log.dataset.hasWelcome = '';
-  ensureChatWelcome();
+  ensureChatWelcome();();
 }
 
 async function sendChatMessage(text){
@@ -3211,7 +3321,7 @@ async function sendChatMessage(text){
   const input = $('msg');
   if(input) input.value = '';
 
-  ensureChatWelcome();
+  ensureChatWelcome();();
   chatAppend('user', msg);
 
   // disable send to prevent "stuck double-click" feeling
@@ -3236,7 +3346,7 @@ async function sendChatMessage(text){
 
 function openChatPrefill(text){
   setSection('chat');
-  ensureChatWelcome();
+  ensureChatWelcome();();
   const input = $('msg');
   if(input){
     input.value = text || '';
@@ -3771,7 +3881,7 @@ function init(){
   startHeroCountdown();
   relocateMatchDayOpsToggles();
   setSection('home');
-  ensureChatWelcome();
+  ensureChatWelcome();();
 }
 
 // run init reliably even if DOMContentLoaded already fired
