@@ -2316,10 +2316,6 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
 
 
 /* Desktop: pin VIP rail above Fan Zone rails, then push Fan Zone down */
-
-}
-/* AUTO-FIX: close desktop @media block */
-
 @media(min-width: 1200px){
   .vip-rail{
     position: fixed;
@@ -2452,12 +2448,12 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
   body[data-msec="extras"] #scheduleCard{ display:none !important; }
 
 
-  body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{ display:block !important; }
+  body[data-msec="schedule"] #scheduleCard{ display:block !important; }
 
-  body:is([data-msec="schedule"],[data-sec="schedule"]) .chatcard,
-  body:is([data-msec="schedule"],[data-sec="schedule"]) .menucard,
-  body:is([data-msec="schedule"],[data-sec="schedule"]) #fanZoneLeft,
-  body:is([data-msec="schedule"],[data-sec="schedule"]) #fanZoneRight{ display:none !important; }
+  body[data-msec="schedule"] .chatcard,
+  body[data-msec="schedule"] .menucard,
+  body[data-msec="schedule"] #fanZoneLeft,
+  body[data-msec="schedule"] #fanZoneRight{ display:none !important; }
 
 
   /* VIP shown alongside Fan Zone (if you want it there) */
@@ -2520,10 +2516,6 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
    - fanzone: fanZoneLeft + fanZoneRight
    - vip: vipHoldRail
 */
-
-}
-/* AUTO-FIX: close VIP rail @media block */
-
 @media (max-width: 950px){
   /* default: chat */
   body[data-msec="chat"] .chatcard{ display:block !important; }
@@ -2541,13 +2533,13 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
   body[data-msec="menu"] #vipHoldRail{ display:none !important; }
 
 
-  body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{ display:block !important; }
+  body[data-msec="schedule"] #scheduleCard{ display:block !important; }
 
-  body:is([data-msec="schedule"],[data-sec="schedule"]) .chatcard,
-  body:is([data-msec="schedule"],[data-sec="schedule"]) .menucard,
-  body:is([data-msec="schedule"],[data-sec="schedule"]) #fanZoneLeft,
-  body:is([data-msec="schedule"],[data-sec="schedule"]) #fanZoneRight,
-  body:is([data-msec="schedule"],[data-sec="schedule"]) #vipHoldRail{ display:none !important; }
+  body[data-msec="schedule"] .chatcard,
+  body[data-msec="schedule"] .menucard,
+  body[data-msec="schedule"] #fanZoneLeft,
+  body[data-msec="schedule"] #fanZoneRight,
+  body[data-msec="schedule"] #vipHoldRail{ display:none !important; }
 
 
   body[data-msec="fanzone"] #fanZoneLeft,
@@ -2622,11 +2614,11 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
 
 
   /* Make sure the schedule card sits directly under the hero */
-  body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{ margin-top: 0 !important; }
+  body[data-msec="schedule"] #scheduleCard{ margin-top: 0 !important; }
 
 
   /* Small scroll offset so sticky header feels nicer */
-  body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{ scroll-margin-top: 8px; }
+  body[data-msec="schedule"] #scheduleCard{ scroll-margin-top: 8px; }
 
 /* =======================
    MOBILE SCHEDULE GAP FIX (v5 - definitive)
@@ -2635,10 +2627,10 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
    creating a large blank gap before #scheduleCard.
    Fix: remove .leftcol from layout in schedule mode, and make the grid auto-height (no 1fr stretch).
    ======================= */
-body:is([data-msec="schedule"],[data-sec="schedule"]) .leftcol{ display:none !important; }
+body[data-msec="schedule"] .leftcol{ display:none !important; }
 
 
-body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{
+body[data-msec="schedule"] #scheduleCard{
   display:block !important;
   grid-column: 1 / -1 !important;
   grid-row: 2 !important;
@@ -2693,203 +2685,6 @@ body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{
 
 
 
-
-
-/* =======================
-   SCHEDULE — iOS Premium Renderer (scoped)
-
-/* SCHEDULE LIST LAYOUT */
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule #schedule{
-  display: grid;
-  gap: 12px;
-  margin-top: 12px;
-}
-   Only affects the Schedule screen + its subviews.
-   ======================= */
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbar{
-  width: 100%;
-  padding: 6px;
-  gap: 6px;
-  border-radius: 999px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: rgba(255,255,255,.05);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbtn{
-  flex: 1;
-  min-height: 44px;
-  padding: 11px 16px;
-  border-radius: 999px;
-  font-size: 13px;
-  font-weight: 950;
-  letter-spacing: .02em;
-  background: transparent;
-  color: rgba(244,248,255,.92);
-  -webkit-tap-highlight-color: transparent;
-  transition: transform .12s ease, filter .12s ease;
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbtn[aria-selected="true"]{
-  background: rgba(212,175,55,.96);
-  color: rgba(0,0,0,.88);
-  box-shadow: 0 12px 28px rgba(0,0,0,.34), inset 0 0 0 1px rgba(0,0,0,.22);
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleMetaLine{
-  margin-top: 10px;
-  font-size: 12px;
-  opacity: .78;
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #schedule{
-  margin-top: 10px;
-  display: grid;
-  gap: 10px;
-}
-
-/* Fixture / Live cards */
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .matchRow{
-  border-radius: 18px;
-  padding: 12px 14px;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.06);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 14px 42px rgba(0,0,0,.32);
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .matchRow:active{
-  transform: translateY(1px);
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mTop{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-  margin-bottom: 8px;
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mStage{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: rgba(244,248,255,.92);
-  background: rgba(255,255,255,.07);
-  border: 1px solid rgba(255,255,255,.10);
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mDate{
-  font-size: 12px;
-  font-weight: 800;
-  color: rgba(234,240,255,.82);
-  opacity: .92;
-  text-align: right;
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mTeams{
-  font-size: 15px;
-  line-height: 1.25;
-  font-weight: 900;
-  letter-spacing: .01em;
-  color: rgba(244,248,255,.96);
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .vs{
-  display:inline-block;
-  margin: 0 6px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: rgba(244,248,255,.88);
-  background: rgba(255,255,255,.06);
-  border: 1px solid rgba(255,255,255,.10);
-  vertical-align: middle;
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mVenue{
-  margin-top: 8px;
-  font-size: 12px;
-  font-weight: 800;
-  color: rgba(234,240,255,.72);
-}
-
-/* Live score emphasis */
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mScore{
-  font-size: 15px;
-  font-weight: 1000;
-  letter-spacing: .01em;
-}
-
-/* Groups / Standings */
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standBlock{
-  border-radius: 18px;
-  padding: 12px 12px 10px;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.055);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  box-shadow: 0 14px 42px rgba(0,0,0,.30);
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTitle{
-  font-size: 13px;
-  font-weight: 1000;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: rgba(244,248,255,.92);
-  margin-bottom: 8px;
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTable{
-  width:100%;
-  border-collapse: collapse;
-  overflow: hidden;
-  border-radius: 12px;
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTable thead th{
-  text-align:left;
-  font-size: 11px;
-  font-weight: 1000;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  padding: 10px 10px;
-  color: rgba(234,240,255,.78);
-  background: rgba(255,255,255,.05);
-  border-bottom: 1px solid rgba(255,255,255,.10);
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTable td{
-  padding: 10px 10px;
-  font-size: 13px;
-  font-weight: 800;
-  color: rgba(244,248,255,.92);
-  border-bottom: 1px solid rgba(255,255,255,.08);
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTable tbody tr:last-child td{
-  border-bottom: 0;
-}
-
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .hint{
-  padding: 14px 12px;
-  border-radius: 16px;
-  border: 1px dashed rgba(255,255,255,.14);
-  color: rgba(234,240,255,.78);
-  background: rgba(255,255,255,.03);
-}
 /* =======================
    FAN ZONE MODAL MOBILE SCROLL FIX
    Ensures long lists (countries, polls) never render off-screen.
@@ -3168,8 +2963,72 @@ body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .hint{
 }
 
 
+/* === SCHEDULE: fit-on-screen + easy navigation (SAFE, schedule-only) === */
+body[data-sec="schedule"] #sec-schedule{
+  /* prevent the fixed bottom nav from covering the last item */
+  padding-bottom: calc(118px + env(safe-area-inset-bottom));
 }
-/* AUTO-FIX: close mobile msec @media block */
+
+body[data-sec="schedule"] #sec-schedule > .sidepad{
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100svh - 118px - env(safe-area-inset-bottom));
+}
+
+body[data-sec="schedule"] #scheduleTabs{
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding-top: 6px;
+  padding-bottom: 6px;
+  background: rgba(7,16,34,.38);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+body[data-sec="schedule"] #scheduleMetaLine{
+  position: sticky;
+  top: 56px;
+  z-index: 3;
+  padding: 6px 0 4px;
+  background: rgba(7,16,34,.26);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+body[data-sec="schedule"] #schedule{
+  flex: 1;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(150px + env(safe-area-inset-bottom));
+  scroll-padding-bottom: calc(150px + env(safe-area-inset-bottom));
+}
+
+/* pager stays reachable while browsing long lists */
+body[data-sec="schedule"] #pager{
+  position: sticky;
+  bottom: calc(86px + env(safe-area-inset-bottom));
+  z-index: 4;
+  padding-top: 10px !important;
+}
+
+body[data-sec="schedule"] #pager > div{
+  border-radius: 18px;
+  padding: 10px 12px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 16px 46px rgba(0,0,0,.34);
+}
+
+/* slightly more compact rows to fit more per page */
+body[data-sec="schedule"] #sec-schedule .matchRow{
+  padding: 10px 12px;
+  border-radius: 16px;
+}
+body[data-sec="schedule"] #sec-schedule .mTeams{ font-size: 14.5px; }
+body[data-sec="schedule"] #sec-schedule .mVenue{ margin-top: 6px; }
 </style>
 </head>
 
@@ -3362,9 +3221,15 @@ body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .hint{
     <div class="schedule" id="schedule"></div>
     <div class="sidepad" id="pager" style="display:none; padding-top:10px;">
       <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
+        <div style="display:flex; gap:10px; align-items:center;">
         <button class="secondary" id="prevPage" style="min-width:88px;">Prev</button>
         <div class="pill" id="pageIndicator">Page 1 of 1</div>
         <button class="secondary" id="nextPage" style="min-width:88px;">Next</button>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <button class="secondary small" id="schedTopBtn" type="button" aria-label="Scroll schedule to top">Top</button>
+        <button class="secondary small" id="schedBottomBtn" type="button" aria-label="Scroll schedule to bottom">Bottom</button>
+      </div>
       </div>
     </div>
   </div>
@@ -4041,30 +3906,26 @@ function initScheduleHandlers(){
   const tabs = $('scheduleTabs');
   if(!tabs) return;
 
-  // Bind to the actual buttons in the Schedule tabs (Fixtures / Live / Groups)
-  const btns = $$('button[data-view]', tabs);
-
-  function select(view){
-    scheduleView = view || 'fixtures';
-    btns.forEach(b=>{
-      const on = (b.dataset.view === scheduleView);
-      b.setAttribute('aria-selected', on ? 'true' : 'false');
-    });
-  }
-
-  btns.forEach(btn=>{
+  $$('.segbtn, .tabBtn', tabs).forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      select(btn.dataset.view);
-      currentPage = 1;           // reset paging when switching views
+      scheduleView = btn.dataset.view || 'fixtures';
+      $$('.segbtn, .tabBtn', tabs).forEach(b=>b.classList.toggle('active', b === btn));
       loadSchedule(true);
     });
   });
 
-  // Ensure initial selection matches scheduleView
-  select(scheduleView);
-
   $('prevPage')?.addEventListener('click', ()=>{ currentPage = Math.max(1, currentPage-1); loadSchedule(); });
   $('nextPage')?.addEventListener('click', ()=>{ currentPage = currentPage+1; loadSchedule(); });
+
+  // quick navigation + keep paging usable on mobile
+  const schedList = $('schedule');
+  const scrollTop = ()=>{ if(schedList) schedList.scrollTo({top:0, behavior:'smooth'}); };
+  const scrollBottom = ()=>{ if(schedList) schedList.scrollTo({top:(schedList.scrollHeight||0), behavior:'smooth'}); };
+  $('prevPage')?.addEventListener('click', scrollTop);
+  $('nextPage')?.addEventListener('click', scrollTop);
+  $('schedTopBtn')?.addEventListener('click', scrollTop);
+  $('schedBottomBtn')?.addEventListener('click', scrollBottom);
+
 }
 
 function renderFixtures(matches){
@@ -4115,25 +3976,19 @@ function renderLive(matches){
   if(!list) return;
 
   list.innerHTML = (matches || []).map(m=>{
-    const dt = escapeHtml(m.date || m.datetime_local || m.datetime_utc || '');
     const home = escapeHtml(m.home || '');
     const away = escapeHtml(m.away || '');
     const score = escapeHtml(m.score || m.result || '');
     const status = escapeHtml(m.status || 'Live');
-
     return `<div class="matchRow">
-      <div class="mTop">
-        <div class="mStage">${status}</div>
-        ${dt ? `<div class="mDate">${dt}</div>` : ``}
-      </div>
+      <div class="mTop"><div class="mStage">${status}</div></div>
       <div class="mTeams">${home} <span class="vs">vs</span> ${away}</div>
-      <div class="mVenue mScore">${score}</div>
+      <div class="mVenue">${score}</div>
     </div>`;
   }).join('') || `<div class="hint">No live matches right now.</div>`;
 
   if(meta){ meta.textContent = `Live updates`; }
 }
-
 
 function renderStandings(data){
   const list = $('schedule');
@@ -4175,9 +4030,11 @@ async function loadSchedule(force=false){
         fixturesCache = data.matches || [];
       }
       renderFixtures(fixturesCache);
+      const _sl = $('schedule'); if(_sl) _sl.scrollTop = 0;
     }else if(scheduleView === 'live'){
       const data = await fetchJSON('/worldcup/live.json');
       renderLive(data.matches || data.live || []);
+      const _sl = $('schedule'); if(_sl) _sl.scrollTop = 0;
     }else if(scheduleView === 'groups'){
       const scope = (state.scope === 'featured') ? 'featured' : 'all';
       const data = await fetchJSON(`/worldcup/standings.json?scope=${encodeURIComponent(scope)}`);
