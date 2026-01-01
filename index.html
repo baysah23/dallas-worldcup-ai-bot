@@ -2647,68 +2647,104 @@ body[data-msec="schedule"] #scheduleCard{
 }
 
 /* =========================
-   CHAT LANGUAGE SELECTOR (iOS “moving capsule”)
-   - single, clear label for first-time users
-   - slider feel: active pill is a single capsule that moves
+   CHAT LANGUAGE SELECTOR (iOS 26 “moving capsule”)
+   Goals:
+   - Less busy: title/caption left, compact segmented right
+   - More Apple rhythm: tighter type, slightly lighter weight, subtle tracking
+   - Slider feel: single capsule moves, lighter fill + stronger inner highlight
    ========================= */
 .cardHead.chatHead{
-  gap:12px;
-  align-items:flex-start;
+  display:flex;
+  align-items:center;              /* fixes the “off” header alignment */
+  justify-content:space-between;
+  gap:10px;
+  padding-top: 14px;
 }
-.chatHeadLeft{ display:flex; flex-direction:column; gap:4px; min-width:0; }
+
+.chatHeadLeft{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+}
+
+.chatHeadLeft .cardTitle{
+  margin:0;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+
 .chatLangCaption{
-  font-size:12px;
-  font-weight:900;
-  letter-spacing:.08em;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.10em;
   text-transform:uppercase;
-  color: rgba(235,245,255,.72);
+  color: rgba(235,245,255,.62);
   line-height: 1.1;
 }
 
+/* Compact iOS 26 segmented */
 #chatLangRow.segmented{
   --seg-left: 4px;
-  --seg-width: 80px;
+  --seg-width: 78px;
 
   position: relative;
   display:flex;
   align-items:center;
   gap: 2px;
-  padding: 4px;
+  padding: 3px;                   /* ↓ less height */
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,.14);
-  background: rgba(0,0,0,.26);
-  backdrop-filter: blur(12px) saturate(1.25);
-  -webkit-backdrop-filter: blur(12px) saturate(1.25);
-  box-shadow: 0 12px 28px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.10);
+
+  /* more iOS: darker base, less “buttony” */
+  background: rgba(255,255,255,.06);
+  backdrop-filter: blur(14px) saturate(1.35);
+  -webkit-backdrop-filter: blur(14px) saturate(1.35);
+
+  /* cleaner, less heavy */
+  box-shadow:
+    0 10px 24px rgba(0,0,0,.18),
+    inset 0 1px 0 rgba(255,255,255,.12);
+
   overflow:hidden;
-  min-height: 40px;
+  height: 36px;                   /* iOS-ish */
+  flex: 0 0 auto;
 }
 
-/* moving capsule */
+/* moving capsule: lighter fill + stronger inner highlight */
 #chatLangRow.segmented::before{
   content:"";
   position:absolute;
-  top:4px; bottom:4px;
+  top:3px; bottom:3px;
   left: var(--seg-left);
   width: var(--seg-width);
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.12));
-  border: 1px solid rgba(255,255,255,.18);
+
+  background:
+    linear-gradient(180deg,
+      rgba(255,255,255,.38) 0%,
+      rgba(255,255,255,.22) 45%,
+      rgba(255,255,255,.14) 100%
+    );
+
+  border: 1px solid rgba(255,255,255,.22);
   box-shadow:
-    0 10px 24px rgba(0,0,0,.30),
-    inset 0 1px 0 rgba(255,255,255,.30);
+    0 10px 22px rgba(0,0,0,.18),
+    inset 0 1px 0 rgba(255,255,255,.55),  /* stronger inner highlight */
+    inset 0 -1px 0 rgba(0,0,0,.18);
+
   transform: translateZ(0);
-  transition: left .24s cubic-bezier(.2,.9,.2,1), width .24s cubic-bezier(.2,.9,.2,1);
+  transition: left .22s cubic-bezier(.2,.9,.2,1), width .22s cubic-bezier(.2,.9,.2,1);
   pointer-events:none;
 }
 
-/* subtle top edge line like iOS */
+/* subtle top edge line (lighter, less busy) */
 #chatLangRow.segmented::after{
   content:"";
   position:absolute;
-  left:10px; right:10px; top:7px;
+  left:12px; right:12px; top:6px;
   height:1px;
-  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.26), rgba(255,255,255,0));
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.18), rgba(255,255,255,0));
   opacity:.55;
   pointer-events:none;
 }
@@ -2719,37 +2755,47 @@ body[data-msec="schedule"] #scheduleCard{
   appearance:none;
   border:0;
   background: transparent;
-  color: rgba(234,240,255,.82);
-  font-weight: 900;
-  font-size: 12.5px;
-  letter-spacing: .01em;
+
+  /* Apple type rhythm */
+  color: rgba(234,240,255,.78);
+  font-weight: 750;
+  font-size: 12px;
+  letter-spacing: -0.01em;
+
   padding: 8px 10px;
   border-radius: 999px;
   cursor:pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
   white-space: nowrap;
-  transition: transform .12s ease, color .12s ease, opacity .12s ease;
+
+  transition: transform .10s ease, color .12s ease, opacity .12s ease;
+  opacity: .92;
 }
 #chatLangRow .segBtn:active{ transform: translateY(1px) scale(.99); }
 
 #chatLangRow .segBtn.active{
-  color: rgba(255,255,255,.98);
-  text-shadow: 0 8px 18px rgba(0,0,0,.35);
+  color: rgba(15,27,51,.92);       /* active text goes darker (iOS style) */
+  text-shadow: none;
+  opacity: 1;
 }
 
+/* Small screens: keep compact without wrapping */
 @media (max-width: 380px){
-  #chatLangRow .segBtn{ font-size: 12px; padding: 8px 8px; }
+  #chatLangRow.segmented{ height: 34px; }
+  #chatLangRow .segBtn{ font-size: 11.5px; padding: 8px 8px; }
 }
 
 /* =========================
    CHAT INPUT BAR (premium alignment)
+   - keeps your JS intact; only spacing/visual polish
    ========================= */
 .chatInputRow{
   display:flex;
   align-items:center;
   gap:8px;
   flex-wrap:nowrap;
+  margin-top: 10px;
 }
 
 #msg{
@@ -2757,7 +2803,7 @@ body[data-msec="schedule"] #scheduleCard{
   padding: 0 12px;
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,.14);
-  background: rgba(7,16,34,.50);
+  background: rgba(7,16,34,.48);
   color: var(--text);
   outline:none;
   font-size: 14px;
@@ -2768,9 +2814,9 @@ body[data-msec="schedule"] #scheduleCard{
   padding: 0 12px;
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,.14);
-  font-weight: 900;
+  font-weight: 850;
   font-size: 13px;
-  letter-spacing: .01em;
+  letter-spacing: -0.01em;
   cursor:pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
@@ -2779,7 +2825,7 @@ body[data-msec="schedule"] #scheduleCard{
 }
 
 #sendBtn{
-  background: rgba(46,160,67,.28);
+  background: rgba(46,160,67,.26);
 }
 #btnClear.secondary{
   background: rgba(255,255,255,.06);
@@ -2788,7 +2834,6 @@ body[data-msec="schedule"] #scheduleCard{
 }
 
 #sendBtn:active, #btnClear:active{ transform: translateY(1px) scale(.99); filter: brightness(1.08); }
-
 </style>
 </head>
 
