@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- BUILD_VERIFY: 2026-01-01T09:20:10Z -->
+  <!-- BUILD_VERIFY: 2026-01-01T09:38:18Z -->
 <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="format-detection" content="telephone=no"/>
@@ -2316,6 +2316,8 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
    HERO 3D POP (SAFE, UI-only)
    - Adds subtle depth to rotating star images
    - No JS changes; respects reduced-motion
+*/
+
 /* ========================= */
 .hero{
   perspective: 900px;
@@ -2699,7 +2701,7 @@ body[data-msec="schedule"] #scheduleCard{
 
 
 /* =========================
-   CHAT UI — iOS 26 segmented + clean header alignment
+   CHAT UI — iOS 26 “moving capsule”
    ========================= */
 .cardHead.chatHead{
   display:flex;
@@ -2709,14 +2711,8 @@ body[data-msec="schedule"] #scheduleCard{
 }
 .chatHeadLeft{ display:flex; flex-direction:column; gap:2px; min-width:0; }
 .chatHeadLeft .cardTitle{ margin:0; font-size:16px; letter-spacing:-0.01em; }
-.chatLangCaption{
-  font-size:11px;
-  font-weight:800;
-  letter-spacing:.10em;
-  text-transform:uppercase;
-  color: rgba(235,245,255,.62);
-  line-height: 1.1;
-}
+.chatLangCaption{ font-size:11px; font-weight:800; letter-spacing:.10em; text-transform:uppercase; color: rgba(235,245,255,.62); line-height:1.1; }
+
 #chatLangRow.segmented{
   --seg-left: 3px;
   --seg-width: 72px;
@@ -2743,7 +2739,7 @@ body[data-msec="schedule"] #scheduleCard{
   width: var(--seg-width);
   border-radius:999px;
   background: linear-gradient(180deg, rgba(255,255,255,.42) 0%, rgba(255,255,255,.26) 45%, rgba(255,255,255,.16) 100%);
-  border: 1px solid rgba(255,255,255,.22);
+  border:1px solid rgba(255,255,255,.22);
   box-shadow: 0 10px 22px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.60), inset 0 -1px 0 rgba(0,0,0,.20);
   transition: left .22s cubic-bezier(.2,.9,.2,1), width .22s cubic-bezier(.2,.9,.2,1);
   pointer-events:none;
@@ -2776,12 +2772,7 @@ body[data-msec="schedule"] #scheduleCard{
 }
 #chatLangRow .segBtn:active{ transform: translateY(1px) scale(.99); }
 #chatLangRow .segBtn.active{ color: rgba(15,27,51,.92); opacity:1; }
-@media (max-width: 380px){
-  #chatLangRow.segmented{ height:32px; }
-  #chatLangRow .segBtn{ font-size:11px; padding:7px 7px; }
-}
 
-/* Chat input alignment */
 .chatInputRow{ display:flex; align-items:center; gap:8px; flex-wrap:nowrap; }
 #msg{ height:44px; border-radius:14px; }
 #sendBtn, #btnClear{ height:44px; border-radius:14px; }
@@ -2925,15 +2916,16 @@ body[data-msec="schedule"] #scheduleCard{
       <!-- CHAT -->
       <section class="section" id="sec-chat" aria-label="Chat">
         <div class="card">
-          <div class="cardHead">
-            <h2 class="cardTitle">Concierge chat</h2>
-            <div class="pillRow" id="chatLangRow" aria-label="Chat language">
-  <div class="langLabel">Language</div>
-  <div class="langSegWrap" role="tablist" aria-label="Chat language selector">
-    <button class="langSeg" data-lang="en" type="button" title="English"><span class="langCode">EN</span><span class="langName">English</span></button>
-    <button class="langSeg" data-lang="es" type="button" title="Español"><span class="langCode">ES</span><span class="langName">Español</span></button>
-    <button class="langSeg" data-lang="pt" type="button" title="Português"><span class="langCode">PT</span><span class="langName">Português</span></button>
-    <button class="langSeg" data-lang="fr" type="button" title="Français"><span class="langCode">FR</span><span class="langName">Français</span></button>
+          <div class="cardHead chatHead">
+  <div class="chatHeadLeft">
+    <h2 class="cardTitle">Concierge chat</h2>
+    <div class="chatLangCaption">Chat language</div>
+  </div>
+  <div class="segmented" id="chatLangRow" role="tablist" aria-label="Chat language selector">
+    <button class="segBtn" data-lang="en" type="button" role="tab" aria-selected="true">English</button>
+    <button class="segBtn" data-lang="es" type="button" role="tab" aria-selected="false">Español</button>
+    <button class="segBtn" data-lang="fr" type="button" role="tab" aria-selected="false">Français</button>
+    <button class="segBtn" data-lang="pt" type="button" role="tab" aria-selected="false">Português</button>
   </div>
 </div>
 </div>
@@ -3997,6 +3989,13 @@ function init(){
   }
 })();
 
+  // UI-only: keep segmented capsule aligned on rotation/resize
+  try{
+    if(!window.__chatSegResizeBound){
+      window.__chatSegResizeBound = true;
+      window.addEventListener('resize', ()=>{ try{ updateUI(); }catch(e){} }, {passive:true});
+    }
+  }catch(e){}
 </script>
 
 </body>
