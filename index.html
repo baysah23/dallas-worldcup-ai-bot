@@ -2835,6 +2835,32 @@ body[data-msec="schedule"] #scheduleCard{
 #msg{ height:44px; border-radius:14px; }
 #sendBtn, #btnClear{ height:44px; border-radius:14px; }
 
+
+/* === Chat header one-line micro-polish === */
+#sec-chat .cardHead.chatHead{
+  align-items:center;
+  gap:10px;
+}
+
+#sec-chat .cardTitle{
+  font-weight: 800;          /* lighter than before */
+  font-size: 14px;           /* slightly smaller */
+  letter-spacing: .01em;
+  opacity: .85;              /* recede vs controls */
+  white-space: nowrap;
+}
+
+#sec-chat .segWrap{
+  margin-left: auto;         /* push languages to the right */
+  padding: 2px;              /* tighter capsule */
+}
+
+#sec-chat .segBtn{
+  padding: 6px 9px;          /* tighter buttons */
+  font-size: 11.5px;
+  letter-spacing: .02em;
+}
+
 </style>
 </head>
 
