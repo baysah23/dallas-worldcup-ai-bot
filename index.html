@@ -3352,7 +3352,7 @@ function chatAppend(role, text, opts){
   if(opts && opts.welcome) wrap.setAttribute('data-welcome','1');
 
   const bubble = document.createElement('div');
-  bubble.className = 'bubble';
+    bubble.className = 'bubble bot';
   bubble.textContent = (text ?? '').toString();
   wrap.appendChild(bubble);
 
@@ -3381,7 +3381,8 @@ function chatAppend(role, text, opts){
     wrap.className = 'chatLine bot';
     wrap.setAttribute('data-welcome','1');
     const bubble = document.createElement('div');
-    bubble.className = 'bubble';
+    const bubbleRole = (role === 'user') ? 'me' : role;
+  bubble.className = 'bubble ' + bubbleRole;
     bubble.textContent = welcomeText;
     wrap.appendChild(bubble);
     log.prepend(wrap);
