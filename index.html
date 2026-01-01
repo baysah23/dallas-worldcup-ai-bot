@@ -2697,115 +2697,97 @@ body[data-msec="schedule"] #scheduleCard{
 }
 
 
-
-/* =========================
-   CHAT UI (SAFE REDESIGN)
-   - iOS-style segmented language control
-   - clean header + input alignment
-   - NO JS changes
-   ========================= */
+/* === CHAT UI — Premium (surgical) === */
+/* Only affects Chat section (sec-chat) */
 #sec-chat .cardHead{
-  gap: 12px;
-  flex-wrap: wrap;
-  align-items: center;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
 }
-#sec-chat .cardTitle{
-  flex: 1 1 auto;
-  min-width: 160px;
+#sec-chat #chatLangRow{
+  margin-left:auto;
 }
-#chatLangRow{
-  flex: 1 1 100%;
-  display: flex;
-  justify-content: flex-end;
-}
-
-/* Segmented control (iOS) */
-#chatLangRow .langSegWrap{
-  width: 100%;
-  max-width: 520px;
-  display: flex;
-  gap: 0;
-  padding: 4px;
+#sec-chat #chatLangRow .iosSeg{
+  display:flex;
+  align-items:center;
+  gap:0;
+  padding:4px;
   border-radius: 14px;
+  background: rgba(255,255,255,.08);
   border: 1px solid rgba(255,255,255,.16);
-  background: linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.04));
-  backdrop-filter: blur(14px) saturate(1.35);
-  -webkit-backdrop-filter: blur(14px) saturate(1.35);
-  box-shadow: 0 12px 34px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.14);
-  overflow: hidden;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
 }
-
-#chatLangRow .langSeg{
-  flex: 1 1 0;
-  justify-content: center;
-  min-height: 42px;
-  padding: 10px 8px;
-  border-radius: 10px;
-  border: 0;
+#sec-chat #chatLangRow .iosSegBtn{
+  appearance:none;
+  -webkit-appearance:none;
+  border:0;
   background: transparent;
-  color: rgba(235,245,255,.84);
+  color: rgba(244,248,255,.86);
   font-weight: 900;
-  letter-spacing: -0.01em;
+  font-size: 12px;
+  padding: 10px 10px;
+  border-radius: 11px;
+  letter-spacing: .01em;
+  line-height: 1;
+  cursor:pointer;
+  user-select:none;
+  white-space: nowrap;
+  transition: background .14s ease, color .14s ease, transform .12s ease, box-shadow .14s ease;
 }
-#chatLangRow .langSeg + .langSeg{
-  border-left: 1px solid rgba(255,255,255,.08);
-}
-#chatLangRow .langSeg.active{
-  background: rgba(255,255,255,.16);
-  color: rgba(255,255,255,.96);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.20), 0 10px 24px rgba(0,0,0,.22);
+#sec-chat #chatLangRow .iosSegBtn:active{ transform: scale(.99); }
+
+/* Active state is driven by JS via .active */
+#sec-chat #chatLangRow .iosSegBtn.active{
+  color: rgba(0,0,0,.90);
+  background: rgba(255,255,255,.92);
+  box-shadow: 0 10px 22px rgba(0,0,0,.28), inset 0 0 0 1px rgba(0,0,0,.16);
 }
 
-/* small phones: allow two rows without looking duplicated */
-@media (max-width: 390px){
-  #chatLangRow .langSegWrap{ flex-wrap: wrap; }
-  #chatLangRow .langSeg{
-    flex: 1 1 50%;
-    border-left: 0;
-  }
-  #chatLangRow .langSeg:nth-child(odd){ border-right: 1px solid rgba(255,255,255,.08); }
-  #chatLangRow .langSeg:nth-child(n+3){ border-top: 1px solid rgba(255,255,255,.08); }
+/* Tighten on small widths: keep premium, avoid wrap */
+@media (max-width: 420px){
+  #sec-chat #chatLangRow .iosSegBtn{ padding: 9px 8px; font-size: 11px; }
 }
 
-/* Chat input bar (aligned, iOS glass) */
+/* Chat input bar alignment */
 #sec-chat .chatInputRow{
-  display: grid;
-  grid-template-columns: 1fr auto auto;
   gap: 8px;
-  align-items: stretch;
+  align-items: center;
 }
 #sec-chat #msg{
   height: 46px;
+  padding: 0 14px;
   border-radius: 14px;
-  background: rgba(255,255,255,.05);
-  border: 1px solid rgba(255,255,255,.14);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.16);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.10);
 }
 #sec-chat #sendBtn,
 #sec-chat #btnClear{
   height: 46px;
   padding: 0 14px;
   border-radius: 14px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
   font-weight: 950;
-  letter-spacing: -0.01em;
 }
-
-/* Send: keep your green but make it “button-grade” */
 #sec-chat #sendBtn{
-  border: 1px solid rgba(46,160,67,.35);
-  background: linear-gradient(180deg, rgba(46,160,67,.30), rgba(46,160,67,.18));
-  box-shadow: 0 12px 28px rgba(0,0,0,.20);
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(46,160,67,.30);
 }
 #sec-chat #btnClear{
   border: 1px solid rgba(255,255,255,.14);
   background: rgba(255,255,255,.06);
-  color: rgba(235,245,255,.92);
-  padding: 0 12px;
+  color: rgba(244,248,255,.88);
 }
-#sec-chat #btnClear:active,
-#sec-chat #sendBtn:active{ transform: translateY(1px) scale(.99); }
 
+/* Remove global .secondary padding override impact on chat clear button */
+#sec-chat #btnClear.secondary{
+  padding: 0 14px !important;
+}
 
 </style>
 </head>
@@ -2949,11 +2931,11 @@ body[data-msec="schedule"] #scheduleCard{
           <div class="cardHead">
             <h2 class="cardTitle">Concierge chat</h2>
             <div class="pillRow" id="chatLangRow" aria-label="Chat language">
-  <div class="langSegWrap" role="tablist" aria-label="Chat language selector">
-    <button class="langSeg" data-lang="en" type="button" role="tab" aria-selected="true"><span class="langName">English</span></button>
-    <button class="langSeg" data-lang="es" type="button" role="tab" aria-selected="false"><span class="langName">Español</span></button>
-    <button class="langSeg" data-lang="fr" type="button" role="tab" aria-selected="false"><span class="langName">Français</span></button>
-    <button class="langSeg" data-lang="pt" type="button" role="tab" aria-selected="false"><span class="langName">Português</span></button>
+  <div class="iosSeg" role="tablist" aria-label="Chat language selector">
+    <button class="iosSegBtn langSeg" data-lang="en" type="button" role="tab" aria-selected="false">English</button>
+    <button class="iosSegBtn langSeg" data-lang="es" type="button" role="tab" aria-selected="false">Español</button>
+    <button class="iosSegBtn langSeg" data-lang="fr" type="button" role="tab" aria-selected="false">Français</button>
+    <button class="iosSegBtn langSeg" data-lang="pt" type="button" role="tab" aria-selected="false">Português</button>
   </div>
 </div>
 </div>
@@ -2966,7 +2948,7 @@ body[data-msec="schedule"] #scheduleCard{
               <button id="sendBtn" type="button">Send</button>
               <button id="btnClear" class="secondary" type="button">Clear</button>
             </div>
-            <p class="hint">Pick a language above — your welcome message and replies will match.</p>
+            <p class="hint">Tap the language pill to switch EN → ES → PT → FR.</p>
           </div>
         </div>
       </section>
