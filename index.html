@@ -4870,6 +4870,254 @@ function init(){
       window.addEventListener('resize', ()=>{ try{ updateUI(); }catch(e){} }, {passive:true});
     }
   }catch(e){}
+
+/* === FANZONE_VIP_HANDLERS_PATCH_v1 (surgical; Fan Zone + VIP only) === */
+(function(){
+  function $(id){ return document.getElementById(id); }
+
+  function ensureToastHost(){
+    // reuse existing .toast styling in CSS
+    let t = document.querySelector('.toast');
+    if(!t){
+      t = document.createElement('div');
+      t.className = 'toast';
+      t.setAttribute('role','status');
+      t.setAttribute('aria-live','polite');
+      t.style.display = 'none';
+      document.body.appendChild(t);
+    }
+    return t;
+  }
+
+  let toastTimer = null;
+  function luxToast(msg, ms){
+    const t = ensureToastHost();
+    t.textContent = msg;
+    t.style.display = 'block';
+    t.classList.add('show');
+    if(toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>{
+      t.classList.remove('show');
+      t.style.display = 'none';
+    }, Math.max(1200, ms || 3200));
+  }
+
+  const SUPPORT_KEY = 'wc_support_country_v1';
+  const POLL_KEY    = 'wc_match_poll_v1';
+
+  const COUNTRIES = [
+    ["🇺🇸","United States"],["🇲🇽","Mexico"],["🇨🇦","Canada"],
+    ["🇦🇷","Argentina"],["🇧🇷","Brazil"],["🇺🇾","Uruguay"],["🇨🇴","Colombia"],["🇨🇱","Chile"],
+    ["🇪🇸","Spain"],["🇫🇷","France"],["🇩🇪","Germany"],["🇮🇹","Italy"],["🇵🇹","Portugal"],["🇳🇱","Netherlands"],
+    ["🇬🇧","England"],["🇧🇪","Belgium"],["🇭🇷","Croatia"],["🇨🇭","Switzerland"],["🇸🇪","Sweden"],["🇳🇴","Norway"],["🇩🇰","Denmark"],
+    ["🇯🇵","Japan"],["🇰🇷","South Korea"],["🇦🇺","Australia"],["🇳🇿","New Zealand"],
+    ["🇳🇬","Nigeria"],["🇬🇭","Ghana"],["🇨🇲","Cameroon"],["🇸🇳","Senegal"],["🇲🇦","Morocco"],["🇪🇬","Egypt"],["🇿🇦","South Africa"],
+    ["🇸🇦","Saudi Arabia"],["🇶🇦","Qatar"],["🇦🇪","United Arab Emirates"],["🇮🇷","Iran"],
+    ["🇹🇷","Turkey"],["🇵🇱","Poland"],["🇷🇸","Serbia"],["🇷🇴","Romania"],["🇺🇦","Ukraine"]
+  ];
+
+  const DEFAULT_POLL = [
+    { id:"m1", label:"🇺🇸 United States vs 🇲🇽 Mexico" },
+    { id:"m2", label:"🇫🇷 France vs 🇦🇷 Argentina" },
+    { id:"m3", label:"🇧🇷 Brazil vs 🇩🇪 Germany" },
+    { id:"m4", label:"🇪🇸 Spain vs 🏴 England" }
+  ];
+
+  function getAppUrl(){
+    // Keep it robust across render/local; do not include hash
+    return (location.origin || '') + (location.pathname || '/');
+  }
+
+  function ensureCountryCard(){
+    let card = $('countryCard');
+    if(card) return card;
+
+    const left = $('fanZoneLeft');
+    if(!left) return null;
+
+    card = document.createElement('div');
+    card.className = 'fz-card lux-reveal';
+    card.id = 'countryCard';
+    card.style.cssText = 'display:none; margin-top:10px; max-height:52vh; overflow:auto;';
+    card.innerHTML = `
+      <h3>🏁 Choose your country</h3>
+      <div class="fz-muted">This personalizes Fan Zone highlights on this device.</div>
+      <div id="countryList" style="margin-top:10px; display:grid; gap:8px;"></div>
+    `;
+    // Insert after actions block for predictable layout
+    const actions = left.querySelector('.fz-actions');
+    if(actions && actions.nextSibling){
+      actions.parentNode.insertBefore(card, actions.nextSibling);
+    }else{
+      left.appendChild(card);
+    }
+    return card;
+  }
+
+  function hide(el){ if(el) el.style.display = 'none'; }
+  function show(el){ if(el) el.style.display = 'block'; }
+
+  function renderCountries(){
+    const card = ensureCountryCard();
+    if(!card) return;
+    const list = card.querySelector('#countryList');
+    if(!list || list.dataset.built === '1') return;
+
+    COUNTRIES.forEach(([flag,name])=>{
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'fz-btn';
+      b.style.cssText = 'text-align:left; display:flex; align-items:center; gap:10px; padding:10px 12px;';
+      b.innerHTML = `<span aria-hidden="true" style="font-size:18px; width:22px;">${flag}</span><span style="font-weight:800;">${name}</span>`;
+      b.addEventListener('click', ()=>{
+        const lbl = $('supporterLabel');
+        const flg = $('supporterFlag');
+        if(lbl) lbl.textContent = name;
+        if(flg) flg.textContent = flag;
+        try{ localStorage.setItem(SUPPORT_KEY, JSON.stringify({flag,name,ts:Date.now()})); }catch(e){}
+        luxToast(`Supporting: ${name}`, 2200);
+        hide(card);
+      }, { passive:true });
+      list.appendChild(b);
+    });
+
+    list.dataset.built = '1';
+  }
+
+  function loadSupporter(){
+    try{
+      const v = JSON.parse(localStorage.getItem(SUPPORT_KEY) || 'null');
+      if(v && v.name){
+        const lbl = $('supporterLabel');
+        const flg = $('supporterFlag');
+        if(lbl) lbl.textContent = v.name;
+        if(flg) flg.textContent = v.flag || '🏁';
+      }
+    }catch(e){}
+  }
+
+  function getPollState(){
+    try{
+      const v = JSON.parse(localStorage.getItem(POLL_KEY) || 'null');
+      if(v && v.votes && v.options) return v;
+    }catch(e){}
+    return { options: DEFAULT_POLL, votes: {}, ts: Date.now() };
+  }
+
+  function savePollState(st){
+    try{ localStorage.setItem(POLL_KEY, JSON.stringify(st)); }catch(e){}
+  }
+
+  function renderPoll(){
+    const card = $('pollCard');
+    const list = $('pollList');
+    if(!card || !list) return;
+
+    const st = getPollState();
+    const total = Object.values(st.votes || {}).reduce((a,b)=>a+(+b||0),0) || 0;
+
+    list.innerHTML = '';
+    st.options.forEach(opt=>{
+      const v = (+st.votes[opt.id] || 0);
+      const pct = total ? Math.round((v/total)*100) : 0;
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'fz-btn';
+      btn.style.cssText = 'text-align:left; padding:10px 12px;';
+      btn.innerHTML = `
+        <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+          <div style="font-weight:850;">${opt.label}</div>
+          <div class="fz-muted" style="white-space:nowrap;">${pct}%</div>
+        </div>
+        <div style="margin-top:8px; height:8px; border-radius:999px; background: rgba(255,255,255,.10); overflow:hidden;">
+          <div style="height:100%; width:${pct}%; border-radius:999px; background: rgba(255,255,255,.26);"></div>
+        </div>
+      `;
+      btn.addEventListener('click', ()=>{
+        const st2 = getPollState();
+        st2.votes[opt.id] = (+st2.votes[opt.id] || 0) + 1;
+        st2.ts = Date.now();
+        savePollState(st2);
+        renderPoll();
+        luxToast('Vote received — thanks!', 2200);
+      }, { passive:true });
+
+      list.appendChild(btn);
+    });
+  }
+
+  function openCountry(){
+    const c = ensureCountryCard();
+    if(!c) return;
+    renderCountries();
+    show(c);
+    hide($('pollCard'));
+  }
+
+  function openPoll(){
+    hide(ensureCountryCard());
+    const pc = $('pollCard');
+    if(pc){
+      renderPoll();
+      show(pc);
+    }
+  }
+
+  function openQR(){
+    const qc = $('qrCard');
+    const img = $('qrImg');
+    const link = $('qrLink');
+    if(!qc || !img || !link) return;
+
+    const url = getAppUrl();
+    link.href = url;
+    link.textContent = url.replace(/^https?:\/\//,'');
+    // Simple hosted QR generator (no extra libs)
+    const encoded = encodeURIComponent(url);
+    img.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encoded}`;
+    show(qc);
+  }
+
+  function bindOnce(el, evt, fn){
+    if(!el) return;
+    const key = `bound_${evt}`;
+    if(el.dataset && el.dataset[key] === '1') return;
+    el.addEventListener(evt, fn);
+    if(el.dataset) el.dataset[key] = '1';
+  }
+
+  function bindFanZoneVipHandlers(){
+    // Fan Zone buttons + icon buttons
+    bindOnce($('btnPickCountry'), 'click', (e)=>{ e.preventDefault(); openCountry(); });
+    bindOnce($('btnOpenPoll'), 'click', (e)=>{ e.preventDefault(); openPoll(); });
+    bindOnce($('btnSharePoster'), 'click', (e)=>{ e.preventDefault(); openQR(); });
+
+    bindOnce($('fzIconCountry'), 'click', (e)=>{ e.preventDefault(); openCountry(); });
+    bindOnce($('fzIconPoll'), 'click', (e)=>{ e.preventDefault(); openPoll(); });
+    bindOnce($('fzIconQR'), 'click', (e)=>{ e.preventDefault(); openQR(); });
+
+    // VIP placeholder behavior
+    bindOnce($('vipHoldBtn'), 'click', (e)=>{
+      e.preventDefault();
+      luxToast('VIP Table Hold is coming soon — reserved for partner venues.', 3600);
+    });
+    bindOnce($('vipHoldInfoBtn'), 'click', (e)=>{
+      e.preventDefault();
+      luxToast('How VIP Hold works: 1) Choose match  2) Set party size  3) Venue confirms  4) You get a priority hold window.', 5200);
+    });
+
+    // Restore saved supporter immediately (nice touch)
+    loadSupporter();
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', bindFanZoneVipHandlers, { once:true });
+  }else{
+    bindFanZoneVipHandlers();
+  }
+})();
+
 </script>
 
 </body>
