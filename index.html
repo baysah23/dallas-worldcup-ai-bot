@@ -2316,6 +2316,10 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
 
 
 /* Desktop: pin VIP rail above Fan Zone rails, then push Fan Zone down */
+
+}
+/* AUTO-FIX: close desktop @media block */
+
 @media(min-width: 1200px){
   .vip-rail{
     position: fixed;
@@ -2448,12 +2452,12 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
   body[data-msec="extras"] #scheduleCard{ display:none !important; }
 
 
-  body[data-msec="schedule"] #scheduleCard{ display:block !important; }
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{ display:block !important; }
 
-  body[data-msec="schedule"] .chatcard,
-  body[data-msec="schedule"] .menucard,
-  body[data-msec="schedule"] #fanZoneLeft,
-  body[data-msec="schedule"] #fanZoneRight{ display:none !important; }
+  body:is([data-msec="schedule"],[data-sec="schedule"]) .chatcard,
+  body:is([data-msec="schedule"],[data-sec="schedule"]) .menucard,
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #fanZoneLeft,
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #fanZoneRight{ display:none !important; }
 
 
   /* VIP shown alongside Fan Zone (if you want it there) */
@@ -2516,6 +2520,10 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
    - fanzone: fanZoneLeft + fanZoneRight
    - vip: vipHoldRail
 */
+
+}
+/* AUTO-FIX: close VIP rail @media block */
+
 @media (max-width: 950px){
   /* default: chat */
   body[data-msec="chat"] .chatcard{ display:block !important; }
@@ -2533,13 +2541,13 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
   body[data-msec="menu"] #vipHoldRail{ display:none !important; }
 
 
-  body[data-msec="schedule"] #scheduleCard{ display:block !important; }
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{ display:block !important; }
 
-  body[data-msec="schedule"] .chatcard,
-  body[data-msec="schedule"] .menucard,
-  body[data-msec="schedule"] #fanZoneLeft,
-  body[data-msec="schedule"] #fanZoneRight,
-  body[data-msec="schedule"] #vipHoldRail{ display:none !important; }
+  body:is([data-msec="schedule"],[data-sec="schedule"]) .chatcard,
+  body:is([data-msec="schedule"],[data-sec="schedule"]) .menucard,
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #fanZoneLeft,
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #fanZoneRight,
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #vipHoldRail{ display:none !important; }
 
 
   body[data-msec="fanzone"] #fanZoneLeft,
@@ -2614,11 +2622,11 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
 
 
   /* Make sure the schedule card sits directly under the hero */
-  body[data-msec="schedule"] #scheduleCard{ margin-top: 0 !important; }
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{ margin-top: 0 !important; }
 
 
   /* Small scroll offset so sticky header feels nicer */
-  body[data-msec="schedule"] #scheduleCard{ scroll-margin-top: 8px; }
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{ scroll-margin-top: 8px; }
 
 /* =======================
    MOBILE SCHEDULE GAP FIX (v5 - definitive)
@@ -2627,10 +2635,10 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
    creating a large blank gap before #scheduleCard.
    Fix: remove .leftcol from layout in schedule mode, and make the grid auto-height (no 1fr stretch).
    ======================= */
-body[data-msec="schedule"] .leftcol{ display:none !important; }
+body:is([data-msec="schedule"],[data-sec="schedule"]) .leftcol{ display:none !important; }
 
 
-body[data-msec="schedule"] #scheduleCard{
+body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{
   display:block !important;
   grid-column: 1 / -1 !important;
   grid-row: 2 !important;
@@ -2684,6 +2692,300 @@ body[data-msec="schedule"] #scheduleCard{
 
 
 
+
+
+
+/* =======================
+   SCHEDULE — iOS Premium Renderer (scoped)
+
+/* SCHEDULE LIST LAYOUT */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule #schedule{
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+   Only affects the Schedule screen + its subviews.
+   ======================= */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbar{
+  width: 100%;
+  padding: 6px;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.05);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbtn{
+  flex: 1;
+  min-height: 44px;
+  padding: 11px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: .02em;
+  background: transparent;
+  color: rgba(244,248,255,.92);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .12s ease, filter .12s ease;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbtn[aria-selected="true"]{
+  background: rgba(212,175,55,.96);
+  color: rgba(0,0,0,.88);
+  box-shadow: 0 12px 28px rgba(0,0,0,.34), inset 0 0 0 1px rgba(0,0,0,.22);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleMetaLine{
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: .78;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #schedule{
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+/* Fixture / Live cards */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .matchRow{
+  border-radius: 18px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 14px 42px rgba(0,0,0,.32);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .matchRow:active{
+  transform: translateY(1px);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom: 8px;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mStage{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(244,248,255,.92);
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.10);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mDate{
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(234,240,255,.82);
+  opacity: .92;
+  text-align: right;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mTeams{
+  font-size: 15px;
+  line-height: 1.25;
+  font-weight: 900;
+  letter-spacing: .01em;
+  color: rgba(244,248,255,.96);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .vs{
+  display:inline-block;
+  margin: 0 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(244,248,255,.88);
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.10);
+  vertical-align: middle;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mVenue{
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(234,240,255,.72);
+}
+
+/* Live score emphasis */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mScore{
+  font-size: 15px;
+  font-weight: 1000;
+  letter-spacing: .01em;
+}
+
+/* Groups / Standings */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standBlock{
+  border-radius: 18px;
+  padding: 12px 12px 10px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.055);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 14px 42px rgba(0,0,0,.30);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTitle{
+  font-size: 13px;
+  font-weight: 1000;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: rgba(244,248,255,.92);
+  margin-bottom: 8px;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTable{
+  width:100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTable thead th{
+  text-align:left;
+  font-size: 11px;
+  font-weight: 1000;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 10px 10px;
+  color: rgba(234,240,255,.78);
+  background: rgba(255,255,255,.05);
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTable td{
+  padding: 10px 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(244,248,255,.92);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTable tbody tr:last-child td{
+  border-bottom: 0;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .hint{
+  padding: 14px 12px;
+  border-radius: 16px;
+  border: 1px dashed rgba(255,255,255,.14);
+  color: rgba(234,240,255,.78);
+  background: rgba(255,255,255,.03);
+}
+
+/* --- Schedule premium extras (sticky dates, live pulse, non-empty banners) --- */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .dateHeader{
+  position: sticky;
+  top: calc(env(safe-area-inset-top) + 0px);
+  z-index: 3;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(12,18,35,.66);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 14px 42px rgba(0,0,0,.28);
+  font-size: 12px;
+  font-weight: 1000;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(234,240,255,.88);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .infoBanner{
+  padding: 16px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.05);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 18px 50px rgba(0,0,0,.30);
+}
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .infoTitle{
+  font-size: 14px;
+  font-weight: 1000;
+  letter-spacing: .01em;
+}
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .infoSub{
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: .80;
+  line-height: 1.35;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .liveDot{
+  display:inline-block;
+  width:8px;
+  height:8px;
+  border-radius:999px;
+  background: rgba(255,90,90,.95);
+  margin-right:8px;
+  box-shadow: 0 0 0 0 rgba(255,90,90,.45);
+  animation: livePulse 1.3s ease-in-out infinite;
+  transform: translateY(-1px);
+}
+@keyframes livePulse{
+  0%{ box-shadow: 0 0 0 0 rgba(255,90,90,.45); }
+  70%{ box-shadow: 0 0 0 10px rgba(255,90,90,0); }
+  100%{ box-shadow: 0 0 0 0 rgba(255,90,90,0); }
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbtn.tap,
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule #pager button.tap{
+  transform: translateY(1px) scale(.99);
+  filter: brightness(1.08);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .teamCell{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .rank{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:20px;
+  height:20px;
+  border-radius:10px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+  font-size: 12px;
+  font-weight: 1000;
+  opacity: .9;
+}
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .qualBadge{
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 1000;
+  letter-spacing: .04em;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(212,175,55,.18);
+  border: 1px solid rgba(212,175,55,.35);
+  color: rgba(244,220,140,.95);
+}
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTable td.pts{
+  font-weight: 1000;
+}
 
 /* =======================
    FAN ZONE MODAL MOBILE SCROLL FIX
@@ -2963,42 +3265,8 @@ body[data-msec="schedule"] #scheduleCard{
 }
 
 
-
-/* === SCHEDULE: iOS premium usability fixes (tabs + last item visibility) === */
-body[data-sec="schedule"] .scheduleSegbar{
-  position: sticky;
-  top: 0;
-  z-index: 45; /* above list, below bottom nav (50) */
-  margin-top: 8px;
-  margin-bottom: 10px;
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
 }
-
-body[data-sec="schedule"] #schedule{
-  /* Ensure last matchup isn't hidden behind pager + bottom nav */
-  padding-bottom: calc(150px + env(safe-area-inset-bottom));
-}
-
-/* Pager should sit above the fixed bottom nav */
-body[data-sec="schedule"] #pager{
-  position: sticky;
-  bottom: calc(86px + env(safe-area-inset-bottom));
-  z-index: 46;
-}
-
-/* Give the schedule section a bit of breathing room above the bottom nav */
-body[data-sec="schedule"] #sec-schedule{
-  padding-bottom: calc(96px + env(safe-area-inset-bottom));
-}
-
-/* If any schedule view wrapper uses overflow, keep tabs visible */
-body[data-sec="schedule"] #sec-schedule .sidepad,
-body[data-sec="schedule"] #sec-schedule .card,
-body[data-sec="schedule"] #sec-schedule .cardInner{
-  overflow: visible;
-}
-
+/* AUTO-FIX: close mobile msec @media block */
 </style>
 </head>
 
@@ -3870,16 +4138,46 @@ function initScheduleHandlers(){
   const tabs = $('scheduleTabs');
   if(!tabs) return;
 
-  $$('.tabBtn', tabs).forEach(btn=>{
+  // Bind to the actual buttons in the Schedule tabs (Fixtures / Live / Groups)
+  const btns = $$('button[data-view]', tabs);
+
+  function select(view){
+    scheduleView = view || 'fixtures';
+    btns.forEach(b=>{
+      const on = (b.dataset.view === scheduleView);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+  }
+
+  btns.forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      scheduleView = btn.dataset.view || 'fixtures';
-      $$('.tabBtn', tabs).forEach(b=>b.classList.toggle('active', b === btn));
+      // micro-feedback (iOS-like)
+      btn.classList.add('tap');
+      setTimeout(()=>btn.classList.remove('tap'), 180);
+      try{ if(navigator.vibrate) navigator.vibrate(8); }catch(e){}
+      select(btn.dataset.view);
+      currentPage = 1;           // reset paging when switching views
       loadSchedule(true);
     });
   });
 
-  $('prevPage')?.addEventListener('click', ()=>{ currentPage = Math.max(1, currentPage-1); loadSchedule(); });
-  $('nextPage')?.addEventListener('click', ()=>{ currentPage = currentPage+1; loadSchedule(); });
+  // Ensure initial selection matches scheduleView
+  select(scheduleView);
+
+  $('prevPage')?.addEventListener('click', (e)=>{
+    const b = e.currentTarget;
+    if(b){ b.classList.add('tap'); setTimeout(()=>b.classList.remove('tap'), 180); }
+    try{ if(navigator.vibrate) navigator.vibrate(8); }catch(_){}
+    currentPage = Math.max(1, currentPage-1);
+    loadSchedule();
+  });
+  $('nextPage')?.addEventListener('click', (e)=>{
+    const b = e.currentTarget;
+    if(b){ b.classList.add('tap'); setTimeout(()=>b.classList.remove('tap'), 180); }
+    try{ if(navigator.vibrate) navigator.vibrate(8); }catch(_){}
+    currentPage = currentPage+1;
+    loadSchedule();
+  });
 }
 
 function renderFixtures(matches){
@@ -3896,13 +4194,39 @@ function renderFixtures(matches){
   const start = (currentPage-1)*perPage;
   const slice = matches.slice(start, start+perPage);
 
-  list.innerHTML = slice.map(m=>{
-    const dt = escapeHtml(m.date || m.datetime_local || m.datetime_utc || '');
+  // Date grouping + sticky headers
+  const dateKeyOf = (raw)=>{
+    const s = (raw || '').trim();
+    if(!s) return '';
+    const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+    if(m) return m[1];
+    const d = new Date(s);
+    if(!isNaN(d)) return d.toISOString().slice(0,10);
+    return s;
+  };
+  const dateLabel = (key)=>{
+    if (/^\d{4}-\d{2}-\d{2}$/.test(key)){
+      const d = new Date(key + 'T00:00:00Z');
+      return new Intl.DateTimeFormat('en-US',{month:'short', day:'numeric'}).format(d);
+    }
+    return key;
+  };
+
+  let lastKey = null;
+  let html = '';
+  slice.forEach(m=>{
+    const rawDt = (m.date || m.datetime_local || m.datetime_utc || '');
+    const key = dateKeyOf(rawDt);
+    if(key && key !== lastKey){
+      html += `<div class="dateHeader" role="heading" aria-level="3">${escapeHtml(dateLabel(key))}</div>`;
+      lastKey = key;
+    }
+    const dt = escapeHtml(rawDt);
     const home = escapeHtml(m.home || '');
     const away = escapeHtml(m.away || '');
     const venue = escapeHtml(m.venue || '');
     const stage = escapeHtml(m.stage || '');
-    return `<div class="matchRow">
+    html += `<div class="matchRow">
       <div class="mTop">
         <div class="mStage">${stage}</div>
         <div class="mDate">${dt}</div>
@@ -3910,7 +4234,9 @@ function renderFixtures(matches){
       <div class="mTeams">${home} <span class="vs">vs</span> ${away}</div>
       <div class="mVenue">${venue}</div>
     </div>`;
-  }).join('') || `<div class="hint">No fixtures found.</div>`;
+  });
+
+  list.innerHTML = html || `<div class="hint">No fixtures found.</div>`;
 
   const pager = $('pager');
   const pi = $('pageIndicator');
@@ -3924,25 +4250,67 @@ function renderFixtures(matches){
   }
 }
 
-function renderLive(matches){
+function renderLive(data){
   const list = $('schedule');
   const meta = $('scheduleMetaLine');
   if(!list) return;
 
-  list.innerHTML = (matches || []).map(m=>{
+  const matches = (data && (data.matches || data.live)) || [];
+  const quality = (data && data.quality) || {};
+  const hasScores = !!quality.has_any_scores || matches.some(m => (m.score || m.result || m.score_home != null || m.score_away != null));
+
+  if(!matches.length){
+    list.innerHTML = `<div class="infoBanner">
+      <div class="infoTitle">No live matches right now</div>
+      <div class="infoSub">Live scores will appear here once games are in progress.</div>
+    </div>`;
+    if(meta){ meta.textContent = `Live`; }
+    return;
+  }
+
+  if(!hasScores){
+    list.innerHTML = `<div class="infoBanner">
+      <div class="infoTitle">Live scores available once connected</div>
+      <div class="infoSub">This tab will show real-time matchups and scores when a live data provider is enabled.</div>
+    </div>` + matches.map(m=>{
+      const dt = escapeHtml(m.date || m.datetime_local || m.datetime_utc || '');
+      const home = escapeHtml(m.home || '');
+      const away = escapeHtml(m.away || '');
+      const status = escapeHtml(m.status || 'Live window');
+      return `<div class="matchRow">
+        <div class="mTop">
+          <div class="mStage">${status}</div>
+          ${dt ? `<div class="mDate">${dt}</div>` : ``}
+        </div>
+        <div class="mTeams">${home} <span class="vs">vs</span> ${away}</div>
+        <div class="mVenue">Awaiting live scores</div>
+      </div>`;
+    }).join('');
+    if(meta){ meta.textContent = `Live · awaiting scores`; }
+    return;
+  }
+
+  list.innerHTML = matches.map(m=>{
+    const dt = escapeHtml(m.date || m.datetime_local || m.datetime_utc || '');
     const home = escapeHtml(m.home || '');
     const away = escapeHtml(m.away || '');
-    const score = escapeHtml(m.score || m.result || '');
+    const score = escapeHtml(m.score || m.result || (m.score_home!=null && m.score_away!=null ? `${m.score_home}–${m.score_away}` : ''));
     const status = escapeHtml(m.status || 'Live');
-    return `<div class="matchRow">
-      <div class="mTop"><div class="mStage">${status}</div></div>
-      <div class="mTeams">${home} <span class="vs">vs</span> ${away}</div>
-      <div class="mVenue">${score}</div>
-    </div>`;
-  }).join('') || `<div class="hint">No live matches right now.</div>`;
 
-  if(meta){ meta.textContent = `Live updates`; }
+    const isLive = /live|in\s*progress/i.test(status) || (m.is_live === true);
+    return `<div class="matchRow ${isLive ? 'isLive' : ''}">
+      <div class="mTop">
+        <div class="mStage">${isLive ? `<span class="liveDot" aria-hidden="true"></span>` : ``}${status}</div>
+        ${dt ? `<div class="mDate">${dt}</div>` : ``}
+      </div>
+      <div class="mTeams">${home} <span class="vs">vs</span> ${away}</div>
+      <div class="mVenue mScore">${score || ''}</div>
+    </div>`;
+  }).join('');
+
+  if(meta){ meta.textContent = `Live`; }
 }
+
 
 function renderStandings(data){
   const list = $('schedule');
@@ -3952,23 +4320,34 @@ function renderStandings(data){
   const groups = data.groups || [];
   list.innerHTML = groups.map(g=>{
     const name = escapeHtml(g.group || g.name || '');
-    const rows = (g.table || g.teams || []).map(t=>{
-      return `<tr>
-        <td>${escapeHtml(t.team || t.name || '')}</td>
+    const rowsArr = (g.table || g.teams || []);
+    const rows = rowsArr.map((t, idx)=>{
+      const rank = (typeof t.rank !== 'undefined') ? t.rank : (idx+1);
+      const pts = (t.pts ?? t.points ?? 0);
+      const gd = (t.gd ?? ((t.gf??0)-(t.ga??0)) ?? 0);
+      const badge = (rank <= 2) ? `<span class="qualBadge">${rank<=1?'Leader':'Top 2'}</span>` : ``;
+      return `<tr class="${rank<=2?'topRow':''}">
+        <td class="teamCell"><span class="rank">${rank}</span>${escapeHtml(t.team || t.name || '')}${badge}</td>
         <td>${escapeHtml(t.p || t.played || 0)}</td>
-        <td>${escapeHtml(t.pts ?? t.points ?? 0)}</td>
+        <td>${escapeHtml(gd)}</td>
+        <td class="pts">${escapeHtml(pts)}</td>
       </tr>`;
     }).join('');
+
     return `<div class="standBlock">
       <div class="standTitle">${name}</div>
       <table class="standTable">
-        <thead><tr><th>Team</th><th>P</th><th>Pts</th></tr></thead>
+        <thead><tr><th>Team</th><th>P</th><th>GD</th><th>Pts</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
+      ${rowsArr.length ? `` : `<div class="hint" style="margin-top:8px;">Group teams will appear once fixtures load.</div>`}
     </div>`;
-  }).join('') || `<div class="hint">Standings unavailable.</div>`;
+  }).join('') || `<div class="infoBanner">
+    <div class="infoTitle">Groups will appear here</div>
+    <div class="infoSub">If this is empty, your standings feed is unavailable. Fixtures will still show under Fixtures.</div>
+  </div>`;
 
-  if(meta){ meta.textContent = `Standings · ${data.count_groups || groups.length} groups`; }
+  if(meta){ meta.textContent = `Groups · ${data.count_groups || groups.length} groups`; }
 }
 
 async function loadSchedule(force=false){
@@ -3986,7 +4365,7 @@ async function loadSchedule(force=false){
       renderFixtures(fixturesCache);
     }else if(scheduleView === 'live'){
       const data = await fetchJSON('/worldcup/live.json');
-      renderLive(data.matches || data.live || []);
+      renderLive(data);
     }else if(scheduleView === 'groups'){
       const scope = (state.scope === 'featured') ? 'featured' : 'all';
       const data = await fetchJSON(`/worldcup/standings.json?scope=${encodeURIComponent(scope)}`);
