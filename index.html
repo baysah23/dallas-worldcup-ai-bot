@@ -2316,6 +2316,10 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
 
 
 /* Desktop: pin VIP rail above Fan Zone rails, then push Fan Zone down */
+
+}
+/* AUTO-FIX: close desktop @media block */
+
 @media(min-width: 1200px){
   .vip-rail{
     position: fixed;
@@ -2516,6 +2520,10 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
    - fanzone: fanZoneLeft + fanZoneRight
    - vip: vipHoldRail
 */
+
+}
+/* AUTO-FIX: close VIP rail @media block */
+
 @media (max-width: 950px){
   /* default: chat */
   body[data-msec="chat"] .chatcard{ display:block !important; }
@@ -2689,6 +2697,13 @@ body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{
 
 /* =======================
    SCHEDULE — iOS Premium Renderer (scoped)
+
+/* SCHEDULE LIST LAYOUT */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule #schedule{
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
    Only affects the Schedule screen + its subviews.
    ======================= */
 body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbar{
@@ -2704,12 +2719,16 @@ body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbar{
 
 body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbtn{
   flex: 1;
-  min-height: 40px;
-  padding: 10px 14px;
+  min-height: 44px;
+  padding: 11px 16px;
+  border-radius: 999px;
   font-size: 13px;
-  font-weight: 900;
-  letter-spacing: .01em;
-  color: rgba(244,248,255,.90);
+  font-weight: 950;
+  letter-spacing: .02em;
+  background: transparent;
+  color: rgba(244,248,255,.92);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .12s ease, filter .12s ease;
 }
 
 body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbtn[aria-selected="true"]{
@@ -3148,6 +3167,9 @@ body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .hint{
   border-color: rgba(255,255,255,.16) !important;
 }
 
+
+}
+/* AUTO-FIX: close mobile msec @media block */
 </style>
 </head>
 
