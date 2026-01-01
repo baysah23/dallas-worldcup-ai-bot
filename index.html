@@ -3350,7 +3350,10 @@ function setLang(lang){
   // Chat language selector
   $$('#chatLangRow [data-lang]').forEach(btn=>{
     const b = (btn.dataset?.lang||'').toLowerCase();
-    btn.classList.toggle('active', b === (state.lang||'en').toLowerCase());
+    const isOn = b === (state.lang||'en').toLowerCase();
+    btn.classList.toggle('active', isOn);
+    // aria-selected drives the visual highlight (CSS targets [aria-selected="true"])
+    btn.setAttribute('aria-selected', isOn ? 'true' : 'false');
   });
   
   // UI-only: iOS segmented capsule positioning
