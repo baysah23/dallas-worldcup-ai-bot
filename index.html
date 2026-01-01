@@ -2748,6 +2748,93 @@ body:is([data-msec="schedule"],[data-sec="schedule"]) #schedule{
   display: grid;
   gap: 10px;
 }
+/* =========================================================
+   SCHEDULE (iOS premium) — fit + pager + scroll (SAFE)
+   - No JS layout math
+   - Keeps Chat untouched
+   ========================================================= */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .sidepad{
+  display:flex;
+  flex-direction:column;
+  gap: 0;
+  /* Fill the viewport; leave room for fixed bottom nav */
+  min-height: calc(100svh - 92px);
+}
+
+/* Bigger iOS-style pills */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbar{
+  width: 100%;
+  justify-content: center;
+  padding: 8px;
+  gap: 8px;
+}
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbtn{
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: .01em;
+}
+
+/* Scroll area for results */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule #scheduleScroll{
+  margin-top: 10px;
+  flex: 1 1 auto;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(110px + env(safe-area-inset-bottom)); /* ensures last card clears pager + bottom nav */
+  scrollbar-width: thin;
+}
+
+/* Results grid lives inside scroll area now */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule #schedule{
+  margin-top: 0;
+}
+
+/* Pager always sits above the fixed bottom nav */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule #pager{
+  position: sticky;
+  bottom: calc(74px + env(safe-area-inset-bottom));
+  z-index: 60;
+  margin-top: 10px;
+  padding-bottom: 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: linear-gradient(180deg, rgba(7,16,34,.88), rgba(7,16,34,.72));
+  backdrop-filter: blur(14px) saturate(1.25);
+  -webkit-backdrop-filter: blur(14px) saturate(1.25);
+  box-shadow: 0 18px 60px rgba(0,0,0,.35);
+}
+
+/* Pager buttons match iOS premium */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule #pager .secondary{
+  height: 42px;
+  padding: 0 14px;
+  border-radius: 14px;
+  font-weight: 900;
+  letter-spacing: .01em;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  color: rgba(234,240,255,.95);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+}
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule #pager .secondary:active{
+  transform: translateY(1px) scale(.99);
+  filter: brightness(1.06);
+}
+
+/* Page indicator capsule */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule #pageIndicator{
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+}
+
 
 /* Fixture / Live cards */
 body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .matchRow{
@@ -3359,7 +3446,7 @@ body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .hint{
       <button class="segbtn" type="button" data-view="groups" aria-selected="false">Groups</button>
     </div>
     <div class="metaLine" id="scheduleMetaLine" aria-live="polite"></div>
-    <div class="schedule" id="schedule"></div>
+    <div class="scheduleScroll" id="scheduleScroll"><div class="schedule" id="schedule"></div></div>
     <div class="sidepad" id="pager" style="display:none; padding-top:10px;">
       <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
         <button class="secondary" id="prevPage" style="min-width:88px;">Prev</button>
