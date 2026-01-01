@@ -3539,67 +3539,75 @@ body[data-sec="schedule"] #sec-schedule #pager .pill{
 }
 
 
-/* ===== Fan Zone mini-sheet polish (premium/iOS-safe) ===== */
-#pollCard, #qrCard, #countryCard{
-  overflow:hidden;
+/* === FAN ZONE/VIP: safe premium fixes (2026-01-01) === */
+/* Mobile: ensure Fan Zone rails are in-flow and fit the viewport (no off-screen load) */
+@media (max-width: 950px){
+  body[data-msec="fanzone"] #fanZoneLeft,
+  body[data-msec="fanzone"] #fanZoneRight{
+    position: static !important;
+    top: auto !important; left: auto !important; right: auto !important;
+    width: min(560px, calc(100% - 16px)) !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 10px auto 0 !important;
+  }
+  body[data-msec="fanzone"] #fanZoneRight{ margin-bottom: 12px !important; }
+
+  /* prevent horizontal squeeze from legacy widths */
+  .fanzone-left, .fanzone-right{ width: 100% !important; }
 }
-.fz-sheet-head{
+
+/* Poll "mini sheet" inside card */
+#pollCard{
+  padding: 10px 12px;
+  overflow: hidden !important; /* body scroll lives on list */
+}
+#pollCard .fz-minirow{
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 2px 0 8px;
+  background: linear-gradient(180deg, rgba(7,16,34,.92), rgba(7,16,34,.70));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  margin-bottom: 10px !important;
+}
+#pollList{
+  max-height: 42vh;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+/* iOS-like poll rows */
+.fz-pollrow{
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  padding: 11px 12px !important;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.055);
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+}
+.fz-pollrow:active{ transform: translateY(1px) scale(.99); filter: brightness(1.06); }
+
+.fz-polltop{
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:10px;
-  padding:10px 10px 6px;
-  position:sticky;
-  top:0;
-  z-index:2;
-  background: rgba(12,18,35,.55);
-  -webkit-backdrop-filter: blur(14px);
-  backdrop-filter: blur(14px);
-  border-bottom: 1px solid rgba(255,255,255,.10);
-  border-top-left-radius: 16px;
-  border-top-right-radius: 16px;
+  gap: 10px;
 }
-.fz-sheet-title{
-  font-weight: 900;
-  letter-spacing: .2px;
-}
-.fz-sheet-sub{
-  padding: 6px 10px 0;
-}
-.fz-sheet-body{
-  padding: 10px;
-  max-height: 34vh;
-  overflow:auto;
-}
-.fz-sheet-list{
-  display:grid;
-  gap:10px;
-}
-#pollList .fz-btn{
-  width:100%;
-}
-.qrWrap{
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:14px;
-  flex-wrap:wrap;
-}
-.qrImgWrap{
-  background:#fff;
-  border-radius:14px;
-  padding:10px;
-  box-shadow: 0 8px 18px rgba(0,0,0,.22);
-}
-#qrImg{
+.fz-pollname{ font-weight: 900; letter-spacing: .01em; }
+.fz-pollpct{ font-variant-numeric: tabular-nums; white-space:nowrap; }
+
+/* QR card: keep image from overflowing */
+#qrCard img, #qrImg{
+  max-width: 100% !important;
+  height: auto !important;
   display:block;
-  width: min(220px, 70vw);
-  height: auto;
 }
-.qrText{
-  min-width: 180px;
-  max-width: 360px;
-}
+#qrCard{ overflow:hidden; }
 </style>
 </head>
 
@@ -3826,14 +3834,12 @@ body[data-sec="schedule"] #sec-schedule #pager .pill{
 </div>
 </div>
 <div class="fz-card lux-reveal" id="pollCard" style="display:none; margin-top:10px; max-height:52vh; overflow:auto;">
-<div class="fz-sheet-head">
-  <div class="fz-sheet-title">⚔️ Match of the Day Poll</div>
+<div class="fz-minirow" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
+  <h3 style="margin:0;">⚔️ Match of the Day Poll</h3>
   <button class="fz-iconbtn" id="closePollCard" type="button" aria-label="Close poll">✕</button>
 </div>
-<div class="fz-sheet-sub fz-muted">Vote for who you think will win.</div>
-<div class="fz-sheet-body">
-  <div id="pollList" class="fz-sheet-list"></div>
-</div>
+<div class="fz-muted">Vote for who you think will win.</div>
+<div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
 </div>
 </aside>
     <aside aria-label="Fan Zone Right Panel" class="fanzone fanzone-right" id="fanZoneRight">
@@ -3853,19 +3859,16 @@ body[data-sec="schedule"] #sec-schedule #pager .pill{
       </div></div>
 </div>
 <div class="fz-card lux-reveal" id="qrCard" style="display:none; margin-top:10px;">
-<div class="fz-sheet-head">
-  <div class="fz-sheet-title">📱 QR poster</div>
+<div class="fz-minirow" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
+  <h3 style="margin:0;">📱 QR poster</h3>
   <button class="fz-iconbtn" id="closeQRCard" type="button" aria-label="Close QR">✕</button>
 </div>
-<div class="fz-sheet-sub fz-muted">Print/display at the entrance. Scan to open the app.</div>
-<div class="fz-sheet-body">
-  <div class="qrWrap">
-    <div class="qrImgWrap"><img id="qrImg" alt="QR code"/></div>
-    <div class="qrText">
-      <div class="fz-muted" style="margin-bottom:6px;">Link:</div>
-      <div><a href="#" id="qrLink" rel="noopener" target="_blank">Open app</a></div>
-    </div>
-  </div>
+<div class="fz-muted">Print/display at the entrance. Scan to open the app.</div>
+<div class="qrWrap" style="margin-top:10px;">
+<img id="qrImg" alt="QR code" style="width:220px;height:220px;border-radius:12px;background:#fff;padding:10px;display:block;margin:0 auto;" />
+<div class="qrText">
+<div class="fz-muted" style="margin-bottom:6px;">Link:</div>
+<div><a href="#" id="qrLink" rel="noopener" target="_blank">Open app</a></div>
 </div>
 </div></div>
 </aside>
@@ -4990,8 +4993,10 @@ function init(){
   ];
 
   const DEFAULT_POLL = [
-    { id:"t1", label:"Team A" },
-    { id:"t2", label:"Team B" }
+    { id:"m1", label:"🇺🇸 United States vs 🇲🇽 Mexico" },
+    { id:"m2", label:"🇫🇷 France vs 🇦🇷 Argentina" },
+    { id:"m3", label:"🇧🇷 Brazil vs 🇩🇪 Germany" },
+    { id:"m4", label:"🇪🇸 Spain vs 🏴 England" }
   ];
 
   function getAppUrl(){
@@ -5033,63 +5038,49 @@ function init(){
     return card;
   }
 
-  function hide(el){ if(el) el.style.display = 'none'; }
-  function show(el){ if(el) el.style.display = 'block'; }
+  function hide(el){ if(el){ el.style.display = 'none'; el.setAttribute('aria-hidden','true'); } }
+  function show(el){ if(el){ el.style.display = 'block'; el.removeAttribute('aria-hidden'); } }
+  function isShown(el){ return !!(el && el.style.display !== 'none' && el.offsetParent !== null); }
 
   
-  async function getTeamsFromSchedule(){
-    // Cache in-memory for this session to keep UI snappy.
-    if(window.__WC_TEAMS_CACHE && Array.isArray(window.__WC_TEAMS_CACHE) && window.__WC_TEAMS_CACHE.length){
-      return window.__WC_TEAMS_CACHE;
-    }
+  function getWorldCupTeams(){
     try{
-      const r = await fetch('/schedule.json?scope=all', { cache:'no-store' });
-      if(!r.ok) throw new Error('schedule fetch failed');
-      const j = await r.json();
-      const matches = (j && j.matches) ? j.matches : (Array.isArray(j) ? j : []);
-      const set = new Set();
-      (matches || []).forEach(m=>{
-        const h = (m && (m.home || m.home_team || m.team1)) || '';
-        const a = (m && (m.away || m.away_team || m.team2)) || '';
-        if(h) set.add(String(h).trim());
-        if(a) set.add(String(a).trim());
-      });
-      const teams = Array.from(set).filter(Boolean).sort((x,y)=>x.localeCompare(y));
-      window.__WC_TEAMS_CACHE = teams;
-      return teams;
+      // Prefer cached schedule.json (same data schedule tab uses)
+      const cached = readFixtureCache && readFixtureCache();
+      const raw = Array.isArray(cached?.matches) ? cached.matches : [];
+      const s = new Set();
+      for(const m of raw){
+        const h = (m?.home||'').trim();
+        const a = (m?.away||'').trim();
+        if(h) s.add(h);
+        if(a) s.add(a);
+      }
+      const arr = Array.from(s).filter(Boolean).sort((x,y)=>x.localeCompare(y));
+      return arr.length ? arr : null;
     }catch(e){
       return null;
     }
   }
-
-  function flagForCountry(name){
-    // Prefer existing mapping, fall back to a neutral flag.
-    const hit = (COUNTRIES || []).find(([f,n]) => (n||'').toLowerCase() === String(name||'').toLowerCase());
-    return hit ? hit[0] : '🏳️';
-  }
-
-  async function renderCountries(){
+function renderCountries(){
     const card = ensureCountryCard();
     if(!card) return;
     const list = card.querySelector('#countryList');
-    if(!list) return;
+    if(!list || list.dataset.built === '1') return;
 
-    // Always rebuild if schedule-based list becomes available later.
-    list.innerHTML = '';
-    list.dataset.built = '0';
+    const teams = getWorldCupTeams();
+    // Map known flags from the built-in list, but only show teams that actually exist in Schedule.
+    const flagMap = new Map();
+    try{ COUNTRIES.forEach(([flag,name])=> flagMap.set(String(name).toLowerCase(), flag)); }catch(e){}
 
-    const teams = await getTeamsFromSchedule();
-    const names = (teams && teams.length) ? teams : (COUNTRIES || []).map(x=>x[1]);
+    const items = teams && teams.length ? teams : (COUNTRIES||[]).map(x=>x[1]).filter(Boolean);
+    items.forEach((name)=>{
+      const flag = flagMap.get(String(name).toLowerCase()) || '🏳️';
 
-    // If schedule returned teams, filter static country list to WC participants only
-    const unique = Array.from(new Set((names || []).map(s=>String(s||'').trim()).filter(Boolean)));
-    unique.forEach((name)=>{
-      const flag = flagForCountry(name);
       const b = document.createElement('button');
       b.type = 'button';
       b.className = 'fz-btn';
       b.style.cssText = 'text-align:left; display:flex; align-items:center; gap:10px; padding:10px 12px;';
-      b.innerHTML = `<span aria-hidden="true" style="font-size:18px;">${flag}</span><span style="font-weight:800;">${name}</span>`;
+      b.innerHTML = `<span aria-hidden="true" style="font-size:18px; width:22px;">${flag}</span><span style="font-weight:800;">${name}</span>`;
       b.addEventListener('click', ()=>{
         const lbl = $('supporterLabel');
         const flg = $('supporterFlag');
@@ -5104,7 +5095,6 @@ function init(){
 
     list.dataset.built = '1';
   }
-
 
   function loadSupporter(){
     try{
@@ -5145,14 +5135,14 @@ function init(){
 
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'fz-btn';
-      btn.style.cssText = 'text-align:left; padding:10px 12px;';
+      btn.className = 'fz-btn fz-pollrow';
+      btn.style.cssText = '';
       btn.innerHTML = `
-        <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
-          <div style="font-weight:850;">${opt.label}</div>
-          <div class="fz-muted" style="white-space:nowrap;">${pct}%</div>
+        <div class="fz-polltop">
+          <div class="fz-pollname">${opt.label}</div>
+          <div class="fz-muted fz-pollpct">${pct}%</div>
         </div>
-        <div style="margin-top:8px; height:8px; border-radius:999px; background: rgba(255,255,255,.10); overflow:hidden;">
+        <div style="height:8px; border-radius:999px; background: rgba(255,255,255,.10); overflow:hidden;">
           <div style="height:100%; width:${pct}%; border-radius:999px; background: rgba(255,255,255,.26);"></div>
         </div>
       `;
@@ -5164,7 +5154,7 @@ function init(){
         renderPoll();
         luxToast('Vote received — thanks!', 2200);
         // Auto-close after voting
-        const pc = $('pollCard'); if(pc) pc.style.display='none';
+        hidePoll();
       }, { passive:true });
 
       list.appendChild(btn);
@@ -5305,13 +5295,15 @@ function init(){
     hide($('pollCard'));
   }
 
+    function hidePoll(){ const pc=$('pollCard'); if(pc) hide(pc); }
+
     function openPoll(){
       hide(ensureCountryCard());
       const pc = $('pollCard');
       if(!pc) return;
   
       // Toggle behavior (tap again to close)
-      if(pc.offsetParent){
+      if(isShown(pc)){
         hide(pc);
         return;
       }
@@ -5328,15 +5320,29 @@ function init(){
       if(!qc || !img || !link) return;
   
       // Toggle behavior (tap again to close)
-      if(qc.offsetParent){
+      if(isShown(qc)){
         hide(qc);
         return;
       }
   
+      // Keep the card centered and within viewport on iOS
+      try{
+        qc.style.width = "min(520px, 100%)";
+        qc.style.maxWidth = "520px";
+        qc.style.margin = "12px auto 0";
+        qc.style.boxSizing = "border-box";
+      }catch(e){}
+  
       const url = getAppUrl();
       link.href = url;
       link.textContent = url.replace(/^https?:\/\//,'');
-// Simple hosted QR generator (no extra libs)
+  
+      img.style.maxWidth = "100%";
+      img.style.height = "auto";
+      img.style.display = "block";
+      img.style.margin = "10px auto 0";
+  
+      // Simple hosted QR generator (no extra libs)
       const encoded = encodeURIComponent(url);
       img.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encoded}`;
   
@@ -5363,7 +5369,7 @@ function init(){
     bindOnce($('fzIconQR'), 'click', (e)=>{ e.preventDefault(); openQR(); });
 
     // Close buttons for Fan Zone cards
-    bindOnce($('closePollCard'), 'click', (e)=>{ e.preventDefault(); hide($('pollCard')); });
+    bindOnce($('closePollCard'), 'click', (e)=>{ e.preventDefault(); e.stopPropagation(); hidePoll(); });
     bindOnce($('closeQRCard'), 'click', (e)=>{ e.preventDefault(); hide($('qrCard')); });
 
     // VIP placeholder behavior
