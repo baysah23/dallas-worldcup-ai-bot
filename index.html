@@ -2710,7 +2710,7 @@ body[data-msec="schedule"] #scheduleCard{
 /* =========================
    CHAT LANGUAGE SELECTOR (iOS-like segmented)
    ========================= */
-#chatLangRow{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+#chatLangRow{ display:flex; align-items:center; gap:10px; flex-wrap: nowrap; }
 #chatLangRow .langLabel{
   font-size:12px;
   letter-spacing:.06em;
@@ -2886,6 +2886,18 @@ body[data-msec="schedule"] #scheduleCard{
   margin-left: auto;          /* keep languages on same row */
   white-space: nowrap;
 }
+
+
+/* === Chat language row: keep on ONE line (scroll if needed) === */
+#sec-chat #chatLangRow{
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: calc(100% - 92px); /* leaves room for the 'Language' label */
+}
+#sec-chat #chatLangRow::-webkit-scrollbar{ height: 0; }
+#sec-chat #chatLangRow .segBtn{ flex: 0 0 auto; }
 
 </style>
 </head>
