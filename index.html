@@ -5063,18 +5063,46 @@ function init(){
   }
 
   async function fetchScheduleTeams(){
+    // Pull teams ONLY from the same schedule feed the Schedule tab uses.
+    // Safe fallbacks: fixture cache (if present) → network fetch with timeout.
     try{
-      const data = await fetchJSONWithTimeout('/schedule.json', 4500);
-      const raw = Array.isArray(data?.matches) ? data.matches : [];
-      const s = new Set();
-      for(const m of raw){
-        const h = (m && m.home) ? String(m.home).trim() : '';
-        const a = (m && m.away) ? String(m.away).trim() : '';
-        if(h) s.add(h);
-        if(a) s.add(a);
+      const extractTeams = (d)=>{
+        const raw = Array.isArray(d?.matches) ? d.matches
+                  : Array.isArray(d?.fixtures) ? d.fixtures
+                  : [];
+        const s = new Set();
+        for(const m of raw){
+          const h = (m && (m.home ?? m.home_team ?? m.team1)) ? String(m.home ?? m.home_team ?? m.team1).trim() : '';
+          const a = (m && (m.away ?? m.away_team ?? m.team2)) ? String(m.away ?? m.away_team ?? m.team2).trim() : '';
+          if(h) s.add(h);
+          if(a) s.add(a);
+        }
+        const arr = Array.from(s).filter(Boolean).sort((x,y)=>x.localeCompare(y));
+        return arr.length ? arr : null;
+      };
+
+      // 1) Try any already-cached schedule data (no network).
+      let cachedData = null;
+      try{
+        if(typeof readFixtureCache === 'function') cachedData = readFixtureCache();
+      }catch(_e){}
+      if(!cachedData && window.__FIXTURE_CACHE) cachedData = window.__FIXTURE_CACHE;
+
+      const cachedTeams = extractTeams(cachedData);
+      if(cachedTeams) return cachedTeams;
+
+      // 2) Network fetch with timeout.
+      const controller = ('AbortController' in window) ? new AbortController() : null;
+      const to = setTimeout(()=>{ try{ controller && controller.abort(); }catch(_e){} }, 4500);
+      try{
+        const resp = await fetch('/schedule.json', { cache:'no-store', signal: controller ? controller.signal : undefined });
+        if(!resp.ok) return null;
+        const data = await resp.json();
+        const teams = extractTeams(data);
+        return teams;
+      }finally{
+        clearTimeout(to);
       }
-      const arr = Array.from(s).filter(Boolean).sort((x,y)=>x.localeCompare(y));
-      return arr.length ? arr : null;
     }catch(e){
       return null;
     }
