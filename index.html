@@ -522,6 +522,12 @@
     }
     .segBtn[aria-selected="true"]{ color: rgba(255,255,255,.98); }
 
+/* Keep Chat language header on one line: allow horizontal scroll instead of wrapping */
+#chatLangRow.segmented{ scrollbar-width:none; }
+#chatLangRow.segmented::-webkit-scrollbar{ display:none; }
+#chatLangRow.segmented .segBtn{ flex:0 0 auto; white-space:nowrap; }
+
+
 /* === TOOLS ROW === */
     .tools{
       display:flex;
@@ -2710,7 +2716,7 @@ body[data-msec="schedule"] #scheduleCard{
 /* =========================
    CHAT LANGUAGE SELECTOR (iOS-like segmented)
    ========================= */
-#chatLangRow{ display:flex; align-items:center; gap:10px; flex-wrap: nowrap; }
+#chatLangRow{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
 #chatLangRow .langLabel{
   font-size:12px;
   letter-spacing:.06em;
@@ -2766,6 +2772,7 @@ body[data-msec="schedule"] #scheduleCard{
   align-items:center;
   justify-content:space-between;
   gap:10px;
+  flex-wrap:nowrap;
 }
 .chatHeadLeft{ display:flex; flex-direction:column; gap:2px; min-width:0; }
 .chatHeadLeft .cardTitle{ margin:0; font-size:16px; letter-spacing:-0.01em; }
@@ -2785,9 +2792,12 @@ body[data-msec="schedule"] #scheduleCard{
   -webkit-backdrop-filter: blur(14px) saturate(1.35);
   backdrop-filter: blur(14px) saturate(1.35);
   box-shadow: 0 10px 24px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.12);
-  overflow:hidden;
+  overflow-x:auto;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling: touch;
   height:34px;
-  flex:0 0 auto;
+  flex:1 1 auto;
+  min-width:0;
 }
 #chatLangRow.segmented::before{
   content:"";
@@ -2886,18 +2896,6 @@ body[data-msec="schedule"] #scheduleCard{
   margin-left: auto;          /* keep languages on same row */
   white-space: nowrap;
 }
-
-
-/* === Chat language row: keep on ONE line (scroll if needed) === */
-#sec-chat #chatLangRow{
-  flex-wrap: nowrap !important;
-  white-space: nowrap !important;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  max-width: calc(100% - 92px); /* leaves room for the 'Language' label */
-}
-#sec-chat #chatLangRow::-webkit-scrollbar{ height: 0; }
-#sec-chat #chatLangRow .segBtn{ flex: 0 0 auto; }
 
 </style>
 </head>
