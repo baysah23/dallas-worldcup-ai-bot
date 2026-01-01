@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="format-detection" content="telephone=no"/>
   <title>World Cup Concierge</title>
-  <!-- WC_BUILD_VERSION: V1-BUSINESS-NOCITY-FIX-20251230-222355-CHATUI-PREMIUM-V3 -->
+  <!-- WC_BUILD_VERSION: V1-BUSINESS-NOCITY-FIX-20251230-222355 -->
   <style>
     :root{
       --bg:#071022;
@@ -2791,137 +2791,115 @@ body[data-msec="schedule"] #scheduleCard{
 
 
 /* =========================================================
-   CHAT UI — PREMIUM (surgical)
-   - iOS-style segmented language control (single instance)
-   - Clean header alignment + composer bar (input + Send/Clear)
-   - No JS logic changes
+   CHAT UI (PREMIUM) — surgical: language selector + input bar
+   - No homepage/countdown changes
+   - Uses existing JS ids: #chatLangRow, #msg, #sendBtn, #btnClear
    ========================================================= */
-#sec-chat .chatHead{
+#sec-chat .cardHead{
   align-items:flex-start;
-  gap: 12px;
 }
-#sec-chat #chatLangRow{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  margin-left:auto;
+#sec-chat .chatLangBlock{
+  margin: 2px 0 12px;
 }
-#sec-chat #chatLangRow .langLabel{
+#sec-chat .chatLangLabel{
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 950;
   letter-spacing: .14em;
   text-transform: uppercase;
-  color: rgba(235,245,255,.72);
-  margin-top: 1px;
+  color: rgba(234,240,255,.86);
+  margin: 0 0 8px 2px;
 }
-
-/* iOS segmented control */
-#sec-chat #chatLangRow .iosSeg{
-  display:flex;
-  align-items:center;
-  gap:0;
+#sec-chat .chatLangRow .iosSeg{
+  width: 100%;
+  justify-content: space-between;
   padding: 4px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.06));
   border: 1px solid rgba(255,255,255,.18);
-  backdrop-filter: blur(14px) saturate(1.5);
-  -webkit-backdrop-filter: blur(14px) saturate(1.5);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 10px 24px rgba(0,0,0,.18);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.14),
+    0 10px 28px rgba(0,0,0,.16);
 }
-#sec-chat #chatLangRow .iosSegBtn{
+#sec-chat .chatLangRow .iosSegBtn{
   flex: 1 1 0;
-  min-width: 0;
-  height: 34px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 11px;
-  background: transparent;
-  color: rgba(244,248,255,.88);
-  font-weight: 900;
-  font-size: 12px;
-  letter-spacing: .01em;
-  cursor:pointer;
-  -webkit-tap-highlight-color: transparent;
-  touch-action: manipulation;
-  transition: transform .12s ease, filter .12s ease, background .12s ease, color .12s ease;
+  text-align: center;
+  padding: 10px 8px;
+  border-radius: 13px;
 }
-#sec-chat #chatLangRow .iosSegBtn + .iosSegBtn{
-  box-shadow: inset 1px 0 0 rgba(255,255,255,.10);
+#sec-chat .chatLangRow .iosSegBtn + .iosSegBtn{
+  margin-left: 2px;
 }
-#sec-chat #chatLangRow .iosSegBtn:active{ transform: scale(.99); filter: brightness(1.06); }
-
-/* Active state driven by existing JS (.active toggled) */
-#sec-chat #chatLangRow .iosSegBtn.active{
-  background: rgba(255,255,255,.92);
-  color: rgba(0,0,0,.88);
-  box-shadow: 0 10px 22px rgba(0,0,0,.28), inset 0 0 0 1px rgba(0,0,0,.14);
+#sec-chat .chatLangRow .iosSegBtn.active{
+  background: rgba(255,255,255,.95);
+  color: rgba(0,0,0,.92);
+  box-shadow:
+    0 14px 34px rgba(0,0,0,.22),
+    inset 0 0 0 1px rgba(0,0,0,.14);
 }
 
-/* Prevent wrapping: shrink label, keep premium */
-@media (max-width: 420px){
-  #sec-chat .chatHead{ align-items:stretch; }
-  #sec-chat #chatLangRow{
-    width: 100%;
-    margin-left: 0;
-    justify-content: space-between;
-  }
-  #sec-chat #chatLangRow .langLabel{ font-size: 10px; letter-spacing: .12em; }
-  #sec-chat #chatLangRow .iosSegBtn{ padding: 0 8px; font-size: 11px; }
-}
-
-/* Composer bar */
+/* Composer (iOS bar) */
 #sec-chat .chatComposer{
   display:flex;
   align-items:center;
-  gap: 8px;
-  margin-top: 10px;
-
+  gap:10px;
+  margin-top: 12px;
   padding: 8px;
-  border-radius: 16px;
+  border-radius: 18px;
   border: 1px solid rgba(255,255,255,.16);
-  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
-  backdrop-filter: blur(14px) saturate(1.5);
-  -webkit-backdrop-filter: blur(14px) saturate(1.5);
-  box-shadow: 0 14px 36px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.12);
+  background: linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.04));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.12), 0 12px 30px rgba(0,0,0,.14);
 }
-#sec-chat #msg{
+#sec-chat .chatField{
   flex: 1 1 auto;
+  display:flex;
+  align-items:center;
   min-width: 0;
-  height: 40px;
-  padding: 0 12px;
+  padding: 0 10px;
+  height: 44px;
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,.12);
-  background: rgba(0,0,0,.18);
-  color: rgba(244,248,255,.94);
-  font-size: 14px;
+  background: rgba(7,16,34,.42);
 }
-#sec-chat #msg::placeholder{ color: rgba(185,199,238,.82); }
-#sec-chat #sendBtn, #sec-chat #btnClear{
+#sec-chat #msg{
+  flex:1 1 auto;
   height: 40px;
-  padding: 0 12px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  color: var(--text);
+  font-size: 14px;
+  min-width: 0;
+}
+#sec-chat #msg::placeholder{
+  color: rgba(185,199,238,.78);
+}
+#sec-chat .chatBtn{
+  flex: 0 0 auto;
+  height: 44px;
+  padding: 0 14px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.14);
+  border: 1px solid rgba(255,255,255,.16);
   font-weight: 950;
-  font-size: 13px;
-  letter-spacing: .01em;
-  cursor:pointer;
-}
-#sec-chat #sendBtn{
-  background: rgba(46,160,67,.28);
-  border-color: rgba(46,160,67,.38);
-  color: rgba(244,248,255,.96);
-}
-#sec-chat #btnClear{
+  font-size: 14px;
+  color: rgba(244,248,255,.92);
   background: rgba(255,255,255,.06);
-  color: rgba(244,248,255,.88);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
-#sec-chat #sendBtn:active, #sec-chat #btnClear:active{
+#sec-chat .chatBtn.primary{
+  border-color: rgba(46,160,67,.35);
+  background: rgba(46,160,67,.30);
+}
+#sec-chat .chatBtn:active{
   transform: translateY(1px) scale(.99);
   filter: brightness(1.06);
 }
 
-/* Back-compat: if old .chatInputRow exists somewhere, keep it hidden in chat */
-#sec-chat .chatInputRow{ display:none !important; }
+/* Remove legacy chatInputRow spacing (in case any remains) */
+#sec-chat .chatInputRow{ margin-top: 12px; }
 
 </style>
 </head>
@@ -3062,32 +3040,33 @@ body[data-msec="schedule"] #scheduleCard{
       <!-- CHAT -->
       <section class="section" id="sec-chat" aria-label="Chat">
         <div class="card">
-          <div class="cardHead chatHead">
+          <div class="cardHead">
             <h2 class="cardTitle">Concierge chat</h2>
-
-            <div class="pillRow" id="chatLangRow" aria-label="Chat language">
-              <div class="langLabel">Language</div>
-              <div class="iosSeg" role="tablist" aria-label="Chat language selector">
-                <button class="iosSegBtn" data-lang="en" type="button" role="tab" aria-selected="false">English</button>
-                <button class="iosSegBtn" data-lang="es" type="button" role="tab" aria-selected="false">Español</button>
-                <button class="iosSegBtn" data-lang="fr" type="button" role="tab" aria-selected="false">Français</button>
-                <button class="iosSegBtn" data-lang="pt" type="button" role="tab" aria-selected="false">Português</button>
+          </div>
+          <div class="cardBody">
+            <div class="chatLangBlock" aria-label="Chat language">
+              <div class="chatLangLabel">Language</div>
+              <div id="chatLangRow" class="chatLangRow" aria-label="Chat language selector">
+                <div class="iosSeg" role="tablist" aria-label="Chat language selector">
+                  <button class="iosSegBtn langSeg" data-lang="en" type="button" role="tab" aria-selected="false">English</button>
+                  <button class="iosSegBtn langSeg" data-lang="es" type="button" role="tab" aria-selected="false">Español</button>
+                  <button class="iosSegBtn langSeg" data-lang="fr" type="button" role="tab" aria-selected="false">Français</button>
+                  <button class="iosSegBtn langSeg" data-lang="pt" type="button" role="tab" aria-selected="false">Português</button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="cardBody">
             <div id="chatLog" class="chatLog" aria-live="polite"></div>
-
-            <div class="chatComposer" role="group" aria-label="Chat message">
-              <label class="srOnly" for="msg">Message</label>
-              <input id="msg" autocomplete="off" inputmode="text"
-                     placeholder="Ask anything (EN/ES/PT/FR)…"/>
-              <button id="sendBtn" type="button">Send</button>
-              <button id="btnClear" type="button">Clear</button>
+            <div class="chatComposer" role="group" aria-label="Chat input">
+              <div class="chatField">
+                <label class="srOnly" for="msg">Message</label>
+                <input id="msg" autocomplete="off" inputmode="text"
+                       placeholder="Ask anything…"/>
+              </div>
+              <button id="sendBtn" class="chatBtn primary" type="button">Send</button>
+              <button id="btnClear" class="chatBtn secondary" type="button">Clear</button>
             </div>
-
-            <p class="hint">The language selector updates the welcome message and reply language.</p>
+            <p class="hint">Switch language anytime — your concierge stays consistent.</p>
           </div>
         </div>
       </section>
