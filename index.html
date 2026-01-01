@@ -5062,6 +5062,45 @@ function init(){
     }
   }
 
+  const QUAL_TEAMS_KEY = 'wc_qualified_teams_v1';
+
+  function readQualifiedCache(){
+    try{ return JSON.parse(localStorage.getItem(QUAL_TEAMS_KEY) || 'null'); }catch(e){ return null; }
+  }
+  function writeQualifiedCache(teams){
+    try{ localStorage.setItem(QUAL_TEAMS_KEY, JSON.stringify({ts: Date.now(), teams: teams || []})); }catch(e){}
+  }
+
+  async function fetchQualifiedTeams(){
+    // Prefer server-qualified teams (keeps picker accurate as qualification evolves).
+    // Endpoint exists in app.py: /worldcup/qualified.json (alias /countries/qualified.json).
+    try{
+      const cached = readQualifiedCache();
+      const age = cached && cached.ts ? (Date.now() - cached.ts) : Infinity;
+      if(cached && Array.isArray(cached.teams) && cached.teams.length && age < 12*60*60*1000){
+        return cached.teams.slice();
+      }
+
+      const controller = ('AbortController' in window) ? new AbortController() : null;
+      const to = setTimeout(()=>{ try{ controller && controller.abort(); }catch(_e){} }, 4500);
+      try{
+        const resp = await fetch('/worldcup/qualified.json', { cache:'no-store', signal: controller ? controller.signal : undefined });
+        if(!resp.ok) return null;
+        const data = await resp.json();
+        const teams = Array.isArray(data?.teams) ? data.teams
+                   : Array.isArray(data?.qualified) ? data.qualified
+                   : [];
+        const out = teams.map(t=>String(t||'').trim()).filter(Boolean);
+        if(out.length) writeQualifiedCache(out);
+        return out.length ? out : null;
+      }finally{
+        clearTimeout(to);
+      }
+    }catch(e){
+      return null;
+    }
+  }
+
   async function fetchScheduleTeams(){
     // Pull teams ONLY from the same schedule feed the Schedule tab uses.
     // Safe fallbacks: fixture cache (if present) → network fetch with timeout.
@@ -5114,6 +5153,8 @@ function init(){
   }
 
   async function ensureScheduleTeams(){
+    const q = await fetchQualifiedTeams();
+    if(q && q.length) return q;
     const t = getWorldCupTeams();
     if(t && t.length) return t;
     return await fetchScheduleTeams();
