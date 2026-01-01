@@ -2652,7 +2652,7 @@ body[data-msec="schedule"] #scheduleCard{
   border:1px solid rgba(255,255,255,.10);
   background: rgba(255,255,255,.03);
   border-radius: 999px;
-  width: fit-content;
+  width: 100%;
   max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -2685,6 +2685,86 @@ body[data-msec="schedule"] #scheduleCard{
 
 
 
+
+
+/* iOS-premium Schedule list */
+body[data-sec="schedule"] #sec-schedule .schedule{
+  display: grid;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+body[data-sec="schedule"] #sec-schedule .matchRow{
+  padding: 12px 12px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  box-shadow: 0 18px 44px rgba(0,0,0,.36);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+body[data-sec="schedule"] #sec-schedule .matchRow:active{
+  transform: translateY(1px);
+}
+
+body[data-sec="schedule"] #sec-schedule .mTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  font-size: 12px;
+  letter-spacing: .2px;
+  opacity: .85;
+}
+
+body[data-sec="schedule"] #sec-schedule .mStage{
+  font-weight: 650;
+  text-transform: uppercase;
+  opacity: .92;
+}
+
+body[data-sec="schedule"] #sec-schedule .mDate{
+  opacity: .75;
+  font-variant-numeric: tabular-nums;
+}
+
+body[data-sec="schedule"] #sec-schedule .mTeams{
+  margin-top: 6px;
+  font-size: 16px;
+  font-weight: 720;
+  letter-spacing: .1px;
+  line-height: 1.25;
+}
+
+body[data-sec="schedule"] #sec-schedule .vs{
+  opacity: .55;
+  font-weight: 650;
+  margin: 0 6px;
+}
+
+body[data-sec="schedule"] #sec-schedule .mVenue{
+  margin-top: 6px;
+  font-size: 13px;
+  opacity: .75;
+}
+
+/* Segmented control polish (Schedule only) */
+body[data-sec="schedule"] #sec-schedule .segbar{
+  padding: 6px;
+  gap: 6px;
+  width: 100%;
+}
+
+body[data-sec="schedule"] #sec-schedule .segbtn{
+  padding: 10px 12px;
+  font-weight: 650;
+  letter-spacing: .1px;
+}
+
+body[data-sec="schedule"] #sec-schedule .segbtn[aria-selected="false"]{
+  background: rgba(255,255,255,.06);
+}
 /* =======================
    FAN ZONE MODAL MOBILE SCROLL FIX
    Ensures long lists (countries, polls) never render off-screen.
@@ -3833,10 +3913,22 @@ function initScheduleHandlers(){
   const tabs = $('scheduleTabs');
   if(!tabs) return;
 
-  $$('.tabBtn', tabs).forEach(btn=>{
+  // Buttons are rendered as .segbtn in the Schedule section markup.
+  const btns = $$('.segbtn', tabs);
+  if(!btns.length) return;
+
+  // Derive initial view from aria-selected (fallback to fixtures)
+  const selected = btns.find(b => b.getAttribute('aria-selected') === 'true') || btns[0];
+  scheduleView = selected.dataset.view || 'fixtures';
+
+  // Ensure a single selected state (ARIA)
+  btns.forEach(b=> b.setAttribute('aria-selected', (b===selected) ? 'true' : 'false'));
+
+  btns.forEach(btn=>{
     btn.addEventListener('click', ()=>{
       scheduleView = btn.dataset.view || 'fixtures';
-      $$('.tabBtn', tabs).forEach(b=>b.classList.toggle('active', b === btn));
+      btns.forEach(b=> b.setAttribute('aria-selected', (b===btn) ? 'true' : 'false'));
+      currentPage = 1;
       loadSchedule(true);
     });
   });
@@ -3937,8 +4029,13 @@ function renderStandings(data){
 async function loadSchedule(force=false){
   const list = $('schedule');
   const meta = $('scheduleMetaLine');
+  const pager = $('pager');
+
   if(list) list.innerHTML = `<div class="hint">Loading…</div>`;
   if(meta) meta.textContent = '';
+
+  // Pager is only meaningful for fixtures view
+  if(pager && scheduleView !== 'fixtures'){ pager.style.display = 'none'; }
 
   try{
     if(scheduleView === 'fixtures'){
