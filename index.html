@@ -1,13 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- BUILD_VERIFY: 2026-01-01T02:45:43Z -->
+  <!-- BUILD_VERIFY: 2026-01-01T03:12:39Z -->
+<!-- BUILD_VERIFY: 2026-01-01T02:45:43Z -->
 <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta name="format-detection" content="telephone=no"/>
   <title>World Cup Concierge</title>
   <!-- WC_BUILD_VERSION: V1-BUSINESS-NOCITY-FIX-20251230-222355 -->
-  <style>
+  -->
+<style>
     :root{
       --bg:#071022;
       --panel:#0f1b33;
@@ -2827,6 +2829,117 @@ body[data-msec="schedule"] #scheduleCard{
 }
 
 #sendBtn:active, #btnClear:active{ transform: translateY(1px) scale(.99); filter: brightness(1.08); }
+
+/* =========================
+   CHAT UI (Option A) — iOS 26 “moving capsule”
+   ========================= */
+.cardHead.chatHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.chatHeadLeft{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  min-width:0;
+}
+.chatHeadLeft .cardTitle{
+  margin:0;
+  font-size:16px;
+  letter-spacing:-0.01em;
+}
+.chatLangCaption{
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  color: rgba(235,245,255,.62);
+  line-height: 1.1;
+}
+
+/* compact segmented */
+#chatLangRow.segmented{
+  --seg-left: 3px;
+  --seg-width: 72px;
+  position: relative;
+  display:flex;
+  align-items:center;
+  gap:2px;
+  padding:3px;
+  border-radius:999px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.055);
+  backdrop-filter: blur(14px) saturate(1.35);
+  -webkit-backdrop-filter: blur(14px) saturate(1.35);
+  box-shadow: 0 10px 24px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.12);
+  overflow:hidden;
+  height:34px;
+  flex: 0 0 auto;
+}
+#chatLangRow.segmented::before{
+  content:"";
+  position:absolute;
+  top:3px; bottom:3px;
+  left: var(--seg-left);
+  width: var(--seg-width);
+  border-radius:999px;
+  background: linear-gradient(180deg,
+    rgba(255,255,255,.42) 0%,
+    rgba(255,255,255,.26) 45%,
+    rgba(255,255,255,.16) 100%
+  );
+  border: 1px solid rgba(255,255,255,.22);
+  box-shadow:
+    0 10px 22px rgba(0,0,0,.16),
+    inset 0 1px 0 rgba(255,255,255,.60),
+    inset 0 -1px 0 rgba(0,0,0,.20);
+  transition: left .22s cubic-bezier(.2,.9,.2,1), width .22s cubic-bezier(.2,.9,.2,1);
+  pointer-events:none;
+}
+#chatLangRow.segmented::after{
+  content:"";
+  position:absolute;
+  left:12px; right:12px; top:6px;
+  height:1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.18), rgba(255,255,255,0));
+  opacity:.55;
+  pointer-events:none;
+}
+#chatLangRow .segBtn{
+  position:relative;
+  z-index:1;
+  border:0;
+  background:transparent;
+  color: rgba(234,240,255,.78);
+  font-weight: 750;
+  font-size: 11.5px;
+  letter-spacing: -0.01em;
+  padding: 7px 9px;
+  border-radius:999px;
+  cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+  opacity:.92;
+  transition: transform .10s ease, color .12s ease, opacity .12s ease;
+}
+#chatLangRow .segBtn:active{ transform: translateY(1px) scale(.99); }
+#chatLangRow .segBtn.active{
+  color: rgba(15,27,51,.92);
+  opacity:1;
+}
+
+/* input row alignment */
+.chatInputRow{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:nowrap;
+}
+#msg{ height:44px; border-radius:14px; }
+#sendBtn, #btnClear{ height:44px; border-radius:14px; }
+
 </style>
 </head>
 
@@ -3347,7 +3460,21 @@ function setLang(lang){
     btn.setAttribute('aria-selected', (b === lang) ? 'true' : 'false');
   });
 
-  // iOS segmented “moving capsule” indicator (UI only)
+  
+  // UI-only: iOS segmented capsule positioning
+  try{
+    const wrap = document.getElementById('chatLangRow');
+    if(wrap && wrap.classList.contains('segmented')){
+      const active = wrap.querySelector('[data-lang].active') || wrap.querySelector('.segBtn.active');
+      if(active){
+        const w = wrap.getBoundingClientRect();
+        const a = active.getBoundingClientRect();
+        wrap.style.setProperty('--seg-left', Math.max(3, Math.round(a.left - w.left)) + 'px');
+        wrap.style.setProperty('--seg-width', Math.max(44, Math.round(a.width)) + 'px');
+      }
+    }
+  }catch(e){}
+// iOS segmented “moving capsule” indicator (UI only)
   try{
     const wrap = document.getElementById('chatLangRow');
     if(wrap && wrap.classList.contains('segmented')){
@@ -4048,6 +4175,13 @@ function init(){
   try{
     if(!window.__segmentedResizeBound){
       window.__segmentedResizeBound = true;
+      window.addEventListener('resize', ()=>{ try{ updateUI(); }catch(e){} }, {passive:true});
+    }
+  }catch(e){}
+  // UI-only: keep segmented capsule aligned on rotation/resize
+  try{
+    if(!window.__chatSegResizeBound){
+      window.__chatSegResizeBound = true;
       window.addEventListener('resize', ()=>{ try{ updateUI(); }catch(e){} }, {passive:true});
     }
   }catch(e){}
