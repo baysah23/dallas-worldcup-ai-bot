@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- CHAT_LOGICFIX_BUILD: 2026-01-01T12:41:14Z -->
   <!-- BUILD_VERIFY: 2026-01-01T09:38:18Z -->
 <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
@@ -2899,21 +2900,18 @@ body[data-msec="schedule"] #scheduleCard{
 
 
 /* =========================================================
-   CHAT HEADER — FORCE APPLY TO *CURRENT* MARKUP (build 2026-01-01T12:33:09Z)
-   Root cause: Chat header uses #chatLangRow .langLabel/.langSegWrap/.langSeg,
-   while newer iOS segmented styles target .segWrap/.segBtn or #chatLangRow.segmented.
-   This patch styles the existing markup so changes ALWAYS take effect.
+   CHAT HEADER iOS 26 POLISH + GLASS RAIL (logicfix build 2026-01-01T12:41:14Z)
+   - Logic fix: #chatLangRow now also has .segWrap so ::before indicator works
    ========================================================= */
-
-/* Glass rail behind the chat header */
 #sec-chat .cardHead.chatHead{
-  position: relative !important;
+  position: relative;
   padding: 12px 12px 10px !important;
   margin: 0 !important;
+
   display:flex !important;
   align-items:center !important;
   justify-content:space-between !important;
-  gap:10px !important;
+  gap: 10px !important;
   flex-wrap: nowrap !important;
 
   background: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.028)) !important;
@@ -2922,23 +2920,16 @@ body[data-msec="schedule"] #scheduleCard{
   backdrop-filter: blur(16px) saturate(1.45) !important;
 }
 #sec-chat .cardHead.chatHead::after{
-  content:"" !important;
-  position:absolute !important;
-  left:12px !important; right:12px !important; top:10px !important;
-  height:1px !important;
-  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.22), rgba(255,255,255,0)) !important;
-  opacity:.55 !important;
-  pointer-events:none !important;
+  content:"";
+  position:absolute;
+  left: 12px; right: 12px; top: 10px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.22), rgba(255,255,255,0));
+  opacity: .55;
+  pointer-events:none;
 }
 
-/* Tight title alignment (keeps it on the same row) */
-#sec-chat .chatHeadLeft{
-  display:flex !important;
-  align-items:center !important;
-  flex-direction: row !important;
-  gap:10px !important;
-  min-width: 0 !important;
-}
+#sec-chat .chatHeadLeft{ display:flex !important; align-items:center !important; min-width:0 !important; }
 #sec-chat .chatHeadLeft .cardTitle{
   margin:0 !important;
   font-size: 15px !important;
@@ -2949,84 +2940,26 @@ body[data-msec="schedule"] #scheduleCard{
   transform: translateY(1px) !important;
 }
 
-/* === Existing language selector markup: keep it ONE LINE + iOS 26 segmented polish === */
-#chatLangRow{
-  display:flex !important;
-  align-items:center !important;
-  gap:10px !important;
-  flex-wrap: nowrap !important;
-  white-space: nowrap !important;
-  min-width: 0 !important;
-}
-
-#chatLangRow .langLabel{
-  display:none !important; /* removes the extra "Language" word so it won't force a wrap */
-}
-
-/* Make the wrap behave like an iOS segmented capsule */
-#chatLangRow .langSegWrap{
-  position: relative !important;
-  display:flex !important;
-  align-items:center !important;
-  gap:2px !important;
-  padding:3px !important;
-  border-radius:999px !important;
-
-  background: rgba(255,255,255,.055) !important;
-  border: 1px solid rgba(255,255,255,.13) !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 10px 22px rgba(0,0,0,.18) !important;
-
-  -webkit-backdrop-filter: blur(18px) saturate(1.55) !important;
-  backdrop-filter: blur(18px) saturate(1.55) !important;
-
-  /* prevent wrap; allow sideways scroll if needed */
-  flex-wrap: nowrap !important;
+/* Keep the segmented control on one line; scroll sideways if needed */
+#chatLangRow.segmented{
   white-space: nowrap !important;
   overflow-x: auto !important;
   overflow-y: hidden !important;
   -webkit-overflow-scrolling: touch !important;
   scrollbar-width: none !important;
 }
-#chatLangRow .langSegWrap::-webkit-scrollbar{ display:none !important; }
+#chatLangRow.segmented::-webkit-scrollbar{ display:none !important; }
+#chatLangRow.segmented .segBtn{ flex:0 0 auto !important; white-space:nowrap !important; }
 
-/* Buttons inside the capsule */
-#chatLangRow .langSeg{
-  flex: 0 0 auto !important;
-  white-space: nowrap !important;
-
-  border-radius: 999px !important;
-  padding: 8px 10px !important;
-  min-height: 34px !important;
-
-  background: transparent !important;
-  border: 1px solid transparent !important;
-
-  color: rgba(234,240,255,.82) !important;
-  font-weight: 900 !important;
-  font-size: 12px !important;
-  letter-spacing: .02em !important;
-  line-height: 1 !important;
-
-  transition: transform .12s ease, filter .12s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease, color .18s ease !important;
+/* iOS-ish capsule refinements (piggybacks on existing .segWrap/.segBtn rules) */
+#chatLangRow.segWrap{
+  background: rgba(255,255,255,.055) !important;
+  border-color: rgba(255,255,255,.13) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 10px 22px rgba(0,0,0,.18) !important;
 }
-#chatLangRow .langSeg:active{
-  transform: translateY(1px) scale(.99) !important;
-  filter: brightness(1.06) !important;
-}
-
-/* Active state (your JS toggles .active and aria-selected) */
-#chatLangRow .langSeg.active,
-#chatLangRow .langSeg[aria-selected="true"]{
-  color: rgba(255,255,255,.98) !important;
+#chatLangRow.segWrap::before{
   background: rgba(255,255,255,.085) !important;
   border-color: rgba(255,255,255,.16) !important;
-  box-shadow: 0 10px 18px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.16) !important;
-}
-
-/* Compact on very small devices */
-@media (max-width: 380px){
-  #sec-chat .cardHead.chatHead{ padding: 11px 10px 9px !important; }
-  #chatLangRow .langSeg{ padding: 7px 9px !important; font-size: 11.5px !important; }
 }
 
 </style>
@@ -3170,9 +3103,9 @@ body[data-msec="schedule"] #scheduleCard{
         <div class="card">
           <div class="cardHead chatHead">
   <div class="chatHeadLeft">
-    <h2 class="cardTitle">Language</h2>
+    <h2 class="cardTitle">Chat</h2>
 </div>
-  <div class="segmented" id="chatLangRow" role="tablist" aria-label="Chat language selector">
+  <div class="segmented segWrap" id="chatLangRow" role="tablist" aria-label="Chat language selector">
     <button class="segBtn" data-lang="en" type="button" role="tab" aria-selected="true">English</button>
     <button class="segBtn" data-lang="es" type="button" role="tab" aria-selected="false">Español</button>
     <button class="segBtn" data-lang="fr" type="button" role="tab" aria-selected="false">Français</button>
