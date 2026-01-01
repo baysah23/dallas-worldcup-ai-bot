@@ -389,7 +389,99 @@
       padding-right: 4px;
       scroll-behavior:smooth;
     }
+    
+    /* Chat thread (iOS-like) */
+    .chatLog{
+      padding: 8px 6px 0 6px;
+    }
+    .chatLine{
+      display:flex;
+      width:100%;
+      margin: 8px 0;
+    }
+    .chatLine.bot{ justify-content:flex-start; }
+    .chatLine.user{ justify-content:flex-end; }
+
+    .chatLine.bot .bubble{
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.14);
+      -webkit-backdrop-filter: blur(14px) saturate(1.4);
+      backdrop-filter: blur(14px) saturate(1.4);
+      box-shadow: 0 12px 28px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.10);
+    }
+    .chatLine.user .bubble{
+      background: linear-gradient(180deg, rgba(46,160,67,.55), rgba(46,160,67,.22));
+      border: 1px solid rgba(46,160,67,.45);
+      -webkit-backdrop-filter: blur(10px) saturate(1.2);
+      backdrop-filter: blur(10px) saturate(1.2);
+      box-shadow: 0 12px 28px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.10);
+    }
     .bubble{
+      border-radius: 18px;
+      padding: 12px 14px;
+      font-size: 14px;
+      letter-spacing: .01em;
+    }
+
+    /* iMessage-like input bar */
+    .chatInputRow{
+      position: sticky;
+      bottom: 0;
+      background: rgba(7,16,34,.86);
+      -webkit-backdrop-filter: blur(16px) saturate(1.35);
+      backdrop-filter: blur(16px) saturate(1.35);
+      border-top: 1px solid rgba(255,255,255,.10);
+      padding: 10px 8px 12px;
+      margin-top: 10px;
+      border-radius: 18px;
+    }
+    #msg{
+      height: 46px;
+      border-radius: 16px;
+      padding: 0 14px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.14);
+      color: var(--text);
+      outline: none;
+      -webkit-backdrop-filter: blur(14px) saturate(1.3);
+      backdrop-filter: blur(14px) saturate(1.3);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    #msg::placeholder{ color: rgba(234,240,255,.55); }
+
+    #sendBtn{
+      width: 46px;
+      height: 46px;
+      padding: 0;
+      border-radius: 16px;
+      display:grid;
+      place-items:center;
+      background: linear-gradient(180deg, rgba(46,160,67,.55), rgba(46,160,67,.25));
+      border: 1px solid rgba(46,160,67,.45);
+      box-shadow: 0 12px 26px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.10);
+      color: transparent; /* hides the text label while keeping accessible name */
+      position: relative;
+    }
+    #sendBtn::after{
+      content: "↑";
+      font-size: 18px;
+      font-weight: 1000;
+      line-height: 1;
+      color: var(--text);
+      transform: translateY(-1px);
+    }
+    #sendBtn.busy::after{ content:"…"; transform:none; }
+
+    #btnClear.secondary{
+      height: 46px;
+      border-radius: 16px;
+      padding: 0 14px;
+      background: rgba(255,255,255,.05);
+      border: 1px solid rgba(255,255,255,.12);
+      color: rgba(234,240,255,.88);
+      font-weight: 800;
+    }
+.bubble{
       display:block;
       max-width: 88%;
       padding: 10px 12px;
@@ -2938,7 +3030,7 @@ body[data-msec="schedule"] #scheduleCard{
               <button id="sendBtn" type="button">Send</button>
               <button id="btnClear" class="secondary" type="button">Clear</button>
             </div>
-            <p class="hint">Tap the language pill to switch EN → ES → PT → FR.</p>
+            <p class="hint">Tap a language tab above to switch EN / ES / FR / PT.</p>
           </div>
         </div>
       </section>
@@ -3117,16 +3209,16 @@ const escapeHtml = (s)=>String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':
 
 // ---------- concierge welcome copy (localized) ----------
 const WELCOME_PRIMARY_BY_LANG = {
-  en: "Greetings World Cup fans. I’m your concierge — here to assist with reservations, VIP experiences, and match-day planning for your business and guests. Tell me what you need, and I’ll take care of the details.",
-  es: "Saludos, fans del Mundial. Soy tu concierge — aquí para ayudarte con reservaciones, experiencias VIP y la planificación del día de partido para tu negocio y tus invitados. Dime qué necesitas y me encargo de los detalles.",
-  pt: "Saudações, fãs da Copa do Mundo. Sou seu concierge — aqui para ajudar com reservas, experiências VIP e o planejamento do dia do jogo para o seu negócio e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
-  fr: "Bonjour, fans de la Coupe du Monde. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et l’organisation du jour de match pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
+  en: "Greetings World Cup fans. I’m your concierge — here to help your business with reservations, VIP experiences, and match‑day planning for you and your guests. Tell me what you need, and I’ll take care of the details.",
+  es: "Saludos, fans del Mundial. Soy tu concierge — aquí para ayudar a tu negocio con reservas, experiencias VIP y planificación del día del partido para ti y tus invitados. Dime qué necesitas y me encargo de los detalles.",
+  pt: "Saudações, fãs da Copa do Mundo. Sou seu concierge — aqui para ajudar seu negócio com reservas, experiências VIP e planejamento do dia do jogo para você e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
+  fr: "Bonjour, fans de la Coupe du Monde. Je suis votre concierge — ici pour aider votre entreprise avec les réservations, les expériences VIP et l’organisation du jour de match pour vous et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
 };
 const WELCOME_GAMEDAY_BY_LANG = {
-  en: "Greetings World Cup fans. It’s game day. I’m your concierge — here to assist with reservations, VIP experiences, and real-time match-day needs for your business and guests. Tell me what you need, and I’ll take care of the details.",
-  es: "Saludos, fans del Mundial. Hoy es día de partido. Soy tu concierge — aquí para ayudarte con reservaciones, experiencias VIP y necesidades en tiempo real para tu negocio y tus invitados. Dime qué necesitas y me encargo de los detalles.",
-  pt: "Saudações, fãs da Copa do Mundo. Hoje é dia de jogo. Sou seu concierge — aqui para ajudar com reservas, experiências VIP e necessidades em tempo real para o seu negócio e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
-  fr: "Bonjour, fans de la Coupe du Monde. C’est jour de match. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et les besoins en temps réel pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
+  en: "Greetings World Cup fans. It’s game day. I’m your concierge — here to handle last‑minute reservations, VIP requests, and real‑time match‑day needs for your business and guests. Tell me what you need, and I’ll take care of the details.",
+  es: "Saludos, fans del Mundial. Hoy es día de partido. Soy tu concierge — aquí para gestionar reservas de última hora, solicitudes VIP y necesidades en tiempo real para tu negocio y tus invitados. Dime qué necesitas y me encargo de los detalles.",
+  pt: "Saudações, fãs da Copa do Mundo. Hoje é dia de jogo. Sou seu concierge — aqui para cuidar de reservas de última hora, pedidos VIP e necessidades em tempo real para seu negócio e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
+  fr: "Bonjour, fans de la Coupe du Monde. C’est jour de match. Je suis votre concierge — ici pour gérer les réservations de dernière minute, les demandes VIP et les besoins en temps réel pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
 };
 
 function getWelcomeForState(lang){
@@ -3222,7 +3314,7 @@ function maybeTriggerGameDayMessage(kind){
     if(!log) return;
 
     // If a non-game-day welcome is already present, append the game-day welcome once.
-    chatAppend('bot', WELCOME_GAMEDAY);
+    chatAppend('bot', getWelcomeForState(state.lang));
   }catch(e){}
 }
 const clamp = (n,min,max)=>Math.max(min, Math.min(max, n));
@@ -3258,7 +3350,7 @@ function setSection(sec){
   if(sec === 'menu'){ try{ loadMenu(); }catch(e){} }
   if(sec === 'fanzone'){ try{ loadFanzone(); }catch(e){} }
   if(sec === 'vip'){ try{ loadVIP(); }catch(e){} }
-  if(sec === 'chat'){ try{ focusChatInput(); }catch(e){} }
+  if(sec === 'chat'){ try{ ensureChatWelcome(); }catch(e){} try{ focusChatInput(); }catch(e){} }
 
   try{ window.scrollTo(0,0); }catch(e){}
 }
@@ -3590,7 +3682,8 @@ function startHeroCountdown(){
     const now = new Date();
     const st = computeState(now, matches);
     window.__wcCountdownStateKind = st.kind;
-    updateAdminCountdownState(st.kind);
+        try{ normalizeChatWelcome(); }catch(e){}
+updateAdminCountdownState(st.kind);
     maybeTriggerGameDayMessage(st.kind);
     setTop(st.top, st.badge);
     if(st.kind === 'complete'){
