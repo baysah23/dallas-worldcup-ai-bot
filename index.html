@@ -2899,114 +2899,134 @@ body[data-msec="schedule"] #scheduleCard{
 
 
 /* =========================================================
-   CHAT HEADER (v1.0): Glass rail + tight alignment + iOS 26 segmented polish
-   - Keeps header strictly one line (scrolls horizontally if needed)
-   - Adds subtle glass "rail" behind the header row
-   - Upgrades segmented control (no JS required)
+   CHAT HEADER — FORCE APPLY TO *CURRENT* MARKUP (build 2026-01-01T12:33:09Z)
+   Root cause: Chat header uses #chatLangRow .langLabel/.langSegWrap/.langSeg,
+   while newer iOS segmented styles target .segWrap/.segBtn or #chatLangRow.segmented.
+   This patch styles the existing markup so changes ALWAYS take effect.
    ========================================================= */
-#sec-chat .cardHead.chatHead{
-  position: relative;
-  padding: 12px 12px 10px !important;   /* tighter */
-  margin: 0 !important;
 
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap: 10px;
+/* Glass rail behind the chat header */
+#sec-chat .cardHead.chatHead{
+  position: relative !important;
+  padding: 12px 12px 10px !important;
+  margin: 0 !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:10px !important;
   flex-wrap: nowrap !important;
 
-  /* subtle glass rail */
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.028));
-  border-bottom: 1px solid rgba(255,255,255,.10);
-  -webkit-backdrop-filter: blur(16px) saturate(1.45);
-  backdrop-filter: blur(16px) saturate(1.45);
+  background: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.028)) !important;
+  border-bottom: 1px solid rgba(255,255,255,.10) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.45) !important;
+  backdrop-filter: blur(16px) saturate(1.45) !important;
+}
+#sec-chat .cardHead.chatHead::after{
+  content:"" !important;
+  position:absolute !important;
+  left:12px !important; right:12px !important; top:10px !important;
+  height:1px !important;
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.22), rgba(255,255,255,0)) !important;
+  opacity:.55 !important;
+  pointer-events:none !important;
 }
 
+/* Tight title alignment (keeps it on the same row) */
 #sec-chat .chatHeadLeft{
   display:flex !important;
   align-items:center !important;
-  min-width: 0;
+  flex-direction: row !important;
+  gap:10px !important;
+  min-width: 0 !important;
 }
-
 #sec-chat .chatHeadLeft .cardTitle{
-  margin: 0 !important;
+  margin:0 !important;
   font-size: 15px !important;
   font-weight: 950 !important;
   letter-spacing: -0.01em !important;
-  white-space: nowrap !important;
   line-height: 1.05 !important;
-  transform: translateY(1px); /* tiny optical alignment */
+  white-space: nowrap !important;
+  transform: translateY(1px) !important;
 }
 
-/* iOS 26 segmented-control (capsule) */
+/* === Existing language selector markup: keep it ONE LINE + iOS 26 segmented polish === */
 #chatLangRow{
-  position: relative;
-  display:flex;
-  align-items:center;
-  gap: 2px;
-  padding: 3px;
-  border-radius: 999px;
-
-  background: rgba(255,255,255,.055);
-  border: 1px solid rgba(255,255,255,.13);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.10),
-    0 10px 22px rgba(0,0,0,.18);
-
-  -webkit-backdrop-filter: blur(18px) saturate(1.55);
-  backdrop-filter: blur(18px) saturate(1.55);
-
-  /* single line + overflow behavior */
-  flex-wrap: nowrap;
-  white-space: nowrap;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
-}
-#chatLangRow::-webkit-scrollbar{ display:none; }
-
-/* subtle specular line across the rail */
-#sec-chat .cardHead.chatHead::after{
-  content:"";
-  position:absolute;
-  left: 12px; right: 12px; top: 10px;
-  height: 1px;
-  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.22), rgba(255,255,255,0));
-  opacity: .55;
-  pointer-events:none;
+  display:flex !important;
+  align-items:center !important;
+  gap:10px !important;
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+  min-width: 0 !important;
 }
 
-#chatLangRow .segBtn{
-  flex: 0 0 auto;
-  border-radius: 999px;
-  padding: 8px 10px;
-  border: 1px solid transparent; /* prevents layout shift on select */
-  background: transparent;
-  color: rgba(234,240,255,.82);
-  font-weight: 900;
-  font-size: 12px;
-  letter-spacing: .02em;
-  line-height: 1;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  transition: transform .12s ease, filter .12s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease, color .18s ease;
-}
-#chatLangRow .segBtn:active{ transform: translateY(1px) scale(.99); filter: brightness(1.06); }
-
-#chatLangRow .segBtn[aria-selected="true"]{
-  color: rgba(255,255,255,.98);
-  background: rgba(255,255,255,.085);
-  border-color: rgba(255,255,255,.16);
-  box-shadow:
-    0 10px 18px rgba(0,0,0,.18),
-    inset 0 1px 0 rgba(255,255,255,.16);
+#chatLangRow .langLabel{
+  display:none !important; /* removes the extra "Language" word so it won't force a wrap */
 }
 
-/* ultra-small phones: keep it compact */
+/* Make the wrap behave like an iOS segmented capsule */
+#chatLangRow .langSegWrap{
+  position: relative !important;
+  display:flex !important;
+  align-items:center !important;
+  gap:2px !important;
+  padding:3px !important;
+  border-radius:999px !important;
+
+  background: rgba(255,255,255,.055) !important;
+  border: 1px solid rgba(255,255,255,.13) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 10px 22px rgba(0,0,0,.18) !important;
+
+  -webkit-backdrop-filter: blur(18px) saturate(1.55) !important;
+  backdrop-filter: blur(18px) saturate(1.55) !important;
+
+  /* prevent wrap; allow sideways scroll if needed */
+  flex-wrap: nowrap !important;
+  white-space: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: none !important;
+}
+#chatLangRow .langSegWrap::-webkit-scrollbar{ display:none !important; }
+
+/* Buttons inside the capsule */
+#chatLangRow .langSeg{
+  flex: 0 0 auto !important;
+  white-space: nowrap !important;
+
+  border-radius: 999px !important;
+  padding: 8px 10px !important;
+  min-height: 34px !important;
+
+  background: transparent !important;
+  border: 1px solid transparent !important;
+
+  color: rgba(234,240,255,.82) !important;
+  font-weight: 900 !important;
+  font-size: 12px !important;
+  letter-spacing: .02em !important;
+  line-height: 1 !important;
+
+  transition: transform .12s ease, filter .12s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease, color .18s ease !important;
+}
+#chatLangRow .langSeg:active{
+  transform: translateY(1px) scale(.99) !important;
+  filter: brightness(1.06) !important;
+}
+
+/* Active state (your JS toggles .active and aria-selected) */
+#chatLangRow .langSeg.active,
+#chatLangRow .langSeg[aria-selected="true"]{
+  color: rgba(255,255,255,.98) !important;
+  background: rgba(255,255,255,.085) !important;
+  border-color: rgba(255,255,255,.16) !important;
+  box-shadow: 0 10px 18px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.16) !important;
+}
+
+/* Compact on very small devices */
 @media (max-width: 380px){
   #sec-chat .cardHead.chatHead{ padding: 11px 10px 9px !important; }
-  #chatLangRow .segBtn{ padding: 7px 9px; font-size: 11.5px; }
+  #chatLangRow .langSeg{ padding: 7px 9px !important; font-size: 11.5px !important; }
 }
 
 </style>
