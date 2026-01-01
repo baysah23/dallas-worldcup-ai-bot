@@ -2789,7 +2789,161 @@ body[data-msec="schedule"] #scheduleCard{
   padding: 0 14px !important;
 }
 
-</style>
+
+    /* =========================================================
+       CHAT UI — Premium iOS Segmented Control + Input Bar
+       (Surgical: chat-only overrides; no JS behavior changes)
+       ========================================================= */
+
+    /* Header alignment (title left, segmented control right) */
+    #sec-chat .cardHead{
+      align-items: flex-start;
+      gap: 10px;
+    }
+    #sec-chat .cardTitle{
+      margin-top: 2px;
+      line-height: 1.15;
+    }
+    #chatLangRow{
+      margin-left: auto;
+      display:flex;
+      align-items:center;
+    }
+
+    /* iOS segmented control */
+    #chatLangRow .iosSeg{
+      display:flex;
+      align-items:center;
+      gap:0;
+      padding: 3px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
+      backdrop-filter: blur(16px) saturate(1.4);
+      -webkit-backdrop-filter: blur(16px) saturate(1.4);
+      box-shadow:
+        0 10px 24px rgba(0,0,0,.22),
+        inset 0 1px 0 rgba(255,255,255,.14);
+      overflow:hidden;
+    }
+    #chatLangRow .iosSegBtn{
+      appearance:none;
+      -webkit-appearance:none;
+      border:0;
+      background: transparent;
+      color: rgba(185,199,238,.95);
+      font-weight: 900;
+      font-size: 11px;
+      letter-spacing: .01em;
+      padding: 7px 10px;
+      border-radius: 11px;
+      line-height: 1;
+      cursor:pointer;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: background .16s ease, color .16s ease, transform .12s ease, box-shadow .16s ease;
+      white-space: nowrap;
+    }
+    #chatLangRow .iosSegBtn:active{ transform: scale(.99); }
+    #chatLangRow .iosSegBtn[aria-selected="true"]{
+      color: rgba(255,255,255,.98);
+      background: linear-gradient(180deg, rgba(31,111,235,.55), rgba(31,111,235,.18));
+      box-shadow:
+        0 10px 24px rgba(31,111,235,.18),
+        inset 0 1px 0 rgba(255,255,255,.18);
+    }
+    #chatLangRow .iosSegBtn:focus-visible{
+      outline:none;
+      box-shadow: 0 0 0 4px rgba(31,111,235,.18);
+    }
+
+    /* Small phones: allow wrap without breaking layout */
+    @media (max-width: 380px){
+      #sec-chat .cardHead{ align-items: flex-start; }
+      #chatLangRow .iosSeg{ flex-wrap: wrap; justify-content:flex-end; }
+      #chatLangRow .iosSegBtn{ padding: 7px 9px; }
+    }
+
+    /* Chat log spacing (keeps header tidy) */
+    #sec-chat .chatLog{
+      margin-top: 4px;
+    }
+
+    /* Premium input bar wrapper */
+    #sec-chat .chatInputRow{
+      display:flex;
+      gap: 8px;
+      align-items:center;
+      padding: 8px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.03));
+      backdrop-filter: blur(14px) saturate(1.35);
+      -webkit-backdrop-filter: blur(14px) saturate(1.35);
+      box-shadow: 0 12px 30px rgba(0,0,0,.18);
+    }
+    #sec-chat #msg{
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 42px;
+      padding: 0 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(7,16,34,.50);
+      color: rgba(234,240,255,.98);
+      outline:none;
+      font-size: 14px;
+    }
+    #sec-chat #msg::placeholder{ color: rgba(185,199,238,.70); }
+    #sec-chat #msg:focus{
+      border-color: rgba(31,111,235,.55);
+      box-shadow: 0 0 0 4px rgba(31,111,235,.14);
+    }
+
+    /* Buttons: same height, clean alignment */
+    #sec-chat #sendBtn,
+    #sec-chat #btnClear{
+      height: 42px;
+      padding: 0 12px;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.14);
+      font-weight: 950;
+      font-size: 13px;
+      letter-spacing: .01em;
+      cursor:pointer;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:8px;
+      transition: transform .12s ease, filter .12s ease, background .16s ease;
+      white-space: nowrap;
+    }
+    #sec-chat #sendBtn{
+      background: linear-gradient(180deg, rgba(46,160,67,.42), rgba(46,160,67,.22));
+      color: rgba(255,255,255,.98);
+      border-color: rgba(46,160,67,.40);
+      box-shadow: 0 12px 26px rgba(46,160,67,.14);
+    }
+    #sec-chat #btnClear{
+      background: rgba(255,255,255,.06);
+      color: rgba(234,240,255,.92);
+      border-color: rgba(255,255,255,.14);
+    }
+    #sec-chat #sendBtn:active,
+    #sec-chat #btnClear:active{
+      transform: translateY(1px) scale(.99);
+      filter: brightness(1.06);
+    }
+
+    /* Hint: tighter + aligned */
+    #sec-chat #chatHint{
+      margin-top: 8px;
+      opacity: .92;
+    }
+
+  </style>
 </head>
 
 <body data-sec="home" data-kickoff-utc="2026-06-11T00:00:00Z">
@@ -2948,7 +3102,7 @@ body[data-msec="schedule"] #scheduleCard{
               <button id="sendBtn" type="button">Send</button>
               <button id="btnClear" class="secondary" type="button">Clear</button>
             </div>
-            <p class="hint">Tap the language pill to switch EN → ES → PT → FR.</p>
+            <p class="hint" id="chatHint">Select a language, then ask anything. (EN / ES / FR / PT)</p>
           </div>
         </div>
       </section>
@@ -3127,10 +3281,10 @@ const escapeHtml = (s)=>String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':
 
 // ---------- concierge welcome copy (localized) ----------
 const WELCOME_PRIMARY_BY_LANG = {
-  en: "Greetings World Cup fans. I’m your concierge — here to assist with reservations, VIP experiences, and match-day planning for your business and guests. Tell me what you need, and I’ll take care of the details.",
-  es: "Saludos, fans del Mundial. Soy tu concierge — aquí para ayudarte con reservaciones, experiencias VIP y la planificación del día de partido para tu negocio y tus invitados. Dime qué necesitas y me encargo de los detalles.",
-  pt: "Saudações, fãs da Copa do Mundo. Sou seu concierge — aqui para ajudar com reservas, experiências VIP e o planejamento do dia do jogo para o seu negócio e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
-  fr: "Bonjour, fans de la Coupe du Monde. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et l’organisation du jour de match pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
+  en: "Greetings World Cup fans. I’m your concierge — here to assist. Tell me what you need, and I’ll handle the details.",
+  es: "Saludos, fans del Mundial. Soy tu concierge — aquí para ayudarte. Dime qué necesitas y me encargo de los detalles.",
+  pt: "Saudações, fãs da Copa do Mundo. Sou seu concierge — aqui para ajudar. Diga o que você precisa e eu cuido dos detalhes.",
+  fr: "Bonjour, fans de la Coupe du Monde. Je suis votre concierge — ici pour vous aider. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
 };
 const WELCOME_GAMEDAY_BY_LANG = {
   en: "Greetings World Cup fans. It’s game day. I’m your concierge — here to assist with reservations, VIP experiences, and real-time match-day needs for your business and guests. Tell me what you need, and I’ll take care of the details.",
