@@ -2648,14 +2648,13 @@ body[data-msec="schedule"] #scheduleCard{
 
 /* =========================
    CHAT LANGUAGE SELECTOR (iOS 26 “moving capsule”)
-   Goals:
-   - Less busy: title/caption left, compact segmented right
-   - More Apple rhythm: tighter type, slightly lighter weight, subtle tracking
-   - Slider feel: single capsule moves, lighter fill + stronger inner highlight
+   - compact height (more iOS 26)
+   - lighter capsule fill + stronger inner highlight
+   - Apple-ish type rhythm + cleaner header alignment
    ========================= */
 .cardHead.chatHead{
   display:flex;
-  align-items:center;              /* fixes the “off” header alignment */
+  align-items:center;
   justify-content:space-between;
   gap:10px;
   padding-top: 14px;
@@ -2683,35 +2682,31 @@ body[data-msec="schedule"] #scheduleCard{
   line-height: 1.1;
 }
 
-/* Compact iOS 26 segmented */
 #chatLangRow.segmented{
-  --seg-left: 4px;
-  --seg-width: 78px;
+  --seg-left: 3px;
+  --seg-width: 72px;
 
   position: relative;
   display:flex;
   align-items:center;
   gap: 2px;
-  padding: 3px;                   /* ↓ less height */
+  padding: 3px;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,.14);
 
-  /* more iOS: darker base, less “buttony” */
-  background: rgba(255,255,255,.06);
+  background: rgba(255,255,255,.055);
   backdrop-filter: blur(14px) saturate(1.35);
   -webkit-backdrop-filter: blur(14px) saturate(1.35);
 
-  /* cleaner, less heavy */
   box-shadow:
     0 10px 24px rgba(0,0,0,.18),
     inset 0 1px 0 rgba(255,255,255,.12);
 
   overflow:hidden;
-  height: 36px;                   /* iOS-ish */
+  height: 34px;
   flex: 0 0 auto;
 }
 
-/* moving capsule: lighter fill + stronger inner highlight */
 #chatLangRow.segmented::before{
   content:"";
   position:absolute;
@@ -2720,25 +2715,23 @@ body[data-msec="schedule"] #scheduleCard{
   width: var(--seg-width);
   border-radius: 999px;
 
-  background:
-    linear-gradient(180deg,
-      rgba(255,255,255,.38) 0%,
-      rgba(255,255,255,.22) 45%,
-      rgba(255,255,255,.14) 100%
-    );
+  background: linear-gradient(180deg,
+    rgba(255,255,255,.42) 0%,
+    rgba(255,255,255,.26) 45%,
+    rgba(255,255,255,.16) 100%
+  );
 
   border: 1px solid rgba(255,255,255,.22);
   box-shadow:
-    0 10px 22px rgba(0,0,0,.18),
-    inset 0 1px 0 rgba(255,255,255,.55),  /* stronger inner highlight */
-    inset 0 -1px 0 rgba(0,0,0,.18);
+    0 10px 22px rgba(0,0,0,.16),
+    inset 0 1px 0 rgba(255,255,255,.60),
+    inset 0 -1px 0 rgba(0,0,0,.20);
 
   transform: translateZ(0);
   transition: left .22s cubic-bezier(.2,.9,.2,1), width .22s cubic-bezier(.2,.9,.2,1);
   pointer-events:none;
 }
 
-/* subtle top edge line (lighter, less busy) */
 #chatLangRow.segmented::after{
   content:"";
   position:absolute;
@@ -2756,13 +2749,12 @@ body[data-msec="schedule"] #scheduleCard{
   border:0;
   background: transparent;
 
-  /* Apple type rhythm */
   color: rgba(234,240,255,.78);
   font-weight: 750;
-  font-size: 12px;
+  font-size: 11.5px;
   letter-spacing: -0.01em;
 
-  padding: 8px 10px;
+  padding: 7px 9px;
   border-radius: 999px;
   cursor:pointer;
   -webkit-tap-highlight-color: transparent;
@@ -2775,16 +2767,15 @@ body[data-msec="schedule"] #scheduleCard{
 #chatLangRow .segBtn:active{ transform: translateY(1px) scale(.99); }
 
 #chatLangRow .segBtn.active{
-  color: rgba(15,27,51,.92);       /* active text goes darker (iOS style) */
-  text-shadow: none;
+  color: rgba(15,27,51,.92);
   opacity: 1;
 }
 
-/* Small screens: keep compact without wrapping */
 @media (max-width: 380px){
-  #chatLangRow.segmented{ height: 34px; }
-  #chatLangRow .segBtn{ font-size: 11.5px; padding: 8px 8px; }
+  #chatLangRow.segmented{ height: 32px; }
+  #chatLangRow .segBtn{ font-size: 11px; padding: 7px 7px; }
 }
+
 
 /* =========================
    CHAT INPUT BAR (premium alignment)
@@ -3347,9 +3338,13 @@ function setLang(lang){
   }
 
   // Chat language selector
+  // UI only: highlight active language (no event binding here)
   $$('#chatLangRow [data-lang]').forEach(btn=>{
     const b = (btn.dataset?.lang||'').toLowerCase();
-    
+    btn.classList.toggle('active', b === lang);
+    btn.setAttribute('aria-selected', (b === lang) ? 'true' : 'false');
+  });
+
   // iOS segmented “moving capsule” indicator (UI only)
   try{
     const wrap = document.getElementById('chatLangRow');
@@ -3358,16 +3353,13 @@ function setLang(lang){
       if(active){
         const wRect = wrap.getBoundingClientRect();
         const aRect = active.getBoundingClientRect();
-        const left = Math.max(4, Math.round(aRect.left - wRect.left));
-        const width = Math.max(40, Math.round(aRect.width));
+        const left  = Math.max(3, Math.round(aRect.left - wRect.left));
+        const width = Math.max(44, Math.round(aRect.width));
         wrap.style.setProperty('--seg-left', left + 'px');
         wrap.style.setProperty('--seg-width', width + 'px');
-        wrap.querySelectorAll('[role="tab"]').forEach(b=>b.setAttribute('aria-selected', b.classList.contains('active') ? 'true' : 'false'));
       }
     }
   }catch(e){}
-btn.classList.toggle('active', b === (state.lang||'en').toLowerCase());
-  });
   // Keep single welcome updated
   try{ normalizeChatWelcome(); }catch(e){}
 }
