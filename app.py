@@ -2190,7 +2190,13 @@ def worldcup_live_json():
     _stand_payload_cache[scope] = {"_cached_at": _now_ts(), "payload": payload}
     return _json_with_etag(payload)
 def _compute_group_standings(matches: List[Dict[str, Any]]) -> Dict[str, Any]:
-    """Compute group standings from available completed group matches."""
+    """Compute group standings from group fixtures.
+
+    Behavior:
+      - Always returns groups + team rows when group fixtures exist (even if no scores yet),
+        so the Groups tab never renders empty.
+      - If scores are present (home_score/away_score), it updates P/W/D/L/GF/GA/PTS.
+    """
     groups: Dict[str, Dict[str, Any]] = {}
 
     def ensure_team(g: str, team: str):
@@ -2204,38 +2210,46 @@ def _compute_group_standings(matches: List[Dict[str, Any]]) -> Dict[str, Any]:
             "pts": 0,
         })
 
+    # Pass 1: seed groups + team list from *all* group fixtures (scores or not)
     for m in matches:
         stage = (m.get("stage") or "").strip()
         if not stage.lower().startswith("group"):
+            continue
+        g = stage
+        home = (m.get("home") or "").strip() or "TBD"
+        away = (m.get("away") or "").strip() or "TBD"
+        # Avoid polluting tables with TBD vs TBD when teams aren't known yet
+        if home != "TBD":
+            ensure_team(g, home)
+        if away != "TBD":
+            ensure_team(g, away)
+
+    # Pass 2: apply results where scores exist
+    for m in matches:
+        stage = (m.get("stage") or "").strip()
+        if not stage.lower().startswith("group"):
+            continue
+        hs = m.get("home_score")
+        as_ = m.get("away_score")
+        if hs is None or as_ is None:
+            continue  # no result yet
+        try:
+            hs = int(hs); as_ = int(as_)
+        except Exception:
             continue
 
         g = stage
         home = (m.get("home") or "").strip() or "TBD"
         away = (m.get("away") or "").strip() or "TBD"
-
-        # Option A (pre-standings): Always surface groups + teams from fixtures,
-        # even if no scores exist yet.
-        ensure_team(g, home)
-        ensure_team(g, away)
-
-        # If teams aren't known yet, we can’t compute anything else.
         if home == "TBD" or away == "TBD":
             continue
 
-        hs = m.get("home_score")
-        as_ = m.get("away_score")
-        if hs is None or as_ is None:
-            continue  # fixture exists, but no result yet
-
-        try:
-            hs = int(hs)
-            as_ = int(as_)
-        except Exception:
-            continue
-
+        ensure_team(g, home)
+        ensure_team(g, away)
 
         ht = groups[g][home]
         at = groups[g][away]
+
         ht["p"] += 1; at["p"] += 1
         ht["gf"] += hs; ht["ga"] += as_
         at["gf"] += as_; at["ga"] += hs
@@ -2256,8 +2270,14 @@ def _compute_group_standings(matches: List[Dict[str, Any]]) -> Dict[str, Any]:
         rows = list(teams.values())
         for r in rows:
             r["gd"] = int(r["gf"]) - int(r["ga"])
-        rows.sort(key=lambda r: (r["pts"], r["gd"], r["gf"], r["team"]), reverse=True)
+        # If no points yet, keep a stable alphabetical order; otherwise standard sorting.
+        any_points = any(int(r.get("pts", 0) or 0) > 0 or int(r.get("p", 0) or 0) > 0 for r in rows)
+        if any_points:
+            rows.sort(key=lambda r: (r["pts"], r["gd"], r["gf"], r["team"]), reverse=True)
+        else:
+            rows.sort(key=lambda r: (r["team"],))
         out[g] = rows
+
     return out
 
 
@@ -2278,7 +2298,7 @@ def worldcup_standings_json():
         "updated_at": _now_ts(),
         "groups": standings,
         "count_groups": len(standings),
-        "note": "Standings are pre-populated from group fixtures (all teams shown). Points update automatically once scores exist in the fixture feed.",
+        "note": "Groups are seeded from fixtures; points update automatically once scores are present in the feed.",
     }
     return _json_with_etag(payload)
 
