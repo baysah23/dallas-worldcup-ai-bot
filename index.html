@@ -2897,6 +2897,26 @@ body[data-msec="schedule"] #scheduleCard{
   white-space: nowrap;
 }
 
+
+/* === CHAT HEADER: SINGLE LINE LOCK (v1.0) === */
+#chatLangRow{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+#chatLangRow::-webkit-scrollbar{
+  display: none;
+}
+#chatLangRow .segBtn{
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
 </style>
 </head>
 
