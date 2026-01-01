@@ -1657,7 +1657,7 @@ body.has-support .fz-country:hover{
   }
 
 
-.fanzone-left, .fanzone-right{ width: 320px; }
+.fanzone-left, .fanzone-right{ width: 100%; }
 
   .fanzone-left, .fanzone-right{
     position: fixed;
@@ -1681,7 +1681,7 @@ body.has-support .fz-country:hover{
 
 /* --- Fan Zone size reduction (compact rails) --- */
 .fanzone-left, .fanzone-right{
-  width: 260px;
+  width: 100%;
   font-size: 12px;
 }
 
@@ -3764,7 +3764,10 @@ body[data-sec="schedule"] #sec-schedule #pager .pill{
 </div>
 </div>
 <div class="fz-card lux-reveal" id="pollCard" style="display:none; margin-top:10px; max-height:52vh; overflow:auto;">
-<h3>⚔️ Match of the Day Poll</h3>
+<div class="fz-minirow" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
+  <h3 style="margin:0;">⚔️ Match of the Day Poll</h3>
+  <button class="fz-iconbtn" id="closePollCard" type="button" aria-label="Close poll">✕</button>
+</div>
 <div class="fz-muted">Vote for who you think will win.</div>
 <div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
 </div>
@@ -3786,7 +3789,10 @@ body[data-sec="schedule"] #sec-schedule #pager .pill{
       </div></div>
 </div>
 <div class="fz-card lux-reveal" id="qrCard" style="display:none; margin-top:10px;">
-<h3>📱 QR poster</h3>
+<div class="fz-minirow" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
+  <h3 style="margin:0;">📱 QR poster</h3>
+  <button class="fz-iconbtn" id="closeQRCard" type="button" aria-label="Close QR">✕</button>
+</div>
 <div class="fz-muted">Print/display at the entrance. Scan to open the app.</div>
 <div class="qrWrap" style="margin-top:10px;">
 <img id="qrImg" alt="QR code" style="width:220px;height:220px;border-radius:12px;background:#fff;padding:10px;display:block;margin:0 auto;" />
@@ -4940,7 +4946,10 @@ function init(){
     card.id = 'countryCard';
     card.style.cssText = 'display:none; margin-top:10px; max-height:52vh; overflow:auto;';
     card.innerHTML = `
-      <h3>🏁 Choose your country</h3>
+      <div class="fz-minirow" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <h3 style="margin:0;">🏁 Choose your country</h3>
+        <button class="fz-iconbtn" id="closeCountryCard" type="button" aria-label="Close country picker">✕</button>
+      </div>
       <div class="fz-muted">This personalizes Fan Zone highlights on this device.</div>
       <div id="countryList" style="margin-top:10px; display:grid; gap:8px;"></div>
     `;
@@ -4950,6 +4959,11 @@ function init(){
       actions.parentNode.insertBefore(card, actions.nextSibling);
     }else{
       left.appendChild(card);
+    }
+    // Wire close button inside the country picker card
+    const cClose = card.querySelector('#closeCountryCard');
+    if(cClose){
+      bindOnce(cClose, 'click', (e)=>{ e.preventDefault(); hide(card); });
     }
     return card;
   }
@@ -5041,6 +5055,8 @@ function init(){
         savePollState(st2);
         renderPoll();
         luxToast('Vote received — thanks!', 2200);
+        // Auto-close after voting
+        const pc = $('pollCard'); if(pc) pc.style.display='none';
       }, { passive:true });
 
       list.appendChild(btn);
@@ -5096,6 +5112,10 @@ function init(){
     bindOnce($('fzIconCountry'), 'click', (e)=>{ e.preventDefault(); openCountry(); });
     bindOnce($('fzIconPoll'), 'click', (e)=>{ e.preventDefault(); openPoll(); });
     bindOnce($('fzIconQR'), 'click', (e)=>{ e.preventDefault(); openQR(); });
+
+    // Close buttons for Fan Zone cards
+    bindOnce($('closePollCard'), 'click', (e)=>{ e.preventDefault(); hide($('pollCard')); });
+    bindOnce($('closeQRCard'), 'click', (e)=>{ e.preventDefault(); hide($('qrCard')); });
 
     // VIP placeholder behavior
     bindOnce($('vipHoldBtn'), 'click', (e)=>{
