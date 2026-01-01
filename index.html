@@ -5061,18 +5061,59 @@ function init(){
       return null;
     }
   }
-function renderCountries(){
+
+  async function fetchScheduleTeams(){
+    try{
+      const data = await fetchJSONWithTimeout('/schedule.json', 4500);
+      const raw = Array.isArray(data?.matches) ? data.matches : [];
+      const s = new Set();
+      for(const m of raw){
+        const h = (m && m.home) ? String(m.home).trim() : '';
+        const a = (m && m.away) ? String(m.away).trim() : '';
+        if(h) s.add(h);
+        if(a) s.add(a);
+      }
+      const arr = Array.from(s).filter(Boolean).sort((x,y)=>x.localeCompare(y));
+      return arr.length ? arr : null;
+    }catch(e){
+      return null;
+    }
+  }
+
+  function setCountryListLoading(listEl){
+    if(!listEl) return;
+    listEl.innerHTML = `<div class="fz-muted" style="padding:8px 2px;">Loading teams…</div>`;
+  }
+
+  async function ensureScheduleTeams(){
+    const t = getWorldCupTeams();
+    if(t && t.length) return t;
+    return await fetchScheduleTeams();
+  }
+
+  async function renderCountries(){
     const card = ensureCountryCard();
     if(!card) return;
     const list = card.querySelector('#countryList');
     if(!list || list.dataset.built === '1') return;
 
-    const teams = getWorldCupTeams();
+    setCountryListLoading(list);
+
+    const teams = await ensureScheduleTeams();
+
     // Map known flags from the built-in list, but only show teams that actually exist in Schedule.
     const flagMap = new Map();
     try{ COUNTRIES.forEach(([flag,name])=> flagMap.set(String(name).toLowerCase(), flag)); }catch(e){}
 
-    const items = teams && teams.length ? teams : (COUNTRIES||[]).map(x=>x[1]).filter(Boolean);
+    const items = teams && teams.length ? teams : [];
+    if(!items.length){
+      list.innerHTML = `<div class="fz-muted" style="padding:8px 2px;">No World Cup teams found yet. Open the Schedule tab once (to load fixtures) or refresh.</div>`;
+      list.dataset.built = '1';
+      return;
+    }
+
+    list.innerHTML = '';
+
     items.forEach((name)=>{
       const flag = flagMap.get(String(name).toLowerCase()) || '🏳️';
 
