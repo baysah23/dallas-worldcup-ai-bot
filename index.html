@@ -2963,143 +2963,206 @@ body[data-msec="schedule"] #scheduleCard{
 }
 
 
-/* === SCHEDULE iOS Premium (scoped) — v1.1 === */
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule{
-  --schedCardBg: rgba(255,255,255,.07);
-  --schedCardLine: rgba(255,255,255,.12);
-  --schedGlow: rgba(0,0,0,.32);
-  --schedText: rgba(244,248,255,.96);
-  --schedMuted: rgba(214,224,255,.78);
-}
+/* === SCHEDULE: iOS Premium List (scoped) === */
+body[data-msec="schedule"] #sec-schedule .sidepad{ padding-bottom: 6px; }
 
-/* Bigger, iOS-style segmented control (Schedule only) */
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbar{
-  margin-top: 6px;
-  padding: 6px;
-  border-radius: 18px;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.06);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  gap: 6px;
-}
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbtn{
-  min-height: 34px;
-  padding: 8px 12px;
-  font-size: 13px;
-  letter-spacing: .01em;
-  font-weight: 800;
-}
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbtn[aria-selected="true"]{
-  background: rgba(255,255,255,.92);
-  color: rgba(0,0,0,.88);
-  box-shadow: 0 10px 24px rgba(0,0,0,.28);
-}
-
-/* Schedule list container */
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule #schedule{
-  display: grid;
-  gap: 12px;
-  margin-top: 12px;
-  max-height: var(--schedMaxH, auto);
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 10px;
-}
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule #schedule::-webkit-scrollbar{ display:none; }
-
-/* iOS premium match cards */
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .matchRow{
-  border-radius: 18px;
-  padding: 12px 14px;
-  border: 1px solid var(--schedCardLine);
-  background: var(--schedCardBg);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  box-shadow: 0 16px 46px var(--schedGlow);
-  transform: translateZ(0);
-}
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .matchRow:active{
-  transform: translateY(1px);
-}
-
-/* top row: stage + date */
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mTop{
+body[data-msec="schedule"] #sec-schedule .segbar{
   display:flex;
+  gap:8px;
   align-items:center;
-  justify-content:space-between;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mStage{
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,.84);
-}
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mDate{
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--schedMuted);
-  opacity: .95;
+  padding:6px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.10);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
-/* teams line */
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mTeams{
-  font-size: 15px;
-  line-height: 1.25;
-  font-weight: 900;
-  letter-spacing: .01em;
-  color: var(--schedText);
+body[data-msec="schedule"] #sec-schedule .segbtn{
+  flex:1;
+  padding:10px 14px;
+  border-radius:999px;
+  font-size:13px;
+  font-weight:800;
+  letter-spacing:.01em;
+  line-height:1;
 }
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .vs{
-  display:inline-block;
-  margin: 0 6px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-  color: rgba(255,255,255,.78);
+
+body[data-msec="schedule"] #sec-schedule .segbtn[aria-selected="true"]{
+  background: rgba(255,255,255,.92);
+  color: rgba(0,0,0,.92);
+  box-shadow: 0 10px 22px rgba(0,0,0,.35);
+}
+
+body[data-msec="schedule"] #sec-schedule .metaLine{
+  margin-top:10px;
+  font-size:12px;
+  opacity:.78;
+}
+
+body[data-msec="schedule"] #sec-schedule .schedule{
+  margin-top:10px;
+  display:grid;
+  gap:10px;
+  padding-bottom: 96px; /* keep last card above bottom nav */
+}
+
+body[data-msec="schedule"] #sec-schedule .schCard{
+  border-radius: 18px;
+  padding: 12px 12px 10px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.10);
+  box-shadow: 0 16px 34px rgba(0,0,0,.35);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+body[data-msec="schedule"] #sec-schedule .schTop{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-bottom:8px;
+}
+
+body[data-msec="schedule"] #sec-schedule .schBadge{
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  padding:6px 10px;
+  border-radius:999px;
+  background: rgba(0,0,0,.25);
+  border: 1px solid rgba(255,255,255,.10);
+  color: rgba(255,255,255,.86);
+  white-space:nowrap;
+  max-width: 55%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+body[data-msec="schedule"] #sec-schedule .schWhen{
+  font-size:12px;
+  color: rgba(255,255,255,.72);
+  white-space:nowrap;
+}
+
+body[data-msec="schedule"] #sec-schedule .schTeams{
+  display:grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items:center;
+  gap:10px;
+}
+
+body[data-msec="schedule"] #sec-schedule .schTeamsLive{
+  grid-template-columns: 1fr auto 1fr;
+}
+
+body[data-msec="schedule"] #sec-schedule .schTeam{
+  font-size:14px;
+  font-weight:900;
+  letter-spacing:.01em;
+  color: rgba(255,255,255,.92);
+}
+
+body[data-msec="schedule"] #sec-schedule .schVs{
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color: rgba(255,255,255,.45);
+}
+
+body[data-msec="schedule"] #sec-schedule .schScore{
+  font-size:16px;
+  font-weight:950;
+  letter-spacing:.02em;
+  padding:6px 10px;
+  border-radius:12px;
   background: rgba(255,255,255,.08);
   border: 1px solid rgba(255,255,255,.10);
+  color: rgba(255,255,255,.92);
 }
 
-/* venue line */
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mVenue{
-  margin-top: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  color: rgba(214,224,255,.72);
+body[data-msec="schedule"] #sec-schedule .schScoreMuted{
+  opacity:.55;
+}
+
+body[data-msec="schedule"] #sec-schedule .schWhere{
+  margin-top:8px;
+  font-size:12px;
+  color: rgba(255,255,255,.68);
+}
+
+body[data-msec="schedule"] #sec-schedule .schBottom{
+  margin-top:10px;
   display:flex;
-  gap: 8px;
+  justify-content:space-between;
   align-items:center;
-}
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mVenue .dot{
-  width: 6px; height: 6px; border-radius: 999px;
-  background: rgba(212,175,55,.9);
-  box-shadow: 0 0 0 4px rgba(212,175,55,.12);
-  flex: 0 0 auto;
+  gap:10px;
 }
 
-/* Pager: sticky and always reachable */
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule #pager{
-  position: sticky;
-  bottom: calc(74px + env(safe-area-inset-bottom));
-  z-index: 5;
-  margin-top: 10px;
-  padding: 10px 10px 12px;
-  border-radius: 18px;
-  border: 1px solid rgba(255,255,255,.12);
-  background: rgba(10,16,30,.55);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+body[data-msec="schedule"] #sec-schedule .schPill{
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  padding:6px 10px;
+  border-radius:999px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.10);
+  color: rgba(255,255,255,.78);
+  white-space:nowrap;
 }
-body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule #pager .secondary{
-  min-height: 36px;
-  border-radius: 14px;
+
+/* Standings */
+body[data-msec="schedule"] #sec-schedule .stCard{ padding-bottom: 12px; }
+body[data-msec="schedule"] #sec-schedule .stHeader{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+}
+body[data-msec="schedule"] #sec-schedule .stLegend{
+  font-size:11px;
+  color: rgba(255,255,255,.55);
+  white-space:nowrap;
+}
+body[data-msec="schedule"] #sec-schedule .stPtsLbl{ color: rgba(255,255,255,.78); font-weight:900; }
+
+body[data-msec="schedule"] #sec-schedule .stGrid{
+  display:grid;
+  gap:6px;
+}
+body[data-msec="schedule"] #sec-schedule .stRow{
+  display:grid;
+  grid-template-columns: 1fr 28px 28px 28px 28px 34px 40px;
+  gap:6px;
+  align-items:center;
+  padding:8px 10px;
+  border-radius:14px;
+  background: rgba(0,0,0,.18);
+  border: 1px solid rgba(255,255,255,.08);
+}
+body[data-msec="schedule"] #sec-schedule .stTeam{
+  font-size:12px;
+  font-weight:900;
+  color: rgba(255,255,255,.90);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+body[data-msec="schedule"] #sec-schedule .stNum{
+  font-size:11px;
+  text-align:center;
+  color: rgba(255,255,255,.70);
+}
+body[data-msec="schedule"] #sec-schedule .stPts{
+  font-size:11px;
+  text-align:center;
+  font-weight:900;
+  color: rgba(255,255,255,.92);
 }
 
 </style>
@@ -3973,70 +4036,187 @@ function initScheduleHandlers(){
   const tabs = $('scheduleTabs');
   if(!tabs) return;
 
-  // Bind to the existing segmented buttons (Fixtures / Live / Groups)
-  $$('.segbtn', tabs).forEach(btn=>{
+  const btns = $$('.segbtn', tabs);
+  if(!btns.length) return;
+
+  // Ensure default view is fixtures
+  if(!scheduleView) scheduleView = 'fixtures';
+
+  function setActive(btn){
+    scheduleView = btn.dataset.view || 'fixtures';
+    currentPage = 1; // reset paging on view change
+    btns.forEach(b=>{
+      const on = (b === btn);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+      b.classList.toggle('active', on);
+    });
+  }
+
+  btns.forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      scheduleView = btn.dataset.view || 'fixtures';
-      currentPage = 1;
-
-      // aria-selected drives the visual state in CSS
-      $$('.segbtn', tabs).forEach(b=>b.setAttribute('aria-selected', (b === btn) ? 'true' : 'false'));
-
+      setActive(btn);
       loadSchedule(true);
-    }, {passive:true});
+    });
   });
+
+  // Initialize selected state from markup (aria-selected) or default first button
+  const selected = btns.find(b => b.getAttribute('aria-selected') === 'true') || btns[0];
+  setActive(selected);
 
   $('prevPage')?.addEventListener('click', ()=>{
-    currentPage = Math.max(1, currentPage-1);
-    loadSchedule();
+    currentPage = Math.max(1, currentPage - 1);
+    loadSchedule(false);
   });
-
   $('nextPage')?.addEventListener('click', ()=>{
-    currentPage = currentPage+1;
-    loadSchedule();
+    currentPage = currentPage + 1;
+    loadSchedule(false);
   });
-
-  // keep height/paging optimal on rotation / resize
-  try{
-    if(!window.__schedResizeBound){
-      window.__schedResizeBound = true;
-      window.addEventListener('resize', ()=>{ try{ if(scheduleView){ updateScheduleLayout(); loadSchedule(); } }catch(e){} }, {passive:true});
-    }
-  }catch(e){}
 }
 
-let schedulePerPage = 8;
+function renderFixtures(matches){
+  const list = $('schedule');
+  const meta = $('scheduleMetaLine');
+  const pager = $('pager');
+  const pi = $('pageIndicator');
 
-function updateScheduleLayout(){
-  // Compute how many cards fit above the bottom nav, then paginate to avoid "hard-to-reach last game"
-  try{
-    const sec = $('sec-schedule');
-    const list = $('schedule');
-    const pager = $('pager');
-    const nav = document.querySelector('.bottombar');
-    if(!sec || !list) return;
+  const arr = Array.isArray(matches) ? matches : [];
+  if(!list) return;
 
-    const navH = nav ? nav.getBoundingClientRect().height : 0;
-    const safeB = (window.visualViewport?.offsetTop ? 0 : 0); // placeholder (keeps older Safari happy)
+  // paging
+  const perPage = 10;
+  const total = arr.length;
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  currentPage = Math.min(Math.max(1, currentPage || 1), pages);
 
-    const secRect = sec.getBoundingClientRect();
-    const listRect = list.getBoundingClientRect();
+  const start = (currentPage - 1) * perPage;
+  const slice = arr.slice(start, start + perPage);
 
-    // available height from list top to viewport bottom minus bottom nav and a little breathing room
-    let avail = window.innerHeight - listRect.top - navH - 18;
-    // reserve space for pager when it is shown
-    const pagerH = (pager && getComputedStyle(pager).display !== 'none') ? pager.getBoundingClientRect().height : 0;
-    avail = Math.max(220, avail - pagerH);
+  list.innerHTML = slice.map(m=>{
+    const stage = escapeHtml(m.group || m.stage || m.round || '');
+    const date = escapeHtml(m.date || '');
+    const tlocal = escapeHtml(m.time_local || (m.datetime_local || '').split(' ').slice(1).join(' ') || '');
+    const dt = escapeHtml(m.datetime_local || m.datetime_utc || '');
+    const home = escapeHtml(m.home || m.team1 || m.home_team || '');
+    const away = escapeHtml(m.away || m.team2 || m.away_team || '');
+    const venue = escapeHtml(m.venue || m.stadium || '');
+    const city = escapeHtml(m.city || '');
+    const line1 = (date && tlocal) ? `${date} • ${tlocal}` : (date || dt || '');
+    const where = [venue, city].filter(Boolean).join(' • ');
 
-    document.documentElement.style.setProperty('--schedMaxH', Math.floor(avail) + 'px');
+    return `<article class="schCard">
+      <div class="schTop">
+        <div class="schBadge">${stage || 'Fixture'}</div>
+        <div class="schWhen">${line1}</div>
+      </div>
+      <div class="schTeams">
+        <div class="schTeam">${home || 'TBD'}</div>
+        <div class="schVs">vs</div>
+        <div class="schTeam">${away || 'TBD'}</div>
+      </div>
+      ${where ? `<div class="schWhere">${where}</div>` : ``}
+    </article>`;
+  }).join('') || `<div class="hint">No fixtures found.</div>`;
 
-    // Estimate row height using first card if present; else default
-    const first = list.firstElementChild;
-    const rowH = first ? first.getBoundingClientRect().height + 12 : 96;
-    schedulePerPage = clamp(Math.floor(avail / rowH), 5, 10);
-  }catch(e){}
+  if(pager && pi){
+    pager.style.display = pages > 1 ? '' : 'none';
+    pi.textContent = `Page ${currentPage} of ${pages}`;
+  }
+
+  if(meta){
+    meta.textContent = total ? `${total} fixtures` : `No fixtures`;
+  }
 }
 
+function renderLive(matches){
+  const list = $('schedule');
+  const meta = $('scheduleMetaLine');
+  const pager = $('pager');
+  if(pager) pager.style.display = 'none';
+  const arr = Array.isArray(matches) ? matches : [];
+  if(!list) return;
+
+  list.innerHTML = arr.map(m=>{
+    const stage = escapeHtml(m.group || m.stage || m.round || '');
+    const status = escapeHtml(m.status || m.state || '');
+    const minute = escapeHtml(m.minute != null ? String(m.minute) : '');
+    const home = escapeHtml(m.home || m.team1 || '');
+    const away = escapeHtml(m.away || m.team2 || '');
+    const hs = (m.home_score != null) ? escapeHtml(String(m.home_score)) : escapeHtml(String(m.score_home ?? ''));
+    const as = (m.away_score != null) ? escapeHtml(String(m.away_score)) : escapeHtml(String(m.score_away ?? ''));
+    const score = (hs !== '' || as !== '') ? `${hs || '0'}–${as || '0'}` : '';
+    const venue = escapeHtml(m.venue || m.stadium || '');
+    const when = escapeHtml(m.datetime_local || m.date || '');
+
+    const right = score ? `<div class="schScore">${score}</div>` : `<div class="schScore schScoreMuted">—</div>`;
+    const badge = [status, minute ? `${minute}'` : ''].filter(Boolean).join(' ');
+    return `<article class="schCard">
+      <div class="schTop">
+        <div class="schBadge">${stage || 'Live'}</div>
+        <div class="schWhen">${escapeHtml(when)}</div>
+      </div>
+      <div class="schTeams schTeamsLive">
+        <div class="schTeam">${home || 'TBD'}</div>
+        ${right}
+        <div class="schTeam">${away || 'TBD'}</div>
+      </div>
+      <div class="schBottom">
+        ${badge ? `<div class="schPill">${escapeHtml(badge)}</div>` : `<div></div>`}
+        ${venue ? `<div class="schWhere">${venue}</div>` : ``}
+      </div>
+    </article>`;
+  }).join('') || `<div class="hint">No live matches right now.</div>`;
+
+  if(meta){
+    meta.textContent = arr.length ? `${arr.length} live matches` : `Live is quiet`;
+  }
+}
+
+function renderStandings(data){
+  const list = $('schedule');
+  const meta = $('scheduleMetaLine');
+  const pager = $('pager');
+  if(pager) pager.style.display = 'none';
+  if(!list) return;
+
+  const groups = (data && data.groups && typeof data.groups === 'object') ? data.groups : {};
+  const names = Object.keys(groups);
+
+  list.innerHTML = names.map(g=>{
+    const rows = Array.isArray(groups[g]) ? groups[g] : [];
+    const body = rows.map(r=>{
+      const team = escapeHtml(r.team || '');
+      const mp = escapeHtml(String(r.mp ?? ''));
+      const w = escapeHtml(String(r.w ?? ''));
+      const d = escapeHtml(String(r.d ?? ''));
+      const l = escapeHtml(String(r.l ?? ''));
+      const gd = escapeHtml(String(r.gd ?? ''));
+      const pts = escapeHtml(String(r.pts ?? ''));
+      return `<div class="stRow">
+        <div class="stTeam">${team}</div>
+        <div class="stNum">${mp}</div>
+        <div class="stNum">${w}</div>
+        <div class="stNum">${d}</div>
+        <div class="stNum">${l}</div>
+        <div class="stNum">${gd}</div>
+        <div class="stPts">${pts}</div>
+      </div>`;
+    }).join('') || `<div class="hint">No standings yet.</div>`;
+
+    return `<article class="schCard stCard">
+      <div class="stHeader">
+        <div class="schBadge">${escapeHtml(g)}</div>
+        <div class="stLegend">MP&nbsp;&nbsp;W&nbsp;&nbsp;D&nbsp;&nbsp;L&nbsp;&nbsp;GD&nbsp;&nbsp;<span class="stPtsLbl">PTS</span></div>
+      </div>
+      <div class="stGrid">
+        ${body}
+      </div>
+    </article>`;
+  }).join('') || `<div class="hint">Groups unavailable.</div>`;
+
+  if(meta){
+    meta.textContent = names.length ? `${names.length} groups` : `No groups`;
+  }
+}
 
 async function loadSchedule(force=false){
   const list = $('schedule');
@@ -4044,24 +4224,29 @@ async function loadSchedule(force=false){
   if(list) list.innerHTML = `<div class="hint">Loading…</div>`;
   if(meta) meta.textContent = '';
 
-    updateScheduleLayout();
-
   try{
     if(scheduleView === 'fixtures'){
       if(!fixturesCache || force){
         const data = await fetchJSON('/schedule.json');
-        fixturesCache = data.matches || [];
+        const raw = data?.matches ?? data?.fixtures ?? data?.games ?? data?.schedule ?? data ?? [];
+        fixturesCache = Array.isArray(raw) ? raw : [];
       }
       renderFixtures(fixturesCache);
     }else if(scheduleView === 'live'){
       const data = await fetchJSON('/worldcup/live.json');
-      renderLive(data.matches || data.live || []);
+      const raw = data?.matches ?? data?.live ?? data ?? [];
+      renderLive(Array.isArray(raw) ? raw : []);
     }else if(scheduleView === 'groups'){
       const scope = (state.scope === 'featured') ? 'featured' : 'all';
       const data = await fetchJSON(`/worldcup/standings.json?scope=${encodeURIComponent(scope)}`);
-      renderStandings(data);
+      renderStandings(data || {});
+    }else{
+      // fallback
+      scheduleView = 'fixtures';
+      return loadSchedule(force);
     }
   }catch(e){
+    console.warn('Schedule load error', e);
     if(list) list.innerHTML = `<div class="hint">Schedule unavailable.</div>`;
   }
 }
