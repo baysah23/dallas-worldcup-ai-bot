@@ -2647,164 +2647,147 @@ body[data-msec="schedule"] #scheduleCard{
 }
 
 /* =========================
-   CHAT LANGUAGE SELECTOR (iOS-like segmented)
+   CHAT LANGUAGE SELECTOR (iOS “moving capsule”)
+   - single, clear label for first-time users
+   - slider feel: active pill is a single capsule that moves
    ========================= */
-#chatLangRow{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-#chatLangRow .langLabel{
-  font-size:12px;
-  letter-spacing:.06em;
-  text-transform:uppercase;
-  color: rgba(235,245,255,.70);
-}
-#chatLangRow .langSegWrap{
-  display:flex;
-  gap:8px;
-  padding:6px;
-  border-radius:14px;
-  background: rgba(0,0,0,.22);
-  border: 1px solid rgba(255,255,255,.14);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-#chatLangRow .langSeg{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  padding:10px 12px;
-  min-height:44px;
-  border-radius:12px;
-  border:1px solid rgba(255,255,255,.12);
-  background: rgba(255,255,255,.06);
-  color: rgba(244,248,255,.92);
-  font-weight:800;
-  cursor:pointer;
-  transition: transform .12s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
-}
-#chatLangRow .langSeg:active{ transform: translateY(1px); }
-#chatLangRow .langSeg .langCode{
-  font-size:12px;
-  letter-spacing:.08em;
-  padding:4px 8px;
-  border-radius:10px;
-  background: rgba(0,0,0,.26);
-  border:1px solid rgba(255,255,255,.12);
-}
-#chatLangRow .langSeg .langName{ font-size:13px; opacity:.92; }
-#chatLangRow .langSeg.active{
-  background: rgba(255,255,255,.16);
-  border-color: rgba(255,255,255,.22);
-  box-shadow: 0 10px 24px rgba(0,0,0,.30);
-}
-
-
-/* ===== CHAT UI PREMIUM (surgical) ===== */
-#sec-chat .cardHead{ padding: 14px 14px 10px; }
-#sec-chat .chatHead{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
+.cardHead.chatHead{
   gap:12px;
-  width:100%;
+  align-items:flex-start;
 }
-#sec-chat .chatHeadLeft{ min-width:0; }
-#sec-chat .chatSub{
-  margin-top:4px;
-  font-size: 12px;
-  color: rgba(185,199,238,.92);
-  letter-spacing: .01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.chatHeadLeft{ display:flex; flex-direction:column; gap:4px; min-width:0; }
+.chatLangCaption{
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color: rgba(235,245,255,.72);
+  line-height: 1.1;
 }
 
-/* iOS-style segmented control */
-#sec-chat #chatLangRow{ margin-left:0; }
-#sec-chat #chatLangRow .iosSeg{
+#chatLangRow.segmented{
+  --seg-left: 4px;
+  --seg-width: 80px;
+
+  position: relative;
   display:flex;
   align-items:center;
-  gap:0;
-  padding: 3px;
-  border-radius: 14px;
-  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
-  border: 1px solid rgba(255,255,255,.18);
-  backdrop-filter: blur(18px) saturate(1.35);
-  -webkit-backdrop-filter: blur(18px) saturate(1.35);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,.14),
-    0 10px 26px rgba(0,0,0,.28);
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.26);
+  backdrop-filter: blur(12px) saturate(1.25);
+  -webkit-backdrop-filter: blur(12px) saturate(1.25);
+  box-shadow: 0 12px 28px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.10);
   overflow:hidden;
+  min-height: 40px;
 }
-#sec-chat #chatLangRow .iosSegBtn{
+
+/* moving capsule */
+#chatLangRow.segmented::before{
+  content:"";
+  position:absolute;
+  top:4px; bottom:4px;
+  left: var(--seg-left);
+  width: var(--seg-width);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,.12));
+  border: 1px solid rgba(255,255,255,.18);
+  box-shadow:
+    0 10px 24px rgba(0,0,0,.30),
+    inset 0 1px 0 rgba(255,255,255,.30);
+  transform: translateZ(0);
+  transition: left .24s cubic-bezier(.2,.9,.2,1), width .24s cubic-bezier(.2,.9,.2,1);
+  pointer-events:none;
+}
+
+/* subtle top edge line like iOS */
+#chatLangRow.segmented::after{
+  content:"";
+  position:absolute;
+  left:10px; right:10px; top:7px;
+  height:1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.26), rgba(255,255,255,0));
+  opacity:.55;
+  pointer-events:none;
+}
+
+#chatLangRow .segBtn{
+  position: relative;
+  z-index: 1;
   appearance:none;
-  -webkit-appearance:none;
   border:0;
   background: transparent;
-  color: rgba(244,248,255,.84);
+  color: rgba(234,240,255,.82);
   font-weight: 900;
-  font-size: 12px;
-  padding: 9px 10px;
-  border-radius: 11px;
+  font-size: 12.5px;
   letter-spacing: .01em;
-  line-height: 1;
+  padding: 8px 10px;
+  border-radius: 999px;
   cursor:pointer;
-  user-select:none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
   white-space: nowrap;
-  transition: background .14s ease, color .14s ease, transform .12s ease, box-shadow .14s ease;
+  transition: transform .12s ease, color .12s ease, opacity .12s ease;
 }
-#sec-chat #chatLangRow .iosSegBtn:active{ transform: scale(.99); }
+#chatLangRow .segBtn:active{ transform: translateY(1px) scale(.99); }
 
-/* Active state (JS toggles .active) */
-#sec-chat #chatLangRow .iosSegBtn.active{
-  color: rgba(7,16,34,.95);
-  background: linear-gradient(180deg, rgba(255,255,255,.96), rgba(255,255,255,.86));
-  box-shadow:
-    0 10px 22px rgba(0,0,0,.22),
-    inset 0 0 0 1px rgba(0,0,0,.14);
+#chatLangRow .segBtn.active{
+  color: rgba(255,255,255,.98);
+  text-shadow: 0 8px 18px rgba(0,0,0,.35);
 }
 
-/* Small widths: keep premium, avoid wrap */
-@media (max-width: 420px){
-  #sec-chat .chatSub{ display:none; }
-  #sec-chat #chatLangRow .iosSegBtn{ padding: 9px 8px; font-size: 11px; }
+@media (max-width: 380px){
+  #chatLangRow .segBtn{ font-size: 12px; padding: 8px 8px; }
 }
 
-/* Chat input bar: iOS row alignment */
-#sec-chat .chatInputRow{
+/* =========================
+   CHAT INPUT BAR (premium alignment)
+   ========================= */
+.chatInputRow{
   display:flex;
-  gap:10px;
   align-items:center;
-  margin-top: 10px;
+  gap:8px;
+  flex-wrap:nowrap;
 }
-#sec-chat #msg{
+
+#msg{
   height: 44px;
   padding: 0 12px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.16);
-  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,.16));
-  backdrop-filter: blur(14px) saturate(1.2);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(7,16,34,.50);
+  color: var(--text);
+  outline:none;
+  font-size: 14px;
 }
-#sec-chat #sendBtn,
-#sec-chat #btnClear{
+
+#sendBtn, #btnClear{
   height: 44px;
-  padding: 0 14px;
+  padding: 0 12px;
   border-radius: 14px;
-  font-weight: 950;
+  border: 1px solid rgba(255,255,255,.14);
+  font-weight: 900;
+  font-size: 13px;
   letter-spacing: .01em;
-  box-shadow: 0 10px 24px rgba(0,0,0,.20);
+  cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform .12s ease, filter .12s ease, background .12s ease, border-color .12s ease;
+  white-space: nowrap;
 }
-#sec-chat #sendBtn{
-  border: 1px solid rgba(46,160,67,.45);
-  background: linear-gradient(180deg, rgba(46,160,67,.40), rgba(46,160,67,.22));
+
+#sendBtn{
+  background: rgba(46,160,67,.28);
 }
-#sec-chat #btnClear{
-  border: 1px solid rgba(255,255,255,.18);
-  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
-  color: rgba(244,248,255,.92);
+#btnClear.secondary{
+  background: rgba(255,255,255,.06);
+  border-color: rgba(255,255,255,.12);
+  color: rgba(234,240,255,.92);
 }
-#sec-chat #sendBtn:active,
-#sec-chat #btnClear:active{ transform: translateY(1px) scale(.99); filter: brightness(1.06); }
-/* ===== END CHAT UI PREMIUM ===== */
+
+#sendBtn:active, #btnClear:active{ transform: translateY(1px) scale(.99); filter: brightness(1.08); }
 
 </style>
 </head>
@@ -2945,19 +2928,16 @@ body[data-msec="schedule"] #scheduleCard{
       <!-- CHAT -->
       <section class="section" id="sec-chat" aria-label="Chat">
         <div class="card">
-          <div class="cardHead">
-            <div class="chatHead">
+          <div class="cardHead chatHead">
   <div class="chatHeadLeft">
     <h2 class="cardTitle">Concierge chat</h2>
-    <div class="chatSub">Choose a language to chat in:</div>
+    <div class="chatLangCaption">Chat language</div>
   </div>
-  <div class="pillRow" id="chatLangRow" aria-label="Chat language">
-    <div class="iosSeg" role="tablist" aria-label="Chat language selector">
-      <button class="iosSegBtn langSeg" data-lang="en" type="button" role="tab" aria-selected="false">English</button>
-      <button class="iosSegBtn langSeg" data-lang="es" type="button" role="tab" aria-selected="false">Español</button>
-      <button class="iosSegBtn langSeg" data-lang="fr" type="button" role="tab" aria-selected="false">Français</button>
-      <button class="iosSegBtn langSeg" data-lang="pt" type="button" role="tab" aria-selected="false">Português</button>
-    </div>
+  <div class="segmented" id="chatLangRow" role="tablist" aria-label="Chat language selector">
+    <button class="segBtn" data-lang="en" type="button" role="tab" aria-selected="true">English</button>
+    <button class="segBtn" data-lang="es" type="button" role="tab" aria-selected="false">Español</button>
+    <button class="segBtn" data-lang="fr" type="button" role="tab" aria-selected="false">Français</button>
+    <button class="segBtn" data-lang="pt" type="button" role="tab" aria-selected="false">Português</button>
   </div>
 </div>
 </div>
@@ -2970,7 +2950,7 @@ body[data-msec="schedule"] #scheduleCard{
               <button id="sendBtn" type="button">Send</button>
               <button id="btnClear" class="secondary" type="button">Clear</button>
             </div>
-            
+            <p class="hint">Tap the language pill to switch EN → ES → PT → FR.</p>
           </div>
         </div>
       </section>
@@ -3324,7 +3304,24 @@ function setLang(lang){
   // Chat language selector
   $$('#chatLangRow [data-lang]').forEach(btn=>{
     const b = (btn.dataset?.lang||'').toLowerCase();
-    btn.classList.toggle('active', b === (state.lang||'en').toLowerCase());
+    
+  // iOS segmented “moving capsule” indicator (UI only)
+  try{
+    const wrap = document.getElementById('chatLangRow');
+    if(wrap && wrap.classList.contains('segmented')){
+      const active = wrap.querySelector('[data-lang].active');
+      if(active){
+        const wRect = wrap.getBoundingClientRect();
+        const aRect = active.getBoundingClientRect();
+        const left = Math.max(4, Math.round(aRect.left - wRect.left));
+        const width = Math.max(40, Math.round(aRect.width));
+        wrap.style.setProperty('--seg-left', left + 'px');
+        wrap.style.setProperty('--seg-width', width + 'px');
+        wrap.querySelectorAll('[role="tab"]').forEach(b=>b.setAttribute('aria-selected', b.classList.contains('active') ? 'true' : 'false'));
+      }
+    }
+  }catch(e){}
+btn.classList.toggle('active', b === (state.lang||'en').toLowerCase());
   });
   // Keep single welcome updated
   try{ normalizeChatWelcome(); }catch(e){}
@@ -4008,6 +4005,13 @@ function init(){
   }
 })();
 
+  // Bind once: keep segmented capsule aligned on rotation/resize
+  try{
+    if(!window.__segmentedResizeBound){
+      window.__segmentedResizeBound = true;
+      window.addEventListener('resize', ()=>{ try{ updateUI(); }catch(e){} }, {passive:true});
+    }
+  }catch(e){}
 </script>
 
 </body>
