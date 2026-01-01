@@ -2861,6 +2861,32 @@ body[data-msec="schedule"] #scheduleCard{
   letter-spacing: .02em;
 }
 
+
+/* === FORCE CHAT HEADER TO SINGLE LINE (FINAL FIX) === */
+#sec-chat .cardHead.chatHead{
+  display:flex;
+  align-items:center;
+  flex-wrap: nowrap;          /* prevent line break */
+}
+
+#sec-chat .chatHeadLeft{
+  display:flex;
+  align-items:center;
+  flex-direction: row;        /* stop vertical stacking */
+  gap:10px;
+  min-width: 0;
+}
+
+#sec-chat .cardTitle{
+  white-space: nowrap;
+  margin: 0;
+}
+
+#sec-chat .segWrap{
+  margin-left: auto;          /* keep languages on same row */
+  white-space: nowrap;
+}
+
 </style>
 </head>
 
