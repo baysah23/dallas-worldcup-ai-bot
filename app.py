@@ -1002,7 +1002,7 @@ def ensure_sheet_schema(ws) -> List[str]:
     Make sure row 1 is the header and includes the CRM columns we need.
     Returns the final header list (as stored in the sheet).
     """
-    desired = ["timestamp", "name", "phone", "date", "time", "party_size", "language", "status", "vip"]
+    desired = ["timestamp", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier"]
 
     existing = ws.row_values(1) or []
     existing_norm = [_normalize_header(x) for x in existing]
@@ -1065,6 +1065,8 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
     setv("language", lead.get("language", "en"))
     setv("status", status)
     setv("vip", vip)
+    setv("entry_point", lead.get("entry_point",""))
+    setv("tier", lead.get("tier",""))
 
     # Append at bottom (keeps headers at the top)
     ws.append_row(row, value_input_option="USER_ENTERED")
@@ -3447,6 +3449,8 @@ def admin():
     i_lang = idx("language")
     i_status = idx("status")
     i_vip = idx("vip")
+    i_entry = idx("entry_point")
+    i_tier = idx("tier")
 
     def colval(r, i, default=""):
         return (r[i] if 0 <= i < len(r) else default).strip() if isinstance(r, list) else default
@@ -3548,7 +3552,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
         html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>Newest first. Update Status/VIP and save.</div></div>")
         html.append("<div class='tablewrap'><table>")
         html.append("<thead><tr>"
-                    "<th>Sheet Row</th><th>Timestamp</th><th>Name</th><th>Phone</th><th>Date</th><th>Time</th><th>Party</th><th>Lang</th><th>Status</th><th>VIP</th><th>Save</th>"
+                    "<th>Sheet Row</th><th>Timestamp</th><th>Name</th><th>Phone</th><th>Date</th><th>Time</th><th>Party</th><th>Lang</th><th>Status</th><th>VIP</th><th>Entry</th><th>Tier</th><th>Save</th>"
                     "</tr></thead><tbody>")
         for sheet_row, r in numbered:
             ts = colval(r, i_ts, "")
@@ -3560,6 +3564,8 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
             lg = colval(r, i_lang, "en")
             st = colval(r, i_status, "New") or "New"
             vip = colval(r, i_vip, "No") or "No"
+            ep = colval(r, i_entry, "")
+            tier = colval(r, i_tier, "")
 
             def opt(selected, label):
                 sel = "selected" if selected else ""
@@ -3586,6 +3592,9 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
                         f"{opt(vip.lower() in ['yes','true','1','y'], 'Yes')}{opt(vip.lower() in ['no','false','0','n',''], 'No')}"
                         "</select>")
             html.append("</td>")
+
+            html.append("<td><span class='pill'>" + _hesc(ep) + "</span></td>")
+            html.append("<td><span class='pill'>" + _hesc(tier) + "</span></td>")
 
             html.append("<td>")
             html.append(f"<button class='btn2' onclick='saveLead({sheet_row})'>Save</button>")
@@ -4332,6 +4341,63 @@ tr:hover td{background:rgba(255,255,255,.03)}
     return "".join(html)
 
 
+
+
+# ============================================================
+# Concierge intake API (writes into Admin Leads sheet)
+# ============================================================
+@app.route("/api/intake", methods=["POST"])
+def api_intake():
+    payload = request.get_json(silent=True) or {}
+
+    entry_point = (payload.get("entry_point") or "").strip() or "reserve_now"
+    contact = (payload.get("contact") or "").strip()
+    date_s = (payload.get("date") or "").strip()
+    time_s = (payload.get("time") or "").strip()
+    party = (payload.get("party_size") or "").strip()
+    vibe = (payload.get("vibe") or "").strip()
+    budget = (payload.get("budget") or "").strip()
+    notes = (payload.get("notes") or "").strip()
+    lang = (payload.get("lang") or "").strip() or "en"
+
+    if not contact or not date_s or not time_s or not party:
+        return jsonify({"ok": False, "error": "Missing required fields"}), 400
+
+    # Compute tier (simple + reliable)
+    tier = "VIP" if (entry_point == "vip_vibe" or "vip" in vibe.lower()) else "Regular"
+    vip_flag = "Yes" if tier == "VIP" else "No"
+
+    # Keep the admin leads sheet "phone" column as the best single contact field.
+    # Store entry_point/tier in dedicated columns (added to schema).
+    lead = {
+        "name": (payload.get("name") or "").strip(),
+        "phone": contact,
+        "date": date_s,
+        "time": time_s,
+        "party_size": party,
+        "language": lang,
+        "status": "New",
+        "vip": vip_flag,
+        "entry_point": entry_point,
+        "tier": tier,
+    }
+
+    # Add context into details for quick scanning
+    detail_bits = []
+    if vibe: detail_bits.append(f"vibe: {vibe}")
+    if budget: detail_bits.append(f"budget: {budget}")
+    if notes: detail_bits.append(f"notes: {notes}")
+    if detail_bits:
+        lead["phone"] = contact  # unchanged
+        # Put extra details into a "notes" style field if the sheet has it; otherwise it will be ignored.
+        lead["notes"] = " | ".join(detail_bits)
+
+    try:
+        append_lead_to_sheet(lead)
+        _audit("intake.new", {"entry_point": entry_point, "tier": tier})
+        return jsonify({"ok": True, "tier": tier})
+    except Exception as e:
+        return jsonify({"ok": False, "error": "Failed to store intake"}), 500
 
 # ============================================================
 # Leads intake (used by the new UI)

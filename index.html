@@ -3929,7 +3929,7 @@ body[data-sec="schedule"] #sec-schedule #pager .pill{
         <input id="iContact" placeholder="Phone or email" />
         <button class="ctaBtn" id="submitIntake" type="button">Submit request</button>
         <div id="intakeMsg" class="hint"></div>
-        <div class="hint">We’ll route you to Chat next to confirm time window + party size (and any preferences).</div>
+        <div class="hint">Saved to your Admin Leads list. You can confirm details and follow up from there.</div>
       </div>
     </div>
   </div>
@@ -4789,7 +4789,9 @@ async function loadVIP(){
 }
 
 // ---------- intake modal ----------
-function openModal(){
+let currentEntryPoint = 'reserve_now';
+function openModal(entryPoint){
+  currentEntryPoint = (entryPoint || currentEntryPoint || 'reserve_now');
   const m = $('intakeModal');
   if(!m) return;
   m.classList.remove('hidden');
@@ -4818,12 +4820,41 @@ async function submitIntake(){
   }
   if(msg) msg.textContent = 'Sending…';
 
-  // keep it in-chat (premium + fast)
-  const summary = `Reservation request: date ${iDate}, party ${iGroup}, time ${iTime}${iVibe?`, vibe ${iVibe}`:''}${iBudget?`, budget ${iBudget}`:''}${iNotes?`, notes ${iNotes}`:''}. Contact: ${iContact}.`;
-  closeModal();
-  openChatPrefill(summary);
-  if(msg) msg.textContent = '';
+  const payload = {
+    entry_point: currentEntryPoint || 'reserve_now',
+    date: iDate,
+    party_size: iGroup,
+    time: iTime,
+    vibe: iVibe,
+    budget: iBudget,
+    notes: iNotes,
+    contact: iContact,
+    lang: state?.lang || 'en'
+  };
+
+  try{
+    const res = await fetch('/api/intake', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok || !data.ok){
+      throw new Error(data.error || 'Request failed');
+    }
+    closeModal();
+    toast(`Request saved as ${data.tier || ''} — view it in Admin → Leads.`, 2400);
+    if(msg) msg.textContent = '';
+    // reset fields lightly (keep contact for convenience)
+    try{
+      $('iDate').value=''; $('iGroup').value=''; $('iTime').value='';
+      $('iVibe').value=''; $('iBudget').value=''; $('iNotes').value='';
+    }catch(e){}
+  }catch(e){
+    if(msg) msg.textContent = 'Could not submit. Please try again.';
+  }
 }
+
 
 // ---------- home bindings ----------
 function bindHome(){
@@ -4835,7 +4866,7 @@ function bindHome(){
 
   $('ctaReserve')?.addEventListener('click', ()=>{
     // Reserve now opens the intake modal (concierge form style)
-    openModal();
+    openModal('reserve_now');
   });
 
   function applyQuickPrefill(q){
@@ -4858,7 +4889,7 @@ function bindHome(){
   // Quick chips -> prefill intake modal
   $$('.quickChips .chip').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      openModal();
+      openModal(((btn.dataset?.q||'').toLowerCase().includes('vip')) ? 'vip_vibe' : (((btn.dataset?.q||'').toLowerCase().includes('table for 4')) ? 'table_for_4' : 'reserve_now'));
       applyQuickPrefill(btn.dataset?.q || '');
     });
   });
@@ -4868,7 +4899,7 @@ function bindHome(){
   $('tileFanzone')?.addEventListener('click', ()=>setSection('fanzone'));
   $('tileSchedule')?.addEventListener('click', ()=>setSection('schedule'));
   $('tileMenu')?.addEventListener('click', ()=>setSection('menu'));
-  $('tilePlan')?.addEventListener('click', ()=>openModal());
+  $('tilePlan')?.addEventListener('click', ()=>openModal('match_day'));
 
   // Pills
   $('pillLang')?.addEventListener('click', ()=>cycleLang());
