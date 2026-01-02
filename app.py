@@ -3803,9 +3803,9 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 """)
 
     # Scripts
-    html.append(f"""
+    html.append("""
 <script>
-const KEY = {json.dumps(key)};
+const KEY = __ADMIN_KEY__;
 
 
 // ===== Leads filters (simple + fast) =====
@@ -4079,7 +4079,7 @@ async function loadAudit(){{
 
 try{ setupLeadFilters(); }catch(e){}
 </script>
-""")
+""".replace("__ADMIN_KEY__", json.dumps(key)))
 
     html.append("</div></body></html>")
     return "".join(html)
