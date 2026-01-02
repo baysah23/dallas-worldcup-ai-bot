@@ -4208,7 +4208,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 .note{margin-top:8px;font-size:12px;color:var(--muted)}
 .hidden{display:none}
 .locked{opacity:.45;filter:saturate(.7)}
-.locked::after{content:'🔒';margin-left:6px;font-size:12px;opacity:.8}
+.locked::after{content:'🔒 Owner';margin-left:6px;font-size:12px;opacity:.8}
 .code{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-size:12px}
 </style>
 """)
@@ -5142,6 +5142,33 @@ async function clearNotifs(){
     if(msg) msg.textContent='Error';
   }
 }
+
+function setupTabs(){
+  const btns = Array.from(document.querySelectorAll('.tabbtn'));
+  const panes = Array.from(document.querySelectorAll('.tabpane'));
+  if(!btns.length || !panes.length) return;
+
+  function show(tab){
+    btns.forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
+    panes.forEach(p=>p.classList.add('hidden'));
+    const pane = document.querySelector('#tab-'+tab);
+    if(pane) pane.classList.remove('hidden');
+    // keep URL hash for deep-linking
+    try{ history.replaceState(null, '', '#'+tab); }catch(e){}
+  }
+
+  btns.forEach(b=>{
+    b.addEventListener('click', (e)=>{
+      e.preventDefault();
+      const tab = b.getAttribute('data-tab');
+      if(tab) show(tab);
+    });
+  });
+
+  // open tab from URL hash if present
+  const initial = (location.hash||'').replace('#','').trim();
+  if(initial && document.querySelector('.tabbtn[data-tab="'+initial+'"]')) show(initial);
+}
 function openNotifications(){
   // Switch to Ops tab and scroll to the notifications card
   try{
@@ -5158,8 +5185,12 @@ function openNotifications(){
 // Poll notifications lightly
 setInterval(()=>{ try{ loadNotifs(); }catch(e){} }, 15000);
 
-try{ setupLeadFilters(); }catch(e){}
-try{ loadNotifs(); }catch(e){}
+document.addEventListener('DOMContentLoaded', ()=>{
+  try{ setupTabs(); }catch(e){}
+  try{ markLockedControls(); }catch(e){}
+  try{ setupLeadFilters(); }catch(e){}
+  try{ loadNotifs(); }catch(e){}
+});
 </script>
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
 
