@@ -4207,8 +4207,8 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 .btnTiny:hover{background:rgba(255,255,255,.10)}
 .note{margin-top:8px;font-size:12px;color:var(--muted)}
 .hidden{display:none}
-.locked{opacity:.45;filter:saturate(.7)}
-.locked::after{content:'🔒 Owner';margin-left:6px;font-size:12px;opacity:.8}
+.locked{opacity:.45;filter:saturate(.7);cursor:not-allowed}
+.locked::after{content:'⛔ No permission';margin-left:6px;font-size:12px;opacity:.8}
 .code{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-size:12px}
 </style>
 """)
@@ -4237,13 +4237,13 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
     html.append(r"""
 <div class="tabs">
-  <button class="tabbtn active" data-tab="leads">Leads</button>
-  <button class="tabbtn" data-tab="ops">Ops</button>
-  <button class="tabbtn" data-tab="ai">AI</button>
-  <button class="tabbtn" data-tab="aiq">AI Queue</button>
-  <button class="tabbtn" data-tab="rules">Rules</button>
-  <button class="tabbtn" data-tab="menu">Menu</button>
-  <button class="tabbtn" data-tab="audit">Audit</button>
+  <button type="button" class="tabbtn active" data-tab="leads">Leads</button>
+  <button type="button" class="tabbtn" data-tab="ops">Ops</button>
+  <button type="button" class="tabbtn" data-tab="ai">AI</button>
+  <button type="button" class="tabbtn" data-tab="aiq">AI Queue</button>
+  <button type="button" class="tabbtn" data-tab="rules">Rules</button>
+  <button type="button" class="tabbtn" data-tab="menu">Menu</button>
+  <button type="button" class="tabbtn" data-tab="audit">Audit</button>
 </div>
 
 <div id="tab-leads" class="tabpane">
@@ -4346,7 +4346,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
         <label class="small"><input type="checkbox" id="ops-viponly"> VIP-only</label><br/>
         <label class="small"><input type="checkbox" id="ops-waitlist"> Waitlist mode</label>
         <div style="margin-top:10px">
-          <button class="btn" onclick="saveOps()">Save Ops</button>
+          <button type="button" class="btn" onclick="saveOps()">Save Ops</button>
           <span id="ops-msg" class="note"></span>
         </div>
       </div>
@@ -4439,7 +4439,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
       </div>
 
       <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn" onclick="saveAI()">Save AI Settings</button>
+        <button type="button" class="btn" onclick="saveAI()">Save AI Settings</button>
         <button class="btn2" onclick="loadAI()">Reload</button>
         <span id="ai-msg" class="note"></span>
       </div>
@@ -4530,7 +4530,7 @@ id="tab-rules" class="tabpane hidden">
     </div>
 
     <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
-      <button class="btn" data-min-role="owner" onclick="saveRules()">Save Rules</button>
+      <button type="button" class="btn" data-min-role="owner" onclick="saveRules()">Save Rules</button>
       <button class="btn2" onclick="loadRules()">Reload</button>
       <span id="rules-msg" class="note"></span>
     </div>
@@ -4552,7 +4552,7 @@ id="tab-rules" class="tabpane hidden">
         <label class="small">Upload menu JSON file</label>
         <input id="menu-file" class="inp" type="file" accept="application/json"/>
         <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn" data-min-role="owner" onclick="uploadMenu()">Upload</button>
+          <button type="button" class="btn" data-min-role="owner" onclick="uploadMenu()">Upload</button>
           <button class="btn2" onclick="loadMenu()">Load Current</button>
           <span id="menu-msg" class="note"></span>
         </div>
@@ -4998,9 +4998,9 @@ function renderAIQueue(items){
     const payload = esc(JSON.stringify(it.payload || {}));
 
     const canAct = (st === 'pending');
-    const approveBtn = `<button class="btn" ${canAct?'':'disabled'} onclick="aiqApprove('${id}')">Approve</button>`;
+    const approveBtn = `<button type="button" class="btn" ${canAct?'':'disabled'} onclick="aiqApprove('${id}')">Approve</button>`;
     const denyBtn = `<button class="btn2" ${canAct?'':'disabled'} onclick="aiqDeny('${id}')">Deny</button>`;
-    const ovBtn = `<button class="btn" data-min-role="owner" onclick="aiqOverride('${id}')">Owner Override</button>`;
+    const ovBtn = `<button type="button" class="btn" data-min-role="owner" onclick="aiqOverride('${id}')">Owner Override</button>`;
 
     return `
       <div style="padding:12px;border:1px solid rgba(255,255,255,.16);border-radius:14px;margin-bottom:10px;background:rgba(255,255,255,.06)">
@@ -5203,6 +5203,8 @@ def admin_fanzone():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return "Unauthorized", 401
+    ctx = _admin_ctx()
+    role = (ctx.get("role") or "manager").strip() or "manager"
     key = (request.args.get("key", "") or "").strip()
 
     html = []
@@ -5263,7 +5265,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
       <div style="font-weight:800;letter-spacing:.02em">Fan Zone • Poll Controls</div>
       <div class="sub">Edit sponsor text + set Match of the Day (no redeploy). Also shows live poll status.</div>
     </div>
-    <button class="btn" id="btnSaveConfig">Save settings</button>
+    <button type="button" class="btn" id="btnSaveConfig">Save settings</button>
   </div>
 
   <div class="controls" style="margin:12px 0 0 0">
