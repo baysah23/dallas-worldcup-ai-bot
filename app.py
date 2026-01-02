@@ -218,8 +218,6 @@ def _admin_auth() -> Dict[str, str]:
     - If key matches any ADMIN_MANAGER_KEYS => role=manager
     """
     key = (request.args.get("key", "") or "").strip()
-
-    role = _admin_ctx().get("role","")
     if not key:
         return {"ok": False, "role": "", "actor": ""}
 
@@ -1004,7 +1002,8 @@ def ensure_sheet_schema(ws) -> List[str]:
     Make sure row 1 is the header and includes the CRM columns we need.
     Returns the final header list (as stored in the sheet).
     """
-    desired = ['timestamp', 'name', 'phone', 'date', 'time', 'party_size', 'language', 'status', 'vip', 'entry_point', 'tier', 'queue', 'business_context', 'budget', 'notes', 'vibe']
+    desired = ["timestamp", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier", "queue", "business_context", "budget", "notes", "vibe"]
+
     existing = ws.row_values(1) or []
     existing_norm = [_normalize_header(x) for x in existing]
 
@@ -3527,7 +3526,6 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     html.append("<div class='h1'>Admin Dashboard v1</div>")
     html.append("<div class='sub'>Tabs + Rules Config + Menu Upload (fan UI unchanged)</div>")
     html.append("<div class='pills'>")
-    html.append(f"<span class='pill'><b>Role</b> {(role or '-').title()}</span>")
     html.append(f"<span class='pill'><b>Leads</b> {len(body)}</span>")
     html.append(f"<span class='pill'><b>VIP</b> {vip_count}</span>")
     for k, v in status_counts.items():
@@ -3543,19 +3541,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     html.append("</div>")
     html.append("</div>")  # topbar
 
-    # Tabs (role-aware: keep manager view simple)
-    if (role or "") == "manager":
-        html.append(r"""
-<div class="tabs">
-  <button class="tabbtn active" data-tab="leads">Leads</button>
-  <button class="tabbtn" data-tab="ops">Ops</button>
-  <button class="tabbtn" data-tab="audit">Audit</button>
-</div>
-
-<div id="tab-leads" class="tabpane">
-""")
-    else:
-        html.append(r"""
+    html.append(r"""
 <div class="tabs">
   <button class="tabbtn active" data-tab="leads">Leads</button>
   <button class="tabbtn" data-tab="ops">Ops</button>
@@ -3566,7 +3552,6 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
 <div id="tab-leads" class="tabpane">
 """)
-
 
     # Leads table
     if leads_err:
@@ -3900,196 +3885,196 @@ function setupLeadFilters(){
 }
 
 
-function qs(sel){{return document.querySelector(sel);}}
-function qsa(sel){{return Array.from(document.querySelectorAll(sel));}}
+function qs(sel){return document.querySelector(sel);}
+function qsa(sel){return Array.from(document.querySelectorAll(sel));}
 
-qsa('.tabbtn').forEach(btn=>{{
-  btn.addEventListener('click', ()=>{{
+qsa('.tabbtn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
     qsa('.tabbtn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     const t = btn.dataset.tab;
-    ['leads','ops','rules','menu','audit'].forEach(x=>{{
+    ['leads','ops','rules','menu','audit'].forEach(x=>{
       const pane = document.getElementById('tab-'+x);
       if(!pane) return;
       pane.classList.toggle('hidden', x!==t);
-    }});
+    });
     if(t==='ops') loadOps();
     if(t==='rules') loadRules();
     if(t==='menu') loadMenu();
     if(t==='audit') loadAudit();
-  }});
-}});
+  });
+});
 
-async function saveLead(sheetRow){{
+async function saveLead(sheetRow){
   const status = qs('#status-'+sheetRow).value;
   const vip = qs('#vip-'+sheetRow).value;
-  const res = await fetch('/admin/update-lead?key='+encodeURIComponent(KEY), {{
+  const res = await fetch('/admin/update-lead?key='+encodeURIComponent(KEY), {
     method:'POST',
-    headers:{{'Content-Type':'application/json'}},
-    body: JSON.stringify({{sheet_row: sheetRow, status, vip}})
-  }});
-  const j = await res.json().catch(()=>{{}});
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({sheet_row: sheetRow, status, vip})
+  });
+  const j = await res.json().catch(()=>{});
   if(j && j.ok) alert('Saved');
   else alert('Save failed: ' + (j.error||res.status));
-}}
+}
 
-async function loadRules(){{
+async function loadRules(){
   const msg = qs('#rules-msg'); if(msg) msg.textContent='';
   const res = await fetch('/admin/api/rules?key='+encodeURIComponent(KEY));
   const j = await res.json().catch(()=>null);
-  if(!j || !j.ok){{ if(msg) msg.textContent='Failed to load rules'; return; }}
-  const r = j.rules || {{}};
+  if(!j || !j.ok){ if(msg) msg.textContent='Failed to load rules'; return; }
+  const r = j.rules || {};
   qs('#rules-max-party').value = r.max_party_size || '';
   qs('#rules-banner').value = r.match_day_banner || '';
   qs('#rules-closed').value = (r.closed_dates||[]).join('\\n');
-  const h = r.hours || {{}};
-  ['mon','tue','wed','thu','fri','sat','sun'].forEach(d=>{{
+  const h = r.hours || {};
+  ['mon','tue','wed','thu','fri','sat','sun'].forEach(d=>{
     const el = qs('#h-'+d);
     if(el) el.value = (h[d]||'');
-  }});
-}}
+  });
+}
 
-async function saveRules(){{
+async function saveRules(){
   const msg = qs('#rules-msg'); if(msg) msg.textContent='Saving...';
-  const hours={{}};
+  const hours={};
   ['mon','tue','wed','thu','fri','sat','sun'].forEach(d=>hours[d]=qs('#h-'+d).value);
-  const payload={{
+  const payload={
     max_party_size: parseInt(qs('#rules-max-party').value || '0', 10),
     match_day_banner: qs('#rules-banner').value || '',
     closed_dates: qs('#rules-closed').value || '',
     hours: hours
-  }};
-  const res = await fetch('/admin/api/rules?key='+encodeURIComponent(KEY), {{
+  };
+  const res = await fetch('/admin/api/rules?key='+encodeURIComponent(KEY), {
     method:'POST',
-    headers:{{'Content-Type':'application/json'}},
+    headers:{'Content-Type':'application/json'},
     body: JSON.stringify(payload)
-  }});
+  });
   const j = await res.json().catch(()=>null);
-  if(j && j.ok){{ if(msg) msg.textContent='Saved ✔'; }}
-  else {{ if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }}
-}}
+  if(j && j.ok){ if(msg) msg.textContent='Saved ✔'; }
+  else { if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }
+}
 
-async function loadMenu(){{
+async function loadMenu(){
   const msg = qs('#menu-msg'); if(msg) msg.textContent='';
   const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY));
   const j = await res.json().catch(()=>null);
-  if(j && j.ok){{
-    qs('#menu-json').value = JSON.stringify(j.menu || {{}}, null, 2);
+  if(j && j.ok){
+    qs('#menu-json').value = JSON.stringify(j.menu || {}, null, 2);
     if(msg) msg.textContent='Loaded ✔';
-  }} else {{
+  } else {
     if(msg) msg.textContent='Failed to load';
-  }}
-}}
+  }
+}
 
-async function saveMenuJson(){{
+async function saveMenuJson(){
   const msg = qs('#menu-msg'); if(msg) msg.textContent='Saving...';
   let payload=null;
-  try {{ payload = JSON.parse(qs('#menu-json').value || '{{}}'); }} catch(e) {{
+  try { payload = JSON.parse(qs('#menu-json').value || '{}'); } catch(e) {
     alert('Invalid JSON'); if(msg) msg.textContent='Invalid JSON'; return;
-  }}
-  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY), {{
+  }
+  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY), {
     method:'POST',
-    headers:{{'Content-Type':'application/json'}},
+    headers:{'Content-Type':'application/json'},
     body: JSON.stringify(payload)
-  }});
+  });
   const j = await res.json().catch(()=>null);
-  if(j && j.ok){{ if(msg) msg.textContent='Saved ✔'; }}
-  else {{ if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }}
-}}
+  if(j && j.ok){ if(msg) msg.textContent='Saved ✔'; }
+  else { if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }
+}
 
-async function uploadMenu(){{
+async function uploadMenu(){
   const msg = qs('#menu-msg'); if(msg) msg.textContent='Uploading...';
   const f = qs('#menu-file').files[0];
-  if(!f){{ alert('Choose a JSON file'); if(msg) msg.textContent='No file'; return; }}
+  if(!f){ alert('Choose a JSON file'); if(msg) msg.textContent='No file'; return; }
   const fd = new FormData();
   fd.append('file', f);
-  const res = await fetch('/admin/api/menu-upload?key='+encodeURIComponent(KEY), {{
+  const res = await fetch('/admin/api/menu-upload?key='+encodeURIComponent(KEY), {
     method:'POST',
     body: fd
-  }});
+  });
   const j = await res.json().catch(()=>null);
-  if(j && j.ok){{ qs('#menu-json').value = JSON.stringify(j.menu || {{}}, null, 2); if(msg) msg.textContent='Uploaded ✔'; }}
-  else {{ if(msg) msg.textContent='Upload failed'; alert('Upload failed: '+(j && j.error ? j.error : res.status)); }}
-}}
+  if(j && j.ok){ qs('#menu-json').value = JSON.stringify(j.menu || {}, null, 2); if(msg) msg.textContent='Uploaded ✔'; }
+  else { if(msg) msg.textContent='Upload failed'; alert('Upload failed: '+(j && j.error ? j.error : res.status)); }
+}
 
-async function loadOps(){{
+async function loadOps(){
   const msg = qs('#ops-msg'); if(msg) msg.textContent='Loading...';
   const res = await fetch('/admin/api/ops?key='+encodeURIComponent(KEY));
   const j = await res.json().catch(()=>null);
-  if(!j || !j.ok){{ if(msg) msg.textContent='Failed to load ops'; return; }}
-  const o = j.ops || {{}};
+  if(!j || !j.ok){ if(msg) msg.textContent='Failed to load ops'; return; }
+  const o = j.ops || {};
   const pause = qs('#ops-pause'); if(pause) pause.checked = (o.pause_reservations===true || o.pause_reservations==='true');
   const vip = qs('#ops-viponly'); if(vip) vip.checked = (o.vip_only===true || o.vip_only==='true');
   const wl = qs('#ops-waitlist'); if(wl) wl.checked = (o.waitlist_mode===true || o.waitlist_mode==='true');
   if(msg) msg.textContent='';
-}}
+}
 
-async function saveOps(){{
+async function saveOps(){
   const msg = qs('#ops-msg'); if(msg) msg.textContent='Saving...';
-  const payload = {{
+  const payload = {
     pause_reservations: !!(qs('#ops-pause') && qs('#ops-pause').checked),
     vip_only: !!(qs('#ops-viponly') && qs('#ops-viponly').checked),
     waitlist_mode: !!(qs('#ops-waitlist') && qs('#ops-waitlist').checked),
-  }};
-  const res = await fetch('/admin/api/ops?key='+encodeURIComponent(KEY), {{
+  };
+  const res = await fetch('/admin/api/ops?key='+encodeURIComponent(KEY), {
     method:'POST',
-    headers:{{'Content-Type':'application/json'}},
+    headers:{'Content-Type':'application/json'},
     body: JSON.stringify(payload)
-  }});
+  });
   const j = await res.json().catch(()=>null);
-  if(j && j.ok){{ if(msg) msg.textContent='Saved ✔'; }}
-  else {{ if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }}
-}}
+  if(j && j.ok){ if(msg) msg.textContent='Saved ✔'; }
+  else { if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }
+}
 
-async function applyPreset(name){{
+async function applyPreset(name){
   const msg = qs('#preset-msg'); if(msg) msg.textContent='Applying "'+name+'" ...';
-  const res = await fetch('/admin/api/presets/apply?key='+encodeURIComponent(KEY), {{
+  const res = await fetch('/admin/api/presets/apply?key='+encodeURIComponent(KEY), {
     method:'POST',
-    headers:{{'Content-Type':'application/json'}},
-    body: JSON.stringify({{name}})
-  }});
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name})
+  });
   const j = await res.json().catch(()=>null);
-  if(j && j.ok){{
+  if(j && j.ok){
     if(msg) msg.textContent='Applied ✔ (logged)';
     await loadOps();
     // If you are owner and preset touched rules, refresh rules form for visibility.
     if(j.rules) await loadRules();
-  }} else {{
+  } else {
     if(msg) msg.textContent='Apply failed';
     alert('Preset failed: '+(j && j.error ? j.error : res.status));
-  }}
-}}
+  }
+}
 
-function esc(s){{
+function esc(s){
   return (s==null?'':String(s))
     .replaceAll('&','&amp;')
     .replaceAll('<','&lt;')
     .replaceAll('>','&gt;')
     .replaceAll('"','&quot;')
     .replaceAll("'","&#39;");
-}}
+}
 
-async function loadAudit(){{
+async function loadAudit(){
   const msg = qs('#audit-msg'); if(msg) msg.textContent='Loading...';
   const lim = parseInt((qs('#audit-limit') && qs('#audit-limit').value) || '200', 10) || 200;
   const res = await fetch('/admin/api/audit?key='+encodeURIComponent(KEY)+'&limit='+encodeURIComponent(lim));
   const j = await res.json().catch(()=>null);
-  if(!j || !j.ok){{ if(msg) msg.textContent='Failed to load audit'; return; }}
+  if(!j || !j.ok){ if(msg) msg.textContent='Failed to load audit'; return; }
   const body = qs('#audit-body');
-  if(body){{
+  if(body){
     body.innerHTML = '';
-    (j.items || []).forEach(it=>{{
+    (j.items || []).forEach(it=>{
       const tr = document.createElement('tr');
       tr.innerHTML = '<td>'+esc(it.ts||'')+'</td>'
         +'<td><span class="code">'+esc(it.actor||'')+'</span></td>'
         +'<td>'+esc(it.role||'')+'</td>'
         +'<td>'+esc(it.action||'')+'</td>'
-        +'<td><span class="code">'+esc(JSON.stringify(it.meta||{{}}))+'</span></td>';
+        +'<td><span class="code">'+esc(JSON.stringify(it.meta||{}))+'</span></td>';
       body.appendChild(tr);
-    }});
-  }}
+    });
+  }
   if(msg) msg.textContent='';
-}}
+}
 
 
 try{ setupLeadFilters(); }catch(e){}
