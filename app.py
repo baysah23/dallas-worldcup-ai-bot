@@ -4471,7 +4471,6 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
   </div>
 </div>
 
-<div 
 <div id="tab-aiq" class="tabpane hidden">
   <div class="card">
     <div class="h2">AI Approval Queue</div>
@@ -4493,7 +4492,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
   </div>
 </div>
 
-id="tab-rules" class="tabpane hidden">
+<div id="tab-rules" class="tabpane hidden">
   <div class="card">
     <div class="h2">Business Rules</div>
     <div class="small">These rules power reservation guardrails (max party size, closed dates, hours, banner). Saved rules persist on the server.</div>
@@ -5304,14 +5303,51 @@ tr:hover td{background:rgba(255,255,255,.03)}
 </div> <!-- end tab-menu -->
 
 <div id="tab-ops" class="tabpane hidden">
-  
+  <div class="card">
+    <div class="h2">Ops</div>
+    <div class="small">Fan Zone ops are controlled in the main Admin → Ops tab.</div>
+  </div>
+</div>
 
 <div id="tab-audit" class="tabpane hidden">
-  
+  <div class="card">
+    <div class="h2">Audit</div>
+    <div class="small">Use the main Admin → Audit tab to review changes.</div>
+  </div>
+</div>
 
 <script>
 (function(){
   const ADMIN_KEY = (new URLSearchParams(location.search)).get("key") || "";
+  const ROLE = "__ADMIN_ROLE__";
+  const ROLE_RANK = { manager: 1, owner: 2 };
+  function hasRole(minRole){
+    const need = ROLE_RANK[minRole||'manager'] || 1;
+    const have = ROLE_RANK[ROLE||'manager'] || 1;
+    return have >= need;
+  }
+  function markLockedControls(){
+    document.querySelectorAll('[data-min-role]').forEach(el=>{
+      const need = el.getAttribute('data-min-role') || 'manager';
+      if(!hasRole(need)){
+        el.classList.add('locked');
+        el.setAttribute('aria-disabled','true');
+        el.setAttribute('title','Owner-only');
+        // keep tappable so we can explain
+        el.style.pointerEvents = 'auto';
+      }
+    });
+  }
+  window.addEventListener('DOMContentLoaded', markLockedControls);
+  document.addEventListener('click',(e)=>{
+    const el = e.target && e.target.closest ? e.target.closest('[data-min-role]') : null;
+    if(!el) return;
+    const need = el.getAttribute('data-min-role') || 'manager';
+    if(hasRole(need)) return;
+    e.preventDefault(); e.stopPropagation();
+    const label = (el.textContent||'').trim() || 'This action';
+    alert(label + ' is Owner-only.');
+  }, true);
 
   const $ = (id)=>document.getElementById(id);
 
