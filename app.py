@@ -4,6 +4,7 @@ load_dotenv()
 import os
 import json
 import hashlib
+import uuid
 import re
 import time
 import datetime
@@ -166,6 +167,20 @@ BUSINESS_RULES = {
     ],
     "max_party_size": 12,
     "match_day_banner": "🏟️ Match-day mode: Opening at 11am on match days!",
+    # AI automation governance (admin/manager configurable)
+    "ai": {
+        # off | assist | auto
+        "mode": "assist",
+        # if true, AI proposals go to approval queue before applying changes
+        "require_approval": True,
+        # 0.0 - 1.0; only used for auto mode
+        "auto_confidence_threshold": 0.85,
+        # which proposal types are allowed
+        "enabled_proposals": {
+            "lead_triage": True
+        },
+    },
+
 }
 
 
@@ -3331,6 +3346,159 @@ def admin_api_audit():
         pass
     return jsonify({"ok": True, "entries": entries})
 
+
+# ============================================================
+# Admin API: AI Automation settings + approval queue
+# ============================================================
+
+@app.route("/admin/api/ai/settings", methods=["GET","POST"])
+def admin_api_ai_settings():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    if request.method == "GET":
+        return jsonify({"ok": True, "ai": _ai_cfg()})
+
+    patch = request.get_json(silent=True) or {}
+    ai = _ai_cfg()
+
+    mode = (patch.get("mode") or ai.get("mode") or "assist").lower().strip()
+    if mode not in ["off", "assist", "auto"]:
+        return jsonify({"ok": False, "error": "Invalid mode"}), 400
+
+    require_approval = patch.get("require_approval")
+    if require_approval is None:
+        require_approval = ai.get("require_approval", True)
+    require_approval = bool(require_approval)
+
+    thr = patch.get("auto_confidence_threshold", ai.get("auto_confidence_threshold", 0.85))
+    try:
+        thr = float(thr)
+    except Exception:
+        thr = 0.85
+    thr = max(0.0, min(0.99, thr))
+
+    enabled = patch.get("enabled_proposals", ai.get("enabled_proposals") or {"lead_triage": True})
+    if not isinstance(enabled, dict):
+        enabled = {"lead_triage": True}
+    enabled = {"lead_triage": bool(enabled.get("lead_triage", True))}
+
+    rules_patch = {"ai": {"mode": mode, "require_approval": require_approval, "auto_confidence_threshold": thr, "enabled_proposals": enabled}}
+    _persist_rules(rules_patch)
+    _audit("ai.settings.update", {"mode": mode, "require_approval": require_approval, "thr": thr, "enabled": enabled})
+    return jsonify({"ok": True, "ai": _ai_cfg()})
+
+@app.route("/admin/api/ai/queue", methods=["GET"])
+def admin_api_ai_queue():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    status = (request.args.get("status") or "").strip() or None
+    try:
+        limit = int(request.args.get("limit") or 200)
+    except Exception:
+        limit = 200
+    limit = max(10, min(500, limit))
+    items = _aiq_read(limit=limit, status=status)
+    pending = len(_aiq_read(limit=500, status="pending"))
+    return jsonify({"ok": True, "pending": pending, "items": items})
+
+def _find_sheet_row_for_lead(lead: Dict[str, Any]) -> int:
+    """Best-effort: find the sheet row for a queued lead by matching contact + datetime."""
+    contact = (lead or {}).get("contact") or ""
+    dt = (lead or {}).get("datetime") or ""
+    if not contact and not dt:
+        return 0
+    try:
+        gc = get_gspread_client()
+        ws = gc.open(SHEET_NAME).sheet1
+        rows = ws.get_all_values() or []
+        if len(rows) < 2:
+            return 0
+        header = ensure_sheet_schema(ws)
+        hmap = header_map(header)
+        col_contact = hmap.get("contact") or hmap.get("name")  # tolerate schema drift
+        col_dt = hmap.get("datetime")
+        if not col_contact or not col_dt:
+            return 0
+        # 1-indexed columns
+        ic = col_contact - 1
+        idt = col_dt - 1
+        # scan last 300 leads only (fast enough)
+        start = max(1, len(rows) - 300)
+        for r_i in range(len(rows)-1, start-1, -1):
+            r = rows[r_i]
+            c = (r[ic] if ic < len(r) else "")
+            d = (r[idt] if idt < len(r) else "")
+            if (contact and c.strip() == contact.strip()) and (dt and d.strip() == dt.strip()):
+                return r_i + 1  # sheet row number
+    except Exception:
+        return 0
+    return 0
+
+@app.route("/admin/api/ai/decision", methods=["POST"])
+def admin_api_ai_decision():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    data = request.get_json(silent=True) or {}
+    item_id = (data.get("id") or "").strip()
+    action = (data.get("action") or "").strip().lower()
+    notes = (data.get("notes") or "").strip()
+    apply_now = bool(data.get("apply"))
+
+    if not item_id:
+        return jsonify({"ok": False, "error": "Missing id"}), 400
+    if action not in ["approve", "deny", "reset"]:
+        return jsonify({"ok": False, "error": "Invalid action"}), 400
+
+    patch = {
+        "decision": {"by": ctx.get("actor",""), "at": datetime.datetime.utcnow().isoformat() + "Z", "action": action, "notes": notes},
+        "status": "pending" if action == "reset" else ("approved" if action == "approve" else "denied"),
+    }
+
+    updated = _aiq_update(item_id, patch)
+    if not updated:
+        return jsonify({"ok": False, "error": "Not found"}), 404
+
+    # Optional: apply suggested status/vip to Google Sheet (best-effort)
+    applied = False
+    if apply_now and action == "approve":
+        try:
+            lead = (updated.get("lead") or {})
+            proposal = (updated.get("proposal") or {})
+            apply_patch = (proposal.get("apply") or {})
+            status = (apply_patch.get("status") or "").strip()
+            vip = (apply_patch.get("vip") or "").strip()
+            if status or vip:
+                row_num = int((updated.get("sheet_row") or 0) or 0)
+                if row_num < 2:
+                    row_num = _find_sheet_row_for_lead(lead)
+                if row_num >= 2:
+                    # Use same logic as /admin/update-lead (but allow two fields at once)
+                    gc = get_gspread_client()
+                    ws = gc.open(SHEET_NAME).sheet1
+                    header = ensure_sheet_schema(ws)
+                    hmap = header_map(header)
+                    if status:
+                        col = hmap.get("status")
+                        if col:
+                            ws.update_cell(row_num, col, status)
+                    if vip:
+                        col = hmap.get("vip")
+                        if col:
+                            ws.update_cell(row_num, col, vip)
+                    _aiq_update(item_id, {"sheet_row": row_num, "applied": {"status": status, "vip": vip}})
+                    _audit("ai.proposal.applied", {"id": item_id, "row": row_num, "status": status, "vip": vip})
+                    applied = True
+        except Exception:
+            applied = False
+
+    _audit("ai.proposal.decision", {"id": item_id, "action": action, "apply": bool(applied)})
+    return jsonify({"ok": True, "item": updated, "applied": applied})
+
 @app.route("/admin/update-lead", methods=["POST"])
 def admin_update_lead():
     ok, resp = _require_admin(min_role="manager")
@@ -3701,7 +3869,50 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 ''')
 
 
+    html.append(r"""
+<div class="card">
+  <div class="h2">AI Automation Controls</div>
+  <div class="small">AI can propose actions (like triage). Managers/Owners approve, deny, or apply. You can disable or tune behavior anytime.</div>
 
+  <div class="row" style="margin-top:12px;gap:10px;flex-wrap:wrap">
+    <label class="small" style="display:flex;flex-direction:column;gap:6px;min-width:180px">
+      <span><b>Mode</b></span>
+      <select id="ai-mode" class="inp">
+        <option value="off">Off</option>
+        <option value="assist">Assist (queue suggestions)</option>
+        <option value="auto">Auto (when confident)</option>
+      </select>
+    </label>
+
+    <label class="small" style="display:flex;gap:10px;align-items:center;margin-top:22px">
+      <input id="ai-require-approval" type="checkbox"/>
+      <span><b>Require approval</b> (recommended)</span>
+    </label>
+
+    <label class="small" style="display:flex;flex-direction:column;gap:6px;min-width:220px">
+      <span><b>Auto confidence threshold</b></span>
+      <input id="ai-threshold" class="inp" type="number" step="0.01" min="0" max="0.99" value="0.85"/>
+    </label>
+
+    <label class="small" style="display:flex;gap:10px;align-items:center;margin-top:22px">
+      <input id="ai-enable-triage" type="checkbox" checked/>
+      <span><b>Lead triage proposals</b> (status/VIP)</span>
+    </label>
+
+    <button id="btnSaveAI" class="btn" style="margin-top:22px">Save AI settings</button>
+  </div>
+
+  <div class="row" style="margin-top:14px;justify-content:space-between;align-items:center;flex-wrap:wrap">
+    <div class="small"><b>Pending approvals:</b> <span id="ai-pending-count">0</span></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button id="btnRefreshAI" class="btn2">Refresh</button>
+    </div>
+  </div>
+
+  <div id="ai-status" class="small" style="margin-top:10px;opacity:.9"></div>
+  <div id="ai-queue" style="margin-top:10px"></div>
+</div>
+""")
 
     # Rules tab
     html.append(r"""
@@ -4457,7 +4668,122 @@ tr:hover td{background:rgba(255,255,255,.03)}
 
   $("btnSaveConfig")?.addEventListener("click", saveConfig);
 
+
+  function keyQ(){
+    return ADMIN_KEY ? ("?key=" + encodeURIComponent(ADMIN_KEY)) : "";
+  }
+
+  async function loadAI(){
+    try{
+      const r1 = await fetch("/admin/api/ai/settings" + keyQ());
+      const j1 = await r1.json();
+      if(j1 && j1.ok){
+        const ai = j1.ai || {};
+        $("ai-mode").value = (ai.mode||"assist");
+        $("ai-require-approval").checked = !!ai.require_approval;
+        $("ai-threshold").value = (ai.auto_confidence_threshold ?? 0.85);
+        $("ai-enable-triage").checked = !!(ai.enabled_proposals||{}).lead_triage;
+      }
+      const r2 = await fetch("/admin/api/ai/queue" + keyQ() + (keyQ()? "&":"?") + "status=pending&limit=50");
+      const j2 = await r2.json();
+      if(j2 && j2.ok){
+        $("ai-pending-count").textContent = String(j2.pending||0);
+        renderAIQueue(j2.items||[]);
+      }
+      $("ai-status").textContent = "";
+    }catch(e){
+      $("ai-status").textContent = "Failed to load AI settings/queue.";
+    }
+  }
+
+  function fmt(x){ return (x===undefined||x===null) ? "" : String(x); }
+
+  function renderAIQueue(items){
+    const box = $("ai-queue");
+    if(!box) return;
+    if(!items || !items.length){
+      box.innerHTML = "<div class='small' style='opacity:.85'>No pending items.</div>";
+      return;
+    }
+    let html = "";
+    for(const it of items){
+      const p = it.proposal || {};
+      const sug = (p.suggestion||{});
+      const lead = (it.lead||{});
+      const conf = (p.confidence!==undefined) ? (Math.round(p.confidence*100)/100) : "";
+      const title = (p.type||"proposal");
+      html += "<div class='card' style='padding:12px;margin:10px 0'>";
+      html += "<div style='display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap'>";
+      html += "<div>";
+      html += "<div><b>"+esc(title)+"</b> <span class='small' style='opacity:.8'>("+esc(it.id||"")+")</span></div>";
+      html += "<div class='small' style='opacity:.85;margin-top:6px'>Confidence: <b>"+esc(fmt(conf))+"</b> · Created: "+esc(fmt(it.created_at||""))+"</div>";
+      html += "<div class='small' style='opacity:.9;margin-top:6px'>Lead: "+esc(fmt(lead.contact||""))+" · "+esc(fmt(lead.datetime||""))+" · party "+esc(fmt(lead.party_size||""))+"</div>";
+      html += "<div class='small' style='margin-top:8px'>Suggested: <b>Status</b>="+esc(fmt(sug.status||""))+" · <b>VIP</b>="+esc(fmt(sug.vip||""))+"</div>";
+      if((p.rationale||[]).length){
+        html += "<div class='small' style='opacity:.85;margin-top:6px'>Why: "+esc((p.rationale||[]).join(" "))+"</div>";
+      }
+      html += "</div>";
+      html += "<div style='display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end'>";
+      html += "<button class='btn2' onclick=\"aiDecision('"+escAttr(it.id)+"','approve',true)\">Approve + Apply</button>";
+      html += "<button class='btn2' onclick=\"aiDecision('"+escAttr(it.id)+"','approve',false)\">Approve</button>";
+      html += "<button class='btn2' onclick=\"aiDecision('"+escAttr(it.id)+"','deny',false)\">Deny</button>";
+      html += "<button class='btn2' onclick=\"aiDecision('"+escAttr(it.id)+"','reset',false)\">Reset</button>";
+      html += "</div>";
+      html += "</div>";
+      html += "</div>";
+    }
+    box.innerHTML = html;
+  }
+
+  function esc(s){
+    return String(s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;" }[c]));
+  }
+  function escAttr(s){
+    return esc(s).replace(/'/g,"&#39;");
+  }
+
+  async function saveAI(){
+    try{
+      const payload = {
+        mode: $("ai-mode").value,
+        require_approval: $("ai-require-approval").checked,
+        auto_confidence_threshold: parseFloat($("ai-threshold").value||"0.85"),
+        enabled_proposals: { lead_triage: $("ai-enable-triage").checked }
+      };
+      const r = await fetch("/admin/api/ai/settings" + keyQ(), {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)});
+      const j = await r.json();
+      if(j && j.ok){
+        $("ai-status").textContent = "AI settings saved.";
+        await loadAI();
+      }else{
+        $("ai-status").textContent = "Save failed.";
+      }
+    }catch(e){
+      $("ai-status").textContent = "Save failed.";
+    }
+  }
+
+  async function aiDecision(id, action, apply){
+    try{
+      const r = await fetch("/admin/api/ai/decision" + keyQ(), {method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({id, action, apply})});
+      const j = await r.json();
+      if(j && j.ok){
+        $("ai-status").textContent = (action==="approve" && apply && j.applied) ? "Approved + applied to sheet." : ("Decision saved: "+action+".");
+        await loadAI();
+      }else{
+        $("ai-status").textContent = "Decision failed.";
+      }
+    }catch(e){
+      $("ai-status").textContent = "Decision failed.";
+    }
+  }
+  window.aiDecision = aiDecision;
+
+  $("btnSaveAI")?.addEventListener("click", saveAI);
+  $("btnRefreshAI")?.addEventListener("click", loadAI);
+
   loadConfig().then(loadPoll);
+  loadAI();
   loadOps();
   loadAudit();
   setInterval(loadPoll, 5000);
@@ -4531,6 +4857,7 @@ def api_intake():
 # - Optionally appends to Google Sheets if configured (same creds as admin/chat)
 # ============================================================
 LEADS_STORE_PATH = os.environ.get("LEADS_STORE_PATH", "static/data/leads.jsonl")
+AI_QUEUE_PATH = os.environ.get("AI_QUEUE_PATH", "static/data/ai_queue.jsonl")
 GOOGLE_SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "").strip()
 
 def _append_lead_local(row: dict) -> None:
@@ -4569,6 +4896,160 @@ def _append_lead_google_sheet(row: dict) -> bool:
         return True
     except Exception:
         return False
+
+# ============================================================
+# AI Automation Queue (approval / override friendly)
+# ============================================================
+
+def _ai_cfg() -> Dict[str, Any]:
+    cfg = (BUSINESS_RULES or {}).get("ai") or {}
+    # defensive defaults
+    return {
+        "mode": (cfg.get("mode") or "assist"),
+        "require_approval": bool(cfg.get("require_approval", True)),
+        "auto_confidence_threshold": float(cfg.get("auto_confidence_threshold", 0.85)),
+        "enabled_proposals": cfg.get("enabled_proposals") or {"lead_triage": True},
+    }
+
+def _ensure_parent_dir(path: str) -> None:
+    try:
+        d = os.path.dirname(path)
+        if d:
+            os.makedirs(d, exist_ok=True)
+    except Exception:
+        pass
+
+def _aiq_append(entry: Dict[str, Any]) -> None:
+    _ensure_parent_dir(AI_QUEUE_PATH)
+    try:
+        with open(AI_QUEUE_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+def _aiq_read(limit: int = 200, status: Optional[str] = None) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    try:
+        if not os.path.exists(AI_QUEUE_PATH):
+            return []
+        with open(AI_QUEUE_PATH, "r", encoding="utf-8") as f:
+            lines = f.readlines()[-limit:]
+        for ln in reversed(lines):  # newest first
+            ln = (ln or "").strip()
+            if not ln:
+                continue
+            try:
+                obj = json.loads(ln)
+            except Exception:
+                continue
+            if status and (obj.get("status") != status):
+                continue
+            items.append(obj)
+    except Exception:
+        return items
+    return items
+
+def _aiq_rewrite(all_items: List[Dict[str, Any]]) -> None:
+    _ensure_parent_dir(AI_QUEUE_PATH)
+    try:
+        with open(AI_QUEUE_PATH, "w", encoding="utf-8") as f:
+            for it in all_items:
+                f.write(json.dumps(it, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+def _aiq_update(item_id: str, patch: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    try:
+        if not os.path.exists(AI_QUEUE_PATH):
+            return None
+        with open(AI_QUEUE_PATH, "r", encoding="utf-8") as f:
+            lines = [ln for ln in f.readlines() if (ln or "").strip()]
+        items = []
+        target = None
+        for ln in lines:
+            try:
+                obj = json.loads(ln)
+            except Exception:
+                continue
+            if obj.get("id") == item_id:
+                obj = _deep_merge(obj, patch)
+                target = obj
+            items.append(obj)
+        _aiq_rewrite(items)
+        return target
+    except Exception:
+        return None
+
+def _lead_triage_proposal(row: Dict[str, Any]) -> Dict[str, Any]:
+    # Heuristic baseline; upgraded to OpenAI if available
+    contact = (row.get("contact") or "").lower()
+    notes = (row.get("notes") or "").lower()
+    intent = (row.get("intent") or "").lower()
+    budget = (row.get("budget") or "").lower()
+    party = str(row.get("party_size") or "").strip()
+
+    vip = "No"
+    status = "New"
+    confidence = 0.62
+    rationale = []
+
+    # VIP hints
+    if any(k in notes for k in ["vip", "bottle", "section", "booth", "private", "host", "table service"]):
+        vip = "Yes"; confidence += 0.12; rationale.append("Notes indicate VIP-style request.")
+    if any(k in budget for k in ["premium", "high", "$", "vip"]):
+        vip = "Yes"; confidence += 0.08; rationale.append("Budget suggests premium/VIP.")
+    # Confirmation hints
+    if any(k in notes for k in ["confirmed", "paid", "deposit", "booked"]):
+        status = "Confirmed"; confidence += 0.10; rationale.append("Notes imply confirmation.")
+    # Large party hints
+    try:
+        p = int(party) if party else 0
+        if p >= 8:
+            confidence += 0.06; rationale.append("Large party size tends to need tighter follow-up.")
+    except Exception:
+        pass
+
+    confidence = max(0.0, min(0.99, confidence))
+
+    return {
+        "type": "lead_triage",
+        "suggestion": {"status": status, "vip": vip},
+        "confidence": confidence,
+        "rationale": rationale[:5],
+        "apply": {"status": status, "vip": vip},
+    }
+
+def _maybe_enqueue_ai_for_lead(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    cfg = _ai_cfg()
+    enabled = (cfg.get("enabled_proposals") or {}).get("lead_triage", True)
+    if not enabled:
+        return None
+    mode = (cfg.get("mode") or "assist").lower()
+    if mode == "off":
+        return None
+
+    proposal = _lead_triage_proposal(row)
+    item = {
+        "id": uuid.uuid4().hex[:12],
+        "created_at": datetime.datetime.utcnow().isoformat() + "Z",
+        "status": "pending" if cfg.get("require_approval", True) or mode != "auto" else "approved",
+        "source": "lead",
+        "lead": {
+            # what we can reliably reference later
+            "contact": row.get("contact",""),
+            "datetime": row.get("datetime",""),
+            "party_size": row.get("party_size",""),
+            "budget": row.get("budget",""),
+            "intent": row.get("intent",""),
+            "lang": row.get("lang",""),
+        },
+        "proposal": proposal,
+        "decision": {"by": "", "at": "", "action": "", "notes": ""},
+    }
+    _aiq_append(item)
+    _audit("ai.proposal.created", {"id": item["id"], "type": proposal.get("type"), "confidence": proposal.get("confidence")})
+    return item
+
 @app.route("/lead", methods=["POST"])
 def lead():
     payload = request.get_json(silent=True) or {}
@@ -4589,7 +5070,11 @@ def lead():
     ok = False
     if GOOGLE_SHEET_ID or os.environ.get("GOOGLE_CREDS_JSON") or os.path.exists("google_creds.json"):
         ok = _append_lead_google_sheet(row)
-    return jsonify({"ok": True, "sheet_ok": bool(ok)})
+
+    # Create AI proposal (approval-first) if enabled
+    ai_item = _maybe_enqueue_ai_for_lead(row)
+
+    return jsonify({"ok": True, "sheet_ok": bool(ok), "ai": {"queued": bool(ai_item), "id": (ai_item or {}).get("id","")}})
 
 
 if __name__ == "__main__":
