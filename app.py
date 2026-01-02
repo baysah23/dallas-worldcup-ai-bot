@@ -483,6 +483,7 @@ def _ai_enqueue_or_apply_for_new_lead(lead: Dict[str, Any], sheet_row: int) -> N
         if mode != "auto" or require_approval or confidence < min_conf:
             _queue_add(entry)
             _audit("ai.queue.created", {"id": entry["id"], "source": "lead_intake", "confidence": confidence})
+            _notify("ai.queue.created", {"id": entry["id"], "source": "lead_intake", "confidence": confidence, "lead": entry.get("lead")}, targets=["owner","manager"])
             return
 
         # Auto-apply each action (still audited)
@@ -2906,6 +2907,93 @@ os.makedirs(DATA_DIR, exist_ok=True)
 CONFIG_FILE = os.path.join(DATA_DIR, "app_config.json")
 AUDIT_LOG_FILE = os.path.join(DATA_DIR, "audit_log.jsonl")
 
+NOTIFICATIONS_FILE = os.path.join(DATA_DIR, "notifications.jsonl")
+NOTIFY_WEBHOOK_URL = os.environ.get("NOTIFY_WEBHOOK_URL", "").strip()
+
+def _notify(event: str, details: Optional[Dict[str, Any]] = None, targets: Optional[List[str]] = None, level: str = "info") -> None:
+    """
+    Lightweight notifications (Step 8)
+    - Stored locally in an append-only JSONL file
+    - Optionally POSTs to a webhook (best-effort) if NOTIFY_WEBHOOK_URL is set
+    Targets: ["owner"], ["manager"], or ["owner","manager"], or ["all"]
+    """
+    try:
+        if not targets:
+            targets = ["owner", "manager"]
+        entry = {
+            "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            "event": str(event),
+            "level": str(level),
+            "targets": targets,
+            "details": details or {},
+        }
+        os.makedirs(os.path.dirname(NOTIFICATIONS_FILE), exist_ok=True)
+        with open(NOTIFICATIONS_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        if NOTIFY_WEBHOOK_URL:
+            try:
+                payload = json.dumps(entry).encode("utf-8")
+                req = urllib.request.Request(
+                    NOTIFY_WEBHOOK_URL,
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=3)  # nosec - best effort
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+def _read_notifications(limit: int = 50, role: str = "manager") -> List[Dict[str, Any]]:
+    """
+    Read newest notifications first; filter by role.
+    Managers see entries targeted to manager/all; Owners see everything.
+    """
+    try:
+        if not os.path.exists(NOTIFICATIONS_FILE):
+            return []
+        items: List[Dict[str, Any]] = []
+        with open(NOTIFICATIONS_FILE, "rb") as f:
+            f.seek(0, os.SEEK_END)
+            size = f.tell()
+            buf = b""
+            step = 4096
+            while size > 0 and len(items) < limit * 3:
+                read_size = step if size >= step else size
+                size -= read_size
+                f.seek(size)
+                buf = f.read(read_size) + buf
+                lines = buf.splitlines()
+                if size > 0 and buf and not buf.startswith(b"\n"):
+                    buf = lines[0]
+                    lines = lines[1:]
+                else:
+                    buf = b""
+                for ln in reversed(lines):
+                    if not ln.strip():
+                        continue
+                    try:
+                        it = json.loads(ln.decode("utf-8"))
+                        items.append(it)
+                    except Exception:
+                        continue
+                    if len(items) >= limit * 3:
+                        break
+        out: List[Dict[str, Any]] = []
+        for it in items:
+            t = it.get("targets") or []
+            if role == "owner":
+                out.append(it)
+            else:
+                if "all" in t or "manager" in t:
+                    out.append(it)
+            if len(out) >= limit:
+                break
+        return out
+    except Exception:
+        return []
+
 def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
     """Append a single-line JSON audit entry (best-effort, non-blocking)."""
     try:
@@ -3730,6 +3818,7 @@ def admin_api_ai_queue_deny(qid: str):
     it["applied_result"] = None
     _save_ai_queue(queue)
     _audit("ai.queue.deny", {"id": qid, "type": it.get("type")})
+    _notify("ai.queue.deny", {"id": qid, "type": it.get("type"), "by": actor, "role": role}, targets=["owner","manager"])
     return jsonify({"ok": True})
 
 
@@ -3762,6 +3851,7 @@ def admin_api_ai_queue_approve(qid: str):
     it["applied_result"] = applied
     _save_ai_queue(queue)
     _audit("ai.queue.approve", {"id": qid, "type": it.get("type"), "applied": bool(applied and applied.get("ok"))})
+    _notify("ai.queue.approve", {"id": qid, "type": it.get("type"), "applied": bool(applied and applied.get("ok")), "by": actor, "role": role}, targets=["owner","manager"])
     return jsonify({"ok": True, "applied_result": applied})
 
 
@@ -3804,6 +3894,7 @@ def admin_api_ai_queue_override(qid: str):
     it["applied_result"] = applied
     _save_ai_queue(queue)
     _audit("ai.queue.override", {"id": qid, "type": it.get("type"), "applied": bool(applied and applied.get("ok"))})
+    _notify("ai.queue.override", {"id": qid, "type": it.get("type"), "applied": bool(applied and applied.get("ok")), "by": actor, "role": role}, targets=["owner","manager"])
     return jsonify({"ok": True, "applied_result": applied})
 
 
@@ -3826,6 +3917,35 @@ MATCHDAY_PRESETS: Dict[str, Dict[str, Any]] = {
         "rules": {"max_party_size": 10, "match_day_banner": "🌙 Post-game: larger groups welcome"},
     },
 }
+
+# ============================================================
+# Notifications API (in-app notifications for admin/manager)
+# ============================================================
+@app.route("/admin/api/notifications", methods=["GET"])
+def admin_api_notifications():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    role = ctx.get("role", "manager")
+    limit = int(as_int(request.args.get("limit", 50), 50))
+    limit = max(1, min(200, limit))
+    items = _read_notifications(limit=limit, role=role)
+    return jsonify({"ok": True, "role": role, "items": items})
+
+@app.route("/admin/api/notifications/clear", methods=["POST"])
+def admin_api_notifications_clear():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    try:
+        with open(NOTIFICATIONS_FILE, "w", encoding="utf-8") as f:
+            f.write("")
+    except Exception:
+        pass
+    _audit("notifications.clear", {})
+    return jsonify({"ok": True})
+
 
 @app.route("/admin/api/presets", methods=["GET"])
 def admin_api_presets():
@@ -4101,6 +4221,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     html.append("<div class='pills'>")
     html.append(f"<span class='pill'><b>Leads</b> {len(body)}</span>")
     html.append(f"<span class='pill'><b>VIP</b> {vip_count}</span>")
+    html.append("<button class='pill' id='notifBtn' type='button' onclick=\"openNotifications()\">🔔 <b id='notifCount'>0</b></button>")
     for k, v in status_counts.items():
         html.append(f"<span class='pill'><b>{k}</b> {v}</span>")
     html.append("</div>")
@@ -4979,7 +5100,66 @@ async function loadAudit(){
 }
 
 
+
+async function loadNotifs(){
+  const msg = qs('#notif-msg'); if(msg) msg.textContent='Loading…';
+  try{
+    const r = await fetch(`/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}`);
+    const j = await r.json();
+    const items = (j.items||[]);
+    // update badge
+    const c = document.querySelector('#notifCount');
+    if(c) c.textContent = String(items.length||0);
+    const body = document.querySelector('#notifBody');
+    if(body){
+      body.innerHTML='';
+      items.forEach(it=>{
+        const d = it.details || {};
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td>'+esc(it.ts||'')+'</td>'
+          +'<td><span class="code">'+esc(it.event||'')+'</span></td>'
+          +'<td><span class="code">'+esc(JSON.stringify(d))+'</span></td>';
+        body.appendChild(tr);
+      });
+    }
+    if(msg) msg.textContent='';
+  }catch(e){
+    if(msg) msg.textContent='Failed to load';
+  }
+}
+async function clearNotifs(){
+  const msg = qs('#notif-msg'); if(msg) msg.textContent='Clearing…';
+  try{
+    const r = await fetch(`/admin/api/notifications/clear?key=${encodeURIComponent(KEY||'')}`, {method:'POST'});
+    const j = await r.json();
+    if(j.ok){
+      if(msg) msg.textContent='Cleared';
+      loadNotifs();
+    }else{
+      if(msg) msg.textContent='Error';
+    }
+  }catch(e){
+    if(msg) msg.textContent='Error';
+  }
+}
+function openNotifications(){
+  // Switch to Ops tab and scroll to the notifications card
+  try{
+    document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
+    const btn = document.querySelector('.tabbtn[data-tab="ops"]');
+    if(btn) btn.classList.add('active');
+    document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
+    const pane = document.querySelector('#tab-ops');
+    if(pane) pane.classList.remove('hidden');
+    setTimeout(()=>{ document.querySelector('#notifCard')?.scrollIntoView({behavior:'smooth', block:'start'}); }, 50);
+    loadNotifs();
+  }catch(e){}
+}
+// Poll notifications lightly
+setInterval(()=>{ try{ loadNotifs(); }catch(e){} }, 15000);
+
 try{ setupLeadFilters(); }catch(e){}
+try{ loadNotifs(); }catch(e){}
 </script>
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
 
