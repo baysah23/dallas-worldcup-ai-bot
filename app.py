@@ -5356,6 +5356,8 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <script>
 (function(){
   const ADMIN_KEY = (new URLSearchParams(location.search)).get("key") || "";
+  const __ADMIN_KEY__ = ADMIN_KEY; // compat alias used by existing fetch calls
+
   const ROLE = "__ADMIN_ROLE__";
   const ROLE_RANK = { manager: 1, owner: 2 };
   function hasRole(minRole){
