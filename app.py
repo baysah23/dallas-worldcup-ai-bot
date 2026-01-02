@@ -233,6 +233,108 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
             out[k] = v
     return out
 
+
+# ============================================================
+# AI Action Queue (Approval / Deny / Override)
+# - Queue stores proposed AI actions (e.g., tag VIP, update status, draft reply)
+# - Managers can approve/deny
+# - Owners can override payload before applying
+# - Persisted to disk (/tmp) for durability
+# ============================================================
+AI_QUEUE_FILE = os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_ai_queue.json")
+
+def _load_ai_queue() -> List[Dict[str, Any]]:
+    q = _safe_read_json_file(AI_QUEUE_FILE, default=[])
+    if isinstance(q, list):
+        # newest first
+        q.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
+        return q
+    return []
+
+def _save_ai_queue(queue: List[Dict[str, Any]]) -> None:
+    _safe_write_json_file(AI_QUEUE_FILE, queue or [])
+
+def _queue_new_id() -> str:
+    return secrets.token_hex(8)
+
+def _queue_add(entry: Dict[str, Any]) -> Dict[str, Any]:
+    queue = _load_ai_queue()
+    queue.append(entry)
+    _save_ai_queue(queue)
+    return entry
+
+def _queue_find(queue: List[Dict[str, Any]], qid: str) -> Optional[Dict[str, Any]]:
+    for it in queue:
+        if str(it.get("id")) == str(qid):
+            return it
+    return None
+
+def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
+    '''
+    Apply a single approved action against the system.
+    Supported actions (minimal + safe):
+      - vip_tag: update lead VIP field
+      - status_update: update lead Status
+      - reply_draft: store draft text in audit (does NOT send)
+    '''
+    typ = str(action.get("type") or "").strip()
+    payload = action.get("payload") or {}
+    allow = (AI_SETTINGS.get("allow_actions") or {})
+
+    # lead row reference (Google Sheet row number)
+    row_num = int(payload.get("row") or payload.get("sheet_row") or 0)
+
+    if typ == "reply_draft":
+        if not allow.get("reply_draft", True):
+            return {"ok": False, "error": "reply_draft not allowed"}
+        draft = str(payload.get("draft") or "").strip()
+        if not draft:
+            return {"ok": False, "error": "Missing draft"}
+        _audit("ai.reply_draft", {"row": row_num or None, "draft": draft[:2000]})
+        return {"ok": True, "applied": "reply_draft"}
+
+    # VIP / Status require a valid row number
+    if row_num < 2:
+        return {"ok": False, "error": "Missing/invalid sheet row"}
+
+    # Use the same Sheets update logic as /admin/update-lead
+    try:
+        gc = get_gspread_client()
+        ws = gc.open(SHEET_NAME).sheet1
+        header = ws.row_values(1) or []
+        hmap = header_map(header)
+
+        if typ == "vip_tag":
+            if not allow.get("vip_tag", True):
+                return {"ok": False, "error": "vip_tag not allowed"}
+            vip = str(payload.get("vip") or "").strip()
+            if vip not in ("VIP", "Regular"):
+                return {"ok": False, "error": "Invalid vip"}
+            col = hmap.get("vip")
+            if not col:
+                return {"ok": False, "error": "VIP column not found"}
+            ws.update_cell(row_num, col, vip)
+            _audit("ai.vip_tag.apply", {"row": row_num, "vip": vip})
+            return {"ok": True, "applied": "vip_tag"}
+
+        if typ == "status_update":
+            if not allow.get("status_update", False):
+                return {"ok": False, "error": "status_update not allowed"}
+            status = str(payload.get("status") or "").strip()
+            allowed_status = ["New", "Confirmed", "Seated", "No-Show", "Handled"]
+            if status not in allowed_status:
+                return {"ok": False, "error": "Invalid status"}
+            col = hmap.get("status")
+            if not col:
+                return {"ok": False, "error": "Status column not found"}
+            ws.update_cell(row_num, col, status)
+            _audit("ai.status_update.apply", {"row": row_num, "status": status})
+            return {"ok": True, "applied": "status_update"}
+
+        return {"ok": False, "error": "Unsupported action type"}
+    except Exception as e:
+        return {"ok": False, "error": f"Apply failed: {e}"}
+
 def _load_rules_from_disk() -> None:
     global BUSINESS_RULES
     payload = _safe_read_json_file(BUSINESS_RULES_FILE)
@@ -3378,6 +3480,165 @@ def admin_api_ai_settings():
 
 
 
+
+# ============================================================
+# AI Queue API (Admin/Manager)
+# ============================================================
+
+@app.route("/admin/api/ai/queue", methods=["GET"])
+def admin_api_ai_queue_list():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    role = ctx.get("role", "")
+    queue = _load_ai_queue()
+    # optional status filter
+    status = (request.args.get("status") or "").strip().lower()
+    if status:
+        queue = [q for q in queue if str(q.get("status") or "").lower() == status]
+    return jsonify({"ok": True, "role": role, "queue": queue[:500]})
+
+
+@app.route("/admin/api/ai/queue/propose", methods=["POST"])
+def admin_api_ai_queue_propose():
+    # Minimal: allow manager+ to create a proposal (used for testing; later AI will call this)
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    actor = ctx.get("actor", "")
+    role = ctx.get("role", "")
+
+    data = request.get_json(silent=True) or {}
+    typ = str(data.get("type") or "").strip()
+    if typ not in ("vip_tag", "status_update", "reply_draft"):
+        return jsonify({"ok": False, "error": "Invalid type"}), 400
+
+    confidence = float(data.get("confidence") or 0.0)
+    confidence = max(0.0, min(1.0, confidence))
+
+    entry = {
+        "id": _queue_new_id(),
+        "type": typ,
+        "payload": data.get("payload") or {},
+        "confidence": confidence,
+        "rationale": str(data.get("rationale") or "")[:1500],
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "created_by": actor,
+        "created_role": role,
+        "reviewed_at": None,
+        "reviewed_by": None,
+        "reviewed_role": None,
+        "applied_result": None,
+    }
+    _queue_add(entry)
+    _audit("ai.queue.propose", {"id": entry["id"], "type": typ, "confidence": confidence})
+    return jsonify({"ok": True, "id": entry["id"], "entry": entry})
+
+
+@app.route("/admin/api/ai/queue/<qid>/deny", methods=["POST"])
+def admin_api_ai_queue_deny(qid: str):
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    actor = ctx.get("actor", "")
+    role = ctx.get("role", "")
+
+    queue = _load_ai_queue()
+    it = _queue_find(queue, qid)
+    if not it:
+        return jsonify({"ok": False, "error": "Not found"}), 404
+
+    if str(it.get("status")) != "pending":
+        return jsonify({"ok": False, "error": "Not pending"}), 400
+
+    it["status"] = "denied"
+    it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    it["reviewed_by"] = actor
+    it["reviewed_role"] = role
+    it["applied_result"] = None
+    _save_ai_queue(queue)
+    _audit("ai.queue.deny", {"id": qid, "type": it.get("type")})
+    return jsonify({"ok": True})
+
+
+@app.route("/admin/api/ai/queue/<qid>/approve", methods=["POST"])
+def admin_api_ai_queue_approve(qid: str):
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    actor = ctx.get("actor", "")
+    role = ctx.get("role", "")
+
+    queue = _load_ai_queue()
+    it = _queue_find(queue, qid)
+    if not it:
+        return jsonify({"ok": False, "error": "Not found"}), 404
+    if str(it.get("status")) != "pending":
+        return jsonify({"ok": False, "error": "Not pending"}), 400
+
+    # If AI disabled, still allow approval but do not apply (acts like "reviewed")
+    applied = None
+    if AI_SETTINGS.get("enabled") and (AI_SETTINGS.get("mode") in ("auto", "suggest", "off")):
+        # Always require explicit approval here (this endpoint *is* the approval)
+        applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
+
+    it["status"] = "approved"
+    it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    it["reviewed_by"] = actor
+    it["reviewed_role"] = role
+    it["applied_result"] = applied
+    _save_ai_queue(queue)
+    _audit("ai.queue.approve", {"id": qid, "type": it.get("type"), "applied": bool(applied and applied.get("ok"))})
+    return jsonify({"ok": True, "applied_result": applied})
+
+
+@app.route("/admin/api/ai/queue/<qid>/override", methods=["POST"])
+def admin_api_ai_queue_override(qid: str):
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    actor = ctx.get("actor", "")
+    role = ctx.get("role", "")
+
+    data = request.get_json(silent=True) or {}
+    queue = _load_ai_queue()
+    it = _queue_find(queue, qid)
+    if not it:
+        return jsonify({"ok": False, "error": "Not found"}), 404
+
+    if str(it.get("status")) not in ("pending", "approved"):
+        return jsonify({"ok": False, "error": "Not editable"}), 400
+
+    # override payload/type (owner-only)
+    if "type" in data:
+        typ = str(data.get("type") or "").strip()
+        if typ not in ("vip_tag", "status_update", "reply_draft"):
+            return jsonify({"ok": False, "error": "Invalid type"}), 400
+        it["type"] = typ
+    if "payload" in data and isinstance(data.get("payload"), dict):
+        it["payload"] = data.get("payload") or {}
+
+    # Apply immediately
+    applied = None
+    if AI_SETTINGS.get("enabled"):
+        applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
+
+    it["status"] = "approved"
+    it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    it["reviewed_by"] = actor
+    it["reviewed_role"] = role
+    it["applied_result"] = applied
+    _save_ai_queue(queue)
+    _audit("ai.queue.override", {"id": qid, "type": it.get("type"), "applied": bool(applied and applied.get("ok"))})
+    return jsonify({"ok": True, "applied_result": applied})
+
+
 # ============================================================
 # Match-Day Presets (Admin)
 # - One-click bundles that flip multiple Ops toggles + Rule values
@@ -3690,6 +3951,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
   <button class="tabbtn active" data-tab="leads">Leads</button>
   <button class="tabbtn" data-tab="ops">Ops</button>
   <button class="tabbtn" data-tab="ai">AI</button>
+  <button class="tabbtn" data-tab="aiq">AI Queue</button>
   <button class="tabbtn" data-tab="rules">Rules</button>
   <button class="tabbtn" data-tab="menu">Menu</button>
   <button class="tabbtn" data-tab="audit">Audit</button>
@@ -3920,7 +4182,29 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
   </div>
 </div>
 
-<div id="tab-rules" class="tabpane hidden">
+<div 
+<div id="tab-aiq" class="tabpane hidden">
+  <div class="card">
+    <div class="h2">AI Approval Queue</div>
+    <div class="small">Proposed AI actions wait here for <b>Approve</b>, <b>Deny</b>, or <b>Owner Override</b>. This keeps automation powerful but controlled.</div>
+    <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button class="btn2" onclick="loadAIQueue()">Refresh</button>
+      <select id="aiq-filter" class="inp" style="max-width:180px" onchange="loadAIQueue()">
+        <option value="">All</option>
+        <option value="pending">Pending</option>
+        <option value="approved">Approved</option>
+        <option value="denied">Denied</option>
+      </select>
+      <span id="aiq-msg" class="note"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="aiq-list" class="small">Loading…</div>
+  </div>
+</div>
+
+id="tab-rules" class="tabpane hidden">
   <div class="card">
     <div class="h2">Business Rules</div>
     <div class="small">These rules power reservation guardrails (max party size, closed dates, hours, banner). Saved rules persist on the server.</div>
@@ -4143,13 +4427,14 @@ qsa('.tabbtn').forEach(btn=>{
     qsa('.tabbtn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     const t = btn.dataset.tab;
-    ['leads','ops','ai','rules','menu','audit'].forEach(x=>{
+    ['leads','ops','ai','aiq','rules','menu','audit'].forEach(x=>{
       const pane = document.getElementById('tab-'+x);
       if(!pane) return;
       pane.classList.toggle('hidden', x!==t);
     });
     if(t==='ops') loadOps();
     if(t==='ai') loadAI();
+    if(t==='aiq') loadAIQueue();
     if(t==='rules') loadRules();
     if(t==='menu') loadMenu();
     if(t==='audit') loadAudit();
@@ -4383,6 +4668,116 @@ async function applyPreset(name){
     alert('Preset failed: '+(j && j.error ? j.error : res.status));
   }
 }
+
+
+// ===== AI Approval Queue =====
+async function loadAIQueue(){
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Loading…';
+  const list = qs('#aiq-list'); if(list) list.innerHTML = 'Loading…';
+  try{
+    const filt = (qs('#aiq-filter')?.value || '').trim();
+    const url = `/admin/api/ai/queue?key=${encodeURIComponent(KEY)}` + (filt ? `&status=${encodeURIComponent(filt)}` : '');
+    const r = await fetch(url, {cache:'no-store'});
+    const data = await r.json();
+    if(!data.ok) throw new Error(data.error || 'Failed');
+    const q = data.queue || [];
+    renderAIQueue(q);
+    if(msg) msg.textContent = q.length ? (`${q.length} item(s)`) : 'No items';
+  }catch(e){
+    if(msg) msg.textContent = 'Load failed: ' + (e.message || e);
+    if(list) list.textContent = 'Failed to load queue.';
+  }
+}
+
+function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function renderAIQueue(items){
+  const list = qs('#aiq-list');
+  if(!list) return;
+  if(!items || !items.length){
+    list.innerHTML = '<div class="note">No queued AI actions.</div>';
+    return;
+  }
+
+  const rows = items.map(it=>{
+    const id = esc(it.id);
+    const typ = esc(it.type);
+    const st = esc(it.status);
+    const conf = (typeof it.confidence === 'number' ? it.confidence.toFixed(2) : '');
+    const when = esc(it.created_at || '');
+    const rationale = esc(it.rationale || '');
+    const payload = esc(JSON.stringify(it.payload || {}));
+
+    const canAct = (st === 'pending');
+    const approveBtn = `<button class="btn" ${canAct?'':'disabled'} onclick="aiqApprove('${id}')">Approve</button>`;
+    const denyBtn = `<button class="btn2" ${canAct?'':'disabled'} onclick="aiqDeny('${id}')">Deny</button>`;
+    const ovBtn = `<button class="btn" data-min-role="owner" onclick="aiqOverride('${id}')">Owner Override</button>`;
+
+    return `
+      <div style="padding:12px;border:1px solid rgba(255,255,255,.16);border-radius:14px;margin-bottom:10px;background:rgba(255,255,255,.06)">
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+          <div><b>${typ}</b> <span class="chip" style="margin-left:8px">${st}</span> <span class="note" style="margin-left:8px">conf ${conf}</span></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">${approveBtn}${denyBtn}${ovBtn}</div>
+        </div>
+        <div class="note" style="margin-top:6px">id: ${id} · ${when}</div>
+        ${rationale?`<div class="small" style="margin-top:8px"><b>Why:</b> ${rationale}</div>`:''}
+        <details style="margin-top:8px">
+          <summary class="small">Payload</summary>
+          <pre style="white-space:pre-wrap;word-break:break-word;margin-top:8px;font-size:12px;opacity:.9">${payload}</pre>
+        </details>
+      </div>
+    `;
+  }).join('');
+
+  list.innerHTML = rows;
+}
+
+async function aiqApprove(id){
+  if(!confirm('Approve and apply this action?')) return;
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Approving…';
+  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/approve?key=${encodeURIComponent(KEY)}`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({})
+  });
+  const j = await r.json().catch(()=>null);
+  if(j && j.ok){ if(msg) msg.textContent='Approved ✔'; await loadAIQueue(); }
+  else { if(msg) msg.textContent='Approve failed'; alert('Approve failed: '+(j && j.error ? j.error : r.status)); }
+}
+
+async function aiqDeny(id){
+  if(!confirm('Deny this action?')) return;
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Denying…';
+  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/deny?key=${encodeURIComponent(KEY)}`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({})
+  });
+  const j = await r.json().catch(()=>null);
+  if(j && j.ok){ if(msg) msg.textContent='Denied ✔'; await loadAIQueue(); }
+  else { if(msg) msg.textContent='Deny failed'; alert('Deny failed: '+(j && j.error ? j.error : r.status)); }
+}
+
+async function aiqOverride(id){
+  // Owner-only: allow quick edit of payload/type before applying
+  const typ = prompt('Override action type (vip_tag, status_update, reply_draft):', 'vip_tag');
+  if(!typ) return;
+  let payloadTxt = prompt('Override payload JSON (must be valid JSON object):', '{"row":2,"vip":"VIP"}');
+  if(payloadTxt === null) return;
+  payloadTxt = payloadTxt.trim();
+  let payloadObj = null;
+  try{ payloadObj = JSON.parse(payloadTxt); }catch(e){ alert('Invalid JSON'); return; }
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Applying override…';
+  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/override?key=${encodeURIComponent(KEY)}`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({type: typ, payload: payloadObj})
+  });
+  const j = await r.json().catch(()=>null);
+  if(j && j.ok){ if(msg) msg.textContent='Override applied ✔'; await loadAIQueue(); }
+  else { if(msg) msg.textContent='Override failed'; alert('Override failed: '+(j && j.error ? j.error : r.status)); }
+}
+
 
 function esc(s){
   return (s==null?'':String(s))
