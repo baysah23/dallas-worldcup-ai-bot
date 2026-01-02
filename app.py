@@ -4290,7 +4290,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     elif not body:
         html.append("<div class='card'><div class='h2'>Ops</div><div class='small'>No leads yet.</div></div>")
     else:
-        html.append("<div class='card'><div class='h2'>Ops</div><div class='small'>Newest first. Update Status/VIP and save.</div><div style='display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center'><div class='pills' style='margin:0'><button class='btn2' id='flt-all' type='button'>All</button><button class='btn2' id='flt-vip' type='button'>VIP</button><button class='btn2' id='flt-reg' type='button'>Regular</button></div><div style='display:flex;gap:8px;align-items:center'><span class='small' style='white-space:nowrap'>Entry:</span><select class='inp' id='flt-entry' style='min-width:180px'></select><span id='leadsCount' class='small' style='margin-left:8px'>0 shown</span></div></div></div>")
+        html.append("<div class='card'><div class='h2'>Ops</div><div class='small'>Newest first. Update Status/VIP and save.</div><div class='small' id='ops-meta' style='margin-top:6px;opacity:.85'></div><div style='display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center'><div class='pills' style='margin:0'><button class='btn2' id='flt-all' type='button'>All</button><button class='btn2' id='flt-vip' type='button'>VIP</button><button class='btn2' id='flt-reg' type='button'>Regular</button></div><div style='display:flex;gap:8px;align-items:center'><span class='small' style='white-space:nowrap'>Entry:</span><select class='inp' id='flt-entry' style='min-width:180px'></select><span id='leadsCount' class='small' style='margin-left:8px'>0 shown</span></div></div></div>")
         html.append("<div class='tablewrap'><table id='leadsTable'>")
         html.append("<thead><tr>"                    "<th>Row</th><th>Timestamp</th><th>Name</th><th>Contact</th>"                    "<th>Date</th><th>Time</th><th>Party</th>"                    "<th>Segment</th><th>Entry</th><th>Queue</th><th>Budget</th>"                    "<th>Context</th><th>Notes</th>"                    "<th>Status</th><th>VIP</th><th>Save</th>"                    "</tr></thead><tbody>")
         for sheet_row, r in numbered:
@@ -5212,7 +5212,7 @@ function openNotifications(){
     const btn = document.querySelector('.tabbtn[data-tab="leads"]');
     if(btn) btn.classList.add('active');
     document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
-    const pane = document.querySelector('#tab-ops');
+    const pane = document.querySelector('#tab-leads');
     if(pane) pane.classList.remove('hidden');
     setTimeout(()=>{ document.querySelector('#notifCard')?.scrollIntoView({behavior:'smooth', block:'start'}); }, 50);
     loadNotifs();
@@ -5338,20 +5338,6 @@ tr:hover td{background:rgba(255,255,255,.03)}
   </div>
 
 </div> <!-- end tab-menu -->
-
-<div id="tab-ops" class="tabpane hidden">
-  <div class="card">
-    <div class="h2">Ops</div>
-    <div class="small">Match-Day Ops Toggles</div><div class="small" id="ops-meta" style="margin-top:6px;opacity:.85"></div>
-  </div>
-</div>
-
-<div id="tab-audit" class="tabpane hidden">
-  <div class="card">
-    <div class="h2">Audit</div>
-    <div class="small">Use the main Admin → Audit tab to review changes.</div>
-  </div>
-</div>
 
 <script>
 (function(){
