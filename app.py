@@ -3023,6 +3023,28 @@ _LEADS_CACHE: Dict[str, Any] = {"ts": 0.0, "rows": None}  # ttl ~30s
 _sessions: Dict[str, Dict[str, Any]] = {}  # in-memory chat/reservation sessions
 
 
+def _last_audit_event(event_name: str, scan_limit: int = 800) -> Optional[Dict[str, Any]]:
+    """Return the most recent audit entry for a given event (best-effort)."""
+    try:
+        if not os.path.exists(AUDIT_LOG_FILE):
+            return None
+        with open(AUDIT_LOG_FILE, "r", encoding="utf-8") as f:
+            lines = f.readlines()[-max(50, min(int(scan_limit), 5000)):]
+        for ln in reversed(lines):
+            ln = (ln or "").strip()
+            if not ln:
+                continue
+            try:
+                e = json.loads(ln)
+            except Exception:
+                continue
+            if e.get("event") == event_name:
+                return e
+    except Exception:
+        return None
+    return None
+
+
 def _safe_read_json(path: str) -> dict:
     try:
         if os.path.exists(path):
@@ -3628,7 +3650,8 @@ def admin_api_ops():
 
     if request.method == "GET":
         cfg = get_config()
-        return jsonify({"ok": True, "ops": get_ops(cfg)})
+        meta = _last_audit_event("ops.update")
+        return jsonify({"ok": True, "ops": get_ops(cfg), "meta": meta})
 
     data = request.get_json(silent=True) or {}
     def _norm_bool(v) -> str:
@@ -3648,7 +3671,8 @@ def admin_api_ops():
     }
     cfg = set_config(pairs)
     _audit("ops.update", {"ops": get_ops(cfg)})
-    return jsonify({"ok": True, "ops": get_ops(cfg)})
+    meta = _last_audit_event("ops.update")
+    return jsonify({"ok": True, "ops": get_ops(cfg), "meta": meta})
 # ============================================================
 # Match-Day Presets
 
@@ -4210,6 +4234,18 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 .locked{opacity:.45;filter:saturate(.7);cursor:not-allowed}
 .locked::after{content:'⛔ No permission';margin-left:6px;font-size:12px;opacity:.8}
 .code{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-size:12px}
+
+.miniState{
+  margin-left:10px;
+  padding:2px 8px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.04);
+  font-size:12px;
+  letter-spacing:.01em;
+  opacity:0;
+  transition: opacity .18s ease;
+}
 </style>
 """)
     html.append("</head><body><div class='wrap'>")
@@ -4721,8 +4757,8 @@ async function saveRules(){
     body: JSON.stringify(payload)
   });
   const j = await res.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Saved ✔'; }
-  else { if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }
+  if(j && j.ok){ if(msg) msg.textContent=\'Saved ✔\'; try{ _renderOpsMeta(j.meta); }catch(e){} _setMiniState(elPause,"pause","Saved ✓"); _setMiniState(elVip,"vip","Saved ✓"); _setMiniState(elWait,"wait","Saved ✓"); setTimeout(()=>{ _setMiniState(elPause,"pause",""); _setMiniState(elVip,"vip",""); _setMiniState(elWait,"wait",""); }, 1400); }
+  else { _setMiniState(elPause,"pause","Failed"); _setMiniState(elVip,"vip","Failed"); _setMiniState(elWait,"wait","Failed"); if(msg) msg.textContent=\'Save failed\'; alert(\'Save failed: '+(j && j.error ? j.error : res.status)); }
 }
 
 async function loadMenu(){
@@ -4768,11 +4804,64 @@ async function uploadMenu(){
   else { if(msg) msg.textContent='Upload failed'; alert('Upload failed: '+(j && j.error ? j.error : res.status)); }
 }
 
+
+function _ensureMiniState(el, idSuffix){
+  try{
+    if(!el) return null;
+    const id = 'ops-mini-'+idSuffix;
+    let s = document.getElementById(id);
+    if(!s){
+      s = document.createElement('span');
+      s.id = id;
+      s.className = 'miniState';
+      // place right after the control
+      const parent = el.parentElement;
+      if(parent){
+        parent.appendChild(s);
+      } else {
+        el.insertAdjacentElement('afterend', s);
+      }
+    }
+    return s;
+  }catch(e){ return null; }
+}
+function _setMiniState(el, idSuffix, text){
+  const s = _ensureMiniState(el, idSuffix);
+  if(s){ s.textContent = text || ''; s.style.opacity = text ? '1' : '0'; }
+}
+function _ensureOpsMeta(){
+  let el = document.getElementById('ops-meta');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'ops-meta';
+    el.className = 'small';
+    el.style.marginTop = '6px';
+    // Prefer to place near ops message area if present
+    const msg = qs('#ops-msg');
+    if(msg && msg.parentElement){
+      msg.parentElement.appendChild(el);
+    } else {
+      // fallback: add to ops card area
+      (document.querySelector('#tab-leads') || document.body).appendChild(el);
+    }
+  }
+  return el;
+}
+function _renderOpsMeta(meta){
+  try{
+    const el = _ensureOpsMeta();
+    if(!meta || !meta.ts) { el.textContent = ''; return; }
+    const who = (meta.role? meta.role.toUpperCase():'') + (meta.actor? ' ('+meta.actor+')':'');
+    el.textContent = `Last updated: ${meta.ts} ${who}`;
+  }catch(e){}
+}
+
 async function loadOps(){
   const msg = qs('#ops-msg'); if(msg) msg.textContent='Loading...';
   const res = await fetch('/admin/api/ops?key='+encodeURIComponent(KEY));
   const j = await res.json().catch(()=>null);
-  if(!j || !j.ok){ if(msg) msg.textContent='Failed to load ops'; return; }
+  if(!j || !j.ok){ if(msg) msg.textContent=\'Failed to load ops\'; return; }
+  try{ _renderOpsMeta(j.meta); }catch(e){}
   const o = j.ops || {};
   const pause = qs('#ops-pause'); if(pause) pause.checked = (o.pause_reservations===true || o.pause_reservations==='true');
   const vip = qs('#ops-viponly'); if(vip) vip.checked = (o.vip_only===true || o.vip_only==='true');
@@ -4787,6 +4876,16 @@ async function saveOps(){
     vip_only: !!(qs('#ops-viponly') && qs('#ops-viponly').checked),
     waitlist_mode: !!(qs('#ops-waitlist') && qs('#ops-waitlist').checked),
   };
+    // Per-toggle micro feedback
+  const elPause = qs('#ops-pause');
+  const elVip   = qs('#ops-viponly');
+  const elWait  = qs('#ops-waitlist');
+  _setMiniState(elPause,'pause','Saving…');
+  _setMiniState(elVip,'vip','Saving…');
+  _setMiniState(elWait,'wait','Saving…');
+  if(elPause) elPause.disabled = true;
+  if(elVip) elVip.disabled = true;
+  if(elWait) elWait.disabled = true;
   const res = await fetch('/admin/api/ops?key='+encodeURIComponent(KEY), {
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -4800,6 +4899,13 @@ async function saveOps(){
 
 
 // ===== AI Automation =====
+  // Re-enable toggles after save attempt
+  try{
+    if(elPause) elPause.disabled = false;
+    if(elVip) elVip.disabled = false;
+    if(elWait) elWait.disabled = false;
+  }catch(e){}
+
 async function loadAI(){
   const msg = qs('#ai-msg'); if(msg) msg.textContent = '';
   try{
@@ -5236,7 +5342,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <div id="tab-ops" class="tabpane hidden">
   <div class="card">
     <div class="h2">Ops</div>
-    <div class="small">Fan Zone ops are controlled in the main Admin → Ops tab.</div>
+    <div class="small">Match-Day Ops Toggles</div><div class="small" id="ops-meta" style="margin-top:6px;opacity:.85"></div>
   </div>
 </div>
 
@@ -5281,6 +5387,16 @@ tr:hover td{background:rgba(255,255,255,.03)}
   }, true);
 
   const $ = (id)=>document.getElementById(id);
+  function _renderOpsMeta(meta){
+    try{
+      const el = document.getElementById("ops-meta") || null;
+      if(!el) return;
+      if(!meta || !meta.ts){ el.textContent = ""; return; }
+      const who = (meta.role? meta.role.toUpperCase():"") + (meta.actor? " ("+meta.actor+")":"");
+      el.textContent = "Last updated: " + meta.ts + " " + who;
+    }catch(e){}
+  }
+
 
   function esc(s){ return (s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
 
@@ -5462,7 +5578,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
         $("ops-pause").checked = !!out.ops.pause_reservations;
         $("ops-vip").checked   = !!out.ops.vip_only;
         $("ops-wait").checked  = !!out.ops.waitlist_mode;
-        $("ops-status").textContent = "Loaded.";
+        $("ops-status").textContent = "Loaded."; _renderOpsMeta(out.meta);
       } else {
         $("ops-status").textContent = "Failed to load ops.";
       }
@@ -5474,6 +5590,8 @@ tr:hover td{background:rgba(255,255,255,.03)}
     try{
       const btn = $("btnSaveOps");
       if(btn){ btn.disabled = true; btn.textContent = "Saving..."; }
+      try{ $("ops-status").textContent = "Saving..."; }catch(e){}
+      try{ ["ops-pause","ops-vip","ops-wait"].forEach(id=>{ const el=$(id); if(el) el.disabled=true; }); }catch(e){}
       const body = {
         pause_reservations: $("ops-pause").checked,
         vip_only: $("ops-vip").checked,
@@ -5486,7 +5604,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
       });
       const out = await r.json();
       if(out && out.ok){
-        $("ops-status").textContent = "Saved.";
+        $("ops-status").textContent = "Saved ✓"; _renderOpsMeta(out.meta); setTimeout(()=>{ try{ $("ops-status").textContent=""; }catch(e){} }, 1200);
         await loadOps();
       } else {
         $("ops-status").textContent = "Save failed: " + (out.error||"unknown");
@@ -5496,6 +5614,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
     }finally{
       const btn = $("btnSaveOps");
       if(btn){ btn.disabled = false; btn.textContent = "Save ops toggles"; }
+      try{ ["ops-pause","ops-vip","ops-wait"].forEach(id=>{ const el=$(id); if(el) el.disabled=false; }); }catch(e){}
     }
   }
   $("btnSaveOps")?.addEventListener("click", saveOps);
