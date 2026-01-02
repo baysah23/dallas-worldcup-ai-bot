@@ -3113,7 +3113,7 @@ def api_poll_vote():
 
 @app.route("/admin/update-config", methods=["POST"])
 def admin_update_config():
-    ok, resp = _require_admin(min_role="owner")
+    ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
 
@@ -3658,6 +3658,8 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 .btnTiny:hover{background:rgba(255,255,255,.10)}
 .note{margin-top:8px;font-size:12px;color:var(--muted)}
 .hidden{display:none}
+.locked{opacity:.45;filter:saturate(.7)}
+.locked::after{content:'🔒';margin-left:6px;font-size:12px;opacity:.8}
 .code{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-size:12px}
 </style>
 """)
@@ -3802,9 +3804,9 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
         <div class="h2" style="margin-bottom:6px">Match-Day Presets</div>
         <div class="small">One click = flip multiple toggles + rule values.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-          <button class="btn2" onclick="applyPreset('Kickoff Rush')">Kickoff Rush</button>
-          <button class="btn2" onclick="applyPreset('Halftime Surge')">Halftime Surge</button>
-          <button class="btn2" onclick="applyPreset('Post-game')">Post-game</button>
+          <button class="btn2" data-min-role="owner" onclick="applyPreset('Kickoff Rush')">Kickoff Rush</button>
+          <button class="btn2" data-min-role="owner" onclick="applyPreset('Halftime Surge')">Halftime Surge</button>
+          <button class="btn2" data-min-role="owner" onclick="applyPreset('Post-game')">Post-game</button>
         </div>
         <div class="note" id="preset-msg"></div>
         <div class="small" style="margin-top:10px">Note: Presets can change Rules too — Owners only.</div>
@@ -3955,7 +3957,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     </div>
 
     <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
-      <button class="btn" onclick="saveRules()">Save Rules</button>
+      <button class="btn" data-min-role="owner" onclick="saveRules()">Save Rules</button>
       <button class="btn2" onclick="loadRules()">Reload</button>
       <span id="rules-msg" class="note"></span>
     </div>
@@ -3977,7 +3979,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
         <label class="small">Upload menu JSON file</label>
         <input id="menu-file" class="inp" type="file" accept="application/json"/>
         <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn" onclick="uploadMenu()">Upload</button>
+          <button class="btn" data-min-role="owner" onclick="uploadMenu()">Upload</button>
           <button class="btn2" onclick="loadMenu()">Load Current</button>
           <span id="menu-msg" class="note"></span>
         </div>
@@ -4021,6 +4023,39 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 <script>
 const KEY = __ADMIN_KEY__;
 const ROLE = "__ADMIN_ROLE__";
+
+const ROLE_RANK = { "manager": 1, "owner": 2 };
+function hasRole(minRole){
+  const need = ROLE_RANK[minRole||"manager"] || 1;
+  const have = ROLE_RANK[ROLE||"manager"] || 1;
+  return have >= need;
+}
+
+function markLockedControls(){
+  document.querySelectorAll('[data-min-role]').forEach(el=>{
+    const need = el.getAttribute('data-min-role') || 'manager';
+    if(!hasRole(need)){
+      el.classList.add('locked');
+      el.setAttribute('title', 'Owner-only');
+      // Ensure it can still be tapped/clicked to explain why
+      el.style.pointerEvents = 'auto';
+    }
+  });
+}
+window.addEventListener('DOMContentLoaded', markLockedControls);
+
+// Make "locked" controls still clickable (they show a helpful message instead of silently failing)
+document.addEventListener('click', (e)=>{
+  const el = e.target && e.target.closest ? e.target.closest('[data-min-role]') : null;
+  if(!el) return;
+  const need = el.getAttribute('data-min-role') || 'manager';
+  if(hasRole(need)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const label = (el.textContent||'').trim() || 'This action';
+  alert(label + ' is Owner-only.');
+}, true);
+
 
 
 // ===== Leads filters (simple + fast) =====
