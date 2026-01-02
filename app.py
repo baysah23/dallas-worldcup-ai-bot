@@ -3338,14 +3338,14 @@ def admin_update_lead():
         return resp
 
     data = request.get_json(silent=True) or {}
-    row_num = int(data.get("row") or 0)
+    row_num = int(data.get("row") or data.get("sheet_row") or 0)
     if row_num < 2:
         return jsonify({"ok": False, "error": "Bad row"}), 400
 
     status = (data.get("status") or "").strip()
     vip = (data.get("vip") or "").strip()
 
-    allowed_status = ["New", "Confirmed", "Seated", "No-Show"]
+    allowed_status = ["New", "Confirmed", "Seated", "No-Show", "Handled"]
     if status and status not in allowed_status:
         return jsonify({"ok": False, "error": "Invalid status"}), 400
 
@@ -3375,8 +3375,7 @@ def admin_update_lead():
         if col:
             ws.update_cell(row_num, col, vip)
             updates += 1
-
-    _audit("lead.update", {"row": row_num})
+    _audit("lead.handled", {"row": row_num}) if (status == "Handled") else _audit("lead.update", {"row": row_num})
     return jsonify({"ok": True, "updated": updates})
 
 
@@ -3514,6 +3513,8 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 @media(max-width:900px){.row{grid-template-columns:1fr}}
 .btn{border:1px solid rgba(212,175,55,.45);background:rgba(212,175,55,.12);color:var(--text);padding:10px 12px;border-radius:12px;font-size:13px;font-weight:800;cursor:pointer}
 .btn2{border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);padding:10px 12px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer}
+.btnTiny{margin-left:6px;min-width:32px;height:32px;line-height:30px;padding:0 8px;border-radius:10px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.06);color:var(--text);cursor:pointer}
+.btnTiny:hover{background:rgba(255,255,255,.10)}
 .note{margin-top:8px;font-size:12px;color:var(--muted)}
 .hidden{display:none}
 .code{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-size:12px}
@@ -3616,7 +3617,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
             html.append("<td>")
             html.append(f"<select class='inp' id='status-{sheet_row}'>"
-                        f"{opt(st=='New','New')}{opt(st=='Confirmed','Confirmed')}{opt(st=='Seated','Seated')}{opt(st=='No-Show','No-Show')}"
+                        f"{opt(st=='New','New')}{opt(st=='Confirmed','Confirmed')}{opt(st=='Seated','Seated')}{opt(st=='No-Show','No-Show')}{opt(st=='Handled','Handled')}"
                         "</select>")
             html.append("</td>")
 
@@ -3628,7 +3629,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
 
             html.append("<td>")
-            html.append(f"<button class='btn2' onclick='saveLead({sheet_row})'>Save</button>")
+            html.append(f"<button class='btn2' onclick='saveLead({sheet_row})'>Save</button><button class='btnTiny' title='Mark handled' onclick='markHandled({sheet_row})'>✅</button>")
             html.append("</td>")
 
             html.append("</tr>")
@@ -3911,11 +3912,27 @@ async function saveLead(sheetRow){
   const res = await fetch('/admin/update-lead?key='+encodeURIComponent(KEY), {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({sheet_row: sheetRow, status, vip})
+    body: JSON.stringify({row: sheetRow, status, vip})
   });
   const j = await res.json().catch(()=>{});
   if(j && j.ok) alert('Saved');
   else alert('Save failed: ' + (j.error||res.status));
+}
+
+async function markHandled(sheetRow){
+  // Minimal: set status to Handled + write an audit entry.
+  const res = await fetch('/admin/update-lead?key='+encodeURIComponent(KEY), {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({row: sheetRow, status: 'Handled'})
+  });
+  const j = await res.json().catch(()=>{});
+  if(j && j.ok){
+    const sel = qs('#status-'+sheetRow);
+    if(sel) sel.value = 'Handled';
+  } else {
+    alert('Failed: ' + (j && j.error ? j.error : res.status));
+  }
 }
 
 async function loadRules(){
