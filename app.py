@@ -335,6 +335,174 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
     except Exception as e:
         return {"ok": False, "error": f"Apply failed: {e}"}
 
+def _ai_build_lead_prompt(lead: Dict[str, Any]) -> str:
+    # Keep prompt small + deterministic
+    return (
+        "Lead intake:\n"
+        f"- intent: {lead.get('intent','')}\n"
+        f"- contact: {lead.get('contact','')}\n"
+        f"- budget: {lead.get('budget','')}\n"
+        f"- party_size: {lead.get('party_size','')}\n"
+        f"- datetime: {lead.get('datetime','')}\n"
+        f"- notes: {lead.get('notes','')}\n"
+        f"- lang: {lead.get('lang','')}\n"
+        "\nReturn JSON only."
+    )
+
+def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[str, Any]:
+    """
+    Ask the model for suggested workflow actions for a new lead.
+    Returns dict: {ok, confidence, actions:[{type,payload,reason}], notes}
+    """
+    settings = AI_SETTINGS or {}
+    if not settings.get("enabled"):
+        return {"ok": False, "error": "AI disabled"}
+
+    # Build allowed action schema based on settings
+    allow = settings.get("allow_actions") or {}
+    allowed_types = [k for k,v in allow.items() if v]
+    if not allowed_types:
+        return {"ok": False, "error": "No actions allowed"}
+
+    system_msg = (settings.get("system_prompt") or "").strip()
+    # Tight JSON contract
+    contract = {
+        "confidence": "number 0..1",
+        "actions": [
+            {
+                "type": f"one of: {allowed_types}",
+                "payload": "object (include row)",
+                "reason": "short string"
+            }
+        ],
+        "notes": "short string"
+    }
+    user_msg = _ai_build_lead_prompt(lead) + "\n\nJSON schema:\n" + json.dumps(contract)
+
+    # Call OpenAI (best-effort). If not configured, return a safe suggestion locally.
+    try:
+        if not _OPENAI_AVAILABLE or client is None:
+            raise RuntimeError("OpenAI SDK missing")
+        resp = client.responses.create(
+            model=settings.get("model") or os.environ.get("CHAT_MODEL", "gpt-4o-mini"),
+            input=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ],
+        )
+        raw = (resp.output_text or "").strip()
+    except Exception:
+        # Local heuristic fallback: budget or VIP keywords -> suggest VIP tag
+        raw = ""
+        notes = (lead.get("notes") or "").lower()
+        budget = str(lead.get("budget") or "").lower()
+        is_vip = any(k in notes for k in ["vip", "bottle", "table", "suite"]) or any(k in budget for k in ["1000", "1500", "2000", "2500"])
+        actions = []
+        if is_vip and allow.get("vip_tag", False) and sheet_row:
+            actions.append({"type":"vip_tag","payload":{"row": sheet_row, "vip":"VIP"},"reason":"Lead looks VIP/high-intent"})
+        return {"ok": True, "confidence": 0.55 if actions else 0.3, "actions": actions, "notes":"Heuristic suggestion (AI not configured)"}
+
+    # Parse JSON safely
+    parsed = None
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        # Try to extract JSON blob from text
+        try:
+            m = re.search(r"\{.*\}", raw, flags=re.S)
+            parsed = json.loads(m.group(0)) if m else None
+        except Exception:
+            parsed = None
+
+    if not isinstance(parsed, dict):
+        return {"ok": False, "error": "Bad AI JSON"}
+
+    confidence = float(parsed.get("confidence") or 0)
+    actions_in = parsed.get("actions") or []
+    actions_out = []
+    for a in actions_in if isinstance(actions_in, list) else []:
+        if not isinstance(a, dict):
+            continue
+        typ = str(a.get("type") or "").strip()
+        if typ not in allowed_types:
+            continue
+        payload = a.get("payload") or {}
+        if not isinstance(payload, dict):
+            payload = {}
+        # Always enforce row linkage to prevent "random actions"
+        if sheet_row:
+            payload["row"] = int(sheet_row)
+        actions_out.append({"type": typ, "payload": payload, "reason": str(a.get("reason") or "").strip()[:240]})
+    return {"ok": True, "confidence": confidence, "actions": actions_out, "notes": str(parsed.get("notes") or "").strip()[:240]}
+
+def _ai_enqueue_or_apply_for_new_lead(lead: Dict[str, Any], sheet_row: int) -> None:
+    """
+    Run AI triage for a new lead and either:
+      - enqueue actions for approval (default)
+      - or auto-apply actions when enabled + safe gates pass
+    Never raises.
+    """
+    try:
+        settings = AI_SETTINGS or {}
+        if not settings.get("enabled"):
+            return
+        mode = str(settings.get("mode") or "suggest").lower()
+        require_approval = bool(settings.get("require_approval", True))
+        min_conf = float(settings.get("min_confidence") or 0.7)
+
+        sug = _ai_suggest_actions_for_lead(lead, sheet_row)
+        if not sug.get("ok"):
+            return
+
+        confidence = float(sug.get("confidence") or 0)
+        actions = sug.get("actions") or []
+        if not actions:
+            return
+
+        # Build queue entry
+        entry = {
+            "id": _queue_new_id(),
+            "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "created_by": "system",
+            "created_role": "system",
+            "status": "pending",
+            "source": "lead_intake",
+            "confidence": confidence,
+            "notes": sug.get("notes") or "",
+            "actions": actions,
+            "lead": {  # small snapshot for reviewers
+                "intent": lead.get("intent",""),
+                "contact": lead.get("contact",""),
+                "budget": lead.get("budget",""),
+                "party_size": lead.get("party_size",""),
+                "datetime": lead.get("datetime",""),
+            }
+        }
+
+        # Default: always queue unless explicitly safe to auto-apply
+        if mode != "auto" or require_approval or confidence < min_conf:
+            _queue_add(entry)
+            _audit("ai.queue.created", {"id": entry["id"], "source": "lead_intake", "confidence": confidence})
+            return
+
+        # Auto-apply each action (still audited)
+        ctx = {"role": "owner", "actor": "system"}  # system executes as owner for apply, but it's audited
+        applied = []
+        errors = []
+        for a in actions:
+            res = _queue_apply_action(a, ctx)
+            if res.get("ok"):
+                applied.append(res.get("applied") or a.get("type"))
+            else:
+                errors.append(res.get("error") or "unknown")
+        entry["status"] = "applied" if applied else "error"
+        entry["applied"] = applied
+        entry["errors"] = errors
+        _queue_add(entry)
+        _audit("ai.queue.auto_applied", {"id": entry["id"], "applied": applied, "errors": errors, "confidence": confidence})
+    except Exception:
+        return
+
 def _load_rules_from_disk() -> None:
     global BUSINESS_RULES
     payload = _safe_read_json_file(BUSINESS_RULES_FILE)
@@ -5258,19 +5426,39 @@ def _append_lead_local(row: dict) -> None:
     except Exception:
         pass
 
-def _append_lead_google_sheet(row: dict) -> bool:
+def _extract_row_num_from_updated_range(updated_range: str) -> int:
+    """
+    Parse ranges like 'Leads!A123:K123' and return 123.
+    Returns 0 if unknown.
+    """
+    try:
+        if not updated_range:
+            return 0
+        if "!" in updated_range:
+            updated_range = updated_range.split("!", 1)[1]
+        first = updated_range.split(":", 1)[0]
+        m = re.search(r"(\d+)$", first)
+        return int(m.group(1)) if m else 0
+    except Exception:
+        return 0
+
+def _append_lead_google_sheet(row: dict) -> tuple[bool, int]:
+    """
+    Append a lead to Google Sheets.
+    Returns (ok, sheet_row_number).
+    sheet_row_number may be 0 if it cannot be determined.
+    """
     try:
         gc = get_gspread_client()
         if GOOGLE_SHEET_ID:
             sh = gc.open_by_key(GOOGLE_SHEET_ID)
         else:
             sh = gc.open(SHEET_NAME)
-        # Use a dedicated Leads worksheet if present; fall back to first sheet
         try:
             ws = sh.worksheet("Leads")
         except Exception:
             ws = sh.sheet1
-        ws.append_row([
+        resp = ws.append_row([
             row.get("ts",""),
             row.get("page",""),
             row.get("intent",""),
@@ -5283,9 +5471,19 @@ def _append_lead_google_sheet(row: dict) -> bool:
             row.get("ip",""),
             row.get("ua",""),
         ], value_input_option="USER_ENTERED")
-        return True
+        sheet_row = 0
+        try:
+            updated_range = ""
+            if isinstance(resp, dict):
+                updates = resp.get("updates") or {}
+                updated_range = str(updates.get("updatedRange") or "")
+            sheet_row = _extract_row_num_from_updated_range(updated_range)
+        except Exception:
+            sheet_row = 0
+        return True, int(sheet_row or 0)
     except Exception:
-        return False
+        return False, 0
+
 @app.route("/lead", methods=["POST"])
 def lead():
     payload = request.get_json(silent=True) or {}
@@ -5303,11 +5501,18 @@ def lead():
         "ua": request.headers.get("User-Agent",""),
     }
     _append_lead_local(row)
-    ok = False
-    if GOOGLE_SHEET_ID or os.environ.get("GOOGLE_CREDS_JSON") or os.path.exists("google_creds.json"):
-        ok = _append_lead_google_sheet(row)
-    return jsonify({"ok": True, "sheet_ok": bool(ok)})
 
+    sheet_ok = False
+    sheet_row = 0
+    if GOOGLE_SHEET_ID or os.environ.get("GOOGLE_CREDS_JSON") or os.path.exists("google_creds.json"):
+        sheet_ok, sheet_row = _append_lead_google_sheet(row)
+
+    # Step 7: AI triage on intake → queue suggestions (approval by manager/admin)
+    # Best-effort; never blocks lead capture if AI fails.
+    if sheet_ok or AI_SETTINGS.get("enabled"):
+        _ai_enqueue_or_apply_for_new_lead(row, int(sheet_row or 0))
+
+    return jsonify({"ok": True, "sheet_ok": bool(sheet_ok), "sheet_row": int(sheet_row or 0)})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
