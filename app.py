@@ -1002,7 +1002,7 @@ def ensure_sheet_schema(ws) -> List[str]:
     Make sure row 1 is the header and includes the CRM columns we need.
     Returns the final header list (as stored in the sheet).
     """
-    desired = ["timestamp", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier"]
+    desired = ["timestamp", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier", "queue", "business_context", "budget", "notes", "vibe"]
 
     existing = ws.row_values(1) or []
     existing_norm = [_normalize_header(x) for x in existing]
@@ -1067,6 +1067,11 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
     setv("vip", vip)
     setv("entry_point", lead.get("entry_point",""))
     setv("tier", lead.get("tier",""))
+    setv("queue", lead.get("queue",""))
+    setv("business_context", lead.get("business_context",""))
+    setv("budget", lead.get("budget",""))
+    setv("notes", lead.get("notes",""))
+    setv("vibe", lead.get("vibe",""))
 
     # Append at bottom (keeps headers at the top)
     ws.append_row(row, value_input_option="USER_ENTERED")
@@ -3451,6 +3456,11 @@ def admin():
     i_vip = idx("vip")
     i_entry = idx("entry_point")
     i_tier = idx("tier")
+    i_queue = idx("queue")
+    i_ctx = idx("business_context")
+    i_budget = idx("budget")
+    i_notes = idx("notes")
+    i_vibe = idx("vibe")
 
     def colval(r, i, default=""):
         return (r[i] if 0 <= i < len(r) else default).strip() if isinstance(r, list) else default
@@ -3549,11 +3559,9 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     elif not body:
         html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>No leads yet.</div></div>")
     else:
-        html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>Newest first. Update Status/VIP and save.</div></div>")
-        html.append("<div class='tablewrap'><table>")
-        html.append("<thead><tr>"
-                    "<th>Sheet Row</th><th>Timestamp</th><th>Name</th><th>Phone</th><th>Date</th><th>Time</th><th>Party</th><th>Lang</th><th>Status</th><th>VIP</th><th>Entry</th><th>Tier</th><th>Save</th>"
-                    "</tr></thead><tbody>")
+        html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>Newest first. Update Status/VIP and save.</div><div style='display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center'><div class='pills' style='margin:0'><button class='btn2' id='flt-all' type='button'>All</button><button class='btn2' id='flt-vip' type='button'>VIP</button><button class='btn2' id='flt-reg' type='button'>Regular</button></div><div style='display:flex;gap:8px;align-items:center'><span class='small' style='white-space:nowrap'>Entry:</span><select class='inp' id='flt-entry' style='min-width:180px'></select><span id='leadsCount' class='small' style='margin-left:8px'>0 shown</span></div></div></div>")
+        html.append("<div class='tablewrap'><table id='leadsTable'>")
+        html.append("<thead><tr>"                    "<th>Row</th><th>Timestamp</th><th>Name</th><th>Contact</th>"                    "<th>Date</th><th>Time</th><th>Party</th>"                    "<th>Segment</th><th>Entry</th><th>Queue</th><th>Budget</th>"                    "<th>Context</th><th>Notes</th>"                    "<th>Status</th><th>VIP</th><th>Save</th>"                    "</tr></thead><tbody>")
         for sheet_row, r in numbered:
             ts = colval(r, i_ts, "")
             nm = colval(r, i_name, "")
@@ -3566,12 +3574,17 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
             vip = colval(r, i_vip, "No") or "No"
             ep = colval(r, i_entry, "")
             tier = colval(r, i_tier, "")
+            queue = colval(r, i_queue, "")
+            bctx = colval(r, i_ctx, "")
+            budget = colval(r, i_budget, "")
+            notes = colval(r, i_notes, "")
+            vibe = colval(r, i_vibe, "")
 
             def opt(selected, label):
                 sel = "selected" if selected else ""
                 return f"<option {sel}>{label}</option>"
 
-            html.append("<tr>")
+            html.append(f"<tr data-tier='{_hesc(tier)}' data-entry='{_hesc(ep)}'>")
             html.append(f"<td class='code'>{sheet_row}</td>")
             html.append(f"<td>{ts}</td>")
             html.append(f"<td>{nm}</td>")
@@ -3579,7 +3592,27 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
             html.append(f"<td>{d}</td>")
             html.append(f"<td>{t}</td>")
             html.append(f"<td>{ps}</td>")
-            html.append(f"<td>{lg}</td>")
+            # Segment badge (VIP vs Regular)
+            seg = "⭐ VIP" if (tier or "").strip().lower() == "vip" or (vip or "").strip().lower() in ["yes","true","1","y"] else "Regular"
+            seg_cls = "badge warn" if seg.startswith("⭐") else "badge"
+            html.append(f"<td><span class='{seg_cls}'>{_hesc(seg)}</span></td>")
+            html.append("<td><span class='pill'>" + _hesc(ep) + "</span></td>")
+            html.append("<td><span class='badge good'>" + _hesc(queue) + "</span></td>")
+            html.append(f"<td>{_hesc(budget)}</td>")
+            # Context + Notes (compact)
+            ctx_txt = (bctx or "").strip()
+            note_txt = (notes or "").strip()
+            if vibe and vibe.strip():
+                # Keep vibe visible without cluttering budget/notes columns
+                note_txt = (note_txt + (" | " if note_txt else "") + f"vibe: {vibe.strip()}").strip()
+            def _cell_details(label, txt):
+                if not txt:
+                    return "<span class='small'>—</span>"
+                short = txt if len(txt) <= 34 else (txt[:34] + "…")
+                return "<details><summary class='small'>" + _hesc(short) + "</summary><div style='margin-top:6px;white-space:pre-wrap' class='small'>" + _hesc(txt) + "</div></details>"
+            html.append("<td>" + _cell_details("context", ctx_txt) + "</td>")
+            html.append("<td>" + _cell_details("notes", note_txt) + "</td>")
+
 
             html.append("<td>")
             html.append(f"<select class='inp' id='status-{sheet_row}'>"
@@ -3593,8 +3626,6 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
                         "</select>")
             html.append("</td>")
 
-            html.append("<td><span class='pill'>" + _hesc(ep) + "</span></td>")
-            html.append("<td><span class='pill'>" + _hesc(tier) + "</span></td>")
 
             html.append("<td>")
             html.append(f"<button class='btn2' onclick='saveLead({sheet_row})'>Save</button>")
@@ -3775,6 +3806,84 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     html.append(f"""
 <script>
 const KEY = {json.dumps(key)};
+
+
+// ===== Leads filters (simple + fast) =====
+let leadTierFilter = "all";   // all | vip | regular
+let leadEntryFilter = "all";  // all | <entry_point>
+
+function norm(s){ return (s||"").toString().trim().toLowerCase(); }
+
+function applyLeadFilters(){
+  const rows = document.querySelectorAll('#leadsTable tbody tr');
+  let shown = 0;
+  rows.forEach(tr=>{
+    const tier = norm(tr.getAttribute('data-tier')||"");
+    const entry = norm(tr.getAttribute('data-entry')||"");
+    const isVip = (tier === 'vip');
+
+    let ok = true;
+    if(leadTierFilter === "vip") ok = isVip;
+    if(leadTierFilter === "regular") ok = !isVip;
+
+    if(ok && leadEntryFilter !== "all"){
+      ok = (entry === leadEntryFilter);
+    }
+
+    tr.style.display = ok ? "" : "none";
+    if(ok) shown++;
+  });
+
+  const hint = qs('#leadsCount');
+  if(hint) hint.textContent = shown + " shown";
+}
+
+function setupLeadFilters(){
+  const tbl = qs('#leadsTable');
+  if(!tbl) return;
+
+  // Build entry dropdown
+  const entries = new Set();
+  document.querySelectorAll('#leadsTable tbody tr').forEach(tr=>{
+    const ep = norm(tr.getAttribute('data-entry')||"");
+    if(ep) entries.add(ep);
+  });
+
+  const sel = qs('#flt-entry');
+  if(sel){
+    sel.innerHTML = "";
+    const all = document.createElement('option');
+    all.value = "all"; all.textContent = "All";
+    sel.appendChild(all);
+    Array.from(entries).sort().forEach(ep=>{
+      const o = document.createElement('option');
+      o.value = ep; o.textContent = ep.replace(/_/g,' ');
+      sel.appendChild(o);
+    });
+    sel.addEventListener('change', ()=>{
+      leadEntryFilter = norm(sel.value||"all") || "all";
+      applyLeadFilters();
+    });
+  }
+
+  function setBtn(activeId){
+    ['flt-all','flt-vip','flt-reg'].forEach(id=>{
+      const b = qs('#'+id);
+      if(!b) return;
+      b.style.borderColor = (id===activeId) ? 'rgba(212,175,55,.65)' : 'rgba(255,255,255,.12)';
+      b.style.background = (id===activeId) ? 'rgba(212,175,55,.12)' : 'rgba(255,255,255,.03)';
+      b.style.color = (id===activeId) ? '#fff' : 'rgba(234,240,255,.92)';
+    });
+  }
+
+  qs('#flt-all')?.addEventListener('click', ()=>{ leadTierFilter="all"; setBtn('flt-all'); applyLeadFilters(); });
+  qs('#flt-vip')?.addEventListener('click', ()=>{ leadTierFilter="vip"; setBtn('flt-vip'); applyLeadFilters(); });
+  qs('#flt-reg')?.addEventListener('click', ()=>{ leadTierFilter="regular"; setBtn('flt-reg'); applyLeadFilters(); });
+
+  setBtn('flt-all');
+  applyLeadFilters();
+}
+
 
 function qs(sel){{return document.querySelector(sel);}}
 function qsa(sel){{return Array.from(document.querySelectorAll(sel));}}
@@ -3967,6 +4076,8 @@ async function loadAudit(){{
   if(msg) msg.textContent='';
 }}
 
+
+try{ setupLeadFilters(); }catch(e){}
 </script>
 """)
 
@@ -4350,8 +4461,11 @@ tr:hover td{background:rgba(255,255,255,.03)}
 def api_intake():
     payload = request.get_json(silent=True) or {}
 
+
     entry_point = (payload.get("entry_point") or "").strip() or "reserve_now"
+    name = (payload.get("name") or "").strip()
     contact = (payload.get("contact") or "").strip()
+    business_context = (payload.get("business_context") or "").strip()
     date_s = (payload.get("date") or "").strip()
     time_s = (payload.get("time") or "").strip()
     party = (payload.get("party_size") or "").strip()
@@ -4360,17 +4474,17 @@ def api_intake():
     notes = (payload.get("notes") or "").strip()
     lang = (payload.get("lang") or "").strip() or "en"
 
-    if not contact or not date_s or not time_s or not party:
+    # Required: name + contact + date + time + party size
+    if not name or not contact or not date_s or not time_s or not party:
         return jsonify({"ok": False, "error": "Missing required fields"}), 400
 
-    # Compute tier (simple + reliable)
+    # Tier + queue (simple + reliable)
     tier = "VIP" if (entry_point == "vip_vibe" or "vip" in vibe.lower()) else "Regular"
     vip_flag = "Yes" if tier == "VIP" else "No"
+    queue = "Priority" if tier == "VIP" else "Standard"
 
-    # Keep the admin leads sheet "phone" column as the best single contact field.
-    # Store entry_point/tier in dedicated columns (added to schema).
     lead = {
-        "name": (payload.get("name") or "").strip(),
+        "name": name,
         "phone": contact,
         "date": date_s,
         "time": time_s,
@@ -4380,17 +4494,12 @@ def api_intake():
         "vip": vip_flag,
         "entry_point": entry_point,
         "tier": tier,
+        "queue": queue,
+        "business_context": business_context,
+        "budget": budget,
+        "notes": notes,
+        "vibe": vibe,
     }
-
-    # Add context into details for quick scanning
-    detail_bits = []
-    if vibe: detail_bits.append(f"vibe: {vibe}")
-    if budget: detail_bits.append(f"budget: {budget}")
-    if notes: detail_bits.append(f"notes: {notes}")
-    if detail_bits:
-        lead["phone"] = contact  # unchanged
-        # Put extra details into a "notes" style field if the sheet has it; otherwise it will be ignored.
-        lead["notes"] = " | ".join(detail_bits)
 
     try:
         append_lead_to_sheet(lead)
@@ -4443,7 +4552,6 @@ def _append_lead_google_sheet(row: dict) -> bool:
         return True
     except Exception:
         return False
-
 @app.route("/lead", methods=["POST"])
 def lead():
     payload = request.get_json(silent=True) or {}

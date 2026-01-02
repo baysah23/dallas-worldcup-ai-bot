@@ -3912,6 +3912,8 @@ body[data-sec="schedule"] #sec-schedule #pager .pill{
       <div class="modalBody">
         <label for="iCity">Business context (optional)</label>
         <input id="iCity" placeholder="e.g., client name, suite name, or event context (optional)" />
+        <label class="required" for="iName">Name</label>
+        <input id="iName" placeholder="Guest name" />
         <label class="required" for="iDate">Date</label>
         <input id="iDate" type="date" />
         <label class="required" for="iGroup">Party size</label>
@@ -4796,7 +4798,7 @@ function openModal(entryPoint){
   if(!m) return;
   m.classList.remove('hidden');
   document.body.classList.add('modalOpen');
-  try{ $('iDate')?.focus(); }catch(e){}
+  try{ $('iName')?.focus(); }catch(e){}
 }
 function closeModal(){
   const m = $('intakeModal');
@@ -4806,6 +4808,8 @@ function closeModal(){
 }
 async function submitIntake(){
   const msg = $('intakeMsg');
+  const iName = $('iName')?.value || '';
+  const iCity = $('iCity')?.value || '';
   const iDate = $('iDate')?.value || '';
   const iGroup = $('iGroup')?.value || '';
   const iTime = $('iTime')?.value || '';
@@ -4814,14 +4818,16 @@ async function submitIntake(){
   const iNotes = $('iNotes')?.value || '';
   const iContact = $('iContact')?.value || '';
 
-  if(!iDate || !iGroup || !iTime || !iContact){
-    if(msg) msg.textContent = 'Please fill Date, Party size, Time window, and Contact.';
+  if(!iName || !iDate || !iGroup || !iTime || !iContact){
+    if(msg) msg.textContent = 'Please fill Name, Date, Party size, Time window, and Contact.';
     return;
   }
   if(msg) msg.textContent = 'Sending…';
 
   const payload = {
     entry_point: currentEntryPoint || 'reserve_now',
+    name: iName,
+    business_context: iCity,
     date: iDate,
     party_size: iGroup,
     time: iTime,
