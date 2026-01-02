@@ -4238,8 +4238,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     html.append(r"""
 <div class="tabs">
   <button type="button" class="tabbtn active" data-tab="leads">Leads</button>
-  <button type="button" class="tabbtn" data-tab="ops">Ops</button>
-  <button type="button" class="tabbtn" data-tab="ai">AI</button>
+<button type="button" class="tabbtn" data-tab="ai">AI</button>
   <button type="button" class="tabbtn" data-tab="aiq">AI Queue</button>
   <button type="button" class="tabbtn" data-tab="rules">Rules</button>
   <button type="button" class="tabbtn" data-tab="menu">Menu</button>
@@ -4332,73 +4331,6 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
     html.append("</div>")  # tab-leads
 
-    # Ops tab (match-day controls)
-    html.append(r"""
-<div id="tab-ops" class="tabpane hidden">
-  <div class="card">
-    <div class="h2">Match-Day Ops</div>
-    <div class="small">Fast switches that reduce staff load on game day. Saved instantly; logged in Audit.</div>
-
-    <div class="row" style="margin-top:10px">
-      <div class="card" style="margin:0">
-        <div class="h2" style="margin-bottom:6px">Ops toggles</div>
-        <label class="small"><input type="checkbox" id="ops-pause"> Pause reservations</label><br/>
-        <label class="small"><input type="checkbox" id="ops-viponly"> VIP-only</label><br/>
-        <label class="small"><input type="checkbox" id="ops-waitlist"> Waitlist mode</label>
-        <div style="margin-top:10px">
-          <button type="button" class="btn" onclick="saveOps()">Save Ops</button>
-          <span id="ops-msg" class="note"></span>
-        </div>
-      </div>
-
-      <div class="card" style="margin:0">
-        <div class="h2" style="margin-bottom:6px">Match-Day Presets</div>
-        <div class="small">One click = flip multiple toggles + rule values.</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
-          <button class="btn2" data-min-role="owner" onclick="applyPreset('Kickoff Rush')">Kickoff Rush</button>
-          <button class="btn2" data-min-role="owner" onclick="applyPreset('Halftime Surge')">Halftime Surge</button>
-          <button class="btn2" data-min-role="owner" onclick="applyPreset('Post-game')">Post-game</button>
-        </div>
-        <div class="note" id="preset-msg"></div>
-        <div class="small" style="margin-top:10px">Note: Presets can change Rules too — Owners only.</div>
-      </div>
-    </div>
-  </div>
-</div>
-""")
-    # Match-Day Ops Toggles (moved from Fan Zone)
-    html.append(r'''
-<div class="card">
-    <div class="h2">Match-Day Ops Toggles</div>
-    <div class="small">These controls change behavior immediately in the chat reservation flow (fan UI untouched).</div>
-    <div style="margin-top:10px" class="row">
-      <label style="display:flex;gap:10px;align-items:center">
-        <input id="ops-pause" type="checkbox"/>
-        <span><b>Pause Reservations</b> — blocks new reservations</span>
-      </label>
-    </div>
-    <div style="margin-top:10px" class="row">
-      <label style="display:flex;gap:10px;align-items:center">
-        <input id="ops-vip" type="checkbox"/>
-        <span><b>VIP-only</b> — require VIP keyword to proceed</span>
-      </label>
-    </div>
-    <div style="margin-top:10px" class="row">
-      <label style="display:flex;gap:10px;align-items:center">
-        <input id="ops-wait" type="checkbox"/>
-        <span><b>Waitlist Mode</b> — saves captures as Status=Waitlist</span>
-      </label>
-    </div>
-    <button id="btnSaveOps" class="btn" style="margin-top:12px">Save ops toggles</button>
-    <div id="ops-status" class="small" style="margin-top:10px;opacity:.9"></div>
-  </div>
-</div>
-''')
-
-
-
-
-    # Rules tab
     html.append(r"""
 
 <div id="tab-ai" class="tabpane hidden">
@@ -4594,7 +4526,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     html.append("""
 <script>
 const KEY = __ADMIN_KEY__;
-const ROLE = __ADMIN_ROLE__;
+const ROLE = "__ADMIN_ROLE__";
 
 const ROLE_RANK = { "manager": 1, "owner": 2 };
 function hasRole(minRole){
@@ -4710,6 +4642,23 @@ function setupLeadFilters(){
 function qs(sel){return document.querySelector(sel);}
 function qsa(sel){return Array.from(document.querySelectorAll(sel));}
 
+qsa('.tabbtn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    qsa('.tabbtn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const t = btn.dataset.tab;
+    ['leads','ai','aiq','rules','menu','audit'].forEach(x=>{
+      const pane = document.getElementById('tab-'+x);
+      if(!pane) return;
+      pane.classList.toggle('hidden', x!==t);
+    });
+if(t==='ai') loadAI();
+    if(t==='aiq') loadAIQueue();
+    if(t==='rules') loadRules();
+    if(t==='menu') loadMenu();
+    if(t==='audit') loadAudit();
+  });
+});
 
 async function saveLead(sheetRow){
   const status = qs('#status-'+sheetRow).value;
@@ -5129,28 +5078,13 @@ function setupTabs(){
   const panes = Array.from(document.querySelectorAll('.tabpane'));
   if(!btns.length || !panes.length) return;
 
-  function fireLoaders(tab){
-    try{
-      if(tab==='ops') loadOps();
-      if(tab==='ai') loadAI();
-      if(tab==='aiq') loadAIQueue();
-      if(tab==='rules') loadRules();
-      if(tab==='menu') loadMenu();
-      if(tab==='audit') loadAudit();
-    }catch(e){}
-  }
-
   function show(tab){
     btns.forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
     panes.forEach(p=>p.classList.add('hidden'));
     const pane = document.querySelector('#tab-'+tab);
     if(pane) pane.classList.remove('hidden');
-
-    // deep-linking + persistence
+    // keep URL hash for deep-linking
     try{ history.replaceState(null, '', '#'+tab); }catch(e){}
-    try{ localStorage.setItem('wc_admin_tab', tab); }catch(e){}
-
-    fireLoaders(tab);
   }
 
   btns.forEach(b=>{
@@ -5161,19 +5095,15 @@ function setupTabs(){
     });
   });
 
-  // initial: URL hash > localStorage > default
-  let initial = (location.hash||'').replace('#','').trim();
-  if(!initial){
-    try{ initial = (localStorage.getItem('wc_admin_tab')||'').trim(); }catch(e){}
-  }
-  if(!initial || !document.querySelector('.tabbtn[data-tab="'+initial+'"]')) initial = 'leads';
-  show(initial);
+  // open tab from URL hash if present
+  const initial = (location.hash||'').replace('#','').trim();
+  if(initial && document.querySelector('.tabbtn[data-tab="'+initial+'"]')) show(initial);
 }
 function openNotifications(){
   // Switch to Ops tab and scroll to the notifications card
   try{
     document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
-    const btn = document.querySelector('.tabbtn[data-tab="ops"]');
+    const btn = document.querySelector('.tabbtn[data-tab="leads"]');
     if(btn) btn.classList.add('active');
     document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
     const pane = document.querySelector('#tab-ops');
@@ -5320,7 +5250,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <script>
 (function(){
   const ADMIN_KEY = (new URLSearchParams(location.search)).get("key") || "";
-  const ROLE = __ADMIN_ROLE__;
+  const ROLE = "__ADMIN_ROLE__";
   const ROLE_RANK = { manager: 1, owner: 2 };
   function hasRole(minRole){
     const need = ROLE_RANK[minRole||'manager'] || 1;
