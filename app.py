@@ -4184,8 +4184,8 @@ body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(
 .pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .pill{border:1px solid var(--line);background:rgba(255,255,255,.03);padding:8px 10px;border-radius:999px;font-size:12px}
 .pill b{color:var(--gold)}
-.tabs{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
-.tabbtn{border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);padding:10px 12px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer}
+.tabs{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px;position:sticky;top:0;z-index:50;background:linear-gradient(180deg, rgba(11,16,32,.92), rgba(11,16,32,.72));backdrop-filter:blur(10px);padding:10px;border-radius:16px;border:1px solid rgba(255,255,255,.08)}
+.tabbtn{border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);padding:10px 12px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none}
 .tabbtn.active{border-color:rgba(212,175,55,.6);box-shadow:0 0 0 1px rgba(212,175,55,.25) inset}
 .card{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:14px;padding:12px 12px;margin:10px 0}
 .h2{font-size:14px;font-weight:800;margin:0 0 8px}
@@ -5148,25 +5148,60 @@ function setupTabs(){
   if(!btns.length || !panes.length) return;
 
   function show(tab){
-    btns.forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
+    btns.forEach(b=>{
+      const isActive = (b.getAttribute('data-tab')===tab);
+      b.classList.toggle('active', isActive);
+      b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      b.setAttribute('tabindex', isActive ? '0' : '-1');
+    });
     panes.forEach(p=>p.classList.add('hidden'));
     const pane = document.querySelector('#tab-'+tab);
     if(pane) pane.classList.remove('hidden');
-    // keep URL hash for deep-linking
+
+    // Persist + keep URL hash for deep-linking (best-effort)
+    try{ localStorage.setItem('wc_admin_tab', tab); }catch(e){}
     try{ history.replaceState(null, '', '#'+tab); }catch(e){}
   }
 
+  // Make sure buttons behave like real tabs for accessibility
   btns.forEach(b=>{
-    b.addEventListener('click', (e)=>{
+    b.setAttribute('role','tab');
+    b.setAttribute('aria-selected', b.classList.contains('active') ? 'true' : 'false');
+  });
+  const tablist = document.querySelector('.tabs');
+  if(tablist) tablist.setAttribute('role','tablist');
+
+  // Use pointerup (iOS/Safari more reliable) + click fallback
+  function bindTab(btn){
+    const handler = (e)=>{
       e.preventDefault();
-      const tab = b.getAttribute('data-tab');
+      const tab = btn.getAttribute('data-tab');
       if(tab) show(tab);
-    });
+    };
+    btn.addEventListener('pointerup', handler, {passive:false});
+    btn.addEventListener('click', handler, {passive:false});
+  }
+  btns.forEach(bindTab);
+
+  // Keyboard support
+  document.addEventListener('keydown', (e)=>{
+    const active = document.querySelector('.tabbtn.active');
+    if(!active) return;
+    if(e.key!=='ArrowLeft' && e.key!=='ArrowRight') return;
+    e.preventDefault();
+    const i = btns.indexOf(active);
+    if(i<0) return;
+    const next = (e.key==='ArrowRight') ? btns[(i+1)%btns.length] : btns[(i-1+btns.length)%btns.length];
+    if(next) next.focus();
   });
 
-  // open tab from URL hash if present
-  const initial = (location.hash||'').replace('#','').trim();
-  if(initial && document.querySelector('.tabbtn[data-tab="'+initial+'"]')) show(initial);
+  // Open tab from URL hash if present; else last saved; else keep default
+  const fromHash = (location.hash||'').replace('#','').trim();
+  if(fromHash && document.querySelector('.tabbtn[data-tab="'+fromHash+'"]')) return show(fromHash);
+  try{
+    const saved = (localStorage.getItem('wc_admin_tab')||'').trim();
+    if(saved && document.querySelector('.tabbtn[data-tab="'+saved+'"]')) return show(saved);
+  }catch(e){}
 }
 function openNotifications(){
   // Switch to Ops tab and scroll to the notifications card
@@ -5185,6 +5220,13 @@ function openNotifications(){
 setInterval(()=>{ try{ loadNotifs(); }catch(e){} }, 15000);
 
 document.addEventListener('DOMContentLoaded', ()=>{
+
+// Defensive: prevent any accidental overlay or container from swallowing clicks on iOS/Safari
+try{
+  const tabs = document.querySelector('.tabs');
+  if(tabs) tabs.style.pointerEvents = 'auto';
+  document.querySelectorAll('.tabbtn').forEach(b=>{ b.style.pointerEvents='auto'; });
+}catch(e){}
   try{ setupTabs(); }catch(e){}
   try{ markLockedControls(); }catch(e){}
   try{ setupLeadFilters(); }catch(e){}
