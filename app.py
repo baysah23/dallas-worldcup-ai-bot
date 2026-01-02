@@ -218,6 +218,8 @@ def _admin_auth() -> Dict[str, str]:
     - If key matches any ADMIN_MANAGER_KEYS => role=manager
     """
     key = (request.args.get("key", "") or "").strip()
+
+    role = _admin_ctx().get("role","")
     if not key:
         return {"ok": False, "role": "", "actor": ""}
 
@@ -1002,8 +1004,7 @@ def ensure_sheet_schema(ws) -> List[str]:
     Make sure row 1 is the header and includes the CRM columns we need.
     Returns the final header list (as stored in the sheet).
     """
-    desired = ["timestamp", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier", "queue", "business_context", "budget", "notes", "vibe"]
-
+    desired = ['timestamp', 'name', 'phone', 'date', 'time', 'party_size', 'language', 'status', 'vip', 'entry_point', 'tier', 'queue', 'business_context', 'budget', 'notes', 'vibe']
     existing = ws.row_values(1) or []
     existing_norm = [_normalize_header(x) for x in existing]
 
@@ -3526,6 +3527,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     html.append("<div class='h1'>Admin Dashboard v1</div>")
     html.append("<div class='sub'>Tabs + Rules Config + Menu Upload (fan UI unchanged)</div>")
     html.append("<div class='pills'>")
+    html.append(f"<span class='pill'><b>Role</b> {(role or '-').title()}</span>")
     html.append(f"<span class='pill'><b>Leads</b> {len(body)}</span>")
     html.append(f"<span class='pill'><b>VIP</b> {vip_count}</span>")
     for k, v in status_counts.items():
@@ -3541,7 +3543,19 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     html.append("</div>")
     html.append("</div>")  # topbar
 
-    html.append(r"""
+    # Tabs (role-aware: keep manager view simple)
+    if (role or "") == "manager":
+        html.append(r"""
+<div class="tabs">
+  <button class="tabbtn active" data-tab="leads">Leads</button>
+  <button class="tabbtn" data-tab="ops">Ops</button>
+  <button class="tabbtn" data-tab="audit">Audit</button>
+</div>
+
+<div id="tab-leads" class="tabpane">
+""")
+    else:
+        html.append(r"""
 <div class="tabs">
   <button class="tabbtn active" data-tab="leads">Leads</button>
   <button class="tabbtn" data-tab="ops">Ops</button>
@@ -3552,6 +3566,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
 <div id="tab-leads" class="tabpane">
 """)
+
 
     # Leads table
     if leads_err:
