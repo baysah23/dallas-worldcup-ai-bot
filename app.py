@@ -4594,7 +4594,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     html.append("""
 <script>
 const KEY = __ADMIN_KEY__;
-const ROLE = "__ADMIN_ROLE__";
+const ROLE = __ADMIN_ROLE__;
 
 const ROLE_RANK = { "manager": 1, "owner": 2 };
 function hasRole(minRole){
@@ -5319,7 +5319,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <script>
 (function(){
   const ADMIN_KEY = (new URLSearchParams(location.search)).get("key") || "";
-  const ROLE = "__ADMIN_ROLE__";
+  const ROLE = __ADMIN_ROLE__;
   const ROLE_RANK = { manager: 1, owner: 2 };
   function hasRole(minRole){
     const need = ROLE_RANK[minRole||'manager'] || 1;
