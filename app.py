@@ -2,9 +2,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
-import secrets
 import json
 import hashlib
+import secrets
 import re
 import time
 import datetime
@@ -199,6 +199,7 @@ def _default_ai_settings() -> Dict[str, Any]:
             "status_update": False,
             "reply_draft": True,
         },
+        # Feature gates (safe rollout). These further restrict what AI can do, even if allow_actions is true.
         "features": {
             "auto_vip_tag": True,
             "auto_status_update": False,
@@ -210,6 +211,23 @@ def _default_ai_settings() -> Dict[str, Any]:
     }
 
 AI_SETTINGS: Dict[str, Any] = _default_ai_settings()
+
+def _ai_feature_allows(action_type: str, settings: Optional[Dict[str, Any]] = None) -> bool:
+    """Secondary gates for AI actions (feature flags).
+
+    Even if allow_actions permits an action, features can disable it for safe rollout.
+    """
+    s = settings or AI_SETTINGS or {}
+    feat = s.get("features") or {}
+    at = (action_type or "").strip().lower()
+    if at == "vip_tag":
+        return bool(feat.get("auto_vip_tag", True))
+    if at == "status_update":
+        return bool(feat.get("auto_status_update", False))
+    if at == "reply_draft":
+        return bool(feat.get("auto_reply_draft", True))
+    return True
+
 
 def _load_ai_settings_from_disk() -> None:
     global AI_SETTINGS
@@ -284,15 +302,17 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
       - reply_draft: store draft text in audit (does NOT send)
     '''
     typ = str(action.get("type") or "").strip()
+    # Feature flag gate (secondary to allow_actions)
+    if not _ai_feature_allows(typ):
+        return {"ok": False, "error": f"{typ} disabled by feature flag"}
     payload = action.get("payload") or {}
     allow = (AI_SETTINGS.get("allow_actions") or {})
-    feats = (AI_SETTINGS.get("features") or {})
 
     # lead row reference (Google Sheet row number)
     row_num = int(payload.get("row") or payload.get("sheet_row") or 0)
 
     if typ == "reply_draft":
-        if (not allow.get("reply_draft", True)) or (not feats.get("auto_reply_draft", True)):
+        if not allow.get("reply_draft", True):
             return {"ok": False, "error": "reply_draft not allowed"}
         draft = str(payload.get("draft") or "").strip()
         if not draft:
@@ -312,7 +332,7 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
         hmap = header_map(header)
 
         if typ == "vip_tag":
-            if (not allow.get("vip_tag", True)) or (not feats.get("auto_vip_tag", True)):
+            if not allow.get("vip_tag", True):
                 return {"ok": False, "error": "vip_tag not allowed"}
             vip = str(payload.get("vip") or "").strip()
             if vip not in ("VIP", "Regular"):
@@ -325,7 +345,7 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
             return {"ok": True, "applied": "vip_tag"}
 
         if typ == "status_update":
-            if (not allow.get("status_update", False)) or (not feats.get("auto_status_update", False)):
+            if not allow.get("status_update", False):
                 return {"ok": False, "error": "status_update not allowed"}
             status = str(payload.get("status") or "").strip()
             allowed_status = ["New", "Confirmed", "Seated", "No-Show", "Handled"]
@@ -433,6 +453,8 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[s
         typ = str(a.get("type") or "").strip()
         if typ not in allowed_types:
             continue
+        if not _ai_feature_allows(typ, settings):
+            continue
         payload = a.get("payload") or {}
         if not isinstance(payload, dict):
             payload = {}
@@ -463,26 +485,6 @@ def _ai_enqueue_or_apply_for_new_lead(lead: Dict[str, Any], sheet_row: int) -> N
 
         confidence = float(sug.get("confidence") or 0)
         actions = sug.get("actions") or []
-
-        # Enforce feature flags + allow_actions before we queue/apply anything
-        allow_actions = (settings.get("allow_actions") or {})
-        feats = (settings.get("features") or {})
-        feat_map = {"vip_tag": "auto_vip_tag", "status_update": "auto_status_update", "reply_draft": "auto_reply_draft"}
-        filtered = []
-        for a in actions if isinstance(actions, list) else []:
-            if not isinstance(a, dict):
-                continue
-            typ = str(a.get("type") or "").strip()
-            if not typ:
-                continue
-            if not allow_actions.get(typ, True):
-                continue
-            fk = feat_map.get(typ)
-            if fk and (not feats.get(fk, True)):
-                continue
-            filtered.append(a)
-        actions = filtered
-
         if not actions:
             return
 
@@ -4011,18 +4013,18 @@ def admin_api_ai_settings():
         mc = max(0.0, min(1.0, mc))
         patch["min_confidence"] = mc
 
-
-
-    # Feature flags (manager+)
-    # These control which AI actions are even eligible to be queued/applied.
-    if "features" in data and isinstance(data.get("features"), dict):
-        feats_in = data.get("features") or {}
-        feats_out: Dict[str, Any] = {}
-        for k in ("auto_vip_tag", "auto_status_update", "auto_reply_draft"):
-            if k in feats_in:
-                feats_out[k] = bool(as_bool(feats_in.get(k)))
-        if feats_out:
-            patch["features"] = _deep_merge(AI_SETTINGS.get("features") or {}, feats_out)
+    # Feature flags (manager-safe). These do NOT grant new powers; they only further restrict actions.
+    feats_in = data.get("features")
+    if isinstance(feats_in, dict):
+        feats_patch = {}
+        if "auto_vip_tag" in feats_in:
+            feats_patch["auto_vip_tag"] = as_bool(feats_in.get("auto_vip_tag"))
+        if "auto_status_update" in feats_in:
+            feats_patch["auto_status_update"] = as_bool(feats_in.get("auto_status_update"))
+        if "auto_reply_draft" in feats_in:
+            feats_patch["auto_reply_draft"] = as_bool(feats_in.get("auto_reply_draft"))
+        if feats_patch:
+            patch["features"] = feats_patch
 
 
     # Owner-only advanced fields
@@ -4062,124 +4064,6 @@ def admin_api_ai_settings():
 # ============================================================
 # AI Queue API (Admin/Manager)
 # ============================================================
-
-
-# ============================================================
-# AI: Manual Reply Draft (Owner-only)
-# - Creates an AI Queue item of type=reply_draft for a specific lead row
-# - Does NOT send anything; just stores a draft for review/use
-# ============================================================
-
-def _lead_snapshot_from_sheet_row(row_num: int) -> Dict[str, Any]:
-    """Return a small dict snapshot of a lead row for queue reviewers. Never raises."""
-    try:
-        gc = get_gspread_client()
-        ws = gc.open(SHEET_NAME).sheet1
-        header = ws.row_values(1) or []
-        hmap = header_map(header)
-
-        row = ws.row_values(row_num) or []
-        def gv(key: str) -> str:
-            col = hmap.get(key)
-            if not col:
-                return ""
-            i = int(col) - 1
-            return str(row[i]).strip() if 0 <= i < len(row) else ""
-
-        return {
-            "row": row_num,
-            "contact": gv("contact") or gv("name") or gv("phone") or gv("email"),
-            "intent": gv("intent"),
-            "party_size": gv("party_size"),
-            "datetime": gv("datetime") or (gv("date") + " " + gv("time")).strip(),
-            "budget": gv("budget"),
-            "vip": gv("vip"),
-            "status": gv("status"),
-            "notes": (gv("notes") or gv("details") or "")[:240],
-        }
-    except Exception:
-        return {"row": row_num}
-
-def _build_reply_draft_from_snapshot(snap: Dict[str, Any]) -> str:
-    """Simple, safe draft builder (no external AI call)."""
-    contact = (snap.get("contact") or "").strip()
-    party = (snap.get("party_size") or "").strip()
-    dt = (snap.get("datetime") or "").strip()
-    intent = (snap.get("intent") or "").strip()
-    budget = (snap.get("budget") or "").strip()
-    notes = (snap.get("notes") or "").strip()
-
-    opener = "Hi there — thanks for reaching out to World Cup Concierge."
-    if contact and "@" not in contact and len(contact) <= 28:
-        opener = f"Hi {contact} — thanks for reaching out to World Cup Concierge."
-
-    bits = []
-    if party:
-        bits.append(f"party of {party}")
-    if dt:
-        bits.append(f"{dt}")
-    if bits:
-        mid = "I’ve got you down for " + (" on ".join(bits) if len(bits)==2 else bits[0]) + "."
-    else:
-        mid = "I can help you lock in a premium spot for the match."
-
-    ask = "What vibe are you going for (sports bar energy, upscale lounge, or private table)?"
-    if intent:
-        ask = f"Quick question: are you aiming for {intent.lower()}?"
-
-    extra = []
-    if budget:
-        extra.append(f"budget: {budget}")
-    if notes:
-        extra.append(f"notes: {notes}")
-    tail = "Share your preferred time window and any must‑haves, and I’ll line up the best options."
-    if extra:
-        tail = tail + " (" + "; ".join(extra) + ")"
-
-    return (opener + " " + mid + " " + ask + " " + tail).strip()
-
-@app.route("/admin/api/ai/draft-reply", methods=["POST"])
-def admin_api_ai_draft_reply():
-    ok, resp = _require_admin(min_role="owner")
-    if not ok:
-        return resp
-
-    ctx = _admin_ctx()
-    actor = ctx.get("actor", "")
-    role = ctx.get("role", "")
-
-    data = request.get_json(silent=True) or {}
-    try:
-        row_num = int(data.get("row") or 0)
-    except Exception:
-        row_num = 0
-    if row_num < 2:
-        return jsonify({"ok": False, "error": "Invalid row"}), 400
-
-    snap = _lead_snapshot_from_sheet_row(row_num)
-    draft = _build_reply_draft_from_snapshot(snap)
-    if not draft:
-        return jsonify({"ok": False, "error": "Unable to draft"}), 500
-
-    entry = {
-        "id": _queue_new_id(),
-        "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "created_by": actor or "owner",
-        "created_role": role or "owner",
-        "status": "pending",
-        "source": "manual_reply_draft",
-        "confidence": 1.0,
-        "notes": "Manual reply draft requested",
-        "actions": [
-            {"type": "reply_draft", "payload": {"row": row_num, "draft": draft}, "reason": "Draft reply requested"}
-        ],
-        "lead": snap,
-    }
-
-    _queue_add(entry)
-    _audit("ai.queue.created", {"id": entry["id"], "source": "manual_reply_draft", "row": row_num})
-    _notify("ai.queue.created", {"id": entry["id"], "source": "manual_reply_draft", "row": row_num, "lead": snap}, targets=["owner","manager"])
-    return jsonify({"ok": True, "id": entry["id"], "draft": draft})
 
 @app.route("/admin/api/ai/queue", methods=["GET"])
 def admin_api_ai_queue_list():
@@ -4809,6 +4693,18 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
   </div>
 </div>
 
+
+<div class="card" id="forecastCard">
+  <div class="h2">Tonight Forecast</div>
+  <div class="small">Read-only load forecast (last 7/30 days). Helps staffing + VIP readiness.</div>
+  <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <button class="btn2" type="button" onclick="loadForecast()">Refresh</button>
+    <span id="forecast-msg" class="note"></span>
+  </div>
+  <div id="forecastBody" class="small" style="margin-top:10px;line-height:1.4"></div>
+</div>
+
+
 <!-- LEADS TAB -->
 <div id="tab-leads" class="tabpane hidden">
 """)
@@ -4969,6 +4865,17 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     </div>
   </div>
 </div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="h2">AI Replay (Read-only)</div>
+    <div class="small">Owner tool to re-run AI suggestions for a specific lead row without applying changes.</div>
+    <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <input id="replay-row" class="pillselect" style="min-width:120px" placeholder="Row #" />
+      <button class="btn2" type="button" onclick="replayAI()">Replay</button>
+      <span id="replay-msg" class="note"></span>
+    </div>
+    <pre id="replayOut" style="margin-top:10px;white-space:pre-wrap;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:10px;max-height:260px;overflow:auto"></pre>
+  </div>
 
 <div id="tab-aiq" class="tabpane hidden">
   <div class="card">
@@ -5470,6 +5377,11 @@ async function loadAI(){
     qs('#ai-act-status').checked = !!allow.status_update;
     qs('#ai-act-draft').checked = !!allow.reply_draft;
 
+    const feat = s.features || {};
+    if(qs('#ai-feat-vip')) qs('#ai-feat-vip').checked = (feat.auto_vip_tag !== false);
+    if(qs('#ai-feat-status')) qs('#ai-feat-status').checked = !!feat.auto_status_update;
+    if(qs('#ai-feat-draft')) qs('#ai-feat-draft').checked = (feat.auto_reply_draft !== false);
+
     // lock owner-only fields for managers
     ['ai-model','ai-prompt','ai-act-vip','ai-act-status','ai-act-draft'].forEach(id=>{
       const el = qs('#'+id); if(!el) return;
@@ -5960,6 +5872,269 @@ document.addEventListener('DOMContentLoaded', ()=>{
     return "".join(html)
 
 
+
+
+@app.route("/admin/api/ai/draft-reply", methods=["POST"])
+def admin_api_ai_draft_reply():
+    """Owner-only: generate a reply draft for a specific lead row and enqueue it for approval.
+
+    Body: { "row": <sheet row number> }
+    """
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    actor = ctx.get("actor","")
+    role = ctx.get("role","")
+    payload = request.get_json(silent=True) or {}
+    try:
+        row_num = int(payload.get("row") or 0)
+    except Exception:
+        row_num = 0
+    if row_num < 2:
+        return jsonify({"ok": False, "error": "Invalid row"}), 400
+
+    try:
+        gc = get_gspread_client()
+        ws = gc.open(SHEET_NAME).sheet1
+        header = ws.row_values(1) or []
+        vals = ws.row_values(row_num) or []
+        hmap = header_map(header)
+
+        def g(key: str) -> str:
+            col = hmap.get(key)
+            if not col:
+                return ""
+            return (vals[col-1] if col-1 < len(vals) else "") or ""
+
+        lead = {
+            "name": g("name"),
+            "phone": g("phone"),
+            "date": g("date"),
+            "time": g("time"),
+            "party_size": g("party_size"),
+            "language": g("language"),
+            "budget": g("budget"),
+            "notes": g("notes"),
+            "entry_point": g("entry_point"),
+            "tier": g("tier"),
+            "business_context": g("business_context"),
+        }
+
+        if not AI_SETTINGS.get("enabled"):
+            return jsonify({"ok": False, "error": "AI disabled"}), 409
+        if not (AI_SETTINGS.get("allow_actions") or {}).get("reply_draft", True):
+            return jsonify({"ok": False, "error": "reply_draft not allowed"}), 409
+        if not _ai_feature_allows("reply_draft"):
+            return jsonify({"ok": False, "error": "reply_draft disabled by feature flag"}), 409
+
+        system_msg = (AI_SETTINGS.get("system_prompt") or "").strip()
+        user_msg = (
+            "Draft a short, premium, action-oriented reply to this lead. "
+            "Do NOT mention internal systems. Ask for any missing required details.\n\n"
+            f"Name: {lead.get('name')}\nPhone: {lead.get('phone')}\nDate: {lead.get('date')}\nTime: {lead.get('time')}\n"
+            f"Party: {lead.get('party_size')}\nBudget: {lead.get('budget')}\nNotes: {lead.get('notes')}\nLanguage: {lead.get('language')}\n"
+            "\nReturn plain text only."
+        )
+
+        draft_text = ""
+        try:
+            if not _OPENAI_AVAILABLE or client is None:
+                raise RuntimeError("OpenAI SDK missing")
+            resp2 = client.responses.create(
+                model=AI_SETTINGS.get("model") or os.environ.get("CHAT_MODEL","gpt-4o-mini"),
+                input=[
+                    {"role":"system","content":system_msg},
+                    {"role":"user","content":user_msg},
+                ],
+            )
+            draft_text = (resp2.output_text or "").strip()
+        except Exception:
+            draft_text = (
+                f"Hi {lead.get('name') or 'there'}, thanks for reaching out. "
+                "Confirm your party size and preferred time, and we’ll reserve the best available option for match day."
+            )
+
+        entry = {
+            "id": _queue_new_id(),
+            "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "created_by": actor,
+            "created_role": role,
+            "status": "pending",
+            "source": "reply_draft",
+            "confidence": 0.6,
+            "notes": "Owner-requested reply draft",
+            "actions": [
+                {"type":"reply_draft","payload":{"row": row_num, "draft": draft_text[:2000]}, "reason":"Draft reply for staff review"}
+            ],
+            "lead": {
+                "intent": lead.get("entry_point",""),
+                "contact": (lead.get("name","") + " " + lead.get("phone","")).strip(),
+                "budget": lead.get("budget",""),
+                "party_size": lead.get("party_size",""),
+                "datetime": (lead.get("date","") + " " + lead.get("time","")).strip(),
+            }
+        }
+        _queue_add(entry)
+        _audit("ai.queue.created", {"id": entry["id"], "source": "reply_draft", "row": row_num})
+        return jsonify({"ok": True, "queued": entry})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/admin/api/analytics/load-forecast", methods=["GET"])
+def admin_api_load_forecast():
+    """Step 13: read-only load forecast (manager+)."""
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    try:
+        gc = get_gspread_client()
+        ws = gc.open(SHEET_NAME).sheet1
+        header = ws.row_values(1) or []
+        hmap = header_map(header)
+
+        all_vals = ws.get_all_values() or []
+        rows = (all_vals[1:] if len(all_vals) > 1 else [])
+        rows = rows[-800:]
+
+        def col(key: str) -> int:
+            return (hmap.get(key) or 0) - 1
+
+        ts_i = col("timestamp")
+        vip_i = col("vip")
+
+        now = datetime.now(timezone.utc)
+
+        def parse_ts(r):
+            s = (r[ts_i] if ts_i >= 0 and ts_i < len(r) else "").strip()
+            if not s:
+                return None
+            try:
+                return datetime.fromisoformat(s.replace("Z","+00:00")).astimezone(timezone.utc)
+            except Exception:
+                try:
+                    return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
+                except Exception:
+                    return None
+
+        def is_vip(r):
+            s = (r[vip_i] if vip_i >= 0 and vip_i < len(r) else "").strip().lower()
+            return s in ("vip", "yes", "y", "true", "1")
+
+        buckets_7 = {}
+        buckets_30 = {}
+        hours = {}
+        vip_30 = 0
+        total_30 = 0
+
+        for r in rows:
+            dt = parse_ts(r)
+            if dt is None:
+                continue
+            age_days = (now - dt).total_seconds() / 86400.0
+            day_key = dt.strftime("%Y-%m-%d")
+            hour_key = dt.strftime("%H:00")
+
+            if age_days <= 7.0:
+                buckets_7[day_key] = buckets_7.get(day_key, 0) + 1
+            if age_days <= 30.0:
+                buckets_30[day_key] = buckets_30.get(day_key, 0) + 1
+                total_30 += 1
+                if is_vip(r):
+                    vip_30 += 1
+                hours[hour_key] = hours.get(hour_key, 0) + 1
+
+        def top_k(dct, k=5):
+            items = sorted(dct.items(), key=lambda x: x[1], reverse=True)
+            return [{"key": a, "count": b} for a,b in items[:k]]
+
+        out = {
+            "ok": True,
+            "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "last_7_days_total": sum(buckets_7.values()),
+            "last_30_days_total": sum(buckets_30.values()),
+            "top_days_7": top_k(buckets_7, 5),
+            "top_days_30": top_k(buckets_30, 7),
+            "top_hours_30": top_k(hours, 6),
+            "vip_ratio_30": (vip_30/total_30) if total_30 else 0.0,
+        }
+        return jsonify(out)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/admin/api/ai/replay", methods=["POST"])
+def admin_api_ai_replay():
+    """Step 14: audit replay (owner-only, read-only)."""
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+
+    body = request.get_json(silent=True) or {}
+    try:
+        row_num = int(body.get("row") or 0)
+    except Exception:
+        row_num = 0
+    if row_num < 2:
+        return jsonify({"ok": False, "error": "Invalid row"}), 400
+
+    model_override = (body.get("model") or "").strip()
+    prompt_override = (body.get("system_prompt") or "").strip()
+
+    try:
+        gc = get_gspread_client()
+        ws = gc.open(SHEET_NAME).sheet1
+        header = ws.row_values(1) or []
+        vals = ws.row_values(row_num) or []
+        hmap = header_map(header)
+
+        def g(key: str) -> str:
+            col = hmap.get(key)
+            if not col:
+                return ""
+            return (vals[col-1] if col-1 < len(vals) else "") or ""
+
+        lead = {
+            "intent": g("entry_point"),
+            "contact": (g("name") + " " + g("phone")).strip(),
+            "budget": g("budget"),
+            "party_size": g("party_size"),
+            "datetime": (g("date") + " " + g("time")).strip(),
+            "notes": g("notes"),
+            "lang": g("language"),
+        }
+
+        old = dict(AI_SETTINGS or {})
+        try:
+            if model_override:
+                AI_SETTINGS["model"] = model_override
+            if prompt_override:
+                AI_SETTINGS["system_prompt"] = prompt_override
+            suggestion = _ai_suggest_actions_for_lead(lead, row_num)
+        finally:
+            AI_SETTINGS.clear()
+            AI_SETTINGS.update(old)
+
+        q = _load_ai_queue()
+        related = []
+        for it in q:
+            acts = it.get("actions") or []
+            if isinstance(acts, list):
+                for a in acts:
+                    prow = (a.get("payload") or {}).get("row")
+                    if str(prow) == str(row_num):
+                        related.append(it)
+                        break
+            if len(related) >= 5:
+                break
+
+        return jsonify({"ok": True, "row": row_num, "lead": lead, "replay": suggestion, "recent_queue": related})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/admin/fanzone")
 def admin_fanzone():
     ok, resp = _require_admin(min_role="manager")
@@ -6265,6 +6440,52 @@ tr:hover td{background:rgba(255,255,255,.03)}
     toast("Fan Zone script error", "error");
   });
 })();
+
+
+async function loadForecast(){
+  const msg = qs('#forecast-msg'); if(msg) msg.textContent = 'Loading…';
+  const body = qs('#forecastBody'); if(body) body.textContent = '';
+  try{
+    const r = await fetch(`/admin/api/analytics/load-forecast?key=${encodeURIComponent(KEY)}`, {cache:'no-store'});
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.error || 'Failed');
+    const lines = [];
+    lines.push(`Last 7 days: ${d.last_7_days_total || 0} leads`);
+    lines.push(`Last 30 days: ${d.last_30_days_total || 0} leads`);
+    lines.push(`VIP ratio (30d): ${Math.round((d.vip_ratio_30||0)*100)}%`);
+    if(Array.isArray(d.top_hours_30) && d.top_hours_30.length){
+      lines.push(`Top hours (30d): ` + d.top_hours_30.map(x=>`${x.key} (${x.count})`).join(', '));
+    }
+    if(Array.isArray(d.top_days_7) && d.top_days_7.length){
+      lines.push(`Top days (7d): ` + d.top_days_7.map(x=>`${x.key} (${x.count})`).join(', '));
+    }
+    if(body) body.textContent = lines.join('\n');
+    if(msg) msg.textContent = 'Updated ✔';
+  }catch(e){
+    if(msg) msg.textContent = 'Failed: ' + (e.message || e);
+  }
+}
+
+async function replayAI(){
+  const msg = qs('#replay-msg'); if(msg) msg.textContent = 'Replaying…';
+  const out = qs('#replayOut'); if(out) out.textContent = '';
+  const row = parseInt(qs('#replay-row')?.value || '0', 10);
+  if(!row){ if(msg) msg.textContent = 'Enter a sheet row #'; return; }
+  try{
+    const r = await fetch(`/admin/api/ai/replay?key=${encodeURIComponent(KEY)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({row})
+    });
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.error || 'Failed');
+    if(out) out.textContent = JSON.stringify(d, null, 2);
+    if(msg) msg.textContent = 'Done ✔';
+  }catch(e){
+    if(msg) msg.textContent = 'Failed: ' + (e.message || e);
+  }
+}
+
 </script>
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
 
