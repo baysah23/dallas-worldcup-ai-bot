@@ -5123,9 +5123,9 @@ function renderAIQueue(items){
     const payload = esc(JSON.stringify(it.payload || {}));
 
     const canAct = (st === 'pending');
-    const approveBtn = `<button type="button" class="btn" ${canAct?'':'disabled'} onclick="aiqApprove('${id}')">Approve</button>`;
-    const denyBtn = `<button class="btn2" ${canAct?'':'disabled'} onclick="aiqDeny('${id}')">Deny</button>`;
-    const ovBtn = `<button type="button" class="btn" data-min-role="owner" onclick="aiqOverride('${id}')">Owner Override</button>`;
+    const approveBtn = `<button type="button" class="btn" ${canAct?'':'disabled'} onclick="aiqApprove('${id}', this)">Approve</button>`;
+    const denyBtn = `<button class="btn2" ${canAct?'':'disabled'} onclick="aiqDeny('${id}', this)">Deny</button>`;
+    const ovBtn = `<button type="button" class="btn" data-min-role="owner" onclick="aiqOverride('${id}', this)">Owner Override</button>`;
 
     return `
       <div style="padding:12px;border:1px solid rgba(255,255,255,.16);border-radius:14px;margin-bottom:10px;background:rgba(255,255,255,.06)">
@@ -5146,8 +5146,12 @@ function renderAIQueue(items){
   list.innerHTML = rows;
 }
 
-async function aiqApprove(id){
+async function aiqApprove(id, btn){
   if(!confirm('Approve and apply this action?')) return;
+  // Button-level loading state
+  const _btn = btn;
+  if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Approving…'; }
+
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Approving…';
   const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/approve?key=${encodeURIComponent(KEY)}`, {
     method:'POST',
@@ -5155,12 +5159,15 @@ async function aiqApprove(id){
     body: JSON.stringify({})
   });
   const j = await r.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Approved ✔'; await loadAIQueue(); }
-  else { if(msg) msg.textContent='Approve failed'; alert('Approve failed: '+(j && j.error ? j.error : r.status)); }
+  if(j && j.ok){ if(msg) msg.textContent='Approved ✔'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Approve'); } await loadAIQueue(); }
+  else { if(msg) msg.textContent='Approve failed'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Approve'); } alert('Approve failed: '+(j && j.error ? j.error : r.status)); }
 }
 
-async function aiqDeny(id){
+async function aiqDeny(id, btn){
   if(!confirm('Deny this action?')) return;
+  const _btn = btn;
+  if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Denying…'; }
+
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Denying…';
   const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/deny?key=${encodeURIComponent(KEY)}`, {
     method:'POST',
@@ -5168,19 +5175,26 @@ async function aiqDeny(id){
     body: JSON.stringify({})
   });
   const j = await r.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Denied ✔'; await loadAIQueue(); }
-  else { if(msg) msg.textContent='Deny failed'; alert('Deny failed: '+(j && j.error ? j.error : r.status)); }
+  if(j && j.ok){ if(msg) msg.textContent='Denied ✔'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Deny'); } await loadAIQueue(); }
+  else { if(msg) msg.textContent='Deny failed'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Deny'); } alert('Deny failed: '+(j && j.error ? j.error : r.status)); }
 }
 
-async function aiqOverride(id){
+async function aiqOverride(id, btn){
+  if(typeof hasRole === 'function' && !hasRole('owner')){
+    alert('Owner-only: override is locked for managers.');
+    return;
+  }
+  const _btn = btn;
+  if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Overriding…'; }
+
   // Owner-only: allow quick edit of payload/type before applying
   const typ = prompt('Override action type (vip_tag, status_update, reply_draft):', 'vip_tag');
-  if(!typ) return;
+  if(!typ){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } return; }
   let payloadTxt = prompt('Override payload JSON (must be valid JSON object):', '{"row":2,"vip":"VIP"}');
-  if(payloadTxt === null) return;
+  if(payloadTxt === null){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } return; }
   payloadTxt = payloadTxt.trim();
   let payloadObj = null;
-  try{ payloadObj = JSON.parse(payloadTxt); }catch(e){ alert('Invalid JSON'); return; }
+  try{ payloadObj = JSON.parse(payloadTxt); }catch(e){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } alert('Invalid JSON'); return; }
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Applying override…';
   const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/override?key=${encodeURIComponent(KEY)}`, {
     method:'POST',
@@ -5188,8 +5202,8 @@ async function aiqOverride(id){
     body: JSON.stringify({type: typ, payload: payloadObj})
   });
   const j = await r.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Override applied ✔'; await loadAIQueue(); }
-  else { if(msg) msg.textContent='Override failed'; alert('Override failed: '+(j && j.error ? j.error : r.status)); }
+  if(j && j.ok){ if(msg) msg.textContent='Override applied ✔'; if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } await loadAIQueue(); }
+  else { if(msg) msg.textContent='Override failed'; if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } alert('Override failed: '+(j && j.error ? j.error : r.status)); }
 }
 
 
