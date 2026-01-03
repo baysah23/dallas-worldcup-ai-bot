@@ -3562,12 +3562,12 @@ def admin_update_config():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
 
-
 @app.route("/admin/api/rules", methods=["GET","POST"])
 def admin_api_rules():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
+
 
     # Managers can view; only Owners can modify.
     if request.method != "GET":
@@ -3576,54 +3576,51 @@ def admin_api_rules():
             return resp2
 
     global BUSINESS_RULES
-
     if request.method == "GET":
         return jsonify({"ok": True, "rules": BUSINESS_RULES})
 
-    # POST: update rules (owner-only)
-    payload = request.get_json(silent=True)
-    if not isinstance(payload, dict):
-        return jsonify({"ok": False, "error": "Expected JSON object"}), 400
+    payload = request.get_json(silent=True) or {}
+    updated = _coerce_rules(payload)
+    if not updated:
+        return jsonify({"ok": False, "error": "No valid rule fields provided"}), 400
 
-    # Normalize + validate with very forgiving parsing (so UI never breaks)
-    try:
-        max_party = payload.get("max_party_size", BUSINESS_RULES.get("max_party_size", 0))
-        try:
-            max_party = int(max_party) if max_party not in (None, "", 0, "0") else 0
-        except Exception:
-            max_party = 0
-
-        banner = str(payload.get("match_day_banner", BUSINESS_RULES.get("match_day_banner", "")) or "")
-
-        closed = payload.get("closed_dates", BUSINESS_RULES.get("closed_dates", []))
-        if isinstance(closed, str):
-            closed = [ln.strip() for ln in closed.splitlines() if ln.strip()]
-        elif isinstance(closed, list):
-            closed = [str(x).strip() for x in closed if str(x).strip()]
-        else:
-            closed = []
-
-        hours = payload.get("hours", BUSINESS_RULES.get("hours", {}))
-        if not isinstance(hours, dict):
-            hours = {}
-        # Only keep known keys
-        norm_hours = {}
-        for d in ["mon","tue","wed","thu","fri","sat","sun"]:
-            v = hours.get(d, "")
-            norm_hours[d] = str(v).strip() if v is not None else ""
-
-        new_rules = dict(BUSINESS_RULES)
-        new_rules["max_party_size"] = max_party
-        new_rules["match_day_banner"] = banner
-        new_rules["closed_dates"] = closed
-        new_rules["hours"] = norm_hours
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"Invalid rules payload: {e}"}), 400
-
-    BUSINESS_RULES = new_rules
-    _safe_write_json_file(BUSINESS_RULES_FILE, BUSINESS_RULES)
-    _audit("rules.update", {"fields": list(payload.keys())})
+    # Update in-memory + persist
+    BUSINESS_RULES = _deep_merge(BUSINESS_RULES, updated)
+    _persist_rules(updated)
+    _audit("rules.update", {"keys": list(updated.keys())})
     return jsonify({"ok": True, "rules": BUSINESS_RULES})
+
+@app.route("/admin/api/menu", methods=["GET","POST"])
+def admin_api_menu():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+
+    # Managers can view; only Owners can modify.
+    if request.method != "GET":
+        ok2, resp2 = _require_admin(min_role="owner")
+        if not ok2:
+            return resp2
+
+    global _MENU_OVERRIDE
+    if request.method == "GET":
+        return jsonify({"ok": True, "menu": _MENU_OVERRIDE or MENU})
+
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return jsonify({"ok": False, "error": "Expected JSON body"}), 400
+
+    try:
+        normed = _normalize_menu_payload(payload)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+    _MENU_OVERRIDE = normed
+    _safe_write_json_file(MENU_FILE, _MENU_OVERRIDE)
+    _audit("menu.update", {"langs": list(_MENU_OVERRIDE.keys())})
+    return jsonify({"ok": True, "menu": _MENU_OVERRIDE})
+
 @app.route("/admin/api/menu-upload", methods=["POST"])
 def admin_api_menu_upload():
     ok, resp = _require_admin(min_role="owner")
@@ -4593,7 +4590,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     </div>
 
     <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
-      <button type="button" class="btn" data-min-role="owner" onclick="saveRules(this)">Save Rules</button>
+      <button type="button" class="btn" data-min-role="owner" onclick="saveRules()">Save Rules</button>
       <button class="btn2" onclick="loadRules()">Reload</button>
       <span id="rules-msg" class="note"></span>
     </div>
@@ -4821,77 +4818,40 @@ async function markHandled(sheetRow){
   }
 }
 
-async async function loadRules(){
-  const msg = qs('#rules-msg'); if(msg) msg.textContent='Loading...';
-  try{
-    const res = await fetch('/admin/api/rules?key='+encodeURIComponent(KEY));
-    const j = await res.json().catch(()=>null);
-    if(!j || !j.ok){ if(msg) msg.textContent='Failed to load rules'; return; }
-    const r = j.rules || {};
-    const mp = qs('#rules-max-party'); if(mp) mp.value = (r.max_party_size ?? '');
-    const bn = qs('#rules-banner'); if(bn) bn.value = (r.match_day_banner || '');
-    const cd = qs('#rules-closed');
-    if(cd) cd.value = (Array.isArray(r.closed_dates) ? r.closed_dates : []).join('\n');
-    const h = (r.hours && typeof r.hours === 'object') ? r.hours : {};
-    ['mon','tue','wed','thu','fri','sat','sun'].forEach(d=>{
-      const el = qs('#h-'+d);
-      if(el) el.value = (h[d]||'');
-    });
-    if(msg) msg.textContent='Loaded ✔';
-  } catch(e){
-    if(msg) msg.textContent='Failed to load rules';
-  }
+async function loadRules(){
+  const msg = qs('#rules-msg'); if(msg) msg.textContent='';
+  const res = await fetch('/admin/api/rules?key='+encodeURIComponent(KEY));
+  const j = await res.json().catch(()=>null);
+  if(!j || !j.ok){ if(msg) msg.textContent='Failed to load rules'; return; }
+  const r = j.rules || {};
+  qs('#rules-max-party').value = r.max_party_size || '';
+  qs('#rules-banner').value = r.match_day_banner || '';
+  qs('#rules-closed').value = (r.closed_dates||[]).join('\\n');
+  const h = r.hours || {};
+  ['mon','tue','wed','thu','fri','sat','sun'].forEach(d=>{
+    const el = qs('#h-'+d);
+    if(el) el.value = (h[d]||'');
+  });
 }
 
-async async function saveRules(btn){
-  // owner-only guard (UI also hides via data-min-role, but keep it safe)
-  if(typeof ROLE !== 'undefined' && ROLE !== 'owner'){
-    alert('Owner-only: managers can view rules but cannot change them.');
-    return;
-  }
+async function saveRules(){
   const msg = qs('#rules-msg'); if(msg) msg.textContent='Saving...';
-  const saveBtn = btn || document.querySelector('button[onclick="saveRules(this)"]') || document.querySelector('button[onclick="saveRules(this)"]');
-  if(saveBtn){ saveBtn.disabled = true; saveBtn.dataset._label = saveBtn.textContent; saveBtn.textContent = 'Saving…'; }
-
-  try{
-    const hours={};
-    ['mon','tue','wed','thu','fri','sat','sun'].forEach(d=>hours[d]= (qs('#h-'+d)?.value || '').trim());
-    const closedText = (qs('#rules-closed')?.value || '');
-    const closedDates = closedText.split('\n').map(s=>s.trim()).filter(Boolean);
-
-    const rawMax = (qs('#rules-max-party')?.value || '').trim();
-    const maxParty = rawMax ? parseInt(rawMax, 10) : 0;
-
-    const payload={
-      max_party_size: (Number.isFinite(maxParty) ? maxParty : 0),
-      match_day_banner: (qs('#rules-banner')?.value || '').trim(),
-      closed_dates: closedDates,
-      hours: hours
-    };
-
-    const res = await fetch('/admin/api/rules?key='+encodeURIComponent(KEY), {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(payload)
-    });
-    const j = await res.json().catch(()=>null);
-
-    if(j && j.ok){
-      if(msg) msg.textContent='Saved ✔';
-    } else {
-      const err = (j && (j.error || j.message)) ? (j.error || j.message) : ('HTTP '+res.status);
-      if(msg) msg.textContent='Save failed: ' + err;
-      alert('Rules save failed: ' + err);
-    }
-  } catch(e){
-    if(msg) msg.textContent='Save failed';
-    alert('Rules save failed.');
-  } finally {
-    if(saveBtn){
-      saveBtn.disabled = false;
-      saveBtn.textContent = saveBtn.dataset._label || 'Save Rules';
-    }
-  }
+  const hours={};
+  ['mon','tue','wed','thu','fri','sat','sun'].forEach(d=>hours[d]=qs('#h-'+d).value);
+  const payload={
+    max_party_size: parseInt(qs('#rules-max-party').value || '0', 10),
+    match_day_banner: qs('#rules-banner').value || '',
+    closed_dates: qs('#rules-closed').value || '',
+    hours: hours
+  };
+  const res = await fetch('/admin/api/rules?key='+encodeURIComponent(KEY), {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const j = await res.json().catch(()=>null);
+  if(j && j.ok){ if(msg) msg.textContent='Saved ✔'; try{ _renderOpsMeta(j.meta); }catch(e){} _setMiniState(elPause,"pause","Saved ✓"); _setMiniState(elVip,"vip","Saved ✓"); _setMiniState(elWait,"wait","Saved ✓"); setTimeout(()=>{ _setMiniState(elPause,"pause",""); _setMiniState(elVip,"vip",""); _setMiniState(elWait,"wait",""); }, 1400); }
+  else { _setMiniState(elPause,"pause","Failed"); _setMiniState(elVip,"vip","Failed"); _setMiniState(elWait,"wait","Failed"); if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }
 }
 
 async function loadMenu(){
