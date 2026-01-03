@@ -722,14 +722,71 @@ def _admin_ctx() -> Dict[str, str]:
     return {"ok": False, "role": "", "actor": ""}
 
 def get_menu_for_lang(lang: str) -> Dict[str, Any]:
-    """Return menu payload for a given language, using admin override if present."""
+    """Return a normalized menu payload for a given language.
+
+    Public /menu.json expects:
+      { "lang": "en", "title": "Menu", "sections": [ { "title": "...", "items": [...] }, ... ] }
+
+    - Admin overrides (uploaded via /admin) are stored in MENU_FILE and win.
+    - Otherwise, we transform the built-in flat MENU[lang]["items"] into sections.
+    """
     global _MENU_OVERRIDE
     lang = norm_lang(lang)
+
+    # 1) Admin override (already normalized by _normalize_menu_payload)
     if isinstance(_MENU_OVERRIDE, dict):
         m = _MENU_OVERRIDE.get(lang)
-        if isinstance(m, dict) and m.get("items"):
-            return m
-    return MENU[lang]
+        if isinstance(m, dict) and isinstance(m.get("sections"), list) and m.get("sections"):
+            base_title = "Menu"
+            try:
+                base = MENU.get(lang, MENU.get("en", {}))
+                if isinstance(base, dict) and base.get("title"):
+                    base_title = str(base.get("title"))
+            except Exception:
+                pass
+            return {"title": base_title, "sections": m.get("sections")}
+
+    # 2) Built-in fallback: group flat items into sections
+    base = MENU.get(lang, MENU.get("en", {}))
+    base_title = (base.get("title") if isinstance(base, dict) else None) or "Menu"
+    items = []
+    if isinstance(base, dict) and isinstance(base.get("items"), list):
+        items = base.get("items") or []
+
+    # human-ish section titles (default built-in categories)
+    title_map = {
+        "chef": "Chef Specials",
+        "bites": "Bites",
+        "classics": "Classics",
+        "sweets": "Sweets",
+        "drinks": "Drinks",
+    }
+
+    buckets: Dict[str, List[Dict[str, str]]] = {}
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        cid = str(it.get("category_id") or "menu").strip().lower() or "menu"
+        buckets.setdefault(cid, []).append({
+            "name": str(it.get("name") or "").strip(),
+            "price": str(it.get("price") or "").strip(),
+            "desc": str(it.get("desc") or "").strip(),
+            "tag": str(it.get("tag") or "").strip(),
+        })
+
+    sections = []
+    for cid, arr in buckets.items():
+        arr2 = [x for x in arr if x.get("name")]
+        if not arr2:
+            continue
+        sections.append({"title": title_map.get(cid, cid.replace("_", " ").title()), "items": arr2})
+
+    # stable-ish ordering for the default categories
+    order_titles = ["Chef Specials", "Bites", "Classics", "Sweets", "Drinks", "Menu"]
+    sections.sort(key=lambda s: (order_titles.index(s.get("title")) if s.get("title") in order_titles else 999, s.get("title","")))
+
+    return {"title": str(base_title), "sections": sections}
+
 
 
 # ============================================================
@@ -1969,8 +2026,18 @@ def health():
 
 @app.route("/menu.json")
 def menu_json():
+    # No-store so mobile always sees the latest uploaded menu immediately.
     lang = norm_lang(request.args.get("lang", "en"))
-    return jsonify({"lang": lang, "menu": get_menu_for_lang(lang)})
+    payload = get_menu_for_lang(lang) or {}
+    resp = make_response(jsonify({
+        "lang": lang,
+        "title": payload.get("title", "Menu"),
+        "sections": payload.get("sections", []),
+    }))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 

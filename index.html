@@ -4733,7 +4733,7 @@ async function loadMenu(){
   if(hint) hint.textContent = '';
 
   try{
-    const data = await fetchJSON('/menu.json');
+    const data = await fetchJSON(`/menu.json?lang=${encodeURIComponent(state.lang||'en')}`);
     const sections = data.sections || data.menu || [];
     if(!sections.length){
       if(body) body.innerHTML = `<div class="hint">Menu unavailable.</div>`;
