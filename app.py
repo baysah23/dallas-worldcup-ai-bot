@@ -4246,6 +4246,36 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
   opacity:0;
   transition: opacity .18s ease;
 }
+
+/* === Production-clean admin layout tweaks === */
+.wrap{
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.card{ margin-bottom: 14px; }
+.opsRow{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding: 10px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+}
+.opsLabel{ display:flex; flex-direction:column; gap:2px; }
+.opsHint{ font-weight: 500; font-size: 11px; opacity:.7; }
+.opsMini{ margin-left:auto; opacity:0; transition:opacity .18s; }
+.adminGrid{
+  display:grid;
+  grid-template-columns: 1.05fr .95fr;
+  gap: 14px;
+}
+@media(max-width: 980px){
+  .adminGrid{ grid-template-columns: 1fr; }
+}
+/* Keeps tables from stretching layout */
+.tableWrap{ overflow:auto; border-radius: 14px; }
+
 </style>
 """)
     html.append("</head><body><div class='wrap'>")
@@ -4282,10 +4312,42 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 </div>
 
 <div id="tab-leads" class="tabpane">
-  <!-- Ops Controls (restored) -->
+  <div class="adminGrid">
+  <div data-col="ops">
+<!-- Ops Controls -->
   <div class="card" id="ops-controls">
-    <div class="h2">Match-Day Ops</div>
-    <div class="small">Instantly control intake behavior across Fan Zone + venue flows.</div>
+    <div class="h2">Match‑Day Ops</div>
+    <div class="small">Controls apply immediately to Fan Zone + intake flow. Changes are audited.</div>
+
+    <div class="opsGrid" style="margin-top:12px">
+      <label class="opsRow">
+        <input type="checkbox" id="ops-pause" onchange="saveOps()">
+        <span class="opsLabel"><b>Pause Reservations</b><span class="opsHint">Stops new requests</span></span>
+        <span id="mini-pause" class="note opsMini"></span>
+      </label>
+
+      <label class="opsRow">
+        <input type="checkbox" id="ops-vip" onchange="saveOps()">
+        <span class="opsLabel"><b>VIP Only</b><span class="opsHint">Limit intake to VIP</span></span>
+        <span id="mini-vip" class="note opsMini"></span>
+      </label>
+
+      <label class="opsRow">
+        <input type="checkbox" id="ops-wait" onchange="saveOps()">
+        <span class="opsLabel"><b>Waitlist Mode</b><span class="opsHint">Collect requests as waitlist</span></span>
+        <span id="mini-wait" class="note opsMini"></span>
+      </label>
+    </div>
+
+    <div class="row" style="margin-top:12px;align-items:center;gap:10px;flex-wrap:wrap">
+      <button class="btn2" id="btnSaveOps" type="button" onclick="saveOps()">Save</button>
+      <div id="ops-status" class="small"></div>
+    </div>
+
+    <div id="ops-meta" class="small" style="margin-top:10px;opacity:.85"></div>
+  </div>
+
+<div class="small">Instantly control intake behavior across Fan Zone + venue flows.</div>
 
     <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px">
       <label class="small" style="display:flex;align-items:center;gap:10px">
@@ -4401,6 +4463,9 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
             html.append("</tr>")
         html.append("</tbody></table></div>")
+
+    html.append("</div>")  # /leads
+    html.append("</div>")  # /adminGrid
 
     html.append("</div>")  # tab-leads
 
