@@ -1,19 +1,4 @@
 from dotenv import load_dotenv
-
-def as_int(v, default=0):
-    """Safe int parsing for query/body values."""
-    try:
-        if v is None:
-            return default
-        if isinstance(v, (int, float)):
-            return int(v)
-        s = str(v).strip()
-        if s == "":
-            return default
-        return int(float(s))
-    except Exception:
-        return default
-
 load_dotenv()
 
 import os
@@ -79,6 +64,23 @@ except Exception:
 # App + cache-busting (helps Render show latest index.html)
 # ============================================================
 app = Flask(__name__)
+
+# --- Small helpers ---
+
+def as_int(val, default=0):
+    """Safe int conversion used by admin APIs."""
+    try:
+        if val is None:
+            return default
+        if isinstance(val, (int, float)):
+            return int(val)
+        s = str(val).strip()
+        if s == "":
+            return default
+        return int(float(s))
+    except Exception:
+        return default
+
 
 
 
@@ -4320,7 +4322,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 <div class="tabs">
   <button type="button" class="tabbtn active" data-tab="ops">Ops</button>
   <button type="button" class="tabbtn" data-tab="leads">Leads</button>
-  <button type="button" class="tabbtn" data-tab="ai">AI</button>
+<button type="button" class="tabbtn" data-tab="ai">AI</button>
   <button type="button" class="tabbtn" data-tab="aiq">AI Queue</button>
   <button type="button" class="tabbtn" data-tab="rules">Rules</button>
   <button type="button" class="tabbtn" data-tab="menu">Menu</button>
@@ -4397,17 +4399,17 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
 """)
 
-    html.append("</div>")  # tab-ops
-
-    html.append(r"""<div id="tab-leads" class="tabpane hidden">""")
+    html.append(r"""
+<div id="tab-leads" class="tabpane hidden">
+""")
 
     # Leads table
     if leads_err:
-        html.append(f"<div class='card'><div class='h2'>Ops</div><div class='small'>Error reading leads: {leads_err}</div></div>")
+        html.append(f"<div class='card'><div class='h2'>Leads</div><div class='small'>Error reading leads: {leads_err}</div></div>")
     elif not body:
-        html.append("<div class='card'><div class='h2'>Ops</div><div class='small'>No leads yet.</div></div>")
+        html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>No leads yet.</div></div>")
     else:
-        html.append("<div class='card'><div class='h2'>Ops</div><div class='small'>Newest first. Update Status/VIP and save.</div><div style='display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center'><div class='pills' style='margin:0'><button class='btn2' id='flt-all' type='button'>All</button><button class='btn2' id='flt-vip' type='button'>VIP</button><button class='btn2' id='flt-reg' type='button'>Regular</button></div><div style='display:flex;gap:8px;align-items:center'><span class='small' style='white-space:nowrap'>Entry:</span><select class='inp' id='flt-entry' style='min-width:180px'></select><span id='leadsCount' class='small' style='margin-left:8px'>0 shown</span></div></div></div>")
+        html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>Newest first. Update Status/VIP and save.</div><div style='display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center'><div class='pills' style='margin:0'><button class='btn2' id='flt-all' type='button'>All</button><button class='btn2' id='flt-vip' type='button'>VIP</button><button class='btn2' id='flt-reg' type='button'>Regular</button></div><div style='display:flex;gap:8px;align-items:center'><span class='small' style='white-space:nowrap'>Entry:</span><select class='inp' id='flt-entry' style='min-width:180px'></select><span id='leadsCount' class='small' style='margin-left:8px'>0 shown</span></div></div></div>")
         html.append("<div class='tablewrap'><table id='leadsTable'>")
         html.append("<thead><tr>"                    "<th>Row</th><th>Timestamp</th><th>Name</th><th>Contact</th>"                    "<th>Date</th><th>Time</th><th>Party</th>"                    "<th>Segment</th><th>Entry</th><th>Queue</th><th>Budget</th>"                    "<th>Context</th><th>Notes</th>"                    "<th>Status</th><th>VIP</th><th>Save</th>"                    "</tr></thead><tbody>")
         for sheet_row, r in numbered:
@@ -4482,7 +4484,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
             html.append("</tr>")
         html.append("</tbody></table></div>")
 
-    html.append("</div>")  # tab-leads
+    html.append("</div>")  # tab-ops
 
     html.append(r"""
 
@@ -5345,10 +5347,12 @@ function openNotifications(){
     document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
     const pane = document.querySelector('#tab-ops');
     if(pane) pane.classList.remove('hidden');
-    setTimeout(()=>{ document.querySelector('#notifCard')?.scrollIntoView({behavior:'smooth', block:'start'}); }, 50);
+    setTimeout(()=>{ document.querySelector('#notifCard')?.scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
     loadNotifs();
   }catch(e){}
-}
+}); }, 50);
+    loadNotifs();
+  }catch(e){}
 }
 // Poll notifications lightly
 setInterval(()=>{ try{ loadNotifs(); }catch(e){} }, 15000);
