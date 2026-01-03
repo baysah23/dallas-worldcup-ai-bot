@@ -3952,6 +3952,12 @@ def admin_api_notifications():
         return resp
     ctx = _admin_ctx()
     role = ctx.get("role", "manager")
+
+    # Role-based branding (visual only)
+    is_owner = (role == "admin")
+    page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
+    page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
+
     limit = int(as_int(request.args.get("limit", 50), 50))
     limit = max(1, min(200, limit))
     items = _read_notifications(limit=limit, role=role)
@@ -4196,7 +4202,7 @@ def admin():
     html = []
     html.append("<!doctype html><html><head><meta charset='utf-8'>")
     html.append("<meta name='viewport' content='width=device-width, initial-scale=1'/>")
-    html.append("<title>Admin Dashboard</title>")
+    html.append(f"<title>{page_title} — World Cup Concierge</title>")
     html.append(r"""
 <style>
 :root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
@@ -4207,6 +4213,20 @@ body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(
 .sub{color:var(--muted);font-size:12px;margin-top:4px}
 .pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .pill{border:1px solid var(--line);background:rgba(255,255,255,.03);padding:8px 10px;border-radius:999px;font-size:12px}
+
+.pillbtn{cursor:pointer}
+.pillselect{
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.03);
+  color:var(--text);
+  padding:8px 10px;
+  border-radius:999px;
+  font-size:12px;
+  outline:none;
+}
+.pillselect option{background:var(--panel);color:var(--text);}
+.pills .pill input[type="checkbox"]{transform: translateY(1px); margin-left:8px;}
+
 .pill b{color:var(--gold)}
 .tabs{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
 .tabbtn{border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);padding:10px 12px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer}
@@ -4252,12 +4272,17 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
     html.append("<div class='topbar'>")
     html.append("<div>")
-    html.append("<div class='h1'>Admin Dashboard v1</div>")
-    html.append("<div class='sub'>Tabs + Rules Config + Menu Upload (fan UI unchanged)</div>")
+    html.append(f"<div class='h1'>{page_title}</div>")
+    html.append(f"<div class='sub'>Tabs + Rules Config + Menu Upload (fan UI unchanged) · {page_sub}</div>")
     html.append("<div class='pills'>")
     html.append(f"<span class='pill'><b>Ops</b> {len(body)}</span>")
     html.append(f"<span class='pill'><b>VIP</b> {vip_count}</span>")
     html.append("<button class='pill' id='notifBtn' type='button' onclick=\"openNotifications()\">🔔 <b id='notifCount'>0</b></button>")
+
+    html.append("<button class='pill pillbtn' id='refreshBtn' type='button' onclick=\"refreshAll('manual')\">↻ <b>Refresh</b></button>")
+    html.append("<button class='pill pillbtn' id='autoBtn' type='button' onclick=\"toggleAutoRefresh()\">⟳ <b id='autoLabel'>Auto: Off</b></button>")
+    html.append("<select class='pillselect' id='autoEvery' onchange=\"autoEveryChanged()\"><option value='10'>10s</option><option value='30' selected>30s</option><option value='60'>60s</option></select>")
+    html.append("<span class='pill' id='lastRef'>Last refresh: —</span>")
     for k, v in status_counts.items():
         html.append(f"<span class='pill'><b>{k}</b> {v}</span>")
     html.append("</div>")
@@ -5290,11 +5315,89 @@ function openNotifications(){
 // Poll notifications lightly
 setInterval(()=>{ try{ loadNotifs(); }catch(e){} }, 15000);
 
+
+// --- Refresh controls (visual-only; calls existing loaders safely) ---
+let __autoTimer = null;
+
+function _nowHHMMSS(){
+  const d=new Date();
+  const p=n=>String(n).padStart(2,'0');
+  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+function updateLastRef(){
+  const el=document.getElementById('lastRef');
+  if(el) el.textContent = `Last refresh: ${_nowHHMMSS()}`;
+}
+
+function refreshAll(source){
+  try{ loadNotifs(); }catch(e){}
+  try{ loadOps(); }catch(e){}
+  try{ loadAI(); }catch(e){}
+  try{ loadAIQueue(); }catch(e){}
+  // These are safe even if you're not on the tab; they just fetch current configs
+  try{ loadRules(); }catch(e){}
+  try{ loadMenu(); }catch(e){}
+  updateLastRef();
+}
+
+function _setAutoLabel(on){
+  const lab=document.getElementById('autoLabel');
+  if(lab) lab.textContent = on ? "Auto: On" : "Auto: Off";
+}
+
+function _getAutoEvery(){
+  const sel=document.getElementById('autoEvery');
+  const v = sel ? parseInt(sel.value||"30",10) : 30;
+  return (isFinite(v) && v>0) ? v : 30;
+}
+
+function startAutoRefresh(){
+  stopAutoRefresh();
+  const every=_getAutoEvery();
+  __autoTimer = setInterval(()=>{ refreshAll('auto'); }, every*1000);
+  localStorage.setItem('wc_auto_refresh','1');
+  localStorage.setItem('wc_auto_refresh_every', String(every));
+  _setAutoLabel(true);
+}
+
+function stopAutoRefresh(){
+  if(__autoTimer){ try{ clearInterval(__autoTimer); }catch(e){} }
+  __autoTimer=null;
+  localStorage.setItem('wc_auto_refresh','0');
+  _setAutoLabel(false);
+}
+
+function toggleAutoRefresh(){
+  if(__autoTimer) stopAutoRefresh();
+  else startAutoRefresh();
+}
+
+function autoEveryChanged(){
+  const every=_getAutoEvery();
+  localStorage.setItem('wc_auto_refresh_every', String(every));
+  if(__autoTimer) startAutoRefresh(); // restart with new interval
+}
+
+function _initRefreshControls(){
+  // restore interval
+  const savedEvery = parseInt(localStorage.getItem('wc_auto_refresh_every')||"30",10);
+  const sel=document.getElementById('autoEvery');
+  if(sel && isFinite(savedEvery)) sel.value = String(savedEvery);
+  // set initial last refresh time
+  updateLastRef();
+  // restore auto state
+  const on = (localStorage.getItem('wc_auto_refresh')||"0") === "1";
+  if(on) startAutoRefresh();
+  else _setAutoLabel(false);
+}
+
 document.addEventListener('DOMContentLoaded', ()=>{
   try{ setupTabs(); }catch(e){}
   try{ markLockedControls(); }catch(e){}
   try{ setupLeadFilters(); }catch(e){}
   try{ loadNotifs(); }catch(e){}
+  try{ _initRefreshControls(); }catch(e){}
+  try{ refreshAll('boot'); }catch(e){}
 });
 </script>
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
