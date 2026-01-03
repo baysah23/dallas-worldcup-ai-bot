@@ -65,23 +65,6 @@ except Exception:
 # ============================================================
 app = Flask(__name__)
 
-# --- Small helpers ---
-
-def as_int(val, default=0):
-    """Safe int conversion used by admin APIs."""
-    try:
-        if val is None:
-            return default
-        if isinstance(val, (int, float)):
-            return int(val)
-        s = str(val).strip()
-        if s == "":
-            return default
-        return int(float(s))
-    except Exception:
-        return default
-
-
 
 
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
@@ -4264,34 +4247,10 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
   transition: opacity .18s ease;
 }
 
-/* === Production-clean admin layout tweaks === */
-.wrap{
-  max-width: 1200px;
-  margin: 0 auto;
-}
-.card{ margin-bottom: 14px; }
-.opsRow{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  padding: 10px 10px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.10);
-  background: rgba(255,255,255,.04);
-}
-.opsLabel{ display:flex; flex-direction:column; gap:2px; }
-.opsHint{ font-weight: 500; font-size: 11px; opacity:.7; }
-.opsMini{ margin-left:auto; opacity:0; transition:opacity .18s; }
-.adminGrid{
-  display:grid;
-  grid-template-columns: 1.05fr .95fr;
-  gap: 14px;
-}
-@media(max-width: 980px){
-  .adminGrid{ grid-template-columns: 1fr; }
-}
-/* Keeps tables from stretching layout */
-.tableWrap{ overflow:auto; border-radius: 14px; }
+/* === Tabs clickability hardening === */
+.tabs{ position: sticky; top: 0; z-index: 9999; pointer-events: auto; }
+.tabbtn{ pointer-events: auto; }
+.wrap{ position: relative; z-index: 0; }
 
 </style>
 """)
@@ -4320,96 +4279,24 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
     html.append(r"""
 <div class="tabs">
-  <button type="button" class="tabbtn active" data-tab="ops">Ops</button>
-  <button type="button" class="tabbtn" data-tab="leads">Leads</button>
-<button type="button" class="tabbtn" data-tab="ai">AI</button>
-  <button type="button" class="tabbtn" data-tab="aiq">AI Queue</button>
-  <button type="button" class="tabbtn" data-tab="rules">Rules</button>
-  <button type="button" class="tabbtn" data-tab="menu">Menu</button>
-  <button type="button" class="tabbtn" data-tab="audit">Audit</button>
+  <button type="button" class="tabbtn active" data-tab="leads"Ops</button>
+<button type="button" class="tabbtn" data-tab="ai"AI</button>
+  <button type="button" class="tabbtn" data-tab="aiq"AI Queue</button>
+  <button type="button" class="tabbtn" data-tab="rules"Rules</button>
+  <button type="button" class="tabbtn" data-tab="menu"Menu</button>
+  <button type="button" class="tabbtn" data-tab="audit"Audit</button>
 </div>
 
-<div id="tab-ops" class="tabpane">
-<!-- Ops Controls -->
-  <div class="card" id="ops-controls">
-    <div class="h2">Match‑Day Ops</div>
-    <div class="small">Controls apply immediately to Fan Zone + intake flow. Changes are audited.</div>
-
-    <div class="opsGrid" style="margin-top:12px">
-      <label class="opsRow">
-        <input type="checkbox" id="ops-pause" onchange="saveOps()">
-        <span class="opsLabel"><b>Pause Reservations</b><span class="opsHint">Stops new requests</span></span>
-        <span id="mini-pause" class="note opsMini"></span>
-      </label>
-
-      <label class="opsRow">
-        <input type="checkbox" id="ops-vip" onchange="saveOps()">
-        <span class="opsLabel"><b>VIP Only</b><span class="opsHint">Limit intake to VIP</span></span>
-        <span id="mini-vip" class="note opsMini"></span>
-      </label>
-
-      <label class="opsRow">
-        <input type="checkbox" id="ops-wait" onchange="saveOps()">
-        <span class="opsLabel"><b>Waitlist Mode</b><span class="opsHint">Collect requests as waitlist</span></span>
-        <span id="mini-wait" class="note opsMini"></span>
-      </label>
-    </div>
-
-    <div class="row" style="margin-top:12px;align-items:center;gap:10px;flex-wrap:wrap">
-      <button class="btn2" id="btnSaveOps" type="button" onclick="saveOps()">Save</button>
-      <div id="ops-status" class="small"></div>
-    </div>
-
-    <div id="ops-meta" class="small" style="margin-top:10px;opacity:.85"></div>
-  </div>
-
-<div class="small">Instantly control intake behavior across Fan Zone + venue flows.</div>
-
-    <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px">
-      <label class="small" style="display:flex;align-items:center;gap:10px">
-        <input type="checkbox" id="ops-pause" onchange="saveOps()">
-        <span><b>Pause Reservations</b></span>
-        <span id="mini-pause" class="note" style="margin-left:auto;opacity:0;transition:opacity .18s"></span>
-      </label>
-
-      <label class="small" style="display:flex;align-items:center;gap:10px">
-        <input type="checkbox" id="ops-viponly" onchange="saveOps()">
-        <span><b>VIP Only</b></span>
-        <span id="mini-vip" class="note" style="margin-left:auto;opacity:0;transition:opacity .18s"></span>
-      </label>
-
-      <label class="small" style="display:flex;align-items:center;gap:10px">
-        <input type="checkbox" id="ops-waitlist" onchange="saveOps()">
-        <span><b>Waitlist Mode</b> <span style="opacity:.75">(AI Waiting List)</span></span>
-        <span id="mini-wait" class="note" style="margin-left:auto;opacity:0;transition:opacity .18s"></span>
-      </label>
-    </div>
-
-    <div id="ops-meta" class="small" style="margin-top:8px;opacity:.85"></div>
-    <div id="ops-msg" class="note" style="margin-top:8px"></div>
-    <div class="small" style="margin-top:10px;opacity:.7">Tip: toggles save immediately (you’ll see “Saving…” → “Saved”).</div>
-  </div>
-
-  <!-- Notifications (restored) -->
-  <div class="card" id="notifCard">
-    <div class="h2">Notifications</div>
-    <div id="notifBody" class="small" style="margin-top:8px"></div>
-    <div id="notif-msg" class="note" style="margin-top:8px"></div>
-  </div>
-
-""")
-
-    html.append(r"""
-<div id="tab-leads" class="tabpane hidden">
+<div id="tab-leads" class="tabpane">
 """)
 
     # Leads table
     if leads_err:
-        html.append(f"<div class='card'><div class='h2'>Leads</div><div class='small'>Error reading leads: {leads_err}</div></div>")
+        html.append(f"<div class='card'><div class='h2'>Ops</div><div class='small'>Error reading leads: {leads_err}</div></div>")
     elif not body:
-        html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>No leads yet.</div></div>")
+        html.append("<div class='card'><div class='h2'>Ops</div><div class='small'>No leads yet.</div></div>")
     else:
-        html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>Newest first. Update Status/VIP and save.</div><div style='display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center'><div class='pills' style='margin:0'><button class='btn2' id='flt-all' type='button'>All</button><button class='btn2' id='flt-vip' type='button'>VIP</button><button class='btn2' id='flt-reg' type='button'>Regular</button></div><div style='display:flex;gap:8px;align-items:center'><span class='small' style='white-space:nowrap'>Entry:</span><select class='inp' id='flt-entry' style='min-width:180px'></select><span id='leadsCount' class='small' style='margin-left:8px'>0 shown</span></div></div></div>")
+        html.append("<div class='card'><div class='h2'>Ops</div><div class='small'>Newest first. Update Status/VIP and save.</div><div style='display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center'><div class='pills' style='margin:0'><button class='btn2' id='flt-all' type='button'>All</button><button class='btn2' id='flt-vip' type='button'>VIP</button><button class='btn2' id='flt-reg' type='button'>Regular</button></div><div style='display:flex;gap:8px;align-items:center'><span class='small' style='white-space:nowrap'>Entry:</span><select class='inp' id='flt-entry' style='min-width:180px'></select><span id='leadsCount' class='small' style='margin-left:8px'>0 shown</span></div></div></div>")
         html.append("<div class='tablewrap'><table id='leadsTable'>")
         html.append("<thead><tr>"                    "<th>Row</th><th>Timestamp</th><th>Name</th><th>Contact</th>"                    "<th>Date</th><th>Time</th><th>Party</th>"                    "<th>Segment</th><th>Entry</th><th>Queue</th><th>Budget</th>"                    "<th>Context</th><th>Notes</th>"                    "<th>Status</th><th>VIP</th><th>Save</th>"                    "</tr></thead><tbody>")
         for sheet_row, r in numbered:
@@ -4484,26 +4371,13 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
             html.append("</tr>")
         html.append("</tbody></table></div>")
 
-    html.append("</div>")  # tab-ops
+    html.append("</div>")  # tab-leads
 
     html.append(r"""
 
 <div id="tab-ai" class="tabpane hidden">
   <div class="card">
     <div class="h2">AI Automation</div>
-    <div class="row" style="margin-top:10px">
-      <div class="card" style="margin:0">
-        <div class="h2" style="margin-bottom:6px">Presets</div>
-        <div class="small">Quickly apply safe, proven AI + ops defaults.</div>
-        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
-          <button type="button" class="btn2" onclick="applyPreset('balanced')">Balanced</button>
-          <button type="button" class="btn2" onclick="applyPreset('conservative')">Conservative</button>
-          <button type="button" class="btn2" onclick="applyPreset('aggressive')">Aggressive</button>
-          <span id="preset-msg" class="note"></span>
-        </div>
-      </div>
-    </div>
-
     <div class="small">Managers can enable/disable AI and choose how much autonomy it has. Owners can tune advanced behavior.</div>
   </div>
 
@@ -4821,8 +4695,7 @@ qsa('.tabbtn').forEach(btn=>{
       pane.classList.toggle('hidden', x!==t);
     });
 if(t==='ai') loadAI();
-        if(t==='leads') loadOps();
-if(t==='aiq') loadAIQueue();
+    if(t==='aiq') loadAIQueue();
     if(t==='rules') loadRules();
     if(t==='menu') loadMenu();
     if(t==='audit') loadAudit();
@@ -5312,6 +5185,19 @@ async function clearNotifs(){
   }
 }
 
+// Robust tab switcher (works even if event listeners fail to bind)
+window.showTab = function(tab){
+  try{
+    const btns = Array.from(document.querySelectorAll('.tabbtn'));
+    const panes = Array.from(document.querySelectorAll('.tabpane'));
+    btns.forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
+    panes.forEach(p=>p.classList.add('hidden'));
+    const pane = document.querySelector('#tab-'+tab);
+    if(pane) pane.classList.remove('hidden');
+    try{ history.replaceState(null, '', '#'+tab); }catch(e){}
+  }catch(e){}
+};
+
 function setupTabs(){
   const btns = Array.from(document.querySelectorAll('.tabbtn'));
   const panes = Array.from(document.querySelectorAll('.tabpane'));
@@ -5339,18 +5225,15 @@ function setupTabs(){
   if(initial && document.querySelector('.tabbtn[data-tab="'+initial+'"]')) show(initial);
 }
 function openNotifications(){
-  // Switch to Ops tab and scroll to Notifications
+  // Switch to Ops tab and scroll to the notifications card
   try{
     document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
-    const btn = document.querySelector('.tabbtn[data-tab="ops"]');
+    const btn = document.querySelector('.tabbtn[data-tab="leads"]');
     if(btn) btn.classList.add('active');
     document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
     const pane = document.querySelector('#tab-ops');
     if(pane) pane.classList.remove('hidden');
-    setTimeout(()=>{ document.querySelector('#notifCard')?.scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
-    loadNotifs();
-  }catch(e){}
-}); }, 50);
+    setTimeout(()=>{ document.querySelector('#notifCard')?.scrollIntoView({behavior:'smooth', block:'start'}); }, 50);
     loadNotifs();
   }catch(e){}
 }
@@ -5362,8 +5245,6 @@ document.addEventListener('DOMContentLoaded', ()=>{
   try{ markLockedControls(); }catch(e){}
   try{ setupLeadFilters(); }catch(e){}
   try{ loadNotifs(); }catch(e){}
-  try{ loadOps(); }catch(e){}
-
 });
 </script>
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
