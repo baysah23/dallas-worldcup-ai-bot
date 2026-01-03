@@ -4313,7 +4313,20 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     <div class="small" style="margin-top:10px;opacity:.72">Tip: toggles auto-save (“Saving…” → “Saved”).</div>
   </div>
 
-  <div class="card" id="notifCard">
+  
+  <div class="card" id="matchdayCard">
+    <div class="h2">Match Day Ops</div>
+    <div class="small">One-click presets that set multiple Ops toggles + key Rules. Audited.</div>
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+      <button type="button" class="btn2" onclick="applyPreset('Kickoff Rush')">Kickoff Rush</button>
+      <button type="button" class="btn2" onclick="applyPreset('Halftime Surge')">Halftime Surge</button>
+      <button type="button" class="btn2" onclick="applyPreset('Post-game')">Post-game</button>
+    </div>
+    <div id="preset-msg" class="note" style="margin-top:10px"></div>
+    <div class="small" style="margin-top:10px;opacity:.72">Tip: presets update Ops + Rules instantly so staff can shift modes fast.</div>
+  </div>
+
+<div class="card" id="notifCard">
     <div class="h2">Notifications</div>
     <div id="notifBody" class="small" style="margin-top:8px"></div>
     <div id="notif-msg" class="note" style="margin-top:8px"></div>
@@ -4601,6 +4614,9 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     # Scripts
     html.append("""
 <script>
+const KEY = __ADMIN_KEY__;
+const ROLE = __ADMIN_ROLE__;
+
 const ROLE_RANK = { "manager": 1, "owner": 2 };
 function hasRole(minRole){
   const need = ROLE_RANK[minRole||"manager"] || 1;
@@ -5403,7 +5419,6 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <script>
 (function(){
   const ADMIN_KEY = (new URLSearchParams(location.search)).get("key") || "";
-  const KEY = ADMIN_KEY; // compat for existing fetch calls
   const __ADMIN_KEY__ = ADMIN_KEY; // compat alias used by existing fetch calls
 
   const ROLE = __ADMIN_ROLE__;
