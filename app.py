@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+import secrets
 import json
 import hashlib
 import re
@@ -198,6 +199,11 @@ def _default_ai_settings() -> Dict[str, Any]:
             "status_update": False,
             "reply_draft": True,
         },
+        "features": {
+            "auto_vip_tag": True,
+            "auto_status_update": False,
+            "auto_reply_draft": True,
+        },
         "updated_at": None,
         "updated_by": None,  # actor hash
         "updated_role": None,
@@ -280,12 +286,13 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
     typ = str(action.get("type") or "").strip()
     payload = action.get("payload") or {}
     allow = (AI_SETTINGS.get("allow_actions") or {})
+    feats = (AI_SETTINGS.get("features") or {})
 
     # lead row reference (Google Sheet row number)
     row_num = int(payload.get("row") or payload.get("sheet_row") or 0)
 
     if typ == "reply_draft":
-        if not allow.get("reply_draft", True):
+        if (not allow.get("reply_draft", True)) or (not feats.get("auto_reply_draft", True)):
             return {"ok": False, "error": "reply_draft not allowed"}
         draft = str(payload.get("draft") or "").strip()
         if not draft:
@@ -305,7 +312,7 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
         hmap = header_map(header)
 
         if typ == "vip_tag":
-            if not allow.get("vip_tag", True):
+            if (not allow.get("vip_tag", True)) or (not feats.get("auto_vip_tag", True)):
                 return {"ok": False, "error": "vip_tag not allowed"}
             vip = str(payload.get("vip") or "").strip()
             if vip not in ("VIP", "Regular"):
@@ -318,7 +325,7 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
             return {"ok": True, "applied": "vip_tag"}
 
         if typ == "status_update":
-            if not allow.get("status_update", False):
+            if (not allow.get("status_update", False)) or (not feats.get("auto_status_update", False)):
                 return {"ok": False, "error": "status_update not allowed"}
             status = str(payload.get("status") or "").strip()
             allowed_status = ["New", "Confirmed", "Seated", "No-Show", "Handled"]
@@ -456,6 +463,26 @@ def _ai_enqueue_or_apply_for_new_lead(lead: Dict[str, Any], sheet_row: int) -> N
 
         confidence = float(sug.get("confidence") or 0)
         actions = sug.get("actions") or []
+
+        # Enforce feature flags + allow_actions before we queue/apply anything
+        allow_actions = (settings.get("allow_actions") or {})
+        feats = (settings.get("features") or {})
+        feat_map = {"vip_tag": "auto_vip_tag", "status_update": "auto_status_update", "reply_draft": "auto_reply_draft"}
+        filtered = []
+        for a in actions if isinstance(actions, list) else []:
+            if not isinstance(a, dict):
+                continue
+            typ = str(a.get("type") or "").strip()
+            if not typ:
+                continue
+            if not allow_actions.get(typ, True):
+                continue
+            fk = feat_map.get(typ)
+            if fk and (not feats.get(fk, True)):
+                continue
+            filtered.append(a)
+        actions = filtered
+
         if not actions:
             return
 
@@ -3984,6 +4011,20 @@ def admin_api_ai_settings():
         mc = max(0.0, min(1.0, mc))
         patch["min_confidence"] = mc
 
+
+
+    # Feature flags (manager+)
+    # These control which AI actions are even eligible to be queued/applied.
+    if "features" in data and isinstance(data.get("features"), dict):
+        feats_in = data.get("features") or {}
+        feats_out: Dict[str, Any] = {}
+        for k in ("auto_vip_tag", "auto_status_update", "auto_reply_draft"):
+            if k in feats_in:
+                feats_out[k] = bool(as_bool(feats_in.get(k)))
+        if feats_out:
+            patch["features"] = _deep_merge(AI_SETTINGS.get("features") or {}, feats_out)
+
+
     # Owner-only advanced fields
     if role == "owner":
         if "model" in data:
@@ -4021,6 +4062,124 @@ def admin_api_ai_settings():
 # ============================================================
 # AI Queue API (Admin/Manager)
 # ============================================================
+
+
+# ============================================================
+# AI: Manual Reply Draft (Owner-only)
+# - Creates an AI Queue item of type=reply_draft for a specific lead row
+# - Does NOT send anything; just stores a draft for review/use
+# ============================================================
+
+def _lead_snapshot_from_sheet_row(row_num: int) -> Dict[str, Any]:
+    """Return a small dict snapshot of a lead row for queue reviewers. Never raises."""
+    try:
+        gc = get_gspread_client()
+        ws = gc.open(SHEET_NAME).sheet1
+        header = ws.row_values(1) or []
+        hmap = header_map(header)
+
+        row = ws.row_values(row_num) or []
+        def gv(key: str) -> str:
+            col = hmap.get(key)
+            if not col:
+                return ""
+            i = int(col) - 1
+            return str(row[i]).strip() if 0 <= i < len(row) else ""
+
+        return {
+            "row": row_num,
+            "contact": gv("contact") or gv("name") or gv("phone") or gv("email"),
+            "intent": gv("intent"),
+            "party_size": gv("party_size"),
+            "datetime": gv("datetime") or (gv("date") + " " + gv("time")).strip(),
+            "budget": gv("budget"),
+            "vip": gv("vip"),
+            "status": gv("status"),
+            "notes": (gv("notes") or gv("details") or "")[:240],
+        }
+    except Exception:
+        return {"row": row_num}
+
+def _build_reply_draft_from_snapshot(snap: Dict[str, Any]) -> str:
+    """Simple, safe draft builder (no external AI call)."""
+    contact = (snap.get("contact") or "").strip()
+    party = (snap.get("party_size") or "").strip()
+    dt = (snap.get("datetime") or "").strip()
+    intent = (snap.get("intent") or "").strip()
+    budget = (snap.get("budget") or "").strip()
+    notes = (snap.get("notes") or "").strip()
+
+    opener = "Hi there — thanks for reaching out to World Cup Concierge."
+    if contact and "@" not in contact and len(contact) <= 28:
+        opener = f"Hi {contact} — thanks for reaching out to World Cup Concierge."
+
+    bits = []
+    if party:
+        bits.append(f"party of {party}")
+    if dt:
+        bits.append(f"{dt}")
+    if bits:
+        mid = "I’ve got you down for " + (" on ".join(bits) if len(bits)==2 else bits[0]) + "."
+    else:
+        mid = "I can help you lock in a premium spot for the match."
+
+    ask = "What vibe are you going for (sports bar energy, upscale lounge, or private table)?"
+    if intent:
+        ask = f"Quick question: are you aiming for {intent.lower()}?"
+
+    extra = []
+    if budget:
+        extra.append(f"budget: {budget}")
+    if notes:
+        extra.append(f"notes: {notes}")
+    tail = "Share your preferred time window and any must‑haves, and I’ll line up the best options."
+    if extra:
+        tail = tail + " (" + "; ".join(extra) + ")"
+
+    return (opener + " " + mid + " " + ask + " " + tail).strip()
+
+@app.route("/admin/api/ai/draft-reply", methods=["POST"])
+def admin_api_ai_draft_reply():
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+
+    ctx = _admin_ctx()
+    actor = ctx.get("actor", "")
+    role = ctx.get("role", "")
+
+    data = request.get_json(silent=True) or {}
+    try:
+        row_num = int(data.get("row") or 0)
+    except Exception:
+        row_num = 0
+    if row_num < 2:
+        return jsonify({"ok": False, "error": "Invalid row"}), 400
+
+    snap = _lead_snapshot_from_sheet_row(row_num)
+    draft = _build_reply_draft_from_snapshot(snap)
+    if not draft:
+        return jsonify({"ok": False, "error": "Unable to draft"}), 500
+
+    entry = {
+        "id": _queue_new_id(),
+        "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "created_by": actor or "owner",
+        "created_role": role or "owner",
+        "status": "pending",
+        "source": "manual_reply_draft",
+        "confidence": 1.0,
+        "notes": "Manual reply draft requested",
+        "actions": [
+            {"type": "reply_draft", "payload": {"row": row_num, "draft": draft}, "reason": "Draft reply requested"}
+        ],
+        "lead": snap,
+    }
+
+    _queue_add(entry)
+    _audit("ai.queue.created", {"id": entry["id"], "source": "manual_reply_draft", "row": row_num})
+    _notify("ai.queue.created", {"id": entry["id"], "source": "manual_reply_draft", "row": row_num, "lead": snap}, targets=["owner","manager"])
+    return jsonify({"ok": True, "id": entry["id"], "draft": draft})
 
 @app.route("/admin/api/ai/queue", methods=["GET"])
 def admin_api_ai_queue_list():
