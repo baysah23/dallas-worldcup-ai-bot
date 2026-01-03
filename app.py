@@ -4482,8 +4482,6 @@ def admin():
     html.append(r"""
 <style>
 :root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
-html{color-scheme:dark;}
-select,select option,select optgroup,.pillselect{color-scheme:dark;}
 body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(900px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);color:var(--text);}
 .wrap{max-width:1200px;margin:0 auto;padding:18px;}
 .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;}
@@ -4503,6 +4501,19 @@ body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(
   outline:none;
 }
 .pillselect option{background:var(--panel);color:var(--text);}
+/* iOS Safari native <select> picker fix: ensure option text is readable */
+@supports (-webkit-touch-callout: none) {
+  .pillselect{
+    background: rgba(255,255,255,.92) !important;
+    color: #111 !important;
+    -webkit-text-fill-color:#111 !important;
+  }
+  .pillselect option{
+    background:#fff !important;
+    color:#111 !important;
+  }
+}
+
 .pills .pill input[type="checkbox"]{transform: translateY(1px); margin-left:8px;}
 
 .pill b{color:var(--gold)}
@@ -5800,9 +5811,7 @@ def admin_fanzone():
     html.append("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'/>")
     html.append("<title>Fan Zone Admin</title>")
     html.append("""<style>
-:root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10html{color-scheme:dark;}
-select,select option,select optgroup,.pillselect{color-scheme:dark;}
-);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
+:root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
 body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(1200px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);color:var(--text);}
 .wrap{max-width:1200px;margin:0 auto;padding:18px;}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
