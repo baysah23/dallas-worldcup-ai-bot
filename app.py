@@ -676,14 +676,18 @@ FIXTURE_CACHE_FILE = os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_fixtures.js
 POLL_STORE_FILE = os.environ.get("POLL_STORE_FILE", "/tmp/wc26_poll_votes.json")
 
 
-def _safe_read_json_file(path: str) -> Optional[Any]:
+def _safe_read_json_file(path: str, default: Any = None) -> Any:
+    """Read JSON from disk safely.
+
+    Returns `default` if the file is missing or invalid.
+    """
     try:
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
-        return None
-    return None
+        return default
+    return default
 
 
 def _safe_write_json_file(path: str, payload: Any) -> None:
