@@ -3130,21 +3130,43 @@ def _read_notifications(limit: int = 50, role: str = "manager") -> List[Dict[str
         return []
 
 def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
-    """Append a single-line JSON audit entry (best-effort, non-blocking)."""
+    """Append a single-line JSON audit entry (best-effort, non-blocking).
+
+    Important: this must NEVER break request handling. If audit fails, we swallow errors.
+    """
     try:
-        ctx = _admin_ctx()
+        # request is a LocalProxy; avoid touching it if we're outside a request context.
+        try:
+            from flask import has_request_context
+        except Exception:
+            has_request_context = lambda: False  # type: ignore
+
+        if has_request_context():
+            ctx = _admin_ctx()
+            ip = client_ip()
+            path = getattr(request, "path", "")
+        else:
+            ctx = {"role": "", "actor": ""}
+            ip = ""
+            path = ""
+
         entry = {
             "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
             "event": str(event),
             "role": ctx.get("role", ""),
             "actor": ctx.get("actor", ""),
-            "ip": client_ip() if request else "",
-            "path": getattr(request, "path", ""),
+            "ip": ip,
+            "path": path,
             "details": details or {},
         }
         os.makedirs(os.path.dirname(AUDIT_LOG_FILE), exist_ok=True)
         with open(AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            f.write(json.dumps(entry, ensure_ascii=False) + "
+")
+            try:
+                f.flush()
+            except Exception:
+                pass
     except Exception:
         pass
 
