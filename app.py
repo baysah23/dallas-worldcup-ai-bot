@@ -4806,7 +4806,7 @@ if(t==='ai') loadAI();
   });
 });
 
-async async function saveLead(sheetRow){
+async function saveLead(sheetRow){
   const statusEl = qs('#status-'+sheetRow);
   const vipEl = qs('#vip-'+sheetRow);
   const status = statusEl ? statusEl.value : "";
@@ -4846,7 +4846,7 @@ async async function saveLead(sheetRow){
   }
 }
 
-async async function markHandled(sheetRow){
+async function markHandled(sheetRow){
   // Minimal: set status to Handled + write an audit entry.
   const tiny = document.querySelectorAll(`button[onclick="markHandled(${sheetRow})"]`);
   tiny.forEach(b=>{ b.disabled = true; b.dataset._old = b.textContent; b.textContent = "…"; });
@@ -4870,7 +4870,7 @@ async async function markHandled(sheetRow){
   }
 }
 
-async async function loadRules(){
+async function loadRules(){
   const msg = qs('#rules-msg'); if(msg) msg.textContent='Loading...';
   try{
     const res = await fetch('/admin/api/rules?key='+encodeURIComponent(KEY));
@@ -4892,7 +4892,7 @@ async async function loadRules(){
   }
 }
 
-async async function saveRules(btn){
+async function saveRules(btn){
   // owner-only guard (UI also hides via data-min-role, but keep it safe)
   if(typeof ROLE !== 'undefined' && ROLE !== 'owner'){
     alert('Owner-only: managers can view rules but cannot change them.');
