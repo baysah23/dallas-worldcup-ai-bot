@@ -5250,9 +5250,22 @@ function setupTabs(){
     });
   });
 
-  // open tab from URL hash if present
+  // Make inline onclick handlers use the same implementation
+  window.showTab = show;
+
+  // open tab from URL hash if present, otherwise default to Ops
   const initial = (location.hash||'').replace('#','').trim();
-  if(initial && document.querySelector('.tabbtn[data-tab="'+initial+'"]')) show(initial);
+  if(initial && document.querySelector('.tabbtn[data-tab="'+initial+'"]')) {
+    show(initial);
+  } else {
+    show('ops');
+  }
+
+  // keep in sync if hash changes
+  window.addEventListener('hashchange', ()=>{
+    const t = (location.hash||'').replace('#','').trim();
+    if(t && document.querySelector('.tabbtn[data-tab="'+t+'"]')) show(t);
+  });
 }
 function openNotifications(){
   try{
