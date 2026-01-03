@@ -4303,7 +4303,8 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
     html.append(r"""
 <div class="tabs">
-  <button type="button" class="tabbtn active" data-tab="leads">Ops</button>
+  <button type="button" class="tabbtn active" data-tab="ops">Ops</button>
+  <button type="button" class="tabbtn" data-tab="leads">Leads</button>
 <button type="button" class="tabbtn" data-tab="ai">AI</button>
   <button type="button" class="tabbtn" data-tab="aiq">AI Queue</button>
   <button type="button" class="tabbtn" data-tab="rules">Rules</button>
@@ -4311,9 +4312,9 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
   <button type="button" class="tabbtn" data-tab="audit">Audit</button>
 </div>
 
-<div id="tab-leads" class="tabpane">
-  <div class="adminGrid">
-  <div data-col="ops">
+<div id="tab-ops" class="tabpane">
+
+
 <!-- Ops Controls -->
   <div class="card" id="ops-controls">
     <div class="h2">Match‑Day Ops</div>
@@ -4464,10 +4465,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
             html.append("</tr>")
         html.append("</tbody></table></div>")
 
-    html.append("</div>")  # /leads
-    html.append("</div>")  # /adminGrid
-
-    html.append("</div>")  # tab-leads
+    html.append("</div>")    html.append("</div>")  # tab-leads
 
     html.append(r"""
 
@@ -5325,12 +5323,15 @@ function openNotifications(){
   // Switch to Ops tab and scroll to the notifications card
   try{
     document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
-    const btn = document.querySelector('.tabbtn[data-tab="leads"]');
+    const btn = document.querySelector('.tabbtn[data-tab="ops"]');
     if(btn) btn.classList.add('active');
     document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
     const pane = document.querySelector('#tab-ops');
     if(pane) pane.classList.remove('hidden');
     setTimeout(()=>{ document.querySelector('#notifCard')?.scrollIntoView({behavior:'smooth', block:'start'}); }, 50);
+    loadNotifs();
+  }catch(e){}
+}); }, 50);
     loadNotifs();
   }catch(e){}
 }
