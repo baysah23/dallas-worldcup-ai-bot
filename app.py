@@ -4411,7 +4411,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
                 sel = "selected" if selected else ""
                 return f"<option {sel}>{label}</option>"
 
-            html.append(f"<tr data-tier='{_hesc(tier)}' data-entry='{_hesc(ep)}'>")
+            html.append(f"<tr data-tier='{_hesc(tier)}' data-entry='{_hesc(ep)}' data-seg='{_hesc('vip' if seg.startswith('⭐') else 'regular')}'>")
             html.append(f"<td class='code'>{sheet_row}</td>")
             html.append(f"<td>{ts}</td>")
             html.append(f"<td>{nm}</td>")
@@ -4422,7 +4422,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
             # Segment badge (VIP vs Regular)
             seg = "⭐ VIP" if (tier or "").strip().lower() == "vip" or (vip or "").strip().lower() in ["yes","true","1","y"] else "Regular"
             seg_cls = "badge warn" if seg.startswith("⭐") else "badge"
-            html.append(f"<td><span class='{seg_cls}'>{_hesc(seg)}</span></td>")
+            html.append(f"<td><span id='seg-{sheet_row}' class='{seg_cls}'>{_hesc(seg)}</span></td>")
             html.append("<td><span class='pill'>" + _hesc(ep) + "</span></td>")
             html.append("<td><span class='badge good'>" + _hesc(queue) + "</span></td>")
             html.append(f"<td>{_hesc(budget)}</td>")
@@ -4703,10 +4703,24 @@ function norm(s){ return (s||"").toString().trim().toLowerCase(); }
 function applyLeadFilters(){
   const rows = document.querySelectorAll('#leadsTable tbody tr');
   let shown = 0;
+
+  function isVipVal(v){
+    const x = norm(v||"");
+    return (x === 'vip' || x === 'yes' || x === 'true' || x === '1' || x === 'y' || x === '⭐ vip');
+  }
+
   rows.forEach(tr=>{
     const tier = norm(tr.getAttribute('data-tier')||"");
     const entry = norm(tr.getAttribute('data-entry')||"");
-    const isVip = (tier === 'vip');
+    const seg = norm(tr.getAttribute('data-seg')||"");
+
+    // Robust VIP detection (supports tier=VIP, vip column Yes/No, and future variants)
+    let isVip = (seg === 'vip') || (tier === 'vip');
+
+    if(!isVip){
+      const vsel = tr.querySelector("select[id^='vip-']");
+      if(vsel) isVip = isVipVal(vsel.value);
+    }
 
     let ok = true;
     if(leadTierFilter === "vip") ok = isVip;
@@ -4792,32 +4806,67 @@ if(t==='ai') loadAI();
   });
 });
 
-async function saveLead(sheetRow){
-  const status = qs('#status-'+sheetRow).value;
-  const vip = qs('#vip-'+sheetRow).value;
-  const res = await fetch('/admin/update-lead?key='+encodeURIComponent(KEY), {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({row: sheetRow, status, vip})
-  });
-  const j = await res.json().catch(()=>{});
-  if(j && j.ok) alert('Saved');
-  else alert('Save failed: ' + (j.error||res.status));
+async async function saveLead(sheetRow){
+  const statusEl = qs('#status-'+sheetRow);
+  const vipEl = qs('#vip-'+sheetRow);
+  const status = statusEl ? statusEl.value : "";
+  const vip = vipEl ? vipEl.value : "";
+
+  // Disable save button briefly to prevent double clicks
+  const btns = document.querySelectorAll(`button[onclick="saveLead(${sheetRow})"]`);
+  btns.forEach(b=>{ b.disabled = true; b.dataset._old = b.textContent; b.textContent = "Saving…"; });
+
+  try{
+    const res = await fetch('/admin/update-lead?key='+encodeURIComponent(KEY), {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({row: sheetRow, status, vip})
+    });
+
+    const j = await res.json().catch(()=>null);
+    if(j && j.ok){
+      // Update segment detection live so VIP/Regular tabs stay correct
+      const tr = vipEl ? vipEl.closest('tr') : null;
+      if(tr){
+        const isVip = (String(vip||"").toLowerCase() === "yes");
+        tr.setAttribute('data-seg', isVip ? 'vip' : 'regular');
+
+        const badge = qs('#seg-'+sheetRow);
+        if(badge){
+          badge.textContent = isVip ? "⭐ VIP" : "Regular";
+          badge.className = isVip ? "badge warn" : "badge";
+        }
+      }
+      applyLeadFilters();
+    } else {
+      alert('Save failed: ' + ((j && j.error) ? j.error : res.status));
+    }
+  } finally {
+    btns.forEach(b=>{ b.disabled = false; b.textContent = b.dataset._old || "Save"; delete b.dataset._old; });
+  }
 }
 
-async function markHandled(sheetRow){
+async async function markHandled(sheetRow){
   // Minimal: set status to Handled + write an audit entry.
-  const res = await fetch('/admin/update-lead?key='+encodeURIComponent(KEY), {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({row: sheetRow, status: 'Handled'})
-  });
-  const j = await res.json().catch(()=>{});
-  if(j && j.ok){
-    const sel = qs('#status-'+sheetRow);
-    if(sel) sel.value = 'Handled';
-  } else {
-    alert('Failed: ' + (j && j.error ? j.error : res.status));
+  const tiny = document.querySelectorAll(`button[onclick="markHandled(${sheetRow})"]`);
+  tiny.forEach(b=>{ b.disabled = true; b.dataset._old = b.textContent; b.textContent = "…"; });
+
+  try{
+    const res = await fetch('/admin/update-lead?key='+encodeURIComponent(KEY), {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({row: sheetRow, status: 'Handled'})
+    });
+
+    const j = await res.json().catch(()=>null);
+    if(j && j.ok){
+      const sel = qs('#status-'+sheetRow);
+      if(sel) sel.value = 'Handled';
+    } else {
+      alert('Failed: ' + ((j && j.error) ? j.error : res.status));
+    }
+  } finally {
+    tiny.forEach(b=>{ b.disabled = false; b.textContent = b.dataset._old || "✅"; delete b.dataset._old; });
   }
 }
 
