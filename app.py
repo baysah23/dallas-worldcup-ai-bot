@@ -3954,7 +3954,12 @@ def admin_api_notifications():
     role = ctx.get("role", "manager")
 
     # Role-based branding (visual only)
-    is_owner = (role == "admin")
+    is_owner = (role == "owner")
+    page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
+    page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
+
+    # Role-based branding (visual only)
+    is_owner = (role == "owner")
     page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
     page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
 
@@ -4144,6 +4149,12 @@ def admin():
 
     ctx = _admin_ctx()
     role = ctx.get("role", "manager")
+
+    # Role-based branding (visual only)
+    is_owner = (role == "owner")
+    page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
+    page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
+
 
     # Leads (best-effort)
     rows = []
