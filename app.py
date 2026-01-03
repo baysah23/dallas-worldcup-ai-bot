@@ -676,18 +676,14 @@ FIXTURE_CACHE_FILE = os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_fixtures.js
 POLL_STORE_FILE = os.environ.get("POLL_STORE_FILE", "/tmp/wc26_poll_votes.json")
 
 
-def _safe_read_json_file(path: str, default: Any = None) -> Any:
-    """Read JSON from disk safely.
-
-    Returns `default` if the file is missing or invalid.
-    """
+def _safe_read_json_file(path: str) -> Optional[Any]:
     try:
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
-        return default
-    return default
+        return None
+    return None
 
 
 def _safe_write_json_file(path: str, payload: Any) -> None:
@@ -3562,12 +3558,12 @@ def admin_update_config():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
 
-
 @app.route("/admin/api/rules", methods=["GET","POST"])
 def admin_api_rules():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
+
 
     # Managers can view; only Owners can modify.
     if request.method != "GET":
@@ -3576,54 +3572,51 @@ def admin_api_rules():
             return resp2
 
     global BUSINESS_RULES
-
     if request.method == "GET":
         return jsonify({"ok": True, "rules": BUSINESS_RULES})
 
-    # POST: update rules (owner-only)
-    payload = request.get_json(silent=True)
-    if not isinstance(payload, dict):
-        return jsonify({"ok": False, "error": "Expected JSON object"}), 400
+    payload = request.get_json(silent=True) or {}
+    updated = _coerce_rules(payload)
+    if not updated:
+        return jsonify({"ok": False, "error": "No valid rule fields provided"}), 400
 
-    # Normalize + validate with very forgiving parsing (so UI never breaks)
-    try:
-        max_party = payload.get("max_party_size", BUSINESS_RULES.get("max_party_size", 0))
-        try:
-            max_party = int(max_party) if max_party not in (None, "", 0, "0") else 0
-        except Exception:
-            max_party = 0
-
-        banner = str(payload.get("match_day_banner", BUSINESS_RULES.get("match_day_banner", "")) or "")
-
-        closed = payload.get("closed_dates", BUSINESS_RULES.get("closed_dates", []))
-        if isinstance(closed, str):
-            closed = [ln.strip() for ln in closed.splitlines() if ln.strip()]
-        elif isinstance(closed, list):
-            closed = [str(x).strip() for x in closed if str(x).strip()]
-        else:
-            closed = []
-
-        hours = payload.get("hours", BUSINESS_RULES.get("hours", {}))
-        if not isinstance(hours, dict):
-            hours = {}
-        # Only keep known keys
-        norm_hours = {}
-        for d in ["mon","tue","wed","thu","fri","sat","sun"]:
-            v = hours.get(d, "")
-            norm_hours[d] = str(v).strip() if v is not None else ""
-
-        new_rules = dict(BUSINESS_RULES)
-        new_rules["max_party_size"] = max_party
-        new_rules["match_day_banner"] = banner
-        new_rules["closed_dates"] = closed
-        new_rules["hours"] = norm_hours
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"Invalid rules payload: {e}"}), 400
-
-    BUSINESS_RULES = new_rules
-    _safe_write_json_file(BUSINESS_RULES_FILE, BUSINESS_RULES)
-    _audit("rules.update", {"fields": list(payload.keys())})
+    # Update in-memory + persist
+    BUSINESS_RULES = _deep_merge(BUSINESS_RULES, updated)
+    _persist_rules(updated)
+    _audit("rules.update", {"keys": list(updated.keys())})
     return jsonify({"ok": True, "rules": BUSINESS_RULES})
+
+@app.route("/admin/api/menu", methods=["GET","POST"])
+def admin_api_menu():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+
+    # Managers can view; only Owners can modify.
+    if request.method != "GET":
+        ok2, resp2 = _require_admin(min_role="owner")
+        if not ok2:
+            return resp2
+
+    global _MENU_OVERRIDE
+    if request.method == "GET":
+        return jsonify({"ok": True, "menu": _MENU_OVERRIDE or MENU})
+
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return jsonify({"ok": False, "error": "Expected JSON body"}), 400
+
+    try:
+        normed = _normalize_menu_payload(payload)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+    _MENU_OVERRIDE = normed
+    _safe_write_json_file(MENU_FILE, _MENU_OVERRIDE)
+    _audit("menu.update", {"langs": list(_MENU_OVERRIDE.keys())})
+    return jsonify({"ok": True, "menu": _MENU_OVERRIDE})
+
 @app.route("/admin/api/menu-upload", methods=["POST"])
 def admin_api_menu_upload():
     ok, resp = _require_admin(min_role="owner")
@@ -3959,17 +3952,6 @@ def admin_api_notifications():
         return resp
     ctx = _admin_ctx()
     role = ctx.get("role", "manager")
-
-    # Role-based branding (visual only)
-    is_owner = (role == "owner")
-    page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
-    page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
-
-    # Role-based branding (visual only)
-    is_owner = (role == "owner")
-    page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
-    page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
-
     limit = int(as_int(request.args.get("limit", 50), 50))
     limit = max(1, min(200, limit))
     items = _read_notifications(limit=limit, role=role)
@@ -4157,12 +4139,6 @@ def admin():
     ctx = _admin_ctx()
     role = ctx.get("role", "manager")
 
-    # Role-based branding (visual only)
-    is_owner = (role == "owner")
-    page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
-    page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
-
-
     # Leads (best-effort)
     rows = []
     leads_err = None
@@ -4220,7 +4196,7 @@ def admin():
     html = []
     html.append("<!doctype html><html><head><meta charset='utf-8'>")
     html.append("<meta name='viewport' content='width=device-width, initial-scale=1'/>")
-    html.append(f"<title>{page_title} — World Cup Concierge</title>")
+    html.append("<title>Admin Dashboard</title>")
     html.append(r"""
 <style>
 :root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
@@ -4231,20 +4207,6 @@ body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(
 .sub{color:var(--muted);font-size:12px;margin-top:4px}
 .pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .pill{border:1px solid var(--line);background:rgba(255,255,255,.03);padding:8px 10px;border-radius:999px;font-size:12px}
-
-.pillbtn{cursor:pointer}
-.pillselect{
-  border:1px solid var(--line);
-  background:rgba(255,255,255,.03);
-  color:var(--text);
-  padding:8px 10px;
-  border-radius:999px;
-  font-size:12px;
-  outline:none;
-}
-.pillselect option{background:var(--panel);color:var(--text);}
-.pills .pill input[type="checkbox"]{transform: translateY(1px); margin-left:8px;}
-
 .pill b{color:var(--gold)}
 .tabs{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
 .tabbtn{border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);padding:10px 12px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer}
@@ -4290,17 +4252,12 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
     html.append("<div class='topbar'>")
     html.append("<div>")
-    html.append(f"<div class='h1'>{page_title}</div>")
-    html.append(f"<div class='sub'>Tabs + Rules Config + Menu Upload (fan UI unchanged) · {page_sub}</div>")
+    html.append("<div class='h1'>Admin Dashboard v1</div>")
+    html.append("<div class='sub'>Tabs + Rules Config + Menu Upload (fan UI unchanged)</div>")
     html.append("<div class='pills'>")
     html.append(f"<span class='pill'><b>Ops</b> {len(body)}</span>")
     html.append(f"<span class='pill'><b>VIP</b> {vip_count}</span>")
     html.append("<button class='pill' id='notifBtn' type='button' onclick=\"openNotifications()\">🔔 <b id='notifCount'>0</b></button>")
-
-    html.append("<button class='pill pillbtn' id='refreshBtn' type='button' onclick=\"refreshAll('manual')\">↻ <b>Refresh</b></button>")
-    html.append("<button class='pill pillbtn' id='autoBtn' type='button' onclick=\"toggleAutoRefresh()\">⟳ <b id='autoLabel'>Auto: Off</b></button>")
-    html.append("<select class='pillselect' id='autoEvery' onchange=\"autoEveryChanged()\"><option value='10'>10s</option><option value='30' selected>30s</option><option value='60'>60s</option></select>")
-    html.append("<span class='pill' id='lastRef'>Last refresh: —</span>")
     for k, v in status_counts.items():
         html.append(f"<span class='pill'><b>{k}</b> {v}</span>")
     html.append("</div>")
@@ -4407,15 +4364,11 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
             notes = colval(r, i_notes, "")
             vibe = colval(r, i_vibe, "")
 
-
-            # Segment (VIP vs Regular): treat VIP if either tier==VIP or vip==Yes
-            is_vip = ((tier or "").strip().lower() == "vip") or ((vip or "").strip().lower() in ["yes","true","1","y","vip"])
-            seg = "⭐ VIP" if is_vip else "Regular"
             def opt(selected, label):
                 sel = "selected" if selected else ""
                 return f"<option {sel}>{label}</option>"
 
-            html.append(f"<tr data-tier='{_hesc(tier)}' data-entry='{_hesc(ep)}' data-seg='{_hesc('vip' if is_vip else 'regular')}'>")
+            html.append(f"<tr data-tier='{_hesc(tier)}' data-entry='{_hesc(ep)}'>")
             html.append(f"<td class='code'>{sheet_row}</td>")
             html.append(f"<td>{ts}</td>")
             html.append(f"<td>{nm}</td>")
@@ -4424,8 +4377,9 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
             html.append(f"<td>{t}</td>")
             html.append(f"<td>{ps}</td>")
             # Segment badge (VIP vs Regular)
+            seg = "⭐ VIP" if (tier or "").strip().lower() == "vip" or (vip or "").strip().lower() in ["yes","true","1","y"] else "Regular"
             seg_cls = "badge warn" if seg.startswith("⭐") else "badge"
-            html.append(f"<td><span id='seg-{sheet_row}' class='{seg_cls}'>{_hesc(seg)}</span></td>")
+            html.append(f"<td><span class='{seg_cls}'>{_hesc(seg)}</span></td>")
             html.append("<td><span class='pill'>" + _hesc(ep) + "</span></td>")
             html.append("<td><span class='badge good'>" + _hesc(queue) + "</span></td>")
             html.append(f"<td>{_hesc(budget)}</td>")
@@ -4596,7 +4550,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     </div>
 
     <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
-      <button type="button" class="btn" data-min-role="owner" onclick="saveRules(this)">Save Rules</button>
+      <button type="button" class="btn" data-min-role="owner" onclick="saveRules()">Save Rules</button>
       <button class="btn2" onclick="loadRules()">Reload</button>
       <span id="rules-msg" class="note"></span>
     </div>
@@ -4670,6 +4624,54 @@ function hasRole(minRole){
   return have >= need;
 }
 
+// Tabs: show/hide panels + remember last tab
+const TAB_IDS = ["ops","leads","ai","aiq","rules","menu","audit"];
+function showTab(name, opts){
+  name = (name||"ops").toLowerCase();
+  if(!TAB_IDS.includes(name)) name = "ops";
+
+  // panes
+  TAB_IDS.forEach(t=>{
+    const pane = document.getElementById("tab-"+t);
+    if(pane) pane.style.display = (t===name) ? "block" : "none";
+  });
+
+  // buttons
+  document.querySelectorAll(".tabbtn").forEach(btn=>{
+    const t = (btn.getAttribute("data-tab")||"").toLowerCase();
+    btn.classList.toggle("active", t===name);
+  });
+
+  // persist
+  try { localStorage.setItem("admin.activeTab", name); } catch(e){}
+
+  // URL param (without causing a reload)
+  const o = opts || {};
+  if(!o.skipUrl){
+    try{
+      const u = new URL(window.location.href);
+      u.searchParams.set("tab", name);
+      window.history.replaceState({}, "", u.toString());
+    }catch(e){}
+  }
+  return false;
+}
+
+function initTabs(){
+  let tab = null;
+  try{
+    const u = new URL(window.location.href);
+    tab = u.searchParams.get("tab");
+  }catch(e){}
+  if(!tab){
+    try{ tab = localStorage.getItem("admin.activeTab"); }catch(e){}
+  }
+  showTab(tab || "ops", {skipUrl:false});
+}
+window.addEventListener("DOMContentLoaded", initTabs);
+
+
+
 function markLockedControls(){
   document.querySelectorAll('[data-min-role]').forEach(el=>{
     const need = el.getAttribute('data-min-role') || 'manager';
@@ -4682,37 +4684,6 @@ function markLockedControls(){
   });
 }
 window.addEventListener('DOMContentLoaded', markLockedControls);
-
-// ===== Tabs =====
-function showTab(name){
-  name = (name || 'ops').toLowerCase();
-  // activate button
-  document.querySelectorAll('.tabbtn').forEach(b=>{
-    if((b.getAttribute('data-tab')||'').toLowerCase() === name) b.classList.add('active');
-    else b.classList.remove('active');
-  });
-  // show panel
-  document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
-  const pane = document.getElementById('tab-' + name);
-  if(pane) pane.classList.remove('hidden');
-  // persist
-  try{ localStorage.setItem('admin_active_tab', name); }catch(_e){}
-  try{
-    const u = new URL(window.location.href);
-    u.searchParams.set('tab', name);
-    history.replaceState(null, '', u.toString());
-  }catch(_e){}
-}
-
-function initTabs(){
-  let t = null;
-  try{ t = new URLSearchParams(window.location.search).get('tab'); }catch(_e){}
-  if(!t){
-    try{ t = localStorage.getItem('admin_active_tab'); }catch(_e){}
-  }
-  showTab(t || 'ops');
-}
-window.addEventListener('DOMContentLoaded', initTabs);
 
 // Make "locked" controls still clickable (they show a helpful message instead of silently failing)
 document.addEventListener('click', (e)=>{
@@ -4737,24 +4708,10 @@ function norm(s){ return (s||"").toString().trim().toLowerCase(); }
 function applyLeadFilters(){
   const rows = document.querySelectorAll('#leadsTable tbody tr');
   let shown = 0;
-
-  function isVipVal(v){
-    const x = norm(v||"");
-    return (x === 'vip' || x === 'yes' || x === 'true' || x === '1' || x === 'y' || x === '⭐ vip');
-  }
-
   rows.forEach(tr=>{
     const tier = norm(tr.getAttribute('data-tier')||"");
     const entry = norm(tr.getAttribute('data-entry')||"");
-    const seg = norm(tr.getAttribute('data-seg')||"");
-
-    // Robust VIP detection (supports tier=VIP, vip column Yes/No, and future variants)
-    let isVip = (seg === 'vip') || (tier === 'vip');
-
-    if(!isVip){
-      const vsel = tr.querySelector("select[id^='vip-']");
-      if(vsel) isVip = isVipVal(vsel.value);
-    }
+    const isVip = (tier === 'vip');
 
     let ok = true;
     if(leadTierFilter === "vip") ok = isVip;
@@ -4841,140 +4798,68 @@ if(t==='ai') loadAI();
 });
 
 async function saveLead(sheetRow){
-  const statusEl = qs('#status-'+sheetRow);
-  const vipEl = qs('#vip-'+sheetRow);
-  const status = statusEl ? statusEl.value : "";
-  const vip = vipEl ? vipEl.value : "";
-
-  // Disable save button briefly to prevent double clicks
-  const btns = document.querySelectorAll(`button[onclick="saveLead(${sheetRow})"]`);
-  btns.forEach(b=>{ b.disabled = true; b.dataset._old = b.textContent; b.textContent = "Saving…"; });
-
-  try{
-    const res = await fetch('/admin/update-lead?key='+encodeURIComponent(KEY), {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({row: sheetRow, status, vip})
-    });
-
-    const j = await res.json().catch(()=>null);
-    if(j && j.ok){
-      // Update segment detection live so VIP/Regular tabs stay correct
-      const tr = vipEl ? vipEl.closest('tr') : null;
-      if(tr){
-        const isVip = (String(vip||"").toLowerCase() === "yes");
-        tr.setAttribute('data-seg', isVip ? 'vip' : 'regular');
-
-        const badge = qs('#seg-'+sheetRow);
-        if(badge){
-          badge.textContent = isVip ? "⭐ VIP" : "Regular";
-          badge.className = isVip ? "badge warn" : "badge";
-        }
-      }
-      applyLeadFilters();
-    } else {
-      alert('Save failed: ' + ((j && j.error) ? j.error : res.status));
-    }
-  } finally {
-    btns.forEach(b=>{ b.disabled = false; b.textContent = b.dataset._old || "Save"; delete b.dataset._old; });
-  }
+  const status = qs('#status-'+sheetRow).value;
+  const vip = qs('#vip-'+sheetRow).value;
+  const res = await fetch('/admin/update-lead?key='+encodeURIComponent(KEY), {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({row: sheetRow, status, vip})
+  });
+  const j = await res.json().catch(()=>{});
+  if(j && j.ok) alert('Saved');
+  else alert('Save failed: ' + (j.error||res.status));
 }
 
 async function markHandled(sheetRow){
   // Minimal: set status to Handled + write an audit entry.
-  const tiny = document.querySelectorAll(`button[onclick="markHandled(${sheetRow})"]`);
-  tiny.forEach(b=>{ b.disabled = true; b.dataset._old = b.textContent; b.textContent = "…"; });
-
-  try{
-    const res = await fetch('/admin/update-lead?key='+encodeURIComponent(KEY), {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({row: sheetRow, status: 'Handled'})
-    });
-
-    const j = await res.json().catch(()=>null);
-    if(j && j.ok){
-      const sel = qs('#status-'+sheetRow);
-      if(sel) sel.value = 'Handled';
-    } else {
-      alert('Failed: ' + ((j && j.error) ? j.error : res.status));
-    }
-  } finally {
-    tiny.forEach(b=>{ b.disabled = false; b.textContent = b.dataset._old || "✅"; delete b.dataset._old; });
+  const res = await fetch('/admin/update-lead?key='+encodeURIComponent(KEY), {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({row: sheetRow, status: 'Handled'})
+  });
+  const j = await res.json().catch(()=>{});
+  if(j && j.ok){
+    const sel = qs('#status-'+sheetRow);
+    if(sel) sel.value = 'Handled';
+  } else {
+    alert('Failed: ' + (j && j.error ? j.error : res.status));
   }
 }
 
 async function loadRules(){
-  const msg = qs('#rules-msg'); if(msg) msg.textContent='Loading...';
-  try{
-    const res = await fetch('/admin/api/rules?key='+encodeURIComponent(KEY));
-    const j = await res.json().catch(()=>null);
-    if(!j || !j.ok){ if(msg) msg.textContent='Failed to load rules'; return; }
-    const r = j.rules || {};
-    const mp = qs('#rules-max-party'); if(mp) mp.value = (r.max_party_size ?? '');
-    const bn = qs('#rules-banner'); if(bn) bn.value = (r.match_day_banner || '');
-    const cd = qs('#rules-closed');
-    if(cd) cd.value = (Array.isArray(r.closed_dates) ? r.closed_dates : []).join('\n');
-    const h = (r.hours && typeof r.hours === 'object') ? r.hours : {};
-    ['mon','tue','wed','thu','fri','sat','sun'].forEach(d=>{
-      const el = qs('#h-'+d);
-      if(el) el.value = (h[d]||'');
-    });
-    if(msg) msg.textContent='Loaded ✔';
-  } catch(e){
-    if(msg) msg.textContent='Failed to load rules';
-  }
+  const msg = qs('#rules-msg'); if(msg) msg.textContent='';
+  const res = await fetch('/admin/api/rules?key='+encodeURIComponent(KEY));
+  const j = await res.json().catch(()=>null);
+  if(!j || !j.ok){ if(msg) msg.textContent='Failed to load rules'; return; }
+  const r = j.rules || {};
+  qs('#rules-max-party').value = r.max_party_size || '';
+  qs('#rules-banner').value = r.match_day_banner || '';
+  qs('#rules-closed').value = (r.closed_dates||[]).join('\\n');
+  const h = r.hours || {};
+  ['mon','tue','wed','thu','fri','sat','sun'].forEach(d=>{
+    const el = qs('#h-'+d);
+    if(el) el.value = (h[d]||'');
+  });
 }
 
-async function saveRules(btn){
-  // owner-only guard (UI also hides via data-min-role, but keep it safe)
-  if(typeof ROLE !== 'undefined' && ROLE !== 'owner'){
-    alert('Owner-only: managers can view rules but cannot change them.');
-    return;
-  }
+async function saveRules(){
   const msg = qs('#rules-msg'); if(msg) msg.textContent='Saving...';
-  const saveBtn = btn || document.querySelector('button[onclick="saveRules(this)"]') || document.querySelector('button[onclick="saveRules(this)"]');
-  if(saveBtn){ saveBtn.disabled = true; saveBtn.dataset._label = saveBtn.textContent; saveBtn.textContent = 'Saving…'; }
-
-  try{
-    const hours={};
-    ['mon','tue','wed','thu','fri','sat','sun'].forEach(d=>hours[d]= (qs('#h-'+d)?.value || '').trim());
-    const closedText = (qs('#rules-closed')?.value || '');
-    const closedDates = closedText.split('\n').map(s=>s.trim()).filter(Boolean);
-
-    const rawMax = (qs('#rules-max-party')?.value || '').trim();
-    const maxParty = rawMax ? parseInt(rawMax, 10) : 0;
-
-    const payload={
-      max_party_size: (Number.isFinite(maxParty) ? maxParty : 0),
-      match_day_banner: (qs('#rules-banner')?.value || '').trim(),
-      closed_dates: closedDates,
-      hours: hours
-    };
-
-    const res = await fetch('/admin/api/rules?key='+encodeURIComponent(KEY), {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(payload)
-    });
-    const j = await res.json().catch(()=>null);
-
-    if(j && j.ok){
-      if(msg) msg.textContent='Saved ✔';
-    } else {
-      const err = (j && (j.error || j.message)) ? (j.error || j.message) : ('HTTP '+res.status);
-      if(msg) msg.textContent='Save failed: ' + err;
-      alert('Rules save failed: ' + err);
-    }
-  } catch(e){
-    if(msg) msg.textContent='Save failed';
-    alert('Rules save failed.');
-  } finally {
-    if(saveBtn){
-      saveBtn.disabled = false;
-      saveBtn.textContent = saveBtn.dataset._label || 'Save Rules';
-    }
-  }
+  const hours={};
+  ['mon','tue','wed','thu','fri','sat','sun'].forEach(d=>hours[d]=qs('#h-'+d).value);
+  const payload={
+    max_party_size: parseInt(qs('#rules-max-party').value || '0', 10),
+    match_day_banner: qs('#rules-banner').value || '',
+    closed_dates: qs('#rules-closed').value || '',
+    hours: hours
+  };
+  const res = await fetch('/admin/api/rules?key='+encodeURIComponent(KEY), {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  });
+  const j = await res.json().catch(()=>null);
+  if(j && j.ok){ if(msg) msg.textContent='Saved ✔'; try{ _renderOpsMeta(j.meta); }catch(e){} _setMiniState(elPause,"pause","Saved ✓"); _setMiniState(elVip,"vip","Saved ✓"); _setMiniState(elWait,"wait","Saved ✓"); setTimeout(()=>{ _setMiniState(elPause,"pause",""); _setMiniState(elVip,"vip",""); _setMiniState(elWait,"wait",""); }, 1400); }
+  else { _setMiniState(elPause,"pause","Failed"); _setMiniState(elVip,"vip","Failed"); _setMiniState(elWait,"wait","Failed"); if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }
 }
 
 async function loadMenu(){
@@ -5250,9 +5135,9 @@ function renderAIQueue(items){
     const payload = esc(JSON.stringify(it.payload || {}));
 
     const canAct = (st === 'pending');
-    const approveBtn = `<button type="button" class="btn" ${canAct?'':'disabled'} onclick="aiqApprove('${id}', this)">Approve</button>`;
-    const denyBtn = `<button class="btn2" ${canAct?'':'disabled'} onclick="aiqDeny('${id}', this)">Deny</button>`;
-    const ovBtn = `<button type="button" class="btn" data-min-role="owner" onclick="aiqOverride('${id}', this)">Owner Override</button>`;
+    const approveBtn = `<button type="button" class="btn" ${canAct?'':'disabled'} onclick="aiqApprove('${id}')">Approve</button>`;
+    const denyBtn = `<button class="btn2" ${canAct?'':'disabled'} onclick="aiqDeny('${id}')">Deny</button>`;
+    const ovBtn = `<button type="button" class="btn" data-min-role="owner" onclick="aiqOverride('${id}')">Owner Override</button>`;
 
     return `
       <div style="padding:12px;border:1px solid rgba(255,255,255,.16);border-radius:14px;margin-bottom:10px;background:rgba(255,255,255,.06)">
@@ -5273,12 +5158,8 @@ function renderAIQueue(items){
   list.innerHTML = rows;
 }
 
-async function aiqApprove(id, btn){
+async function aiqApprove(id){
   if(!confirm('Approve and apply this action?')) return;
-  // Button-level loading state
-  const _btn = btn;
-  if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Approving…'; }
-
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Approving…';
   const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/approve?key=${encodeURIComponent(KEY)}`, {
     method:'POST',
@@ -5286,15 +5167,12 @@ async function aiqApprove(id, btn){
     body: JSON.stringify({})
   });
   const j = await r.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Approved ✔'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Approve'); } await loadAIQueue(); }
-  else { if(msg) msg.textContent='Approve failed'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Approve'); } alert('Approve failed: '+(j && j.error ? j.error : r.status)); }
+  if(j && j.ok){ if(msg) msg.textContent='Approved ✔'; await loadAIQueue(); }
+  else { if(msg) msg.textContent='Approve failed'; alert('Approve failed: '+(j && j.error ? j.error : r.status)); }
 }
 
-async function aiqDeny(id, btn){
+async function aiqDeny(id){
   if(!confirm('Deny this action?')) return;
-  const _btn = btn;
-  if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Denying…'; }
-
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Denying…';
   const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/deny?key=${encodeURIComponent(KEY)}`, {
     method:'POST',
@@ -5302,26 +5180,19 @@ async function aiqDeny(id, btn){
     body: JSON.stringify({})
   });
   const j = await r.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Denied ✔'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Deny'); } await loadAIQueue(); }
-  else { if(msg) msg.textContent='Deny failed'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Deny'); } alert('Deny failed: '+(j && j.error ? j.error : r.status)); }
+  if(j && j.ok){ if(msg) msg.textContent='Denied ✔'; await loadAIQueue(); }
+  else { if(msg) msg.textContent='Deny failed'; alert('Deny failed: '+(j && j.error ? j.error : r.status)); }
 }
 
-async function aiqOverride(id, btn){
-  if(typeof hasRole === 'function' && !hasRole('owner')){
-    alert('Owner-only: override is locked for managers.');
-    return;
-  }
-  const _btn = btn;
-  if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Overriding…'; }
-
+async function aiqOverride(id){
   // Owner-only: allow quick edit of payload/type before applying
   const typ = prompt('Override action type (vip_tag, status_update, reply_draft):', 'vip_tag');
-  if(!typ){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } return; }
+  if(!typ) return;
   let payloadTxt = prompt('Override payload JSON (must be valid JSON object):', '{"row":2,"vip":"VIP"}');
-  if(payloadTxt === null){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } return; }
+  if(payloadTxt === null) return;
   payloadTxt = payloadTxt.trim();
   let payloadObj = null;
-  try{ payloadObj = JSON.parse(payloadTxt); }catch(e){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } alert('Invalid JSON'); return; }
+  try{ payloadObj = JSON.parse(payloadTxt); }catch(e){ alert('Invalid JSON'); return; }
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Applying override…';
   const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/override?key=${encodeURIComponent(KEY)}`, {
     method:'POST',
@@ -5329,8 +5200,8 @@ async function aiqOverride(id, btn){
     body: JSON.stringify({type: typ, payload: payloadObj})
   });
   const j = await r.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Override applied ✔'; if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } await loadAIQueue(); }
-  else { if(msg) msg.textContent='Override failed'; if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } alert('Override failed: '+(j && j.error ? j.error : r.status)); }
+  if(j && j.ok){ if(msg) msg.textContent='Override applied ✔'; await loadAIQueue(); }
+  else { if(msg) msg.textContent='Override failed'; alert('Override failed: '+(j && j.error ? j.error : r.status)); }
 }
 
 
@@ -5370,41 +5241,29 @@ async function loadAudit(){
 async function loadNotifs(){
   const msg = qs('#notif-msg'); if(msg) msg.textContent='Loading…';
   try{
-    const r = await fetch(`/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}`, {cache:'no-store'});
-    const j = await r.json().catch(()=>null);
-    const items = (j && j.items) ? (j.items||[]) : [];
+    const r = await fetch(`/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}`);
+    const j = await r.json();
+    const items = (j.items||[]);
     // update badge
     const c = document.querySelector('#notifCount');
     if(c) c.textContent = String(items.length||0);
-
     const body = document.querySelector('#notifBody');
     if(body){
-      body.innerHTML = '';
-      if(!items.length){
-        body.innerHTML = '<div class="note">No notifications.</div>';
-      } else {
-        items.forEach(it=>{
-          const d = it.details || {};
-          const row = document.createElement('div');
-          row.style.cssText = 'padding:10px;border:1px solid rgba(255,255,255,16);border-radius:14px;margin-bottom:10px;background:rgba(255,255,255,06)';
-          row.innerHTML =
-            '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">' +
-              '<div class="note">'+esc(it.ts||'')+'</div>' +
-              '<div><span class="code">'+esc(it.event||'')+'</span></div>' +
-            '</div>' +
-            '<div class="small" style="margin-top:6px;opacity:.90;word-break:break-word">' +
-              esc(JSON.stringify(d)) +
-            '</div>';
-          body.appendChild(row);
-        });
-      }
+      body.innerHTML='';
+      items.forEach(it=>{
+        const d = it.details || {};
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td>'+esc(it.ts||'')+'</td>'
+          +'<td><span class="code">'+esc(it.event||'')+'</span></td>'
+          +'<td><span class="code">'+esc(JSON.stringify(d))+'</span></td>';
+        body.appendChild(tr);
+      });
     }
     if(msg) msg.textContent='';
   }catch(e){
-    if(msg) msg.textContent = 'Load failed: ' + (e && e.message ? e.message : e);
+    if(msg) msg.textContent='Failed to load';
   }
 }
-
 async function clearNotifs(){
   const msg = qs('#notif-msg'); if(msg) msg.textContent='Clearing…';
   try{
@@ -5479,89 +5338,11 @@ function openNotifications(){
 // Poll notifications lightly
 setInterval(()=>{ try{ loadNotifs(); }catch(e){} }, 15000);
 
-
-// --- Refresh controls (visual-only; calls existing loaders safely) ---
-let __autoTimer = null;
-
-function _nowHHMMSS(){
-  const d=new Date();
-  const p=n=>String(n).padStart(2,'0');
-  return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-}
-function updateLastRef(){
-  const el=document.getElementById('lastRef');
-  if(el) el.textContent = `Last refresh: ${_nowHHMMSS()}`;
-}
-
-function refreshAll(source){
-  try{ loadNotifs(); }catch(e){}
-  try{ loadOps(); }catch(e){}
-  try{ loadAI(); }catch(e){}
-  try{ loadAIQueue(); }catch(e){}
-  // These are safe even if you're not on the tab; they just fetch current configs
-  try{ loadRules(); }catch(e){}
-  try{ loadMenu(); }catch(e){}
-  updateLastRef();
-}
-
-function _setAutoLabel(on){
-  const lab=document.getElementById('autoLabel');
-  if(lab) lab.textContent = on ? "Auto: On" : "Auto: Off";
-}
-
-function _getAutoEvery(){
-  const sel=document.getElementById('autoEvery');
-  const v = sel ? parseInt(sel.value||"30",10) : 30;
-  return (isFinite(v) && v>0) ? v : 30;
-}
-
-function startAutoRefresh(){
-  stopAutoRefresh();
-  const every=_getAutoEvery();
-  __autoTimer = setInterval(()=>{ refreshAll('auto'); }, every*1000);
-  localStorage.setItem('wc_auto_refresh','1');
-  localStorage.setItem('wc_auto_refresh_every', String(every));
-  _setAutoLabel(true);
-}
-
-function stopAutoRefresh(){
-  if(__autoTimer){ try{ clearInterval(__autoTimer); }catch(e){} }
-  __autoTimer=null;
-  localStorage.setItem('wc_auto_refresh','0');
-  _setAutoLabel(false);
-}
-
-function toggleAutoRefresh(){
-  if(__autoTimer) stopAutoRefresh();
-  else startAutoRefresh();
-}
-
-function autoEveryChanged(){
-  const every=_getAutoEvery();
-  localStorage.setItem('wc_auto_refresh_every', String(every));
-  if(__autoTimer) startAutoRefresh(); // restart with new interval
-}
-
-function _initRefreshControls(){
-  // restore interval
-  const savedEvery = parseInt(localStorage.getItem('wc_auto_refresh_every')||"30",10);
-  const sel=document.getElementById('autoEvery');
-  if(sel && isFinite(savedEvery)) sel.value = String(savedEvery);
-  // set initial last refresh time
-  updateLastRef();
-  // restore auto state
-  const on = (localStorage.getItem('wc_auto_refresh')||"0") === "1";
-  if(on) startAutoRefresh();
-  else _setAutoLabel(false);
-}
-
 document.addEventListener('DOMContentLoaded', ()=>{
   try{ setupTabs(); }catch(e){}
   try{ markLockedControls(); }catch(e){}
   try{ setupLeadFilters(); }catch(e){}
   try{ loadNotifs(); }catch(e){}
-  try{ _initRefreshControls(); }catch(e){}
-  try{ refreshAll('boot'); }catch(e){}
 });
 </script>
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
@@ -5708,37 +5489,6 @@ tr:hover td{background:rgba(255,255,255,.03)}
     });
   }
   window.addEventListener('DOMContentLoaded', markLockedControls);
-
-// ===== Tabs =====
-function showTab(name){
-  name = (name || 'ops').toLowerCase();
-  // activate button
-  document.querySelectorAll('.tabbtn').forEach(b=>{
-    if((b.getAttribute('data-tab')||'').toLowerCase() === name) b.classList.add('active');
-    else b.classList.remove('active');
-  });
-  // show panel
-  document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
-  const pane = document.getElementById('tab-' + name);
-  if(pane) pane.classList.remove('hidden');
-  // persist
-  try{ localStorage.setItem('admin_active_tab', name); }catch(_e){}
-  try{
-    const u = new URL(window.location.href);
-    u.searchParams.set('tab', name);
-    history.replaceState(null, '', u.toString());
-  }catch(_e){}
-}
-
-function initTabs(){
-  let t = null;
-  try{ t = new URLSearchParams(window.location.search).get('tab'); }catch(_e){}
-  if(!t){
-    try{ t = localStorage.getItem('admin_active_tab'); }catch(_e){}
-  }
-  showTab(t || 'ops');
-}
-window.addEventListener('DOMContentLoaded', initTabs);
   document.addEventListener('click',(e)=>{
     const el = e.target && e.target.closest ? e.target.closest('[data-min-role]') : null;
     if(!el) return;
