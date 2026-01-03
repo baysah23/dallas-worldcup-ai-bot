@@ -4199,7 +4199,7 @@ def admin():
     html.append("<title>Admin Dashboard</title>")
     html.append(r"""
 <style>
-:root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#e7e7ee;--muted:rgba(231,231,238,.72);--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
+:root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
 body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(900px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);color:var(--text);}
 .wrap{max-width:1200px;margin:0 auto;padding:18px;}
 .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;}
@@ -4246,11 +4246,6 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
   opacity:0;
   transition: opacity .18s ease;
 }
-
-/* === Tab label visibility hardening === */
-.tabbtn{ color:#e7e7ee !important; }
-.tabbtn.active{ color:#ffffff !important; }
-
 </style>
 """)
     html.append("</head><body><div class='wrap'>")
@@ -4278,24 +4273,64 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
     html.append(r"""
 <div class="tabs">
-  <button type="button" class="tabbtn active" data-tab="leads">Ops</button>
-<button type="button" class="tabbtn" data-tab="ai">AI</button>
-  <button type="button" class="tabbtn" data-tab="aiq">AI Queue</button>
-  <button type="button" class="tabbtn" data-tab="rules">Rules</button>
-  <button type="button" class="tabbtn" data-tab="menu">Menu</button>
-  <button type="button" class="tabbtn" data-tab="audit">Audit</button>
+  <button type="button" class="tabbtn active" data-tab="ops" onclick="showTab('ops');return false;">Ops</button>
+  <button type="button" class="tabbtn" data-tab="leads" onclick="showTab('leads');return false;">Leads</button>
+  <button type="button" class="tabbtn" data-tab="ai" onclick="showTab('ai');return false;">AI</button>
+  <button type="button" class="tabbtn" data-tab="aiq" onclick="showTab('aiq');return false;">AI Queue</button>
+  <button type="button" class="tabbtn" data-tab="rules" onclick="showTab('rules');return false;">Rules</button>
+  <button type="button" class="tabbtn" data-tab="menu" onclick="showTab('menu');return false;">Menu</button>
+  <button type="button" class="tabbtn" data-tab="audit" onclick="showTab('audit');return false;">Audit</button>
 </div>
 
-<div id="tab-leads" class="tabpane">
+<!-- OPS TAB -->
+<div id="tab-ops" class="tabpane">
+  <div class="card" id="ops-controls">
+    <div class="h2">Ops</div>
+    <div class="small">Fast operational controls (audited).</div>
+    <div class="small" id="ops-meta" style="margin-top:6px;opacity:.85"></div>
+
+    <div style="margin-top:12px;display:flex;flex-direction:column;gap:10px">
+      <label class="small" style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" id="ops-pause" onchange="saveOps()">
+        <span><b>Pause Reservations</b></span>
+        <span id="mini-pause" class="note" style="margin-left:auto;opacity:0;transition:opacity .18s"></span>
+      </label>
+
+      <label class="small" style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" id="ops-viponly" onchange="saveOps()">
+        <span><b>VIP Only</b></span>
+        <span id="mini-vip" class="note" style="margin-left:auto;opacity:0;transition:opacity .18s"></span>
+      </label>
+
+      <label class="small" style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" id="ops-waitlist" onchange="saveOps()">
+        <span><b>Waitlist Mode</b> <span style="opacity:.75">(AI Waiting List)</span></span>
+        <span id="mini-wait" class="note" style="margin-left:auto;opacity:0;transition:opacity .18s"></span>
+      </label>
+    </div>
+
+    <div id="ops-msg" class="note" style="margin-top:10px"></div>
+    <div class="small" style="margin-top:10px;opacity:.72">Tip: toggles auto-save (“Saving…” → “Saved”).</div>
+  </div>
+
+  <div class="card" id="notifCard">
+    <div class="h2">Notifications</div>
+    <div id="notifBody" class="small" style="margin-top:8px"></div>
+    <div id="notif-msg" class="note" style="margin-top:8px"></div>
+  </div>
+</div>
+
+<!-- LEADS TAB -->
+<div id="tab-leads" class="tabpane hidden">
 """)
 
     # Leads table
     if leads_err:
-        html.append(f"<div class='card'><div class='h2'>Ops</div><div class='small'>Error reading leads: {leads_err}</div></div>")
+        html.append(f"<div class='card'><div class='h2'>Leads</div><div class='small'>Error reading leads: {leads_err}</div></div>")
     elif not body:
-        html.append("<div class='card'><div class='h2'>Ops</div><div class='small'>No leads yet.</div></div>")
+        html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>No leads yet.</div></div>")
     else:
-        html.append("<div class='card'><div class='h2'>Ops</div><div class='small'>Newest first. Update Status/VIP and save.</div><div style='display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center'><div class='pills' style='margin:0'><button class='btn2' id='flt-all' type='button'>All</button><button class='btn2' id='flt-vip' type='button'>VIP</button><button class='btn2' id='flt-reg' type='button'>Regular</button></div><div style='display:flex;gap:8px;align-items:center'><span class='small' style='white-space:nowrap'>Entry:</span><select class='inp' id='flt-entry' style='min-width:180px'></select><span id='leadsCount' class='small' style='margin-left:8px'>0 shown</span></div></div></div>")
+        html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>Newest first. Update Status/VIP and save.</div><div style='display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center'><div class='pills' style='margin:0'><button class='btn2' id='flt-all' type='button'>All</button><button class='btn2' id='flt-vip' type='button'>VIP</button><button class='btn2' id='flt-reg' type='button'>Regular</button></div><div style='display:flex;gap:8px;align-items:center'><span class='small' style='white-space:nowrap'>Entry:</span><select class='inp' id='flt-entry' style='min-width:180px'></select><span id='leadsCount' class='small' style='margin-left:8px'>0 shown</span></div></div></div>")
         html.append("<div class='tablewrap'><table id='leadsTable'>")
         html.append("<thead><tr>"                    "<th>Row</th><th>Timestamp</th><th>Name</th><th>Contact</th>"                    "<th>Date</th><th>Time</th><th>Party</th>"                    "<th>Segment</th><th>Entry</th><th>Queue</th><th>Budget</th>"                    "<th>Context</th><th>Notes</th>"                    "<th>Status</th><th>VIP</th><th>Save</th>"                    "</tr></thead><tbody>")
         for sheet_row, r in numbered:
@@ -5184,6 +5219,15 @@ async function clearNotifs(){
   }
 }
 
+window.showTab = function(tab){
+  try{
+    document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
+    document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
+    const pane = document.querySelector('#tab-'+tab);
+    if(pane) pane.classList.remove('hidden');
+    try{ history.replaceState(null,'','#'+tab); }catch(e){}
+  }catch(e){}
+};
 function setupTabs(){
   const btns = Array.from(document.querySelectorAll('.tabbtn'));
   const panes = Array.from(document.querySelectorAll('.tabpane'));
@@ -5211,15 +5255,12 @@ function setupTabs(){
   if(initial && document.querySelector('.tabbtn[data-tab="'+initial+'"]')) show(initial);
 }
 function openNotifications(){
-  // Switch to Ops tab and scroll to the notifications card
   try{
-    document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
-    const btn = document.querySelector('.tabbtn[data-tab="leads"]');
-    if(btn) btn.classList.add('active');
-    document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
-    const pane = document.querySelector('#tab-ops');
-    if(pane) pane.classList.remove('hidden');
-    setTimeout(()=>{ document.querySelector('#notifCard')?.scrollIntoView({behavior:'smooth', block:'start'}); }, 50);
+    showTab('ops');
+    setTimeout(()=>{ document.querySelector('#notifCard')?.scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
+    loadNotifs();
+  }catch(e){}
+}); }, 50);
     loadNotifs();
   }catch(e){}
 }
@@ -5344,12 +5385,6 @@ tr:hover td{background:rgba(255,255,255,.03)}
 
 </div> <!-- end tab-menu -->
 
-<div id="tab-ops" class="tabpane hidden">
-  <div class="card">
-    <div class="h2">Ops</div>
-    <div class="small">Match-Day Ops Toggles</div><div class="small" id="ops-meta" style="margin-top:6px;opacity:.85"></div>
-  </div>
-</div>
 
 <div id="tab-audit" class="tabpane hidden">
   <div class="card">
