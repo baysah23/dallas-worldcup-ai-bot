@@ -4098,7 +4098,10 @@ def admin_api_notifications():
     page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
     page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
 
-    limit = int(as_int(request.args.get("limit", 50), 50))
+    try:
+        limit = int(request.args.get("limit", 50) or 50)
+    except Exception:
+        limit = 50
     limit = max(1, min(200, limit))
     items = _read_notifications(limit=limit, role=role)
     return jsonify({"ok": True, "role": role, "items": items})
@@ -4184,6 +4187,11 @@ def admin_api_audit():
                     entries.append(json.loads(ln))
                 except Exception:
                     continue
+    except Exception:
+        pass
+    # Newest first
+    try:
+        entries = list(reversed(entries))
     except Exception:
         pass
     return jsonify({"ok": True, "entries": entries})
@@ -4769,12 +4777,15 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     <div class="small">Shows who changed ops/rules/menu and when.</div>
     <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <input class="inp" id="audit-limit" type="number" min="10" max="500" value="200" style="width:120px" />
+      <select class="inp" id="audit-filter" style="width:220px">
+        <option value="all">All events</option>
+      </select>
       <button class="btn2" onclick="loadAudit()">Refresh</button>
       <span id="audit-msg" class="note"></span>
     </div>
     <div class="tablewrap" style="margin-top:10px">
       <table>
-        <thead><tr><th>Time</th><th>Actor</th><th>Role</th><th>Action</th><th>Details</th></tr></thead>
+        <thead><tr><th>Time</th><th>Actor</th><th>Role</th><th>Event</th><th>Details</th><th></th></tr></thead>
         <tbody id="audit-body"></tbody>
       </table>
     </div>
@@ -5361,21 +5372,84 @@ function esc(s){
 async function loadAudit(){
   const msg = qs('#audit-msg'); if(msg) msg.textContent='Loading...';
   const lim = parseInt((qs('#audit-limit') && qs('#audit-limit').value) || '200', 10) || 200;
-  const res = await fetch('/admin/api/audit?key='+encodeURIComponent(KEY)+'&limit='+encodeURIComponent(lim));
+  const filterEl = qs('#audit-filter');
+  const selected = (filterEl && filterEl.value) ? filterEl.value : 'all';
+
+  const url = '/admin/api/audit?key='+encodeURIComponent(KEY)+'&limit='+encodeURIComponent(lim);
+  const res = await fetch(url, {cache:'no-store'});
   const j = await res.json().catch(()=>null);
   if(!j || !j.ok){ if(msg) msg.textContent='Failed to load audit'; return; }
+
+  let entries = (j.entries || j.items || []);
+  // Normalize older shapes if any
+  entries = entries.map(e=>{
+    if(e && (e.event || e.ts)) return e;
+    return {
+      ts: e.ts || e.time || '',
+      event: e.action || e.event || '',
+      role: e.role || '',
+      actor: e.actor || '',
+      details: e.details || e.meta || {}
+    };
+  });
+
+  // Newest first
+  entries.sort((a,b)=> String(b.ts||'').localeCompare(String(a.ts||'')));
+
+  // Populate filter options (event types)
+  if(filterEl){
+    const keep = filterEl.value || 'all';
+    const events = Array.from(new Set(entries.map(e=>String(e.event||'').trim()).filter(Boolean))).sort();
+    let html = '<option value="all">All events</option>';
+    events.forEach(ev=>{ html += '<option value="'+esc(ev)+'">'+esc(ev)+'</option>'; });
+    filterEl.innerHTML = html;
+    filterEl.value = (events.includes(keep) ? keep : 'all');
+    filterEl.onchange = ()=>loadAudit();
+  }
+
+  const activeFilter = (filterEl && filterEl.value) ? filterEl.value : selected;
+
   const body = qs('#audit-body');
   if(body){
     body.innerHTML = '';
-    (j.items || []).forEach(it=>{
-      const tr = document.createElement('tr');
-      tr.innerHTML = '<td>'+esc(it.ts||'')+'</td>'
-        +'<td><span class="code">'+esc(it.actor||'')+'</span></td>'
-        +'<td>'+esc(it.role||'')+'</td>'
-        +'<td>'+esc(it.action||'')+'</td>'
-        +'<td><span class="code">'+esc(JSON.stringify(it.meta||{}))+'</span></td>';
-      body.appendChild(tr);
-    });
+    const shown = entries.filter(e=> activeFilter==='all' ? true : String(e.event||'')===String(activeFilter));
+    if(!shown.length){
+      body.innerHTML = '<tr><td colspan="6"><span class="note">No audit entries.</span></td></tr>';
+    } else {
+      shown.forEach(e=>{
+        const details = (e.details || {});
+        const copyPayload = JSON.stringify(e, null, 2);
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td>'+esc(e.ts||'')+'</td>'
+          +'<td><span class="code">'+esc(e.actor||'')+'</span></td>'
+          +'<td>'+esc(e.role||'')+'</td>'
+          +'<td>'+esc(e.event||'')+'</td>'
+          +'<td><span class="code">'+esc(JSON.stringify(details))+'</span></td>'
+          +'<td><button class="btn2" type="button">Copy</button></td>';
+        const btn = tr.querySelector('button');
+        if(btn){
+          btn.addEventListener('click', async ()=>{
+            try{
+              if(navigator && navigator.clipboard && navigator.clipboard.writeText){
+                await navigator.clipboard.writeText(copyPayload);
+              } else {
+                const ta = document.createElement('textarea');
+                ta.value = copyPayload;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                ta.remove();
+              }
+              if(msg){ msg.textContent = 'Copied'; setTimeout(()=>{ if(msg) msg.textContent=''; }, 800); }
+            }catch(_){
+              if(msg){ msg.textContent = 'Copy failed'; setTimeout(()=>{ if(msg) msg.textContent=''; }, 1200); }
+            }
+          });
+        }
+        body.appendChild(tr);
+      });
+    }
   }
   if(msg) msg.textContent='';
 }
