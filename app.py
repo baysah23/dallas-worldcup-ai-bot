@@ -4407,11 +4407,15 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
             notes = colval(r, i_notes, "")
             vibe = colval(r, i_vibe, "")
 
+
+            # Segment (VIP vs Regular): treat VIP if either tier==VIP or vip==Yes
+            is_vip = ((tier or "").strip().lower() == "vip") or ((vip or "").strip().lower() in ["yes","true","1","y","vip"])
+            seg = "⭐ VIP" if is_vip else "Regular"
             def opt(selected, label):
                 sel = "selected" if selected else ""
                 return f"<option {sel}>{label}</option>"
 
-            html.append(f"<tr data-tier='{_hesc(tier)}' data-entry='{_hesc(ep)}' data-seg='{_hesc('vip' if seg.startswith('⭐') else 'regular')}'>")
+            html.append(f"<tr data-tier='{_hesc(tier)}' data-entry='{_hesc(ep)}' data-seg='{_hesc('vip' if is_vip else 'regular')}'>")
             html.append(f"<td class='code'>{sheet_row}</td>")
             html.append(f"<td>{ts}</td>")
             html.append(f"<td>{nm}</td>")
@@ -4420,7 +4424,6 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
             html.append(f"<td>{t}</td>")
             html.append(f"<td>{ps}</td>")
             # Segment badge (VIP vs Regular)
-            seg = "⭐ VIP" if (tier or "").strip().lower() == "vip" or (vip or "").strip().lower() in ["yes","true","1","y"] else "Regular"
             seg_cls = "badge warn" if seg.startswith("⭐") else "badge"
             html.append(f"<td><span id='seg-{sheet_row}' class='{seg_cls}'>{_hesc(seg)}</span></td>")
             html.append("<td><span class='pill'>" + _hesc(ep) + "</span></td>")
