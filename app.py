@@ -4477,11 +4477,11 @@ def admin():
 
     html = []
     html.append("<!doctype html><html><head><meta charset='utf-8'>")
-    html.append("<meta name='viewport' content='width=device-width, initial-scale=1'/>")
+    html.append("<meta name='viewport' content='width=device-width, initial-scale=1'/><meta name='color-scheme' content='dark light'/>")
     html.append(f"<title>{page_title} — World Cup Concierge</title>")
     html.append(r"""
 <style>
-:root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
+:root{color-scheme:dark;--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
 body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(900px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);color:var(--text);}
 .wrap{max-width:1200px;margin:0 auto;padding:18px;}
 .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;}
@@ -4503,14 +4503,17 @@ body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(
 .pillselect option{background:var(--panel);color:var(--text);}
 /* iOS Safari native <select> picker fix: ensure option text is readable */
 @supports (-webkit-touch-callout: none) {
-  .pillselect{
-    background: rgba(255,255,255,.92) !important;
-    color: #111 !important;
-    -webkit-text-fill-color:#111 !important;
+  /* iOS Safari: keep your dark pill look AND make the native picker readable */
+  html{color-scheme: dark;}
+  .pillselect, select{
+    color-scheme: dark;
+    -webkit-appearance: none;
+    appearance: none;
   }
+  /* Option styling is unreliable on iOS, but this helps non-native render paths */
   .pillselect option{
-    background:#fff !important;
-    color:#111 !important;
+    background: #0f1b33;
+    color: #ffffff;
   }
 }
 
@@ -5808,7 +5811,7 @@ def admin_fanzone():
     key = (request.args.get("key", "") or "").strip()
 
     html = []
-    html.append("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'/>")
+    html.append("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'/><meta name='color-scheme' content='dark light'/>")
     html.append("<title>Fan Zone Admin</title>")
     html.append("""<style>
 :root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
