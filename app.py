@@ -1,4 +1,19 @@
 from dotenv import load_dotenv
+
+def as_int(v, default=0):
+    """Safe int parsing for query/body values."""
+    try:
+        if v is None:
+            return default
+        if isinstance(v, (int, float)):
+            return int(v)
+        s = str(v).strip()
+        if s == "":
+            return default
+        return int(float(s))
+    except Exception:
+        return default
+
 load_dotenv()
 
 import os
@@ -4305,7 +4320,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 <div class="tabs">
   <button type="button" class="tabbtn active" data-tab="ops">Ops</button>
   <button type="button" class="tabbtn" data-tab="leads">Leads</button>
-<button type="button" class="tabbtn" data-tab="ai">AI</button>
+  <button type="button" class="tabbtn" data-tab="ai">AI</button>
   <button type="button" class="tabbtn" data-tab="aiq">AI Queue</button>
   <button type="button" class="tabbtn" data-tab="rules">Rules</button>
   <button type="button" class="tabbtn" data-tab="menu">Menu</button>
@@ -4313,8 +4328,6 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 </div>
 
 <div id="tab-ops" class="tabpane">
-
-
 <!-- Ops Controls -->
   <div class="card" id="ops-controls">
     <div class="h2">Match‑Day Ops</div>
@@ -4383,6 +4396,10 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
   </div>
 
 """)
+
+    html.append("</div>")  # tab-ops
+
+    html.append(r"""<div id="tab-leads" class="tabpane hidden">""")
 
     # Leads table
     if leads_err:
@@ -4465,7 +4482,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
             html.append("</tr>")
         html.append("</tbody></table></div>")
 
-    html.append("</div>")    html.append("</div>")  # tab-leads
+    html.append("</div>")  # tab-leads
 
     html.append(r"""
 
@@ -5320,7 +5337,7 @@ function setupTabs(){
   if(initial && document.querySelector('.tabbtn[data-tab="'+initial+'"]')) show(initial);
 }
 function openNotifications(){
-  // Switch to Ops tab and scroll to the notifications card
+  // Switch to Ops tab and scroll to Notifications
   try{
     document.querySelectorAll('.tabbtn').forEach(b=>b.classList.remove('active'));
     const btn = document.querySelector('.tabbtn[data-tab="ops"]');
@@ -5331,9 +5348,7 @@ function openNotifications(){
     setTimeout(()=>{ document.querySelector('#notifCard')?.scrollIntoView({behavior:'smooth', block:'start'}); }, 50);
     loadNotifs();
   }catch(e){}
-}); }, 50);
-    loadNotifs();
-  }catch(e){}
+}
 }
 // Poll notifications lightly
 setInterval(()=>{ try{ loadNotifs(); }catch(e){} }, 15000);
