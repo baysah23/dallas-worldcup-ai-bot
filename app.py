@@ -511,6 +511,73 @@ def _load_rules_from_disk() -> None:
         # Merge on top of defaults so missing keys don't break anything.
         BUSINESS_RULES = _deep_merge(BUSINESS_RULES, payload)
 
+
+def _coerce_rules(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate/coerce incoming Rules payload from the Admin UI.
+
+    Returns a partial dict of rule keys to merge on top of BUSINESS_RULES.
+    """
+    updated: Dict[str, Any] = {}
+
+    # Max party size
+    if "max_party_size" in payload:
+        try:
+            v = int(payload.get("max_party_size") or 0)
+            if v > 0:
+                updated["max_party_size"] = v
+        except Exception:
+            pass
+
+    # Match-day banner text
+    if "match_day_banner" in payload:
+        try:
+            s = str(payload.get("match_day_banner") or "")
+            updated["match_day_banner"] = s[:280]  # keep it short/safe
+        except Exception:
+            pass
+
+    # Closed dates: accept textarea string (newline separated) OR list[str]
+    if "closed_dates" in payload:
+        raw = payload.get("closed_dates")
+        dates: list[str] = []
+        if isinstance(raw, str):
+            for line in raw.splitlines():
+                line = line.strip()
+                if line:
+                    dates.append(line)
+        elif isinstance(raw, list):
+            for x in raw:
+                try:
+                    s = str(x).strip()
+                    if s:
+                        dates.append(s)
+                except Exception:
+                    continue
+        updated["closed_dates"] = dates
+
+    # Hours: dict with keys mon..sun; values like "11:00-22:00" or ""
+    if "hours" in payload and isinstance(payload.get("hours"), dict):
+        h_in = payload.get("hours") or {}
+        out: Dict[str, str] = {}
+        for d in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
+            v = h_in.get(d, "")
+            try:
+                out[d] = str(v).strip()
+            except Exception:
+                out[d] = ""
+        updated["hours"] = out
+
+    return updated
+
+
+def _persist_rules(_updated: Dict[str, Any]) -> None:
+    """Persist current BUSINESS_RULES to disk (best effort)."""
+    try:
+        _safe_write_json_file(BUSINESS_RULES_FILE, BUSINESS_RULES)
+    except Exception:
+        pass
+
+
 def _load_menu_from_disk() -> Optional[Dict[str, Any]]:
     payload = _safe_read_json_file(MENU_FILE)
     if isinstance(payload, dict) and payload:
@@ -4850,8 +4917,15 @@ async function saveRules(){
     body: JSON.stringify(payload)
   });
   const j = await res.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Saved ✔'; try{ _renderOpsMeta(j.meta); }catch(e){} _setMiniState(elPause,"pause","Saved ✓"); _setMiniState(elVip,"vip","Saved ✓"); _setMiniState(elWait,"wait","Saved ✓"); setTimeout(()=>{ _setMiniState(elPause,"pause",""); _setMiniState(elVip,"vip",""); _setMiniState(elWait,"wait",""); }, 1400); }
-  else { _setMiniState(elPause,"pause","Failed"); _setMiniState(elVip,"vip","Failed"); _setMiniState(elWait,"wait","Failed"); if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }
+  if(j && j.ok){
+    if(msg) msg.textContent='Saved ✔';
+    // Optional: normalize inputs from server (in case it clamps values)
+    try{ await loadRules(); }catch(e){}
+    setTimeout(()=>{ try{ if(msg) msg.textContent=''; }catch(e){} }, 1400);
+  } else {
+    if(msg) msg.textContent='Save failed';
+    alert('Save failed: '+(j && j.error ? j.error : res.status));
+  }
 }
 
 async function loadMenu(){
