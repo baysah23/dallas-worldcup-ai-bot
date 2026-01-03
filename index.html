@@ -4734,6 +4734,19 @@ async function loadMenu(){
 
   try{
     const data = await fetchJSON(`/menu.json?lang=${encodeURIComponent(state.lang||'en')}`);
+    // Show last-updated stamp (from admin upload) if available
+    try{
+      const meta = data.meta || {};
+      const ts = meta.updated_at || '';
+      if(hint){
+        if(ts){
+          const d = new Date(ts);
+          hint.textContent = `Updated ${isNaN(d.getTime()) ? ts : d.toLocaleString()}`;
+        }else{
+          hint.textContent = '';
+        }
+      }
+    }catch(_e){ /* ignore */ }
     const sections = data.sections || data.menu || [];
     if(!sections.length){
       if(body) body.innerHTML = `<div class="hint">Menu unavailable.</div>`;

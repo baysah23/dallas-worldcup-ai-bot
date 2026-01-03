@@ -601,6 +601,9 @@ def _normalize_menu_payload(payload: Any) -> Dict[str, Any]:
 
     out: Dict[str, Any] = {}
     for lang, lang_obj in payload.items():
+        # allow reserved meta keys like _meta
+        if str(lang).startswith('_'):
+            continue
         lang_key = _s(lang, 20) or "en"
         if not isinstance(lang_obj, dict):
             raise ValueError(f"Language '{lang_key}' must be an object")
@@ -632,6 +635,24 @@ def _normalize_menu_payload(payload: Any) -> Dict[str, Any]:
         out[lang_key] = {"sections": norm_sections}
     return out
 
+
+
+def _bump_menu_meta(menu_obj: Dict[str, Any]) -> Dict[str, Any]:
+    """Attach/increment menu override metadata."""
+    try:
+        prev = _MENU_OVERRIDE.get('_meta') if isinstance(_MENU_OVERRIDE, dict) else None  # type: ignore[name-defined]
+    except Exception:
+        prev = None
+    ver = 0
+    if isinstance(prev, dict):
+        try:
+            ver = int(prev.get('version') or 0)
+        except Exception:
+            ver = 0
+    ver += 1
+    ts = datetime.now(timezone.utc).isoformat(timespec='seconds').replace('+00:00','Z')
+    menu_obj['_meta'] = {'version': ver, 'updated_at': ts}
+    return menu_obj
 
 
 def _persist_rules(_updated: Dict[str, Any]) -> None:
@@ -744,7 +765,8 @@ def get_menu_for_lang(lang: str) -> Dict[str, Any]:
                     base_title = str(base.get("title"))
             except Exception:
                 pass
-            return {"title": base_title, "sections": m.get("sections")}
+            meta = _MENU_OVERRIDE.get("_meta") if isinstance(_MENU_OVERRIDE, dict) else None
+            return {"title": base_title, "sections": m.get("sections"), "meta": meta or {}}
 
     # 2) Built-in fallback: group flat items into sections
     base = MENU.get(lang, MENU.get("en", {}))
@@ -785,7 +807,8 @@ def get_menu_for_lang(lang: str) -> Dict[str, Any]:
     order_titles = ["Chef Specials", "Bites", "Classics", "Sweets", "Drinks", "Menu"]
     sections.sort(key=lambda s: (order_titles.index(s.get("title")) if s.get("title") in order_titles else 999, s.get("title","")))
 
-    return {"title": str(base_title), "sections": sections}
+    meta = _MENU_OVERRIDE.get("_meta") if isinstance(_MENU_OVERRIDE, dict) else None
+    return {"title": str(base_title), "sections": sections, "meta": meta or {"version": 0, "updated_at": ""}}
 
 
 
@@ -3846,9 +3869,9 @@ def admin_api_menu():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
 
-    _MENU_OVERRIDE = normed
+    _MENU_OVERRIDE = _bump_menu_meta(normed)
     _safe_write_json_file(MENU_FILE, _MENU_OVERRIDE)
-    _audit("menu.update", {"langs": list(_MENU_OVERRIDE.keys())})
+    _audit("menu.update", {"langs": [k for k in _MENU_OVERRIDE.keys() if not str(k).startswith('_')], "version": _MENU_OVERRIDE.get('_meta',{}).get('version')})
     return jsonify({"ok": True, "menu": _MENU_OVERRIDE})
 
 @app.route("/admin/api/menu-upload", methods=["POST"])
@@ -3869,9 +3892,9 @@ def admin_api_menu_upload():
     except Exception as e:
         return jsonify({"ok": False, "error": f"Invalid menu file: {e}"}), 400
 
-    _MENU_OVERRIDE = normed
+    _MENU_OVERRIDE = _bump_menu_meta(normed)
     _safe_write_json_file(MENU_FILE, _MENU_OVERRIDE)
-    _audit("menu.upload", {"size_bytes": len(raw)})
+    _audit("menu.upload", {"size_bytes": len(raw), "version": _MENU_OVERRIDE.get('_meta',{}).get('version')})
     return jsonify({"ok": True, "menu": _MENU_OVERRIDE})
 
 
