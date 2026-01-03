@@ -4199,7 +4199,7 @@ def admin():
     html.append("<title>Admin Dashboard</title>")
     html.append(r"""
 <style>
-:root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
+:root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#e7e7ee;--muted:rgba(231,231,238,.72);--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
 body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(900px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);color:var(--text);}
 .wrap{max-width:1200px;margin:0 auto;padding:18px;}
 .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;}
@@ -4247,10 +4247,9 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
   transition: opacity .18s ease;
 }
 
-/* === Tabs clickability hardening === */
-.tabs{ position: sticky; top: 0; z-index: 9999; pointer-events: auto; }
-.tabbtn{ pointer-events: auto; }
-.wrap{ position: relative; z-index: 0; }
+/* === Tab label visibility hardening === */
+.tabbtn{ color:#e7e7ee !important; }
+.tabbtn.active{ color:#ffffff !important; }
 
 </style>
 """)
@@ -4279,12 +4278,12 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
     html.append(r"""
 <div class="tabs">
-  <button type="button" class="tabbtn active" data-tab="leads"Ops</button>
-<button type="button" class="tabbtn" data-tab="ai"AI</button>
-  <button type="button" class="tabbtn" data-tab="aiq"AI Queue</button>
-  <button type="button" class="tabbtn" data-tab="rules"Rules</button>
-  <button type="button" class="tabbtn" data-tab="menu"Menu</button>
-  <button type="button" class="tabbtn" data-tab="audit"Audit</button>
+  <button type="button" class="tabbtn active" data-tab="leads">Ops</button>
+<button type="button" class="tabbtn" data-tab="ai">AI</button>
+  <button type="button" class="tabbtn" data-tab="aiq">AI Queue</button>
+  <button type="button" class="tabbtn" data-tab="rules">Rules</button>
+  <button type="button" class="tabbtn" data-tab="menu">Menu</button>
+  <button type="button" class="tabbtn" data-tab="audit">Audit</button>
 </div>
 
 <div id="tab-leads" class="tabpane">
@@ -5184,19 +5183,6 @@ async function clearNotifs(){
     if(msg) msg.textContent='Error';
   }
 }
-
-// Robust tab switcher (works even if event listeners fail to bind)
-window.showTab = function(tab){
-  try{
-    const btns = Array.from(document.querySelectorAll('.tabbtn'));
-    const panes = Array.from(document.querySelectorAll('.tabpane'));
-    btns.forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
-    panes.forEach(p=>p.classList.add('hidden'));
-    const pane = document.querySelector('#tab-'+tab);
-    if(pane) pane.classList.remove('hidden');
-    try{ history.replaceState(null, '', '#'+tab); }catch(e){}
-  }catch(e){}
-};
 
 function setupTabs(){
   const btns = Array.from(document.querySelectorAll('.tabbtn'));
