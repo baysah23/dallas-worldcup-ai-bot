@@ -5810,346 +5810,195 @@ tr:hover td{background:rgba(255,255,255,.03)}
 
 <script>
 (function(){
-  const ADMIN_KEY = (new URLSearchParams(location.search)).get("key") || "";
-  const __ADMIN_KEY__ = ADMIN_KEY; // compat alias used by existing fetch calls
-
-  const ROLE = __ADMIN_ROLE__;
-  const ROLE_RANK = { manager: 1, owner: 2 };
-  function hasRole(minRole){
-    const need = ROLE_RANK[minRole||'manager'] || 1;
-    const have = ROLE_RANK[ROLE||'manager'] || 1;
-    return have >= need;
-  }
-  function markLockedControls(){
-    document.querySelectorAll('[data-min-role]').forEach(el=>{
-      const need = el.getAttribute('data-min-role') || 'manager';
-      if(!hasRole(need)){
-        el.classList.add('locked');
-        el.setAttribute('aria-disabled','true');
-        el.setAttribute('title','Owner-only');
-        // keep tappable so we can explain
-        el.style.pointerEvents = 'auto';
-      }
-    });
-  }
-  window.addEventListener('DOMContentLoaded', markLockedControls);
-  document.addEventListener('click',(e)=>{
-    const el = e.target && e.target.closest ? e.target.closest('[data-min-role]') : null;
-    if(!el) return;
-    const need = el.getAttribute('data-min-role') || 'manager';
-    if(hasRole(need)) return;
-    e.preventDefault(); e.stopPropagation();
-    const label = (el.textContent||'').trim() || 'This action';
-    alert(label + ' is Owner-only.');
-  }, true);
+  const qs = new URLSearchParams(location.search);
+  const ADMIN_KEY = qs.get("key") || "";
+  const ROLE = __ADMIN_ROLE__; // replaced server-side with JSON string
 
   const $ = (id)=>document.getElementById(id);
-  function _renderOpsMeta(meta){
-    try{
-      const el = document.getElementById("ops-meta") || null;
-      if(!el) return;
-      if(!meta || !meta.ts){ el.textContent = ""; return; }
-      const who = (meta.role? meta.role.toUpperCase():"") + (meta.actor? " ("+meta.actor+")":"");
-      el.textContent = "Last updated: " + meta.ts + " " + who;
-    }catch(e){}
+
+  function toast(msg, kind){
+    const el = $("toast");
+    if(!el) return;
+    el.textContent = String(msg||"");
+    el.setAttribute("data-kind", kind||"");
+    el.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(()=>el.classList.remove("show"), 2200);
   }
 
+  function setPollStatus(html){
+    const box = $("pollStatus");
+    if(!box) return;
+    box.innerHTML = html;
+  }
 
-  function esc(s){ return (s||"").replace(/[&<>"]/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c])); }
+  async function loadPollStatus(){
+    try{
+      setPollStatus('<div class="sub">Loading poll status…</div>');
+      const res = await fetch("/api/poll/state", {cache:"no-store"});
+      const data = await res.json().catch(()=>null);
+      if(!data || data.ok === false){
+        setPollStatus('<div class="sub">Poll status unavailable</div>');
+        return;
+      }
+      const locked = !!data.locked;
+      const title = (data.title || "Match of the Day Poll");
+      const top = (data.top && data.top.length) ? data.top : [];
+      let rows = "";
+      for(const r of top){
+        const name = String(r.name||"");
+        const votes = String(r.votes||0);
+        rows += `<div class="row"><div>${escapeHtml(name)}</div><div class="mono">${escapeHtml(votes)}</div></div>`;
+      }
+      if(!rows) rows = '<div class="sub">No votes yet</div>';
 
-  async function loadScheduleOptions(selected){
+      setPollStatus(
+        `<div class="h2">${escapeHtml(title)}</div>` +
+        `<div class="small">${locked ? "🔒 Locked" : "🟢 Open"}</div>` +
+        `<div style="margin-top:10px;display:grid;gap:8px">${rows}</div>`
+      );
+    }catch(e){
+      setPollStatus('<div class="sub">Poll status unavailable</div>');
+    }
+  }
+
+  function escapeHtml(s){
+    return String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function loadMatchesForDropdown(){
     const sel = $("motdSelect");
     if(!sel) return;
-
-    sel.innerHTML = "<option value=''>Auto (next upcoming match)</option>";
-
     try{
+      sel.disabled = true;
       const res = await fetch("/schedule.json?scope=all&q=", {cache:"no-store"});
-      const data = await res.json();
-      const matches = (data && data.matches) ? data.matches : [];
+      const data = await res.json().catch(()=>null);
+      const matches = (data && Array.isArray(data.matches)) ? data.matches : [];
+      // preserve current selection if possible
+      const current = sel.value || "";
+      sel.innerHTML = '<option value="">Select a match…</option>';
       let added = 0;
-
       for(const m of matches){
-        if(added > 180) break;
-        const id = (m.datetime_utc || "") + "|" + (m.home||"") + "|" + (m.away||"");
-        const safeId = id.replace(/[^A-Za-z0-9|:_-]+/g,"_").slice(0,180);
-        const label = `${m.date||""} ${m.time||""} • ${m.home||""} vs ${m.away||""} • ${m.venue||""}`;
+        if(added >= 250) break;
+        const dt = String(m.datetime_utc||"");
+        const home = String(m.home||"");
+        const away = String(m.away||"");
+        if(!dt || !home || !away) continue;
+
+        const id = (dt + "|" + home + "|" + away).replace(/[^A-Za-z0-9|:_-]+/g,"_").slice(0,180);
+        const label = `${m.date||""} ${m.time||""} • ${home} vs ${away} • ${m.venue||""}`.trim();
 
         const opt = document.createElement("option");
-        opt.value = safeId;
-        opt.textContent = label;
-        opt.setAttribute("data-home", m.home||"");
-        opt.setAttribute("data-away", m.away||"");
-        opt.setAttribute("data-dt", m.datetime_utc||"");
-        if(selected && selected === safeId) opt.selected = true;
+        opt.value = id;
+        opt.textContent = label || (home + " vs " + away);
+        opt.setAttribute("data-home", home);
+        opt.setAttribute("data-away", away);
+        opt.setAttribute("data-dt", dt);
+        if(current && current === id) opt.selected = true;
         sel.appendChild(opt);
         added++;
       }
-    }catch(e){}
+      sel.disabled = false;
+      // If we restored selection, re-fill fields.
+      if(sel.value){
+        fillMatchFieldsFromOption(sel.selectedOptions[0]);
+      }
+    }catch(e){
+      sel.disabled = false;
+      toast("Couldn’t load matches", "error");
+    }
+  }
 
-    // sync manual fields to selection
-    sel.onchange = ()=>{
-      try{
-        const opt = sel.options[sel.selectedIndex];
-        if(!opt) return;
-        // IMPORTANT: don't erase a manual override when switching back to Auto.
-        if((opt.value||"") === ""){
-          const curHome = ($("motdHome")?.value || "").trim();
-          const curAway = ($("motdAway")?.value || "").trim();
-          const curKick = ($("motdKickoff")?.value || "").trim();
-          if(curHome || curAway || curKick) return;
-        }
-        if($("motdHome")) $("motdHome").value = opt.getAttribute("data-home") || "";
-        if($("motdAway")) $("motdAway").value = opt.getAttribute("data-away") || "";
-        if($("motdKickoff")) $("motdKickoff").value = opt.getAttribute("data-dt") || "";
-      }catch(e){}
+  function fillMatchFieldsFromOption(opt){
+    if(!opt) return;
+    const home = opt.getAttribute("data-home") || "";
+    const away = opt.getAttribute("data-away") || "";
+    const dt = opt.getAttribute("data-dt") || "";
+    if($("motdHome")) $("motdHome").value = home;
+    if($("motdAway")) $("motdAway").value = away;
+    if($("motdKickoff")) $("motdKickoff").value = dt;
+  }
+
+  async function saveFanZoneConfig(){
+    const btn = $("btnSaveConfig");
+    const sel = $("motdSelect");
+    const lockEl = $("pollLockMode");
+    if(!btn) return;
+
+    const payload = {
+      section: "fanzone",
+      motd: {
+        home: ($("motdHome")?.value || "").trim(),
+        away: ($("motdAway")?.value || "").trim(),
+        kickoff_utc: ($("motdKickoff")?.value || "").trim(),
+        match_id: (sel?.value || "").trim(),
+      },
+      poll: {
+        lock_mode: (lockEl?.value || "").trim(), // "auto" | "force_unlocked" | "force_locked"
+      }
     };
 
-    // trigger once
-    try{ sel.onchange(); }catch(e){}
-  }
+    const prev = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Saving…";
 
-  async function loadConfig(){
     try{
-      const res = await fetch("/api/config", {cache:"no-store"});
-      const cfg = await res.json();
-      if($("pollSponsorText")) $("pollSponsorText").value = (cfg.poll_sponsor_text || "");
-      if($("motdHome")) $("motdHome").value = (cfg.motd_home || "");
-      if($("motdAway")) $("motdAway").value = (cfg.motd_away || "");
-      if($("motdKickoff")) $("motdKickoff").value = (cfg.motd_datetime_utc || "");
-      if($("pollLockMode")) $("pollLockMode").value = (cfg.poll_lock_mode || "auto");
-      await loadScheduleOptions(cfg.match_of_day_id || "");
-    }catch(e){
-      await loadScheduleOptions("");
-    }
-  }
-
-  function renderPollStatus(state){
-    const wrap = $("pollStatus");
-    if(!wrap) return;
-
-    if(!state || !state.ok){
-      wrap.innerHTML = "<div class='sub'>Poll status unavailable.</div>";
-      return;
-    }
-
-    const m = state.match || {};
-    const teams = [m.home, m.away].filter(Boolean);
-    const counts = state.counts || {};
-    const pct = state.percentages || {};
-    const locked = !!state.locked;
-    const post = !!state.post_match;
-    const winner = state.winner || "";
-    const sponsor = state.sponsor_text || "";
-    const total = state.total_votes || 0;
-
-    const rows = teams.map(t=>{
-      const isWin = post && winner && winner === t;
-      const p = Number(pct[t] || 0);
-      const c = Number(counts[t] || 0);
-      const barColor = isWin ? "rgba(212,175,55,.85)" : "rgba(46,160,67,.75)";
-      return `
-        <div style="display:flex;align-items:center;gap:10px;margin:8px 0">
-          <div style="flex:0 0 160px;font-weight:700">${esc(t)} ${isWin ? "🏆" : ""}</div>
-          <div style="flex:1;border:1px solid rgba(255,255,255,.12);border-radius:999px;overflow:hidden;height:10px;background:rgba(255,255,255,.04)">
-            <div style="height:100%;width:${p}%;background:${barColor}"></div>
-          </div>
-          <div style="flex:0 0 120px;text-align:right;color:var(--muted)">${p.toFixed(1)}% • ${c}</div>
-        </div>
-      `;
-    }).join("");
-
-    wrap.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;flex-wrap:wrap">
-        <div>
-          <div class="sub">Current match</div>
-          <div style="font-weight:800">${esc(m.home || "")} vs ${esc(m.away || "")}</div>
-          <div class="small">${esc(m.date || "")} ${esc(m.time || "")} • ${esc(m.venue || "")}</div>
-        </div>
-        <div style="text-align:right">
-          <div class="sub">Status</div>
-          <div style="font-weight:800">${locked ? (post ? "Post-match" : "Locked (kickoff)") : "Open"}</div>
-        </div>
-      </div>
-      ${sponsor ? `<div class="small" style="margin-top:8px">Sponsor: <b>${esc(sponsor)}</b></div>` : ""}
-      <div class="small" style="margin-top:6px">Total votes: <b>${total}</b></div>
-      <div style="margin-top:6px">${rows}</div>
-    `;
-  }
-
-  async function loadPoll(){
-    try{
-      const res = await fetch("/api/poll/state", {cache:"no-store"});
-      const st = await res.json();
-      renderPollStatus(st);
-    }catch(e){
-      renderPollStatus(null);
-    }
-  }
-
-  async function saveConfig(){
-    const sponsor = ($("pollSponsorText")?.value || "").trim();
-    const matchId = ($("motdSelect")?.value || "").trim();
-    const home = ($("motdHome")?.value || "").trim();
-    const away = ($("motdAway")?.value || "").trim();
-    const kickoff = ($("motdKickoff")?.value || "").trim();
-    const lockMode = ($("pollLockMode")?.value || "auto").trim();
-    try{
-      // Disable button briefly to prevent double-click race with the 5s poll refresh.
-      const btn = $("btnSaveConfig");
-      if(btn){ btn.disabled = true; btn.textContent = "Saving…"; }
-      const res = await fetch(`/admin/update-config?key=${encodeURIComponent(ADMIN_KEY)}`,{
-        method:"POST",
-        cache:"no-store",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({
-          poll_sponsor_text: sponsor,
-          match_of_day_id: matchId,
-          motd_home: home,
-          motd_away: away,
-          motd_datetime_utc: kickoff,
-          poll_lock_mode: lockMode
-        })
-      });
-      let out=null; try{ out = await res.json(); }catch(e){ const t = await res.text(); out={ok:false,error:(t||'Non-JSON response')}; }
-      if(out && out.ok){
-        await loadConfig();
-        await loadPoll();
-      } else {
-        alert("Save failed: " + (out.error || "unknown"));
-      }
-    }catch(e){
-      alert("Save failed.");
-    }finally{
-      const btn = $("btnSaveConfig");
-      if(btn){ btn.disabled = false; btn.textContent = "Save settings"; }
-    }
-  }
-
-  // ===== Fan Zone Admin init (bind controls lazily so it works even if tab content is injected later) =====
-  let __fzInitDone = false;
-  let __fzPollTimer = null;
-
-  async function initFanZoneAdmin(){
-    // Only init when the Fan Zone controls exist on the page.
-    const sel = $("motdSelect");
-    const status = $("pollStatus");
-    const btn = $("btnSaveConfig");
-    if(!sel || !status || !btn) return;
-
-    if(!__fzInitDone){
-      __fzInitDone = true;
-
-      // Bind once
-      btn.addEventListener("click", saveConfig);
-
-      // Keep dropdown -> manual fields wiring (in case markup was injected after loadScheduleOptions ran)
-      sel.addEventListener("change", ()=>{
-        try{
-          const opt = sel.options[sel.selectedIndex];
-          if(!opt) return;
-          // IMPORTANT: don't erase manual override when switching back to Auto.
-          if((opt.value||"") === ""){
-            const curHome = ($("motdHome")?.value || "").trim();
-            const curAway = ($("motdAway")?.value || "").trim();
-            const curKick = ($("motdKickoff")?.value || "").trim();
-            if(curHome || curAway || curKick) return;
-          }
-          if($("motdHome")) $("motdHome").value = opt.getAttribute("data-home") || "";
-          if($("motdAway")) $("motdAway").value = opt.getAttribute("data-away") || "";
-          if($("motdKickoff")) $("motdKickoff").value = opt.getAttribute("data-dt") || "";
-        }catch(e){}
-      });
-
-      // First load
-      try{ await loadConfig(); }catch(e){}
-      try{ await loadPoll(); }catch(e){}
-
-      // Refresh poll status every 5s (lightweight)
-      if(__fzPollTimer){ try{ clearInterval(__fzPollTimer); }catch(e){} }
-      __fzPollTimer = setInterval(()=>{ try{ loadPoll(); }catch(e){} }, 5000);
-    } else {
-      // If you navigated away and back, refresh immediately
-      try{ await loadPoll(); }catch(e){}
-    }
-  }
-
-
-
-  async function loadOps(){
-    try{
-      const r = await fetch("/admin/api/ops?key="+__ADMIN_KEY__, {cache:"no-store"});
-      const out = await r.json();
-      if(out && out.ok && out.ops){
-        $("ops-pause").checked = !!out.ops.pause_reservations;
-        $("ops-vip").checked   = !!out.ops.vip_only;
-        $("ops-wait").checked  = !!out.ops.waitlist_mode;
-        $("ops-status").textContent = "Loaded."; _renderOpsMeta(out.meta);
-      } else {
-        $("ops-status").textContent = "Failed to load ops.";
-      }
-    }catch(e){
-      $("ops-status").textContent = "Failed to load ops.";
-    }
-  }
-  async function saveOps(){
-    try{
-      const btn = $("btnSaveOps");
-      if(btn){ btn.disabled = true; btn.textContent = "Saving..."; }
-      try{ $("ops-status").textContent = "Saving..."; }catch(e){}
-      try{ ["ops-pause","ops-vip","ops-wait"].forEach(id=>{ const el=$(id); if(el) el.disabled=true; }); }catch(e){}
-      const body = {
-        pause_reservations: $("ops-pause").checked,
-        vip_only: $("ops-vip").checked,
-        waitlist_mode: $("ops-wait").checked,
-      };
-      const r = await fetch("/admin/api/ops?key="+__ADMIN_KEY__, {
-        method:"POST",
+      const res = await fetch(`/admin/update-config?key=${encodeURIComponent(ADMIN_KEY)}`, {
+        method: "POST",
         headers: {"Content-Type":"application/json"},
-        body: JSON.stringify(body),
+        body: JSON.stringify(payload)
       });
-      const out = await r.json();
-      if(out && out.ok){
-        $("ops-status").textContent = "Saved ✓"; _renderOpsMeta(out.meta); setTimeout(()=>{ try{ $("ops-status").textContent=""; }catch(e){} }, 1200);
-        await loadOps();
-      } else {
-        $("ops-status").textContent = "Save failed: " + (out.error||"unknown");
+      const data = await res.json().catch(()=>null);
+      if(!res.ok || !data || data.ok === false){
+        toast((data && data.error) ? data.error : "Save failed", "error");
+        btn.textContent = prev;
+        btn.disabled = false;
+        return;
       }
+      btn.textContent = "Saved ✓";
+      toast("Saved", "ok");
+      setTimeout(()=>{ btn.textContent = prev; btn.disabled = false; }, 900);
+
+      // Refresh poll status after save so staff trust the click
+      loadPollStatus();
     }catch(e){
-      $("ops-status").textContent = "Save failed.";
-    }finally{
-      const btn = $("btnSaveOps");
-      if(btn){ btn.disabled = false; btn.textContent = "Save ops toggles"; }
-      try{ ["ops-pause","ops-vip","ops-wait"].forEach(id=>{ const el=$(id); if(el) el.disabled=false; }); }catch(e){}
+      toast("Save failed", "error");
+      btn.textContent = prev;
+      btn.disabled = false;
     }
   }
-  $("btnSaveOps")?.addEventListener("click", saveOps);
 
-  async function loadAudit(){
+  function safeBoot(){
     try{
-      const limit = parseInt(($("audit-limit").value||"200"),10) || 200;
-      const r = await fetch("/admin/api/audit?key="+__ADMIN_KEY__+"&limit="+encodeURIComponent(limit), {cache:"no-store"});
-      const out = await r.json();
-      if(out && out.ok && Array.isArray(out.entries)){
-        const lines = out.entries.map(e => {
-          const who = (e.role? e.role.toUpperCase():"") + (e.actor? "("+e.actor+")":"");
-          return `[${e.ts||""}] ${who} ${e.event||""} ${(e.path||"")}\n  ${JSON.stringify(e.details||{})}`;
-        }).join("\n\n");
-        $("audit-out").textContent = lines || "(empty)";
-      } else {
-        $("audit-out").textContent = "Failed to load audit.";
+      // Match dropdown
+      const sel = $("motdSelect");
+      if(sel){
+        sel.addEventListener("change", ()=>fillMatchFieldsFromOption(sel.selectedOptions[0]));
+        loadMatchesForDropdown();
       }
+      // Save
+      const btn = $("btnSaveConfig");
+      if(btn) btn.addEventListener("click", (e)=>{ e.preventDefault(); saveFanZoneConfig(); });
+
+      // Initial poll status
+      loadPollStatus();
     }catch(e){
-      $("audit-out").textContent = "Failed to load audit.";
+      // never silently die
+      toast("Fan Zone UI failed to boot", "error");
+      console.error(e);
     }
   }
-  $("btnLoadAudit")?.addEventListener("click", loadAudit);
 
-  // Fan Zone admin controls may be injected after initial load; init lazily.
-  try{ initFanZoneAdmin(); }catch(e){}
+  window.addEventListener("DOMContentLoaded", safeBoot);
 
-  loadOps();
-  loadAudit();
+  window.addEventListener("error", (e)=>{
+    console.error("FanZone error:", e?.error || e?.message || e);
+    toast("Fan Zone script error", "error");
+  });
+  window.addEventListener("unhandledrejection", (e)=>{
+    console.error("FanZone rejection:", e?.reason || e);
+    toast("Fan Zone script error", "error");
+  });
 })();
 </script>
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
@@ -6321,3 +6170,5 @@ def lead():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
     app.run(host="0.0.0.0", port=port, debug=False)
+# SIZE_PAD_START
+###########################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################
