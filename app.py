@@ -3495,6 +3495,27 @@ def api_config():
     return jsonify(public)
 
 
+
+
+def _poll_client_id(provided: str) -> str:
+    """Return a stable anonymous client id for poll voting.
+
+    - If the front-end provides a client_id, we use it.
+    - Otherwise we derive a deterministic id from request metadata.
+    We hash so we never store raw IP/UA in the poll store/audit.
+    """
+    p = (provided or "").strip()
+    if p:
+        return p[:120]
+    try:
+        ua = (request.headers.get("User-Agent") or "").strip()
+        al = (request.headers.get("Accept-Language") or "").strip()
+        ip = (request.headers.get("X-Forwarded-For") or request.remote_addr or "").split(",")[0].strip()
+        raw = f"{ip}|{ua}|{al}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+    except Exception:
+        return "anon"
+
 @app.route("/api/poll/state")
 def api_poll_state():
     """Return match poll state.
@@ -3527,6 +3548,10 @@ def api_poll_state():
         post_match = _poll_is_post_match(motd)
 
         teams = [motd.get("home") or "Team A", motd.get("away") or "Team B"]
+        client_id_raw = (request.args.get("client_id") or "").strip()
+        client_id = _poll_client_id(client_id_raw) if client_id_raw else ""
+        voted_for = _poll_has_voted(mid, client_id) if client_id else None
+        can_vote = (not locked) and (not voted_for)
         counts = _poll_counts(mid)
         total = sum(counts.get(t, 0) for t in teams)
         pct = {}
@@ -3540,6 +3565,8 @@ def api_poll_state():
         cfg = get_config()
         return jsonify({
             "ok": True,
+            "can_vote": can_vote,
+            "voted_for": voted_for,
             "match": {
                 "id": mid,
                 "date": motd.get("date"),
@@ -3585,7 +3612,8 @@ def api_poll_state():
 @app.route("/api/poll/vote", methods=["POST"])
 def api_poll_vote():
     data = request.get_json(silent=True) or {}
-    client_id = (data.get("client_id") or "").strip()
+    client_id_raw = (data.get("client_id") or "").strip()
+    client_id = _poll_client_id(client_id_raw)
     team = (data.get("team") or "").strip()
 
     motd = _get_match_of_day()
@@ -3624,6 +3652,10 @@ def api_poll_vote():
         return jsonify({"ok": False, "error": "Could not record vote"}), 500
 
     # return updated state
+    try:
+        _audit("poll.vote", {"match_id": mid, "team": team, "client": client_id[:12]})
+    except Exception:
+        pass
     return api_poll_state()
 
 @app.route("/admin/update-config", methods=["POST"])
