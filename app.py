@@ -1584,7 +1584,7 @@ def extract_name(text: str) -> Optional[str]:
     # If message contains 'party', take words before 'party'
     if "party" in lower:
         pre = raw[:lower.find("party")].strip()
-        pre = re.sub(r"[^A-Za-z\s\-\'\.]", "", pre).strip()
+        pre = re.sub(r"[^A-Za-z\s\-'\.]", "", pre).strip()
         pre = re.sub(r"\s+", " ", pre)
         if 1 <= len(pre) <= 40:
             return pre
@@ -1597,7 +1597,7 @@ def extract_name(text: str) -> Optional[str]:
         name_part += ch
     name_part = name_part.strip()
     name_part = re.sub(r"\s+", " ", name_part)
-    name_part = re.sub(r"[^A-Za-z\s\-\'\.]", "", name_part).strip()
+    name_part = re.sub(r"[^A-Za-z\s\-'\.]", "", name_part).strip()
     if 1 <= len(name_part) <= 40:
         return name_part
 
@@ -4797,8 +4797,8 @@ async function saveRules(){
     body: JSON.stringify(payload)
   });
   const j = await res.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent=\'Saved ✔\'; try{ _renderOpsMeta(j.meta); }catch(e){} _setMiniState(elPause,"pause","Saved ✓"); _setMiniState(elVip,"vip","Saved ✓"); _setMiniState(elWait,"wait","Saved ✓"); setTimeout(()=>{ _setMiniState(elPause,"pause",""); _setMiniState(elVip,"vip",""); _setMiniState(elWait,"wait",""); }, 1400); }
-  else { _setMiniState(elPause,"pause","Failed"); _setMiniState(elVip,"vip","Failed"); _setMiniState(elWait,"wait","Failed"); if(msg) msg.textContent=\'Save failed\'; alert(\'Save failed: '+(j && j.error ? j.error : res.status)); }
+  if(j && j.ok){ if(msg) msg.textContent='Saved ✔'; try{ _renderOpsMeta(j.meta); }catch(e){} _setMiniState(elPause,"pause","Saved ✓"); _setMiniState(elVip,"vip","Saved ✓"); _setMiniState(elWait,"wait","Saved ✓"); setTimeout(()=>{ _setMiniState(elPause,"pause",""); _setMiniState(elVip,"vip",""); _setMiniState(elWait,"wait",""); }, 1400); }
+  else { _setMiniState(elPause,"pause","Failed"); _setMiniState(elVip,"vip","Failed"); _setMiniState(elWait,"wait","Failed"); if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }
 }
 
 async function loadMenu(){
@@ -4900,7 +4900,7 @@ async function loadOps(){
   const msg = qs('#ops-msg'); if(msg) msg.textContent='Loading...';
   const res = await fetch('/admin/api/ops?key='+encodeURIComponent(KEY));
   const j = await res.json().catch(()=>null);
-  if(!j || !j.ok){ if(msg) msg.textContent=\'Failed to load ops\'; return; }
+  if(!j || !j.ok){ if(msg) msg.textContent='Failed to load ops'; return; }
   try{ _renderOpsMeta(j.meta); }catch(e){}
   const o = j.ops || {};
   const pause = qs('#ops-pause'); if(pause) pause.checked = (o.pause_reservations===true || o.pause_reservations==='true');
@@ -5271,9 +5271,6 @@ function openNotifications(){
   try{
     showTab('ops');
     setTimeout(()=>{ document.querySelector('#notifCard')?.scrollIntoView({behavior:'smooth', block:'start'}); }, 60);
-    loadNotifs();
-  }catch(e){}
-}); }, 50);
     loadNotifs();
   }catch(e){}
 }
