@@ -4282,6 +4282,43 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 </div>
 
 <div id="tab-leads" class="tabpane">
+  <!-- Ops Controls (restored) -->
+  <div class="card" id="ops-controls">
+    <div class="h2">Match-Day Ops</div>
+    <div class="small">Instantly control intake behavior across Fan Zone + venue flows.</div>
+
+    <div style="margin-top:10px;display:flex;flex-direction:column;gap:10px">
+      <label class="small" style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" id="ops-pause" onchange="saveOps()">
+        <span><b>Pause Reservations</b></span>
+        <span id="mini-pause" class="note" style="margin-left:auto;opacity:0;transition:opacity .18s"></span>
+      </label>
+
+      <label class="small" style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" id="ops-viponly" onchange="saveOps()">
+        <span><b>VIP Only</b></span>
+        <span id="mini-vip" class="note" style="margin-left:auto;opacity:0;transition:opacity .18s"></span>
+      </label>
+
+      <label class="small" style="display:flex;align-items:center;gap:10px">
+        <input type="checkbox" id="ops-waitlist" onchange="saveOps()">
+        <span><b>Waitlist Mode</b> <span style="opacity:.75">(AI Waiting List)</span></span>
+        <span id="mini-wait" class="note" style="margin-left:auto;opacity:0;transition:opacity .18s"></span>
+      </label>
+    </div>
+
+    <div id="ops-meta" class="small" style="margin-top:8px;opacity:.85"></div>
+    <div id="ops-msg" class="note" style="margin-top:8px"></div>
+    <div class="small" style="margin-top:10px;opacity:.7">Tip: toggles save immediately (you’ll see “Saving…” → “Saved”).</div>
+  </div>
+
+  <!-- Notifications (restored) -->
+  <div class="card" id="notifCard">
+    <div class="h2">Notifications</div>
+    <div id="notifBody" class="small" style="margin-top:8px"></div>
+    <div id="notif-msg" class="note" style="margin-top:8px"></div>
+  </div>
+
 """)
 
     # Leads table
@@ -4372,6 +4409,19 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 <div id="tab-ai" class="tabpane hidden">
   <div class="card">
     <div class="h2">AI Automation</div>
+    <div class="row" style="margin-top:10px">
+      <div class="card" style="margin:0">
+        <div class="h2" style="margin-bottom:6px">Presets</div>
+        <div class="small">Quickly apply safe, proven AI + ops defaults.</div>
+        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+          <button type="button" class="btn2" onclick="applyPreset('balanced')">Balanced</button>
+          <button type="button" class="btn2" onclick="applyPreset('conservative')">Conservative</button>
+          <button type="button" class="btn2" onclick="applyPreset('aggressive')">Aggressive</button>
+          <span id="preset-msg" class="note"></span>
+        </div>
+      </div>
+    </div>
+
     <div class="small">Managers can enable/disable AI and choose how much autonomy it has. Owners can tune advanced behavior.</div>
   </div>
 
@@ -4689,7 +4739,8 @@ qsa('.tabbtn').forEach(btn=>{
       pane.classList.toggle('hidden', x!==t);
     });
 if(t==='ai') loadAI();
-    if(t==='aiq') loadAIQueue();
+        if(t==='leads') loadOps();
+if(t==='aiq') loadAIQueue();
     if(t==='rules') loadRules();
     if(t==='menu') loadMenu();
     if(t==='audit') loadAudit();
@@ -5226,6 +5277,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
   try{ markLockedControls(); }catch(e){}
   try{ setupLeadFilters(); }catch(e){}
   try{ loadNotifs(); }catch(e){}
+  try{ loadOps(); }catch(e){}
+
 });
 </script>
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
