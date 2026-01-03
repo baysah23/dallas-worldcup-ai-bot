@@ -5229,29 +5229,41 @@ async function loadAudit(){
 async function loadNotifs(){
   const msg = qs('#notif-msg'); if(msg) msg.textContent='Loading…';
   try{
-    const r = await fetch(`/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}`);
-    const j = await r.json();
-    const items = (j.items||[]);
+    const r = await fetch(`/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}`, {cache:'no-store'});
+    const j = await r.json().catch(()=>null);
+    const items = (j && j.items) ? (j.items||[]) : [];
     // update badge
     const c = document.querySelector('#notifCount');
     if(c) c.textContent = String(items.length||0);
+
     const body = document.querySelector('#notifBody');
     if(body){
-      body.innerHTML='';
-      items.forEach(it=>{
-        const d = it.details || {};
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td>'+esc(it.ts||'')+'</td>'
-          +'<td><span class="code">'+esc(it.event||'')+'</span></td>'
-          +'<td><span class="code">'+esc(JSON.stringify(d))+'</span></td>';
-        body.appendChild(tr);
-      });
+      body.innerHTML = '';
+      if(!items.length){
+        body.innerHTML = '<div class="note">No notifications.</div>';
+      } else {
+        items.forEach(it=>{
+          const d = it.details || {};
+          const row = document.createElement('div');
+          row.style.cssText = 'padding:10px;border:1px solid rgba(255,255,255,16);border-radius:14px;margin-bottom:10px;background:rgba(255,255,255,06)';
+          row.innerHTML =
+            '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">' +
+              '<div class="note">'+esc(it.ts||'')+'</div>' +
+              '<div><span class="code">'+esc(it.event||'')+'</span></div>' +
+            '</div>' +
+            '<div class="small" style="margin-top:6px;opacity:.90;word-break:break-word">' +
+              esc(JSON.stringify(d)) +
+            '</div>';
+          body.appendChild(row);
+        });
+      }
     }
     if(msg) msg.textContent='';
   }catch(e){
-    if(msg) msg.textContent='Failed to load';
+    if(msg) msg.textContent = 'Load failed: ' + (e && e.message ? e.message : e);
   }
 }
+
 async function clearNotifs(){
   const msg = qs('#notif-msg'); if(msg) msg.textContent='Clearing…';
   try{
