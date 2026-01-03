@@ -4537,6 +4537,8 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
             vip = colval(r, i_vip, "No") or "No"
             ep = colval(r, i_entry, "")
             tier = colval(r, i_tier, "")
+            # Canonical tier used for filtering (prevents VIP entries leaking into Regular when tier column is blank)
+            tier_key = "vip" if (str(tier or "").strip().lower() == "vip" or str(vip or "").strip().lower() in ["yes","true","1","y","vip"]) else "regular"
             queue = colval(r, i_queue, "")
             bctx = colval(r, i_ctx, "")
             budget = colval(r, i_budget, "")
@@ -4547,7 +4549,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
                 sel = "selected" if selected else ""
                 return f"<option {sel}>{label}</option>"
 
-            html.append(f"<tr data-tier='{_hesc(tier)}' data-entry='{_hesc(ep)}'>")
+            html.append(f"<tr data-tier='{_hesc(tier_key)}' data-entry='{_hesc(ep)}'>")
             html.append(f"<td class='code'>{sheet_row}</td>")
             html.append(f"<td>{ts}</td>")
             html.append(f"<td>{nm}</td>")
@@ -4556,7 +4558,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
             html.append(f"<td>{t}</td>")
             html.append(f"<td>{ps}</td>")
             # Segment badge (VIP vs Regular)
-            seg = "⭐ VIP" if (tier or "").strip().lower() == "vip" or (vip or "").strip().lower() in ["yes","true","1","y"] else "Regular"
+            seg = "⭐ VIP" if tier_key == "vip" else "Regular"
             seg_cls = "badge warn" if seg.startswith("⭐") else "badge"
             html.append(f"<td><span class='{seg_cls}'>{_hesc(seg)}</span></td>")
             html.append("<td><span class='pill'>" + _hesc(ep) + "</span></td>")
