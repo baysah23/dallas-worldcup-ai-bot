@@ -4683,6 +4683,37 @@ function markLockedControls(){
 }
 window.addEventListener('DOMContentLoaded', markLockedControls);
 
+// ===== Tabs =====
+function showTab(name){
+  name = (name || 'ops').toLowerCase();
+  // activate button
+  document.querySelectorAll('.tabbtn').forEach(b=>{
+    if((b.getAttribute('data-tab')||'').toLowerCase() === name) b.classList.add('active');
+    else b.classList.remove('active');
+  });
+  // show panel
+  document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
+  const pane = document.getElementById('tab-' + name);
+  if(pane) pane.classList.remove('hidden');
+  // persist
+  try{ localStorage.setItem('admin_active_tab', name); }catch(_e){}
+  try{
+    const u = new URL(window.location.href);
+    u.searchParams.set('tab', name);
+    history.replaceState(null, '', u.toString());
+  }catch(_e){}
+}
+
+function initTabs(){
+  let t = null;
+  try{ t = new URLSearchParams(window.location.search).get('tab'); }catch(_e){}
+  if(!t){
+    try{ t = localStorage.getItem('admin_active_tab'); }catch(_e){}
+  }
+  showTab(t || 'ops');
+}
+window.addEventListener('DOMContentLoaded', initTabs);
+
 // Make "locked" controls still clickable (they show a helpful message instead of silently failing)
 document.addEventListener('click', (e)=>{
   const el = e.target && e.target.closest ? e.target.closest('[data-min-role]') : null;
@@ -5677,6 +5708,37 @@ tr:hover td{background:rgba(255,255,255,.03)}
     });
   }
   window.addEventListener('DOMContentLoaded', markLockedControls);
+
+// ===== Tabs =====
+function showTab(name){
+  name = (name || 'ops').toLowerCase();
+  // activate button
+  document.querySelectorAll('.tabbtn').forEach(b=>{
+    if((b.getAttribute('data-tab')||'').toLowerCase() === name) b.classList.add('active');
+    else b.classList.remove('active');
+  });
+  // show panel
+  document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
+  const pane = document.getElementById('tab-' + name);
+  if(pane) pane.classList.remove('hidden');
+  // persist
+  try{ localStorage.setItem('admin_active_tab', name); }catch(_e){}
+  try{
+    const u = new URL(window.location.href);
+    u.searchParams.set('tab', name);
+    history.replaceState(null, '', u.toString());
+  }catch(_e){}
+}
+
+function initTabs(){
+  let t = null;
+  try{ t = new URLSearchParams(window.location.search).get('tab'); }catch(_e){}
+  if(!t){
+    try{ t = localStorage.getItem('admin_active_tab'); }catch(_e){}
+  }
+  showTab(t || 'ops');
+}
+window.addEventListener('DOMContentLoaded', initTabs);
   document.addEventListener('click',(e)=>{
     const el = e.target && e.target.closest ? e.target.closest('[data-min-role]') : null;
     if(!el) return;
