@@ -569,6 +569,70 @@ def _coerce_rules(payload: Dict[str, Any]) -> Dict[str, Any]:
 
     return updated
 
+def _normalize_menu_payload(payload: Any) -> Dict[str, Any]:
+    """Validate/coerce incoming Menu JSON.
+
+    Expected shape (example):
+      {
+        "en": {"sections": [{"title":"Chef Specials","items":[{"name":"A","price":"$16","desc":"...","tag":"Share"}]}]},
+        "es": {...}
+      }
+
+    We keep the structure flexible but ensure:
+    - top-level is an object/dict
+    - each language value is an object with a 'sections' list
+    - each section has 'title' (str) and 'items' (list)
+    - each item has at least 'name' (str); other fields optional strings
+    """
+    if not isinstance(payload, dict):
+        raise ValueError("Menu JSON must be an object (dictionary) at the top level")
+
+    def _s(x: Any, max_len: int = 200) -> str:
+        if x is None:
+            return ""
+        if isinstance(x, (int, float, bool)):
+            x = str(x)
+        if not isinstance(x, str):
+            raise ValueError("Menu fields must be strings")
+        x = x.strip()
+        if len(x) > max_len:
+            x = x[:max_len]
+        return x
+
+    out: Dict[str, Any] = {}
+    for lang, lang_obj in payload.items():
+        lang_key = _s(lang, 20) or "en"
+        if not isinstance(lang_obj, dict):
+            raise ValueError(f"Language '{lang_key}' must be an object")
+        sections = lang_obj.get("sections", [])
+        if not isinstance(sections, list):
+            raise ValueError(f"Language '{lang_key}': 'sections' must be a list")
+        norm_sections = []
+        for sec in sections:
+            if not isinstance(sec, dict):
+                raise ValueError(f"Language '{lang_key}': each section must be an object")
+            title = _s(sec.get("title", ""), 120)
+            items = sec.get("items", [])
+            if not isinstance(items, list):
+                raise ValueError(f"Language '{lang_key}': section '{title}': 'items' must be a list")
+            norm_items = []
+            for it in items:
+                if not isinstance(it, dict):
+                    raise ValueError(f"Language '{lang_key}': section '{title}': each item must be an object")
+                name = _s(it.get("name", ""), 120)
+                if not name:
+                    raise ValueError(f"Language '{lang_key}': section '{title}': item missing 'name'")
+                norm_items.append({
+                    "name": name,
+                    "price": _s(it.get("price", ""), 40),
+                    "desc": _s(it.get("desc", ""), 240),
+                    "tag": _s(it.get("tag", ""), 60),
+                })
+            norm_sections.append({"title": title or "Menu", "items": norm_items})
+        out[lang_key] = {"sections": norm_sections}
+    return out
+
+
 
 def _persist_rules(_updated: Dict[str, Any]) -> None:
     """Persist current BUSINESS_RULES to disk (best effort)."""
