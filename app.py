@@ -5550,6 +5550,7 @@ window.showTab = function(tab){
     document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
     const pane = document.querySelector('#tab-'+tab);
     if(pane) pane.classList.remove('hidden');
+    try{ initFanZoneAdmin(); }catch(e){}
     try{ history.replaceState(null,'','#'+tab); }catch(e){}
   }catch(e){}
 };
@@ -5680,6 +5681,7 @@ function _initRefreshControls(){
 
 document.addEventListener('DOMContentLoaded', ()=>{
   try{ setupTabs(); }catch(e){}
+  try{ initFanZoneAdmin(); }catch(e){}
   try{ markLockedControls(); }catch(e){}
   try{ setupLeadFilters(); }catch(e){}
   try{ loadNotifs(); }catch(e){}
@@ -6024,6 +6026,55 @@ tr:hover td{background:rgba(255,255,255,.03)}
     }
   }
 
+  // ===== Fan Zone Admin init (bind controls lazily so it works even if tab content is injected later) =====
+  let __fzInitDone = false;
+  let __fzPollTimer = null;
+
+  async function initFanZoneAdmin(){
+    // Only init when the Fan Zone controls exist on the page.
+    const sel = $("motdSelect");
+    const status = $("pollStatus");
+    const btn = $("btnSaveConfig");
+    if(!sel || !status || !btn) return;
+
+    if(!__fzInitDone){
+      __fzInitDone = true;
+
+      // Bind once
+      btn.addEventListener("click", saveConfig);
+
+      // Keep dropdown -> manual fields wiring (in case markup was injected after loadScheduleOptions ran)
+      sel.addEventListener("change", ()=>{
+        try{
+          const opt = sel.options[sel.selectedIndex];
+          if(!opt) return;
+          // IMPORTANT: don't erase manual override when switching back to Auto.
+          if((opt.value||"") === ""){
+            const curHome = ($("motdHome")?.value || "").trim();
+            const curAway = ($("motdAway")?.value || "").trim();
+            const curKick = ($("motdKickoff")?.value || "").trim();
+            if(curHome || curAway || curKick) return;
+          }
+          if($("motdHome")) $("motdHome").value = opt.getAttribute("data-home") || "";
+          if($("motdAway")) $("motdAway").value = opt.getAttribute("data-away") || "";
+          if($("motdKickoff")) $("motdKickoff").value = opt.getAttribute("data-dt") || "";
+        }catch(e){}
+      });
+
+      // First load
+      try{ await loadConfig(); }catch(e){}
+      try{ await loadPoll(); }catch(e){}
+
+      // Refresh poll status every 5s (lightweight)
+      if(__fzPollTimer){ try{ clearInterval(__fzPollTimer); }catch(e){} }
+      __fzPollTimer = setInterval(()=>{ try{ loadPoll(); }catch(e){} }, 5000);
+    } else {
+      // If you navigated away and back, refresh immediately
+      try{ await loadPoll(); }catch(e){}
+    }
+  }
+
+
 
   async function loadOps(){
     try{
@@ -6094,12 +6145,11 @@ tr:hover td{background:rgba(255,255,255,.03)}
   }
   $("btnLoadAudit")?.addEventListener("click", loadAudit);
 
-  $("btnSaveConfig")?.addEventListener("click", saveConfig);
+  // Fan Zone admin controls may be injected after initial load; init lazily.
+  try{ initFanZoneAdmin(); }catch(e){}
 
-  loadConfig().then(loadPoll);
   loadOps();
   loadAudit();
-  setInterval(loadPoll, 5000);
 })();
 </script>
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
