@@ -1,0 +1,27 @@
+{
+  "name": "dallas-worldcup-ai-bot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test:panels": "playwright test tests/00_smoke_load.spec.js tests/10_tabs_layout.spec.js tests/20_save_refresh_actions.spec.js tests/30_visual_regression.spec.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/baysah23/dallas-worldcup-ai-bot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/baysah23/dallas-worldcup-ai-bot/issues"
+  },
+  "homepage": "https://github.com/baysah23/dallas-worldcup-ai-bot#readme",
+  "devDependencies": {
+    "@playwright/test": "^1.57.0"
+  }
+}

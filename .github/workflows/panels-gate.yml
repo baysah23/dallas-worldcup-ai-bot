@@ -1,0 +1,78 @@
+name: Panels Gate
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  panels-gate:
+    runs-on: windows-latest
+
+    env:
+      ADMIN_URL: ${{ secrets.ADMIN_URL }}
+      MANAGER_URL: ${{ secrets.MANAGER_URL }}
+      FANZONE_URL: ${{ secrets.FANZONE_URL }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          if (Test-Path requirements.txt) { pip install -r requirements.txt }
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Node deps
+        shell: pwsh
+        run: |
+          if (Test-Path package-lock.json) { npm ci } else { npm i }
+
+      - name: Install Playwright browsers
+        shell: pwsh
+        run: npx playwright install --with-deps
+
+      - name: Start server
+        shell: pwsh
+        run: |
+          # Start your Flask app in the background
+          Start-Process -NoNewWindow -FilePath python -ArgumentList "app.py"
+          Start-Sleep -Seconds 3
+
+      - name: Wait for server
+        shell: pwsh
+        run: |
+          $ok = $false
+          for ($i=0; $i -lt 30; $i++) {
+            try {
+              Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:5050/" | Out-Null
+              $ok = $true
+              break
+            } catch {}
+            Start-Sleep -Seconds 1
+          }
+          if (-not $ok) { throw "Server did not start on http://127.0.0.1:5050/" }
+
+      - name: Run Panels Gate
+        shell: pwsh
+        run: npm run test:panels
+
+      - name: Upload Playwright artifacts (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            test-results
+            playwright-report
