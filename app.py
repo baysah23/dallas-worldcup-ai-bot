@@ -258,6 +258,134 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
     return out
 
 
+
+# ============================================================
+# Partner/Venue Policy Rules (Human-in-the-middle, hard constraints)
+# - Per partner/venue rules that AI and operators must obey.
+# - Enforced BOTH when suggestions are created and when actions are applied.
+# - Stored on disk (/tmp) so it survives restarts on Render.
+# ============================================================
+PARTNER_POLICIES_FILE = os.environ.get("PARTNER_POLICIES_FILE", "/tmp/wc26_partner_policies.json")
+
+def _default_partner_policy() -> Dict[str, Any]:
+    # Restrictive defaults (safe):
+    # - Never allow AI to auto-change status unless explicitly enabled per partner AND allowed in AI settings.
+    # - VIP tagging allowed, but can be constrained by min budget.
+    return {
+        "vip_min_budget": 0,                 # e.g., 1500 to require a minimum budget for VIP tagging
+        "never_status_update": True,         # hard block status_update actions unless set False
+        "allowed_statuses": ["New", "Confirmed", "Seated", "No-Show", "Handled"],
+        # Outbound channels (added for upcoming phase; kept restrictive-safe by default)
+        "outbound_allowed": {"email": True, "sms": True, "whatsapp": True},
+        "outbound_require_role": "manager",  # who can send outbound (human click) once enabled
+    }
+
+_PARTNER_POLICIES: Dict[str, Any] = {"default": _default_partner_policy()}
+
+def _load_partner_policies_from_disk() -> None:
+    global _PARTNER_POLICIES
+    payload = _safe_read_json_file(PARTNER_POLICIES_FILE, default=None)
+    if isinstance(payload, dict) and payload:
+        # Merge default policy into each partner so missing keys don't break.
+        out: Dict[str, Any] = {}
+        for k, v in payload.items():
+            if not isinstance(v, dict):
+                continue
+            out[str(k)] = _deep_merge(_default_partner_policy(), v)
+        if "default" not in out:
+            out["default"] = _default_partner_policy()
+        _PARTNER_POLICIES = out
+
+def _save_partner_policy(partner: str, policy_patch: Dict[str, Any]) -> Dict[str, Any]:
+    """Persist a single partner policy (best effort)."""
+    global _PARTNER_POLICIES
+    partner = (partner or "").strip() or "default"
+    cur = _PARTNER_POLICIES.get(partner) if isinstance(_PARTNER_POLICIES, dict) else None
+    if not isinstance(cur, dict):
+        cur = _default_partner_policy()
+    merged = _deep_merge(cur, policy_patch or {})
+    _PARTNER_POLICIES[partner] = merged
+    _safe_write_json_file(PARTNER_POLICIES_FILE, _PARTNER_POLICIES)
+    return merged
+
+def _derive_partner_id(lead: Optional[Dict[str, Any]] = None, payload: Optional[Dict[str, Any]] = None) -> str:
+    """Best-effort partner/venue identifier, so policies can apply even if schema varies."""
+    lead = lead or {}
+    payload = payload or {}
+    for key in ["partner", "venue", "partner_id", "venue_id"]:
+        v = payload.get(key) or lead.get(key)
+        if v:
+            return str(v).strip()
+    # fallbacks from common fields
+    for key in ["entry_point", "business_context", "tier", "queue"]:
+        v = payload.get(key) or lead.get(key)
+        if v:
+            s = str(v).strip()
+            # take first token if it looks like "VENUE_XYZ ..."
+            return s.split()[0]
+    return "default"
+
+def _partner_policy(partner: str) -> Dict[str, Any]:
+    partner = (partner or "").strip() or "default"
+    base = _PARTNER_POLICIES.get("default") if isinstance(_PARTNER_POLICIES, dict) else None
+    if not isinstance(base, dict):
+        base = _default_partner_policy()
+    p = _PARTNER_POLICIES.get(partner) if isinstance(_PARTNER_POLICIES, dict) else None
+    if not isinstance(p, dict):
+        return base
+    return _deep_merge(base, p)
+
+def _parse_budget_to_number(val: Any) -> float:
+    try:
+        s = str(val or "").strip()
+        if not s:
+            return 0.0
+        s = s.replace("$", "").replace(",", "")
+        # accept "1500+" or "1500 usd"
+        m = re.search(r"(\d+(\.\d+)?)", s)
+        if not m:
+            return 0.0
+        return float(m.group(1))
+    except Exception:
+        return 0.0
+
+def _policy_check_action(partner: str, action_type: str, payload: Dict[str, Any], role: str = "") -> Tuple[bool, str]:
+    """Return (allowed, reason). Hard blocks only."""
+    pol = _partner_policy(partner)
+    at = (action_type or "").strip().lower()
+
+    # Hard block status updates unless partner explicitly allows
+    if at == "status_update":
+        if bool(pol.get("never_status_update", True)):
+            return False, "Blocked by partner policy: status updates disabled"
+        status = str((payload or {}).get("status") or "").strip()
+        allowed = pol.get("allowed_statuses") or []
+        if status and isinstance(allowed, list) and allowed and status not in allowed:
+            return False, f"Blocked by partner policy: status '{status}' not allowed"
+
+    # VIP tagging minimum budget
+    if at == "vip_tag":
+        vip = str((payload or {}).get("vip") or "").strip()
+        if vip == "VIP":
+            min_budget = float(pol.get("vip_min_budget") or 0)
+            # budget may be on payload (preferred) or absent; treat absent as 0
+            b = _parse_budget_to_number((payload or {}).get("budget"))
+            if b < min_budget:
+                return False, f"Blocked by partner policy: VIP requires budget ≥ {int(min_budget)}"
+
+    # Outbound sending (reserved for next phase)
+    if at in ("send_sms", "send_email", "send_whatsapp"):
+        ch = at.replace("send_", "")
+        allowed = (pol.get("outbound_allowed") or {})
+        if isinstance(allowed, dict) and not bool(allowed.get(ch, False)):
+            return False, f"Blocked by partner policy: outbound {ch} disabled"
+        req_role = str(pol.get("outbound_require_role") or "manager").strip().lower()
+        if req_role == "owner" and (role or "").lower() != "owner":
+            return False, "Blocked by partner policy: outbound requires owner"
+
+    return True, ""
+
+
 # ============================================================
 # AI Action Queue (Approval / Deny / Override)
 # - Queue stores proposed AI actions (e.g., tag VIP, update status, draft reply)
@@ -302,10 +430,21 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
       - reply_draft: store draft text in audit (does NOT send)
     '''
     typ = str(action.get("type") or "").strip()
+
+    # Partner policy hard-gate (enforced even if AI/settings allow it)
+    payload = action.get("payload") or {}
+    try:
+        partner_id = _derive_partner_id(payload=payload)
+    except Exception:
+        partner_id = "default"
+    ok_pol, why_pol = _policy_check_action(partner_id, typ, payload, role=str((ctx or {}).get("role") or ""))
+    if not ok_pol:
+        _audit("policy.block", {"partner": partner_id, "type": typ, "reason": why_pol, "row": payload.get("row")})
+        return {"ok": False, "error": why_pol}
+
     # Feature flag gate (secondary to allow_actions)
     if not _ai_feature_allows(typ):
         return {"ok": False, "error": f"{typ} disabled by feature flag"}
-    payload = action.get("payload") or {}
     allow = (AI_SETTINGS.get("allow_actions") or {})
 
     # lead row reference (Google Sheet row number)
@@ -461,6 +600,17 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[s
         # Always enforce row linkage to prevent "random actions"
         if sheet_row:
             payload["row"] = int(sheet_row)
+        # Partner policy filter (keeps bad suggestions out of the queue)
+        try:
+            partner_id = _derive_partner_id(lead=lead, payload=payload)
+        except Exception:
+            partner_id = "default"
+        # Provide budget context for VIP min budget policies (best effort)
+        if "budget" not in payload and lead.get("budget") is not None:
+            payload["budget"] = lead.get("budget")
+        ok_pol, _why_pol = _policy_check_action(partner_id, typ, payload, role="system")
+        if not ok_pol:
+            continue
         actions_out.append({"type": typ, "payload": payload, "reason": str(a.get("reason") or "").strip()[:240]})
     return {"ok": True, "confidence": confidence, "actions": actions_out, "notes": str(parsed.get("notes") or "").strip()[:240]}
 
@@ -708,6 +858,12 @@ try:
     _load_ai_settings_from_disk()
 except Exception:
     pass
+
+try:
+    _load_partner_policies_from_disk()
+except Exception:
+    pass
+
 
 
 _MENU_OVERRIDE: Optional[Dict[str, Any]] = None
