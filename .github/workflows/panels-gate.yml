@@ -10,13 +10,13 @@ jobs:
     runs-on: windows-latest
 
     env:
-      # ✅ your app checks these env vars to validate keys
+      # App auth keys (your app checks these)
       ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
       ADMIN_MANAGER_KEYS: ${{ secrets.ADMIN_MANAGER_KEY }}
 
       PORT: "5050"
 
-      # Playwright URLs (local server)
+      # Playwright URLs (local)
       ADMIN_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_OWNER_KEY }}
       MANAGER_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_MANAGER_KEY }}
       FANZONE_URL: http://127.0.0.1:5050/admin/fanzone?key=${{ secrets.ADMIN_OWNER_KEY }}
@@ -56,24 +56,22 @@ jobs:
           New-Item -ItemType Directory -Force test-results | Out-Null
           New-Item -ItemType Directory -Force playwright-report | Out-Null
 
-      - name: Start server (capture logs)
+      # ✅ Start server + wait + run tests in ONE step (prevents Windows runner from killing background process)
+      - name: Start server and run Panels Gate
         shell: pwsh
         run: |
-          Start-Process -NoNewWindow `
+          # Start server and capture logs
+          $server = Start-Process -PassThru -NoNewWindow `
             -FilePath python `
             -ArgumentList "-u", "app.py" `
             -RedirectStandardOutput "server.log" `
             -RedirectStandardError "server.err"
-          Start-Sleep -Seconds 3
 
-      - name: Wait for server (curl connectivity check)
-        shell: pwsh
-        run: |
+          Write-Host "Server PID: $($server.Id)"
+
+          # Wait until we can CONNECT (any HTTP response is fine)
           $ok = $false
-
           for ($i=0; $i -lt 60; $i++) {
-            # We only care that we can CONNECT.
-            # curl.exe returns 0 if it connects and gets any HTTP response.
             & curl.exe -s -o NUL "http://127.0.0.1:5050/"
             if ($LASTEXITCODE -eq 0) { $ok = $true; break }
             Start-Sleep -Seconds 1
@@ -85,14 +83,17 @@ jobs:
             if (Test-Path server.log) { Get-Content server.log -Tail 200 | Out-Host }
             Write-Host "---- server.err (tail) ----"
             if (Test-Path server.err) { Get-Content server.err -Tail 200 | Out-Host }
+            try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
             throw "Server not reachable on http://127.0.0.1:5050/"
           }
 
-          Write-Host "✅ Server reachable on 127.0.0.1:5050"
-
-      - name: Run Panels Gate
-        shell: pwsh
-        run: npm run test:panels
+          Write-Host "✅ Server reachable. Running Playwright gate..."
+          try {
+            npm run test:panels
+          } finally {
+            # Always stop server
+            try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
+          }
 
       - name: Upload artifacts (always)
         if: always()
