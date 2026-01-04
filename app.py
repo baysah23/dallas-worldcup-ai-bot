@@ -5997,7 +5997,19 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
       }
       var pane = document.getElementById('tab-'+tab);
       if(pane && pane.classList) pane.classList.remove('hidden');
-      try{ history.replaceState(null,'','#'+tab); }catch(e){}
+      try{
+      // Tab-specific lazy loaders (safe: functions may not exist yet)
+      if(tab==='ops'){ try{ loadOps(); }catch(e){} try{ loadNotifs(); }catch(e){} }
+      if(tab==='leads'){ try{ if(typeof setupLeadFilters==='function') setupLeadFilters(); }catch(e){} }
+      if(tab==='ai'){ try{ loadAI(); }catch(e){} }
+      if(tab==='aiq'){ try{ loadAIQueue(); }catch(e){} }
+      if(tab==='monitor'){ try{ loadHealth(); }catch(e){} }
+      if(tab==='audit'){ try{ loadAudit(); }catch(e){} }
+      if(tab==='rules'){ try{ loadRules(); }catch(e){} }
+      if(tab==='menu'){ try{ loadMenu(); }catch(e){} }
+      if(tab==='policies'){ try{ if(typeof loadPartnerList==='function') loadPartnerList(); }catch(e){} try{ if(typeof loadPartnerPolicy==='function') loadPartnerPolicy(); }catch(e){} }
+    }catch(e){}
+    try{ history.replaceState(null,'','#'+tab); }catch(e){}
     }catch(e){}
   }
   window.showTab = function(tab){
@@ -6228,23 +6240,8 @@ function setupLeadFilters(){
 function qs(sel){return document.querySelector(sel);}
 function qsa(sel){return Array.from(document.querySelectorAll(sel));}
 
-qsa('.tabbtn').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    qsa('.tabbtn').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-    const t = btn.dataset.tab;
-    ['leads','ai','aiq','rules','menu','audit'].forEach(x=>{
-      const pane = document.getElementById('tab-'+x);
-      if(!pane) return;
-      pane.classList.toggle('hidden', x!==t);
-    });
-if(t==='ai') loadAI();
-    if(t==='aiq') loadAIQueue();
-    if(t==='rules') loadRules();
-    if(t==='menu') loadMenu();
-    if(t==='audit') loadAudit();
-  });
-});
+
+/* (disabled) duplicate tab binding block removed to prevent breaking Ops/Monitoring/Policies */
 
 async function saveLead(sheetRow){
   const status = qs('#status-'+sheetRow).value;
@@ -7043,57 +7040,10 @@ async function clearNotifs(){
   }
 }
 
-window.showTab = function(tab){
-  try{
-    document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
-    document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
-    const pane = document.querySelector('#tab-'+tab);
-    if(pane) pane.classList.remove('hidden');
-    if(tab==='rules'){ try{ loadPartnerList(); loadPartnerPolicy(); }catch(e){} try{ loadRules(); }catch(e){} }
 
-    try{ initFanZoneAdmin(); }catch(e){}
-    try{ history.replaceState(null,'','#'+tab); }catch(e){}
-  }catch(e){}
-};
-function setupTabs(){
-  const btns = Array.from(document.querySelectorAll('.tabbtn'));
-  const panes = Array.from(document.querySelectorAll('.tabpane'));
-  if(!btns.length || !panes.length) return;
-
-  function show(tab){
-    btns.forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
-    panes.forEach(p=>p.classList.add('hidden'));
-    const pane = document.querySelector('#tab-'+tab);
-    if(pane) pane.classList.remove('hidden');
-    // keep URL hash for deep-linking
-    try{ history.replaceState(null, '', '#'+tab); }catch(e){}
-  }
-
-  btns.forEach(b=>{
-    b.addEventListener('click', (e)=>{
-      e.preventDefault();
-      const tab = b.getAttribute('data-tab');
-      if(tab) show(tab);
-    });
-  });
-
-  // Make inline onclick handlers use the same implementation
-  window.showTab = show;
-
-  // open tab from URL hash if present, otherwise default to Ops
-  const initial = (location.hash||'').replace('#','').trim();
-  if(initial && document.querySelector('.tabbtn[data-tab="'+initial+'"]')) {
-    show(initial);
-  } else {
-    show('ops');
-  }
-
-  // keep in sync if hash changes
-  window.addEventListener('hashchange', ()=>{
-    const t = (location.hash||'').replace('#','').trim();
-    if(t && document.querySelector('.tabbtn[data-tab="'+t+'"]')) show(t);
-  });
-}
+/* (disabled) duplicate showTab/setupTabs block removed.
+   Your tab system is initialized earlier with role-locking + hash support.
+   Keeping this would overwrite showTab and break locked tabs + panes. */
 function openNotifications(){
   try{
     showTab('ops');
