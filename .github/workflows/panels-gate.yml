@@ -10,9 +10,17 @@ jobs:
     runs-on: windows-latest
 
     env:
-      ADMIN_URL: ${{ secrets.ADMIN_URL }}
-      MANAGER_URL: ${{ secrets.MANAGER_URL }}
-      FANZONE_URL: ${{ secrets.FANZONE_URL }}
+      # Server must know valid keys (your app checks these)
+      ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
+      ADMIN_MANAGER_KEYS: ${{ secrets.ADMIN_MANAGER_KEY }}
+
+      # Ensure local port is predictable
+      PORT: "5050"
+
+      # Playwright URLs (local server)
+      ADMIN_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_OWNER_KEY }}
+      MANAGER_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_MANAGER_KEY }}
+      FANZONE_URL: http://127.0.0.1:5050/admin/fanzone?key=${{ secrets.ADMIN_OWNER_KEY }}
 
     steps:
       - name: Checkout
@@ -43,18 +51,29 @@ jobs:
         shell: pwsh
         run: npx playwright install --with-deps
 
-      - name: Start server
+      - name: Prep artifact folders (so upload never says “not found”)
         shell: pwsh
         run: |
-          # Start your Flask app in the background
-          Start-Process -NoNewWindow -FilePath python -ArgumentList "app.py"
-          Start-Sleep -Seconds 3
+          New-Item -ItemType Directory -Force test-results | Out-Null
+          New-Item -ItemType Directory -Force playwright-report | Out-Null
+
+      - name: Start server (capture logs)
+        shell: pwsh
+        run: |
+          # Start Flask app in background and capture stdout/stderr
+          Start-Process -NoNewWindow `
+            -FilePath python `
+            -ArgumentList "-u", "app.py" `
+            -RedirectStandardOutput "server.log" `
+            -RedirectStandardError "server.err"
+
+          Start-Sleep -Seconds 2
 
       - name: Wait for server
         shell: pwsh
         run: |
           $ok = $false
-          for ($i=0; $i -lt 30; $i++) {
+          for ($i=0; $i -lt 40; $i++) {
             try {
               Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:5050/" | Out-Null
               $ok = $true
@@ -62,17 +81,25 @@ jobs:
             } catch {}
             Start-Sleep -Seconds 1
           }
-          if (-not $ok) { throw "Server did not start on http://127.0.0.1:5050/" }
+          if (-not $ok) {
+            Write-Host "---- server.log ----"
+            if (Test-Path server.log) { Get-Content server.log -Tail 200 }
+            Write-Host "---- server.err ----"
+            if (Test-Path server.err) { Get-Content server.err -Tail 200 }
+            throw "Server did not start on http://127.0.0.1:5050/"
+          }
 
       - name: Run Panels Gate
         shell: pwsh
         run: npm run test:panels
 
-      - name: Upload Playwright artifacts (on failure)
-        if: failure()
+      - name: Upload artifacts (always)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-artifacts
+          name: panels-gate-artifacts
           path: |
-            test-results
-            playwright-report
+            test-results/**
+            playwright-report/**
+            server.log
+            server.err
