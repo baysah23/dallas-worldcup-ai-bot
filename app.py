@@ -5373,6 +5373,11 @@ body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(
 
 .pill b{color:var(--gold)}
 .tabs{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
+.tabgroup{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 8px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)}
+.tablabel{font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.65;margin-right:4px}
+.tabbtn.locked{opacity:.45;cursor:not-allowed}
+.tabbtn.locked:hover{transform:none}
+
 .tabbtn{border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);padding:10px 12px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer}
 .tabbtn.active{border-color:rgba(212,175,55,.6);box-shadow:0 0 0 1px rgba(212,175,55,.25) inset}
 .card{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:14px;padding:12px 12px;margin:10px 0}
@@ -5950,6 +5955,20 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
   function qsa(sel){ return document.querySelectorAll(sel); }
   function setActive(tab){
     try{
+      var btn = document.querySelector('.tabbtn[data-tab="'+tab+'"]');
+      var minRole = (btn && btn.getAttribute && btn.getAttribute('data-minrole')) ? btn.getAttribute('data-minrole') : "manager";
+      if(ROLE_RANK && ROLE_RANK[ROLE] !== undefined && ROLE_RANK[minRole] !== undefined){
+        if(ROLE_RANK[ROLE] < ROLE_RANK[minRole]){
+          try{ toast("Owner-only section"); }catch(e){}
+          // snap back to Ops if a hash tried to open a locked tab
+          try{
+            if(tab !== "ops" && document.querySelector('.tabbtn[data-tab="ops"]')) tab = "ops";
+          }catch(e){}
+        }
+      }
+    }catch(e){}
+
+    try{
       var btns = qsa('.tabbtn');
       for(var i=0;i<btns.length;i++){
         var b = btns[i];
@@ -5973,7 +5992,20 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
   function bind(){
     var btns = qsa('.tabbtn');
-    for(var i=0;i<btns.length;i++){
+    
+    // mark owner-only tabs for managers
+    try{
+      for(var j=0;j<btns.length;j++){
+        var br = btns[j];
+        var minr = (br && br.getAttribute) ? (br.getAttribute('data-minrole')||'manager') : 'manager';
+        if(ROLE_RANK && ROLE_RANK[ROLE] !== undefined && ROLE_RANK[minr] !== undefined){
+          if(ROLE_RANK[ROLE] < ROLE_RANK[minr]){
+            try{ br.classList.add('locked'); br.setAttribute('title','Owner only'); }catch(e){}
+          }
+        }
+      }
+    }catch(e){}
+for(var i=0;i<btns.length;i++){
       (function(b){
         try{
           b.addEventListener('click', function(ev){
