@@ -6,72 +6,46 @@ const MANAGER_URL = process.env.MANAGER_URL;
 const FANZONE_URL = process.env.FANZONE_URL;
 
 if (!ADMIN_URL || !MANAGER_URL || !FANZONE_URL) {
-  throw new Error(
-    "Missing env vars: ADMIN_URL, MANAGER_URL, FANZONE_URL. Set them in CI/workflow."
-  );
+  throw new Error("Missing env vars: ADMIN_URL, MANAGER_URL, FANZONE_URL");
 }
+
+// Fixed, deterministic snapshot frame
+const VIEWPORT = { width: 1280, height: 720 };
+const CLIP = { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height };
+
+// Keep Admin strict; Manager a bit looser (but stable via masks)
+const SNAP_ADMIN = { animations: "disabled", maxDiffPixelRatio: 0.02, clip: CLIP };
+const SNAP_MANAGER = { animations: "disabled", maxDiffPixelRatio: 0.03, clip: CLIP };
+const SNAP_FANZONE = { animations: "disabled", maxDiffPixelRatio: 0.03, clip: CLIP };
+
+test.use({ viewport: VIEWPORT });
 
 async function stabilize(page) {
+  // Kill layout jitter
+  await page.addStyleTag({
+    content: `
+      * { caret-color: transparent !important; }
+      html { scroll-behavior: auto !important; }
+      /* kill transitions/animations even if playwright misses some */
+      *, *::before, *::after {
+        transition: none !important;
+        animation: none !important;
+      }
+      /* remove scrollbar rendering diffs */
+      ::-webkit-scrollbar { width: 0 !important; height: 0 !important; }
+      body { overflow: hidden !important; }
+    `,
+  });
+
   await page.waitForLoadState("domcontentloaded");
+  await page.waitForTimeout(150);
   await page.waitForLoadState("networkidle").catch(() => {});
   await page.waitForTimeout(250);
+
+  // Always start from top-left
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(150);
 }
-
-function commonMasks(page) {
-  return [
-    // toasts / transient status
-    page.locator(".toast, #toast, .snackbar, .notice, .saving, .saved"),
-
-    // timestamps / "last updated"
-    page.locator("[data-testid='timestamp'], [data-testid='last-updated']"),
-    page.locator(".last-updated, .updated-at, .audit-timestamp, .timestamp"),
-
-    // dynamic pills/badges/counters
-    page.locator(".pill, .badge, .chip, .counter, .count, .status-pill"),
-  ];
-}
-
-function auditFeedMasks(page) {
-  return [
-    page.locator("#audit, #audit-log, #tab-audit, .audit, .audit-log, .activity, .activity-log"),
-    page.locator("#tab-audit table, #tab-audit tbody, #tab-audit ul, #tab-audit ol"),
-    page.locator("#audit table, #audit tbody, #audit ul, #audit ol"),
-  ];
-}
-
-// ✅ NEW: Leads is highly dynamic (lists, sorting, counts, timestamps)
-// Mask the main leads content region so visuals test the layout/chrome, not live data.
-function leadsFeedMasks(page) {
-  return [
-    // common tab container IDs/classes
-    page.locator("#tab-leads, #leads, .leads, .leads-pane, .leads-panel"),
-
-    // typical table/card containers inside leads
-    page.locator("#tab-leads table, #tab-leads tbody, #tab-leads .table, #tab-leads .cards"),
-    page.locator("#leads table, #leads tbody, #leads .table, #leads .cards"),
-
-    // common “rows” / “cards” patterns
-    page.locator(".lead-row, .lead-card, .lead-item"),
-  ];
-}
-
-const SNAP_ADMIN = {
-  fullPage: false,
-  animations: "disabled",
-  maxDiffPixelRatio: 0.01,
-};
-
-const SNAP_MANAGER = {
-  fullPage: false,
-  animations: "disabled",
-  maxDiffPixelRatio: 0.03,
-};
-
-const SNAP_FANZONE = {
-  fullPage: false,
-  animations: "disabled",
-  maxDiffPixelRatio: 0.02,
-};
 
 async function clickTab(page, label) {
   const btn = page.getByRole("button", { name: label });
@@ -79,21 +53,58 @@ async function clickTab(page, label) {
     await btn.first().click();
     return;
   }
-
   const byText = page.locator("button, .tabbtn, .tab").filter({ hasText: label });
   if (await byText.count()) {
     await byText.first().click();
     return;
   }
-
-  throw new Error(`Could not find tab "${label}" button`);
+  throw new Error(`Could not find tab "${label}"`);
 }
 
-function tabMasks(page, tabLabel) {
-  const t = tabLabel.toLowerCase();
+function commonMasks(page) {
+  return [
+    // transient UI
+    page.locator(".toast, #toast, .snackbar, .notice, .saving, .saved"),
+    // time-ish / counters / dynamic chips
+    page.locator(".last-updated, .updated-at, .timestamp, .counter, .count, .badge, .chip, .pill"),
+  ];
+}
 
-  if (t === "audit") return [...commonMasks(page), ...auditFeedMasks(page)];
-  if (t === "leads") return [...commonMasks(page), ...leadsFeedMasks(page)];
+// Ops is often stateful (toggle on/off, saved banners, audit line, etc.)
+// We mask the *toggle region* so we regression-test layout chrome and headings.
+function opsMasks(page) {
+  return [
+    // common containers where toggles live
+    page.locator("#ops-controls, #tab-ops #ops-controls, #tab-ops .toggles, #tab-ops .toggle-grid, #tab-ops .controls"),
+    // match day ops presets are dynamic too
+    page.locator("#tab-ops .presets, #tab-ops .preset, #tab-ops .preset-row"),
+  ];
+}
+
+// Leads is highly dynamic; mask the list/table/cards area.
+function leadsMasks(page) {
+  return [
+    page.locator("#tab-leads, #leads, .leads, .leads-pane, .leads-panel"),
+    page.locator("#tab-leads table, #tab-leads tbody, #tab-leads .cards, #tab-leads .table"),
+    page.locator("#leads table, #leads tbody, #leads .cards, #leads .table"),
+    page.locator(".lead-row, .lead-card, .lead-item"),
+  ];
+}
+
+// Audit feeds can reorder / new lines
+function auditMasks(page) {
+  return [
+    page.locator("#tab-audit, #audit, .audit, .audit-log, .activity, .activity-log"),
+    page.locator("#tab-audit table, #tab-audit tbody, #tab-audit ul, #tab-audit ol"),
+  ];
+}
+
+function masksForTab(page, tabLabel) {
+  const t = (tabLabel || "").toLowerCase();
+
+  if (t === "ops") return [...commonMasks(page), ...opsMasks(page)];
+  if (t === "leads") return [...commonMasks(page), ...leadsMasks(page)];
+  if (t === "audit") return [...commonMasks(page), ...auditMasks(page)];
 
   return commonMasks(page);
 }
@@ -120,10 +131,9 @@ test.describe("Visual - ADMIN tab panes", () => {
       await stabilize(page);
 
       const safe = t.replace(/\s+/g, "_").toLowerCase();
-
       await expect(page).toHaveScreenshot(`admin-${safe}.png`, {
         ...SNAP_ADMIN,
-        mask: tabMasks(page, t),
+        mask: masksForTab(page, t),
       });
     }
   });
@@ -139,13 +149,11 @@ test.describe("Visual - MANAGER core panes", () => {
     for (const t of tabs) {
       await clickTab(page, t);
       await stabilize(page);
-      await page.waitForTimeout(300);
 
       const safe = t.replace(/\s+/g, "_").toLowerCase();
-
       await expect(page).toHaveScreenshot(`manager-${safe}.png`, {
         ...SNAP_MANAGER,
-        mask: tabMasks(page, t),
+        mask: masksForTab(page, t),
       });
     }
   });

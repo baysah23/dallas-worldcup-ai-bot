@@ -1,69 +1,76 @@
-name: Panels Gate
+name: panels-gate
 
 on:
-  pull_request:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+concurrency:
+  group: panels-gate-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   panels-gate:
     runs-on: windows-latest
+    timeout-minutes: 20
 
     env:
-      # Your app checks these env vars to validate keys
+      PORT: 5050
+      CI: true
+
+      # You should set these in GitHub → Settings → Secrets and variables → Actions
+      # Secrets:
+      #   ADMIN_OWNER_KEY
+      #   ADMIN_MANAGER_KEYS
+      # Or just set ADMIN_URL / MANAGER_URL / FANZONE_URL as secrets directly.
       ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
-      ADMIN_MANAGER_KEYS: ${{ secrets.ADMIN_MANAGER_KEY }}
+      ADMIN_MANAGER_KEYS: ${{ secrets.ADMIN_MANAGER_KEYS }}
 
-      # Force local port
-      PORT: "5050"
-
-      # Playwright URLs (local)
+      # Local URLs (the tests use these env vars)
       ADMIN_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_OWNER_KEY }}
-      MANAGER_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_MANAGER_KEY }}
+      # If your manager URL is actually /manager, change it here:
+      MANAGER_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_MANAGER_KEYS }}
       FANZONE_URL: http://127.0.0.1:5050/admin/fanzone?key=${{ secrets.ADMIN_OWNER_KEY }}
-
-      # Make Playwright behave like CI
-      CI: "true"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
 
       - name: Install Python deps
-        shell: pwsh
         run: |
           python -m pip install --upgrade pip
           if (Test-Path requirements.txt) { pip install -r requirements.txt }
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
       - name: Install Node deps
-        shell: pwsh
-        run: |
-          if (Test-Path package-lock.json) { npm ci } else { npm i }
+        run: npm ci
 
       - name: Install Playwright browsers
-        shell: pwsh
         run: npx playwright install --with-deps
 
-      - name: Prep artifact folders
+      - name: Start server + run Playwright gate
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force test-results | Out-Null
-          New-Item -ItemType Directory -Force playwright-report | Out-Null
+          # Clean old artifacts so upload is always current
+          if (Test-Path test-results) { Remove-Item -Recurse -Force test-results }
+          if (Test-Path playwright-report) { Remove-Item -Recurse -Force playwright-report }
+          if (Test-Path server.log) { Remove-Item -Force server.log }
+          if (Test-Path server.err) { Remove-Item -Force server.err }
 
-      # ✅ Start server + wait + run tests in ONE step (prevents Windows job cleanup killing the server)
-      - name: Start server and run Panels Gate
-        shell: pwsh
-        run: |
+          # Start server and capture logs
           $server = Start-Process -PassThru -NoNewWindow `
             -FilePath python `
             -ArgumentList "-u", "app.py" `
@@ -97,13 +104,29 @@ jobs:
             try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
           }
 
-      - name: Upload artifacts (always)
+      - name: Debug: list artifact directories
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "---- ls (root) ----"
+          Get-ChildItem -Force | Format-Table -AutoSize
+          Write-Host "---- ls test-results ----"
+          if (Test-Path test-results) { Get-ChildItem test-results -Recurse -Force | Select-Object FullName, Length | Format-Table -AutoSize } else { Write-Host "test-results not found" }
+          Write-Host "---- ls playwright-report ----"
+          if (Test-Path playwright-report) { Get-ChildItem playwright-report -Recurse -Force | Select-Object FullName, Length | Format-Table -AutoSize } else { Write-Host "playwright-report not found" }
+          Write-Host "---- server logs ----"
+          if (Test-Path server.log) { Get-Content server.log -Tail 50 | Out-Host }
+          if (Test-Path server.err) { Get-Content server.err -Tail 50 | Out-Host }
+
+      - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: panels-gate-artifacts
+          name: playwright-artifacts
           path: |
             test-results/**
             playwright-report/**
             server.log
             server.err
+          if-no-files-found: ignore
+          retention-days: 7
