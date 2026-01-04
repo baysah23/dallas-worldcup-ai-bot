@@ -5945,6 +5945,61 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     # Scripts
     html.append("""
 <script>
+/* Admin tabs bootstrap (runs even if later script has a parse error) */
+(function(){
+  function qsa(sel){ return document.querySelectorAll(sel); }
+  function setActive(tab){
+    try{
+      var btns = qsa('.tabbtn');
+      for(var i=0;i<btns.length;i++){
+        var b = btns[i];
+        if(b && b.classList){
+          var dt = b.getAttribute('data-tab');
+          if(dt === tab) b.classList.add('active'); else b.classList.remove('active');
+        }
+      }
+      var panes = qsa('.tabpane');
+      for(var j=0;j<panes.length;j++){
+        var p = panes[j];
+        if(p && p.classList) p.classList.add('hidden');
+      }
+      var pane = document.getElementById('tab-'+tab);
+      if(pane && pane.classList) pane.classList.remove('hidden');
+      try{ history.replaceState(null,'','#'+tab); }catch(e){}
+    }catch(e){}
+  }
+
+  window.showTab = function(tab){ setActive(tab); return false; };
+
+  function bind(){
+    var btns = qsa('.tabbtn');
+    for(var i=0;i<btns.length;i++){
+      (function(b){
+        try{
+          b.addEventListener('click', function(ev){
+            try{ ev.preventDefault(); }catch(e){}
+            var t = b.getAttribute('data-tab');
+            if(t) setActive(t);
+          });
+        }catch(e){}
+      })(btns[i]);
+    }
+    // initial hash or default ops
+    var h = (location.hash || '').replace('#','').trim();
+    if(h && document.querySelector('.tabbtn[data-tab="'+h+'"]')) setActive(h);
+    else setActive('ops');
+    window.addEventListener('hashchange', function(){
+      var t = (location.hash || '').replace('#','').trim();
+      if(t && document.querySelector('.tabbtn[data-tab="'+t+'"]')) setActive(t);
+    });
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
+  else bind();
+})();
+</script>
+
+<script>
 const KEY = __ADMIN_KEY__;
 const ROLE = __ADMIN_ROLE__;
 
