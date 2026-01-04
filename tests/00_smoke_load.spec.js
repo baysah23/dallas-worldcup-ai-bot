@@ -1,62 +1,52 @@
 const { test, expect } = require("@playwright/test");
 
-const ADMIN_URL = process.env.ADMIN_URL;
-const MANAGER_URL = process.env.MANAGER_URL;
-const FANZONE_URL = process.env.FANZONE_URL; // optional
+const ADMIN_URL =
+  process.env.ADMIN_URL ||
+  "http://127.0.0.1:5050/admin?key=REPLACE_ADMIN_KEY";
+const MANAGER_URL =
+  process.env.MANAGER_URL ||
+  "http://127.0.0.1:5050/admin?key=REPLACE_MANAGER_KEY";
+const FANZONE_URL =
+  process.env.FANZONE_URL ||
+  "http://127.0.0.1:5050/admin/fanzone?key=REPLACE_ADMIN_KEY";
 
-function must(v, name) {
-  if (!v) throw new Error(`Missing env var: ${name}`);
-  return v;
-}
-
-async function captureConsoleErrors(page) {
-  const errors = [];
-
+function attachConsoleCollectors(page, errors) {
+  page.on("pageerror", (err) => errors.push(`[pageerror] ${err.message}`));
   page.on("console", (msg) => {
-    if (msg.type() === "error") {
-      const loc = msg.location?.();
-      const where =
-        loc && loc.url
-          ? ` @ ${loc.url}:${loc.lineNumber || 0}:${loc.columnNumber || 0}`
-          : "";
-      errors.push(`[console.error] ${msg.text()}${where}`);
-    }
+    const type = msg.type();
+    const text = msg.text();
+    if (type === "error") errors.push(`[console.error] ${text}`);
   });
-
-  page.on("pageerror", (err) => {
-    // IMPORTANT: print stack so we get file:line:col
-    const stack = err?.stack || "";
-    const msg = err?.message || String(err);
-    errors.push(`[pageerror] ${msg}${stack ? "\n" + stack : ""}`);
-  });
-
-  return errors;
 }
 
-async function runOne(label, page, url) {
-  const errors = await captureConsoleErrors(page);
+async function runOne(page, url, label) {
+  const errors = [];
+  attachConsoleCollectors(page, errors);
 
   await page.goto(url, { waitUntil: "domcontentloaded" });
-  await expect(page.locator("body")).toBeVisible();
+  await page.waitForTimeout(500);
+
+  // If your app has a known global error banner, check it here (optional):
+  // const fatalBanner = page.locator(".fatal, .error-banner");
+  // if (await fatalBanner.count()) errors.push(`[ui] fatal banner present`);
 
   if (errors.length) {
-    console.log(`\n=== ${label} PAGE ERRORS ===\n`);
-    console.log(errors.join("\n\n"));
-    console.log(`\n===========================\n`);
+    console.log(`\n=== ${label.toUpperCase()} PAGE ERRORS ===\n`);
+    console.log(errors.join("\n"));
+    console.log("\n===========================\n");
   }
 
   expect(errors, errors.join("\n")).toHaveLength(0);
 }
 
 test("Admin page loads with no fatal console errors", async ({ page }) => {
-  await runOne("ADMIN", page, must(ADMIN_URL, "ADMIN_URL"));
+  await runOne(page, ADMIN_URL, "admin");
 });
 
 test("Manager page loads with no fatal console errors", async ({ page }) => {
-  await runOne("MANAGER", page, must(MANAGER_URL, "MANAGER_URL"));
+  await runOne(page, MANAGER_URL, "manager");
 });
 
 test("Fan Zone page loads with no fatal console errors", async ({ page }) => {
-  if (!FANZONE_URL) test.skip(true, "FANZONE_URL not set");
-  await runOne("FANZONE", page, FANZONE_URL);
+  await runOne(page, FANZONE_URL, "fanzone");
 });

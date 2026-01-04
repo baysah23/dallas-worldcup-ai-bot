@@ -1,30 +1,29 @@
 name: panels-gate
 
 on:
-  pull_request: {}
   push:
-    branches:
-      - main
-      - master
-  workflow_dispatch: {}
-
-concurrency:
-  group: panels-gate-${{ github.ref }}
-  cancel-in-progress: true
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
 
 jobs:
   panels-gate:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
 
     env:
-      CI: "true"
-      PORT: "5050"
+      PORT: 5050
+      CI: true
+
+      # These should be set in repo Secrets
       ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
       ADMIN_MANAGER_KEYS: ${{ secrets.ADMIN_MANAGER_KEYS }}
-      ADMIN_URL: ${{ secrets.ADMIN_URL }}
-      MANAGER_URL: ${{ secrets.MANAGER_URL }}
-      FANZONE_URL: ${{ secrets.FANZONE_URL }}
+
+      # Local URLs used by Playwright in CI
+      ADMIN_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_OWNER_KEY }}
+      MANAGER_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_MANAGER_KEY }}
+      FANZONE_URL: http://127.0.0.1:5050/admin/fanzone?key=${{ secrets.ADMIN_OWNER_KEY }}
 
     steps:
       - name: Checkout
@@ -34,7 +33,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: npm
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -48,7 +46,7 @@ jobs:
           if (Test-Path "requirements.txt") {
             pip install -r requirements.txt
           } else {
-            Write-Host "No requirements.txt found. Skipping pip install."
+            Write-Host "No requirements.txt found; skipping pip install -r."
           }
 
       - name: Install Node deps
@@ -63,18 +61,9 @@ jobs:
       - name: Install Playwright browsers
         shell: pwsh
         run: |
-          npx playwright --version
-          npx playwright install --with-deps
+          npx playwright install chromium
 
-      - name: Sanity check secrets
-        shell: pwsh
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:ADMIN_URL)) { throw "Missing secret: ADMIN_URL" }
-          if ([string]::IsNullOrWhiteSpace($env:MANAGER_URL)) { throw "Missing secret: MANAGER_URL" }
-          if ([string]::IsNullOrWhiteSpace($env:FANZONE_URL)) { throw "Missing secret: FANZONE_URL" }
-          Write-Host "Secrets OK."
-
-      - name: Start server and run Playwright gate
+      - name: Start server + wait + run Playwright gate
         shell: pwsh
         run: |
           # Start server and capture logs
@@ -84,18 +73,20 @@ jobs:
             -RedirectStandardOutput "server.log" `
             -RedirectStandardError "server.err"
 
-          Write-Host ("Server PID: " + $server.Id)
+          Write-Host "Server PID: $($server.Id)"
 
           # Wait until connectable (any HTTP response is fine)
           $ok = $false
-          for ($i = 0; $i -lt 60; $i++) {
-            & curl.exe -s -o NUL "http://127.0.0.1:5050/"
-            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+          for ($i=0; $i -lt 75; $i++) {
+            try {
+              & curl.exe -s -o NUL "http://127.0.0.1:5050/"
+              if ($LASTEXITCODE -eq 0) { $ok = $true; break }
+            } catch {}
             Start-Sleep -Seconds 1
           }
 
           if (-not $ok) {
-            Write-Host "ERROR: Could not connect to server on 127.0.0.1:5050"
+            Write-Host "❌ Could not connect to server on 127.0.0.1:5050"
             Write-Host "---- server.log (tail) ----"
             if (Test-Path server.log) { Get-Content server.log -Tail 200 | Out-Host }
             Write-Host "---- server.err (tail) ----"
@@ -104,49 +95,37 @@ jobs:
             throw "Server not reachable on http://127.0.0.1:5050/"
           }
 
-          Write-Host "OK: Server reachable. Running Playwright gate..."
+          Write-Host "✅ Server reachable. Running Playwright gate..."
           try {
-            # IMPORTANT: ensures playwright is available in PATH in CI
+            # Use npx so CI never hits "playwright not recognized"
             npm run test:panels
           } finally {
             try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
           }
 
-      - name: Debug - list artifact directories
+      - name: Debug: list artifact directories
         if: always()
         shell: pwsh
         run: |
-          Write-Host "---- root ----"
+          Write-Host "---- ls (root) ----"
           Get-ChildItem -Force | Format-Table -AutoSize
+          Write-Host "---- ls (test-results) ----"
+          if (Test-Path "test-results") { Get-ChildItem -Recurse -Force "test-results" | Select-Object FullName | Out-Host } else { Write-Host "test-results not found" }
+          Write-Host "---- ls (playwright-report) ----"
+          if (Test-Path "playwright-report") { Get-ChildItem -Recurse -Force "playwright-report" | Select-Object FullName | Out-Host } else { Write-Host "playwright-report not found" }
+          Write-Host "---- server.log tail ----"
+          if (Test-Path "server.log") { Get-Content server.log -Tail 200 | Out-Host }
+          Write-Host "---- server.err tail ----"
+          if (Test-Path "server.err") { Get-Content server.err -Tail 200 | Out-Host }
 
-          Write-Host "---- test-results ----"
-          if (Test-Path "test-results") {
-            Get-ChildItem "test-results" -Recurse -Force | Select-Object -First 200
-          } else {
-            Write-Host "test-results folder not found."
-          }
-
-          Write-Host "---- playwright-report ----"
-          if (Test-Path "playwright-report") {
-            Get-ChildItem "playwright-report" -Recurse -Force | Select-Object -First 200
-          } else {
-            Write-Host "playwright-report folder not found."
-          }
-
-          Write-Host "---- server logs (tail) ----"
-          if (Test-Path "server.log") { Write-Host "server.log:"; Get-Content "server.log" -Tail 200 | Out-Host }
-          if (Test-Path "server.err") { Write-Host "server.err:"; Get-Content "server.err" -Tail 200 | Out-Host }
-
-      # Bonus fix for: “No files were found… No artifacts will be uploaded.”
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-artifacts
-          if-no-files-found: ignore
-          retention-days: 7
+          if-no-files-found: warn
           path: |
-            test-results
-            playwright-report
+            test-results/**
+            playwright-report/**
             server.log
             server.err

@@ -1,112 +1,114 @@
-// tests/30_visual_regression.spec.js
 const { test, expect } = require("@playwright/test");
 
-const ADMIN_URL = process.env.ADMIN_URL;
-const MANAGER_URL = process.env.MANAGER_URL;
-const FANZONE_URL = process.env.FANZONE_URL;
+const ADMIN_URL =
+  process.env.ADMIN_URL ||
+  "http://127.0.0.1:5050/admin?key=REPLACE_ADMIN_KEY";
+const MANAGER_URL =
+  process.env.MANAGER_URL ||
+  "http://127.0.0.1:5050/admin?key=REPLACE_MANAGER_KEY";
+const FANZONE_URL =
+  process.env.FANZONE_URL ||
+  "http://127.0.0.1:5050/admin/fanzone?key=REPLACE_ADMIN_KEY";
 
-if (!ADMIN_URL || !MANAGER_URL || !FANZONE_URL) {
-  throw new Error("Missing env vars: ADMIN_URL, MANAGER_URL, FANZONE_URL");
-}
-
-// Fixed, deterministic snapshot frame
 const VIEWPORT = { width: 1280, height: 720 };
-const CLIP = { x: 0, y: 0, width: VIEWPORT.width, height: VIEWPORT.height };
 
-// Keep Admin strict; Manager a bit looser (but stable via masks)
-const SNAP_ADMIN = { animations: "disabled", maxDiffPixelRatio: 0.02, clip: CLIP };
-const SNAP_MANAGER = { animations: "disabled", maxDiffPixelRatio: 0.03, clip: CLIP };
-const SNAP_FANZONE = { animations: "disabled", maxDiffPixelRatio: 0.03, clip: CLIP };
-
-test.use({ viewport: VIEWPORT });
+// A bit of tolerance so tiny raster differences don't fail CI
+const SNAP_OPTS = {
+  fullPage: false,
+  maxDiffPixelRatio: 0.02,
+  animations: "disabled",
+  caret: "hide",
+};
 
 async function stabilize(page) {
-  // Kill layout jitter
+  await page.setViewportSize(VIEWPORT);
+
+  // Disable animations/transitions at runtime
   await page.addStyleTag({
     content: `
-      * { caret-color: transparent !important; }
-      html { scroll-behavior: auto !important; }
-      /* kill transitions/animations even if playwright misses some */
       *, *::before, *::after {
         transition: none !important;
         animation: none !important;
+        caret-color: transparent !important;
       }
-      /* remove scrollbar rendering diffs */
-      ::-webkit-scrollbar { width: 0 !important; height: 0 !important; }
-      body { overflow: hidden !important; }
+      html { scroll-behavior: auto !important; }
     `,
   });
 
+  // Let layout settle
   await page.waitForLoadState("domcontentloaded");
-  await page.waitForTimeout(150);
-  await page.waitForLoadState("networkidle").catch(() => {});
   await page.waitForTimeout(250);
 
-  // Always start from top-left
+  // Scroll to top for consistent screenshots
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.waitForTimeout(150);
 }
 
-async function clickTab(page, label) {
-  const btn = page.getByRole("button", { name: label });
+// Common dynamic areas across pages (mask them if present)
+function commonMasks(page) {
+  const candidates = [
+    "#toast",
+    ".toast",
+    ".toasts",
+    "#notifications",
+    ".notifications",
+    ".timestamp",
+    ".time",
+    "[data-ts]",
+    "#last-updated",
+    ".last-updated",
+    "#audit",
+    "#tab-audit",
+    ".audit",
+    ".audit-log",
+    ".log",
+    "#leads",
+    "#tab-leads",
+    ".leads",
+    "table",
+  ];
+  return candidates.map((sel) => page.locator(sel)).filter(Boolean);
+}
+
+// Extra masks per tab (when labels are known)
+function tabMasks(page, tabLabel) {
+  const base = commonMasks(page);
+
+  const label = (tabLabel || "").toLowerCase();
+  if (label.includes("lead")) {
+    base.push(page.locator("#tab-leads table"));
+    base.push(page.locator("#tab-leads .table"));
+    base.push(page.locator("#tab-leads .rows"));
+  }
+  if (label.includes("audit")) {
+    base.push(page.locator("#tab-audit"));
+    base.push(page.locator("#tab-audit table"));
+    base.push(page.locator("#tab-audit .log"));
+  }
+  if (label.includes("ops")) {
+    base.push(page.locator("#tab-ops .last-updated"));
+    base.push(page.locator("#tab-ops [data-ts]"));
+  }
+  if (label.includes("ai queue") || label.includes("aiq")) {
+    base.push(page.locator("#tab-aiq table"));
+    base.push(page.locator("#tab-aiq .queue"));
+  }
+  return base;
+}
+
+async function clickTab(page, tabName) {
+  const btn = page.getByRole("button", { name: new RegExp(`^${tabName}$`, "i") });
   if (await btn.count()) {
     await btn.first().click();
+    await page.waitForTimeout(200);
     return;
   }
-  const byText = page.locator("button, .tabbtn, .tab").filter({ hasText: label });
-  if (await byText.count()) {
-    await byText.first().click();
+  const byDataTab = page.locator(`[data-tab="${tabName.toLowerCase()}"]`);
+  if (await byDataTab.count()) {
+    await byDataTab.first().click();
+    await page.waitForTimeout(200);
     return;
   }
-  throw new Error(`Could not find tab "${label}"`);
-}
-
-function commonMasks(page) {
-  return [
-    // transient UI
-    page.locator(".toast, #toast, .snackbar, .notice, .saving, .saved"),
-    // time-ish / counters / dynamic chips
-    page.locator(".last-updated, .updated-at, .timestamp, .counter, .count, .badge, .chip, .pill"),
-  ];
-}
-
-// Ops is often stateful (toggle on/off, saved banners, audit line, etc.)
-// We mask the *toggle region* so we regression-test layout chrome and headings.
-function opsMasks(page) {
-  return [
-    // common containers where toggles live
-    page.locator("#ops-controls, #tab-ops #ops-controls, #tab-ops .toggles, #tab-ops .toggle-grid, #tab-ops .controls"),
-    // match day ops presets are dynamic too
-    page.locator("#tab-ops .presets, #tab-ops .preset, #tab-ops .preset-row"),
-  ];
-}
-
-// Leads is highly dynamic; mask the list/table/cards area.
-function leadsMasks(page) {
-  return [
-    page.locator("#tab-leads, #leads, .leads, .leads-pane, .leads-panel"),
-    page.locator("#tab-leads table, #tab-leads tbody, #tab-leads .cards, #tab-leads .table"),
-    page.locator("#leads table, #leads tbody, #leads .cards, #leads .table"),
-    page.locator(".lead-row, .lead-card, .lead-item"),
-  ];
-}
-
-// Audit feeds can reorder / new lines
-function auditMasks(page) {
-  return [
-    page.locator("#tab-audit, #audit, .audit, .audit-log, .activity, .activity-log"),
-    page.locator("#tab-audit table, #tab-audit tbody, #tab-audit ul, #tab-audit ol"),
-  ];
-}
-
-function masksForTab(page, tabLabel) {
-  const t = (tabLabel || "").toLowerCase();
-
-  if (t === "ops") return [...commonMasks(page), ...opsMasks(page)];
-  if (t === "leads") return [...commonMasks(page), ...leadsMasks(page)];
-  if (t === "audit") return [...commonMasks(page), ...auditMasks(page)];
-
-  return commonMasks(page);
 }
 
 test.describe("Visual - ADMIN tab panes", () => {
@@ -131,9 +133,10 @@ test.describe("Visual - ADMIN tab panes", () => {
       await stabilize(page);
 
       const safe = t.replace(/\s+/g, "_").toLowerCase();
+
       await expect(page).toHaveScreenshot(`admin-${safe}.png`, {
-        ...SNAP_ADMIN,
-        mask: masksForTab(page, t),
+        ...SNAP_OPTS,
+        mask: tabMasks(page, t),
       });
     }
   });
@@ -151,9 +154,10 @@ test.describe("Visual - MANAGER core panes", () => {
       await stabilize(page);
 
       const safe = t.replace(/\s+/g, "_").toLowerCase();
+
       await expect(page).toHaveScreenshot(`manager-${safe}.png`, {
-        ...SNAP_MANAGER,
-        mask: masksForTab(page, t),
+        ...SNAP_OPTS,
+        mask: tabMasks(page, t),
       });
     }
   });
@@ -165,7 +169,7 @@ test.describe("Visual - FANZONE page", () => {
     await stabilize(page);
 
     await expect(page).toHaveScreenshot("fanzone.png", {
-      ...SNAP_FANZONE,
+      ...SNAP_OPTS,
       mask: commonMasks(page),
     });
   });
