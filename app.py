@@ -5373,6 +5373,10 @@ body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(
 
 .pill b{color:var(--gold)}
 .tabs{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
+.topbar{position:relative;z-index:5}
+.tabs{position:relative;z-index:6}
+.tabbtn,.btn,.btn2{position:relative;z-index:7}
+
 .tabbtn{border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);padding:10px 12px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer}
 .tabbtn.active{border-color:rgba(212,175,55,.6);box-shadow:0 0 0 1px rgba(212,175,55,.25) inset}
 .card{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:14px;padding:12px 12px;margin:10px 0}
