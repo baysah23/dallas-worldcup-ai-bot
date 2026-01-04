@@ -31,28 +31,40 @@ function commonMasks(page) {
   ];
 }
 
-// Extra masks specifically for audit-like feeds that change constantly
 function auditFeedMasks(page) {
   return [
-    // common IDs/classes for audit containers
     page.locator("#audit, #audit-log, #tab-audit, .audit, .audit-log, .activity, .activity-log"),
-
-    // tables/lists inside audit (often the changing part)
     page.locator("#tab-audit table, #tab-audit tbody, #tab-audit ul, #tab-audit ol"),
     page.locator("#audit table, #audit tbody, #audit ul, #audit ol"),
+  ];
+}
+
+// ✅ NEW: Leads is highly dynamic (lists, sorting, counts, timestamps)
+// Mask the main leads content region so visuals test the layout/chrome, not live data.
+function leadsFeedMasks(page) {
+  return [
+    // common tab container IDs/classes
+    page.locator("#tab-leads, #leads, .leads, .leads-pane, .leads-panel"),
+
+    // typical table/card containers inside leads
+    page.locator("#tab-leads table, #tab-leads tbody, #tab-leads .table, #tab-leads .cards"),
+    page.locator("#leads table, #leads tbody, #leads .table, #leads .cards"),
+
+    // common “rows” / “cards” patterns
+    page.locator(".lead-row, .lead-card, .lead-item"),
   ];
 }
 
 const SNAP_ADMIN = {
   fullPage: false,
   animations: "disabled",
-  maxDiffPixelRatio: 0.01, // strict
+  maxDiffPixelRatio: 0.01,
 };
 
 const SNAP_MANAGER = {
   fullPage: false,
   animations: "disabled",
-  maxDiffPixelRatio: 0.03, // tolerant (manager reflects live state)
+  maxDiffPixelRatio: 0.03,
 };
 
 const SNAP_FANZONE = {
@@ -77,6 +89,15 @@ async function clickTab(page, label) {
   throw new Error(`Could not find tab "${label}" button`);
 }
 
+function tabMasks(page, tabLabel) {
+  const t = tabLabel.toLowerCase();
+
+  if (t === "audit") return [...commonMasks(page), ...auditFeedMasks(page)];
+  if (t === "leads") return [...commonMasks(page), ...leadsFeedMasks(page)];
+
+  return commonMasks(page);
+}
+
 test.describe("Visual - ADMIN tab panes", () => {
   test("Admin tab panes stable viewport snapshots", async ({ page }) => {
     await page.goto(ADMIN_URL, { waitUntil: "domcontentloaded" });
@@ -99,9 +120,10 @@ test.describe("Visual - ADMIN tab panes", () => {
       await stabilize(page);
 
       const safe = t.replace(/\s+/g, "_").toLowerCase();
+
       await expect(page).toHaveScreenshot(`admin-${safe}.png`, {
         ...SNAP_ADMIN,
-        mask: commonMasks(page),
+        mask: tabMasks(page, t),
       });
     }
   });
@@ -121,15 +143,9 @@ test.describe("Visual - MANAGER core panes", () => {
 
       const safe = t.replace(/\s+/g, "_").toLowerCase();
 
-      // ✅ For Audit, mask the dynamic feed area so layout regressions still get caught
-      const masks =
-        t.toLowerCase() === "audit"
-          ? [...commonMasks(page), ...auditFeedMasks(page)]
-          : commonMasks(page);
-
       await expect(page).toHaveScreenshot(`manager-${safe}.png`, {
         ...SNAP_MANAGER,
-        mask: masks,
+        mask: tabMasks(page, t),
       });
     }
   });
