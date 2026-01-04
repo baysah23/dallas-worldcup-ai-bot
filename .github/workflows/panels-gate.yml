@@ -2,9 +2,11 @@ name: panels-gate
 
 on:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
   workflow_dispatch:
 
 concurrency:
@@ -17,20 +19,13 @@ jobs:
     timeout-minutes: 20
 
     env:
-      PORT: 5050
-      CI: true
+      PORT: "5050"
+      CI: "true"
 
-      # You should set these in GitHub → Settings → Secrets and variables → Actions
-      # Secrets:
-      #   ADMIN_OWNER_KEY
-      #   ADMIN_MANAGER_KEYS
-      # Or just set ADMIN_URL / MANAGER_URL / FANZONE_URL as secrets directly.
       ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
       ADMIN_MANAGER_KEYS: ${{ secrets.ADMIN_MANAGER_KEYS }}
 
-      # Local URLs (the tests use these env vars)
       ADMIN_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_OWNER_KEY }}
-      # If your manager URL is actually /manager, change it here:
       MANAGER_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_MANAGER_KEYS }}
       FANZONE_URL: http://127.0.0.1:5050/admin/fanzone?key=${{ secrets.ADMIN_OWNER_KEY }}
 
@@ -42,29 +37,34 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "npm"
+          cache: npm
 
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
+          cache: pip
 
       - name: Install Python deps
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
           if (Test-Path requirements.txt) { pip install -r requirements.txt }
 
       - name: Install Node deps
-        run: npm ci
+        shell: pwsh
+        run: |
+          npm ci
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+        shell: pwsh
+        run: |
+          npx playwright install --with-deps
 
       - name: Start server + run Playwright gate
         shell: pwsh
         run: |
-          # Clean old artifacts so upload is always current
+          # Clean old artifacts so uploads are always current
           if (Test-Path test-results) { Remove-Item -Recurse -Force test-results }
           if (Test-Path playwright-report) { Remove-Item -Recurse -Force playwright-report }
           if (Test-Path server.log) { Remove-Item -Force server.log }
@@ -111,22 +111,30 @@ jobs:
           Write-Host "---- ls (root) ----"
           Get-ChildItem -Force | Format-Table -AutoSize
           Write-Host "---- ls test-results ----"
-          if (Test-Path test-results) { Get-ChildItem test-results -Recurse -Force | Select-Object FullName, Length | Format-Table -AutoSize } else { Write-Host "test-results not found" }
+          if (Test-Path test-results) {
+            Get-ChildItem test-results -Recurse -Force | Select-Object FullName, Length | Format-Table -AutoSize
+          } else {
+            Write-Host "test-results not found"
+          }
           Write-Host "---- ls playwright-report ----"
-          if (Test-Path playwright-report) { Get-ChildItem playwright-report -Recurse -Force | Select-Object FullName, Length | Format-Table -AutoSize } else { Write-Host "playwright-report not found" }
+          if (Test-Path playwright-report) {
+            Get-ChildItem playwright-report -Recurse -Force | Select-Object FullName, Length | Format-Table -AutoSize
+          } else {
+            Write-Host "playwright-report not found"
+          }
           Write-Host "---- server logs ----"
-          if (Test-Path server.log) { Get-Content server.log -Tail 50 | Out-Host }
-          if (Test-Path server.err) { Get-Content server.err -Tail 50 | Out-Host }
+          if (Test-Path server.log) { Get-Content server.log -Tail 80 | Out-Host }
+          if (Test-Path server.err) { Get-Content server.err -Tail 80 | Out-Host }
 
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-artifacts
-          path: |
-            test-results/**
-            playwright-report/**
-            server.log
-            server.err
           if-no-files-found: ignore
           retention-days: 7
+          path: |
+            test-results
+            playwright-report
+            server.log
+            server.err
