@@ -4517,6 +4517,84 @@ def admin_api_audit():
         pass
     return jsonify({"ok": True, "entries": entries})
 
+
+
+# ============================================================
+# Partner / Venue Policies API (Hard rules)
+# - Managers can read/list
+# - Owners can set/delete
+# ============================================================
+@app.route("/admin/api/partner-policies/list", methods=["GET"])
+def admin_api_partner_policies_list():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    try:
+        _load_partner_policies_from_disk()
+        partners = sorted([k for k in (_PARTNER_POLICIES or {}).keys() if k and k != "default"])
+        return jsonify({"ok": True, "partners": partners, "default": _PARTNER_POLICIES.get("default", _default_partner_policy())})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+@app.route("/admin/api/partner-policies", methods=["GET"])
+def admin_api_partner_policies_get():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    try:
+        _load_partner_policies_from_disk()
+        partner = (request.args.get("partner") or "").strip() or "default"
+        pol = _PARTNER_POLICIES.get(partner) if isinstance(_PARTNER_POLICIES, dict) else None
+        if not isinstance(pol, dict):
+            pol = _default_partner_policy()
+        return jsonify({"ok": True, "partner": partner, "policy": pol})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+@app.route("/admin/api/partner-policies/set", methods=["POST"])
+def admin_api_partner_policies_set():
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+    try:
+        _load_partner_policies_from_disk()
+        body = request.get_json(silent=True) or {}
+        partner = (body.get("partner") or "").strip() or "default"
+        policy = body.get("policy") or {}
+        if not isinstance(policy, dict):
+            return jsonify({"ok": False, "error": "Invalid policy payload"}), 400
+        if "vip_min_budget" in policy:
+            try:
+                policy["vip_min_budget"] = int(policy["vip_min_budget"] or 0)
+            except Exception:
+                policy["vip_min_budget"] = 0
+        if "allowed_statuses" in policy and policy["allowed_statuses"] is None:
+            policy.pop("allowed_statuses", None)
+        merged = _save_partner_policy(partner, policy)
+        _audit_event("partner_policy.save", {"partner": partner, "policy": merged})
+        return jsonify({"ok": True, "partner": partner, "policy": merged})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
+@app.route("/admin/api/partner-policies/delete", methods=["POST"])
+def admin_api_partner_policies_delete():
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+    try:
+        _load_partner_policies_from_disk()
+        body = request.get_json(silent=True) or {}
+        partner = (body.get("partner") or "").strip() or "default"
+        if partner == "default":
+            return jsonify({"ok": False, "error": "Cannot delete default policy"}), 400
+        if isinstance(_PARTNER_POLICIES, dict) and partner in _PARTNER_POLICIES:
+            _PARTNER_POLICIES.pop(partner, None)
+            _safe_write_json_file(PARTNER_POLICIES_FILE, _PARTNER_POLICIES)
+            _audit_event("partner_policy.delete", {"partner": partner})
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 400
+
 @app.route("/admin/update-lead", methods=["POST"])
 def admin_update_lead():
     ok, resp = _require_admin(min_role="manager")
@@ -5097,6 +5175,67 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     </div>
   </div>
 </div>
+
+  <div class="card" style="margin-top:12px">
+    <div class="h2">Partner / Venue Policies (Hard)</div>
+    <div class="small">
+      Policies are enforced on <b>AI suggestions</b> and again on <b>Apply</b>. They cannot be bypassed by AI.
+      Defaults are safe until you set partner-specific rules.
+    </div>
+
+    <div class="grid2" style="margin-top:10px">
+      <div>
+        <label class="small">Partner / Venue ID</label>
+        <input id="pp-partner" class="inp" placeholder="e.g., VENUE_ABC"/>
+        <div class="small" style="opacity:.8;margin-top:6px">Tip: use a stable ID you also store in your leads (partner/venue field). "default" applies if no partner is detected.</div>
+      </div>
+      <div>
+        <label class="small">VIP minimum budget (USD)</label>
+        <input id="pp-vip-min" class="inp" type="number" min="0" step="50" placeholder="1500"/>
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:10px">
+      <div>
+        <label class="small">Status updates</label>
+        <label class="small" style="display:flex;gap:8px;align-items:center;margin-top:8px">
+          <input id="pp-never-status" type="checkbox" checked/>
+          <span>Hard block AI status_update (recommended)</span>
+        </label>
+        <div class="small" style="opacity:.8;margin-top:6px">Even if status_update is allowlisted, this can still block it per partner.</div>
+      </div>
+      <div>
+        <label class="small">Allowed statuses (comma-separated)</label>
+        <input id="pp-allowed-statuses" class="inp" placeholder="New, Confirmed, Seated, No-Show, Handled"/>
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:10px">
+      <div>
+        <label class="small">Outbound allowed channels</label>
+        <input id="pp-allowed-channels" class="inp" placeholder="email, sms, whatsapp"/>
+        <div class="small" style="opacity:.8;margin-top:6px">Used by outbound sending (next phase). Human-in-the-middle is always enforced.</div>
+      </div>
+      <div>
+        <label class="small">Outbound requires role</label>
+        <select id="pp-outbound-role" class="inp">
+          <option value="manager">Manager+</option>
+          <option value="owner">Owner only</option>
+        </select>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+      <button type="button" class="btn" data-min-role="owner" onclick="savePartnerPolicy()">Save Policy</button>
+      <button class="btn2" onclick="loadPartnerPolicy()">Load Policy</button>
+      <button class="btn2" data-min-role="owner" onclick="deletePartnerPolicy()">Delete Policy</button>
+      <button class="btn2" onclick="loadPartnerList()">List Partners</button>
+      <span id="pp-msg" class="note"></span>
+    </div>
+
+    <div id="pp-list" class="small" style="margin-top:10px;opacity:.9"></div>
+  </div>
+
 """)
 
     # Menu tab
@@ -5362,6 +5501,120 @@ async function saveRules(){
   } else {
     if(msg) msg.textContent='Save failed';
     alert('Save failed: '+(j && j.error ? j.error : res.status));
+  }
+}
+
+
+// ===============================
+// Partner / Venue Policies (Hard)
+// ===============================
+async function loadPartnerList(){
+  const msg = qs('#pp-msg'); if(msg) msg.textContent='Loading partners...';
+  const box = qs('#pp-list'); if(box) box.textContent='';
+  try{
+    const res = await fetch('/admin/api/partner-policies/list?key='+encodeURIComponent(KEY));
+    const j = await res.json().catch(()=>null);
+    if(!j || !j.ok){ if(msg) msg.textContent='Failed'; return; }
+    const partners = (j.partners||[]).filter(Boolean);
+    if(box){
+      box.innerHTML = partners.length
+        ? ('<b>Known partners:</b> ' + partners.map(p=>'<code style="padding:2px 6px;border:1px solid rgba(255,255,255,.12);border-radius:10px">'+escapeHtml(p)+'</code>').join(' '))
+        : 'No partner policies saved yet (only default).';
+    }
+    if(msg) msg.textContent='Loaded ✔';
+  }catch(e){
+    if(msg) msg.textContent='Error';
+  }
+}
+
+function _getPartnerId(){
+  const p = (qs('#pp-partner')?.value||'').trim();
+  return p || 'default';
+}
+
+async function loadPartnerPolicy(){
+  const msg = qs('#pp-msg'); if(msg) msg.textContent='Loading...';
+  const partner = _getPartnerId();
+  try{
+    const res = await fetch('/admin/api/partner-policies?key='+encodeURIComponent(KEY)+'&partner='+encodeURIComponent(partner));
+    const j = await res.json().catch(()=>null);
+    if(!j || !j.ok){ if(msg) msg.textContent='Failed'; return; }
+    const pol = j.policy || {};
+    qs('#pp-vip-min').value = (pol.vip_min_budget ?? 0);
+    qs('#pp-never-status').checked = !!pol.never_status_update;
+    qs('#pp-allowed-statuses').value = Array.isArray(pol.allowed_statuses) ? pol.allowed_statuses.join(', ') : (pol.allowed_statuses||'');
+    const oa = pol.outbound_allowed || {};
+    const allowed = Object.keys(oa).filter(k=>oa[k]);
+    qs('#pp-allowed-channels').value = allowed.join(', ');
+    qs('#pp-outbound-role').value = (pol.outbound_require_role || 'manager');
+    if(msg) msg.textContent='Loaded ✔';
+  }catch(e){
+    if(msg) msg.textContent='Error';
+  }
+}
+
+async function savePartnerPolicy(){
+  const msg = qs('#pp-msg'); if(msg) msg.textContent='Saving...';
+  const partner = _getPartnerId();
+  const vipMin = parseInt(qs('#pp-vip-min').value||'0',10) || 0;
+  const neverStatus = !!qs('#pp-never-status').checked;
+  const statusesRaw = (qs('#pp-allowed-statuses').value||'').trim();
+  const statuses = statusesRaw ? statusesRaw.split(',').map(s=>s.trim()).filter(Boolean) : [];
+  const chRaw = (qs('#pp-allowed-channels').value||'').trim();
+  const ch = chRaw ? chRaw.split(',').map(s=>s.trim().toLowerCase()).filter(Boolean) : [];
+  const outbound_allowed = { email:false, sms:false, whatsapp:false };
+  ch.forEach(k=>{ if(Object.prototype.hasOwnProperty.call(outbound_allowed,k)) outbound_allowed[k]=true; });
+  const outbound_role = (qs('#pp-outbound-role').value||'manager').trim() || 'manager';
+
+  const payload = {
+    partner: partner,
+    policy: {
+      vip_min_budget: vipMin,
+      never_status_update: neverStatus,
+      allowed_statuses: statuses.length ? statuses : undefined,
+      outbound_allowed: outbound_allowed,
+      outbound_require_role: outbound_role
+    }
+  };
+
+  try{
+    const res = await fetch('/admin/api/partner-policies/set?key='+encodeURIComponent(KEY), {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const j = await res.json().catch(()=>null);
+    if(j && j.ok){
+      if(msg) msg.textContent='Saved ✔';
+      try{ await loadPartnerList(); }catch(e){}
+    } else {
+      if(msg) msg.textContent=(j && j.error) ? ('Blocked: '+j.error) : 'Failed';
+    }
+  }catch(e){
+    if(msg) msg.textContent='Error';
+  }
+}
+
+async function deletePartnerPolicy(){
+  const msg = qs('#pp-msg'); if(msg) msg.textContent='Deleting...';
+  const partner = _getPartnerId();
+  try{
+    const res = await fetch('/admin/api/partner-policies/delete?key='+encodeURIComponent(KEY), {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({partner: partner})
+    });
+    const j = await res.json().catch(()=>null);
+    if(j && j.ok){
+      if(msg) msg.textContent='Deleted ✔';
+      try{ await loadPartnerList(); }catch(e){}
+      if(partner !== 'default'){ qs('#pp-partner').value=''; }
+      try{ await loadPartnerPolicy(); }catch(e){}
+    } else {
+      if(msg) msg.textContent=(j && j.error) ? ('Blocked: '+j.error) : 'Failed';
+    }
+  }catch(e){
+    if(msg) msg.textContent='Error';
   }
 }
 
@@ -5883,6 +6136,8 @@ window.showTab = function(tab){
     document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
     const pane = document.querySelector('#tab-'+tab);
     if(pane) pane.classList.remove('hidden');
+    if(tab==='rules'){ try{ loadPartnerList(); loadPartnerPolicy(); }catch(e){} try{ loadRules(); }catch(e){} }
+
     try{ initFanZoneAdmin(); }catch(e){}
     try{ history.replaceState(null,'','#'+tab); }catch(e){}
   }catch(e){}
