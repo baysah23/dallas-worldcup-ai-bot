@@ -7206,7 +7206,7 @@ async function loadHealth(){
         const badge = c.ok ? '✅' : (c.severity==='error' ? '🚨' : '⚠️');
         return `${badge} ${c.name}: ${c.message||''}`;
       });
-      body.textContent = lines.join('\n');
+      body.textContent = lines.join('\\n');
     }
   }catch(e){
     if(msg) msg.textContent='Load failed: '+(e.message||e);
@@ -7233,7 +7233,7 @@ async function runHealth(){
         const badge = c.ok ? '✅' : (c.severity==='error' ? '🚨' : '⚠️');
         return `${badge} ${c.name}: ${c.message||''}`;
       });
-      body.textContent = lines.join('\n');
+      body.textContent = lines.join('\\n');
     }
     // also refresh notifications (alerts may have been emitted)
     try{ loadNotifs(); }catch(e){}
@@ -7896,7 +7896,7 @@ async function loadForecast(){
     if(Array.isArray(d.top_days_7) && d.top_days_7.length){
       lines.push(`Top days (7d): ` + d.top_days_7.map(x=>`${x.key} (${x.count})`).join(', '));
     }
-    if(body) body.textContent = lines.join('\n');
+    if(body) body.textContent = lines.join('\\n');
     if(msg) msg.textContent = 'Updated ✔';
   }catch(e){
     if(msg) msg.textContent = 'Failed: ' + (e.message || e);
