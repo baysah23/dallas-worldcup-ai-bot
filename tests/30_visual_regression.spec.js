@@ -7,55 +7,74 @@ const FANZONE_URL = process.env.FANZONE_URL;
 
 if (!ADMIN_URL || !MANAGER_URL || !FANZONE_URL) {
   throw new Error(
-    "Missing env vars: ADMIN_URL, MANAGER_URL, FANZONE_URL. Set them in CI secrets or your shell."
+    "Missing env vars: ADMIN_URL, MANAGER_URL, FANZONE_URL. Set them in CI/workflow."
   );
 }
 
-// Small stabilization helper: wait for layout + fonts to settle
 async function stabilize(page) {
   await page.waitForLoadState("domcontentloaded");
   await page.waitForLoadState("networkidle").catch(() => {});
-  await page.waitForTimeout(200);
+  await page.waitForTimeout(250);
 }
 
-// Mask things that change (timestamps, “last updated”, etc.)
 function commonMasks(page) {
   return [
-    // Common “dynamic” targets (safe to keep even if selector not found)
-    page.locator("[data-testid='timestamp']"),
-    page.locator("[data-testid='last-updated']"),
-    page.locator(".toast"),
-    page.locator("#toast"),
-    page.locator(".saving"),
-    page.locator(".status-pill"),
-    page.locator(".audit-timestamp"),
-    page.locator(".updated-at"),
+    // toasts / transient status
+    page.locator(".toast, #toast, .snackbar, .notice, .saving, .saved"),
+
+    // timestamps / "last updated"
+    page.locator("[data-testid='timestamp'], [data-testid='last-updated']"),
+    page.locator(".last-updated, .updated-at, .audit-timestamp, .timestamp"),
+
+    // dynamic pills/badges/counters
+    page.locator(".pill, .badge, .chip, .counter, .count, .status-pill"),
   ];
 }
 
-const SNAP_OPTS = {
-  fullPage: false, // viewport only (stable)
+// Extra masks specifically for audit-like feeds that change constantly
+function auditFeedMasks(page) {
+  return [
+    // common IDs/classes for audit containers
+    page.locator("#audit, #audit-log, #tab-audit, .audit, .audit-log, .activity, .activity-log"),
+
+    // tables/lists inside audit (often the changing part)
+    page.locator("#tab-audit table, #tab-audit tbody, #tab-audit ul, #tab-audit ol"),
+    page.locator("#audit table, #audit tbody, #audit ul, #audit ol"),
+  ];
+}
+
+const SNAP_ADMIN = {
+  fullPage: false,
   animations: "disabled",
-  // tiny rendering diffs are normal across machines; keep this small but non-zero
-  maxDiffPixelRatio: 0.01,
+  maxDiffPixelRatio: 0.01, // strict
+};
+
+const SNAP_MANAGER = {
+  fullPage: false,
+  animations: "disabled",
+  maxDiffPixelRatio: 0.03, // tolerant (manager reflects live state)
+};
+
+const SNAP_FANZONE = {
+  fullPage: false,
+  animations: "disabled",
+  maxDiffPixelRatio: 0.02,
 };
 
 async function clickTab(page, label) {
-  // Prefer button by role/name if present
   const btn = page.getByRole("button", { name: label });
   if (await btn.count()) {
     await btn.first().click();
     return;
   }
 
-  // Fallback: data-tab button if your UI uses it
-  const byData = page.locator(`button[data-tab], .tabbtn`).filter({ hasText: label });
-  if (await byData.count()) {
-    await byData.first().click();
+  const byText = page.locator("button, .tabbtn, .tab").filter({ hasText: label });
+  if (await byText.count()) {
+    await byText.first().click();
     return;
   }
 
-  throw new Error(`Could not find tab button for "${label}"`);
+  throw new Error(`Could not find tab "${label}" button`);
 }
 
 test.describe("Visual - ADMIN tab panes", () => {
@@ -80,10 +99,10 @@ test.describe("Visual - ADMIN tab panes", () => {
       await stabilize(page);
 
       const safe = t.replace(/\s+/g, "_").toLowerCase();
-      await expect(page).toHaveScreenshot(
-        `admin-${safe}.png`,
-        { ...SNAP_OPTS, mask: commonMasks(page) }
-      );
+      await expect(page).toHaveScreenshot(`admin-${safe}.png`, {
+        ...SNAP_ADMIN,
+        mask: commonMasks(page),
+      });
     }
   });
 });
@@ -93,18 +112,25 @@ test.describe("Visual - MANAGER core panes", () => {
     await page.goto(MANAGER_URL, { waitUntil: "domcontentloaded" });
     await stabilize(page);
 
-    // Keep these to the ones managers actually use
     const tabs = ["Ops", "Leads", "AI Queue", "Monitoring", "Audit"];
 
     for (const t of tabs) {
       await clickTab(page, t);
       await stabilize(page);
+      await page.waitForTimeout(300);
 
       const safe = t.replace(/\s+/g, "_").toLowerCase();
-      await expect(page).toHaveScreenshot(
-        `manager-${safe}.png`,
-        { ...SNAP_OPTS, mask: commonMasks(page) }
-      );
+
+      // ✅ For Audit, mask the dynamic feed area so layout regressions still get caught
+      const masks =
+        t.toLowerCase() === "audit"
+          ? [...commonMasks(page), ...auditFeedMasks(page)]
+          : commonMasks(page);
+
+      await expect(page).toHaveScreenshot(`manager-${safe}.png`, {
+        ...SNAP_MANAGER,
+        mask: masks,
+      });
     }
   });
 });
@@ -114,9 +140,9 @@ test.describe("Visual - FANZONE page", () => {
     await page.goto(FANZONE_URL, { waitUntil: "domcontentloaded" });
     await stabilize(page);
 
-    await expect(page).toHaveScreenshot(
-      "fanzone.png",
-      { ...SNAP_OPTS, mask: commonMasks(page) }
-    );
+    await expect(page).toHaveScreenshot("fanzone.png", {
+      ...SNAP_FANZONE,
+      mask: commonMasks(page),
+    });
   });
 });

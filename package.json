@@ -1,7 +1,10 @@
 {
   "scripts": {
-    "test:panels": "playwright test tests/00_smoke_load.spec.js tests/10_tabs_layout.spec.js tests/20_save_refresh_actions.spec.js tests/30_visual_regression.spec.js",
-    "test:visual": "playwright test tests/30_visual_regression.spec.js",
-    "test:visual:update": "playwright test tests/30_visual_regression.spec.js --update-snapshots"
+    "test:panels": "npx playwright test tests/00_smoke_load.spec.js tests/10_tabs_layout.spec.js tests/20_save_refresh_actions.spec.js tests/30_visual_regression.spec.js",
+    "test:visual": "npx playwright test tests/30_visual_regression.spec.js",
+    "test:visual:update": "npx playwright test tests/30_visual_regression.spec.js --update-snapshots"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
   }
 }
