@@ -66,22 +66,22 @@ jobs:
       - name: Wait for server (find listening port for python)
         shell: pwsh
         run: |
-          $pid = [int]$env:SERVER_PID
-          Write-Host "Server PID: $pid"
+          $serverPid = [int]$env:SERVER_PID
+          Write-Host "Server PID: $serverPid"
 
-          function Get-ListeningPortsForPid($pid) {
+          function Get-ListeningPortsForPid($targetPid) {
             $lines = cmd /c "netstat -ano -p tcp | findstr LISTENING"
             $ports = @()
 
             foreach ($ln in $lines) {
-              # Example line:
+              # Example:
               # TCP    0.0.0.0:5050    0.0.0.0:0    LISTENING    1234
               $parts = ($ln -replace "\s+", " ").Trim().Split(" ")
               if ($parts.Length -ge 5) {
                 $local = $parts[1]
                 $state = $parts[3]
                 $p = $parts[4]
-                if ($state -eq "LISTENING" -and $p -eq "$pid") {
+                if ($state -eq "LISTENING" -and $p -eq "$targetPid") {
                   if ($local -match ":(\d+)$") { $ports += [int]$matches[1] }
                 }
               }
@@ -93,9 +93,8 @@ jobs:
           $port = $null
 
           for ($i=0; $i -lt 60; $i++) {
-            $ports = Get-ListeningPortsForPid $pid
+            $ports = Get-ListeningPortsForPid $serverPid
             if ($ports.Count -gt 0) {
-              # Prefer 5050 if present, else take the first one
               if ($ports -contains 5050) { $port = 5050 } else { $port = $ports[0] }
               $ok = $true
               break
@@ -104,11 +103,11 @@ jobs:
           }
 
           if (-not $ok) {
-            Write-Host "❌ Could not find any LISTENING port for PID $pid"
+            Write-Host "❌ Could not find any LISTENING port for PID $serverPid"
             Write-Host "---- netstat :5050 ----"
             cmd /c "netstat -ano | findstr :5050" | Out-Host
             Write-Host "---- netstat python PID ----"
-            cmd /c "netstat -ano -p tcp | findstr $pid" | Out-Host
+            cmd /c "netstat -ano -p tcp | findstr $serverPid" | Out-Host
 
             Write-Host "---- server.log (tail) ----"
             if (Test-Path server.log) { Get-Content server.log -Tail 200 | Out-Host }
