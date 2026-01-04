@@ -5470,25 +5470,6 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     <button type="button" class="tabbtn" data-tab="menu" data-minrole="owner" onclick="showTab('menu');return false;">Menu</button>
     <button type="button" class="tabbtn" data-tab="policies" data-minrole="owner" onclick="showTab('policies');return false;">Policies</button>
   </div>
-
-
-<!-- Panels quick-jump (always visible) -->
-<div class="card" id="panel-jump" style="margin-top:12px">
-  <div class="h2" style="margin-bottom:6px">Panels</div>
-  <div class="small" style="opacity:.85;margin-bottom:10px">Everything is visible. Owner-only panels are shown but locked for managers.</div>
-  <div class="grid2" style="gap:10px">
-    <button type="button" class="btn2" onclick="showTab('ops');return false;">Ops</button>
-    <button type="button" class="btn2" onclick="showTab('leads');return false;">Leads</button>
-    <button type="button" class="btn2" onclick="showTab('aiq');return false;">AI Queue</button>
-    <button type="button" class="btn2" onclick="showTab('monitor');return false;">Monitoring</button>
-    <button type="button" class="btn2" onclick="showTab('audit');return false;">Audit</button>
-    <button type="button" class="btn2" data-minrole="owner" onclick="showTab('ai');return false;">AI Settings</button>
-    <button type="button" class="btn2" data-minrole="owner" onclick="showTab('rules');return false;">Rules</button>
-    <button type="button" class="btn2" data-minrole="owner" onclick="showTab('menu');return false;">Menu</button>
-    <button type="button" class="btn2" data-minrole="owner" onclick="showTab('policies');return false;">Policies</button>
-  </div>
-  <div class="note" id="panel-jump-note" style="margin-top:10px;opacity:.85"></div>
-</div>
 </div>
 
 <!-- OPS TAB -->
@@ -6044,27 +6025,15 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
   function bind(){
     var btns = qsa('.tabbtn');
-
-// mark owner-only controls (tabs + quick-jump buttons) for managers
-try{
-  var lockEls = document.querySelectorAll('[data-minrole],[data-min-role]');
-  for(var k=0;k<lockEls.length;k++){
-    var le = lockEls[k];
-    var need = (le && le.getAttribute) ? ((le.getAttribute('data-minrole')||le.getAttribute('data-min-role')||'manager').toLowerCase()) : 'manager';
-    if(ROLE_RANK && ROLE_RANK[ROLE] !== undefined && ROLE_RANK[need] !== undefined){
-      if(ROLE_RANK[ROLE] < ROLE_RANK[need]){
-        try{ le.classList.add('locked'); le.setAttribute('title','Owner only'); }catch(e){}
-      }
-    }
-  }
-  // Optional note under quick-jump
-  try{
-    var note = document.getElementById('panel-jump-note');
-    if(note){
-      note.textContent = (ROLE === 'owner') ? 'Owner access: all panels unlocked.' : 'Manager access: AI Settings, Rules, Menu, Policies are visible but locked.';
-    }
-  }catch(e){}
-}catch(e){}
+    
+    // mark owner-only tabs for managers
+    try{
+      for(var j=0;j<btns.length;j++){
+        var br = btns[j];
+        var minr = (br && br.getAttribute) ? (br.getAttribute('data-minrole')||'manager') : 'manager';
+        if(ROLE_RANK && ROLE_RANK[ROLE] !== undefined && ROLE_RANK[minr] !== undefined){
+          if(ROLE_RANK[ROLE] < ROLE_RANK[minr]){
+            try{ br.classList.add('locked'); br.setAttribute('title','Owner only'); }catch(e){}
           }
         }
       }
