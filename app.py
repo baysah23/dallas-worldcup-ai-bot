@@ -1252,6 +1252,14 @@ def _admin_auth() -> Dict[str, str]:
     if not key:
         return {"ok": False, "role": "", "actor": ""}
 
+
+
+@app.get("/admin/api/whoami")
+def admin_api_whoami():
+    """Return the server-truth role for the current key (owner/manager) so UI locks can't drift."""
+    ctx = _admin_ctx()
+    return jsonify(ok=bool(ctx.get("ok")), role=ctx.get("role",""), actor=ctx.get("actor",""))
+
     role = ""
     if ADMIN_OWNER_KEY and key == ADMIN_OWNER_KEY:
         role = "owner"
@@ -5146,7 +5154,7 @@ def admin_api_partner_policies_set():
         if "allowed_statuses" in policy and policy["allowed_statuses"] is None:
             policy.pop("allowed_statuses", None)
         merged = _save_partner_policy(partner, policy)
-        _audit("partner_policy.save", {"partner": partner, "policy": merged})
+        _audit_event("partner_policy.save", {"partner": partner, "policy": merged})
         return jsonify({"ok": True, "partner": partner, "policy": merged})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
@@ -5165,7 +5173,7 @@ def admin_api_partner_policies_delete():
         if isinstance(_PARTNER_POLICIES, dict) and partner in _PARTNER_POLICIES:
             _PARTNER_POLICIES.pop(partner, None)
             _safe_write_json_file(PARTNER_POLICIES_FILE, _PARTNER_POLICIES)
-            _audit("partner_policy.delete", {"partner": partner})
+            _audit_event("partner_policy.delete", {"partner": partner})
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
@@ -5997,19 +6005,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
       }
       var pane = document.getElementById('tab-'+tab);
       if(pane && pane.classList) pane.classList.remove('hidden');
-      try{
-      // Tab-specific lazy loaders (safe: functions may not exist yet)
-      if(tab==='ops'){ try{ loadOps(); }catch(e){} try{ loadNotifs(); }catch(e){} }
-      if(tab==='leads'){ try{ if(typeof setupLeadFilters==='function') setupLeadFilters(); }catch(e){} }
-      if(tab==='ai'){ try{ loadAI(); }catch(e){} }
-      if(tab==='aiq'){ try{ loadAIQueue(); }catch(e){} }
-      if(tab==='monitor'){ try{ loadHealth(); }catch(e){} }
-      if(tab==='audit'){ try{ loadAudit(); }catch(e){} }
-      if(tab==='rules'){ try{ loadRules(); }catch(e){} }
-      if(tab==='menu'){ try{ loadMenu(); }catch(e){} }
-      if(tab==='policies'){ try{ if(typeof loadPartnerList==='function') loadPartnerList(); }catch(e){} try{ if(typeof loadPartnerPolicy==='function') loadPartnerPolicy(); }catch(e){} }
-    }catch(e){}
-    try{ history.replaceState(null,'','#'+tab); }catch(e){}
+      try{ history.replaceState(null,'','#'+tab); }catch(e){}
     }catch(e){}
   }
   window.showTab = function(tab){
@@ -6077,10 +6073,61 @@ for(var i=0;i<btns.length;i++){
 </script>
 
 <script>
-const KEY = __ADMIN_KEY__;
-const ROLE = __ADMIN_ROLE__;
+const KEY = (new URLSearchParams(window.location.search).get('key') || '');
+let ROLE = (__ADMIN_ROLE__ || 'manager');
 
-const ROLE_RANK = { "manager": 1, "owner": 2 };
+// Auto-append ?key=... to same-origin admin/api calls so buttons always work
+(function(){
+  const _origFetch = window.fetch;
+  window.fetch = function(input, init){
+    try{
+      let url = (typeof input === 'string') ? input : (input && input.url) ? input.url : '';
+      if(url && url.startsWith('/')){
+        if(url.startsWith('/admin') || url.startsWith('/api') || url.startsWith('/health')){
+          if(url.indexOf('key=') === -1){
+            url += (url.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(KEY || '');
+            if(typeof input === 'string') input = url;
+            else input = new Request(url, input);
+          }
+        }
+      }
+    }catch(e){}
+    return _origFetch(input, init);
+  };
+})();
+
+// Refresh role from server so manager/owner locks are always correct
+async function _refreshRole(){
+  try{
+    const r = await fetch('/admin/api/whoami', {credentials:'same-origin'});
+    const j = await r.json();
+    if(j && j.ok && j.role){ ROLE = j.role; }
+
+
+// Enforce owner-only locks in one place (tabs + buttons)
+document.addEventListener('click', function(ev){
+  try{
+    const el = ev.target && ev.target.closest ? ev.target.closest('[data-minrole]') : null;
+    if(!el) return;
+    const need = (el.getAttribute('data-minrole') || '').toLowerCase();
+    if(need === 'owner' && ROLE !== 'owner'){
+      ev.preventDefault();
+      ev.stopPropagation();
+      try{ toast('Owner-only'); }catch(e){ alert('Owner-only'); }
+      try{ if(typeof showTab === 'function') showTab('ops'); }catch(e){}
+      return false;
+    }
+  }catch(e){}
+}, true);
+
+document.addEventListener('DOMContentLoaded', function(){
+  try{ _refreshRole(); setTimeout(_refreshRole, 500); }catch(e){}
+});
+
+  }catch(e){}
+}
+
+ = { "manager": 1, "owner": 2 };
 
 function _elSig(el){
   if(!el) return "null";
@@ -6240,8 +6287,23 @@ function setupLeadFilters(){
 function qs(sel){return document.querySelector(sel);}
 function qsa(sel){return Array.from(document.querySelectorAll(sel));}
 
-
-/* (disabled) duplicate tab binding block removed to prevent breaking Ops/Monitoring/Policies */
+qsa('.tabbtn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    qsa('.tabbtn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const t = btn.dataset.tab;
+    ['leads','ai','aiq','rules','menu','audit'].forEach(x=>{
+      const pane = document.getElementById('tab-'+x);
+      if(!pane) return;
+      pane.classList.toggle('hidden', x!==t);
+    });
+if(t==='ai') loadAI();
+    if(t==='aiq') loadAIQueue();
+    if(t==='rules') loadRules();
+    if(t==='menu') loadMenu();
+    if(t==='audit') loadAudit();
+  });
+});
 
 async function saveLead(sheetRow){
   const status = qs('#status-'+sheetRow).value;
@@ -7040,10 +7102,57 @@ async function clearNotifs(){
   }
 }
 
+window.showTab = function(tab){
+  try{
+    document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
+    document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
+    const pane = document.querySelector('#tab-'+tab);
+    if(pane) pane.classList.remove('hidden');
+    if(tab==='rules'){ try{ loadPartnerList(); loadPartnerPolicy(); }catch(e){} try{ loadRules(); }catch(e){} }
 
-/* (disabled) duplicate showTab/setupTabs block removed.
-   Your tab system is initialized earlier with role-locking + hash support.
-   Keeping this would overwrite showTab and break locked tabs + panes. */
+    try{ initFanZoneAdmin(); }catch(e){}
+    try{ history.replaceState(null,'','#'+tab); }catch(e){}
+  }catch(e){}
+};
+function setupTabs(){
+  const btns = Array.from(document.querySelectorAll('.tabbtn'));
+  const panes = Array.from(document.querySelectorAll('.tabpane'));
+  if(!btns.length || !panes.length) return;
+
+  function show(tab){
+    btns.forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
+    panes.forEach(p=>p.classList.add('hidden'));
+    const pane = document.querySelector('#tab-'+tab);
+    if(pane) pane.classList.remove('hidden');
+    // keep URL hash for deep-linking
+    try{ history.replaceState(null, '', '#'+tab); }catch(e){}
+  }
+
+  btns.forEach(b=>{
+    b.addEventListener('click', (e)=>{
+      e.preventDefault();
+      const tab = b.getAttribute('data-tab');
+      if(tab) show(tab);
+    });
+  });
+
+  // Make inline onclick handlers use the same implementation
+  window.showTab = show;
+
+  // open tab from URL hash if present, otherwise default to Ops
+  const initial = (location.hash||'').replace('#','').trim();
+  if(initial && document.querySelector('.tabbtn[data-tab="'+initial+'"]')) {
+    show(initial);
+  } else {
+    show('ops');
+  }
+
+  // keep in sync if hash changes
+  window.addEventListener('hashchange', ()=>{
+    const t = (location.hash||'').replace('#','').trim();
+    if(t && document.querySelector('.tabbtn[data-tab="'+t+'"]')) show(t);
+  });
+}
 function openNotifications(){
   try{
     showTab('ops');
