@@ -1241,24 +1241,17 @@ try:
 except Exception:
     _MENU_OVERRIDE = None
 
+
 def _admin_auth() -> Dict[str, str]:
     """Return admin auth context: {ok, role, actor}.
 
-    Auth mechanism stays compatible with your current deployment: ?key=...
+    Auth mechanism: ?key=...
     - If key matches ADMIN_OWNER_KEY => role=owner
     - If key matches any ADMIN_MANAGER_KEYS => role=manager
     """
     key = (request.args.get("key", "") or "").strip()
     if not key:
         return {"ok": False, "role": "", "actor": ""}
-
-
-
-@app.get("/admin/api/whoami")
-def admin_api_whoami():
-    """Return the server-truth role for the current key (owner/manager) so UI locks can't drift."""
-    ctx = _admin_ctx()
-    return jsonify(ok=bool(ctx.get("ok")), role=ctx.get("role",""), actor=ctx.get("actor",""))
 
     role = ""
     if ADMIN_OWNER_KEY and key == ADMIN_OWNER_KEY:
@@ -1271,6 +1264,13 @@ def admin_api_whoami():
 
     actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
     return {"ok": True, "role": role, "actor": actor}
+
+
+@app.get("/admin/api/whoami")
+def admin_api_whoami():
+    """Return the server-truth role for the current key (owner/manager) so UI locks can't drift."""
+    ctx = _admin_ctx()
+    return jsonify(ok=bool(ctx.get("ok")), role=ctx.get("role", ""), actor=ctx.get("actor", ""))
 
 def _require_admin(min_role: str = "manager"):
     """Enforce admin access.
