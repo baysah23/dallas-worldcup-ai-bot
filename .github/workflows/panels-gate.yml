@@ -10,12 +10,16 @@ jobs:
     runs-on: windows-latest
 
     env:
-      # ✅ your app checks these env vars
+      # ✅ your app checks these env vars to validate keys
       ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
       ADMIN_MANAGER_KEYS: ${{ secrets.ADMIN_MANAGER_KEY }}
 
-      # Try to force port (if app honors it)
       PORT: "5050"
+
+      # Playwright URLs (local server)
+      ADMIN_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_OWNER_KEY }}
+      MANAGER_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_MANAGER_KEY }}
+      FANZONE_URL: http://127.0.0.1:5050/admin/fanzone?key=${{ secrets.ADMIN_OWNER_KEY }}
 
     steps:
       - name: Checkout
@@ -46,94 +50,45 @@ jobs:
         shell: pwsh
         run: npx playwright install --with-deps
 
-      - name: Prep artifact folders
+      - name: Prep artifact folders (avoid “not found” on upload)
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force test-results | Out-Null
           New-Item -ItemType Directory -Force playwright-report | Out-Null
 
-      - name: Start server (capture logs + PID)
+      - name: Start server (capture logs)
         shell: pwsh
         run: |
-          $p = Start-Process -PassThru -NoNewWindow `
+          Start-Process -NoNewWindow `
             -FilePath python `
             -ArgumentList "-u", "app.py" `
             -RedirectStandardOutput "server.log" `
             -RedirectStandardError "server.err"
-          "SERVER_PID=$($p.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append
-          Start-Sleep -Seconds 2
+          Start-Sleep -Seconds 3
 
-      - name: Wait for server (find listening port for python)
+      - name: Wait for server (curl connectivity check)
         shell: pwsh
         run: |
-          $serverPid = [int]$env:SERVER_PID
-          Write-Host "Server PID: $serverPid"
-
-          function Get-ListeningPortsForPid($targetPid) {
-            $lines = cmd /c "netstat -ano -p tcp | findstr LISTENING"
-            $ports = @()
-
-            foreach ($ln in $lines) {
-              # Example:
-              # TCP    0.0.0.0:5050    0.0.0.0:0    LISTENING    1234
-              $parts = ($ln -replace "\s+", " ").Trim().Split(" ")
-              if ($parts.Length -ge 5) {
-                $local = $parts[1]
-                $state = $parts[3]
-                $p = $parts[4]
-                if ($state -eq "LISTENING" -and $p -eq "$targetPid") {
-                  if ($local -match ":(\d+)$") { $ports += [int]$matches[1] }
-                }
-              }
-            }
-            return ($ports | Sort-Object -Unique)
-          }
-
           $ok = $false
-          $port = $null
 
           for ($i=0; $i -lt 60; $i++) {
-            $ports = Get-ListeningPortsForPid $serverPid
-            if ($ports.Count -gt 0) {
-              if ($ports -contains 5050) { $port = 5050 } else { $port = $ports[0] }
-              $ok = $true
-              break
-            }
+            # We only care that we can CONNECT.
+            # curl.exe returns 0 if it connects and gets any HTTP response.
+            & curl.exe -s -o NUL "http://127.0.0.1:5050/"
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
             Start-Sleep -Seconds 1
           }
 
           if (-not $ok) {
-            Write-Host "❌ Could not find any LISTENING port for PID $serverPid"
-            Write-Host "---- netstat :5050 ----"
-            cmd /c "netstat -ano | findstr :5050" | Out-Host
-            Write-Host "---- netstat python PID ----"
-            cmd /c "netstat -ano -p tcp | findstr $serverPid" | Out-Host
-
+            Write-Host "❌ Could not connect to server on 127.0.0.1:5050"
             Write-Host "---- server.log (tail) ----"
             if (Test-Path server.log) { Get-Content server.log -Tail 200 | Out-Host }
             Write-Host "---- server.err (tail) ----"
             if (Test-Path server.err) { Get-Content server.err -Tail 200 | Out-Host }
-
-            throw "Server did not open a listening port."
+            throw "Server not reachable on http://127.0.0.1:5050/"
           }
 
-          "SERVER_PORT=$port" | Out-File -FilePath $env:GITHUB_ENV -Append
-          Write-Host "✅ Detected server port: $port"
-
-      - name: Set Playwright URLs (based on detected port)
-        shell: pwsh
-        run: |
-          $port = $env:SERVER_PORT
-          "ADMIN_URL=http://127.0.0.1:$port/admin?key=${{ secrets.ADMIN_OWNER_KEY }}" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "MANAGER_URL=http://127.0.0.1:$port/admin?key=${{ secrets.ADMIN_MANAGER_KEY }}" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "FANZONE_URL=http://127.0.0.1:$port/admin/fanzone?key=${{ secrets.ADMIN_OWNER_KEY }}" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: Quick HTTP ping (best-effort)
-        shell: pwsh
-        run: |
-          $u = $env:ADMIN_URL
-          Write-Host "Pinging: $u"
-          cmd /c "curl -s -o NUL $u" | Out-Host
+          Write-Host "✅ Server reachable on 127.0.0.1:5050"
 
       - name: Run Panels Gate
         shell: pwsh
