@@ -5518,7 +5518,6 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     <div id="notifBody" class="small" style="margin-top:8px"></div>
     <div id="notif-msg" class="note" style="margin-top:8px"></div>
   </div>
-</div>
 
 
 <div class="card" id="forecastCard">
@@ -5529,6 +5528,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     <span id="forecast-msg" class="note"></span>
   </div>
   <div id="forecastBody" class="small" style="margin-top:10px;line-height:1.4"></div>
+</div>
 </div>
 
 
