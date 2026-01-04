@@ -10,14 +10,14 @@ jobs:
     runs-on: windows-latest
 
     env:
-      # Server must know valid keys (your app checks these)
+      # ✅ Your app checks these env vars to validate admin/manager keys
       ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
       ADMIN_MANAGER_KEYS: ${{ secrets.ADMIN_MANAGER_KEY }}
 
-      # Ensure local port is predictable
+      # ✅ Force local port (your app.py should honor PORT; if not, it still runs on 5050 in your logs)
       PORT: "5050"
 
-      # Playwright URLs (local server)
+      # ✅ Playwright URLs (local server in CI)
       ADMIN_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_OWNER_KEY }}
       MANAGER_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_MANAGER_KEY }}
       FANZONE_URL: http://127.0.0.1:5050/admin/fanzone?key=${{ secrets.ADMIN_OWNER_KEY }}
@@ -51,7 +51,7 @@ jobs:
         shell: pwsh
         run: npx playwright install --with-deps
 
-      - name: Prep artifact folders (so upload never says “not found”)
+      - name: Prep artifact folders (so uploads never say “not found”)
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force test-results | Out-Null
@@ -67,26 +67,25 @@ jobs:
             -RedirectStandardOutput "server.log" `
             -RedirectStandardError "server.err"
 
-          Start-Sleep -Seconds 2
+          Start-Sleep -Seconds 3
 
-      - name: Wait for server
+      - name: Wait for server (connectivity check)
         shell: pwsh
         run: |
           $ok = $false
           for ($i=0; $i -lt 40; $i++) {
-            try {
-              Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:5050/" | Out-Null
-              $ok = $true
-              break
-            } catch {}
+            # curl exits 0 if it can connect (even if HTTP is 302/404)
+            & curl.exe -s -o NUL "http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_OWNER_KEY }}"
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
             Start-Sleep -Seconds 1
           }
+
           if (-not $ok) {
-            Write-Host "---- server.log ----"
+            Write-Host "---- server.log (tail) ----"
             if (Test-Path server.log) { Get-Content server.log -Tail 200 }
-            Write-Host "---- server.err ----"
+            Write-Host "---- server.err (tail) ----"
             if (Test-Path server.err) { Get-Content server.err -Tail 200 }
-            throw "Server did not start on http://127.0.0.1:5050/"
+            throw "Server did not start / not reachable on http://127.0.0.1:5050/"
           }
 
       - name: Run Panels Gate
