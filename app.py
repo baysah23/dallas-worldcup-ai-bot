@@ -4945,6 +4945,20 @@ def admin_api_alert_settings():
 # ============================================================
 # Notifications API (in-app notifications for admin/manager)
 # ============================================================
+
+@app.route("/admin/api/alerts/test", methods=["POST"])
+def admin_api_alert_test():
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    who = ctx.get("user") or "owner"
+    details = f"Test alert triggered by {who} at {datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')}"
+    # Use a unique key so tests aren't rate-limited.
+    key = "test." + str(int(time.time()))
+    res = _dispatch_alert("World Cup Concierge: Test Alert", details, key, severity="warn")
+    return jsonify({"ok": True, "result": res})
+
 @app.route("/admin/api/notifications", methods=["GET"])
 def admin_api_notifications():
     ok, resp = _require_admin(min_role="manager")
@@ -5731,6 +5745,66 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
       <span id="rules-msg" class="note"></span>
     </div>
   </div>
+  <div class="card" id="alertsCard">
+    <div class="h2">Alerts Settings</div>
+    <div class="small">Configure monitoring alerts (Slack/Email/SMS). Alerts are rate-limited and best-effort (never crash the app).</div>
+
+    <div class="grid2" style="margin-top:12px">
+      <div>
+        <label class="small" style="display:flex;gap:8px;align-items:center">
+          <input id="al-enabled" type="checkbox"/>
+          <span>Enable alerts</span>
+        </label>
+        <div class="small" style="opacity:.8;margin-top:6px">When enabled, <b>Run checks</b> can emit alerts on failures (rate-limited).</div>
+      </div>
+      <div>
+        <label class="small">Rate limit (seconds)</label>
+        <input id="al-rate" class="inp" type="number" min="60" step="60" placeholder="600"/>
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:12px">
+      <div>
+        <label class="small" style="display:flex;gap:8px;align-items:center">
+          <input id="al-slack-en" type="checkbox"/>
+          <span>Slack</span>
+        </label>
+        <input id="al-slack-url" class="inp" placeholder="Slack webhook URL"/>
+      </div>
+      <div>
+        <label class="small" style="display:flex;gap:8px;align-items:center">
+          <input id="al-email-en" type="checkbox"/>
+          <span>Email</span>
+        </label>
+        <input id="al-email-to" class="inp" placeholder="Alert email TO"/>
+        <input id="al-email-from" class="inp" placeholder="Alert email FROM (optional)"/>
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:12px">
+      <div>
+        <label class="small" style="display:flex;gap:8px;align-items:center">
+          <input id="al-sms-en" type="checkbox"/>
+          <span>SMS (critical only)</span>
+        </label>
+        <input id="al-sms-to" class="inp" placeholder="Alert SMS TO (E.164)"/>
+        <div class="small" style="opacity:.75;margin-top:6px">SMS only sends on <b>error</b> severity alerts (to prevent spam).</div>
+      </div>
+      <div>
+        <label class="small">Fixtures stale threshold (seconds)</label>
+        <input id="al-fixtures-stale" class="inp" type="number" min="3600" step="3600" placeholder="86400"/>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button type="button" class="btn2" onclick="loadAlerts()">Load</button>
+      <button type="button" class="btn" data-min-role="owner" onclick="saveAlerts()">Save</button>
+      <button type="button" class="btn2" data-min-role="owner" onclick="testAlert()">Send test alert</button>
+      <span id="al-msg" class="note"></span>
+    </div>
+  </div>
+
+
 </div>
 
   <div class="card" style="margin-top:12px">
@@ -6172,6 +6246,78 @@ async function deletePartnerPolicy(){
     }
   }catch(e){
     if(msg) msg.textContent='Error';
+  }
+}
+
+async function loadAlerts(){
+  try{
+    qs('#al-msg').textContent = 'Loading…';
+    const res = await fetch('/admin/api/alerts/settings?key='+encodeURIComponent(KEY));
+    const j = await res.json().catch(()=>null);
+    if(!j || !j.ok){ qs('#al-msg').textContent = 'Load failed: ' + ((j&&j.error)||res.status); return; }
+    const s = j.settings || {};
+    qs('#al-enabled').checked = !!s.enabled;
+    qs('#al-rate').value = s.rate_limit_seconds ?? 600;
+    const checks = s.checks || {};
+    qs('#al-fixtures-stale').value = checks.fixtures_stale_seconds ?? 86400;
+
+    const ch = s.channels || {};
+    const slack = ch.slack || {};
+    const email = ch.email || {};
+    const sms = ch.sms || {};
+
+    qs('#al-slack-en').checked = !!slack.enabled;
+    qs('#al-slack-url').value = slack.webhook_url || '';
+
+    qs('#al-email-en').checked = !!email.enabled;
+    qs('#al-email-to').value = email.to || '';
+    qs('#al-email-from').value = email.from || '';
+
+    qs('#al-sms-en').checked = !!sms.enabled;
+    qs('#al-sms-to').value = sms.to || '';
+
+    qs('#al-msg').textContent = 'Loaded';
+  }catch(e){
+    qs('#al-msg').textContent = 'Load error';
+  }
+}
+
+async function saveAlerts(){
+  if(!hasRole('owner')){ qs('#al-msg').textContent = 'Owner only'; return; }
+  try{
+    qs('#al-msg').textContent = 'Saving…';
+    const payload = {
+      enabled: qs('#al-enabled').checked,
+      rate_limit_seconds: parseInt(qs('#al-rate').value||'600',10),
+      checks: { fixtures_stale_seconds: parseInt(qs('#al-fixtures-stale').value||'86400',10) },
+      channels: {
+        slack: { enabled: qs('#al-slack-en').checked, webhook_url: (qs('#al-slack-url').value||'').trim() },
+        email: { enabled: qs('#al-email-en').checked, to: (qs('#al-email-to').value||'').trim(), from: (qs('#al-email-from').value||'').trim() },
+        sms: { enabled: qs('#al-sms-en').checked, to: (qs('#al-sms-to').value||'').trim() }
+      }
+    };
+    const res = await fetch('/admin/api/alerts/settings?key='+encodeURIComponent(KEY), {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const j = await res.json().catch(()=>null);
+    if(!j || !j.ok){ qs('#al-msg').textContent = 'Save failed: ' + ((j&&j.error)||res.status); return; }
+    qs('#al-msg').textContent = 'Saved';
+  }catch(e){
+    qs('#al-msg').textContent = 'Save error';
+  }
+}
+
+async function testAlert(){
+  if(!hasRole('owner')){ qs('#al-msg').textContent = 'Owner only'; return; }
+  try{
+    qs('#al-msg').textContent = 'Sending test…';
+    const res = await fetch('/admin/api/alerts/test?key='+encodeURIComponent(KEY), { method:'POST' });
+    const j = await res.json().catch(()=>null);
+    if(!j || !j.ok){ qs('#al-msg').textContent = 'Test failed: ' + ((j&&j.error)||res.status); return; }
+    qs('#al-msg').textContent = 'Test sent';
+  }catch(e){
+    qs('#al-msg').textContent = 'Test error';
   }
 }
 
