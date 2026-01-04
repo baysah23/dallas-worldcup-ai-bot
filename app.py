@@ -5447,13 +5447,21 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
     html.append(r"""
 <div class="tabs">
-  <button type="button" class="tabbtn active" data-tab="ops" onclick="showTab('ops');return false;">Ops</button>
-  <button type="button" class="tabbtn" data-tab="leads" onclick="showTab('leads');return false;">Leads</button>
-  <button type="button" class="tabbtn" data-tab="ai" onclick="showTab('ai');return false;">AI</button>
-  <button type="button" class="tabbtn" data-tab="aiq" onclick="showTab('aiq');return false;">AI Queue</button>
-  <button type="button" class="tabbtn" data-tab="rules" onclick="showTab('rules');return false;">Rules</button>
-  <button type="button" class="tabbtn" data-tab="menu" onclick="showTab('menu');return false;">Menu</button>
-  <button type="button" class="tabbtn" data-tab="audit" onclick="showTab('audit');return false;">Audit</button>
+  <div class="tabgroup">
+    <span class="tablabel">Operate</span>
+    <button type="button" class="tabbtn active" data-tab="ops" onclick="showTab('ops');return false;">Ops</button>
+    <button type="button" class="tabbtn" data-tab="leads" onclick="showTab('leads');return false;">Leads</button>
+    <button type="button" class="tabbtn" data-tab="aiq" onclick="showTab('aiq');return false;">AI Queue</button>
+    <button type="button" class="tabbtn" data-tab="monitor" onclick="showTab('monitor');return false;">Monitoring</button>
+    <button type="button" class="tabbtn" data-tab="audit" onclick="showTab('audit');return false;">Audit</button>
+  </div>
+  <div class="tabgroup">
+    <span class="tablabel">Configure</span>
+    <button type="button" class="tabbtn" data-tab="ai" data-minrole="owner" onclick="showTab('ai');return false;">AI Settings</button>
+    <button type="button" class="tabbtn" data-tab="rules" data-minrole="owner" onclick="showTab('rules');return false;">Rules</button>
+    <button type="button" class="tabbtn" data-tab="menu" data-minrole="owner" onclick="showTab('menu');return false;">Menu</button>
+    <button type="button" class="tabbtn" data-tab="policies" data-minrole="owner" onclick="showTab('policies');return false;">Policies</button>
+  </div>
 </div>
 
 <!-- OPS TAB -->
@@ -5489,17 +5497,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
   
   
-  <div class="card" id="healthCard">
-    <div class="h2">System Health</div>
-    <div class="small">Read-only checks for Sheets, Queue, Fixtures, and outbound readiness. Alerts are optional.</div>
-    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <button type="button" class="btn" onclick="runHealth()">Run checks</button>
-      <button type="button" class="btn2" onclick="loadHealth()">Refresh</button>
-      <span id="health-msg" class="note"></span>
-      <span style="margin-left:auto" class="note" id="health-ts"></span>
-    </div>
-    <div id="health-body" class="small" style="margin-top:12px;white-space:pre-wrap"></div>
-  </div>
+  
 
 <div class="card" id="matchdayCard">
     <div class="h2">Match Day Ops</div>
@@ -5518,9 +5516,24 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     <div id="notifBody" class="small" style="margin-top:8px"></div>
     <div id="notif-msg" class="note" style="margin-top:8px"></div>
   </div>
+</div>
 
 
-<div class="card" id="forecastCard">
+<!-- LEADS TAB -->
+
+<div id="tab-monitor" class="tabpane hidden">
+  <div class="card" id="healthCard">
+    <div class="h2">System Health</div>
+    <div class="small">Read-only checks for Sheets, Queue, Fixtures, and outbound readiness. Alerts are optional.</div>
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button type="button" class="btn" onclick="runHealth()">Run checks</button>
+      <button type="button" class="btn2" onclick="loadHealth()">Refresh</button>
+      <span id="health-msg" class="note"></span>
+      <span style="margin-left:auto" class="note" id="health-ts"></span>
+    </div>
+    <div id="health-body" class="small" style="margin-top:12px;white-space:pre-wrap"></div>
+  </div>
+  <div class="card" id="forecastCard">
   <div class="h2">Tonight Forecast</div>
   <div class="small">Read-only load forecast (last 7/30 days). Helps staffing + VIP readiness.</div>
   <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
@@ -5529,10 +5542,66 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
   </div>
   <div id="forecastBody" class="small" style="margin-top:10px;line-height:1.4"></div>
 </div>
+  <div class="card" id="alertsCard">
+    <div class="h2">Alerts Settings</div>
+    <div class="small">Configure monitoring alerts (Slack/Email/SMS). Alerts are rate-limited and best-effort (never crash the app).</div>
+
+    <div class="grid2" style="margin-top:12px">
+      <div>
+        <label class="small" style="display:flex;gap:8px;align-items:center">
+          <input id="al-enabled" type="checkbox"/>
+          <span>Enable alerts</span>
+        </label>
+        <div class="small" style="opacity:.8;margin-top:6px">When enabled, <b>Run checks</b> can emit alerts on failures (rate-limited).</div>
+      </div>
+      <div>
+        <label class="small">Rate limit (seconds)</label>
+        <input id="al-rate" class="inp" type="number" min="60" step="60" placeholder="600"/>
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:12px">
+      <div>
+        <label class="small" style="display:flex;gap:8px;align-items:center">
+          <input id="al-slack-en" type="checkbox"/>
+          <span>Slack</span>
+        </label>
+        <input id="al-slack-url" class="inp" placeholder="Slack webhook URL"/>
+      </div>
+      <div>
+        <label class="small" style="display:flex;gap:8px;align-items:center">
+          <input id="al-email-en" type="checkbox"/>
+          <span>Email</span>
+        </label>
+        <input id="al-email-to" class="inp" placeholder="Alert email TO"/>
+        <input id="al-email-from" class="inp" placeholder="Alert email FROM (optional)"/>
+      </div>
+    </div>
+
+    <div class="grid2" style="margin-top:12px">
+      <div>
+        <label class="small" style="display:flex;gap:8px;align-items:center">
+          <input id="al-sms-en" type="checkbox"/>
+          <span>SMS (critical only)</span>
+        </label>
+        <input id="al-sms-to" class="inp" placeholder="Alert SMS TO (E.164)"/>
+        <div class="small" style="opacity:.75;margin-top:6px">SMS only sends on <b>error</b> severity alerts (to prevent spam).</div>
+      </div>
+      <div>
+        <label class="small">Fixtures stale threshold (seconds)</label>
+        <input id="al-fixtures-stale" class="inp" type="number" min="3600" step="3600" placeholder="86400"/>
+      </div>
+    </div>
+
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button type="button" class="btn2" onclick="loadAlerts()">Load</button>
+      <button type="button" class="btn" data-min-role="owner" onclick="saveAlerts()">Save</button>
+      <button type="button" class="btn2" data-min-role="owner" onclick="testAlert()">Send test alert</button>
+      <span id="al-msg" class="note"></span>
+    </div>
+  </div>
 </div>
 
-
-<!-- LEADS TAB -->
 <div id="tab-leads" class="tabpane hidden">
 """)
 
@@ -5767,69 +5836,48 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
       <span id="rules-msg" class="note"></span>
     </div>
   </div>
-  <div class="card" id="alertsCard">
-    <div class="h2">Alerts Settings</div>
-    <div class="small">Configure monitoring alerts (Slack/Email/SMS). Alerts are rate-limited and best-effort (never crash the app).</div>
-
-    <div class="grid2" style="margin-top:12px">
-      <div>
-        <label class="small" style="display:flex;gap:8px;align-items:center">
-          <input id="al-enabled" type="checkbox"/>
-          <span>Enable alerts</span>
-        </label>
-        <div class="small" style="opacity:.8;margin-top:6px">When enabled, <b>Run checks</b> can emit alerts on failures (rate-limited).</div>
-      </div>
-      <div>
-        <label class="small">Rate limit (seconds)</label>
-        <input id="al-rate" class="inp" type="number" min="60" step="60" placeholder="600"/>
-      </div>
-    </div>
-
-    <div class="grid2" style="margin-top:12px">
-      <div>
-        <label class="small" style="display:flex;gap:8px;align-items:center">
-          <input id="al-slack-en" type="checkbox"/>
-          <span>Slack</span>
-        </label>
-        <input id="al-slack-url" class="inp" placeholder="Slack webhook URL"/>
-      </div>
-      <div>
-        <label class="small" style="display:flex;gap:8px;align-items:center">
-          <input id="al-email-en" type="checkbox"/>
-          <span>Email</span>
-        </label>
-        <input id="al-email-to" class="inp" placeholder="Alert email TO"/>
-        <input id="al-email-from" class="inp" placeholder="Alert email FROM (optional)"/>
-      </div>
-    </div>
-
-    <div class="grid2" style="margin-top:12px">
-      <div>
-        <label class="small" style="display:flex;gap:8px;align-items:center">
-          <input id="al-sms-en" type="checkbox"/>
-          <span>SMS (critical only)</span>
-        </label>
-        <input id="al-sms-to" class="inp" placeholder="Alert SMS TO (E.164)"/>
-        <div class="small" style="opacity:.75;margin-top:6px">SMS only sends on <b>error</b> severity alerts (to prevent spam).</div>
-      </div>
-      <div>
-        <label class="small">Fixtures stale threshold (seconds)</label>
-        <input id="al-fixtures-stale" class="inp" type="number" min="3600" step="3600" placeholder="86400"/>
-      </div>
-    </div>
-
-    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <button type="button" class="btn2" onclick="loadAlerts()">Load</button>
-      <button type="button" class="btn" data-min-role="owner" onclick="saveAlerts()">Save</button>
-      <button type="button" class="btn2" data-min-role="owner" onclick="testAlert()">Send test alert</button>
-      <span id="al-msg" class="note"></span>
-    </div>
-  </div>
-
-
+  
 </div>
 
-  <div class="card" style="margin-top:12px">
+  """)
+
+    # Menu tab
+    html.append(r"""
+<div id="tab-menu" class="tabpane hidden">
+  <div class="card">
+    <div class="h2">Menu Manager</div>
+    <div class="small">Upload a JSON menu file to update <span class="code">/menu.json</span> (fan UI stays the same). Supports en/es/pt/fr blocks.</div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label class="small">Upload menu JSON file</label>
+        <input id="menu-file" class="inp" type="file" accept="application/json"/>
+        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+          <button type="button" class="btn" data-min-role="owner" onclick="uploadMenu()">Upload</button>
+          <button class="btn2" onclick="loadMenu()">Load Current</button>
+          <span id="menu-msg" class="note"></span>
+        </div>
+      </div>
+      <div>
+        <label class="small">Or paste menu JSON</label>
+        <textarea id="menu-json" class="inp code" rows="12" placeholder='{"en":{"title":"Menu","items":[{"category_id":"bites","name":"Nachos","price":"$16","desc":"...","tag":"Share"}]}}'></textarea>
+        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn2" onclick="saveMenuJson()">Save JSON</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+""")
+
+
+    # Audit tab
+    html.append(r"""
+
+<div id="tab-policies" class="tabpane hidden">
+  <div class="card" >
     <div class="h2">Partner / Venue Policies (Hard)</div>
     <div class="small">
       Policies are enforced on <b>AI suggestions</b> and again on <b>Apply</b>. They cannot be bypassed by AI.
@@ -5888,43 +5936,8 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 
     <div id="pp-list" class="small" style="margin-top:10px;opacity:.9"></div>
   </div>
-
-""")
-
-    # Menu tab
-    html.append(r"""
-<div id="tab-menu" class="tabpane hidden">
-  <div class="card">
-    <div class="h2">Menu Manager</div>
-    <div class="small">Upload a JSON menu file to update <span class="code">/menu.json</span> (fan UI stays the same). Supports en/es/pt/fr blocks.</div>
-  </div>
-
-  <div class="card">
-    <div class="row">
-      <div>
-        <label class="small">Upload menu JSON file</label>
-        <input id="menu-file" class="inp" type="file" accept="application/json"/>
-        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
-          <button type="button" class="btn" data-min-role="owner" onclick="uploadMenu()">Upload</button>
-          <button class="btn2" onclick="loadMenu()">Load Current</button>
-          <span id="menu-msg" class="note"></span>
-        </div>
-      </div>
-      <div>
-        <label class="small">Or paste menu JSON</label>
-        <textarea id="menu-json" class="inp code" rows="12" placeholder='{"en":{"title":"Menu","items":[{"category_id":"bites","name":"Nachos","price":"$16","desc":"...","tag":"Share"}]}}'></textarea>
-        <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn2" onclick="saveMenuJson()">Save JSON</button>
-        </div>
-      </div>
-    </div>
-  </div>
 </div>
-""")
 
-
-    # Audit tab
-    html.append(r"""
 <div id="tab-audit" class="tabpane hidden">
   <div class="card">
     <div class="h2">Audit Log</div>
@@ -5987,8 +6000,20 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
       try{ history.replaceState(null,'','#'+tab); }catch(e){}
     }catch(e){}
   }
-
-  window.showTab = function(tab){ setActive(tab); return false; };
+  window.showTab = function(tab){
+    try{
+      var b = document.querySelector('.tabbtn[data-tab="'+tab+'"]');
+      var minr = (b && b.getAttribute) ? (b.getAttribute('data-minrole') || 'manager') : 'manager';
+      if(ROLE_RANK && ROLE_RANK[ROLE] !== undefined && ROLE_RANK[minr] !== undefined){
+        if(ROLE_RANK[ROLE] < ROLE_RANK[minr]){
+          try{ toast('Owner only — redirected to Ops', 'warn'); }catch(e){}
+          try{ setActive('ops'); }catch(e){}
+          return false;
+        }
+      }
+    }catch(e){}
+    setActive(tab); return false;
+  };
 
   function bind(){
     var btns = qsa('.tabbtn');
@@ -6011,18 +6036,26 @@ for(var i=0;i<btns.length;i++){
           b.addEventListener('click', function(ev){
             try{ ev.preventDefault(); }catch(e){}
             var t = b.getAttribute('data-tab');
-            if(t) setActive(t);
+            if(t){
+              try{
+                var minr = (b && b.getAttribute) ? (b.getAttribute('data-minrole') || 'manager') : 'manager';
+                if(ROLE_RANK && ROLE_RANK[ROLE] !== undefined && ROLE_RANK[minr] !== undefined){
+                  if(ROLE_RANK[ROLE] < ROLE_RANK[minr]){ try{ toast('Owner only — redirected to Ops', 'warn'); }catch(e){} setActive('ops'); return; }
+                }
+              }catch(e){}
+              setActive(t);
+            }
           });
         }catch(e){}
       })(btns[i]);
     }
     // initial hash or default ops
     var h = (location.hash || '').replace('#','').trim();
-    if(h && document.querySelector('.tabbtn[data-tab="'+h+'"]')) setActive(h);
-    else setActive('ops');
+    if(h && document.querySelector('.tabbtn[data-tab="'+h+'"]')) showTab(h);
+    else showTab('ops');
     window.addEventListener('hashchange', function(){
       var t = (location.hash || '').replace('#','').trim();
-      if(t && document.querySelector('.tabbtn[data-tab="'+t+'"]')) setActive(t);
+      if(t && document.querySelector('.tabbtn[data-tab="'+t+'"]')) showTab(t);
     });
   }
 
@@ -7593,12 +7626,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 </div> <!-- end tab-menu -->
 
 
-<div id="tab-audit" class="tabpane hidden">
-  <div class="card">
-    <div class="h2">Audit</div>
-    <div class="small">Use the main Admin → Audit tab to review changes.</div>
-  </div>
-</div>
+
 
 <script>
 (function(){
