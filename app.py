@@ -5373,10 +5373,6 @@ body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(
 
 .pill b{color:var(--gold)}
 .tabs{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
-.topbar{position:relative;z-index:5}
-.tabs{position:relative;z-index:6}
-.tabbtn,.btn,.btn2{position:relative;z-index:7}
-
 .tabbtn{border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);padding:10px 12px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer}
 .tabbtn.active{border-color:rgba(212,175,55,.6);box-shadow:0 0 0 1px rgba(212,175,55,.25) inset}
 .card{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:14px;padding:12px 12px;margin:10px 0}
@@ -5953,6 +5949,52 @@ const KEY = __ADMIN_KEY__;
 const ROLE = __ADMIN_ROLE__;
 
 const ROLE_RANK = { "manager": 1, "owner": 2 };
+
+function _elSig(el){
+  if(!el) return "null";
+  const id = el.id ? ("#"+el.id) : "";
+  const cls = (el.className && typeof el.className==="string") ? ("."+el.className.trim().replace(/\s+/g,'.')) : "";
+  return (el.tagName||"").toLowerCase()+id+cls;
+}
+
+// If an invisible overlay is intercepting clicks, this will disable pointer-events on it
+// and show a tiny toast with what was unblocked.
+function installClickUnblocker(){
+  try{
+    document.addEventListener('click', (e)=>{
+      try{
+        // If the click is already hitting a real control, do nothing.
+        const t = e.target;
+        if(t && (t.closest('button,a,input,select,textarea,label,[role="button"],.tabbtn,.pillbtn'))){
+          return;
+        }
+        const x = e.clientX, y = e.clientY;
+        if(!(Number.isFinite(x) && Number.isFinite(y))) return;
+
+        let top = document.elementFromPoint(x,y);
+        // If top is the root containers, nothing to unblock.
+        if(!top || top === document.body || top === document.documentElement) return;
+
+        // Don't ever disable the main app container.
+        if(top.closest && top.closest('.wrap')) return;
+
+        // Heuristic: large positioned layers are most commonly the culprits.
+        const cs = window.getComputedStyle(top);
+        const pos = (cs.position||"");
+        const pe  = (cs.pointerEvents||"");
+        const op  = parseFloat(cs.opacity||"1");
+        const rect = top.getBoundingClientRect();
+        const big = rect.width >= (window.innerWidth*0.9) && rect.height >= (window.innerHeight*0.9);
+
+        if(pe !== 'none' && (pos === 'fixed' || pos === 'absolute') && (big || op < 0.25)){
+          top.style.pointerEvents = 'none';
+          toast("Unblocked overlay: " + _elSig(top));
+        }
+      }catch(err){}
+    }, true); // capture phase so it runs even if the overlay is the target
+  }catch(err){}
+}
+
 function hasRole(minRole){
   const need = ROLE_RANK[minRole||"manager"] || 1;
   const have = ROLE_RANK[ROLE||"manager"] || 1;
@@ -7078,7 +7120,9 @@ function _initRefreshControls(){
 }
 
 document.addEventListener('DOMContentLoaded', ()=>{
-  try{ setupTabs(); }catch(e){}
+  
+  try{ installClickUnblocker(); }catch(e){}
+try{ setupTabs(); }catch(e){}
   try{ initFanZoneAdmin(); }catch(e){}
   try{ markLockedControls(); }catch(e){}
   try{ setupLeadFilters(); }catch(e){}
