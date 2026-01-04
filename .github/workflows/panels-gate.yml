@@ -2,28 +2,20 @@ name: panels-gate
 
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
   pull_request:
-    branches: ["main"]
-  workflow_dispatch:
 
 jobs:
   panels-gate:
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
 
     env:
-      PORT: "5050"
-      CI: "true"
-
-      # Secrets (set these in GitHub → Settings → Secrets and variables → Actions)
-      ADMIN_OWNER_KEY: "${{ secrets.ADMIN_OWNER_KEY }}"
-      ADMIN_MANAGER_KEY: "${{ secrets.ADMIN_MANAGER_KEY }}"
-
-      # URLs (MUST be quoted because of ":" in http://)
-      ADMIN_URL: "http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_OWNER_KEY }}"
-      MANAGER_URL: "http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_MANAGER_KEY }}"
-      FANZONE_URL: "http://127.0.0.1:5050/admin/fanzone?key=${{ secrets.ADMIN_OWNER_KEY }}"
+      PORT: 5050
+      CI: true
+      ADMIN_URL: ${{ secrets.ADMIN_URL }}
+      MANAGER_URL: ${{ secrets.MANAGER_URL }}
+      FANZONE_URL: ${{ secrets.FANZONE_URL }}
 
     steps:
       - name: Checkout
@@ -61,12 +53,12 @@ jobs:
       - name: Install Playwright browsers
         shell: pwsh
         run: |
-          npx playwright install chromium
+          npx playwright install --with-deps chromium
 
-      - name: Start server + wait + run tests
+      - name: Start server + run Playwright gate
         shell: pwsh
         run: |
-          # Start Flask server
+          # Start server and capture logs
           $server = Start-Process -PassThru -NoNewWindow `
             -FilePath python `
             -ArgumentList "-u", "app.py" `
@@ -75,30 +67,26 @@ jobs:
 
           Write-Host "Server PID: $($server.Id)"
 
-          # Wait until reachable
+          # Wait until connectable (any HTTP response is fine)
           $ok = $false
-          for ($i=0; $i -lt 75; $i++) {
-            try {
-              & curl.exe -s -o NUL "http://127.0.0.1:5050/"
-              if ($LASTEXITCODE -eq 0) { $ok = $true; break }
-            } catch {}
+          for ($i=0; $i -lt 60; $i++) {
+            & curl.exe -s -o NUL "http://127.0.0.1:5050/"
+            if ($LASTEXITCODE -eq 0) { $ok = $true; break }
             Start-Sleep -Seconds 1
           }
 
           if (-not $ok) {
-            Write-Host "❌ Server not reachable on http://127.0.0.1:5050/"
+            Write-Host "❌ Could not connect to server on 127.0.0.1:5050"
             Write-Host "---- server.log (tail) ----"
             if (Test-Path server.log) { Get-Content server.log -Tail 200 | Out-Host }
             Write-Host "---- server.err (tail) ----"
             if (Test-Path server.err) { Get-Content server.err -Tail 200 | Out-Host }
             try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
-            throw "Server did not start / not reachable."
+            throw "Server not reachable on http://127.0.0.1:5050/"
           }
 
           Write-Host "✅ Server reachable. Running Playwright gate..."
-
           try {
-            # IMPORTANT: npx (avoids 'playwright not recognized')
             npm run test:panels
           } finally {
             try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
@@ -110,35 +98,36 @@ jobs:
         run: |
           Write-Host "---- ls (root) ----"
           Get-ChildItem -Force | Format-Table -AutoSize
-
-          Write-Host "---- ls (test-results) ----"
-          if (Test-Path "test-results") {
-            Get-ChildItem -Recurse -Force "test-results" | Select-Object FullName | Out-Host
-          } else {
-            Write-Host "test-results not found"
-          }
-
           Write-Host "---- ls (playwright-report) ----"
-          if (Test-Path "playwright-report") {
-            Get-ChildItem -Recurse -Force "playwright-report" | Select-Object FullName | Out-Host
-          } else {
-            Write-Host "playwright-report not found"
-          }
+          if (Test-Path "playwright-report") { Get-ChildItem -Recurse "playwright-report" | Select-Object -First 200 }
+          Write-Host "---- ls (test-results) ----"
+          if (Test-Path "test-results") { Get-ChildItem -Recurse "test-results" | Select-Object -First 200 }
 
-          Write-Host "---- server.log tail ----"
-          if (Test-Path "server.log") { Get-Content server.log -Tail 200 | Out-Host }
-
-          Write-Host "---- server.err tail ----"
-          if (Test-Path "server.err") { Get-Content server.err -Tail 200 | Out-Host }
-
-      - name: Upload Playwright artifacts
+      - name: Upload Playwright HTML report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-artifacts
+          name: playwright-report
+          path: playwright-report
           if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload Playwright test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload server logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-logs
           path: |
-            test-results/**
-            playwright-report/**
             server.log
             server.err
+          if-no-files-found: warn
+          retention-days: 7
