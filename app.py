@@ -386,6 +386,105 @@ def _policy_check_action(partner: str, action_type: str, payload: Dict[str, Any]
     return True, ""
 
 
+
+# ============================================================
+# Outbound adapters (human-in-the-middle only)
+# - These are ONLY executed when a human clicks "Send Now"
+# - Missing credentials must fail gracefully (no crash)
+# ============================================================
+
+try:
+    import requests  # type: ignore
+except Exception:
+    requests = None  # type: ignore
+
+def _outbound_send_email(to_email: str, subject: str, body_text: str) -> Tuple[bool, str]:
+    """Send email via SendGrid (recommended). Returns (ok, message)."""
+    api_key = os.environ.get("SENDGRID_API_KEY", "").strip()
+    from_email = os.environ.get("SENDGRID_FROM", "").strip()
+    if not api_key or not from_email:
+        return False, "Email not configured (missing SENDGRID_API_KEY or SENDGRID_FROM)"
+    if requests is None:
+        return False, "Email not available (missing requests library)"
+
+    try:
+        url = "https://api.sendgrid.com/v3/mail/send"
+        payload = {
+            "personalizations": [{"to": [{"email": to_email}]}],
+            "from": {"email": from_email},
+            "subject": subject or "World Cup Concierge",
+            "content": [{"type": "text/plain", "value": body_text or ""}],
+        }
+        r = requests.post(url, headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}, json=payload, timeout=12)
+        if 200 <= r.status_code < 300:
+            return True, "Email sent"
+        return False, f"SendGrid error {r.status_code}"
+    except Exception as e:
+        return False, f"Email send failed: {e}"
+
+def _outbound_send_twilio(channel: str, to_number_or_id: str, body_text: str) -> Tuple[bool, str]:
+    """
+    Send SMS/WhatsApp via Twilio.
+    - SMS uses TWILIO_FROM
+    - WhatsApp uses TWILIO_WHATSAPP_FROM or TWILIO_FROM prefixed with 'whatsapp:' if already provided
+    """
+    sid = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
+    token = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
+    if not sid or not token:
+        return False, "Twilio not configured (missing TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN)"
+    if requests is None:
+        return False, "Twilio not available (missing requests library)"
+
+    ch = (channel or "").strip().lower()
+    frm = ""
+    to = (to_number_or_id or "").strip()
+
+    if ch == "sms":
+        frm = os.environ.get("TWILIO_FROM", "").strip()
+        if not frm:
+            return False, "SMS not configured (missing TWILIO_FROM)"
+    elif ch == "whatsapp":
+        frm = os.environ.get("TWILIO_WHATSAPP_FROM", "").strip() or os.environ.get("TWILIO_FROM", "").strip()
+        if not frm:
+            return False, "WhatsApp not configured (missing TWILIO_WHATSAPP_FROM or TWILIO_FROM)"
+        if not frm.startswith("whatsapp:"):
+            frm = "whatsapp:" + frm
+        if not to.startswith("whatsapp:"):
+            to = "whatsapp:" + to
+    else:
+        return False, "Unsupported Twilio channel"
+
+    try:
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
+        data = {"From": frm, "To": to, "Body": body_text or ""}
+        r = requests.post(url, data=data, auth=(sid, token), timeout=12)
+        if 200 <= r.status_code < 300:
+            return True, "Message sent"
+        return False, f"Twilio error {r.status_code}"
+    except Exception as e:
+        return False, f"Twilio send failed: {e}"
+
+def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute outbound send (human-triggered). Never called automatically."""
+    at = (action_type or "").strip().lower()
+    pl = payload or {}
+    if at == "send_email":
+        to_email = str(pl.get("to") or pl.get("email") or "").strip()
+        subject = str(pl.get("subject") or "World Cup Concierge").strip()
+        body = str(pl.get("message") or pl.get("body") or "").strip()
+        if not to_email:
+            return {"ok": False, "error": "Missing recipient email"}
+        ok, msg = _outbound_send_email(to_email, subject, body)
+        return {"ok": ok, "message": msg}
+    if at in ("send_sms", "send_whatsapp"):
+        ch = at.replace("send_", "")
+        to_num = str(pl.get("to") or pl.get("phone") or "").strip()
+        body = str(pl.get("message") or pl.get("body") or "").strip()
+        if not to_num:
+            return {"ok": False, "error": "Missing recipient number"}
+        ok, msg = _outbound_send_twilio(ch, to_num, body)
+        return {"ok": ok, "message": msg}
+    return {"ok": False, "error": "Unsupported outbound action"}
 # ============================================================
 # AI Action Queue (Approval / Deny / Override)
 # - Queue stores proposed AI actions (e.g., tag VIP, update status, draft reply)
@@ -4236,6 +4335,68 @@ def admin_api_ai_queue_list():
     return jsonify({"ok": True, "role": role, "queue": queue[:500]})
 
 
+
+@app.route("/admin/api/outbound/propose", methods=["POST"])
+def admin_api_outbound_propose():
+    """
+    Create an outbound send item in the AI Queue (pending).
+    Human approval + explicit send click required.
+    Body: {
+      "partner": "VENUE_ABC" (optional),
+      "channel": "email|sms|whatsapp",
+      "to": "...",
+      "subject": "..." (email only),
+      "message": "..."
+      "row": 12 (optional lead row)
+    }
+    """
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    role = ctx.get("role", "")
+    actor = ctx.get("actor", "")
+
+    data = request.get_json(silent=True) or {}
+    channel = str(data.get("channel") or "").strip().lower()
+    if channel not in ("email", "sms", "whatsapp"):
+        return jsonify({"ok": False, "error": "Invalid channel"}), 400
+    action_type = f"send_{channel}"
+    payload = {
+        "partner": data.get("partner"),
+        "row": data.get("row"),
+        "to": data.get("to"),
+        "subject": data.get("subject"),
+        "message": data.get("message"),
+    }
+    # Best-effort partner id for policy gating
+    partner = _derive_partner_id(payload=payload)
+
+    allowed, reason = _policy_check_action(partner, action_type, payload, role=role)
+    if not allowed:
+        _audit("policy.block", {"partner": partner, "type": action_type, "reason": reason, "source": "outbound.propose"})
+        return jsonify({"ok": False, "error": reason}), 403
+
+    q = _load_ai_queue()
+    qid = _queue_new_id()
+    item = {
+        "id": qid,
+        "type": action_type,
+        "payload": payload,
+        "status": "pending",
+        "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "created_by": actor,
+        "created_role": role,
+        "partner": partner,
+        "human_required": True,
+    }
+    q.insert(0, item)
+    _save_ai_queue(q)
+    _audit("outbound.queue", {"id": qid, "partner": partner, "type": action_type, "by": actor})
+    _notify("outbound.queue", {"id": qid, "partner": partner, "type": action_type, "by": actor, "role": role}, targets=["owner","manager"])
+    return jsonify({"ok": True, "id": qid})
+
+
 @app.route("/admin/api/ai/queue/propose", methods=["POST"])
 def admin_api_ai_queue_propose():
     # Minimal: allow manager+ to create a proposal (used for testing; later AI will call this)
@@ -4320,9 +4481,15 @@ def admin_api_ai_queue_approve(qid: str):
 
     # If AI disabled, still allow approval but do not apply (acts like "reviewed")
     applied = None
-    if AI_SETTINGS.get("enabled") and (AI_SETTINGS.get("mode") in ("auto", "suggest", "off")):
-        # Always require explicit approval here (this endpoint *is* the approval)
-        applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
+
+    it_type = str(it.get("type") or "").strip().lower()
+    # Outbound sends are NEVER executed on approval. Approval only unlocks a human "Send Now" click.
+    if it_type in ("send_email", "send_sms", "send_whatsapp"):
+        applied = {"ok": True, "note": "Approved — ready to send (human click required)"}
+    else:
+        if AI_SETTINGS.get("enabled") and (AI_SETTINGS.get("mode") in ("auto", "suggest", "off")):
+            # Always require explicit approval here (this endpoint *is* the approval)
+            applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
 
     it["status"] = "approved"
     it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -4333,6 +4500,56 @@ def admin_api_ai_queue_approve(qid: str):
     _audit("ai.queue.approve", {"id": qid, "type": it.get("type"), "applied": bool(applied and applied.get("ok"))})
     _notify("ai.queue.approve", {"id": qid, "type": it.get("type"), "applied": bool(applied and applied.get("ok")), "by": actor, "role": role}, targets=["owner","manager"])
     return jsonify({"ok": True, "applied_result": applied})
+
+
+
+@app.route("/admin/api/ai/queue/<qid>/send", methods=["POST"])
+def admin_api_ai_queue_send(qid: str):
+    """
+    Human-triggered outbound send for approved queue items.
+    This endpoint is the ONLY place outbound messages are executed.
+    """
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    actor = ctx.get("actor", "")
+    role = ctx.get("role", "")
+
+    queue = _load_ai_queue()
+    it = _queue_find(queue, qid)
+    if not it:
+        return jsonify({"ok": False, "error": "Not found"}), 404
+
+    it_type = str(it.get("type") or "").strip().lower()
+    if it_type not in ("send_email", "send_sms", "send_whatsapp"):
+        return jsonify({"ok": False, "error": "Not an outbound item"}), 400
+
+    if str(it.get("status")) != "approved":
+        return jsonify({"ok": False, "error": "Must be approved first"}), 400
+
+    if it.get("sent_at"):
+        return jsonify({"ok": False, "error": "Already sent"}), 400
+
+    payload = it.get("payload") or {}
+    # Partner policy must allow this outbound channel and role must meet requirement
+    partner = _derive_partner_id(payload=payload)
+    allowed, reason = _policy_check_action(partner, it_type, payload, role=role)
+    if not allowed:
+        _audit("policy.block", {"partner": partner, "type": it_type, "reason": reason, "id": qid})
+        return jsonify({"ok": False, "error": reason}), 403
+
+    # Execute send
+    res = _outbound_send(it_type, payload)
+    it["sent_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    it["sent_by"] = actor
+    it["sent_role"] = role
+    it["send_result"] = res
+    _save_ai_queue(queue)
+
+    _audit("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": bool(res.get("ok")), "by": actor})
+    _notify("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": bool(res.get("ok")), "by": actor, "role": role}, targets=["owner","manager"])
+    return jsonify({"ok": True, "result": res})
 
 
 @app.route("/admin/api/ai/queue/<qid>/override", methods=["POST"])
@@ -5898,6 +6115,10 @@ function renderAIQueue(items){
     const canAct = (st === 'pending');
     const approveBtn = `<button type="button" class="btn" ${canAct?'':'disabled'} onclick="aiqApprove('${id}', this)">Approve</button>`;
     const denyBtn = `<button class="btn2" ${canAct?'':'disabled'} onclick="aiqDeny('${id}', this)">Deny</button>`;
+    const isOutbound = (typ||'').toLowerCase().startsWith('send_');
+    const canSend = isOutbound && (st==='approved') && !(it && it.sent_at);
+    const sendLabel = (typ||'').toLowerCase()==='send_email' ? 'Send Email' : ((typ||'').toLowerCase()==='send_sms' ? 'Send SMS' : 'Send WhatsApp');
+    const sendBtn = `<button type="button" class="btn" ${canSend?'' : 'disabled'} onclick="aiqSend('${id}', this)">${sendLabel}</button>`;
     const ovBtn = `<button type="button" class="btn" data-min-role="owner" onclick="aiqOverride('${id}', this)">Owner Override</button>`;
 
     return `
@@ -5920,7 +6141,7 @@ function renderAIQueue(items){
 }
 
 async function aiqApprove(id, btn){
-  if(!confirm('Approve and apply this action?')) return;
+  if(!confirm('Approve this action?')) return;
   // Button-level loading state
   const _btn = btn;
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Approving…'; }
@@ -5934,6 +6155,29 @@ async function aiqApprove(id, btn){
   const j = await r.json().catch(()=>null);
   if(j && j.ok){ if(msg) msg.textContent='Approved ✔'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Approve'); } await loadAIQueue(); }
   else { if(msg) msg.textContent='Approve failed'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Approve'); } alert('Approve failed: '+(j && j.error ? j.error : r.status)); }
+}
+
+
+async function aiqSend(id, btn){
+  if(!confirm('Send this outbound message now?')) return;
+  const _btn = btn;
+  if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Sending…'; }
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Sending…';
+  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/send?key=${encodeURIComponent(KEY)}`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({})
+  });
+  const j = await r.json().catch(()=>null);
+  if(j && j.ok){
+    if(msg) msg.textContent='Sent ✔';
+    if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Send'); }
+    await loadAIQueue();
+  }else{
+    if(msg) msg.textContent='Send failed';
+    if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Send'); }
+    alert('Send failed: '+(j && j.error ? j.error : r.status));
+  }
 }
 
 async function aiqDeny(id, btn){
