@@ -1,10 +1,12 @@
 name: panels-gate
 
 on:
-  pull_request:
+  pull_request: {}
   push:
-    branches: [ main, master ]
-  workflow_dispatch:
+    branches:
+      - main
+      - master
+  workflow_dispatch: {}
 
 concurrency:
   group: panels-gate-${{ github.ref }}
@@ -16,14 +18,10 @@ jobs:
     timeout-minutes: 30
 
     env:
-      CI: true
-      PORT: 5050
-
-      # Recommended: store these in GitHub repo Secrets
-      # ADMIN_URL / MANAGER_URL / FANZONE_URL can be built from keys, but keeping them explicit is simplest.
+      CI: "true"
+      PORT: "5050"
       ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
       ADMIN_MANAGER_KEYS: ${{ secrets.ADMIN_MANAGER_KEYS }}
-
       ADMIN_URL: ${{ secrets.ADMIN_URL }}
       MANAGER_URL: ${{ secrets.MANAGER_URL }}
       FANZONE_URL: ${{ secrets.FANZONE_URL }}
@@ -42,7 +40,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
 
       - name: Install Python deps
         shell: pwsh
@@ -67,20 +64,15 @@ jobs:
         shell: pwsh
         run: |
           npx playwright --version
-          npx playwright install
+          npx playwright install --with-deps
 
-      - name: Sanity: show config
+      - name: Sanity check secrets
         shell: pwsh
         run: |
-          node -v
-          npm -v
-          python --version
-          Write-Host "ADMIN_URL=$env:ADMIN_URL"
-          Write-Host "MANAGER_URL=$env:MANAGER_URL"
-          Write-Host "FANZONE_URL=$env:FANZONE_URL"
-          if ([string]::IsNullOrWhiteSpace($env:ADMIN_URL)) { throw "Missing ADMIN_URL secret" }
-          if ([string]::IsNullOrWhiteSpace($env:MANAGER_URL)) { throw "Missing MANAGER_URL secret" }
-          if ([string]::IsNullOrWhiteSpace($env:FANZONE_URL)) { throw "Missing FANZONE_URL secret" }
+          if ([string]::IsNullOrWhiteSpace($env:ADMIN_URL)) { throw "Missing secret: ADMIN_URL" }
+          if ([string]::IsNullOrWhiteSpace($env:MANAGER_URL)) { throw "Missing secret: MANAGER_URL" }
+          if ([string]::IsNullOrWhiteSpace($env:FANZONE_URL)) { throw "Missing secret: FANZONE_URL" }
+          Write-Host "Secrets OK."
 
       - name: Start server and run Playwright gate
         shell: pwsh
@@ -92,11 +84,11 @@ jobs:
             -RedirectStandardOutput "server.log" `
             -RedirectStandardError "server.err"
 
-          Write-Host "Server PID: $($server.Id)"
+          Write-Host ("Server PID: " + $server.Id)
 
           # Wait until connectable (any HTTP response is fine)
           $ok = $false
-          for ($i=0; $i -lt 60; $i++) {
+          for ($i = 0; $i -lt 60; $i++) {
             & curl.exe -s -o NUL "http://127.0.0.1:5050/"
             if ($LASTEXITCODE -eq 0) { $ok = $true; break }
             Start-Sleep -Seconds 1
@@ -114,43 +106,38 @@ jobs:
 
           Write-Host "OK: Server reachable. Running Playwright gate..."
           try {
-            # Use your package.json script (recommended)
+            # IMPORTANT: ensures playwright is available in PATH in CI
             npm run test:panels
-
-            # If you ever need to bypass scripts, you can use:
-            # npx playwright test tests/00_smoke_load.spec.js tests/10_tabs_layout.spec.js tests/20_save_refresh_actions.spec.js tests/30_visual_regression.spec.js
           } finally {
             try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
           }
 
-      - name: Debug: list artifact directories
+      - name: Debug - list artifact directories
         if: always()
         shell: pwsh
         run: |
-          Write-Host "---- ls (root) ----"
+          Write-Host "---- root ----"
           Get-ChildItem -Force | Format-Table -AutoSize
 
-          Write-Host "---- ls test-results ----"
-          if (Test-Path test-results) {
-            Get-ChildItem test-results -Recurse -Force | Select-Object -First 200
+          Write-Host "---- test-results ----"
+          if (Test-Path "test-results") {
+            Get-ChildItem "test-results" -Recurse -Force | Select-Object -First 200
           } else {
             Write-Host "test-results folder not found."
           }
 
-          Write-Host "---- ls playwright-report ----"
-          if (Test-Path playwright-report) {
-            Get-ChildItem playwright-report -Recurse -Force | Select-Object -First 200
+          Write-Host "---- playwright-report ----"
+          if (Test-Path "playwright-report") {
+            Get-ChildItem "playwright-report" -Recurse -Force | Select-Object -First 200
           } else {
             Write-Host "playwright-report folder not found."
           }
 
-          Write-Host "---- tail server logs ----"
-          if (Test-Path server.log) { Write-Host "server.log:"; Get-Content server.log -Tail 200 | Out-Host }
-          if (Test-Path server.err) { Write-Host "server.err:"; Get-Content server.err -Tail 200 | Out-Host }
+          Write-Host "---- server logs (tail) ----"
+          if (Test-Path "server.log") { Write-Host "server.log:"; Get-Content "server.log" -Tail 200 | Out-Host }
+          if (Test-Path "server.err") { Write-Host "server.err:"; Get-Content "server.err" -Tail 200 | Out-Host }
 
-      # Bonus: solves “No files were found with the provided path … No artifacts will be uploaded.”
-      # - always uploads if they exist
-      # - does NOT fail the job if they don’t exist (ignore)
+      # Bonus fix for: “No files were found… No artifacts will be uploaded.”
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -158,4 +145,8 @@ jobs:
           name: playwright-artifacts
           if-no-files-found: ignore
           retention-days: 7
-          path: test-results,playwright-report,server.log,server.err
+          path: |
+            test-results
+            playwright-report
+            server.log
+            server.err
