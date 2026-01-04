@@ -5146,7 +5146,7 @@ def admin_api_partner_policies_set():
         if "allowed_statuses" in policy and policy["allowed_statuses"] is None:
             policy.pop("allowed_statuses", None)
         merged = _save_partner_policy(partner, policy)
-        _audit_event("partner_policy.save", {"partner": partner, "policy": merged})
+        _audit("partner_policy.save", {"partner": partner, "policy": merged})
         return jsonify({"ok": True, "partner": partner, "policy": merged})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
@@ -5165,7 +5165,7 @@ def admin_api_partner_policies_delete():
         if isinstance(_PARTNER_POLICIES, dict) and partner in _PARTNER_POLICIES:
             _PARTNER_POLICIES.pop(partner, None)
             _safe_write_json_file(PARTNER_POLICIES_FILE, _PARTNER_POLICIES)
-            _audit_event("partner_policy.delete", {"partner": partner})
+            _audit("partner_policy.delete", {"partner": partner})
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
