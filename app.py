@@ -11,6 +11,9 @@ import datetime
 from datetime import datetime, date, timezone, timedelta
 from typing import Dict, Any, Optional, List, Tuple
 
+import time
+import urllib.request
+import urllib.error
 from flask import Flask, request, jsonify, send_from_directory, send_file, make_response
 
 # OpenAI client (compat: works with both newer and older openai python packages)
@@ -183,6 +186,148 @@ MENU_FILE = os.environ.get("MENU_FILE", "/tmp/wc26_menu_override.json")
 # - Owners can edit advanced behavior (model/prompts/thresholds)
 # - Persisted on disk so it survives restarts (Render filesystem: /tmp is fine)
 # ============================================================
+
+# ============================================================
+# Monitoring + Alerts (Human-in-the-middle friendly)
+# - Read-only health checks for Sheets / Queue / Fixtures / Outbound provider readiness
+# - Alerts are best-effort and never crash the app
+# - Rate-limited to prevent spam
+# ============================================================
+ALERT_SETTINGS_FILE = os.environ.get("ALERT_SETTINGS_FILE", "/tmp/wc26_alert_settings.json")
+ALERT_STATE_FILE = os.environ.get("ALERT_STATE_FILE", "/tmp/wc26_alert_state.json")
+
+def _default_alert_settings() -> Dict[str, Any]:
+    return {
+        "enabled": False,
+        "channels": {
+            "slack": {"enabled": False, "webhook_url": os.environ.get("SLACK_WEBHOOK_URL", "")},
+            "email": {"enabled": False, "to": os.environ.get("ALERT_EMAIL_TO", ""), "from": os.environ.get("ALERT_EMAIL_FROM", os.environ.get("SENDGRID_FROM",""))},
+            "sms": {"enabled": False, "to": os.environ.get("ALERT_SMS_TO", "")},
+        },
+        "rate_limit_seconds": 600,   # 10 min per unique alert key
+        "checks": {
+            "fixtures_stale_seconds": int(os.environ.get("FIXTURES_STALE_SECONDS", "86400") or 86400), # 24h
+        },
+        "updated_at": None,
+        "updated_by": None,
+        "updated_role": None,
+    }
+
+ALERT_SETTINGS: Dict[str, Any] = _default_alert_settings()
+
+def _load_alert_settings_from_disk() -> None:
+    global ALERT_SETTINGS
+    payload = _safe_read_json_file(ALERT_SETTINGS_FILE)
+    if isinstance(payload, dict) and payload:
+        ALERT_SETTINGS = _deep_merge(_default_alert_settings(), payload)
+
+def _save_alert_settings_to_disk(patch: Dict[str, Any], actor: str, role: str) -> Dict[str, Any]:
+    global ALERT_SETTINGS
+    merged = _deep_merge(ALERT_SETTINGS, patch or {})
+    merged["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    merged["updated_by"] = actor
+    merged["updated_role"] = role
+    ALERT_SETTINGS = merged
+    _safe_write_json_file(ALERT_SETTINGS_FILE, ALERT_SETTINGS)
+    return ALERT_SETTINGS
+
+def _alert_state() -> Dict[str, Any]:
+    st = _safe_read_json_file(ALERT_STATE_FILE, default={})
+    return st if isinstance(st, dict) else {}
+
+def _save_alert_state(st: Dict[str, Any]) -> None:
+    _safe_write_json_file(ALERT_STATE_FILE, st or {})
+
+def _should_send_alert(key: str) -> bool:
+    try:
+        if not ALERT_SETTINGS.get("enabled"):
+            return False
+        st = _alert_state()
+        now = int(time.time())
+        last = int((st.get(key) or 0))
+        rl = int(ALERT_SETTINGS.get("rate_limit_seconds") or 600)
+        if now - last < rl:
+            return False
+        st[key] = now
+        _save_alert_state(st)
+        return True
+    except Exception:
+        return False
+
+def _http_post_json(url: str, payload: Dict[str, Any], timeout: int = 8) -> None:
+    data = json.dumps(payload or {}).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers={"Content-Type":"application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        r.read()
+
+def _send_slack(text: str) -> bool:
+    try:
+        ch = (ALERT_SETTINGS.get("channels") or {}).get("slack") or {}
+        if not (ch.get("enabled") and ch.get("webhook_url")):
+            return False
+        _http_post_json(str(ch.get("webhook_url")), {"text": text})
+        return True
+    except Exception:
+        return False
+
+def _send_email(subject: str, body: str) -> bool:
+    # SendGrid (best-effort). If not configured, just return False.
+    try:
+        ch = (ALERT_SETTINGS.get("channels") or {}).get("email") or {}
+        api_key = os.environ.get("SENDGRID_API_KEY", "")
+        to_addr = str(ch.get("to") or "").strip()
+        from_addr = str(ch.get("from") or "").strip()
+        if not (ch.get("enabled") and api_key and to_addr and from_addr):
+            return False
+        payload = {
+            "personalizations": [{"to": [{"email": to_addr}]}],
+            "from": {"email": from_addr},
+            "subject": subject,
+            "content": [{"type":"text/plain","value": body}],
+        }
+        req = urllib.request.Request(
+            "https://api.sendgrid.com/v3/mail/send",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type":"application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            r.read()
+        return True
+    except Exception:
+        return False
+
+def _send_sms(text: str) -> bool:
+    # Twilio (best-effort). If not configured, return False.
+    try:
+        ch = (ALERT_SETTINGS.get("channels") or {}).get("sms") or {}
+        to_num = str(ch.get("to") or "").strip()
+        if not (ch.get("enabled") and to_num):
+            return False
+        # reuse existing Twilio helpers if present
+        if "_twilio_send_sms" in globals():
+            return bool(_twilio_send_sms(to_num, text))
+        return False
+    except Exception:
+        return False
+
+def _dispatch_alert(title: str, details: str, key: str, severity: str = "error") -> Dict[str, Any]:
+    sent = {"slack": False, "email": False, "sms": False}
+    if not _should_send_alert(key):
+        return {"ok": True, "sent": sent, "rate_limited": True}
+    msg = f"{'🚨' if severity=='error' else '⚠️'} {title}\n{details}".strip()
+    sent["slack"] = _send_slack(msg)
+    sent["email"] = _send_email(title, msg)
+    # SMS only for error severity (you can widen later)
+    if severity == "error":
+        sent["sms"] = _send_sms(msg[:1400])
+    # always in-app notify too
+    try:
+        _notify("monitor.alert", {"title": title, "details": details, "severity": severity}, targets=["owner","manager"])
+    except Exception:
+        pass
+    return {"ok": True, "sent": sent, "rate_limited": False}
+
 AI_SETTINGS_FILE = os.environ.get("AI_SETTINGS_FILE", "/tmp/wc26_ai_settings.json")
 
 def _default_ai_settings() -> Dict[str, Any]:
@@ -504,6 +649,130 @@ def _load_ai_queue() -> List[Dict[str, Any]]:
 
 def _save_ai_queue(queue: List[Dict[str, Any]]) -> None:
     _safe_write_json_file(AI_QUEUE_FILE, queue or [])
+
+
+# ============================================================
+# Health Checks
+# ============================================================
+def _health_check_sheets() -> Dict[str, Any]:
+    t0 = time.time()
+    try:
+        # best-effort: if your app has get_sheet()/get_gspread_client helpers, use them.
+        if "get_sheet" in globals():
+            sh = get_sheet()
+            # touch a cell
+            _ = sh.row_values(1)
+        elif "get_gspread_client" in globals():
+            gc = get_gspread_client()
+            # avoid assumptions about sheet id; just verify auth works
+            _ = bool(gc)
+        else:
+            return {"name": "sheets", "ok": False, "severity": "error", "message": "Sheets client not configured in this build."}
+        return {"name": "sheets", "ok": True, "severity": "ok", "message": "Sheets reachable"}
+    except Exception as e:
+        return {"name": "sheets", "ok": False, "severity": "error", "message": f"Sheets check failed: {e}"}
+    finally:
+        pass
+
+def _health_check_queue() -> Dict[str, Any]:
+    try:
+        q = _load_ai_queue()
+        # write a tiny health marker file to validate disk writes
+        marker_path = os.environ.get("HEALTH_MARKER_FILE", "/tmp/wc26_health_marker.txt")
+        with open(marker_path, "w", encoding="utf-8") as f:
+            f.write(datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
+        return {"name": "queue", "ok": True, "severity": "ok", "message": f"Queue OK ({len(q)} items)"}
+    except Exception as e:
+        return {"name": "queue", "ok": False, "severity": "error", "message": f"Queue check failed: {e}"}
+
+def _health_check_fixtures() -> Dict[str, Any]:
+    # best-effort: if you have a fixtures cache timestamp, use it; otherwise report unknown.
+    try:
+        stale_s = int(((ALERT_SETTINGS.get("checks") or {}).get("fixtures_stale_seconds")) or 86400)
+        # Try common cache file env/paths
+        candidates = [
+            os.environ.get("FIXTURES_CACHE_FILE", ""),
+            "/tmp/wc26_fixtures_cache.json",
+            "/tmp/fixtures_cache.json",
+        ]
+        candidates = [c for c in candidates if c]
+        newest_age = None
+        newest_path = None
+        now = time.time()
+        for p in candidates:
+            if os.path.exists(p):
+                age = now - os.path.getmtime(p)
+                if newest_age is None or age < newest_age:
+                    newest_age = age
+                    newest_path = p
+        if newest_age is None:
+            return {"name": "fixtures", "ok": True, "severity": "warn", "message": "No fixtures cache file detected (skipping staleness check)."}
+        if newest_age > stale_s:
+            return {"name": "fixtures", "ok": False, "severity": "warn", "message": f"Fixtures cache stale ({int(newest_age)}s) at {newest_path}"}
+        return {"name": "fixtures", "ok": True, "severity": "ok", "message": f"Fixtures cache fresh ({int(newest_age)}s) at {newest_path}"}
+    except Exception as e:
+        return {"name": "fixtures", "ok": False, "severity": "warn", "message": f"Fixtures check failed: {e}"}
+
+def _health_check_outbound() -> Dict[str, Any]:
+    try:
+        # We only validate readiness (env vars). Sending is still human-triggered.
+        sg_ok = bool(os.environ.get("SENDGRID_API_KEY")) and bool(os.environ.get("SENDGRID_FROM"))
+        tw_ok = bool(os.environ.get("TWILIO_ACCOUNT_SID")) and bool(os.environ.get("TWILIO_AUTH_TOKEN")) and bool(os.environ.get("TWILIO_FROM"))
+        if not sg_ok and not tw_ok:
+            return {"name": "outbound", "ok": True, "severity": "warn", "message": "Outbound providers not configured (send disabled until configured)."}
+        parts = []
+        parts.append("SendGrid OK" if sg_ok else "SendGrid missing")
+        parts.append("Twilio OK" if tw_ok else "Twilio missing")
+        return {"name": "outbound", "ok": True, "severity": "ok" if (sg_ok or tw_ok) else "warn", "message": ", ".join(parts)}
+    except Exception as e:
+        return {"name": "outbound", "ok": False, "severity": "warn", "message": f"Outbound readiness check failed: {e}"}
+
+def _run_health_checks() -> Dict[str, Any]:
+    t0 = time.time()
+    checks = [
+        _health_check_sheets(),
+        _health_check_queue(),
+        _health_check_fixtures(),
+        _health_check_outbound(),
+    ]
+    # overall
+    overall_ok = all(c.get("ok") for c in checks if c.get("severity") == "error") and not any((c.get("severity") == "error" and not c.get("ok")) for c in checks)
+    worst = "ok"
+    for c in checks:
+        sev = c.get("severity")
+        if sev == "error" and not c.get("ok"):
+            worst = "error"
+            break
+        if sev == "warn" and worst != "error":
+            worst = "warn"
+    return {
+        "ok": True,
+        "status": worst,
+        "checks": checks,
+        "elapsed_ms": int((time.time() - t0) * 1000),
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+
+def _maybe_alert_on_health(report: Dict[str, Any]) -> Dict[str, Any]:
+    try:
+        checks = report.get("checks") or []
+        errors = [c for c in checks if c.get("severity") == "error" and not c.get("ok")]
+        warns = [c for c in checks if c.get("severity") == "warn" and not c.get("ok")]
+        out = {"alerts": []}
+        for c in errors:
+            key = f"health:{c.get('name')}:error"
+            out["alerts"].append(_dispatch_alert(f"Health check failed: {c.get('name')}", c.get("message",""), key=key, severity="error"))
+            try: _audit("monitor.health.fail", {"check": c.get("name"), "message": c.get("message")}) 
+            except Exception: pass
+        for c in warns:
+            key = f"health:{c.get('name')}:warn"
+            out["alerts"].append(_dispatch_alert(f"Health warning: {c.get('name')}", c.get("message",""), key=key, severity="warn"))
+            try: _audit("monitor.health.warn", {"check": c.get("name"), "message": c.get("message")})
+            except Exception: pass
+        return out
+    except Exception:
+        return {"alerts": []}
+
 
 def _queue_new_id() -> str:
     return secrets.token_hex(8)
@@ -4615,6 +4884,64 @@ MATCHDAY_PRESETS: Dict[str, Dict[str, Any]] = {
     },
 }
 
+
+
+# ============================================================
+# Monitoring APIs (Health + Alert Settings)
+# ============================================================
+@app.route("/admin/api/health", methods=["GET"])
+def admin_api_health():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    report = _run_health_checks()
+    return jsonify({"ok": True, "report": report, "alerts_enabled": bool(ALERT_SETTINGS.get("enabled"))})
+
+@app.route("/admin/api/health/run", methods=["POST"])
+def admin_api_health_run():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    report = _run_health_checks()
+    alerts = _maybe_alert_on_health(report)
+    return jsonify({"ok": True, "report": report, "alerts": alerts})
+
+@app.route("/admin/api/alerts/settings", methods=["GET","POST"])
+def admin_api_alert_settings():
+    if request.method == "GET":
+        ok, resp = _require_admin(min_role="manager")
+        if not ok:
+            return resp
+        # hide secrets (webhook) from managers
+        ctx = _admin_ctx()
+        role = ctx.get("role","manager")
+        s = dict(ALERT_SETTINGS or {})
+        if role != "owner":
+            try:
+                s2 = json.loads(json.dumps(s))
+                if isinstance(s2.get("channels"), dict) and isinstance(s2["channels"].get("slack"), dict):
+                    wh = str(s2["channels"]["slack"].get("webhook_url") or "")
+                    s2["channels"]["slack"]["webhook_url"] = ("***" if wh else "")
+                return jsonify({"ok": True, "settings": s2, "role": role})
+            except Exception:
+                pass
+        return jsonify({"ok": True, "settings": s, "role": role})
+
+    # POST: owner-only
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    actor = ctx.get("actor","")
+    role = ctx.get("role","owner")
+    patch = request.get_json(silent=True) or {}
+    if not isinstance(patch, dict):
+        return jsonify({"ok": False, "error": "Invalid payload"}), 400
+    saved = _save_alert_settings_to_disk(patch, actor=actor, role=role)
+    _audit("alerts.settings.update", {"enabled": bool(saved.get("enabled"))})
+    _notify("alerts.settings.update", {"enabled": bool(saved.get("enabled")), "by": actor, "role": role}, targets=["owner","manager"])
+    return jsonify({"ok": True, "settings": saved})
+
 # ============================================================
 # Notifications API (in-app notifications for admin/manager)
 # ============================================================
@@ -5125,7 +5452,20 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
   </div>
 
   
-  <div class="card" id="matchdayCard">
+  
+  <div class="card" id="healthCard">
+    <div class="h2">System Health</div>
+    <div class="small">Read-only checks for Sheets, Queue, Fixtures, and outbound readiness. Alerts are optional.</div>
+    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button type="button" class="btn" onclick="runHealth()">Run checks</button>
+      <button type="button" class="btn2" onclick="loadHealth()">Refresh</button>
+      <span id="health-msg" class="note"></span>
+      <span style="margin-left:auto" class="note" id="health-ts"></span>
+    </div>
+    <div id="health-body" class="small" style="margin-top:12px;white-space:pre-wrap"></div>
+  </div>
+
+<div class="card" id="matchdayCard">
     <div class="h2">Match Day Ops</div>
     <div class="small">One-click presets that set multiple Ops toggles + key Rules. Audited.</div>
     <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
@@ -6457,8 +6797,59 @@ function refreshAll(source){
   // These are safe even if you're not on the tab; they just fetch current configs
   try{ loadRules(); }catch(e){}
   try{ loadMenu(); }catch(e){}
+  try{ loadHealth(); }catch(e){}
   updateLastRef();
 }
+
+async function loadHealth(){
+  const msg = qs('#health-msg'); if(msg) msg.textContent='Loading…';
+  const body = qs('#health-body'); if(body) body.textContent='';
+  try{
+    const r = await fetch(`/admin/api/health?key=${encodeURIComponent(KEY)}`, {cache:'no-store'});
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error||'Failed');
+    const rep = j.report || {};
+    if(msg) msg.textContent = (rep.status||'ok').toUpperCase() + (j.alerts_enabled ? ' · alerts on' : ' · alerts off');
+    const ts = qs('#health-ts'); if(ts) ts.textContent = rep.ts ? ('Updated '+rep.ts) : '';
+    if(body){
+      const lines = (rep.checks||[]).map(c=>{
+        const badge = c.ok ? '✅' : (c.severity==='error' ? '🚨' : '⚠️');
+        return `${badge} ${c.name}: ${c.message||''}`;
+      });
+      body.textContent = lines.join('\n');
+    }
+  }catch(e){
+    if(msg) msg.textContent='Load failed: '+(e.message||e);
+    if(body) body.textContent='Unable to load health report.';
+  }
+}
+
+async function runHealth(){
+  const msg = qs('#health-msg'); if(msg) msg.textContent='Running…';
+  const body = qs('#health-body'); if(body) body.textContent='';
+  try{
+    const r = await fetch(`/admin/api/health/run?key=${encodeURIComponent(KEY)}`, {method:'POST'});
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error||'Failed');
+    const rep = j.report || {};
+    if(msg) msg.textContent = (rep.status||'ok').toUpperCase() + ' · checked';
+    const ts = qs('#health-ts'); if(ts) ts.textContent = rep.ts ? ('Updated '+rep.ts) : '';
+    if(body){
+      const lines = (rep.checks||[]).map(c=>{
+        const badge = c.ok ? '✅' : (c.severity==='error' ? '🚨' : '⚠️');
+        return `${badge} ${c.name}: ${c.message||''}`;
+      });
+      body.textContent = lines.join('\n');
+    }
+    // also refresh notifications (alerts may have been emitted)
+    try{ loadNotifs(); }catch(e){}
+  }catch(e){
+    if(msg) msg.textContent='Run failed: '+(e.message||e);
+    if(body) body.textContent='Unable to run health checks.';
+  }
+}
+
+
 
 function _setAutoLabel(on){
   const lab=document.getElementById('autoLabel');
