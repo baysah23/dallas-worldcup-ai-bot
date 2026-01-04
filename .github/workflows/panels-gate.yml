@@ -10,16 +10,20 @@ jobs:
     runs-on: windows-latest
 
     env:
-      # App auth keys (your app checks these)
+      # Your app checks these env vars to validate keys
       ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
       ADMIN_MANAGER_KEYS: ${{ secrets.ADMIN_MANAGER_KEY }}
 
+      # Force local port
       PORT: "5050"
 
       # Playwright URLs (local)
       ADMIN_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_OWNER_KEY }}
       MANAGER_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_MANAGER_KEY }}
       FANZONE_URL: http://127.0.0.1:5050/admin/fanzone?key=${{ secrets.ADMIN_OWNER_KEY }}
+
+      # Make Playwright behave like CI
+      CI: "true"
 
     steps:
       - name: Checkout
@@ -50,17 +54,16 @@ jobs:
         shell: pwsh
         run: npx playwright install --with-deps
 
-      - name: Prep artifact folders (avoid “not found” on upload)
+      - name: Prep artifact folders
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force test-results | Out-Null
           New-Item -ItemType Directory -Force playwright-report | Out-Null
 
-      # ✅ Start server + wait + run tests in ONE step (prevents Windows runner from killing background process)
+      # ✅ Start server + wait + run tests in ONE step (prevents Windows job cleanup killing the server)
       - name: Start server and run Panels Gate
         shell: pwsh
         run: |
-          # Start server and capture logs
           $server = Start-Process -PassThru -NoNewWindow `
             -FilePath python `
             -ArgumentList "-u", "app.py" `
@@ -69,7 +72,7 @@ jobs:
 
           Write-Host "Server PID: $($server.Id)"
 
-          # Wait until we can CONNECT (any HTTP response is fine)
+          # Wait until connectable (any HTTP response is fine)
           $ok = $false
           for ($i=0; $i -lt 60; $i++) {
             & curl.exe -s -o NUL "http://127.0.0.1:5050/"
@@ -91,7 +94,6 @@ jobs:
           try {
             npm run test:panels
           } finally {
-            # Always stop server
             try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
           }
 

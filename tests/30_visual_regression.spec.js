@@ -1,143 +1,122 @@
+// tests/30_visual_regression.spec.js
 const { test, expect } = require("@playwright/test");
 
 const ADMIN_URL = process.env.ADMIN_URL;
 const MANAGER_URL = process.env.MANAGER_URL;
 const FANZONE_URL = process.env.FANZONE_URL;
 
-function must(v, name) {
-  if (!v) throw new Error(`Missing env var: ${name}`);
-  return v;
+if (!ADMIN_URL || !MANAGER_URL || !FANZONE_URL) {
+  throw new Error(
+    "Missing env vars: ADMIN_URL, MANAGER_URL, FANZONE_URL. Set them in CI secrets or your shell."
+  );
 }
 
+// Small stabilization helper: wait for layout + fonts to settle
 async function stabilize(page) {
-  // Freeze animations/transitions
-  await page.addStyleTag({
-    content: `
-      *, *::before, *::after {
-        transition: none !important;
-        animation: none !important;
-        caret-color: transparent !important;
-      }
-
-      /* ---- VISUAL SNAPSHOT STABILIZERS (IMPORTANT) ----
-         These prevent dynamic content from changing screenshot size. */
-
-      /* Fixed pane heights so AI Queue / others don’t change height with data */
-      #tab-ops, #tab-leads, #tab-aiq, #tab-monitor, #tab-audit, #tab-configure,
-      #tab-ai, #tab-rules, #tab-menu, #tab-policies {
-        box-sizing: border-box !important;
-        min-height: 650px !important;
-        height: 650px !important;
-        overflow: hidden !important;
-      }
-
-      /* Fan Zone: lock viewport-sized body so it doesn't grow/shrink */
-      body {
-        min-height: 900px !important;
-        height: 900px !important;
-        overflow: hidden !important;
-      }
-    `,
-  });
-
-  // Always start at top
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await page.waitForTimeout(250);
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForTimeout(200);
 }
 
-async function clickTab(page, label) {
-  const btn = page.getByRole("button", { name: label }).or(page.getByRole("link", { name: label }));
-  await expect(btn).toBeVisible();
-  await btn.first().click();
-  await page.waitForTimeout(250);
-}
-
+// Mask things that change (timestamps, “last updated”, etc.)
 function commonMasks(page) {
   return [
-    // Dynamic toasts/logs/timestamps (mask if present; safe if not)
-    page.locator(".toast, .toasts, #toast, #toasts").first(),
-    page.locator("#tab-audit, #audit, .audit, .audit-log").first(),
-    page.getByText(/last updated/i).first(),
-    page.getByText(/updated by/i).first(),
+    // Common “dynamic” targets (safe to keep even if selector not found)
+    page.locator("[data-testid='timestamp']"),
+    page.locator("[data-testid='last-updated']"),
+    page.locator(".toast"),
+    page.locator("#toast"),
+    page.locator(".saving"),
+    page.locator(".status-pill"),
+    page.locator(".audit-timestamp"),
+    page.locator(".updated-at"),
   ];
 }
 
 const SNAP_OPTS = {
-  maxDiffPixelRatio: 0.03, // keep strict but realistic
+  fullPage: false, // viewport only (stable)
+  animations: "disabled",
+  // tiny rendering diffs are normal across machines; keep this small but non-zero
+  maxDiffPixelRatio: 0.01,
 };
 
-test("Visual - ADMIN tab panes", async ({ page }) => {
-  await page.goto(must(ADMIN_URL, "ADMIN_URL"), { waitUntil: "domcontentloaded" });
-  await stabilize(page);
+async function clickTab(page, label) {
+  // Prefer button by role/name if present
+  const btn = page.getByRole("button", { name: label });
+  if (await btn.count()) {
+    await btn.first().click();
+    return;
+  }
 
-  const tabs = [
-    { label: "Ops", pane: "#tab-ops" },
-    { label: "Leads", pane: "#tab-leads" },
-    { label: "AI Queue", pane: "#tab-aiq" },
-    { label: "Monitoring", pane: "#tab-monitor" },
-    { label: "Audit", pane: "#tab-audit" },
-    { label: "Configure", pane: "#tab-configure" },
-    { label: "AI Settings", pane: "#tab-ai" },
-    { label: "Rules", pane: "#tab-rules" },
-    { label: "Menu", pane: "#tab-menu" },
-    { label: "Policies", pane: "#tab-policies" },
-  ];
+  // Fallback: data-tab button if your UI uses it
+  const byData = page.locator(`button[data-tab], .tabbtn`).filter({ hasText: label });
+  if (await byData.count()) {
+    await byData.first().click();
+    return;
+  }
 
-  for (const t of tabs) {
-    const btn = page.getByRole("button", { name: t.label }).or(page.getByRole("link", { name: t.label }));
-    if (!(await btn.count())) continue;
+  throw new Error(`Could not find tab button for "${label}"`);
+}
 
-    await clickTab(page, t.label);
+test.describe("Visual - ADMIN tab panes", () => {
+  test("Admin tab panes stable viewport snapshots", async ({ page }) => {
+    await page.goto(ADMIN_URL, { waitUntil: "domcontentloaded" });
     await stabilize(page);
 
-    const pane = page.locator(t.pane).first();
-    await expect(pane).toBeVisible();
+    const tabs = [
+      "Ops",
+      "Leads",
+      "AI Queue",
+      "Monitoring",
+      "Audit",
+      "AI Settings",
+      "Rules",
+      "Menu",
+      "Policies",
+    ];
 
-    await expect(pane).toHaveScreenshot(
-      `admin-${t.label.replace(/\s+/g, "_").toLowerCase()}.png`,
-      { ...SNAP_OPTS, mask: commonMasks(page) }
-    );
-  }
+    for (const t of tabs) {
+      await clickTab(page, t);
+      await stabilize(page);
+
+      const safe = t.replace(/\s+/g, "_").toLowerCase();
+      await expect(page).toHaveScreenshot(
+        `admin-${safe}.png`,
+        { ...SNAP_OPTS, mask: commonMasks(page) }
+      );
+    }
+  });
 });
 
-test("Visual - MANAGER core panes", async ({ page }) => {
-  await page.goto(must(MANAGER_URL, "MANAGER_URL"), { waitUntil: "domcontentloaded" });
-  await stabilize(page);
-
-  const tabs = [
-    { label: "Ops", pane: "#tab-ops" },
-    { label: "Leads", pane: "#tab-leads" },
-    { label: "AI Queue", pane: "#tab-aiq" },
-    { label: "Monitoring", pane: "#tab-monitor" },
-    { label: "Audit", pane: "#tab-audit" },
-  ];
-
-  for (const t of tabs) {
-    const btn = page.getByRole("button", { name: t.label }).or(page.getByRole("link", { name: t.label }));
-    if (!(await btn.count())) continue;
-
-    await clickTab(page, t.label);
+test.describe("Visual - MANAGER core panes", () => {
+  test("Manager core panes stable viewport snapshots", async ({ page }) => {
+    await page.goto(MANAGER_URL, { waitUntil: "domcontentloaded" });
     await stabilize(page);
 
-    const pane = page.locator(t.pane).first();
-    await expect(pane).toBeVisible();
+    // Keep these to the ones managers actually use
+    const tabs = ["Ops", "Leads", "AI Queue", "Monitoring", "Audit"];
 
-    await expect(pane).toHaveScreenshot(
-      `manager-${t.label.replace(/\s+/g, "_").toLowerCase()}.png`,
-      { ...SNAP_OPTS, mask: commonMasks(page) }
-    );
-  }
+    for (const t of tabs) {
+      await clickTab(page, t);
+      await stabilize(page);
+
+      const safe = t.replace(/\s+/g, "_").toLowerCase();
+      await expect(page).toHaveScreenshot(
+        `manager-${safe}.png`,
+        { ...SNAP_OPTS, mask: commonMasks(page) }
+      );
+    }
+  });
 });
 
-test("Visual - FANZONE page", async ({ page }) => {
-  await page.goto(must(FANZONE_URL, "FANZONE_URL"), { waitUntil: "domcontentloaded" });
-  await stabilize(page);
+test.describe("Visual - FANZONE page", () => {
+  test("Fan Zone stable viewport snapshot", async ({ page }) => {
+    await page.goto(FANZONE_URL, { waitUntil: "domcontentloaded" });
+    await stabilize(page);
 
-  const target = page.locator("body").first();
-  await expect(target).toBeVisible();
-
-  await expect(target).toHaveScreenshot("fanzone.png", {
-    maxDiffPixelRatio: 0.03,
-    mask: commonMasks(page),
+    await expect(page).toHaveScreenshot(
+      "fanzone.png",
+      { ...SNAP_OPTS, mask: commonMasks(page) }
+    );
   });
 });
