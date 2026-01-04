@@ -6099,17 +6099,18 @@ let ROLE = (__ADMIN_ROLE__ || 'manager');
 // Refresh role from server so manager/owner locks are always correct
 async function _refreshRole(){
   try{
-    const r = await fetch('/admin/api/whoami', {credentials:'same-origin'});
+    const r = await fetch(`/admin/api/whoami?key=${encodeURIComponent(KEY||'')}`, {cache:'no-store'});
     const j = await r.json();
     if(j && j.ok && j.role){ ROLE = j.role; }
+  }catch(e){}
+}
 
-
-// Enforce owner-only locks in one place (tabs + buttons)
+// Enforce owner-only locks (tabs + buttons)
 document.addEventListener('click', function(ev){
   try{
-    const el = ev.target && ev.target.closest ? ev.target.closest('[data-minrole]') : null;
+    const el = ev.target && ev.target.closest ? ev.target.closest('[data-minrole],[data-min-role]') : null;
     if(!el) return;
-    const need = (el.getAttribute('data-minrole') || '').toLowerCase();
+    const need = (el.getAttribute('data-minrole') || el.getAttribute('data-min-role') || '').toLowerCase();
     if(need === 'owner' && ROLE !== 'owner'){
       ev.preventDefault();
       ev.stopPropagation();
@@ -6124,10 +6125,7 @@ document.addEventListener('DOMContentLoaded', function(){
   try{ _refreshRole(); setTimeout(_refreshRole, 500); }catch(e){}
 });
 
-  }catch(e){}
-}
-
- = { "manager": 1, "owner": 2 };
+const ROLE_RANK = { "manager": 1, "owner": 2 };
 
 function _elSig(el){
   if(!el) return "null";
@@ -6182,7 +6180,7 @@ function hasRole(minRole){
 
 function markLockedControls(){
   document.querySelectorAll('[data-min-role]').forEach(el=>{
-    const need = el.getAttribute('data-min-role') || 'manager';
+    const need = ((el.getAttribute('data-min-role') || el.getAttribute('data-minrole')) || 'manager');
     if(!hasRole(need)){
       el.classList.add('locked');
       el.setAttribute('title', 'Owner-only');
@@ -6195,9 +6193,9 @@ window.addEventListener('DOMContentLoaded', markLockedControls);
 
 // Make "locked" controls still clickable (they show a helpful message instead of silently failing)
 document.addEventListener('click', (e)=>{
-  const el = e.target && e.target.closest ? e.target.closest('[data-min-role]') : null;
+  const el = e.target && e.target.closest ? e.target.closest('[data-min-role],[data-minrole]') : null;
   if(!el) return;
-  const need = el.getAttribute('data-min-role') || 'manager';
+  const need = ((el.getAttribute('data-min-role') || el.getAttribute('data-minrole')) || 'manager');
   if(hasRole(need)) return;
   e.preventDefault();
   e.stopPropagation();
