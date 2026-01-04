@@ -249,6 +249,7 @@ def _should_send_alert(key: str) -> bool:
         if now - last < rl:
             return False
         st[key] = now
+        st['_last_any'] = now
         _save_alert_state(st)
         return True
     except Exception:
@@ -4895,7 +4896,15 @@ def admin_api_health():
     if not ok:
         return resp
     report = _run_health_checks()
-    return jsonify({"ok": True, "report": report, "alerts_enabled": bool(ALERT_SETTINGS.get("enabled"))})
+    st = _alert_state()
+    last_any = st.get('_last_any')
+    last_any_ts = ''
+    try:
+        if last_any:
+            last_any_ts = datetime.fromtimestamp(int(last_any), timezone.utc).isoformat()
+    except Exception:
+        last_any_ts = ''
+    return jsonify({"ok": True, "report": report, "alerts_enabled": bool(ALERT_SETTINGS.get("enabled")), "alerts_last_any": last_any or 0, "alerts_last_any_ts": last_any_ts})
 
 @app.route("/admin/api/health/run", methods=["POST"])
 def admin_api_health_run():
@@ -4904,7 +4913,15 @@ def admin_api_health_run():
         return resp
     report = _run_health_checks()
     alerts = _maybe_alert_on_health(report)
-    return jsonify({"ok": True, "report": report, "alerts": alerts})
+    st = _alert_state()
+    last_any = st.get('_last_any')
+    last_any_ts = ''
+    try:
+        if last_any:
+            last_any_ts = datetime.fromtimestamp(int(last_any), timezone.utc).isoformat()
+    except Exception:
+        last_any_ts = ''
+    return jsonify({"ok": True, "report": report, "alerts": alerts, "alerts_enabled": bool(ALERT_SETTINGS.get("enabled")), "alerts_last_any": last_any or 0, "alerts_last_any_ts": last_any_ts})
 
 @app.route("/admin/api/alerts/settings", methods=["GET","POST"])
 def admin_api_alert_settings():
@@ -6955,7 +6972,11 @@ async function loadHealth(){
     const j = await r.json();
     if(!j.ok) throw new Error(j.error||'Failed');
     const rep = j.report || {};
-    if(msg) msg.textContent = (rep.status||'ok').toUpperCase() + (j.alerts_enabled ? ' · alerts on' : ' · alerts off');
+    if(msg) {
+      const last = (j.alerts_last_any_ts||'').trim();
+      const lastTxt = last ? (' · last alert ' + last.replace('T',' ').replace('Z','')) : ' · last alert never';
+      msg.textContent = (rep.status||'ok').toUpperCase() + (j.alerts_enabled ? ' · alerts ON' : ' · alerts OFF') + lastTxt;
+    }
     const ts = qs('#health-ts'); if(ts) ts.textContent = rep.ts ? ('Updated '+rep.ts) : '';
     if(body){
       const lines = (rep.checks||[]).map(c=>{
@@ -6978,7 +6999,11 @@ async function runHealth(){
     const j = await r.json();
     if(!j.ok) throw new Error(j.error||'Failed');
     const rep = j.report || {};
-    if(msg) msg.textContent = (rep.status||'ok').toUpperCase() + ' · checked';
+    if(msg){
+      const last = (j.alerts_last_any_ts||'').trim();
+      const lastTxt = last ? (' · last alert ' + last.replace('T',' ').replace('Z','')) : ' · last alert never';
+      msg.textContent = (rep.status||'ok').toUpperCase() + ' · checked' + lastTxt;
+    }
     const ts = qs('#health-ts'); if(ts) ts.textContent = rep.ts ? ('Updated '+rep.ts) : '';
     if(body){
       const lines = (rep.checks||[]).map(c=>{
