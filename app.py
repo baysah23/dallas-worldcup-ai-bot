@@ -5973,7 +5973,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 <script>
 /* Admin tabs bootstrap (runs even if later script has a parse error) */
 (function(){
-  function qsa(sel){ return document.querySelectorAll(sel); }
+  async function qsa(sel){ return document.querySelectorAll(sel); }
   function setActive(tab){
     try{
       var btn = document.querySelector('.tabbtn[data-tab="'+tab+'"]');
@@ -6282,8 +6282,8 @@ function setupLeadFilters(){
 }
 
 
-function qs(sel){return document.querySelector(sel);}
-function qsa(sel){return Array.from(document.querySelectorAll(sel));}
+async function qs(sel){return document.querySelector(sel);}
+async function qsa(sel){return Array.from(document.querySelectorAll(sel));}
 
 qsa('.tabbtn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
@@ -6398,7 +6398,7 @@ async function loadPartnerList(){
   }
 }
 
-function _getPartnerId(){
+async function _getPartnerId(){
   const p = (qs('#pp-partner')?.value||'').trim();
   return p || 'default';
 }
@@ -6625,11 +6625,11 @@ function _ensureMiniState(el, idSuffix){
     return s;
   }catch(e){ return null; }
 }
-function _setMiniState(el, idSuffix, text){
+async function _setMiniState(el, idSuffix, text){
   const s = _ensureMiniState(el, idSuffix);
   if(s){ s.textContent = text || ''; s.style.opacity = text ? '1' : '0'; }
 }
-function _ensureOpsMeta(){
+async function _ensureOpsMeta(){
   let el = document.getElementById('ops-meta');
   if(!el){
     el = document.createElement('div');
@@ -6647,7 +6647,7 @@ function _ensureOpsMeta(){
   }
   return el;
 }
-function _renderOpsMeta(meta){
+async function _renderOpsMeta(meta){
   try{
     const el = _ensureOpsMeta();
     if(!meta || !meta.ts) { el.textContent = ''; return; }
@@ -6819,7 +6819,7 @@ async function loadAIQueue(){
   }
 }
 
-function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+async function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function renderAIQueue(items){
   const list = qs('#aiq-list');
@@ -6950,7 +6950,7 @@ async function aiqOverride(id, btn){
 }
 
 
-function esc(s){
+async function esc(s){
   return (s==null?'':String(s))
     .replaceAll('&','&amp;')
     .replaceAll('<','&lt;')
@@ -7165,17 +7165,17 @@ setInterval(()=>{ try{ loadNotifs(); }catch(e){} }, 15000);
 // --- Refresh controls (visual-only; calls existing loaders safely) ---
 let __autoTimer = null;
 
-function _nowHHMMSS(){
+async function _nowHHMMSS(){
   const d=new Date();
   const p=n=>String(n).padStart(2,'0');
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
-function updateLastRef(){
+async function updateLastRef(){
   const el=document.getElementById('lastRef');
   if(el) el.textContent = `Last refresh: ${_nowHHMMSS()}`;
 }
 
-function refreshAll(source){
+async function refreshAll(source){
   try{ loadNotifs(); }catch(e){}
   try{ loadOps(); }catch(e){}
   try{ loadAI(); }catch(e){}
@@ -7307,6 +7307,20 @@ try{ setupTabs(); }catch(e){}
   try{ _initRefreshControls(); }catch(e){}
   try{ refreshAll('boot'); }catch(e){}
 });
+
+// === GLOBAL EXPORTS (AUTO-PATCHED) ===
+// Inline onclick="..." handlers require functions to be on window.*
+try{
+  Object.assign(window, {
+    showTab, applyPreset, runHealth, loadHealth, loadForecast, loadAlerts, saveAlerts, testAlert,
+    loadRules, saveRules, loadMenu, saveMenuJson, uploadMenu,
+    loadAI, saveAI, loadAIQueue, replayAI,
+    aiqApprove, aiqDeny, aiqOverride, aiqSend,
+    loadAudit, saveLead, markHandled,
+    loadPartnerList, loadPartnerPolicy, savePartnerPolicy, deletePartnerPolicy,
+    refreshAll, toast
+  });
+}catch(e){}
 </script>
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
 
@@ -7693,7 +7707,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 
   const $ = (id)=>document.getElementById(id);
 
-  function toast(msg, kind){
+  async function toast(msg, kind){
     const el = $("toast");
     if(!el) return;
     el.textContent = String(msg||"");
@@ -7703,7 +7717,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
     toast._t = setTimeout(()=>el.classList.remove("show"), 2200);
   }
 
-  function setPollStatus(html){
+  async function setPollStatus(html){
     const box = $("pollStatus");
     if(!box) return;
     box.innerHTML = html;
@@ -7739,7 +7753,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
     }
   }
 
-  function escapeHtml(s){
+  async function escapeHtml(s){
     return String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
@@ -7786,7 +7800,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
     }
   }
 
-  function fillMatchFieldsFromOption(opt){
+  async function fillMatchFieldsFromOption(opt){
     if(!opt) return;
     const home = opt.getAttribute("data-home") || "";
     const away = opt.getAttribute("data-away") || "";
@@ -7845,7 +7859,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
     }
   }
 
-  function safeBoot(){
+  async function safeBoot(){
     try{
       // Match dropdown
       const sel = $("motdSelect");
