@@ -13,17 +13,17 @@ jobs:
     timeout-minutes: 25
 
     env:
-      PORT: 5050
-      CI: true
+      PORT: "5050"
+      CI: "true"
 
-      # These should be set in repo Secrets
-      ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
-      ADMIN_MANAGER_KEYS: ${{ secrets.ADMIN_MANAGER_KEYS }}
+      # Secrets (set these in GitHub → Settings → Secrets and variables → Actions)
+      ADMIN_OWNER_KEY: "${{ secrets.ADMIN_OWNER_KEY }}"
+      ADMIN_MANAGER_KEY: "${{ secrets.ADMIN_MANAGER_KEY }}"
 
-      # Local URLs used by Playwright in CI
-      ADMIN_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_OWNER_KEY }}
-      MANAGER_URL: http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_MANAGER_KEY }}
-      FANZONE_URL: http://127.0.0.1:5050/admin/fanzone?key=${{ secrets.ADMIN_OWNER_KEY }}
+      # URLs (MUST be quoted because of ":" in http://)
+      ADMIN_URL: "http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_OWNER_KEY }}"
+      MANAGER_URL: "http://127.0.0.1:5050/admin?key=${{ secrets.ADMIN_MANAGER_KEY }}"
+      FANZONE_URL: "http://127.0.0.1:5050/admin/fanzone?key=${{ secrets.ADMIN_OWNER_KEY }}"
 
     steps:
       - name: Checkout
@@ -46,7 +46,7 @@ jobs:
           if (Test-Path "requirements.txt") {
             pip install -r requirements.txt
           } else {
-            Write-Host "No requirements.txt found; skipping pip install -r."
+            Write-Host "No requirements.txt found; skipping pip install."
           }
 
       - name: Install Node deps
@@ -63,10 +63,10 @@ jobs:
         run: |
           npx playwright install chromium
 
-      - name: Start server + wait + run Playwright gate
+      - name: Start server + wait + run tests
         shell: pwsh
         run: |
-          # Start server and capture logs
+          # Start Flask server
           $server = Start-Process -PassThru -NoNewWindow `
             -FilePath python `
             -ArgumentList "-u", "app.py" `
@@ -75,7 +75,7 @@ jobs:
 
           Write-Host "Server PID: $($server.Id)"
 
-          # Wait until connectable (any HTTP response is fine)
+          # Wait until reachable
           $ok = $false
           for ($i=0; $i -lt 75; $i++) {
             try {
@@ -86,18 +86,19 @@ jobs:
           }
 
           if (-not $ok) {
-            Write-Host "❌ Could not connect to server on 127.0.0.1:5050"
+            Write-Host "❌ Server not reachable on http://127.0.0.1:5050/"
             Write-Host "---- server.log (tail) ----"
             if (Test-Path server.log) { Get-Content server.log -Tail 200 | Out-Host }
             Write-Host "---- server.err (tail) ----"
             if (Test-Path server.err) { Get-Content server.err -Tail 200 | Out-Host }
             try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
-            throw "Server not reachable on http://127.0.0.1:5050/"
+            throw "Server did not start / not reachable."
           }
 
           Write-Host "✅ Server reachable. Running Playwright gate..."
+
           try {
-            # Use npx so CI never hits "playwright not recognized"
+            # IMPORTANT: npx (avoids 'playwright not recognized')
             npm run test:panels
           } finally {
             try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
@@ -109,12 +110,24 @@ jobs:
         run: |
           Write-Host "---- ls (root) ----"
           Get-ChildItem -Force | Format-Table -AutoSize
+
           Write-Host "---- ls (test-results) ----"
-          if (Test-Path "test-results") { Get-ChildItem -Recurse -Force "test-results" | Select-Object FullName | Out-Host } else { Write-Host "test-results not found" }
+          if (Test-Path "test-results") {
+            Get-ChildItem -Recurse -Force "test-results" | Select-Object FullName | Out-Host
+          } else {
+            Write-Host "test-results not found"
+          }
+
           Write-Host "---- ls (playwright-report) ----"
-          if (Test-Path "playwright-report") { Get-ChildItem -Recurse -Force "playwright-report" | Select-Object FullName | Out-Host } else { Write-Host "playwright-report not found" }
+          if (Test-Path "playwright-report") {
+            Get-ChildItem -Recurse -Force "playwright-report" | Select-Object FullName | Out-Host
+          } else {
+            Write-Host "playwright-report not found"
+          }
+
           Write-Host "---- server.log tail ----"
           if (Test-Path "server.log") { Get-Content server.log -Tail 200 | Out-Host }
+
           Write-Host "---- server.err tail ----"
           if (Test-Path "server.err") { Get-Content server.err -Tail 200 | Out-Host }
 
