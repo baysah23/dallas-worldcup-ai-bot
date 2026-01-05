@@ -17,6 +17,10 @@ const APP_ROOT_SELECTOR =
 
 // --- helpers ---
 
+async function forceDesktopViewport(page) {
+  await page.setViewportSize({ width: 1400, height: 900 });
+}
+
 async function waitForReady(page) {
   const root = page.locator(APP_ROOT_SELECTOR);
   if (await root.count()) {
@@ -24,6 +28,73 @@ async function waitForReady(page) {
   } else {
     await expect(page.locator("body")).toContainText(/./, { timeout: 8000 });
   }
+}
+
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function openNavIfCollapsed(page, tabName) {
+  const tabTextVisible = await page
+    .locator(`text=/^${escapeRegex(tabName)}$/i`)
+    .first()
+    .isVisible()
+    .catch(() => false);
+  if (tabTextVisible) return;
+
+  const burgerCandidates = [
+    page.getByRole("button", { name: /menu|navigation|open|tabs/i }),
+    page.locator("[aria-label*='menu' i]"),
+    page.locator("[data-testid*='menu' i]"),
+    page.locator("button:has(svg)"),
+  ];
+
+  for (const loc of burgerCandidates) {
+    const c = await loc.count().catch(() => 0);
+    if (!c) continue;
+    const btn = loc.first();
+    const vis = await btn.isVisible().catch(() => false);
+    if (!vis) continue;
+
+    await btn.click().catch(() => {});
+    const nowVisible = await page
+      .locator(`text=/^${escapeRegex(tabName)}$/i`)
+      .first()
+      .isVisible()
+      .catch(() => false);
+    if (nowVisible) return;
+  }
+}
+
+async function findTabControl(page, name) {
+  const reExact = new RegExp(`^${escapeRegex(name)}$`, "i");
+
+  const candidates = [
+    page.getByRole("button", { name: reExact }),
+    page.getByRole("link", { name: reExact }),
+    page.getByRole("tab", { name: reExact }),
+    page.locator("button", { hasText: reExact }),
+    page.locator("a", { hasText: reExact }),
+    page.locator("[role='tab']", { hasText: reExact }),
+    page.locator(`[data-tab="${name.toLowerCase()}"]`),
+  ];
+
+  for (const loc of candidates) {
+    const count = await loc.count().catch(() => 0);
+    if (!count) continue;
+    return loc.first();
+  }
+  return null;
+}
+
+async function clickTab(page, name) {
+  await openNavIfCollapsed(page, name);
+  const tab = await findTabControl(page, name);
+  if (!tab) return false;
+  await tab.click().catch(async () => {
+    await tab.click({ force: true }).catch(() => {});
+  });
+  return true;
 }
 
 function isPollStateResponse(resp) {
@@ -39,13 +110,12 @@ function isPollStateResponse(resp) {
 test("ADMIN: Ops toggle triggers save (autosave or Save button); refresh keeps page stable", async ({
   page,
 }) => {
+  await forceDesktopViewport(page);
   await page.goto(ADMIN_URL, { waitUntil: "domcontentloaded" });
   await waitForReady(page);
 
-  // Go to Ops tab
-  const opsBtn = page.getByRole("button", { name: /^Ops$/i });
-  await expect(opsBtn.first()).toBeVisible();
-  await opsBtn.first().click();
+  // Go to Ops tab (robust)
+  expect(await clickTab(page, "Ops"), "Ops tab not found/clickable").toBeTruthy();
 
   const opsPane = page
     .locator("#tab-ops, #ops, #ops-controls, #tab-ops-controls")
@@ -53,10 +123,8 @@ test("ADMIN: Ops toggle triggers save (autosave or Save button); refresh keeps p
   await expect(opsPane).toBeVisible({ timeout: 8000 });
 
   const toggle = opsPane.locator("input[type='checkbox']").first();
-  if (!(await toggle.count()))
-    test.skip(true, "No Ops checkbox toggle found in Ops pane.");
+  if (!(await toggle.count())) test.skip(true, "No Ops checkbox toggle found in Ops pane.");
 
-  // Try autosave first: wait for any save-like POST after the click.
   const autosavePromise = page
     .waitForResponse(
       (r) =>
@@ -71,7 +139,6 @@ test("ADMIN: Ops toggle triggers save (autosave or Save button); refresh keeps p
   await toggle.click({ force: true });
   let saveResp = await autosavePromise;
 
-  // If autosave didn't happen, try a visible Save button.
   if (!saveResp) {
     const saveBtn = opsPane.getByRole("button", { name: /save/i }).first();
     if (await saveBtn.count()) {
@@ -91,7 +158,6 @@ test("ADMIN: Ops toggle triggers save (autosave or Save button); refresh keeps p
     }
   }
 
-  // If UI didn't emit a request (some builds save differently), prove backend path works.
   if (!saveResp) {
     const apiResult = await page.evaluate(async (adminUrl) => {
       const u = new URL(adminUrl);
@@ -108,20 +174,15 @@ test("ADMIN: Ops toggle triggers save (autosave or Save button); refresh keeps p
       return { ok: resp.ok, status: resp.status };
     }, ADMIN_URL);
 
-    expect(
-      apiResult.ok,
-      `Fallback POST /admin/update-config failed (${apiResult.status})`
-    ).toBeTruthy();
+    expect(apiResult.ok, `Fallback POST /admin/update-config failed (${apiResult.status})`).toBeTruthy();
   } else {
     expect(saveResp.status(), "Save endpoint should not error").toBeLessThan(400);
   }
 
-  // Refresh should not break state / page should still render
   await page.reload({ waitUntil: "domcontentloaded" });
   await waitForReady(page);
 
-  // Ensure Ops pane is still reachable
-  await opsBtn.first().click();
+  expect(await clickTab(page, "Ops"), "Ops tab not reachable after refresh").toBeTruthy();
   await expect(opsPane).toBeVisible();
 });
 
@@ -132,13 +193,11 @@ test("ADMIN: AI Queue is deterministic (reset + seed via __test__ hooks)", async
   const origin = new URL(ADMIN_URL).origin;
   const token = process.env.E2E_TEST_TOKEN || "local-test-token";
 
-  // 1) Reset deterministic state
   const resetResp = await request.post(`${origin}/__test__/reset`, {
     headers: { "X-E2E-Test-Token": token },
   });
   expect(resetResp.status(), "reset should succeed").toBeLessThan(400);
 
-  // 2) Seed one queue item
   const seedResp = await request.post(`${origin}/__test__/ai_queue/seed`, {
     headers: {
       "X-E2E-Test-Token": token,
@@ -156,30 +215,24 @@ test("ADMIN: AI Queue is deterministic (reset + seed via __test__ hooks)", async
   const seedJson = await seedResp.json().catch(() => ({}));
   expect(seedJson.id, "seed should return an id").toBeTruthy();
 
-  // 3) Load UI and ensure AI Queue pane renders
+  await forceDesktopViewport(page);
   await page.goto(ADMIN_URL, { waitUntil: "domcontentloaded" });
   await waitForReady(page);
 
-  const aiqBtn = page.getByRole("button", { name: /^AI Queue$/i });
-  await expect(aiqBtn.first()).toBeVisible();
-  await aiqBtn.first().click();
+  expect(await clickTab(page, "AI Queue"), "AI Queue tab not found/clickable").toBeTruthy();
 
   const pane = page.locator("#tab-aiq, #aiq, #tab-ai-queue, #ai-queue").first();
   await expect(pane).toBeVisible({ timeout: 8000 });
-
-  // Optional stronger assertion if your UI prints titles:
-  // await expect(pane.getByText(/CI Seed/i)).toBeVisible();
 });
 
 test("MANAGER: Ops tab loads and does not crash when interacting (no sleeps)", async ({
   page,
 }) => {
+  await forceDesktopViewport(page);
   await page.goto(MANAGER_URL, { waitUntil: "domcontentloaded" });
   await waitForReady(page);
 
-  const opsBtn = page.getByRole("button", { name: /^Ops$/i });
-  await expect(opsBtn.first()).toBeVisible();
-  await opsBtn.first().click();
+  expect(await clickTab(page, "Ops"), "Manager Ops tab not found/clickable").toBeTruthy();
 
   const pane = page
     .locator("#tab-ops, #ops, #ops-controls, #tab-ops-controls")
@@ -205,6 +258,7 @@ test("FAN ZONE: poll state loads OR shows safe fallback (deterministic)", async 
     if (msg.type() === "error") errors.push(`[console.error] ${msg.text()}`);
   });
 
+  await forceDesktopViewport(page);
   await page.goto(FANZONE_URL, { waitUntil: "domcontentloaded" });
   await waitForReady(page);
 
@@ -213,10 +267,7 @@ test("FAN ZONE: poll state loads OR shows safe fallback (deterministic)", async 
     .catch(() => null);
 
   if (pollResp) {
-    expect(
-      pollResp.status(),
-      "Poll state request should not error"
-    ).toBeLessThan(400);
+    expect(pollResp.status(), "Poll state request should not error").toBeLessThan(400);
   } else {
     const fallback = page.getByText(
       /couldn't load poll|could not load poll|poll not available|try again/i
