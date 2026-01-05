@@ -8,7 +8,6 @@ on:
 
 jobs:
   panels:
-    # Secrets are NOT provided to workflows triggered by PRs from forks.
     if: >
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
@@ -62,9 +61,15 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
 
-      - name: Start server
+      - name: Start server + wait + run tests (single-step, Windows-safe)
         shell: pwsh
         run: |
+          $uri = "http://127.0.0.1:5050/__test__/health"
+          $hasToken = -not [string]::IsNullOrWhiteSpace($env:E2E_TEST_TOKEN)
+          Write-Host ("E2E_TEST_TOKEN present? " + $hasToken)
+          Write-Host ("Starting server on PORT=" + $env:PORT)
+
+          # Start Flask server
           $server = Start-Process -PassThru -NoNewWindow `
             -FilePath python `
             -ArgumentList "-u","app.py" `
@@ -72,89 +77,74 @@ jobs:
             -RedirectStandardError "server.err"
 
           Write-Host "Server PID: $($server.Id)"
-          "SERVER_PID=$($server.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Wait for server (health + diagnostics)
-        shell: pwsh
-        run: |
-          $uri = "http://127.0.0.1:5050/__test__/health"
+          try {
+            # Wait for server
+            $ok = $false
+            $lastCode = $null
+            $lastBody = $null
 
-          $hasToken = -not [string]::IsNullOrWhiteSpace($env:E2E_TEST_TOKEN)
-          Write-Host ("E2E_TEST_TOKEN present? " + $hasToken)
-          Write-Host ("Probing: " + $uri)
-
-          $ok = $false
-          $lastCode = $null
-          $lastBody = $null
-
-          for ($i=0; $i -lt 80; $i++) {
-            try {
-              if ($hasToken) {
-                $resp = Invoke-WebRequest `
-                  -UseBasicParsing `
-                  -SkipHttpErrorCheck `
-                  -Headers @{ "X-E2E-Test-Token" = $env:E2E_TEST_TOKEN } `
-                  -Uri $uri `
-                  -TimeoutSec 3
-              } else {
-                $resp = Invoke-WebRequest `
-                  -UseBasicParsing `
-                  -SkipHttpErrorCheck `
-                  -Uri $uri `
-                  -TimeoutSec 3
+            for ($i=0; $i -lt 120; $i++) {
+              # If server died, stop early and show logs
+              if ($server.HasExited) {
+                Write-Host "❌ Server process exited early with code $($server.ExitCode)"
+                break
               }
 
-              $lastCode = [int]$resp.StatusCode
-              $lastBody = (($resp.Content | Out-String).Trim())
-
-              # Print a little diagnostics every few tries (so logs stay readable)
-              if ($i -eq 0 -or ($i % 10 -eq 0)) {
-                Write-Host "Attempt $i => HTTP $lastCode"
-                if ($lastBody) { Write-Host $lastBody }
-              }
-
-              if ($lastCode -eq 200) {
-                # Optional: if your health returns JSON with ok:true, validate it
-                $isOk = $true
-                if ($lastBody) {
-                  try {
-                    $json = $lastBody | ConvertFrom-Json
-                    if ($null -ne $json.ok) { $isOk = [bool]$json.ok }
-                  } catch {
-                    # Not JSON; still treat 200 as ready
-                  }
+              try {
+                if ($hasToken) {
+                  $resp = Invoke-WebRequest `
+                    -UseBasicParsing `
+                    -SkipHttpErrorCheck `
+                    -Headers @{ "X-E2E-Test-Token" = $env:E2E_TEST_TOKEN } `
+                    -Uri $uri `
+                    -TimeoutSec 2
+                } else {
+                  $resp = Invoke-WebRequest `
+                    -UseBasicParsing `
+                    -SkipHttpErrorCheck `
+                    -Uri $uri `
+                    -TimeoutSec 2
                 }
 
-                if ($isOk) { $ok = $true; break }
+                $lastCode = [int]$resp.StatusCode
+                $lastBody = (($resp.Content | Out-String).Trim())
+
+                if ($i -eq 0 -or ($i % 20 -eq 0)) {
+                  Write-Host "Attempt $i => HTTP $lastCode"
+                  if ($lastBody) { Write-Host $lastBody }
+                }
+
+                if ($lastCode -eq 200) { $ok = $true; break }
+              } catch {
+                if ($i -eq 0 -or ($i % 20 -eq 0)) {
+                  Write-Host "Attempt $i => exception: $($_.Exception.Message)"
+                }
               }
 
-            } catch {
-              # Likely connection not ready yet
-              if ($i -eq 0 -or ($i % 10 -eq 0)) {
-                Write-Host "Attempt $i => exception: $($_.Exception.Message)"
-              }
+              Start-Sleep -Milliseconds 500
             }
 
-            Start-Sleep -Milliseconds 500
+            if (-not $ok) {
+              Write-Host "❌ Server not ready (health check failed)"
+              Write-Host "Last observed: HTTP $lastCode"
+              if ($lastBody) { Write-Host $lastBody }
+              if (Test-Path server.log) { Get-Content server.log -Tail 200 | Out-Host }
+              if (Test-Path server.err) { Get-Content server.err -Tail 200 | Out-Host }
+              throw "Server not ready at $uri"
+            }
+
+            Write-Host "✅ Server reachable — running deterministic gate"
+            npm run test:panels
+
+            Write-Host "✅ Gate tests finished"
           }
-
-          if (-not $ok) {
-            Write-Host "❌ Server not ready (health check failed)"
-            Write-Host "Last observed: HTTP $lastCode"
-            if ($lastBody) { Write-Host $lastBody }
-
-            if (Test-Path server.log) { Get-Content server.log -Tail 200 | Out-Host }
-            if (Test-Path server.err) { Get-Content server.err -Tail 200 | Out-Host }
-
-            throw "Server not ready at $uri"
+          finally {
+            # Always stop server
+            if ($server -and -not $server.HasExited) {
+              try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
+            }
           }
-
-          Write-Host "✅ Server reachable (health OK)"
-
-      - name: Run deterministic gate (no visuals)
-        shell: pwsh
-        run: |
-          npm run test:panels
 
       - name: Visual checks (optional / non-blocking)
         if: always()
@@ -164,14 +154,6 @@ jobs:
           RUN_VISUAL: "1"
         run: |
           npm run test:visual
-
-      - name: Stop server
-        if: always()
-        shell: pwsh
-        run: |
-          if ($env:SERVER_PID) {
-            try { Stop-Process -Id ([int]$env:SERVER_PID) -Force -ErrorAction SilentlyContinue } catch {}
-          }
 
       - name: Upload Playwright HTML report
         if: always()
