@@ -8119,15 +8119,26 @@ def _require_e2e_test_access() -> Tuple[bool, str]:
 @app.route("/__test__/health", methods=["GET"])
 def __test_health():
     """
-    CI readiness probe.
-    - Always returns 200 so GitHub Actions can reliably wait for the Flask dev server to boot.
-    - Does NOT require auth / tokens (those remain required for any state-changing __test__ endpoints).
+    CI readiness probe (read-only).
+    - Always returns HTTP 200 so GitHub Actions can reliably wait for the Flask server to boot.
+    - Does NOT require auth/tokens; state-changing __test__ endpoints remain protected.
     """
-    return jsonify({
+    try:
+        e2e_mode = str(os.environ.get("E2E_TEST_MODE", "0")).strip() == "1"
+        token_set = bool(str(os.environ.get("E2E_TEST_TOKEN", "")).strip())
+    except Exception:
+        e2e_mode = False
+        token_set = False
+
+    resp = jsonify({
         "ok": True,
-        "e2e_test_mode": bool(E2E_TEST_MODE),
+        "e2e_test_mode": bool(e2e_mode),
+        "token_configured": bool(token_set),
         "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    }), 200
+    })
+    resp.headers["Cache-Control"] = "no-store"
+    return resp, 200
+
 
 @app.route("/__test__/reset", methods=["POST"])
 def __test_reset():
