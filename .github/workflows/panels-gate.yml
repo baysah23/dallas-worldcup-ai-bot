@@ -8,6 +8,7 @@ on:
 
 jobs:
   panels:
+    # Fork PRs don't get secrets; skip to avoid false failures.
     if: >
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
@@ -35,7 +36,7 @@ jobs:
       MANAGER_URL: ${{ secrets.BASE_URL_CI }}/manager?key=${{ secrets.ADMIN_MANAGER_KEY }}
       FANZONE_URL: ${{ secrets.BASE_URL_CI }}/admin/fanzone?key=${{ secrets.ADMIN_OWNER_KEY }}
 
-      # Visuals off by default (set to "1" to enable)
+      # Visuals quarantined by default in CI
       RUN_VISUAL: "0"
 
     steps:
@@ -68,7 +69,7 @@ jobs:
         run: |
           npx playwright install --with-deps chromium
 
-      - name: Start server + wait + run tests (single-step, Windows-safe)
+      - name: Start server + wait + run gate tests (Windows-safe)
         shell: pwsh
         run: |
           # Sanity (safe) - do not print secrets
@@ -149,17 +150,6 @@ jobs:
             Write-Host "✅ Server reachable — running deterministic gate"
             npm run test:panels
 
-            if ($env:RUN_VISUAL -eq "1") {
-              Write-Host "🖼️ RUN_VISUAL=1 — running visual suite while server is up (non-blocking)"
-              try {
-                npm run test:visual
-              } catch {
-                Write-Host "⚠️ Visual suite failed (ignored): $($_.Exception.Message)"
-              }
-            } else {
-              Write-Host "🖼️ Visual suite disabled (RUN_VISUAL=0)"
-            }
-
             Write-Host "✅ Gate tests finished"
           }
           finally {
@@ -167,6 +157,13 @@ jobs:
               try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
             }
           }
+
+      - name: Visual checks (optional)
+        if: env.RUN_VISUAL == '1'
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          npm run test:visual
 
       - name: Upload Playwright HTML report
         if: always()

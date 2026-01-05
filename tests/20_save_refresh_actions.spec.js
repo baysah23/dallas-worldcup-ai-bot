@@ -232,24 +232,26 @@ test("MANAGER: Ops tab loads and does not crash when interacting (no sleeps)", a
   await page.goto(MANAGER_URL, { waitUntil: "domcontentloaded" });
   await waitForReady(page);
 
-  // Manager Ops may be the default pane and not have a clickable “Ops” tab.
-  const opsPane = page
-    .locator("#tab-ops, #ops, #ops-controls, #tab-ops-controls")
-    .first();
-  const paneVisible = await opsPane.isVisible().catch(() => false);
-
-  const clicked = paneVisible ? true : await clickTab(page, "Ops");
-  if (!clicked) {
-    console.log(
-      '[INFO] Manager "Ops" tab/control not found; skipping Manager Ops interaction gate for now.'
-    );
-    return;
-  }
-
+  // Some manager builds render Ops as the default pane with NO explicit "Ops" tab button.
+  // We accept either:
+  //  - an Ops pane is already visible, OR
+  //  - an "Ops" tab exists and can be clicked.
   const pane = page
     .locator("#tab-ops, #ops, #ops-controls, #tab-ops-controls")
     .first();
-  await expect(pane).toBeVisible({ timeout: 8000 });
+
+  const paneVisible = await pane.isVisible().catch(() => false);
+
+  if (!paneVisible) {
+    const clicked = await clickTab(page, "Ops");
+    if (!clicked) {
+      console.log(
+        '[INFO] Manager "Ops" tab/control not found; skipping Manager Ops interaction gate for now.'
+      );
+      return;
+    }
+    await expect(pane).toBeVisible({ timeout: 8000 });
+  }
 
   const toggle = pane.locator("input[type='checkbox']").first();
   if (!(await toggle.count())) {
