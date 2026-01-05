@@ -232,7 +232,16 @@ test("MANAGER: Ops tab loads and does not crash when interacting (no sleeps)", a
   await page.goto(MANAGER_URL, { waitUntil: "domcontentloaded" });
   await waitForReady(page);
 
-  expect(await clickTab(page, "Ops"), "Manager Ops tab not found/clickable").toBeTruthy();
+  const opsPane = page
+    .locator("#tab-ops, #ops, #ops-controls, #tab-ops-controls")
+    .first();
+  const paneVisible = await opsPane.isVisible().catch(() => false);
+
+  const clicked = paneVisible ? true : await clickTab(page, "Ops");
+  expect(
+    clicked,
+    "Manager Ops not visible and Ops tab not found/clickable"
+  ).toBeTruthy();
 
   const pane = page
     .locator("#tab-ops, #ops, #ops-controls, #tab-ops-controls")

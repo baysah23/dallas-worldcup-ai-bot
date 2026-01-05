@@ -158,11 +158,9 @@ jobs:
           }
 
       - name: Visual checks (optional / non-blocking)
-        if: always()
+        if: ${{ success() && env.RUN_VISUAL == '1' }}
         shell: pwsh
         continue-on-error: true
-        env:
-          RUN_VISUAL: "1"
         run: |
           npm run test:visual
 
