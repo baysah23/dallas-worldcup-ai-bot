@@ -8118,16 +8118,13 @@ def _require_e2e_test_access() -> Tuple[bool, str]:
 
 @app.route("/__test__/health", methods=["GET"])
 def __test_health():
-    """CI-safe liveness probe.
-
-    - Only enabled when E2E_TEST_MODE=1 (so it stays off in normal production runs).
-    - Does NOT require the E2E test token (unblocks GitHub Actions readiness checks).
-    - Returns 200 when the server is up.
     """
-    if not E2E_TEST_MODE:
-        # Hide this endpoint unless explicitly enabled for CI/E2E.
-        return jsonify({"ok": False, "error": "E2E test mode is disabled"}), 404
-    return jsonify({"ok": True, "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")})
+    CI readiness probe.
+    Intentionally does NOT require auth so GitHub Actions can confirm the server is up
+    before running Playwright.
+    """
+    return jsonify({"ok": True, "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}), 200
+
 @app.route("/__test__/reset", methods=["POST"])
 def __test_reset():
     """
