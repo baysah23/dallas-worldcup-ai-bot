@@ -23,10 +23,17 @@ jobs:
       E2E_TEST_MODE: "1"
       E2E_TEST_TOKEN: ${{ secrets.E2E_TEST_TOKEN }}
 
-      # Panel URLs (keep using your existing secrets)
-      ADMIN_URL: ${{ secrets.ADMIN_URL }}
-      MANAGER_URL: ${{ secrets.MANAGER_URL }}
-      FANZONE_URL: ${{ secrets.FANZONE_URL }}
+      # ✅ CI should hit LOCAL server (not Render)
+      BASE_URL_CI: ${{ secrets.BASE_URL_CI }}
+
+      # ✅ Match YOUR actual secret names
+      ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
+      ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
+
+      # ✅ URLs built for localhost CI
+      ADMIN_URL: ${{ secrets.BASE_URL_CI }}/admin?key=${{ secrets.ADMIN_OWNER_KEY }}
+      MANAGER_URL: ${{ secrets.BASE_URL_CI }}/manager?key=${{ secrets.ADMIN_MANAGER_KEY }}
+      FANZONE_URL: ${{ secrets.BASE_URL_CI }}/admin/fanzone?key=${{ secrets.ADMIN_OWNER_KEY }}
 
       # Visuals quarantined by default in CI
       RUN_VISUAL: "0"
@@ -64,6 +71,12 @@ jobs:
       - name: Start server + wait + run tests (single-step, Windows-safe)
         shell: pwsh
         run: |
+          # Sanity (safe) - do not print secrets
+          Write-Host ("BASE_URL_CI set? " + (-not [string]::IsNullOrWhiteSpace($env:BASE_URL_CI)))
+          Write-Host ("ADMIN_URL set? " + (-not [string]::IsNullOrWhiteSpace($env:ADMIN_URL)))
+          Write-Host ("MANAGER_URL set? " + (-not [string]::IsNullOrWhiteSpace($env:MANAGER_URL)))
+          Write-Host ("FANZONE_URL set? " + (-not [string]::IsNullOrWhiteSpace($env:FANZONE_URL)))
+
           $uri = "http://127.0.0.1:5050/__test__/health"
           $hasToken = -not [string]::IsNullOrWhiteSpace($env:E2E_TEST_TOKEN)
           Write-Host ("E2E_TEST_TOKEN present? " + $hasToken)
@@ -85,7 +98,6 @@ jobs:
             $lastBody = $null
 
             for ($i=0; $i -lt 120; $i++) {
-              # If server died, stop early and show logs
               if ($server.HasExited) {
                 Write-Host "❌ Server process exited early with code $($server.ExitCode)"
                 break
@@ -140,7 +152,6 @@ jobs:
             Write-Host "✅ Gate tests finished"
           }
           finally {
-            # Always stop server
             if ($server -and -not $server.HasExited) {
               try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
             }
