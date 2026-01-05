@@ -8,6 +8,15 @@ on:
 
 jobs:
   panels:
+    # IMPORTANT:
+    # Secrets are NOT provided to workflows triggered by PRs from forks.
+    # This condition runs the job on:
+    # - push/workflow_dispatch
+    # - PRs from the same repo (not forks)
+    if: >
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+
     runs-on: windows-latest
     timeout-minutes: 25
 
@@ -69,19 +78,32 @@ jobs:
           Write-Host "Server PID: $($server.Id)"
           "SERVER_PID=$($server.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
-      - name: Wait for server (E2E hooks health)
+      - name: Wait for server (health)
         shell: pwsh
         run: |
-          if (-not $env:E2E_TEST_TOKEN) { throw "Missing secret: E2E_TEST_TOKEN" }
+          # NOTE:
+          # Health probe should NOT require secrets. It just confirms the server is reachable.
+          # We'll *optionally* include token header if present.
+          $hasToken = -not [string]::IsNullOrWhiteSpace($env:E2E_TEST_TOKEN)
+          Write-Host ("E2E_TEST_TOKEN present? " + $hasToken)
 
+          $uri = "http://127.0.0.1:5050/__test__/health"
           $ok = $false
+
           for ($i=0; $i -lt 80; $i++) {
             try {
-              $resp = Invoke-WebRequest `
-                -UseBasicParsing `
-                -Headers @{ "X-E2E-Test-Token" = $env:E2E_TEST_TOKEN } `
-                -Uri "http://127.0.0.1:5050/__test__/health" `
-                -TimeoutSec 3
+              if ($hasToken) {
+                $resp = Invoke-WebRequest `
+                  -UseBasicParsing `
+                  -Headers @{ "X-E2E-Test-Token" = $env:E2E_TEST_TOKEN } `
+                  -Uri $uri `
+                  -TimeoutSec 3
+              } else {
+                $resp = Invoke-WebRequest `
+                  -UseBasicParsing `
+                  -Uri $uri `
+                  -TimeoutSec 3
+              }
 
               if ($resp.StatusCode -eq 200) { $ok = $true; break }
             } catch {
@@ -92,12 +114,13 @@ jobs:
 
           if (-not $ok) {
             Write-Host "❌ Server not ready (health check failed)"
+            Write-Host "Tried: $uri"
             if (Test-Path server.log) { Get-Content server.log -Tail 200 | Out-Host }
             if (Test-Path server.err) { Get-Content server.err -Tail 200 | Out-Host }
-            throw "Server not reachable on http://127.0.0.1:5050/__test__/health"
+            throw "Server not reachable on $uri"
           }
 
-          Write-Host "✅ Server reachable + E2E hooks enabled"
+          Write-Host "✅ Server reachable"
 
       - name: Run deterministic gate (no visuals)
         shell: pwsh
@@ -150,3 +173,10 @@ jobs:
             server.err
           if-no-files-found: warn
           retention-days: 7
+
+  # Optional: make fork PRs explicitly show as "skipped" with a friendly message
+  panels_fork_notice:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Skipping panels-gate on fork PRs (GitHub does not provide repo secrets to forked pull_request workflows)."

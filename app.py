@@ -8120,10 +8120,14 @@ def _require_e2e_test_access() -> Tuple[bool, str]:
 def __test_health():
     """
     CI readiness probe.
-    Intentionally does NOT require auth so GitHub Actions can confirm the server is up
-    before running Playwright.
+    - Always returns 200 so GitHub Actions can reliably wait for the Flask dev server to boot.
+    - Does NOT require auth / tokens (those remain required for any state-changing __test__ endpoints).
     """
-    return jsonify({"ok": True, "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}), 200
+    return jsonify({
+        "ok": True,
+        "e2e_test_mode": bool(E2E_TEST_MODE),
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }), 200
 
 @app.route("/__test__/reset", methods=["POST"])
 def __test_reset():
