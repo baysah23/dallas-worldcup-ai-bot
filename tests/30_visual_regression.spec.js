@@ -1,11 +1,5 @@
 const { test, expect } = require("@playwright/test");
 
-// Quarantine visual tests: they only run when explicitly enabled.
-test.skip(
-  process.env.RUN_VISUAL !== "1",
-  "Visual tests are quarantined; set RUN_VISUAL=1 to run."
-);
-
 const ADMIN_URL =
   process.env.ADMIN_URL ||
   "http://127.0.0.1:5050/admin?key=REPLACE_ADMIN_KEY";
@@ -18,193 +12,160 @@ const FANZONE_URL =
   process.env.FANZONE_URL ||
   "http://127.0.0.1:5050/admin/fanzone?key=REPLACE_ADMIN_KEY";
 
-const VIEWPORT = { width: 1280, height: 900 };
+// Optional: if you later add <div data-testid="app-root">,
+// set APP_ROOT_SELECTOR='[data-testid="app-root"]' in env.
+const APP_ROOT_SELECTOR = process.env.APP_ROOT_SELECTOR || "body";
 
-const SNAP_OPTS = {
-  fullPage: false,
-  maxDiffPixelRatio: 0.02,
-  animations: "disabled",
-  caret: "hide",
-  scale: "css",
-};
-
-async function waitForFonts(page) {
-  await page.evaluate(async () => {
-    if (document.fonts && document.fonts.ready) await document.fonts.ready;
-  });
-}
-
-async function settle(page) {
-  await page.evaluate(() => new Promise(requestAnimationFrame));
-}
-
-async function stabilize(page) {
-  await page.setViewportSize(VIEWPORT);
-  await page.emulateMedia({ reducedMotion: "reduce" });
-
-  await page.addStyleTag({
-    content: `
-      *, *::before, *::after {
-        transition: none !important;
-        animation: none !important;
-        caret-color: transparent !important;
-      }
-
-      html { scroll-behavior: auto !important; overflow-y: scroll !important; }
-      body { overflow-y: scroll !important; }
-
-      /* Freeze typical dynamic panes so content length doesn't reflow the page */
-      #tab-leads, #tab-aiq, #tab-monitoring, #tab-ops, #tab-policies, #tab-menu, #tab-rules, #tab-ai-settings {
-        max-height: 650px !important;
-        overflow: auto !important;
-      }
-
-      /* Tables/rows jitter: constrain them */
-      table, .table, .rows, .log, .audit-log {
-        max-height: 520px !important;
-        overflow: auto !important;
-      }
-    `,
-  });
-
+/**
+ * Deterministic page-ready check (no sleeps).
+ */
+async function waitForReady(page) {
   await page.waitForLoadState("domcontentloaded");
+  // "networkidle" can be unreliable if the app polls; don't hard-fail on it.
   await page.waitForLoadState("networkidle").catch(() => {});
-  await waitForFonts(page);
-
-  await page.evaluate(() => window.scrollTo(0, 0));
-  await settle(page);
+  await expect(page.locator(APP_ROOT_SELECTOR)).toBeVisible();
 }
 
-async function clickTab(page, tabName) {
-  const btn = page.getByRole("button", {
-    name: new RegExp(`^${tabName}$`, "i"),
-  });
+/**
+ * Fail fast on obvious crash/error renderings.
+ */
+async function assertNoCrashText(page) {
+  const bodyText = await page.locator("body").innerText();
+  const forbidden = [
+    "SyntaxError",
+    "Unhandled",
+    "Internal Server Error",
+    "Traceback",
+    "Invalid or unexpected token",
+  ];
 
-  if (await btn.count()) {
-    await btn.first().click();
-    await page.waitForLoadState("networkidle").catch(() => {});
-    await settle(page);
+  for (const f of forbidden) {
+    expect(bodyText).not.toContain(f);
+  }
+}
+
+/**
+ * Ensures page isn't blank.
+ */
+async function assertNotBlank(page) {
+  const txt = await page.locator(APP_ROOT_SELECTOR).innerText();
+  expect(txt.trim().length).toBeGreaterThan(50);
+}
+
+/**
+ * Clicks a tab by ARIA role first; falls back to data-tab if needed.
+ */
+async function clickTab(page, tabLabel) {
+  const byRole = page.getByRole("tab", { name: tabLabel });
+  if (await byRole.count()) {
+    await byRole.first().click();
     return true;
   }
 
-  const byDataTab = page.locator(`[data-tab="${tabName.toLowerCase()}"]`);
+  const byButtonRole = page.getByRole("button", { name: tabLabel });
+  if (await byButtonRole.count()) {
+    await byButtonRole.first().click();
+    return true;
+  }
+
+  const byDataTab = page.locator(`[data-tab="${tabLabel.toLowerCase()}"]`);
   if (await byDataTab.count()) {
     await byDataTab.first().click();
-    await page.waitForLoadState("networkidle").catch(() => {});
-    await settle(page);
     return true;
   }
 
   return false;
 }
 
-function commonMasks(page) {
-  const selectors = [
-    "#toast",
-    ".toast",
-    ".toasts",
-    "#notifications",
-    ".notifications",
-    ".timestamp",
-    ".time",
-    "[data-ts]",
-    "#last-updated",
-    ".last-updated",
-    ".audit",
-    ".audit-log",
-    ".log",
-    "time",
-    "[data-time]",
-    "[data-updated]",
-  ];
-  return selectors.map((s) => page.locator(s));
+/**
+ * Asserts that switching tabs changes content and produces non-empty output.
+ * Uses #tab-content if present; otherwise falls back to body text.
+ */
+async function assertTabDistinct(page, tabLabel) {
+  const content =
+    (await page.locator("#tab-content").count())
+      ? page.locator("#tab-content")
+      : page.locator("body");
+
+  const before = (await content.innerText()).trim();
+
+  const ok = await clickTab(page, tabLabel);
+  expect(ok, `Tab not found: ${tabLabel}`).toBeTruthy();
+
+  await waitForReady(page);
+  await assertNoCrashText(page);
+
+  const after = (await content.innerText()).trim();
+  expect(after.length).toBeGreaterThan(30);
+
+  // Must change something (prevents duplicate panes / no-op clicks)
+  expect(after).not.toEqual(before);
 }
 
-function tabMasks(page, tabLabel) {
-  const masks = commonMasks(page);
-  const label = (tabLabel || "").toLowerCase();
-
-  if (label.includes("lead")) {
-    masks.push(page.locator("#tab-leads table"));
-    masks.push(page.locator("#tab-leads .rows"));
-  }
-
-  if (label.includes("ai queue") || label.includes("aiq")) {
-    masks.push(page.locator("#tab-aiq table"));
-    masks.push(page.locator("#tab-aiq .queue"));
-  }
-
-  if (label.includes("ops")) {
-    masks.push(page.locator("#tab-ops .last-updated"));
-    masks.push(page.locator("#tab-ops [data-ts]"));
-  }
-
-  return masks;
-}
-
-test.describe("Visual - ADMIN tab panes", () => {
-  test("Admin tab panes stable viewport snapshots", async ({ page }) => {
+test.describe("FILE 10: CI-safe structure regression (no screenshots)", () => {
+  test("ADMIN loads and all primary tabs render distinct content", async ({ page }) => {
     await page.goto(ADMIN_URL, { waitUntil: "domcontentloaded" });
-    await stabilize(page);
+    await waitForReady(page);
+    await assertNoCrashText(page);
+    await assertNotBlank(page);
 
-    // Audit excluded (too dynamic for pixel-perfect CI)
-    const tabs = [
+    const adminTabs = [
       "Ops",
       "Leads",
       "AI Queue",
       "Monitoring",
+      "Audit",
+      "Configure",
       "AI Settings",
       "Rules",
       "Menu",
       "Policies",
     ];
 
-    for (const t of tabs) {
-      const ok = await clickTab(page, t);
-      expect(ok, `Tab not found: ${t}`).toBeTruthy();
-
-      await stabilize(page);
-
-      const safe = t.replace(/\s+/g, "_").toLowerCase();
-      await expect(page).toHaveScreenshot(`admin-${safe}.png`, {
-        ...SNAP_OPTS,
-        mask: tabMasks(page, t),
-      });
+    for (const tab of adminTabs) {
+      await assertTabDistinct(page, tab);
     }
   });
-});
 
-test.describe("Visual - MANAGER core panes", () => {
-  test("Manager core panes stable viewport snapshots", async ({ page }) => {
+  test("MANAGER loads; core tabs distinct; owner tabs locked", async ({ page }) => {
     await page.goto(MANAGER_URL, { waitUntil: "domcontentloaded" });
-    await stabilize(page);
+    await waitForReady(page);
+    await assertNoCrashText(page);
+    await assertNotBlank(page);
 
-    // Audit excluded (too dynamic for pixel-perfect CI)
-    const tabs = ["Ops", "Leads", "AI Queue", "Monitoring"];
+    const managerTabs = ["Ops", "Leads", "AI Queue", "Monitoring", "Audit", "Policies"];
+    for (const tab of managerTabs) {
+      await assertTabDistinct(page, tab);
+    }
 
-    for (const t of tabs) {
-      const ok = await clickTab(page, t);
-      expect(ok, `Tab not found: ${t}`).toBeTruthy();
+    // Owner-only tabs should be disabled/locked for managers
+    const locked = ["Configure", "AI Settings", "Rules", "Menu"];
+    for (const tab of locked) {
+      const el =
+        (await page.getByRole("tab", { name: tab }).count())
+          ? page.getByRole("tab", { name: tab }).first()
+          : page.getByRole("button", { name: tab }).first();
 
-      await stabilize(page);
+      // If element exists, assert it is disabled or aria-disabled.
+      if (await el.count()) {
+        const aria = await el.getAttribute("aria-disabled");
+        const disabledAttr = await el.getAttribute("disabled");
 
-      const safe = t.replace(/\s+/g, "_").toLowerCase();
-      await expect(page).toHaveScreenshot(`manager-${safe}.png`, {
-        ...SNAP_OPTS,
-        mask: tabMasks(page, t),
-      });
+        expect(
+          aria === "true" || disabledAttr !== null,
+          `Expected locked tab "${tab}" to be disabled for Manager`
+        ).toBeTruthy();
+      }
     }
   });
-});
 
-test.describe("Visual - FANZONE page", () => {
-  test("Fan Zone stable viewport snapshot", async ({ page }) => {
+  test("FAN ZONE loads and shows interactive poll area (or fallback)", async ({ page }) => {
     await page.goto(FANZONE_URL, { waitUntil: "domcontentloaded" });
-    await stabilize(page);
+    await waitForReady(page);
+    await assertNoCrashText(page);
+    await assertNotBlank(page);
 
-    await expect(page).toHaveScreenshot("fanzone.png", {
-      ...SNAP_OPTS,
-      mask: commonMasks(page),
-    });
+    // We don't require exact wording; just ensure poll-ish UI exists.
+    await expect(page.getByText(/match|poll|vote|support/i)).toBeVisible();
   });
 });
