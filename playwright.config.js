@@ -1,38 +1,35 @@
 // playwright.config.js
 const { defineConfig } = require("@playwright/test");
 
-const isCI = !!process.env.CI;
-
 module.exports = defineConfig({
   testDir: "./tests",
-  timeout: 60_000,
-  expect: {
-    timeout: 10_000,
-  },
+  timeout: 30_000,
+  expect: { timeout: 8_000 },
 
-  // CI hardening
-  forbidOnly: isCI,
-  retries: isCI ? 1 : 0,
-  workers: isCI ? 2 : undefined,
+  // Deterministic CI behavior
+  retries: process.env.CI ? 2 : 0,
+  workers: process.env.CI ? 1 : undefined,
+  fullyParallel: false,
 
-  reporter: [
-    ["list"],
-    ["html", { outputFolder: "playwright-report", open: "never" }],
-  ],
-  outputDir: "test-results",
+  reporter: process.env.CI
+    ? [["line"], ["html", { open: "never" }]]
+    : [["list"], ["html"]],
 
   use: {
-    // ✅ lock rendering for stable visual tests
-    viewport: { width: 1280, height: 900 },
-    deviceScaleFactor: 1,
+    headless: true,
+    actionTimeout: 8_000,
+    navigationTimeout: 20_000,
 
-    // ✅ reduce “tiny diffs”
-    locale: "en-US",
-    timezoneId: "America/Chicago",
-
-    // Useful artifacts
-    trace: "retain-on-failure",
+    // Debug artifacts only when needed
+    trace: process.env.CI ? "retain-on-failure" : "on-first-retry",
     screenshot: "only-on-failure",
-    video: "retain-on-failure",
+    video: "retain-on-failure"
   },
+
+  projects: [
+    {
+      name: "chromium",
+      use: { browserName: "chromium", viewport: { width: 1280, height: 720 } }
+    }
+  ]
 });

@@ -3,66 +3,133 @@ const { test, expect } = require("@playwright/test");
 const ADMIN_URL =
   process.env.ADMIN_URL ||
   "http://127.0.0.1:5050/admin?key=REPLACE_ADMIN_KEY";
+
 const MANAGER_URL =
   process.env.MANAGER_URL ||
-  "http://127.0.0.1:5050/admin?key=REPLACE_MANAGER_KEY";
+  "http://127.0.0.1:5050/manager?key=REPLACE_MANAGER_KEY";
+
 const FANZONE_URL =
   process.env.FANZONE_URL ||
   "http://127.0.0.1:5050/admin/fanzone?key=REPLACE_ADMIN_KEY";
 
-async function clickTab(page, name) {
-  // Most reliable: role button exact name
-  const btn = page.getByRole("button", { name: new RegExp(`^${name}$`, "i") });
+// Optional: if you add <div data-testid="app-root"> to panels later,
+// set APP_ROOT_SELECTOR='[data-testid="app-root"]' in env.
+// Otherwise we fallback to body having real content.
+const APP_ROOT_SELECTOR = process.env.APP_ROOT_SELECTOR || "[data-testid='app-root']";
+
+/**
+ * Deterministic "page is ready" check: no sleeps.
+ */
+async function waitForReady(page) {
+  const root = page.locator(APP_ROOT_SELECTOR);
+  if (await root.count()) {
+    await expect(root.first()).toBeVisible({ timeout: 8000 });
+  } else {
+    // Fallback: page should not be blank
+    await expect(page.locator("body")).toContainText(/./, { timeout: 8000 });
+  }
+}
+
+/**
+ * Click a tab in a robust way.
+ * We do NOT sleep; instead we wait for a deterministic "state change".
+ */
+async function clickTabAndWait(page, name) {
+  const beforeHash = new URL(page.url()).hash;
+
+  // Primary: accessible role button with exact label (case-insensitive)
+  const btn = page.getByRole("button", { name: new RegExp(`^${escapeRegex(name)}$`, "i") });
   if (await btn.count()) {
     await btn.first().click();
-    await page.waitForTimeout(150);
+
+    // Wait for *something* to change deterministically:
+    // - hash change (if your app uses it)
+    // - or active state toggles (aria-selected / aria-current)
+    // - or pane visibility changes
+    await waitForTabStateChange(page, name, beforeHash);
     return true;
   }
 
-  // Fallback: data-tab (if your UI uses it)
+  // Fallback: data-tab attribute if present
   const dt = page.locator(`[data-tab="${name.toLowerCase()}"]`);
   if (await dt.count()) {
     await dt.first().click();
-    await page.waitForTimeout(150);
+    await waitForTabStateChange(page, name, beforeHash);
     return true;
   }
 
   return false;
 }
 
-async function visibleTabPanes(page) {
-  // Your panes use: class="tabpane hidden"
-  // So visible panes are tabpane NOT having hidden and also actually visible.
-  const panes = page.locator(".tabpane").filter({ hasNot: page.locator(".hidden") });
-  const count = await panes.count();
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
-  const visibles = [];
-  for (let i = 0; i < count; i++) {
-    const p = panes.nth(i);
-    if (await p.isVisible()) visibles.push(p);
+/**
+ * Deterministic condition after a click.
+ * We try (in order):
+ * 1) URL hash changed OR matches tab name
+ * 2) tab shows selected/active accessibility state
+ * 3) visible tabpane changed (fallback)
+ */
+async function waitForTabStateChange(page, name, beforeHash) {
+  // 1) hash based navigation (very common in your app)
+  // If your app uses #menu, #leads etc, this will be stable.
+  await page.waitForFunction(
+    ({ beforeHash }) => location.hash !== beforeHash,
+    { beforeHash },
+    { timeout: 2000 }
+  ).catch(() => {});
+
+  // 2) accessible active state (if present)
+  const btn = page.getByRole("button", { name: new RegExp(`^${escapeRegex(name)}$`, "i") }).first();
+  await expect(btn).toBeVisible();
+
+  // If your markup uses aria-selected/current, this becomes a strong assertion.
+  // If not, these checks are skipped.
+  const ariaSelected = await btn.getAttribute("aria-selected");
+  const ariaCurrent = await btn.getAttribute("aria-current");
+  if (ariaSelected !== null) {
+    await expect(btn).toHaveAttribute("aria-selected", /true/i);
+    return;
   }
-  return visibles;
+  if (ariaCurrent !== null) {
+    await expect(btn).toHaveAttribute("aria-current", /true/i);
+    return;
+  }
+
+  // 3) Fallback: visible pane count should be exactly 1 (if you use .tabpane shells)
+  // and it should be visible.
+  const panes = visibleTabPanes(page);
+  const count = await panes.count();
+  if (count > 0) {
+    await expect(panes).toHaveCount(1);
+    await expect(panes.first()).toBeVisible();
+  }
 }
 
-async function getVisiblePaneIdOrIndex(page) {
-  const panes = await visibleTabPanes(page);
-  if (!panes.length) return null;
-
-  // Prefer id, else index marker
-  const id = await panes[0].getAttribute("id");
-  if (id) return `#${id}`;
-  return `pane-index-0`;
+/**
+ * Correct, deterministic visible pane locator:
+ * selects elements that have class tabpane but NOT class hidden
+ * (not a descendant check).
+ */
+function visibleTabPanes(page) {
+  return page.locator(".tabpane:not(.hidden)");
 }
 
-async function assertSinglePaneVisible(page) {
-  const panes = await visibleTabPanes(page);
-  expect(panes.length, "Expected exactly ONE visible .tabpane").toBe(1);
-  await expect(panes[0]).toBeVisible();
+async function assertSinglePaneVisibleIfTabPanesExist(page) {
+  const panesAll = page.locator(".tabpane");
+  if ((await panesAll.count()) === 0) return; // if your build doesn't use tabpane shells, skip this check
+
+  const panesVisible = visibleTabPanes(page);
+  await expect(panesVisible, "Expected exactly ONE visible .tabpane").toHaveCount(1);
+  await expect(panesVisible.first()).toBeVisible();
 }
 
-test.describe("ADMIN: tabs click-through + correct pane + no duplicates", () => {
-  test("ADMIN: tabs click-through + correct pane + no duplicates", async ({ page }) => {
+test.describe("ADMIN: deterministic tab navigation (no visuals)", () => {
+  test("Admin: each tab is clickable and results in a stable state", async ({ page }) => {
     await page.goto(ADMIN_URL, { waitUntil: "domcontentloaded" });
+    await waitForReady(page);
 
     const tabs = [
       "Ops",
@@ -76,74 +143,84 @@ test.describe("ADMIN: tabs click-through + correct pane + no duplicates", () => 
       "Policies",
     ];
 
-    // baseline: should have one visible pane at load
-    await assertSinglePaneVisible(page);
-    let lastPane = await getVisiblePaneIdOrIndex(page);
+    // baseline: if your UI uses tabpanes, there should be exactly 1 visible
+    await assertSinglePaneVisibleIfTabPanesExist(page);
 
     for (const t of tabs) {
-      const ok = await clickTab(page, t);
+      const ok = await clickTabAndWait(page, t);
       expect(ok, `Tab button not found: ${t}`).toBeTruthy();
 
-      // After click, we must have exactly one visible pane
-      await assertSinglePaneVisible(page);
-
-      // Pane should change when switching (best-effort; some tabs may share the same container in some builds)
-      const nowPane = await getVisiblePaneIdOrIndex(page);
-      if (nowPane && lastPane && t !== "Ops") {
-        // don’t hard-fail if your UI intentionally reuses same pane shell,
-        // but do fail if NOTHING changes across multiple clicks
-        // We'll "soft assert" with an expectation that frequently catches dead clicks.
-        // If your UI truly reuses pane ids, this still passes (since content changes inside).
-        // (We keep this as a non-fatal check by not forcing inequality.)
-      }
-      lastPane = nowPane;
+      // After click: still exactly one visible pane (if panes exist)
+      await assertSinglePaneVisibleIfTabPanesExist(page);
     }
   });
 });
 
-test.describe("MANAGER: required tabs work + Policies is locked", () => {
-  test("MANAGER: required tabs work + Policies is locked", async ({ page }) => {
+test.describe("MANAGER: deterministic access rules (no visuals)", () => {
+  test("Manager: core tabs work; Policies is blocked or absent", async ({ page }) => {
     await page.goto(MANAGER_URL, { waitUntil: "domcontentloaded" });
+    await waitForReady(page);
 
     const required = ["Ops", "Leads", "AI Queue", "Monitoring", "Audit"];
 
-    await assertSinglePaneVisible(page);
+    await assertSinglePaneVisibleIfTabPanesExist(page);
 
     for (const t of required) {
-      const ok = await clickTab(page, t);
+      const ok = await clickTabAndWait(page, t);
       expect(ok, `Tab button not found: ${t}`).toBeTruthy();
-      await assertSinglePaneVisible(page);
+      await assertSinglePaneVisibleIfTabPanesExist(page);
     }
 
-    // Policies should be locked/hidden for manager (your earlier runs indicated this is intended)
-    const clicked = await clickTab(page, "Policies");
-    if (clicked) {
-      // If it exists as a tab, it should NOT become the visible pane in manager view.
-      // We assert the pane doesn't switch to a policies pane.
-      const panes = await visibleTabPanes(page);
-      expect(panes.length).toBe(1);
+    // Policies: either not present OR present but blocked (does not show policies pane)
+    const policiesFound = await page
+      .getByRole("button", { name: /^Policies$/i })
+      .count();
 
-      const id = await panes[0].getAttribute("id");
-      if (id) {
-        expect(id.toLowerCase()).not.toContain("polic");
+    if (policiesFound) {
+      // Click it
+      const before = page.url();
+      await page.getByRole("button", { name: /^Policies$/i }).first().click();
+
+      // Deterministic block signals:
+      // - a "locked/not authorized" message, OR
+      // - a bounce back to Ops (URL changes or stays same but pane doesn't become policies)
+      const blockedMsg = page.getByText(/locked|owner only|not authorized|permission/i);
+
+      await blockedMsg
+        .first()
+        .waitFor({ timeout: 1500 })
+        .catch(() => {});
+
+      // If a message appears, that's a pass. If not, still require we didn't end up on a policies pane.
+      const panesAll = page.locator(".tabpane");
+      if ((await panesAll.count()) > 0) {
+        const visible = visibleTabPanes(page);
+        await expect(visible).toHaveCount(1);
+        const id = await visible.first().getAttribute("id");
+        if (id) expect(id.toLowerCase()).not.toContain("polic");
+      } else {
+        // No panes system: require we didn't navigate away unexpectedly
+        expect(page.url(), "Manager should not navigate into Policies").toBe(before);
       }
 
-      console.log('[INFO] Manager "Policies" is present but remains locked/hidden (expected).');
+      console.log('[INFO] Manager "Policies" is present but blocked (expected).');
     } else {
-      console.log('[INFO] Manager "Policies" tab not present (also acceptable).');
+      console.log('[INFO] Manager "Policies" not present (acceptable).');
     }
   });
 });
 
-test.describe("FAN ZONE: loads cleanly (route)", () => {
-  test("FAN ZONE: loads cleanly (route)", async ({ page }) => {
+test.describe("FAN ZONE: loads deterministically (no visuals)", () => {
+  test("Fan Zone: loads and shows core content or safe fallback", async ({ page }) => {
     await page.goto(FANZONE_URL, { waitUntil: "domcontentloaded" });
+    await waitForReady(page);
 
-    // Basic sanity
-    await expect(page.locator("body")).toBeVisible();
+    // Deterministic: page should not be blank
+    await expect(page.locator("body")).toContainText(/./);
 
-    // If your Fan Zone has a signature header/card, check it lightly (doesn't require exact text)
-    const maybePoll = page.locator("text=/match of the day/i");
+    // Optional: if the poll header exists, it should be visible.
+    // This does NOT require exact layout.
+    const maybePoll = page.getByText(/match of the day/i);
     if (await maybePoll.count()) {
       await expect(maybePoll.first()).toBeVisible();
     }

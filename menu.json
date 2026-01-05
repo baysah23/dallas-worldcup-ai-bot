@@ -1,0 +1,133 @@
+{
+  "menu": {
+    "id": "world-cup-2026-chefs-global-matchday-menu",
+    "title": "THE WORLD CUP 2026",
+    "subtitle": "Chef’s Global Matchday Menu",
+    "tagline": "Limited Edition • Matchday Exclusive • Crafted for the world’s biggest stage",
+    "style": {
+      "theme": "premium_luxury_ios",
+      "palette": ["obsidian", "champagne_gold", "smoke_gray"],
+      "typography": ["serif_display", "clean_sans"],
+      "finish": ["glass", "soft_glow", "fine_rules"]
+    },
+    "sections": [
+      {
+        "id": "opening-kickoff",
+        "title": "OPENING KICKOFF",
+        "subtitle": "Amuse-Bouche • Chef’s Welcome",
+        "items": [
+          {
+            "id": "golden-start",
+            "name": "Golden Start",
+            "description": "Truffle-whipped ricotta • Warm olive oil • Maldon salt",
+            "served_with": "Artisanal flatbread",
+            "chef_note": "A clean, confident first touch."
+          }
+        ]
+      },
+      {
+        "id": "first-half-global-small-plates",
+        "title": "FIRST HALF — GLOBAL SMALL PLATES",
+        "items": [
+          {
+            "id": "mediterranean-midfield",
+            "name": "Mediterranean Midfield",
+            "description": "Charred octopus • Smoked paprika • Lemon confit • Olive dust"
+          },
+          {
+            "id": "tokyo-press",
+            "name": "Tokyo Press",
+            "description": "Wagyu beef tataki • Yuzu soy • Crispy shallot • Micro herbs"
+          },
+          {
+            "id": "paris-build-up",
+            "name": "Paris Build-Up",
+            "description": "Burrata • Heirloom tomato • Basil oil • Aged balsamic pearls"
+          }
+        ]
+      },
+      {
+        "id": "matchday-cocktail-pairings",
+        "title": "MATCHDAY COCKTAIL PAIRINGS",
+        "subtitle": "Optional",
+        "items": [
+          {
+            "id": "the-host-city",
+            "name": "The Host City",
+            "description": "Grey Goose • Elderflower • Citrus mist",
+            "type": "cocktail"
+          },
+          {
+            "id": "extra-time-spritz",
+            "name": "Extra Time Spritz",
+            "description": "Blood orange • Prosecco • Rosemary essence",
+            "type": "cocktail"
+          },
+          {
+            "id": "final-whistle-zero-proof",
+            "name": "Zero Proof: Final Whistle",
+            "description": "Cucumber • Mint • Lime • Sparkling mineral",
+            "type": "zero_proof"
+          }
+        ]
+      },
+      {
+        "id": "second-half-main-plates",
+        "title": "SECOND HALF — MAIN PLATES",
+        "items": [
+          {
+            "id": "the-captain",
+            "name": "The Captain",
+            "description": "48-hour short rib • Red wine jus • Truffle pomme purée"
+          },
+          {
+            "id": "the-striker",
+            "name": "The Striker",
+            "description": "Herb-crusted lamb loin • Charred aubergine • Pomegranate glaze"
+          },
+          {
+            "id": "the-playmaker-vegan",
+            "name": "The Playmaker (Vegan)",
+            "description": "Wild mushroom risotto • White truffle oil • Aged parmesan foam"
+          }
+        ]
+      },
+      {
+        "id": "half-time-cheese-board",
+        "title": "HALF-TIME CHEESE BOARD",
+        "subtitle": "Table Service",
+        "items": [
+          {
+            "id": "world-selection-board",
+            "name": "World Selection",
+            "description": "Honeycomb • Fig preserve • Seeded crisps",
+            "service_note": "Curated tableside for pacing and pause."
+          }
+        ]
+      },
+      {
+        "id": "final-whistle-dessert",
+        "title": "FINAL WHISTLE — DESSERT",
+        "items": [
+          {
+            "id": "dark-chocolate-sphere",
+            "name": "Dark Chocolate Sphere",
+            "description": "Passion fruit core • Warm vanilla pour"
+          }
+        ]
+      }
+    ],
+    "meta": {
+      "version": "1.0.0",
+      "currency": "USD",
+      "pricing": {
+        "enabled": false,
+        "note": "Add venue-specific pricing as needed."
+      },
+      "allergens": {
+        "enabled": false,
+        "note": "Add allergen tags per item for service compliance."
+      }
+    }
+  }
+}

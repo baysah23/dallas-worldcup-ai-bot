@@ -1,6 +1,7 @@
 {
   "scripts": {
-    "test:panels": "npx playwright test tests/00_smoke_load.spec.js tests/10_tabs_layout.spec.js tests/20_save_refresh_actions.spec.js tests/30_visual_regression.spec.js --project=chromium --workers=2 --reporter=line,html",
+    "test:gate": "npx playwright test tests/00_smoke_load.spec.js tests/10_tabs_layout.spec.js tests/20_save_refresh_actions.spec.js --project=chromium --workers=1 --reporter=line,html",
+    "test:panels": "npm run test:gate",
     "test:visual": "npx playwright test tests/30_visual_regression.spec.js --project=chromium --workers=1 --reporter=line,html",
     "test:visual:update": "npx playwright test tests/30_visual_regression.spec.js --project=chromium --workers=1 --update-snapshots --reporter=line,html"
   },

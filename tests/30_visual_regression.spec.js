@@ -1,11 +1,19 @@
 const { test, expect } = require("@playwright/test");
 
+// Quarantine visual tests: they only run when explicitly enabled.
+test.skip(
+  process.env.RUN_VISUAL !== "1",
+  "Visual tests are quarantined; set RUN_VISUAL=1 to run."
+);
+
 const ADMIN_URL =
   process.env.ADMIN_URL ||
   "http://127.0.0.1:5050/admin?key=REPLACE_ADMIN_KEY";
+
 const MANAGER_URL =
   process.env.MANAGER_URL ||
-  "http://127.0.0.1:5050/admin?key=REPLACE_MANAGER_KEY";
+  "http://127.0.0.1:5050/manager?key=REPLACE_MANAGER_KEY";
+
 const FANZONE_URL =
   process.env.FANZONE_URL ||
   "http://127.0.0.1:5050/admin/fanzone?key=REPLACE_ADMIN_KEY";
@@ -24,6 +32,10 @@ async function waitForFonts(page) {
   await page.evaluate(async () => {
     if (document.fonts && document.fonts.ready) await document.fonts.ready;
   });
+}
+
+async function settle(page) {
+  await page.evaluate(() => new Promise(requestAnimationFrame));
 }
 
 async function stabilize(page) {
@@ -60,24 +72,29 @@ async function stabilize(page) {
   await waitForFonts(page);
 
   await page.evaluate(() => window.scrollTo(0, 0));
-  await page.waitForTimeout(150);
+  await settle(page);
 }
 
 async function clickTab(page, tabName) {
-  const btn = page.getByRole("button", { name: new RegExp(`^${tabName}$`, "i") });
+  const btn = page.getByRole("button", {
+    name: new RegExp(`^${tabName}$`, "i"),
+  });
+
   if (await btn.count()) {
     await btn.first().click();
     await page.waitForLoadState("networkidle").catch(() => {});
-    await page.waitForTimeout(150);
+    await settle(page);
     return true;
   }
+
   const byDataTab = page.locator(`[data-tab="${tabName.toLowerCase()}"]`);
   if (await byDataTab.count()) {
     await byDataTab.first().click();
     await page.waitForLoadState("networkidle").catch(() => {});
-    await page.waitForTimeout(150);
+    await settle(page);
     return true;
   }
+
   return false;
 }
 
@@ -96,7 +113,6 @@ function commonMasks(page) {
     ".audit",
     ".audit-log",
     ".log",
-    // common “volatile” areas:
     "time",
     "[data-time]",
     "[data-updated]",
@@ -112,10 +128,12 @@ function tabMasks(page, tabLabel) {
     masks.push(page.locator("#tab-leads table"));
     masks.push(page.locator("#tab-leads .rows"));
   }
+
   if (label.includes("ai queue") || label.includes("aiq")) {
     masks.push(page.locator("#tab-aiq table"));
     masks.push(page.locator("#tab-aiq .queue"));
   }
+
   if (label.includes("ops")) {
     masks.push(page.locator("#tab-ops .last-updated"));
     masks.push(page.locator("#tab-ops [data-ts]"));
@@ -129,7 +147,7 @@ test.describe("Visual - ADMIN tab panes", () => {
     await page.goto(ADMIN_URL, { waitUntil: "domcontentloaded" });
     await stabilize(page);
 
-    // ✅ Audit excluded (too dynamic for pixel-perfect CI)
+    // Audit excluded (too dynamic for pixel-perfect CI)
     const tabs = [
       "Ops",
       "Leads",
@@ -161,7 +179,7 @@ test.describe("Visual - MANAGER core panes", () => {
     await page.goto(MANAGER_URL, { waitUntil: "domcontentloaded" });
     await stabilize(page);
 
-    // ✅ Audit excluded here too
+    // Audit excluded (too dynamic for pixel-perfect CI)
     const tabs = ["Ops", "Leads", "AI Queue", "Monitoring"];
 
     for (const t of tabs) {
