@@ -1,201 +1,29 @@
-name: panels-gate
+name: Panels Gate
 
 on:
   push:
-    branches: ["main"]
   pull_request:
-  workflow_dispatch:
 
 jobs:
   panels:
-    # Fork PRs don't get secrets; skip to avoid false failures.
-    if: >
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
-
-    runs-on: windows-latest
-    timeout-minutes: 25
-
-    env:
-      PORT: 5050
-      CI: true
-
-      # Deterministic E2E test hooks (server-side)
-      E2E_TEST_MODE: "1"
-      E2E_TEST_TOKEN: ${{ secrets.E2E_TEST_TOKEN }}
-
-      # ✅ CI should hit LOCAL server (not Render)
-      BASE_URL_CI: ${{ secrets.BASE_URL_CI }}
-
-      # ✅ Match YOUR actual secret names
-      ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
-      ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
-
-      # ✅ URLs built for localhost CI
-      ADMIN_URL: ${{ secrets.BASE_URL_CI }}/admin?key=${{ secrets.ADMIN_OWNER_KEY }}
-      MANAGER_URL: ${{ secrets.BASE_URL_CI }}/manager?key=${{ secrets.ADMIN_MANAGER_KEY }}
-      FANZONE_URL: ${{ secrets.BASE_URL_CI }}/admin/fanzone?key=${{ secrets.ADMIN_OWNER_KEY }}
-
-      # Visuals quarantined by default in CI
-      RUN_VISUAL: "0"
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install Python deps
-        shell: pwsh
-        run: |
-          python -m pip install --upgrade pip
-          if (Test-Path requirements.txt) { pip install -r requirements.txt }
-
-      - name: Install Node deps
-        shell: pwsh
-        run: |
-          if (Test-Path package-lock.json) { npm ci } else { npm install }
-
-      - name: Install Playwright + Chromium
-        shell: pwsh
-        run: |
-          npx playwright install --with-deps chromium
-
-      - name: Start server + wait + run gate tests (Windows-safe)
-        shell: pwsh
-        run: |
-          # Sanity (safe) - do not print secrets
-          Write-Host ("BASE_URL_CI set? " + (-not [string]::IsNullOrWhiteSpace($env:BASE_URL_CI)))
-          Write-Host ("ADMIN_URL set? " + (-not [string]::IsNullOrWhiteSpace($env:ADMIN_URL)))
-          Write-Host ("MANAGER_URL set? " + (-not [string]::IsNullOrWhiteSpace($env:MANAGER_URL)))
-          Write-Host ("FANZONE_URL set? " + (-not [string]::IsNullOrWhiteSpace($env:FANZONE_URL)))
-
-          $uri = "http://127.0.0.1:5050/__test__/health"
-          $hasToken = -not [string]::IsNullOrWhiteSpace($env:E2E_TEST_TOKEN)
-          Write-Host ("E2E_TEST_TOKEN present? " + $hasToken)
-          Write-Host ("Starting server on PORT=" + $env:PORT)
-
-          # Start Flask server
-          $server = Start-Process -PassThru -NoNewWindow `
-            -FilePath python `
-            -ArgumentList "-u","app.py" `
-            -RedirectStandardOutput "server.log" `
-            -RedirectStandardError "server.err"
-
-          Write-Host "Server PID: $($server.Id)"
-
-          try {
-            # Wait for server
-            $ok = $false
-            $lastCode = $null
-            $lastBody = $null
-
-            for ($i=0; $i -lt 120; $i++) {
-              if ($server.HasExited) {
-                Write-Host "❌ Server process exited early with code $($server.ExitCode)"
-                break
-              }
-
-              try {
-                if ($hasToken) {
-                  $resp = Invoke-WebRequest `
-                    -UseBasicParsing `
-                    -SkipHttpErrorCheck `
-                    -Headers @{ "X-E2E-Test-Token" = $env:E2E_TEST_TOKEN } `
-                    -Uri $uri `
-                    -TimeoutSec 2
-                } else {
-                  $resp = Invoke-WebRequest `
-                    -UseBasicParsing `
-                    -SkipHttpErrorCheck `
-                    -Uri $uri `
-                    -TimeoutSec 2
-                }
-
-                $lastCode = [int]$resp.StatusCode
-                $lastBody = (($resp.Content | Out-String).Trim())
-
-                if ($i -eq 0 -or ($i % 20 -eq 0)) {
-                  Write-Host "Attempt $i => HTTP $lastCode"
-                  if ($lastBody) { Write-Host $lastBody }
-                }
-
-                if ($lastCode -eq 200) { $ok = $true; break }
-              } catch {
-                if ($i -eq 0 -or ($i % 20 -eq 0)) {
-                  Write-Host "Attempt $i => exception: $($_.Exception.Message)"
-                }
-              }
-
-              Start-Sleep -Milliseconds 500
-            }
-
-            if (-not $ok) {
-              Write-Host "❌ Server not ready (health check failed)"
-              Write-Host "Last observed: HTTP $lastCode"
-              if ($lastBody) { Write-Host $lastBody }
-              if (Test-Path server.log) { Get-Content server.log -Tail 200 | Out-Host }
-              if (Test-Path server.err) { Get-Content server.err -Tail 200 | Out-Host }
-              throw "Server not ready at $uri"
-            }
-
-            Write-Host "✅ Server reachable — running deterministic gate"
-            npm run test:panels
-
-            Write-Host "✅ Gate tests finished"
-          }
-          finally {
-            if ($server -and -not $server.HasExited) {
-              try { Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue } catch {}
-            }
-          }
-
-      - name: Visual checks (optional)
-        if: env.RUN_VISUAL == '1'
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          npm run test:visual
-
-      - name: Upload Playwright HTML report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: playwright-report
-          if-no-files-found: warn
-          retention-days: 7
-
-      - name: Upload Playwright test-results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-results
-          path: test-results
-          if-no-files-found: warn
-          retention-days: 7
-
-      - name: Upload server logs
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: server-logs
-          path: |
-            server.log
-            server.err
-          if-no-files-found: warn
-          retention-days: 7
-
-  panels_fork_notice:
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
-      - run: echo "Skipping panels-gate on fork PRs (GitHub does not provide repo secrets to forked pull_request workflows)."
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Run Panels Gate
+        env:
+          ADMIN_URL: ${{ secrets.ADMIN_URL }}
+          MANAGER_URL: ${{ secrets.MANAGER_URL }}
+          FANZONE_URL: ${{ secrets.FANZONE_URL }}
+          E2E_TEST_TOKEN: ${{ secrets.E2E_TEST_TOKEN }}
+        run: npm run test:panels
