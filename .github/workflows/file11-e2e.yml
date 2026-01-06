@@ -1,4 +1,4 @@
-name: FILE 11 E2E (Local CI only; auto-detect port)
+name: FILE 11 E2E (Local CI only; port autodetect; pass keys to Flask)
 
 on:
   push:
@@ -34,17 +34,20 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Start Flask (background)
+        # IMPORTANT: Flask must receive the same keys the tests use, otherwise routes return 401.
         env:
           FLASK_ENV: production
+          ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
+          ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
+          E2E_TEST_TOKEN: ${{ secrets.E2E_TEST_TOKEN }}
         run: |
           nohup python app.py > flask.log 2>&1 &
           echo "Started Flask (nohup)."
 
       - name: Wait for local server (auto-detect port)
         run: |
-          # Your app sometimes binds 5000 locally, but CI has shown 5050.
           PORTS="5000 5050"
-          for i in {1..90}; do
+          for i in {1..120}; do
             for p in $PORTS; do
               if curl -fsS "http://127.0.0.1:${p}/" > /dev/null; then
                 echo "Local server is up on port ${p}."
@@ -64,11 +67,15 @@ jobs:
           # BASE_URL is set by the previous step after port detection
           ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
           ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
+          E2E_TEST_TOKEN: ${{ secrets.E2E_TEST_TOKEN }}
         run: |
           if [ -z "$BASE_URL" ]; then
             echo "BASE_URL was not set (port detect failed)."
             exit 1
           fi
+          # quick sanity: show whether secrets are present (values not printed)
+          [ -n "$ADMIN_OWNER_KEY" ] && echo "ADMIN_OWNER_KEY=SET" || echo "ADMIN_OWNER_KEY=EMPTY"
+          [ -n "$ADMIN_MANAGER_KEY" ] && echo "ADMIN_MANAGER_KEY=SET" || echo "ADMIN_MANAGER_KEY=EMPTY"
           npx playwright test tests/11_e2e_core_flows.spec.js --project=chromium --workers=1 --reporter=line
 
       - name: Upload Playwright report
