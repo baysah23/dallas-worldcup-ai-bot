@@ -1,4 +1,4 @@
-name: FILE 11 E2E (Local CI only; port autodetect; pass keys to Flask)
+name: FILE 11 E2E (Local CI only; robust port + auth-tolerant wait)
 
 on:
   push:
@@ -34,7 +34,7 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Start Flask (background)
-        # IMPORTANT: Flask must receive the same keys the tests use, otherwise routes return 401.
+        # Pass keys into the Flask process so routes don't 401 in CI.
         env:
           FLASK_ENV: production
           ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
@@ -44,38 +44,54 @@ jobs:
           nohup python app.py > flask.log 2>&1 &
           echo "Started Flask (nohup)."
 
-      - name: Wait for local server (auto-detect port)
+      - name: Wait for local server (robust; accepts 200/3xx/401/403/404)
         run: |
+          set -e
           PORTS="5000 5050"
-          for i in {1..120}; do
-            for p in $PORTS; do
-              if curl -fsS "http://127.0.0.1:${p}/" > /dev/null; then
-                echo "Local server is up on port ${p}."
-                echo "BASE_URL=http://127.0.0.1:${p}" >> $GITHUB_ENV
-                exit 0
-              fi
+          HOSTS="127.0.0.1 localhost 0.0.0.0"
+          for i in {1..150}; do
+            for h in $HOSTS; do
+              for p in $PORTS; do
+                code="$(curl -s -o /dev/null -w "%{http_code}" "http://${h}:${p}/" || true)"
+                # curl gives 000 when it can't connect at all.
+                if [ "$code" != "000" ] && [ -n "$code" ]; then
+                  echo "Server reachable at http://${h}:${p}/ (HTTP ${code})"
+                  echo "BASE_URL=http://127.0.0.1:${p}" >> $GITHUB_ENV
+                  exit 0
+                fi
+              done
             done
+            # if the app prints its port, we can also detect it from logs
+            if [ -f flask.log ]; then
+              detected="$(grep -Eo "http://127\.0\.0\.1:[0-9]{2,5}" flask.log | tail -n 1 || true)"
+              if [ -n "$detected" ]; then
+                port="$(echo "$detected" | sed -E 's/.*:([0-9]+)$/\1/')"
+                code2="$(curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${port}/" || true)"
+                if [ "$code2" != "000" ] && [ -n "$code2" ]; then
+                  echo "Server detected from logs: http://127.0.0.1:${port}/ (HTTP ${code2})"
+                  echo "BASE_URL=http://127.0.0.1:${port}" >> $GITHUB_ENV
+                  exit 0
+                fi
+              fi
+            fi
             sleep 1
           done
-          echo "Local server failed to start on ports: $PORTS"
-          echo "Last 200 lines of flask.log:"
-          tail -n 200 flask.log || true
+          echo "Local server NOT reachable on ports ${PORTS}."
+          echo "Last 220 lines of flask.log:"
+          tail -n 220 flask.log || true
           exit 1
 
       - name: Run FILE 11 (local)
         env:
-          # BASE_URL is set by the previous step after port detection
           ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
           ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
           E2E_TEST_TOKEN: ${{ secrets.E2E_TEST_TOKEN }}
         run: |
           if [ -z "$BASE_URL" ]; then
-            echo "BASE_URL was not set (port detect failed)."
+            echo "BASE_URL was not set (wait step failed)."
             exit 1
           fi
-          # quick sanity: show whether secrets are present (values not printed)
-          [ -n "$ADMIN_OWNER_KEY" ] && echo "ADMIN_OWNER_KEY=SET" || echo "ADMIN_OWNER_KEY=EMPTY"
-          [ -n "$ADMIN_MANAGER_KEY" ] && echo "ADMIN_MANAGER_KEY=SET" || echo "ADMIN_MANAGER_KEY=EMPTY"
+          echo "Using BASE_URL=$BASE_URL"
           npx playwright test tests/11_e2e_core_flows.spec.js --project=chromium --workers=1 --reporter=line
 
       - name: Upload Playwright report
