@@ -1,4 +1,4 @@
-name: FILE 11 E2E (Local CI only; deployed optional)
+name: FILE 11 E2E (Local CI only; auto-detect port)
 
 on:
   push:
@@ -40,25 +40,36 @@ jobs:
           nohup python app.py > flask.log 2>&1 &
           echo "Started Flask (nohup)."
 
-      - name: Wait for local server
+      - name: Wait for local server (auto-detect port)
         run: |
+          # Your app sometimes binds 5000 locally, but CI has shown 5050.
+          PORTS="5000 5050"
           for i in {1..90}; do
-            if curl -fsS "http://127.0.0.1:5000/" > /dev/null; then
-              echo "Local server is up."
-              exit 0
-            fi
+            for p in $PORTS; do
+              if curl -fsS "http://127.0.0.1:${p}/" > /dev/null; then
+                echo "Local server is up on port ${p}."
+                echo "BASE_URL=http://127.0.0.1:${p}" >> $GITHUB_ENV
+                exit 0
+              fi
+            done
             sleep 1
           done
-          echo "Local server failed to start. Last 200 lines:"
+          echo "Local server failed to start on ports: $PORTS"
+          echo "Last 200 lines of flask.log:"
           tail -n 200 flask.log || true
           exit 1
 
       - name: Run FILE 11 (local)
         env:
-          BASE_URL: "http://127.0.0.1:5000"
+          # BASE_URL is set by the previous step after port detection
           ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
           ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
-        run: npx playwright test tests/11_e2e_core_flows.spec.js --project=chromium --workers=1 --reporter=line
+        run: |
+          if [ -z "$BASE_URL" ]; then
+            echo "BASE_URL was not set (port detect failed)."
+            exit 1
+          fi
+          npx playwright test tests/11_e2e_core_flows.spec.js --project=chromium --workers=1 --reporter=line
 
       - name: Upload Playwright report
         if: always()
@@ -73,51 +84,3 @@ jobs:
         with:
           name: flask-log
           path: flask.log
-
-  file11-e2e-deployed:
-    # Only run manually (workflow_dispatch) so secrets + deploy URL issues don't block merges.
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install Node deps
-        run: npm ci
-
-      - name: Install Playwright (Chromium)
-        run: npx playwright install --with-deps chromium
-
-      - name: Debug deployed URL presence (safe)
-        run: |
-          [ -n "${{ secrets.BASE_URL_CI }}" ] && echo "BASE_URL_CI=SET" || echo "BASE_URL_CI=EMPTY"
-
-      - name: Wait for deployed server
-        env:
-          BASE_URL: ${{ secrets.BASE_URL_CI }}
-        run: |
-          if [ -z "$BASE_URL" ]; then
-            echo "BASE_URL_CI secret is empty."
-            exit 1
-          fi
-          for i in {1..120}; do
-            if curl -fsS "$BASE_URL/" > /dev/null; then
-              echo "Deployed server is up."
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "Deployed server did not respond in time."
-          exit 1
-
-      - name: Run FILE 11 (deployed)
-        env:
-          BASE_URL: ${{ secrets.BASE_URL_CI }}
-          ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
-          ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
-        run: npx playwright test tests/11_e2e_core_flows.spec.js --project=chromium --workers=1 --reporter=line
