@@ -124,6 +124,33 @@ ADMIN_OWNER_KEY = (os.environ.get("ADMIN_OWNER_KEY") or ADMIN_KEY or "").strip()
 _ADMIN_MANAGER_KEYS_RAW = (os.environ.get("ADMIN_MANAGER_KEYS") or os.environ.get("ADMIN_MANAGER_KEY") or "").strip()
 ADMIN_MANAGER_KEYS = [k.strip() for k in _ADMIN_MANAGER_KEYS_RAW.split(",") if k.strip()]
 
+
+# ============================================================
+# AUTH STARTUP VISIBILITY (SAFE — HASHED ONLY)
+# ============================================================
+print("\n[AUTH] ===== Admin / Manager Key Status =====")
+
+print(
+    f"[AUTH] ADMIN_OWNER_KEY loaded: "
+    f"{'yes' if ADMIN_OWNER_KEY else 'no'} "
+    f"(hash={_hash_key(ADMIN_OWNER_KEY)})"
+)
+
+print(
+    f"[AUTH] ADMIN_KEY loaded: "
+    f"{'yes' if ADMIN_KEY else 'no'} "
+    f"(hash={_hash_key(ADMIN_KEY)})"
+)
+
+if isinstance(ADMIN_MANAGER_KEYS, (list, tuple)) and ADMIN_MANAGER_KEYS:
+    print(f"[AUTH] MANAGER_KEYS loaded: {len(ADMIN_MANAGER_KEYS)} key(s)")
+    for i, k in enumerate(ADMIN_MANAGER_KEYS):
+        print(f"    - manager[{i}] hash={_hash_key(str(k))}")
+else:
+    print("[AUTH] MANAGER_KEYS loaded: none")
+
+print("[AUTH] =====================================\n")
+
 RATE_LIMIT_PER_MIN = int(os.environ.get("RATE_LIMIT_PER_MIN", "30"))
 
 SHEET_NAME = os.environ.get("GOOGLE_SHEET_NAME", "World Cup AI Reservations")
