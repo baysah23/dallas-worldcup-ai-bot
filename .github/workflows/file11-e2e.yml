@@ -1,18 +1,14 @@
-name: FILE 11 E2E (Both URLs, start Flask, fail fast)
+name: FILE 11 E2E (Local CI only; deployed optional)
 
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 jobs:
-  file11-e2e:
+  file11-e2e-local:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-
-    strategy:
-      fail-fast: true
-      matrix:
-        target: [local, deployed]
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v4
@@ -28,19 +24,16 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Setup Python
-        if: matrix.target == 'local'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install Python deps
-        if: matrix.target == 'local'
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Start Flask (background)
-        if: matrix.target == 'local'
         env:
           FLASK_ENV: production
         run: |
@@ -48,9 +41,8 @@ jobs:
           echo "Started Flask (nohup)."
 
       - name: Wait for local server
-        if: matrix.target == 'local'
         run: |
-          for i in {1..60}; do
+          for i in {1..90}; do
             if curl -fsS "http://127.0.0.1:5000/" > /dev/null; then
               echo "Local server is up."
               exit 0
@@ -62,17 +54,8 @@ jobs:
           exit 1
 
       - name: Run FILE 11 (local)
-        if: matrix.target == 'local'
         env:
           BASE_URL: "http://127.0.0.1:5000"
-          ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
-          ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
-        run: npx playwright test tests/11_e2e_core_flows.spec.js --project=chromium --workers=1 --reporter=line
-
-      - name: Run FILE 11 (deployed)
-        if: matrix.target == 'deployed'
-        env:
-          BASE_URL: ${{ secrets.BASE_URL_CI }}
           ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
           ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
         run: npx playwright test tests/11_e2e_core_flows.spec.js --project=chromium --workers=1 --reporter=line
@@ -81,12 +64,60 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report-${{ matrix.target }}
+          name: playwright-report
           path: playwright-report
 
-      - name: Upload local flask log
-        if: always() && matrix.target == 'local'
+      - name: Upload flask log
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: flask-log
           path: flask.log
+
+  file11-e2e-deployed:
+    # Only run manually (workflow_dispatch) so secrets + deploy URL issues don't block merges.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Node deps
+        run: npm ci
+
+      - name: Install Playwright (Chromium)
+        run: npx playwright install --with-deps chromium
+
+      - name: Debug deployed URL presence (safe)
+        run: |
+          [ -n "${{ secrets.BASE_URL_CI }}" ] && echo "BASE_URL_CI=SET" || echo "BASE_URL_CI=EMPTY"
+
+      - name: Wait for deployed server
+        env:
+          BASE_URL: ${{ secrets.BASE_URL_CI }}
+        run: |
+          if [ -z "$BASE_URL" ]; then
+            echo "BASE_URL_CI secret is empty."
+            exit 1
+          fi
+          for i in {1..120}; do
+            if curl -fsS "$BASE_URL/" > /dev/null; then
+              echo "Deployed server is up."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Deployed server did not respond in time."
+          exit 1
+
+      - name: Run FILE 11 (deployed)
+        env:
+          BASE_URL: ${{ secrets.BASE_URL_CI }}
+          ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
+          ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
+        run: npx playwright test tests/11_e2e_core_flows.spec.js --project=chromium --workers=1 --reporter=line
