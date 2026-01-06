@@ -1,3 +1,4 @@
+
 name: Panels Gate
 
 on:
@@ -11,19 +12,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-
       - run: npm ci
-
       - run: npx playwright install --with-deps chromium
-
-      - name: Run Panels Gate
+      - name: Run FILE 10 Panels Gate
         env:
           ADMIN_URL: ${{ secrets.ADMIN_URL }}
           MANAGER_URL: ${{ secrets.MANAGER_URL }}
           FANZONE_URL: ${{ secrets.FANZONE_URL }}
-          E2E_TEST_TOKEN: ${{ secrets.E2E_TEST_TOKEN }}
         run: npm run test:panels
