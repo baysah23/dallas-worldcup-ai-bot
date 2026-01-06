@@ -27,7 +27,6 @@ jobs:
       - name: Install Playwright (Chromium)
         run: npx playwright install --with-deps chromium
 
-      # --- Local target: start Flask in CI ---
       - name: Setup Python
         if: matrix.target == 'local'
         uses: actions/setup-python@v5
@@ -62,21 +61,20 @@ jobs:
           tail -n 200 flask.log || true
           exit 1
 
-      # --- Run FILE 11 tests ---
       - name: Run FILE 11 (local)
         if: matrix.target == 'local'
         env:
           BASE_URL: "http://127.0.0.1:5000"
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-          MANAGER_KEY: ${{ secrets.MANAGER_KEY }}
+          ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
+          ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
         run: npx playwright test tests/11_e2e_core_flows.spec.js --project=chromium --workers=1 --reporter=line
 
       - name: Run FILE 11 (deployed)
         if: matrix.target == 'deployed'
         env:
           BASE_URL: ${{ secrets.BASE_URL_CI }}
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
-          MANAGER_KEY: ${{ secrets.MANAGER_KEY }}
+          ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
+          ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
         run: npx playwright test tests/11_e2e_core_flows.spec.js --project=chromium --workers=1 --reporter=line
 
       - name: Upload Playwright report

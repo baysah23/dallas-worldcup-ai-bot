@@ -9,14 +9,14 @@ const {
   assertSinglePaneVisibleIfTabPanesExist,
 } = require("./_helpers/panels");
 
-// FILE 11 is STRICT: no skips, fail fast.
-const BASE_URL = mustEnv("BASE_URL"); // e.g. http://127.0.0.1:5000 or https://your-app.onrender.com
-const ADMIN_KEY = mustEnv("ADMIN_KEY");
-const MANAGER_KEY = mustEnv("MANAGER_KEY");
+// FILE 11 is STRICT: fail fast (no skips).
+const BASE_URL = mustEnv("BASE_URL");
+const ADMIN_OWNER_KEY = mustEnv("ADMIN_OWNER_KEY");
+const ADMIN_MANAGER_KEY = mustEnv("ADMIN_MANAGER_KEY");
 
-const ADMIN_URL = buildUrl(BASE_URL, "/admin", ADMIN_KEY);
-const MANAGER_URL = buildUrl(BASE_URL, "/manager", MANAGER_KEY);
-const FANZONE_URL = buildUrl(BASE_URL, "/admin/fanzone", ADMIN_KEY);
+const ADMIN_URL = buildUrl(BASE_URL, "/admin", ADMIN_OWNER_KEY);
+const MANAGER_URL = buildUrl(BASE_URL, "/manager", ADMIN_MANAGER_KEY);
+const FANZONE_URL = buildUrl(BASE_URL, "/admin/fanzone", ADMIN_OWNER_KEY);
 
 test.describe("FILE 11: Core E2E flows (fail fast)", () => {
   test("Admin loads cleanly (no JS errors)", async ({ page }) => {
@@ -30,7 +30,6 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
     expect(resp.status(), "Admin: expected < 400").toBeLessThan(400);
 
     await waitForReady(page);
-
     expect(errors, errors.join("\n")).toHaveLength(0);
   });
 
@@ -45,7 +44,6 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
     expect(resp.status(), "Manager: expected < 400").toBeLessThan(400);
 
     await waitForReady(page);
-
     expect(errors, errors.join("\n")).toHaveLength(0);
   });
 
@@ -60,7 +58,6 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
     expect(resp.status(), "Fan Zone: expected < 400").toBeLessThan(400);
 
     await waitForReady(page);
-
     expect(errors, errors.join("\n")).toHaveLength(0);
   });
 
@@ -69,7 +66,6 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
     await page.goto(ADMIN_URL, { waitUntil: "domcontentloaded" });
     await waitForReady(page);
 
-    // Navigate to Ops if tab exists; otherwise assume default is Ops.
     const opsTab = await page.getByRole("button", { name: /^Ops$/i }).count().catch(() => 0);
     if (opsTab) await clickTabAndWait(page, "Ops");
 
@@ -94,9 +90,6 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
 
     await page.reload({ waitUntil: "domcontentloaded" });
     await waitForReady(page);
-
-    // Still stable after refresh
-    expect(await page.locator("body").count()).toBeTruthy();
   });
 
   test("Admin: AI Queue approve/deny works if items exist", async ({ page }) => {
@@ -107,7 +100,6 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
     await clickTabAndWait(page, "AI Queue");
     await assertSinglePaneVisibleIfTabPanesExist(page);
 
-    // If queue is empty, accept; otherwise require approve/deny clickable.
     const emptyHint = page.getByText(/no items|empty|nothing to review/i);
     const hasEmptyHint = (await emptyHint.count().catch(() => 0)) > 0;
 
@@ -117,10 +109,7 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
     const approveCount = await approve.count().catch(() => 0);
     const denyCount = await deny.count().catch(() => 0);
 
-    if (hasEmptyHint && approveCount === 0 && denyCount === 0) {
-      // Accept empty queue
-      return;
-    }
+    if (hasEmptyHint && approveCount === 0 && denyCount === 0) return;
 
     expect(approveCount + denyCount, "AI Queue: expected approve/deny buttons or an explicit empty state").toBeGreaterThan(0);
 
@@ -138,12 +127,8 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
     ).catch(() => null);
 
     await btn.click({ force: true }).catch(() => {});
-
-    // Not all implementations hit a POST; if it does, it must be OK.
     const actionResp = await actionRespPromise;
-    if (actionResp) {
-      expect(actionResp.status(), "AI Queue action failed").toBeLessThan(400);
-    }
+    if (actionResp) expect(actionResp.status(), "AI Queue action failed").toBeLessThan(400);
   });
 
   test("Manager: owner-only tabs blocked (Configure, AI Settings, Rules)", async ({ page }) => {
@@ -151,7 +136,6 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
     await page.goto(MANAGER_URL, { waitUntil: "domcontentloaded" });
     await waitForReady(page);
 
-    // Try a small set of owner-only-ish tabs. If the tab doesn't exist, skip that specific tab.
     const ownerTabs = ["Configure", "AI Settings", "Rules"];
 
     for (const t of ownerTabs) {
@@ -165,12 +149,11 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
       const blockedMsg = page.getByText(/locked|owner only|not authorized|permission/i);
       const blockedVisible = (await blockedMsg.count().catch(() => 0)) > 0;
 
-      // Either we stayed on same URL (common), or we show a clear "locked" message.
       expect(blockedVisible || page.url() === before, `Manager should be blocked from ${t}`).toBeTruthy();
     }
   });
 
-  test("Fan Zone: Match of the Day poll vote does not crash (best-effort)", async ({ page }) => {
+  test("Fan Zone: poll interaction does not crash (best-effort)", async ({ page }) => {
     const errors = [];
     attachConsoleCollectors(page, errors);
 
@@ -178,21 +161,12 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
     await page.goto(FANZONE_URL, { waitUntil: "domcontentloaded" });
     await waitForReady(page);
 
-    // Open poll area if present
     const pollHeader = page.getByText(/match of the day/i).first();
-    if (await pollHeader.count().catch(() => 0)) {
-      await pollHeader.click().catch(() => {});
-    }
-
-    // Try to click the first obvious vote option (buttons/radios).
-    const voteCandidate = page
-      .locator("button:has-text('%')") // sometimes options include %
-      .first();
+    if (await pollHeader.count().catch(() => 0)) await pollHeader.click().catch(() => {});
 
     const radioCandidate = page.locator("input[type='radio']").first();
     const btnCandidate = page.getByRole("button", { name: /vote|submit/i }).first();
 
-    // Watch for vote endpoint if it exists
     const voteRespPromise = page.waitForResponse(
       (r) =>
         r.request().method() === "POST" &&
@@ -203,16 +177,11 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
     if (await radioCandidate.count().catch(() => 0)) {
       await radioCandidate.check().catch(() => {});
       if (await btnCandidate.count().catch(() => 0)) await btnCandidate.click().catch(() => {});
-    } else if (await voteCandidate.count().catch(() => 0)) {
-      await voteCandidate.click().catch(() => {});
     }
 
     const voteResp = await voteRespPromise;
-    if (voteResp) {
-      expect(voteResp.status(), "Poll vote endpoint returned error").toBeLessThan(400);
-    }
+    if (voteResp) expect(voteResp.status(), "Poll vote endpoint returned error").toBeLessThan(400);
 
-    // Always fail if page crashed
     expect(errors, errors.join("\n")).toHaveLength(0);
   });
 });

@@ -34,7 +34,6 @@ async function waitForReady(page) {
     return;
   }
 
-  // Fallback: ensure page isn't blank (JS didn't die immediately)
   await expect(page.locator("body")).toContainText(/./, { timeout: 12000 });
 }
 
@@ -105,7 +104,6 @@ async function clickTabAndWait(page, name) {
     await tab.click({ force: true }).catch(() => {});
   });
 
-  // Prefer hash change when present; otherwise just ensure page stays non-blank.
   await page
     .waitForFunction(
       ({ beforeHash }) => location.hash !== beforeHash,
