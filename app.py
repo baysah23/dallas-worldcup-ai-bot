@@ -6780,6 +6780,40 @@ async function saveAI(){
     if(msg) msg.textContent = 'Save failed: ' + (e.message || e);
   }
 }
+// ===== AI manual trigger (Option B: run from AI Settings tab) =====
+async function aiTriggerRun(){
+  const msg = qs('#ai-run-msg'); if(msg) msg.textContent = 'Running…';
+  try{
+    const rowStr = (qs('#ai-run-row')?.value || '').trim();
+    const lastnStr = (qs('#ai-run-lastn')?.value || '').trim();
+    const payload = {};
+    if(rowStr){
+      const row = parseInt(rowStr, 10);
+      if(!row || row < 2) throw new Error('Row must be a valid sheet row number (>=2).');
+      payload.row = row;
+    } else {
+      const n = parseInt(lastnStr || '10', 10);
+      payload.last_n_new = Math.max(1, Math.min(50, isNaN(n) ? 10 : n));
+    }
+    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const data = await r.json().catch(()=>null);
+    if(!data || !data.ok) throw new Error((data && data.error) ? data.error : ('Failed: ' + r.status));
+    const created = (data.created_ids || []);
+    const count = (data.triggered_count !== undefined) ? data.triggered_count : created.length;
+    if(msg) msg.textContent = `Triggered ✔ (${count} lead(s))`;
+    try{
+      if(typeof window.showTab === 'function') window.showTab('ai-queue');
+      if(typeof loadAIQueue === 'function') loadAIQueue();
+    }catch(e){}
+  }catch(e){
+    if(msg) msg.textContent = 'Run failed: ' + (e.message || e);
+  }
+}
+
 async function applyPreset(name){
   const msg = qs('#preset-msg'); if(msg) msg.textContent='Applying "'+name+'" ...';
   const res = await fetch('/admin/api/presets/apply?key='+encodeURIComponent(KEY), {
