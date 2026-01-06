@@ -1,0 +1,232 @@
+C — got it. We’ll do this in two phases:
+
+Deterministic CI gate first (non-flaky, no visuals)
+
+Then expand into thorough E2E that maps directly to your 10-point checklist.
+
+You said “one file at a time” + “plain English” + “no visual flakiness”, so the whole strategy is built around:
+
+No screenshot diffs
+
+No layout/animation assertions
+
+Only deterministic, state-based checks (API responses, text, enabled/disabled, redirects, audit lines, etc.)
+
+Stable selectors (IDs / data-testid — not CSS classes that change with design tweaks)
+
+Below is the step-by-step plan and exactly what we’ll put in CI.
+
+What we can reliably test from your current live code
+Admin / Manager panel actions (deterministic)
+
+You already have stable HTTP endpoints we can test without relying on UI visuals:
+
+Update lead (status/VIP): POST /admin/update-lead?key=... 
+
+app
+
+AI Queue approve/deny:
+
+POST /admin/api/ai/queue/<qid>/approve
+
+POST /admin/api/ai/queue/<qid>/deny 
+
+app
+
+Fan Zone Admin page exists: GET /admin/fanzone?key=... 
+
+app
+
+Fan Zone poll (deterministic “functional” checks)
+
+Your Fan Zone JS tries to fetch the poll from an API and falls back gracefully if not available (so it won’t hard-fail the page).
+This means our tests should:
+
+Prefer API-backed poll when available
+
+Otherwise assert the fallback message is shown (still a pass, because it’s intentional resilience)
+
+Also: you already added service worker cleanup that reduces “works sometimes” flake in real browsers. 
+
+index
+
+Phase 1 (NON-NEGOTIABLE): Deterministic CI Gate
+
+Goal: If this fails → you stop and fix before adding more tests (matches your rule #1).
+
+Gate definition (what CI must prove, every push)
+
+Minimum “never ship broken buttons” set:
+
+Admin page loads (200 + expected tab shell exists)
+
+Manager page loads (200 + restricted tabs behave)
+
+AI Queue: propose → approve/deny works (pure API + optionally confirm UI refresh)
+
+Update-lead works (API)
+
+Fan Zone page loads and poll UI can open (no JS crash; poll shows either API results or fallback text)
+
+No visuals. No timing luck.
+
+
+Step-by-step, one file at a time
+FILE 1 — playwright.config.js (make it CI-stable)
+
+Why this file first: CI stability is mostly config: retries, workers, timeouts, baseURL, trace-on-failure.
+
+Rules we’ll enforce here:
+
+Use Chromium only in CI
+
+Use 1 worker (parallelism causes flake when the server/data is shared)
+
+Use retries=2 only in CI
+
+Collect trace/video only on failure (no visual diffs, but traces help debug)
+
+Acceptance to move on: Playwright can launch in CI and run an empty test.
+
+FILE 2 — .github/workflows/panels-gate.yml (start server + run the gate)
+
+Why this file second: if CI doesn’t boot your Flask app deterministically, everything else is noise.
+
+What the workflow will do:
+
+Checkout
+
+Setup Python
+
+Install deps
+
+Start your Flask server (app.py) on 127.0.0.1:<port>
+
+Wait for health (simple curl loop)
+
+Setup Node + install Playwright
+
+Run the gate tests
+
+Acceptance to move on: CI goes green once, and fails if server is down.
+
+FILE 3 — tests/00_smoke_load.spec.js (fast “are pages alive?”)
+
+This is a pure smoke test:
+
+Visit admin URL with key
+
+Assert the top-level UI loads (don’t assert layout)
+
+Visit manager URL with key
+
+Assert the UI loads
+
+Visit /admin/fanzone and assert it loads 
+
+app
+Acceptance to move on: Zero flake, 10 runs in a row locally.
+
+FILE 4 — tests/20_api_gate.spec.js (deterministic API gate)
+
+This is where CI becomes “trustable”.
+
+It will test:
+
+AI Queue propose endpoint exists (POST /admin/api/ai/queue/propose) and returns {ok:true, id:...} 
+
+app
+
+Then approve OR deny the created queue id via:
+
+/admin/api/ai/queue/<qid>/approve and /deny 
+
+app
+
+Update lead endpoint returns ok (we’ll pick a safe row strategy; see note below) 
+
+app
+
+Important note (to avoid flake):
+Right now update-lead needs a real sheet row (row >= 2). 
+
+app
+
+
+For deterministic CI, you have two clean options:
+
+Option A (best for CI): Add a TESTING=1 mode route like POST /__test__/seed_lead + POST /__test__/reset to create a known row and return its row number (only enabled in CI).
+
+Option B (works but less perfect): Read the leads list first, pick the newest row, then update it. This can still be stable if your test environment uses a local file/fixture store.
+
+We’ll choose Option A for true determinism when we get to the app.py change.
+
+Acceptance to move on: API gate is deterministic and fast (<20s).
+
+Phase 2: Thorough E2E (mapped to your checklist)
+
+Once the CI gate is solid, we expand carefully:
+
+1️⃣ Core flow stability (your non-negotiable list)
+
+We’ll write E2E around the session model you already have (your get_session() shows you track mode + lead state). 
+
+app
+
+
+What we’ll test (deterministic):
+
+Required fields show a message (not silent)
+
+Submission returns confirmation/pending message
+
+Refresh doesn’t break state
+
+Back button doesn’t corrupt
+
+Timeout yields human-readable message
+
+Admin/operator control
+
+We’ll test that:
+
+Admin sees incoming leads
+
+Admin manual decision beats automation (AI Queue approve applies only when allowed; deny blocks)
+
+No ghost/stuck reservations
+
+Your queue approve/deny endpoints are already perfect for deterministic assertions. 
+
+app
+
+5️⃣ Failure states (very important)
+
+We’ll simulate:
+
+Network interruption (route abort / block one request)
+
+Backend error (force 500 in TESTING mode)
+
+Restart recovery (relaunch server mid-test and confirm state behavior)
+
+Audit & traceability (lightweight)
+
+You already have audit behavior referenced throughout admin actions (queue actions write audit).
+We’ll assert:
+
+“who/when” is visible somewhere (UI or API)
+
+manual edits are distinguishable
+
+The “no flake” rules we will follow in every test
+
+Never assert pixel/layout/animation
+
+Prefer API assertions over UI when possible
+
+If UI must be used: assert text/visibility/enabled state only
+
+Always wait on a specific network response (not waitForTimeout)
+
+Use stable selectors: IDs first, then data-testid we add
