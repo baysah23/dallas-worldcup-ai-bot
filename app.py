@@ -4598,6 +4598,151 @@ def admin_api_ai_settings():
 # AI Queue API (Admin/Manager)
 # ============================================================
 
+
+
+@app.route("/admin/api/ai/run", methods=["POST"])
+def admin_api_ai_run():
+    """Manually run AI triage from Admin UI (Option B).
+
+    This does NOT auto-apply anything. It only proposes actions into the AI Queue
+    so managers/owners can approve/deny.
+    Payload:
+      { "mode": "new", "limit": 5 }  -> run on newest leads with status "New"
+      { "row": 12 }                 -> run on a specific sheet row (2..N)
+    """
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    ctx = _admin_ctx()
+    actor = ctx.get("actor", "")
+    role = ctx.get("role", "")
+
+    data = request.get_json(silent=True) or {}
+    mode = (data.get("mode") or "new").strip().lower()
+    try:
+        limit = int(data.get("limit") or 5)
+    except Exception:
+        limit = 5
+    limit = max(1, min(25, limit))
+
+    try:
+        row_num = int(data.get("row") or 0)
+    except Exception:
+        row_num = 0
+
+    # Load sheet (best-effort). If Sheets isn't configured, return a friendly error.
+    try:
+        gc = get_gspread_client()
+        ws = gc.open(SHEET_NAME).sheet1
+        header = ensure_sheet_schema(ws)
+        hmap = header_map(header)
+    except Exception as e:
+        return jsonify({"ok": False, "error": "Sheets not available", "detail": str(e)[:300]}), 400
+
+    def _lead_from_row(row_vals: list) -> dict:
+        def get(col: str) -> str:
+            idx = hmap.get(_normalize_header(col))
+            if not idx:
+                return ""
+            i0 = idx - 1
+            return (row_vals[i0] if i0 < len(row_vals) else "") or ""
+        lead = {
+            "name": get("name"),
+            "phone": get("phone"),
+            "date": get("date"),
+            "time": get("time"),
+            "party_size": get("party_size"),
+            "language": get("language"),
+            "entry_point": get("entry_point"),
+            "tier": get("tier"),
+            "queue": get("queue"),
+            "business_context": get("business_context"),
+            "budget": get("budget"),
+            "notes": get("notes"),
+            "vibe": get("vibe"),
+            "status": get("status"),
+            "vip": get("vip"),
+        }
+        # Normalize vip to bool-ish for the AI prompt
+        lead["vip"] = str(lead.get("vip") or "").strip().lower() in ["1","true","yes","y"]
+        return lead
+
+    targets = []
+    if row_num >= 2:
+        try:
+            row_vals = ws.row_values(row_num) or []
+            targets = [(row_num, _lead_from_row(row_vals))]
+        except Exception as e:
+            return jsonify({"ok": False, "error": "Failed to read row", "detail": str(e)[:300]}), 400
+    else:
+        # mode "new": newest first, status == "New"
+        try:
+            rows = ws.get_all_values()
+        except Exception as e:
+            return jsonify({"ok": False, "error": "Failed to read sheet", "detail": str(e)[:300]}), 400
+
+        if not rows or len(rows) < 2:
+            return jsonify({"ok": True, "ran": 0, "proposed": 0, "queue_ids": []})
+
+        status_col = hmap.get("status")  # 1-based
+        # Walk from bottom (newest) upward, collect "New"
+        for i in range(len(rows)-1, 0, -1):
+            if len(targets) >= limit:
+                break
+            rv = rows[i]
+            st = ""
+            if status_col and (status_col-1) < len(rv):
+                st = (rv[status_col-1] or "").strip().lower()
+            if st in ["new", ""]:
+                sheet_row = i + 1  # rows includes header at index 0
+                targets.append((sheet_row, _lead_from_row(rv)))
+
+    proposed_ids = []
+    ran = 0
+
+    # Run AI and push proposals into the queue
+    for sheet_row, lead in targets:
+        ran += 1
+        out = _ai_suggest_actions_for_lead(lead, sheet_row=sheet_row)
+        if not out or not out.get("ok"):
+            continue
+        conf = float(out.get("confidence") or 0.0)
+        try:
+            conf = max(0.0, min(1.0, conf))
+        except Exception:
+            conf = 0.0
+        actions = out.get("actions") or []
+        for a in actions:
+            typ = str(a.get("type") or "").strip()
+            payload = a.get("payload") or {}
+            # Always attach sheet_row for safe apply handlers
+            if isinstance(payload, dict) and "sheet_row" not in payload:
+                payload["sheet_row"] = sheet_row
+            rationale = str(a.get("reason") or out.get("notes") or "")[:1500]
+            entry = {
+                "id": _queue_new_id(),
+                "type": typ,
+                "payload": payload,
+                "confidence": conf,
+                "rationale": rationale,
+                "status": "pending",
+                "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "created_by": actor,
+                "created_role": role,
+                "reviewed_at": None,
+                "reviewed_by": None,
+                "reviewed_role": None,
+                "applied_result": None,
+            }
+            _queue_add(entry)
+            proposed_ids.append(entry["id"])
+
+    if proposed_ids:
+        _audit("ai.run.manual", {"mode": mode, "row": row_num or None, "ran": ran, "proposed": len(proposed_ids)})
+        _notify("ai.run.manual", {"ran": ran, "proposed": len(proposed_ids), "by": actor, "role": role}, targets=["owner","manager"])
+
+    return jsonify({"ok": True, "ran": ran, "proposed": len(proposed_ids), "queue_ids": proposed_ids})
 @app.route("/admin/api/ai/queue", methods=["GET"])
 def admin_api_ai_queue_list():
     ok, resp = _require_admin(min_role="manager")
@@ -5787,6 +5932,12 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     <div class="small">Proposed AI actions wait here for <b>Approve</b>, <b>Deny</b>, or <b>Owner Override</b>. This keeps automation powerful but controlled.</div>
     <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <button class="btn2" onclick="loadAIQueue()">Refresh</button>
+      <span class="note" style="opacity:.6">|</span>
+      <input id="ai-run-limit" class="inp" type="number" min="1" max="25" step="1" value="5" style="max-width:90px" title="How many newest New leads to analyze" />
+      <button class="btn2" onclick="runAINew()">Run AI (New)</button>
+      <input id="ai-run-row" class="inp" type="number" min="2" step="1" placeholder="Row #" style="max-width:110px" title="Run AI for a specific Google Sheet row number" />
+      <button class="btn2" onclick="runAIRow()">Run AI (Row)</button>
+
       <select id="aiq-filter" class="inp" style="max-width:180px" onchange="loadAIQueue()">
         <option value="">All</option>
         <option value="pending">Pending</option>
@@ -6780,40 +6931,6 @@ async function saveAI(){
     if(msg) msg.textContent = 'Save failed: ' + (e.message || e);
   }
 }
-// ===== AI manual trigger (Option B: run from AI Settings tab) =====
-async function aiTriggerRun(){
-  const msg = qs('#ai-run-msg'); if(msg) msg.textContent = 'Running…';
-  try{
-    const rowStr = (qs('#ai-run-row')?.value || '').trim();
-    const lastnStr = (qs('#ai-run-lastn')?.value || '').trim();
-    const payload = {};
-    if(rowStr){
-      const row = parseInt(rowStr, 10);
-      if(!row || row < 2) throw new Error('Row must be a valid sheet row number (>=2).');
-      payload.row = row;
-    } else {
-      const n = parseInt(lastnStr || '10', 10);
-      payload.last_n_new = Math.max(1, Math.min(50, isNaN(n) ? 10 : n));
-    }
-    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(payload),
-    });
-    const data = await r.json().catch(()=>null);
-    if(!data || !data.ok) throw new Error((data && data.error) ? data.error : ('Failed: ' + r.status));
-    const created = (data.created_ids || []);
-    const count = (data.triggered_count !== undefined) ? data.triggered_count : created.length;
-    if(msg) msg.textContent = `Triggered ✔ (${count} lead(s))`;
-    try{
-      if(typeof window.showTab === 'function') window.showTab('ai-queue');
-      if(typeof loadAIQueue === 'function') loadAIQueue();
-    }catch(e){}
-  }catch(e){
-    if(msg) msg.textContent = 'Run failed: ' + (e.message || e);
-  }
-}
-
 async function applyPreset(name){
   const msg = qs('#preset-msg'); if(msg) msg.textContent='Applying "'+name+'" ...';
   const res = await fetch('/admin/api/presets/apply?key='+encodeURIComponent(KEY), {
@@ -6852,6 +6969,47 @@ async function loadAIQueue(){
     if(list) list.textContent = 'Failed to load queue.';
   }
 }
+
+async function runAINew(){
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running AI…';
+  const lim = parseInt(qs('#ai-run-limit')?.value || '5', 10);
+  try{
+    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({mode:'new', limit: isNaN(lim)?5:lim})
+    });
+    const data = await r.json();
+    if(!data.ok) throw new Error(data.error || 'Failed');
+    if(msg) msg.textContent = `Ran ${data.ran||0}. Proposed ${data.proposed||0}.`;
+    await loadAIQueue();
+  }catch(e){
+    if(msg) msg.textContent = 'Run failed: ' + (e.message || e);
+  }
+}
+
+async function runAIRow(){
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running AI…';
+  const row = parseInt(qs('#ai-run-row')?.value || '0', 10);
+  if(!row || row < 2){
+    if(msg) msg.textContent = 'Enter a valid sheet Row # (>= 2).';
+    return;
+  }
+  try{
+    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({row})
+    });
+    const data = await r.json();
+    if(!data.ok) throw new Error(data.error || 'Failed');
+    if(msg) msg.textContent = `Row ${row}: Proposed ${data.proposed||0}.`;
+    await loadAIQueue();
+  }catch(e){
+    if(msg) msg.textContent = 'Run failed: ' + (e.message || e);
+  }
+}
+
 
 function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
