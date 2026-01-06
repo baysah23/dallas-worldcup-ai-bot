@@ -124,33 +124,6 @@ ADMIN_OWNER_KEY = (os.environ.get("ADMIN_OWNER_KEY") or ADMIN_KEY or "").strip()
 _ADMIN_MANAGER_KEYS_RAW = (os.environ.get("ADMIN_MANAGER_KEYS") or os.environ.get("ADMIN_MANAGER_KEY") or "").strip()
 ADMIN_MANAGER_KEYS = [k.strip() for k in _ADMIN_MANAGER_KEYS_RAW.split(",") if k.strip()]
 
-
-# ============================================================
-# AUTH STARTUP VISIBILITY (SAFE — HASHED ONLY)
-# ============================================================
-print("\n[AUTH] ===== Admin / Manager Key Status =====")
-
-print(
-    f"[AUTH] ADMIN_OWNER_KEY loaded: "
-    f"{'yes' if ADMIN_OWNER_KEY else 'no'} "
-    f"(hash={_hash_key(ADMIN_OWNER_KEY)})"
-)
-
-print(
-    f"[AUTH] ADMIN_KEY loaded: "
-    f"{'yes' if ADMIN_KEY else 'no'} "
-    f"(hash={_hash_key(ADMIN_KEY)})"
-)
-
-if isinstance(ADMIN_MANAGER_KEYS, (list, tuple)) and ADMIN_MANAGER_KEYS:
-    print(f"[AUTH] MANAGER_KEYS loaded: {len(ADMIN_MANAGER_KEYS)} key(s)")
-    for i, k in enumerate(ADMIN_MANAGER_KEYS):
-        print(f"    - manager[{i}] hash={_hash_key(str(k))}")
-else:
-    print("[AUTH] MANAGER_KEYS loaded: none")
-
-print("[AUTH] =====================================\n")
-
 RATE_LIMIT_PER_MIN = int(os.environ.get("RATE_LIMIT_PER_MIN", "30"))
 
 SHEET_NAME = os.environ.get("GOOGLE_SHEET_NAME", "World Cup AI Reservations")
@@ -8116,103 +8089,6 @@ def lead():
         _ai_enqueue_or_apply_for_new_lead(row, int(sheet_row or 0))
 
     return jsonify({"ok": True, "sheet_ok": bool(sheet_ok), "sheet_row": int(sheet_row or 0)})
-
-
-# ============================================================
-# E2E Test Hooks (CI-safe, opt-in)
-# - Disabled by default. Enable by setting E2E_TEST_MODE=1.
-# - These endpoints are designed for deterministic Playwright runs (no UI flake).
-# ============================================================
-
-E2E_TEST_MODE = str(os.environ.get("E2E_TEST_MODE", "0")).strip() == "1"
-E2E_TEST_TOKEN = str(os.environ.get("E2E_TEST_TOKEN", "")).strip()
-
-def _require_e2e_test_access() -> Tuple[bool, str]:
-    """Return (ok, reason). Only allows access when E2E_TEST_MODE=1 and caller is authorized."""
-    if not E2E_TEST_MODE:
-        return False, "E2E test mode is disabled"
-    # Prefer a dedicated token for CI. Fallback: owner key can be used locally.
-    token = (request.headers.get("X-E2E-Test-Token") or request.args.get("test_token") or "").strip()
-    key = (request.args.get("key") or "").strip()
-    if E2E_TEST_TOKEN:
-        if token != E2E_TEST_TOKEN:
-            return False, "Missing/invalid test token"
-        return True, ""
-    # If no token configured, allow OWNER key as a last resort (local-only convenience).
-    if ADMIN_OWNER_KEY and key == ADMIN_OWNER_KEY:
-        return True, ""
-    return False, "Missing authorization (set E2E_TEST_TOKEN or pass owner ?key=)"
-
-@app.route("/__test__/health", methods=["GET"])
-def __test_health():
-    """
-    CI readiness probe (read-only).
-    - Always returns HTTP 200 so GitHub Actions can reliably wait for the Flask server to boot.
-    - Does NOT require auth/tokens; state-changing __test__ endpoints remain protected.
-    """
-    try:
-        e2e_mode = str(os.environ.get("E2E_TEST_MODE", "0")).strip() == "1"
-        token_set = bool(str(os.environ.get("E2E_TEST_TOKEN", "")).strip())
-    except Exception:
-        e2e_mode = False
-        token_set = False
-
-    resp = jsonify({
-        "ok": True,
-        "e2e_test_mode": bool(e2e_mode),
-        "token_configured": bool(token_set),
-        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-    })
-    resp.headers["Cache-Control"] = "no-store"
-    return resp, 200
-
-
-@app.route("/__test__/reset", methods=["POST"])
-def __test_reset():
-    """
-    Reset minimal state for deterministic tests.
-    Safe: only resets AI queue (and optionally leaves other state untouched).
-    """
-    ok, reason = _require_e2e_test_access()
-    if not ok:
-        return jsonify({"ok": False, "error": reason}), 403
-    try:
-        _safe_write_json_file(AI_QUEUE_FILE, [])
-        return jsonify({"ok": True, "reset": ["ai_queue"]})
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"reset failed: {e}"}), 500
-
-@app.route("/__test__/ai_queue/seed", methods=["POST"])
-def __test_ai_queue_seed():
-    """
-    Seed a single AI Queue item with a stable schema.
-    This bypasses "AI suggestion" generation so UI tests don't depend on OpenAI/Sheets.
-    """
-    ok, reason = _require_e2e_test_access()
-    if not ok:
-        return jsonify({"ok": False, "error": reason}), 403
-
-    body = request.get_json(silent=True) or {}
-    action_type = str(body.get("type") or body.get("action_type") or "reply_draft").strip().lower()
-    if action_type not in ("vip_tag", "status_update", "reply_draft"):
-        return jsonify({"ok": False, "error": "Invalid type. Use vip_tag | status_update | reply_draft"}), 400
-
-    entry = {
-        "id": _queue_new_id(),
-        "type": action_type,
-        "title": str(body.get("title") or "CI Seed Item"),
-        "details": str(body.get("details") or "Seeded by E2E test hook"),
-        "status": "pending",
-        "payload": body.get("payload") if isinstance(body.get("payload"), dict) else {},
-        "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "created_by": "e2e",
-    }
-    try:
-        _queue_add(entry)
-        return jsonify({"ok": True, "id": entry["id"], "item": entry})
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"seed failed: {e}"}), 500
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
