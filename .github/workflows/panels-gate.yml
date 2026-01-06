@@ -1,5 +1,4 @@
-
-name: Panels Gate
+name: Panels Gate (FILE 10)
 
 on:
   push:
@@ -12,14 +11,59 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium
-      - name: Run FILE 10 Panels Gate
+
+      - name: Install Node deps
+        run: npm ci
+
+      - name: Install Playwright (Chromium)
+        run: npx playwright install --with-deps chromium
+
+      # Safe debug: prints SET/EMPTY only (does not expose values)
+      - name: Debug secret presence (safe)
+        run: |
+          [ -n "${{ secrets.BASE_URL_CI }}" ] && echo "BASE_URL_CI=SET" || echo "BASE_URL_CI=EMPTY"
+          [ -n "${{ secrets.ADMIN_OWNER_KEY }}" ] && echo "ADMIN_OWNER_KEY=SET" || echo "ADMIN_OWNER_KEY=EMPTY"
+          [ -n "${{ secrets.ADMIN_MANAGER_KEY }}" ] && echo "ADMIN_MANAGER_KEY=SET" || echo "ADMIN_MANAGER_KEY=EMPTY"
+
+      - name: Wait for deployed app (BASE_URL_CI)
         env:
-          ADMIN_URL: ${{ secrets.ADMIN_URL }}
-          MANAGER_URL: ${{ secrets.MANAGER_URL }}
-          FANZONE_URL: ${{ secrets.FANZONE_URL }}
+          BASE_URL: ${{ secrets.BASE_URL_CI }}
+        run: |
+          if [ -z "$BASE_URL" ]; then
+            echo "BASE_URL_CI secret is empty."
+            exit 1
+          fi
+          for i in {1..90}; do
+            if curl -fsS "$BASE_URL/" > /dev/null; then
+              echo "Deployed app is reachable."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Deployed app not reachable from runner."
+          exit 1
+
+      - name: Build panel URLs from secrets
+        env:
+          BASE_URL: ${{ secrets.BASE_URL_CI }}
+          ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
+          ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
+        run: |
+          # Normalize BASE_URL (strip trailing slash)
+          BASE_URL="${BASE_URL%/}"
+
+          if [ -z "$ADMIN_OWNER_KEY" ] || [ -z "$ADMIN_MANAGER_KEY" ]; then
+            echo "ADMIN_OWNER_KEY or ADMIN_MANAGER_KEY is empty."
+            exit 1
+          fi
+
+          echo "ADMIN_URL=$BASE_URL/admin?key=$ADMIN_OWNER_KEY" >> $GITHUB_ENV
+          echo "MANAGER_URL=$BASE_URL/manager?key=$ADMIN_MANAGER_KEY" >> $GITHUB_ENV
+          echo "FANZONE_URL=$BASE_URL/admin/fanzone?key=$ADMIN_OWNER_KEY" >> $GITHUB_ENV
+
+      - name: Run FILE 10 Panels Gate
         run: npm run test:panels
