@@ -3754,6 +3754,27 @@ body[data-sec="schedule"] #sec-schedule #pager .pill{
   display:block;
 }
 #qrCard{ overflow:hidden; }
+/* ===== MENU SCROLL FIX (APPLIED) ===== */
+#sec-menu .cardBody{
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#sec-menu #menuBody{
+  padding-bottom: 140px;
+}
+
+#sec-menu{
+  min-height: 0;
+}
+
+@supports (padding: max(0px)) {
+  #sec-menu #menuBody{
+    padding-bottom: max(140px, env(safe-area-inset-bottom));
+  }
+}
+/* ===== END MENU SCROLL FIX ===== */
+
 </style>
 </head>
 
