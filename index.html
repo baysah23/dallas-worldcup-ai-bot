@@ -1437,6 +1437,152 @@ html[data-hero="night"] .broadcast-title{
     }
     /* ===== END MENU ===== */
 
+/* ===== MENU: Premium iOS item cards + filters (SAFE ADD) ===== */
+body[data-sec="menu"] #sec-menu .card{ overflow:hidden; }
+
+.menuFilters{
+  display:flex;
+  gap:8px;
+  flex-wrap: nowrap;
+  overflow-x:auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 8px 2px 10px;
+  margin-top: 6px;
+}
+.menuFilters::-webkit-scrollbar{ display:none; }
+.menuChip{
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: .01em;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  color: rgba(234,240,255,.92);
+  cursor:pointer;
+  user-select:none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .10s ease, background .12s ease, border-color .12s ease, opacity .12s ease;
+  opacity: .92;
+}
+.menuChip:active{ transform: translateY(1px) scale(.99); }
+.menuChip.active{
+  background: rgba(255,255,255,.16);
+  border-color: rgba(255,255,255,.22);
+  opacity: 1;
+}
+
+.menuUpsell{
+  margin-top: 6px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(0,0,0,.20));
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: 0 16px 44px rgba(0,0,0,.24);
+}
+.menuUpsell.hidden{ display:none; }
+.menuUpsellTop{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:10px;
+  margin-bottom: 8px;
+}
+.menuUpsellTitle{
+  font-weight: 950;
+  font-size: 12px;
+  letter-spacing: .10em;
+  text-transform: uppercase;
+  opacity: .86;
+  white-space: nowrap;
+}
+.menuUpsellBadge{
+  font-size: 11px;
+  font-weight: 850;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  opacity:.9;
+  white-space:nowrap;
+}
+.menuUpsellItem{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+.menuUpsellName{ font-weight: 950; font-size: 14px; letter-spacing: -0.01em; }
+.menuUpsellDesc{ color: var(--muted); font-size: 12px; line-height: 1.35; margin-top: 4px; }
+.menuUpsellPrice{ font-weight: 950; font-size: 13px; opacity: .92; white-space:nowrap; }
+
+/* Menu section block */
+.menuSection{
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.03);
+  border-radius: 16px;
+  padding: 10px;
+  margin: 0 0 12px 0;
+  box-shadow: 0 12px 30px rgba(0,0,0,.18);
+}
+.menuTitle{
+  font-weight: 950;
+  font-size: 12px;
+  letter-spacing: .10em;
+  text-transform: uppercase;
+  color: rgba(234,240,255,.86);
+  margin: 2px 2px 10px;
+}
+
+/* Individual item card */
+.menuItem{
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  border-radius: 14px;
+  padding: 10px 10px 9px;
+  margin: 0 0 9px 0;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.menuItem:last-child{ margin-bottom: 0; }
+.miTop{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+.miName{
+  font-weight: 950;
+  font-size: 14px;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  min-width: 0;
+}
+.miMetaRow{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.miTag{
+  font-size: 11px;
+  font-weight: 850;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  opacity: .9;
+}
+.miPrice{
+  font-weight: 950;
+  font-size: 13px;
+  opacity: .92;
+  white-space: nowrap;
+}
+.miDesc{
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  margin-top: 6px;
+}
+/* ===== END MENU: Premium iOS item cards + filters ===== */
+
 
 
 /* =========================
@@ -3781,6 +3927,8 @@ body[data-sec="schedule"] #sec-schedule #pager .pill{
             <button class="pill" id="reloadMenu" type="button">Refresh</button>
           </div>
           <div class="cardBody">
+            <div id="menuUpsell" class="menuUpsell" aria-live="polite"></div>
+            <div id="menuFilters" class="menuFilters" aria-label="Country filters"></div>
             <div id="menuBody" class="list"></div>
             <div id="menuHint" class="hint">Tap Refresh to load menu items.</div>
           </div>
@@ -4726,14 +4874,179 @@ async function loadSchedule(force=false){
 }
 
 // ---------- menu ----------
+let menuCache = null;
+let menuCountry = 'ALL';
+
+async function getQualifiedTeams(){
+  // Best-effort: schedule.json contains teams participating. If unavailable, return null.
+  try{
+    const d = await fetchJSON('/schedule.json');
+    const matches = d.matches || [];
+    const set = new Set();
+    matches.forEach(m=>{
+      const h = (m.home||m.home_team||'').trim();
+      const a = (m.away||m.away_team||'').trim();
+      if(h) set.add(h);
+      if(a) set.add(a);
+    });
+    return set.size ? set : null;
+  }catch(e){
+    return null;
+  }
+}
+
+function buildCountryFilters(countries, qualifiedSet){
+  const wrap = $('menuFilters');
+  if(!wrap) return;
+  // If qualifiedSet exists, intersect.
+  let list = Array.from(new Set((countries||[]).filter(Boolean)));
+  if(qualifiedSet){
+    list = list.filter(c=>qualifiedSet.has(c));
+  }
+  list.sort((a,b)=>a.localeCompare(b));
+
+  const chips = ['ALL', ...list];
+  wrap.innerHTML = chips.map(c=>{
+    const label = (c === 'ALL') ? 'All countries' : c;
+    const active = (menuCountry === c);
+    return `<button type="button" class="menuChip ${active ? 'active':''}" data-country="${escapeHtml(c)}" aria-pressed="${active ? 'true':'false'}">${escapeHtml(label)}</button>`;
+  }).join('');
+
+  // If no countries at all, hide filters
+  if(chips.length <= 1){
+    wrap.innerHTML = '';
+    return;
+  }
+
+  wrap.querySelectorAll('.menuChip').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      menuCountry = (btn.dataset?.country || 'ALL');
+      try{ renderMenu(menuCache); }catch(_e){}
+    }, {passive:false});
+  });
+}
+
+function pickUpsell(sections){
+  // Pick first item tagged match/chef special; otherwise first item.
+  for(const sec of (sections||[])){
+    for(const it of (sec.items||[])){
+      const tags = (it.tags || it.tag || it.badges || []);
+      const tlist = Array.isArray(tags) ? tags : String(tags||'').split(',').map(x=>x.trim()).filter(Boolean);
+      const tnorm = tlist.map(x=>String(x).toLowerCase());
+      if(tnorm.some(x=>x.includes('match') || x.includes('chef') || x.includes('special') || x.includes('signature'))){
+        return {sec, it, tags:tlist};
+      }
+    }
+  }
+  for(const sec of (sections||[])){
+    const it = (sec.items||[])[0];
+    if(it) return {sec, it, tags: Array.isArray(it.tags) ? it.tags : (it.tag ? [it.tag] : [])};
+  }
+  return null;
+}
+
+function itemMatchesCountry(it){
+  if(menuCountry === 'ALL') return true;
+  const c = menuCountry;
+  const raw = it.countries || it.country || it.teams || it.team || it.filters || [];
+  const arr = Array.isArray(raw) ? raw : String(raw||'').split(',').map(x=>x.trim()).filter(Boolean);
+  return arr.includes(c);
+}
+
+function renderUpsell(sections){
+  const box = $('menuUpsell');
+  if(!box) return;
+  const pick = pickUpsell(sections);
+  if(!pick || !pick.it){ box.classList.add('hidden'); box.innerHTML=''; return; }
+  const it = pick.it || {};
+  const name = escapeHtml(it.name || '');
+  const desc = escapeHtml(it.desc || it.description || '');
+  const price = escapeHtml(it.price || '');
+  box.classList.remove('hidden');
+  box.innerHTML = `
+    <div class="menuUpsellTop">
+      <div class="menuUpsellTitle">Recommended for tonight’s match</div>
+      <div class="menuUpsellBadge">Chef’s pick</div>
+    </div>
+    <div class="menuUpsellItem">
+      <div style="min-width:0">
+        <div class="menuUpsellName">${name}</div>
+        <div class="menuUpsellDesc">${desc}</div>
+      </div>
+      <div class="menuUpsellPrice">${price}</div>
+    </div>
+  `;
+}
+
+function renderMenu(data){
+  const body = $('menuBody');
+  if(!body) return;
+  const sections = data?.sections || data?.menu || [];
+  if(!sections.length){
+    body.innerHTML = `<div class="hint">Menu unavailable.</div>`;
+    return;
+  }
+
+  // Build list of countries appearing in menu items
+  const countries = [];
+  sections.forEach(sec=>{
+    (sec.items||[]).forEach(it=>{
+      const raw = it.countries || it.country || it.teams || it.team || it.filters || [];
+      const arr = Array.isArray(raw) ? raw : String(raw||'').split(',').map(x=>x.trim()).filter(Boolean);
+      arr.forEach(c=>{ if(c) countries.push(c); });
+    });
+  });
+
+  // Render upsell (doesn't depend on filter)
+  renderUpsell(sections);
+
+  // Render sections + filtered items
+  const html = sections.map(sec=>{
+    const title = escapeHtml(sec.title || sec.name || '');
+    const items = (sec.items || [])
+      .filter(it=>itemMatchesCountry(it))
+      .map(it=>{
+        const nm = escapeHtml(it.name || '');
+        const ds = escapeHtml(it.desc || it.description || '');
+        const pr = escapeHtml(it.price || '');
+        const tags = (it.tags || it.tag || it.badges || []);
+        const tlist = Array.isArray(tags) ? tags : String(tags||'').split(',').map(x=>x.trim()).filter(Boolean);
+        const tagHtml = tlist.length ? `<div class="miMetaRow">${tlist.slice(0,3).map(t=>`<span class="miTag">${escapeHtml(t)}</span>`).join('')}</div>` : '';
+        return `<div class="menuItem">
+          <div class="miTop">
+            <div class="miName">${nm}</div>
+            <div class="miPrice">${pr}</div>
+          </div>
+          ${tagHtml}
+          <div class="miDesc">${ds}</div>
+        </div>`;
+      }).join('');
+    // Hide empty sections when filtered
+    if(!items) return '';
+    return `<div class="menuSection"><div class="menuTitle">${title}</div>${items}</div>`;
+  }).join('');
+
+  body.innerHTML = html || `<div class="hint">No items for this filter.</div>`;
+
+  // Save countries for filters; filters rendered elsewhere (async)
+  try{ state._menuCountries = countries; }catch(_e){}
+}
+
 async function loadMenu(){
   const body = $('menuBody');
   const hint = $('menuHint');
+  const filters = $('menuFilters');
+  const upsell = $('menuUpsell');
   if(body) body.innerHTML = `<div class="hint">Loading…</div>`;
   if(hint) hint.textContent = '';
+  if(filters) filters.innerHTML = '';
+  if(upsell) { upsell.classList.add('hidden'); upsell.innerHTML = ''; }
 
   try{
     const data = await fetchJSON(`/menu.json?lang=${encodeURIComponent(state.lang||'en')}`);
+    menuCache = data;
+
     // Show last-updated stamp (from admin upload) if available
     try{
       const meta = data.meta || {};
@@ -4747,26 +5060,14 @@ async function loadMenu(){
         }
       }
     }catch(_e){ /* ignore */ }
-    const sections = data.sections || data.menu || [];
-    if(!sections.length){
-      if(body) body.innerHTML = `<div class="hint">Menu unavailable.</div>`;
-      return;
-    }
-    if(body){
-      body.innerHTML = sections.map(sec=>{
-        const title = escapeHtml(sec.title || sec.name || '');
-        const items = (sec.items || []).map(it=>{
-          const nm = escapeHtml(it.name || '');
-          const ds = escapeHtml(it.desc || it.description || '');
-          const pr = escapeHtml(it.price || '');
-          return `<div class="menuItem">
-            <div class="miTop"><div class="miName">${nm}</div><div class="miPrice">${pr}</div></div>
-            <div class="miDesc">${ds}</div>
-          </div>`;
-        }).join('');
-        return `<div class="menuSection"><div class="menuTitle">${title}</div>${items}</div>`;
-      }).join('');
-    }
+
+    // Render menu immediately
+    renderMenu(data);
+
+    // Build filters from menu + schedule-qualified teams (best-effort)
+    const qualified = await getQualifiedTeams();
+    const countries = (state._menuCountries || []);
+    buildCountryFilters(countries, qualified);
   }catch(e){
     if(body) body.innerHTML = `<div class="hint">Menu unavailable.</div>`;
     if(hint) hint.textContent = 'Menu unavailable.';
