@@ -1,8 +1,8 @@
 name: Panels Gate (E2E)
 
 on:
-  push:
-  pull_request:
+  push: {}
+  pull_request: {}
 
 jobs:
   panels:
@@ -46,15 +46,15 @@ jobs:
             fi
 
             echo "Using deployed BASE_URL: $BASE_URL_CI"
-            echo "BASE_URL=$BASE_URL_CI" >> $GITHUB_ENV
-            echo "MODE=deployed" >> $GITHUB_ENV
+            echo "BASE_URL=$BASE_URL_CI" >> "$GITHUB_ENV"
+            echo "MODE=deployed" >> "$GITHUB_ENV"
             exit 0
           fi
 
           # If BASE_URL_CI is NOT set, run the Flask app inside the runner (local mode).
-          echo "BASE_URL_CI is not set; starting local server inside runner (http://127.0.0.1:5050)."
-          echo "BASE_URL=http://127.0.0.1:5050" >> $GITHUB_ENV
-          echo "MODE=local" >> $GITHUB_ENV
+          echo "BASE_URL_CI is not set; starting local server inside runner (http://127.0.0.1:5000)."
+          echo "BASE_URL=http://127.0.0.1:5000" >> "$GITHUB_ENV"
+          echo "MODE=local" >> "$GITHUB_ENV"
 
       - name: Install Python deps (local mode)
         if: env.MODE == 'local'
@@ -72,7 +72,7 @@ jobs:
         if: env.MODE == 'local'
         shell: bash
         env:
-          PORT: "5050"
+          PORT: "5000"
           ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
           ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
           E2E_TEST_TOKEN: ${{ secrets.E2E_TEST_TOKEN }}
@@ -84,7 +84,7 @@ jobs:
 
           echo "Waiting for local server..."
           for i in {1..120}; do
-            if curl -fsS "http://127.0.0.1:5050/" >/dev/null 2>&1; then
+            if curl -fsS "http://127.0.0.1:5000/" >/dev/null 2>&1; then
               echo "Local server is up."
               exit 0
             fi
@@ -127,10 +127,6 @@ jobs:
           export ADMIN_KEY="$ADMIN_OWNER_KEY"
           export MANAGER_KEY="$ADMIN_MANAGER_KEY"
 
-          echo "BASE_URL=$BASE_URL"
-          echo "ADMIN_KEY is set? $([[ -n "$ADMIN_KEY" ]] && echo yes || echo no)"
-          echo "MANAGER_KEY is set? $([[ -n "$MANAGER_KEY" ]] && echo yes || echo no)"
-
           npx playwright test tests/11_e2e_core_flows.spec.js --project=chromium --workers=1 --reporter=line
 
       - name: Verify Redis is enabled in production (deployed mode)
@@ -140,12 +136,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "Checking Redis runtime status…"
           curl -fsS "$BASE_URL/admin/api/_build?key=$ADMIN_OWNER_KEY" | python3 - <<'EOF'
 import sys, json
 d = json.load(sys.stdin)
 if not d.get("redis_enabled"):
-  raise SystemExit("redis_enabled is false")
+    raise SystemExit("redis_enabled is false")
 print("✅ redis_enabled=true")
 EOF
 
