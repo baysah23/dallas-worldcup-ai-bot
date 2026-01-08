@@ -36,15 +36,6 @@ jobs:
 
           if [[ -n "$BASE_URL_CI" ]]; then
             if echo "$BASE_URL_CI" | grep -Eq '^(http://)?(127\.0\.0\.1|localhost|0\.0\.0\.0)(:|/|$)'; then
-
-      - name: "Enterprise gate: prod readiness (Gunicorn + WSGI + Redis)"
-        if: env.MODE == 'deployed'
-        shell: bash
-        env:
-          ADMIN_OWNER_KEY: "${{ secrets.ADMIN_OWNER_KEY }}"
-        run: |
-          set -euo pipefail
-          curl -fsS "$BASE_URL/admin/api/_prod_gate?key=$ADMIN_OWNER_KEY" | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d.get("ok") is True, d; print("✅ prod gate ok")'
               echo "::error::BASE_URL_CI is localhost ($BASE_URL_CI). Set BASE_URL_CI to your deployed URL (e.g., https://dallas-worldcup-ai-bot.onrender.com)."
               exit 1
             fi
@@ -55,6 +46,15 @@ jobs:
 
           echo "MODE=local" >> "$GITHUB_ENV"
           echo "BASE_URL=http://127.0.0.1:5000" >> "$GITHUB_ENV"
+
+      - name: "Enterprise gate: prod readiness (Gunicorn + WSGI + Redis)"
+        if: env.MODE == 'deployed'
+        shell: bash
+        env:
+          ADMIN_OWNER_KEY: "${{ secrets.ADMIN_OWNER_KEY }}"
+        run: |
+          set -euo pipefail
+          curl -fsS "$BASE_URL/admin/api/_prod_gate?key=$ADMIN_OWNER_KEY" | python3 -c 'import sys,json; d=json.load(sys.stdin); assert d.get("ok") is True, d; print("✅ prod gate ok")'
 
       - name: Install Python deps (local mode)
         if: env.MODE == 'local'
