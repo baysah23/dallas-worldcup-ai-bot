@@ -37,6 +37,13 @@ except Exception:
 # Namespace for keys (safe for multi-app reuse)
 _REDIS_NS = os.environ.get("REDIS_NAMESPACE", "wc26").strip() or "wc26"
 
+
+# CI smoke file/key for enterprise gate (safe; does not touch production data)
+CI_SMOKE_FILE = os.environ.get(\"CI_SMOKE_FILE\", \"/tmp/wc26_ci_smoke.json\")
+
+# Track if Redis write failed and we fell back to disk (enterprise detector)
+_REDIS_FALLBACK_USED = False
+_REDIS_FALLBACK_LAST_PATH = \"\"
 # Map our on-disk JSON files to Redis keys when enabled (single source of truth)
 # NOTE: These files still exist for local/dev fallback.
 _REDIS_PATH_KEY_MAP = {
@@ -1599,6 +1606,68 @@ FIXTURE_CACHE_FILE = os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_fixtures.js
 POLL_STORE_FILE = os.environ.get("POLL_STORE_FILE", "/tmp/wc26_poll_votes.json")
 
 
+
+@app.route("/admin/api/_redis_smoke", methods=["GET"])
+def admin_api_redis_smoke():
+    """Enterprise smoke: verify Redis write/read works and NO disk fallback occurs."""
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    # runtime re-init
+    try:
+        _redis_init_if_needed()
+    except Exception:
+        pass
+
+    if not (_REDIS_ENABLED and _REDIS):
+        return jsonify({
+            "ok": False,
+            "error": "Redis not enabled",
+            "redis_enabled": bool(_REDIS_ENABLED),
+            "redis_url_present": bool((os.environ.get("REDIS_URL","") or "").strip()),
+            "redis_namespace": _REDIS_NS,
+        }), 503
+
+    # reset fallback flags for this check
+    global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
+    _REDIS_FALLBACK_USED = False
+    _REDIS_FALLBACK_LAST_PATH = ""
+
+    payload = {
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "pid": os.getpid(),
+        "nonce": secrets.token_hex(6),
+    }
+
+    # Use the app's persistence layer (tests the real path mapping)
+    try:
+        _safe_write_json_file(CI_SMOKE_FILE, payload)
+        got = _safe_read_json_file(CI_SMOKE_FILE, default=None)
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "error": f"Smoke failed: {e}",
+            "redis_enabled": True,
+            "fallback_used": bool(_REDIS_FALLBACK_USED),
+            "fallback_last_path": _REDIS_FALLBACK_LAST_PATH,
+        }), 500
+
+    match = (got == payload)
+    ok_all = bool(match) and (not _REDIS_FALLBACK_USED)
+
+    return jsonify({
+        "ok": ok_all,
+        "redis_enabled": True,
+        "redis_namespace": _REDIS_NS,
+        "key": f"{_REDIS_NS}:ci_smoke",
+        "fallback_used": bool(_REDIS_FALLBACK_USED),
+        "fallback_last_path": _REDIS_FALLBACK_LAST_PATH,
+        "match": bool(match),
+        "payload": payload,
+        "got": got,
+    }), (200 if ok_all else 500)
+
 def _safe_read_json_file(path: str, default: Any = None) -> Any:
     """Read JSON from Redis (if enabled) or disk safely."""
     try:
@@ -1626,8 +1695,19 @@ def _safe_write_json_file(path: str, payload: Any) -> None:
                 ok = _redis_set_json(key, payload)
                 if ok:
                     return
-    except Exception:
-        pass
+                # Redis was enabled, but write failed — mark fallback for enterprise gate
+                global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
+                _REDIS_FALLBACK_USED = True
+                _REDIS_FALLBACK_LAST_PATH = str(path)
+except Exception:
+        # Mark fallback on unexpected redis path errors too (best effort)
+        try:
+            global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
+            _REDIS_FALLBACK_USED = True
+            _REDIS_FALLBACK_LAST_PATH = str(path)
+        except Exception:
+            pass
+
 
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
