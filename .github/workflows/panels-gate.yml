@@ -108,14 +108,14 @@ jobs:
       - name: Run panels tests
         shell: bash
         env:
-          ADMIN_URL: "${{ env.ADMIN_URL }}"
-          MANAGER_URL: "${{ env.MANAGER_URL }}"
-          FANZONE_URL: "${{ env.FANZONE_URL }}"
           E2E_TEST_TOKEN: "${{ secrets.E2E_TEST_TOKEN }}"
         run: |
           set -euo pipefail
+          # IMPORTANT: ADMIN_URL/MANAGER_URL/FANZONE_URL are set via $GITHUB_ENV above.
+          # Do NOT re-bind them via ${{ env.* }} expressions (those don't see $GITHUB_ENV values).
           echo "ADMIN_URL=$ADMIN_URL"
           echo "MANAGER_URL=$MANAGER_URL"
+          echo "FANZONE_URL=$FANZONE_URL"
           npm run test:panels
 
       - name: Redis gate (deployed mode)
