@@ -21,7 +21,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install Node deps
         run: npm ci
@@ -72,14 +72,13 @@ jobs:
         if: env.MODE == 'local'
         shell: bash
         env:
-          PORT: '5050'
+          PORT: "5050"
           ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
           ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
           E2E_TEST_TOKEN: ${{ secrets.E2E_TEST_TOKEN }}
         run: |
           set -euo pipefail
 
-          # Start in background
           nohup python -u app.py > server.log 2>&1 &
           echo $! > server.pid
 
@@ -124,32 +123,30 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Export expected names for your tests/helpers.
           export BASE_URL="$BASE_URL"
           export ADMIN_KEY="$ADMIN_OWNER_KEY"
           export MANAGER_KEY="$ADMIN_MANAGER_KEY"
 
           echo "BASE_URL=$BASE_URL"
-          echo "ADMIN_KEY is set? $([[ -n \"$ADMIN_KEY\" ]] && echo yes || echo no)"
-          echo "MANAGER_KEY is set? $([[ -n \"$MANAGER_KEY\" ]] && echo yes || echo no)"
+          echo "ADMIN_KEY is set? $([[ -n "$ADMIN_KEY" ]] && echo yes || echo no)"
+          echo "MANAGER_KEY is set? $([[ -n "$MANAGER_KEY" ]] && echo yes || echo no)"
 
           npx playwright test tests/11_e2e_core_flows.spec.js --project=chromium --workers=1 --reporter=line
 
-      - name: Enterprise gate — Redis must be enabled (deployed mode)
+      - name: Verify Redis is enabled in production (deployed mode)
         if: env.MODE == 'deployed'
-        shell: bash
         env:
-          BASE_URL: ${{ env.BASE_URL }}
           ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
+        shell: bash
         run: |
           set -euo pipefail
-          echo "Checking Redis runtime status at $BASE_URL ..."
+          echo "Checking Redis runtime status…"
           curl -fsS "$BASE_URL/admin/api/_build?key=$ADMIN_OWNER_KEY" | python3 - <<'EOF'
 import sys, json
-data = json.load(sys.stdin)
-if not data.get('redis_enabled'):
-    raise SystemExit('Redis gate failed: redis_enabled is false')
-print('Redis gate passed: redis_enabled=true')
+d = json.load(sys.stdin)
+if not d.get("redis_enabled"):
+  raise SystemExit("redis_enabled is false")
+print("✅ redis_enabled=true")
 EOF
 
       - name: Upload artifacts (report)
@@ -167,5 +164,5 @@ EOF
         shell: bash
         run: |
           if [[ -f server.pid ]]; then
-            kill $(cat server.pid) || true
+            kill "$(cat server.pid)" || true
           fi
