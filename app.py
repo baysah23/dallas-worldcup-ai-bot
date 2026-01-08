@@ -8603,7 +8603,7 @@ def admin_api_ops_save():
         "updated_role": role,
     }
     return jsonify({"ok": True, "state": state})
-get("/admin/api/fanzone/state")
+@app.get("/admin/api/fanzone/state")
 def admin_api_fanzone_state():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
