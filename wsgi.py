@@ -1,7 +1,8 @@
+import os
+# Marker set BEFORE importing app.py so production guard can verify WSGI path.
+os.environ["WCG_WSGI"] = "1"
+
 from app import app as application
 
-# Alias (some platforms expect `app`)
 app = application
-
-# Marker for CI hard-gate
 application.config["WSGI_LOADED"] = True

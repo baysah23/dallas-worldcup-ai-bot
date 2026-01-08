@@ -189,10 +189,11 @@ app = Flask(__name__)
 
 # ============================================================
 # HARD SAFETY: forbid Flask dev server in production (Render)
+# - wsgi.py sets WCG_WSGI=1 BEFORE importing app.py
 # ============================================================
 if os.environ.get("RENDER") == "true":
     # Must be loaded via gunicorn + wsgi.py
-    if not app.config.get("WSGI_LOADED", False):
+    if os.environ.get("WCG_WSGI") != "1":
         raise RuntimeError(
             "FATAL: Flask dev server detected in production. "
             "Use: gunicorn wsgi:application"
