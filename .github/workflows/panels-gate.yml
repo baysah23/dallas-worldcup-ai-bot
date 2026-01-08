@@ -1,80 +1,171 @@
-# ======================================================
-# PANELS GATE — FULL FILE (REPLACEMENT)
-# Enterprise CI gate: UI + Infra (Redis)
-# ======================================================
-
-name: panels-gate
+name: Panels Gate (E2E)
 
 on:
   push:
-    branches: [ main ]
   pull_request:
 
 jobs:
-  panels-gate:
+  panels:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
 
     steps:
-      # --------------------------------------------------
-      # CHECKOUT
-      # --------------------------------------------------
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      # --------------------------------------------------
-      # NODE / PLAYWRIGHT SETUP
-      # --------------------------------------------------
-      - name: Set up Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
-          cache: npm
+          node-version: 20
 
-      - name: Install dependencies
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Node deps
         run: npm ci
 
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps
+      - name: Install Playwright (Chromium)
+        run: npx playwright install --with-deps chromium
 
-      # --------------------------------------------------
-      # UI / PANEL GATE
-      # --------------------------------------------------
-      - name: Run Admin & Manager panel gate
-        env:
-          ADMIN_URL: ${{ secrets.ADMIN_URL }}
-          MANAGER_URL: ${{ secrets.MANAGER_URL }}
-        run: npm run test:panels
+      - name: Decide BASE_URL (deployed vs local)
+        id: decide
+        shell: bash
+        run: |
+          set -euo pipefail
 
-      # --------------------------------------------------
-      # ENTERPRISE INFRA GATE — REDIS (HARD FAIL)
-      # --------------------------------------------------
-      - name: Verify Redis is enabled in production
+          # Prefer testing a deployed environment when BASE_URL_CI is set.
+          BASE_URL_CI="${BASE_URL_CI:-}"
+
+          if [[ -n "$BASE_URL_CI" ]]; then
+            # Guardrail: a GitHub-hosted runner cannot reach *your* laptop localhost.
+            if echo "$BASE_URL_CI" | grep -Eq '^(http://)?(127\.0\.0\.1|localhost|0\.0\.0\.0)(:|/|$)'; then
+              echo "::error::BASE_URL_CI is set to a localhost URL ($BASE_URL_CI). GitHub runners cannot reach your machine. Set BASE_URL_CI to your public deployed URL (e.g., https://<your-app>.onrender.com)."
+              exit 1
+            fi
+
+            echo "Using deployed BASE_URL: $BASE_URL_CI"
+            echo "BASE_URL=$BASE_URL_CI" >> $GITHUB_ENV
+            echo "MODE=deployed" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          # If BASE_URL_CI is NOT set, run the Flask app inside the runner (local mode).
+          echo "BASE_URL_CI is not set; starting local server inside runner (http://127.0.0.1:5050)."
+          echo "BASE_URL=http://127.0.0.1:5050" >> $GITHUB_ENV
+          echo "MODE=local" >> $GITHUB_ENV
+
+      - name: Install Python deps (local mode)
+        if: env.MODE == 'local'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          if [[ -f requirements.txt ]]; then
+            pip install -r requirements.txt
+          else
+            pip install flask
+          fi
+
+      - name: Start local Flask server (local mode)
+        if: env.MODE == 'local'
+        shell: bash
         env:
+          PORT: '5050'
+          ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
+          ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
+          E2E_TEST_TOKEN: ${{ secrets.E2E_TEST_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Start in background
+          nohup python -u app.py > server.log 2>&1 &
+          echo $! > server.pid
+
+          echo "Waiting for local server..."
+          for i in {1..120}; do
+            if curl -fsS "http://127.0.0.1:5050/" >/dev/null 2>&1; then
+              echo "Local server is up."
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "Local server failed to start. Last 200 lines:" >&2
+          tail -n 200 server.log || true
+          exit 1
+
+      - name: Wait for deployed app (deployed mode)
+        if: env.MODE == 'deployed'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Waiting for deployed app at $BASE_URL ..."
+          for i in {1..120}; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/" || true)
+            if [[ "$code" != "000" ]]; then
+              echo "Deployed app responded with HTTP $code"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Deployed app not reachable from runner." >&2
+          exit 1
+
+      - name: Run FILE 11 Core E2E
+        env:
+          BASE_URL: ${{ env.BASE_URL }}
+          ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
+          ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
+          E2E_TEST_TOKEN: ${{ secrets.E2E_TEST_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Export expected names for your tests/helpers.
+          export BASE_URL="$BASE_URL"
+          export ADMIN_KEY="$ADMIN_OWNER_KEY"
+          export MANAGER_KEY="$ADMIN_MANAGER_KEY"
+
+          echo "BASE_URL=$BASE_URL"
+          echo "ADMIN_KEY is set? $([[ -n \"$ADMIN_KEY\" ]] && echo yes || echo no)"
+          echo "MANAGER_KEY is set? $([[ -n \"$MANAGER_KEY\" ]] && echo yes || echo no)"
+
+          npx playwright test tests/11_e2e_core_flows.spec.js --project=chromium --workers=1 --reporter=line
+
+      - name: Enterprise gate — Redis must be enabled (deployed mode)
+        if: env.MODE == 'deployed'
+        shell: bash
+        env:
+          BASE_URL: ${{ env.BASE_URL }}
           ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
         run: |
-          echo "Checking Redis runtime status…"
-          curl -fsS "https://dallas-worldcup-ai-bot.onrender.com/admin/api/_build?key=$ADMIN_OWNER_KEY" \
-            | python3 - <<'EOF'
+          set -euo pipefail
+          echo "Checking Redis runtime status at $BASE_URL ..."
+          curl -fsS "$BASE_URL/admin/api/_build?key=$ADMIN_OWNER_KEY" | python3 - <<'EOF'
 import sys, json
-try:
-    data = json.load(sys.stdin)
-    if not data.get("redis_enabled"):
-        print("❌ Redis is NOT enabled")
-        sys.exit(1)
-    print("✅ Redis enabled")
-except Exception as e:
-    print("❌ Redis check failed", e)
-    sys.exit(1)
+data = json.load(sys.stdin)
+if not data.get('redis_enabled'):
+    raise SystemExit('Redis gate failed: redis_enabled is false')
+print('Redis gate passed: redis_enabled=true')
 EOF
 
-      # --------------------------------------------------
-      # OPTIONAL: ARTIFACTS (DEBUG ONLY)
-      # --------------------------------------------------
-      - name: Upload Playwright report (on failure)
-        if: failure()
+      - name: Upload artifacts (report)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: playwright-report
-          retention-days: 7
+          path: |
+            playwright-report
+            test-results
+            server.log
+
+      - name: Stop local server (local mode)
+        if: always() && env.MODE == 'local'
+        shell: bash
+        run: |
+          if [[ -f server.pid ]]; then
+            kill $(cat server.pid) || true
+          fi
