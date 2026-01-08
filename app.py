@@ -1383,6 +1383,25 @@ def admin_api_whoami():
     ctx = _admin_ctx()
     return jsonify(ok=bool(ctx.get("ok")), role=ctx.get("role", ""), actor=ctx.get("actor", ""))
 
+
+@app.route("/admin/api/_build", methods=["GET"])
+def admin_api_build():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    rs = _redis_runtime_status()
+    return jsonify({
+        "ok": True,
+        "redis_enabled": bool(rs.get("redis_enabled")),
+        "redis_namespace": rs.get("redis_namespace") or "",
+        "redis_url_present": bool(rs.get("redis_url_present")),
+        "redis_url_effective": rs.get("redis_url_effective") or "",
+        "redis_error": rs.get("redis_error") or "",
+        "build_verify": os.environ.get("BUILD_VERIFY", ""),
+        "chat_logicfix_build": os.environ.get("CHAT_LOGICFIX_BUILD", ""),
+    })
+
 def _require_admin(min_role: str = "manager"):
     """Enforce admin access.
 
@@ -1414,6 +1433,26 @@ def _admin_ctx() -> Dict[str, str]:
     if isinstance(ctx, dict) and ctx.get("ok"):
         return ctx
     return {"ok": False, "role": "", "actor": ""}
+
+
+def _redis_runtime_status() -> Dict[str, Any]:
+    """Runtime Redis truth (Gunicorn-safe): re-init + ping where possible."""
+    try:
+        _redis_init_if_needed()
+    except Exception:
+        pass
+
+    url_present = bool((os.environ.get("REDIS_URL", "") or "").strip())
+    err = str(globals().get("_REDIS_ERROR", "") or "")
+    url_eff = str(globals().get("_REDIS_URL_EFFECTIVE", "") or "")
+
+    return {
+        "redis_enabled": bool(_REDIS_ENABLED),
+        "redis_namespace": _REDIS_NS,
+        "redis_url_present": url_present,
+        "redis_url_effective": url_eff,
+        "redis_error": err,
+    }
 
 def get_menu_for_lang(lang: str) -> Dict[str, Any]:
     """Return a normalized menu payload for a given language.
