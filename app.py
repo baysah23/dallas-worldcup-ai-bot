@@ -796,22 +796,19 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
     Supported actions (minimal + safe):
       - vip_tag: update lead VIP field
       - status_update: update lead Status
-      - reply_draft: persist draft text to sheet column (reply_draft/reply)
+      - reply_draft: store draft text in audit (does NOT send)
     '''
     typ = str(action.get("type") or "").strip()
-    payload = action.get("payload") or {}
 
     # Partner policy hard-gate (enforced even if AI/settings allow it)
+    payload = action.get("payload") or {}
     try:
         partner_id = _derive_partner_id(payload=payload)
     except Exception:
         partner_id = "default"
     ok_pol, why_pol = _policy_check_action(partner_id, typ, payload, role=str((ctx or {}).get("role") or ""))
     if not ok_pol:
-        try:
-            _audit("policy.block", {"partner": partner_id, "type": typ, "reason": why_pol, "row": payload.get("row")})
-        except Exception:
-            pass
+        _audit("policy.block", {"partner": partner_id, "type": typ, "reason": why_pol, "row": payload.get("row")})
         return {"ok": False, "error": why_pol}
 
     # Feature flag gate (secondary to allow_actions)
@@ -819,38 +816,23 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
         return {"ok": False, "error": f"{typ} disabled by feature flag"}
     allow = (AI_SETTINGS.get("allow_actions") or {})
 
+    # lead row reference (Google Sheet row number)
     row_num = int(payload.get("row") or payload.get("sheet_row") or 0)
 
     if typ == "reply_draft":
         if not allow.get("reply_draft", True):
             return {"ok": False, "error": "reply_draft not allowed"}
-        draft = str(payload.get("draft") or payload.get("reply") or "").strip()
+        draft = str(payload.get("draft") or "").strip()
         if not draft:
             return {"ok": False, "error": "Missing draft"}
-        if row_num < 2:
-            return {"ok": False, "error": "Missing/invalid sheet row"}
-
-        try:
-            gc = get_gspread_client()
-            ws = gc.open(SHEET_NAME).sheet1
-            header = ws.row_values(1) or []
-            hmap = header_map(header)
-            col = hmap.get("reply_draft") or hmap.get("reply") or hmap.get("replydraft")
-            if not col:
-                return {"ok": False, "error": "reply_draft column not found in sheet header"}
-            ws.update_cell(row_num, int(col), draft)
-            try:
-                _audit("ai.reply_draft.apply", {"row": row_num, "chars": len(draft)})
-            except Exception:
-                pass
-            return {"ok": True, "applied": "reply_draft"}
-        except Exception as e:
-            return {"ok": False, "error": f"Apply failed: {e}"}
+        _audit("ai.reply_draft", {"row": row_num or None, "draft": draft[:2000]})
+        return {"ok": True, "applied": "reply_draft"}
 
     # VIP / Status require a valid row number
     if row_num < 2:
         return {"ok": False, "error": "Missing/invalid sheet row"}
 
+    # Use the same Sheets update logic as /admin/update-lead
     try:
         gc = get_gspread_client()
         ws = gc.open(SHEET_NAME).sheet1
@@ -866,11 +848,8 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
             col = hmap.get("vip")
             if not col:
                 return {"ok": False, "error": "VIP column not found"}
-            ws.update_cell(row_num, int(col), vip)
-            try:
-                _audit("ai.vip_tag.apply", {"row": row_num, "vip": vip})
-            except Exception:
-                pass
+            ws.update_cell(row_num, col, vip)
+            _audit("ai.vip_tag.apply", {"row": row_num, "vip": vip})
             return {"ok": True, "applied": "vip_tag"}
 
         if typ == "status_update":
@@ -883,11 +862,8 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
             col = hmap.get("status")
             if not col:
                 return {"ok": False, "error": "Status column not found"}
-            ws.update_cell(row_num, int(col), status)
-            try:
-                _audit("ai.status_update.apply", {"row": row_num, "status": status})
-            except Exception:
-                pass
+            ws.update_cell(row_num, col, status)
+            _audit("ai.status_update.apply", {"row": row_num, "status": status})
             return {"ok": True, "applied": "status_update"}
 
         return {"ok": False, "error": "Unsupported action type"}
@@ -8403,114 +8379,140 @@ def __test_ai_queue_seed():
         return jsonify({"ok": False, "error": f"seed failed: {e}"}), 500
 
 
+
+
+# ===================== ENTERPRISE PATCH ENDPOINTS =====================
+# ============================================================
+# Build / deploy verification (JSON)
+# ============================================================
+@app.get("/admin/api/_build")
+def admin_api_build():
+    # No auth: used by CI/local to verify which build is running
+    return jsonify({
+        "ok": True,
+        "build_verify": os.environ.get("BUILD_VERIFY", ""),
+        "chat_logicfix_build": os.environ.get("CHAT_LOGICFIX_BUILD", ""),
+        "redis_enabled": bool(_REDIS_ENABLED),
+        "redis_namespace": _REDIS_NS,
+    })
+# ============================================================
+# Enterprise state APIs (JSON) — no UI change required
+# - These endpoints exist so automation + ops tools can verify persistence.
+# - They do not break existing UI; they add an enterprise contract.
+# ============================================================
+_OPS_KEY = f"{_REDIS_NS}:ops_state"
+_FANZONE_KEY = f"{_REDIS_NS}:fanzone_state"
+
+def _ops_state_default():
+    return {
+        "pause_reservations": False,
+        "vip_only": False,
+        "waitlist_mode": False,
+        "notify": False,
+        "updated_at": None,
+        "updated_by": None,
+        "updated_role": None,
+    }
+
+def _load_ops_state() -> Dict[str, Any]:
+    if _REDIS_ENABLED:
+        st = _redis_get_json(_OPS_KEY, default=None)
+        if isinstance(st, dict):
+            return _deep_merge(_ops_state_default(), st)
+    # Fallback: derive from existing config store
+    try:
+        cfg = get_config()
+        return {
+            "pause_reservations": bool(get_ops(cfg).get("pause_reservations")),
+            "vip_only": bool(get_ops(cfg).get("vip_only")),
+            "waitlist_mode": bool(get_ops(cfg).get("waitlist_mode")),
+            "notify": bool(cfg.get("ops_notify", False) if isinstance(cfg, dict) else False),
+            "updated_at": (cfg.get("_updated_at") if isinstance(cfg, dict) else None),
+            "updated_by": None,
+            "updated_role": None,
+        }
+    except Exception:
+        return _ops_state_default()
+
+def _save_ops_state(patch: Dict[str, Any], actor: str, role: str) -> Dict[str, Any]:
+    st = _deep_merge(_load_ops_state(), patch or {})
+    st["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    st["updated_by"] = actor
+    st["updated_role"] = role
+    if _REDIS_ENABLED:
+        _redis_set_json(_OPS_KEY, st)
+    return st
+
+def _load_fanzone_state() -> Dict[str, Any]:
+    if _REDIS_ENABLED:
+        st = _redis_get_json(_FANZONE_KEY, default=None)
+        if isinstance(st, dict):
+            return st
+    # Fallback: existing poll store file
+    st = _safe_read_json_file(POLL_STORE_FILE, default={})
+    return st if isinstance(st, dict) else {}
+
+def _save_fanzone_state(st: Dict[str, Any], actor: str, role: str) -> Dict[str, Any]:
+    st2 = st if isinstance(st, dict) else {}
+    st2["_meta"] = {
+        "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "updated_by": actor,
+        "updated_role": role,
+    }
+    if _REDIS_ENABLED:
+        _redis_set_json(_FANZONE_KEY, st2)
+    else:
+        _safe_write_json_file(POLL_STORE_FILE, st2)
+    return st2
+
+@app.get("/admin/api/ops/state")
+def admin_api_ops_state():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    return jsonify({"ok": True, "state": _load_ops_state()})
+
+@app.post("/admin/api/ops/save")
+def admin_api_ops_save():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    actor = ctx.get("actor","")
+    role = ctx.get("role","")
+    data = request.get_json(silent=True) or {}
+    patch = {}
+    for k in ["pause_reservations","vip_only","waitlist_mode","notify"]:
+        if k in data:
+            patch[k] = bool(data.get(k))
+    st = _save_ops_state(patch, actor=actor, role=role)
+    _audit("ops.enterprise.save", {"by": actor, "role": role, "patch": patch})
+    return jsonify({"ok": True, "state": st})
+
+@app.get("/admin/api/fanzone/state")
+def admin_api_fanzone_state():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    return jsonify({"ok": True, "state": _load_fanzone_state()})
+
+@app.post("/admin/api/fanzone/save")
+def admin_api_fanzone_save():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    actor = ctx.get("actor","")
+    role = ctx.get("role","")
+    data = request.get_json(silent=True) or {}
+    st = _save_fanzone_state(data, actor=actor, role=role)
+    _audit("fanzone.enterprise.save", {"by": actor, "role": role})
+    return jsonify({"ok": True, "state": st})
+# =================== END ENTERPRISE PATCH ENDPOINTS ===================
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
     app.run(host="0.0.0.0", port=port, debug=False)
 # SIZE_PAD_START
 ###########################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################
-
-# ============================================================
-# Enterprise: AI Queue HTTP API (Approve / Deny / Override)
-# ============================================================
-
-@app.get("/admin/api/ai/queue/list")
-def admin_ai_queue_list():
-    ok, err = _require_admin("manager")
-    if not ok:
-        return err
-    q = _load_ai_queue()
-    return jsonify(ok=True, items=q)
-
-def _ai_queue_apply_decision(qid: str, decision: str, override_payload: Optional[Dict[str, Any]] = None):
-    queue = _load_ai_queue()
-    item = _queue_find(queue, qid)
-    if not item:
-        return None, (jsonify(ok=False, error="Queue item not found"), 404)
-
-    ctx = _admin_ctx()
-    actor = ctx.get("actor","")
-    role = ctx.get("role","")
-
-    if decision == "approve":
-        results = []
-        actions = item.get("actions") or []
-        if override_payload and isinstance(override_payload, dict):
-            # Apply override onto each action payload (keeps row linkage)
-            for a in actions:
-                if isinstance(a, dict) and isinstance(a.get("payload"), dict):
-                    a["payload"] = _deep_merge(a["payload"], override_payload)
-            item["actions"] = actions
-        for act in actions:
-            if isinstance(act, dict):
-                results.append(_queue_apply_action(act, ctx))
-        item["status"] = "approved"
-        item["approved_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        item["approved_by"] = actor
-        item["approved_role"] = role
-        item["applied"] = results
-        _audit("ai.queue.approved", {"id": qid, "by": actor, "role": role})
-    elif decision == "deny":
-        item["status"] = "denied"
-        item["denied_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        item["denied_by"] = actor
-        item["denied_role"] = role
-        _audit("ai.queue.denied", {"id": qid, "by": actor, "role": role})
-    else:
-        return None, (jsonify(ok=False, error="Invalid decision"), 400)
-
-    _save_ai_queue(queue)
-    return item, None
-
-@app.post("/admin/api/ai/queue/action")
-def admin_ai_queue_action():
-    ok, err = _require_admin("manager")
-    if not ok:
-        return err
-
-    data = request.get_json(silent=True) or {}
-    qid = str(data.get("id") or "").strip()
-    decision = str(data.get("decision") or "").strip().lower()
-    override_payload = data.get("override_payload") if isinstance(data.get("override_payload"), dict) else None
-
-    if not qid:
-        return jsonify(ok=False, error="Missing id"), 400
-
-    item, err2 = _ai_queue_apply_decision(qid, decision, override_payload=override_payload)
-    if err2:
-        return err2
-    return jsonify(ok=True, status=item.get("status"), item=item)
-
-# Compatibility endpoints (no UI changes needed)
-@app.post("/admin/api/ai/queue/approve")
-def admin_ai_queue_approve():
-    ok, err = _require_admin("manager")
-    if not ok:
-        return err
-    data = request.get_json(silent=True) or {}
-    qid = str(data.get("id") or request.args.get("id") or "").strip()
-    if not qid:
-        return jsonify(ok=False, error="Missing id"), 400
-    item, err2 = _ai_queue_apply_decision(qid, "approve", override_payload=(data.get("override_payload") if isinstance(data.get("override_payload"), dict) else None))
-    if err2:
-        return err2
-    return jsonify(ok=True, status=item.get("status"), item=item)
-
-@app.post("/admin/api/ai/queue/deny")
-def admin_ai_queue_deny():
-    ok, err = _require_admin("manager")
-    if not ok:
-        return err
-    data = request.get_json(silent=True) or {}
-    qid = str(data.get("id") or request.args.get("id") or "").strip()
-    if not qid:
-        return jsonify(ok=False, error="Missing id"), 400
-    item, err2 = _ai_queue_apply_decision(qid, "deny")
-    if err2:
-        return err2
-    return jsonify(ok=True, status=item.get("status"), item=item)
-
-
-@app.get("/admin/api/_build")
-def admin_api_build():
-    # Helps verify which file/version is running
-    return jsonify(ok=True, build="enterprise-redis-v1", ts=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"))
