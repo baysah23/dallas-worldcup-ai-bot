@@ -187,19 +187,6 @@ except Exception:
 # ============================================================
 app = Flask(__name__)
 
-# ============================================================
-# HARD SAFETY: forbid Flask dev server in production (Render)
-# - wsgi.py sets WCG_WSGI=1 BEFORE importing app.py
-# ============================================================
-if os.environ.get("RENDER") == "true":
-    # Must be loaded via gunicorn + wsgi.py
-    if os.environ.get("WCG_WSGI") != "1":
-        raise RuntimeError(
-            "FATAL: Flask dev server detected in production. "
-            "Use: gunicorn wsgi:application"
-        )
-
-
 
 
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
@@ -1410,9 +1397,20 @@ def admin_api_build():
     if not ok:
         return resp
 
-
+    rs = _redis_runtime_status()
+    return jsonify({
+        "ok": True,
+        "redis_enabled": bool(rs.get("redis_enabled")),
+        "redis_namespace": rs.get("redis_namespace") or "",
+        "redis_url_present": bool(rs.get("redis_url_present")),
+        "redis_url_effective": rs.get("redis_url_effective") or "",
+        "redis_error": rs.get("redis_error") or "",
+        "build_verify": os.environ.get("BUILD_VERIFY", ""),
+        "chat_logicfix_build": os.environ.get("CHAT_LOGICFIX_BUILD", ""),
+    })
 
 @app.route("/admin/api/_redis_smoke", methods=["GET"])
+
 def admin_api_redis_smoke():
     """Enterprise smoke: verify Redis write/read works and NO disk fallback occurs."""
     ok, resp = _require_admin(min_role="manager")
