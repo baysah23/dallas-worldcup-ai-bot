@@ -4467,31 +4467,49 @@ def admin_api_ops():
     if not ok:
         return resp
 
+    ctx = _admin_ctx()
+    actor = ctx.get("actor", "")
+    role = ctx.get("role", "")
+
     if request.method == "GET":
-        cfg = get_config()
+        st = _load_ops_state()
         meta = _last_audit_event("ops.update")
-        return jsonify({"ok": True, "ops": get_ops(cfg), "meta": meta})
+        return jsonify({"ok": True, "ops": {
+            "pause_reservations": bool(st.get("pause_reservations")),
+            "vip_only": bool(st.get("vip_only")),
+            "waitlist_mode": bool(st.get("waitlist_mode")),
+        }, "meta": meta})
 
     data = request.get_json(silent=True) or {}
-    def _norm_bool(v) -> str:
-        if isinstance(v, bool):
-            return "true" if v else "false"
-        s = str(v or "").strip().lower()
-        if s in ("1","true","yes","y","on"):
-            return "true"
-        if s in ("0","false","no","n","off",""):
-            return "false"
-        return "false"
 
-    pairs = {
-        "ops_pause_reservations": _norm_bool(data.get("pause_reservations")),
-        "ops_vip_only": _norm_bool(data.get("vip_only")),
-        "ops_waitlist_mode": _norm_bool(data.get("waitlist_mode")),
-    }
-    cfg = set_config(pairs)
-    _audit("ops.update", {"ops": get_ops(cfg)})
+    def as_bool(v: Any) -> bool:
+        if isinstance(v, bool):
+            return v
+        s = str(v or "").strip().lower()
+        return s in ("1", "true", "yes", "y", "on")
+
+    patch: Dict[str, Any] = {}
+    if "pause_reservations" in data:
+        patch["pause_reservations"] = as_bool(data.get("pause_reservations"))
+    if "vip_only" in data:
+        patch["vip_only"] = as_bool(data.get("vip_only"))
+    if "waitlist_mode" in data:
+        patch["waitlist_mode"] = as_bool(data.get("waitlist_mode"))
+    if "notify" in data:
+        patch["notify"] = as_bool(data.get("notify"))
+
+    st = _save_ops_state(patch, actor=actor, role=role)
+    _audit("ops.update", {"ops": {
+        "pause_reservations": bool(st.get("pause_reservations")),
+        "vip_only": bool(st.get("vip_only")),
+        "waitlist_mode": bool(st.get("waitlist_mode")),
+    }})
     meta = _last_audit_event("ops.update")
-    return jsonify({"ok": True, "ops": get_ops(cfg), "meta": meta})
+    return jsonify({"ok": True, "ops": {
+        "pause_reservations": bool(st.get("pause_reservations")),
+        "vip_only": bool(st.get("vip_only")),
+        "waitlist_mode": bool(st.get("waitlist_mode")),
+    }, "meta": meta})
 # ============================================================
 # Match-Day Presets
 
@@ -8445,63 +8463,58 @@ def _ops_state_default():
     }
 
 def _load_ops_state() -> Dict[str, Any]:
+    # Single source of truth:
+    # - Redis when enabled
+    # - Otherwise persisted config via set_config()/get_config()
     if globals().get("_REDIS_ENABLED"):
         st = _redis_get_json(_OPS_KEY, default=None)
         if isinstance(st, dict):
             return _deep_merge(_ops_state_default(), st)
     try:
         cfg = get_config()
+        ops = get_ops(cfg)
+        if not isinstance(cfg, dict):
+            cfg = {}
         return {
-            "pause_reservations": bool(get_ops(cfg).get("pause_reservations")),
-            "vip_only": bool(get_ops(cfg).get("vip_only")),
-            "waitlist_mode": bool(get_ops(cfg).get("waitlist_mode")),
-            "notify": bool(cfg.get("ops_notify", False) if isinstance(cfg, dict) else False),
-            "updated_at": (cfg.get("_updated_at") if isinstance(cfg, dict) else None),
-            "updated_by": None,
-            "updated_role": None,
+            "pause_reservations": bool(ops.get("pause_reservations")),
+            "vip_only": bool(ops.get("vip_only")),
+            "waitlist_mode": bool(ops.get("waitlist_mode")),
+            "notify": bool(cfg.get("ops_notify", False)),
+            "updated_at": cfg.get("ops_updated_at"),
+            "updated_by": cfg.get("ops_updated_by"),
+            "updated_role": cfg.get("ops_updated_role"),
         }
     except Exception:
         return _ops_state_default()
 
 def _save_ops_state(patch: Dict[str, Any], actor: str, role: str) -> Dict[str, Any]:
-    """Persist ops state.
-
-    - If Redis enabled: write to Redis key (single source of truth).
-    - Else: write to existing CONFIG via set_config so UI + API share the same truth.
-    """
     st = _deep_merge(_load_ops_state(), patch or {})
     st["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     st["updated_by"] = actor
     st["updated_role"] = role
 
+    # Persist
     if globals().get("_REDIS_ENABLED"):
         _redis_set_json(_OPS_KEY, st)
         return st
 
-    # Fallback (no Redis): persist to CONFIG so it survives refresh/restart.
+    # Fallback persistence: write through config store so restarts keep behavior consistent
     def _b(v: Any) -> str:
         return "true" if bool(v) else "false"
 
-    pairs: Dict[str, str] = {}
-    if "pause_reservations" in st:
-        pairs["ops_pause_reservations"] = _b(st.get("pause_reservations"))
-    if "vip_only" in st:
-        pairs["ops_vip_only"] = _b(st.get("vip_only"))
-    if "waitlist_mode" in st:
-        pairs["ops_waitlist_mode"] = _b(st.get("waitlist_mode"))
-    if "notify" in st:
-        pairs["ops_notify"] = _b(st.get("notify"))
-
     try:
-        cfg = set_config(pairs) if pairs else get_config()
-        ops = get_ops(cfg)
-        st["pause_reservations"] = bool(ops.get("pause_reservations"))
-        st["vip_only"] = bool(ops.get("vip_only"))
-        st["waitlist_mode"] = bool(ops.get("waitlist_mode"))
-        st["notify"] = bool(cfg.get("ops_notify", False) if isinstance(cfg, dict) else False)
-        st["updated_at"] = (cfg.get("_updated_at") if isinstance(cfg, dict) else st.get("updated_at"))
+        pairs = {
+            "ops_pause_reservations": _b(st.get("pause_reservations")),
+            "ops_vip_only": _b(st.get("vip_only")),
+            "ops_waitlist_mode": _b(st.get("waitlist_mode")),
+            "ops_notify": _b(st.get("notify")),
+            "ops_updated_at": st.get("updated_at"),
+            "ops_updated_by": st.get("updated_by"),
+            "ops_updated_role": st.get("updated_role"),
+        }
+        set_config(pairs)
     except Exception:
-        # keep st as-is; but do not lie about success elsewhere (caller should audit)
+        # fail loudly via API layer; helpers stay best-effort
         pass
 
     return st
@@ -8546,63 +8559,23 @@ def admin_api_ops_save():
 
     data = request.get_json(silent=True) or {}
 
-    # normalize bools like existing ops update endpoint
-    def _norm_bool(v: Any) -> str:
+    def as_bool(v: Any) -> bool:
         if isinstance(v, bool):
-            return "true" if v else "false"
+            return v
         s = str(v or "").strip().lower()
-        return "true" if s in ("1", "true", "yes", "y", "on") else "false"
+        return s in ("1", "true", "yes", "y", "on")
 
-    # Enterprise contract keys (API)
-    patch = {}
+    patch: Dict[str, Any] = {}
     for k in ["pause_reservations", "vip_only", "waitlist_mode", "notify"]:
         if k in data:
-            patch[k] = bool(str(data.get(k)).strip().lower() in ("1","true","yes","y","on"))
+            patch[k] = as_bool(data.get(k))
 
-    # Persist:
-    # - Redis if enabled
-    # - Otherwise delegate to existing config store (set_config) used by UI
-    if globals().get("_REDIS_ENABLED"):
-        st = _save_ops_state(patch, actor=actor, role=role)
-        try:
-            _audit("ops.enterprise.save", {"by": actor, "role": role, "patch": patch})
-        except Exception:
-            pass
-        return jsonify({"ok": True, "state": st})
-
-    # Fallback: write to config via set_config() (source of truth when Redis is off)
-    pairs = {}
-    if "pause_reservations" in data:
-        pairs["ops_pause_reservations"] = _norm_bool(data.get("pause_reservations"))
-    if "vip_only" in data:
-        pairs["ops_vip_only"] = _norm_bool(data.get("vip_only"))
-    if "waitlist_mode" in data:
-        pairs["ops_waitlist_mode"] = _norm_bool(data.get("waitlist_mode"))
-    if "notify" in data:
-        pairs["ops_notify"] = _norm_bool(data.get("notify"))
-
+    st = _save_ops_state(patch, actor=actor, role=role)
     try:
-        cfg = set_config(pairs)
-        ops = get_ops(cfg)
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"Ops save failed: {e}"}), 500
-
-    try:
-        _audit("ops.update", {"ops": ops})
+        _audit("ops.enterprise.save", {"by": actor, "role": role, "patch": patch})
     except Exception:
         pass
-
-    # Return enterprise-shaped state
-    state = {
-        "pause_reservations": bool(ops.get("pause_reservations")),
-        "vip_only": bool(ops.get("vip_only")),
-        "waitlist_mode": bool(ops.get("waitlist_mode")),
-        "notify": bool(cfg.get("ops_notify", False) if isinstance(cfg, dict) else False),
-        "updated_at": None,
-        "updated_by": actor,
-        "updated_role": role,
-    }
-    return jsonify({"ok": True, "state": state})
+    return jsonify({"ok": True, "state": st})
 @app.get("/admin/api/fanzone/state")
 def admin_api_fanzone_state():
     ok, resp = _require_admin(min_role="manager")
