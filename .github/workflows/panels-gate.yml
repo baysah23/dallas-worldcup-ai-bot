@@ -35,21 +35,17 @@ jobs:
           BASE_URL_CI="${BASE_URL_CI:-}"
 
           if [[ -n "$BASE_URL_CI" ]]; then
-            # Guardrail: GitHub-hosted runners cannot reach your laptop localhost.
             if echo "$BASE_URL_CI" | grep -Eq '^(http://)?(127\.0\.0\.1|localhost|0\.0\.0\.0)(:|/|$)'; then
               echo "::error::BASE_URL_CI is localhost ($BASE_URL_CI). Set BASE_URL_CI to your deployed URL (e.g., https://dallas-worldcup-ai-bot.onrender.com)."
               exit 1
             fi
-
             echo "MODE=deployed" >> "$GITHUB_ENV"
             echo "BASE_URL=$BASE_URL_CI" >> "$GITHUB_ENV"
-            echo "Using deployed BASE_URL: $BASE_URL_CI"
             exit 0
           fi
 
           echo "MODE=local" >> "$GITHUB_ENV"
           echo "BASE_URL=http://127.0.0.1:5000" >> "$GITHUB_ENV"
-          echo "Using local BASE_URL: http://127.0.0.1:5000"
 
       - name: Install Python deps (local mode)
         if: env.MODE == 'local'
@@ -111,14 +107,12 @@ jobs:
           E2E_TEST_TOKEN: "${{ secrets.E2E_TEST_TOKEN }}"
         run: |
           set -euo pipefail
-          # IMPORTANT: ADMIN_URL/MANAGER_URL/FANZONE_URL are set via $GITHUB_ENV above.
-          # Do NOT re-bind them via ${{ env.* }} expressions (those don't see $GITHUB_ENV values).
           echo "ADMIN_URL=$ADMIN_URL"
           echo "MANAGER_URL=$MANAGER_URL"
           echo "FANZONE_URL=$FANZONE_URL"
           npm run test:panels
 
-      - name: Redis gate (deployed mode)
+      - name: "Enterprise gate: Redis must be enabled (deployed mode)"
         if: env.MODE == 'deployed'
         shell: bash
         env:
