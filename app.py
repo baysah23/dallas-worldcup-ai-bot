@@ -796,19 +796,22 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
     Supported actions (minimal + safe):
       - vip_tag: update lead VIP field
       - status_update: update lead Status
-      - reply_draft: store draft text in audit (does NOT send)
+      - reply_draft: persist draft text to sheet column (reply_draft/reply)
     '''
     typ = str(action.get("type") or "").strip()
+    payload = action.get("payload") or {}
 
     # Partner policy hard-gate (enforced even if AI/settings allow it)
-    payload = action.get("payload") or {}
     try:
         partner_id = _derive_partner_id(payload=payload)
     except Exception:
         partner_id = "default"
     ok_pol, why_pol = _policy_check_action(partner_id, typ, payload, role=str((ctx or {}).get("role") or ""))
     if not ok_pol:
-        _audit("policy.block", {"partner": partner_id, "type": typ, "reason": why_pol, "row": payload.get("row")})
+        try:
+            _audit("policy.block", {"partner": partner_id, "type": typ, "reason": why_pol, "row": payload.get("row")})
+        except Exception:
+            pass
         return {"ok": False, "error": why_pol}
 
     # Feature flag gate (secondary to allow_actions)
@@ -816,43 +819,38 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
         return {"ok": False, "error": f"{typ} disabled by feature flag"}
     allow = (AI_SETTINGS.get("allow_actions") or {})
 
-    # lead row reference (Google Sheet row number)
     row_num = int(payload.get("row") or payload.get("sheet_row") or 0)
 
-    
-if typ == "reply_draft":
-    if not allow.get("reply_draft", True):
-        return {"ok": False, "error": "reply_draft not allowed"}
-    draft = str(payload.get("draft") or payload.get("reply") or "").strip()
-    if not draft:
-        return {"ok": False, "error": "Missing draft"}
-    if row_num < 2:
-        return {"ok": False, "error": "Missing/invalid sheet row"}
-
-    # Persist draft to Sheets so UI can display it (enterprise: no silent success)
-    gc = get_gspread_client()
-    ws = gc.open(SHEET_NAME).sheet1
-    header = ws.row_values(1) or []
-    hmap = header_map(header)
-    col = hmap.get("reply_draft") or hmap.get("reply") or hmap.get("replydraft")
-    if not col:
-        return {"ok": False, "error": "reply_draft column not found in sheet header"}
-    ws.update_cell(row_num, int(col), draft)
-    _audit("ai.reply_draft.apply", {"row": row_num, "chars": len(draft)})
-    return {"ok": True, "applied": "reply_draft"}
-
-# VIP / Status require a valid row numberreturn {"ok": False, "error": "reply_draft not allowed"}
-        draft = str(payload.get("draft") or "").strip()
+    if typ == "reply_draft":
+        if not allow.get("reply_draft", True):
+            return {"ok": False, "error": "reply_draft not allowed"}
+        draft = str(payload.get("draft") or payload.get("reply") or "").strip()
         if not draft:
             return {"ok": False, "error": "Missing draft"}
-        _audit("ai.reply_draft", {"row": row_num or None, "draft": draft[:2000]})
-        return {"ok": True, "applied": "reply_draft"}
+        if row_num < 2:
+            return {"ok": False, "error": "Missing/invalid sheet row"}
+
+        try:
+            gc = get_gspread_client()
+            ws = gc.open(SHEET_NAME).sheet1
+            header = ws.row_values(1) or []
+            hmap = header_map(header)
+            col = hmap.get("reply_draft") or hmap.get("reply") or hmap.get("replydraft")
+            if not col:
+                return {"ok": False, "error": "reply_draft column not found in sheet header"}
+            ws.update_cell(row_num, int(col), draft)
+            try:
+                _audit("ai.reply_draft.apply", {"row": row_num, "chars": len(draft)})
+            except Exception:
+                pass
+            return {"ok": True, "applied": "reply_draft"}
+        except Exception as e:
+            return {"ok": False, "error": f"Apply failed: {e}"}
 
     # VIP / Status require a valid row number
     if row_num < 2:
         return {"ok": False, "error": "Missing/invalid sheet row"}
 
-    # Use the same Sheets update logic as /admin/update-lead
     try:
         gc = get_gspread_client()
         ws = gc.open(SHEET_NAME).sheet1
@@ -868,8 +866,11 @@ if typ == "reply_draft":
             col = hmap.get("vip")
             if not col:
                 return {"ok": False, "error": "VIP column not found"}
-            ws.update_cell(row_num, col, vip)
-            _audit("ai.vip_tag.apply", {"row": row_num, "vip": vip})
+            ws.update_cell(row_num, int(col), vip)
+            try:
+                _audit("ai.vip_tag.apply", {"row": row_num, "vip": vip})
+            except Exception:
+                pass
             return {"ok": True, "applied": "vip_tag"}
 
         if typ == "status_update":
@@ -882,8 +883,11 @@ if typ == "reply_draft":
             col = hmap.get("status")
             if not col:
                 return {"ok": False, "error": "Status column not found"}
-            ws.update_cell(row_num, col, status)
-            _audit("ai.status_update.apply", {"row": row_num, "status": status})
+            ws.update_cell(row_num, int(col), status)
+            try:
+                _audit("ai.status_update.apply", {"row": row_num, "status": status})
+            except Exception:
+                pass
             return {"ok": True, "applied": "status_update"}
 
         return {"ok": False, "error": "Unsupported action type"}
