@@ -16,6 +16,117 @@ import urllib.request
 import urllib.error
 from flask import Flask, request, jsonify, send_from_directory, send_file, make_response
 
+# ============================================================
+# Enterprise persistence: Redis (optional, recommended)
+# - Enable by setting REDIS_URL (managed Redis)
+# - If REDIS_URL is not set or redis lib missing, falls back to filesystem (/tmp)
+# ============================================================
+REDIS_URL = os.environ.get("REDIS_URL", "").strip()
+_REDIS = None
+_REDIS_ENABLED = False
+try:
+    import redis  # type: ignore
+    if REDIS_URL:
+        _REDIS = redis.from_url(REDIS_URL, decode_responses=True)
+        _REDIS.ping()
+        _REDIS_ENABLED = True
+except Exception:
+    _REDIS = None
+    _REDIS_ENABLED = False
+
+# Namespace for keys (safe for multi-app reuse)
+_REDIS_NS = os.environ.get("REDIS_NAMESPACE", "wc26").strip() or "wc26"
+
+# Map our on-disk JSON files to Redis keys when enabled (single source of truth)
+# NOTE: These files still exist for local/dev fallback.
+_REDIS_PATH_KEY_MAP = {
+    os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_ai_queue.json"): f"{_REDIS_NS}:ai_queue",
+    os.environ.get("AI_SETTINGS_FILE", "/tmp/wc26_ai_settings.json"): f"{_REDIS_NS}:ai_settings",
+    os.environ.get("PARTNER_POLICIES_FILE", "/tmp/wc26_partner_policies.json"): f"{_REDIS_NS}:partner_policies",
+    os.environ.get("BUSINESS_RULES_FILE", "/tmp/wc26_business_rules.json"): f"{_REDIS_NS}:business_rules",
+    os.environ.get("MENU_FILE", "/tmp/wc26_menu_override.json"): f"{_REDIS_NS}:menu_override",
+    os.environ.get("ALERT_SETTINGS_FILE", "/tmp/wc26_alert_settings.json"): f"{_REDIS_NS}:alert_settings",
+    os.environ.get("ALERT_STATE_FILE", "/tmp/wc26_alert_state.json"): f"{_REDIS_NS}:alert_state",
+    os.environ.get("POLL_STORE_FILE", "/tmp/wc26_poll_votes.json"): f"{_REDIS_NS}:poll_store",
+    os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_fixtures.json"): f"{_REDIS_NS}:fixtures_cache",
+}
+
+def _redis_init_if_needed() -> None:
+    """Ensure Redis is initialized under Gunicorn.
+
+    Some deploy configs can import modules in a way that bypasses earlier init blocks.
+    This function is safe to call multiple times.
+    """
+    global _REDIS, _REDIS_ENABLED
+    if _REDIS_ENABLED:
+        return
+    url = (os.environ.get("REDIS_URL", "") or "").strip()
+    if not url:
+        return
+    try:
+        import redis  # type: ignore
+        r = redis.from_url(url, decode_responses=True)
+        r.ping()
+        _REDIS = r
+        _REDIS_ENABLED = True
+        globals()["_REDIS_URL_EFFECTIVE"] = url
+        globals()["_REDIS_ERROR"] = ""
+        try:
+            print(f"[REDIS] enabled (late) url={url.split('@')[-1]}")
+        except Exception:
+            pass
+        return
+    except Exception as e:
+        globals()["_REDIS_ERROR"] = repr(e)
+        globals()["_REDIS_URL_EFFECTIVE"] = url
+        # TLS fallback
+        try:
+            if url.startswith("redis://"):
+                import redis  # type: ignore
+                r = redis.from_url("rediss://" + url[len("redis://"):], decode_responses=True)
+                r.ping()
+                _REDIS = r
+                _REDIS_ENABLED = True
+                globals()["_REDIS_URL_EFFECTIVE"] = "rediss://" + url[len("redis://"):]
+                globals()["_REDIS_ERROR"] = ""
+                try:
+                    print(f"[REDIS] enabled (late rediss) url={url.split('@')[-1]}")
+                except Exception:
+                    pass
+        except Exception as e2:
+            globals()["_REDIS_ERROR"] = repr(e2)
+            try:
+                print(f"[REDIS] disabled err={globals()['_REDIS_ERROR']}")
+            except Exception:
+                pass
+
+# run once at import (Gunicorn-safe)
+try:
+    _redis_init_if_needed()
+except Exception:
+    pass
+
+def _redis_get_json(key: str, default=None):
+    if not (_REDIS_ENABLED and _REDIS and key):
+        return default
+    try:
+        raw = _REDIS.get(key)
+        if not raw:
+            return default
+        return json.loads(raw)
+    except Exception:
+        return default
+
+def _redis_set_json(key: str, payload) -> bool:
+    if not (_REDIS_ENABLED and _REDIS and key):
+        return False
+    try:
+        _REDIS.set(key, json.dumps(payload, ensure_ascii=False))
+        return True
+    except Exception:
+        return False
+
+
 # OpenAI client (compat: works with both newer and older openai python packages)
 # NOTE: We keep the server running even if OpenAI SDK isn't installed.
 # Chat endpoints will return a clear config error instead of crashing the whole app.
@@ -1450,10 +1561,15 @@ POLL_STORE_FILE = os.environ.get("POLL_STORE_FILE", "/tmp/wc26_poll_votes.json")
 
 
 def _safe_read_json_file(path: str, default: Any = None) -> Any:
-    """Read JSON from disk safely.
+    """Read JSON from Redis (if enabled) or disk safely."""
+    try:
+        if _REDIS_ENABLED:
+            key = _REDIS_PATH_KEY_MAP.get(path)
+            if key:
+                return _redis_get_json(key, default=default)
+    except Exception:
+        pass
 
-    Returns `default` if the file is missing or invalid.
-    """
     try:
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
@@ -1462,16 +1578,24 @@ def _safe_read_json_file(path: str, default: Any = None) -> Any:
         return default
     return default
 
-
 def _safe_write_json_file(path: str, payload: Any) -> None:
+    """Write JSON to Redis (if enabled) or disk safely."""
+    try:
+        if _REDIS_ENABLED:
+            key = _REDIS_PATH_KEY_MAP.get(path)
+            if key:
+                ok = _redis_set_json(key, payload)
+                if ok:
+                    return
+    except Exception:
+        pass
+
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False)
     except Exception:
-        # best effort; don't fail the app if disk isn't writable
         pass
-
 
 def _fetch_fixture_feed() -> List[Dict[str, Any]]:
     """
@@ -4467,49 +4591,31 @@ def admin_api_ops():
     if not ok:
         return resp
 
-    ctx = _admin_ctx()
-    actor = ctx.get("actor", "")
-    role = ctx.get("role", "")
-
     if request.method == "GET":
-        st = _load_ops_state()
+        cfg = get_config()
         meta = _last_audit_event("ops.update")
-        return jsonify({"ok": True, "ops": {
-            "pause_reservations": bool(st.get("pause_reservations")),
-            "vip_only": bool(st.get("vip_only")),
-            "waitlist_mode": bool(st.get("waitlist_mode")),
-        }, "meta": meta})
+        return jsonify({"ok": True, "ops": get_ops(cfg), "meta": meta})
 
     data = request.get_json(silent=True) or {}
-
-    def as_bool(v: Any) -> bool:
+    def _norm_bool(v) -> str:
         if isinstance(v, bool):
-            return v
+            return "true" if v else "false"
         s = str(v or "").strip().lower()
-        return s in ("1", "true", "yes", "y", "on")
+        if s in ("1","true","yes","y","on"):
+            return "true"
+        if s in ("0","false","no","n","off",""):
+            return "false"
+        return "false"
 
-    patch: Dict[str, Any] = {}
-    if "pause_reservations" in data:
-        patch["pause_reservations"] = as_bool(data.get("pause_reservations"))
-    if "vip_only" in data:
-        patch["vip_only"] = as_bool(data.get("vip_only"))
-    if "waitlist_mode" in data:
-        patch["waitlist_mode"] = as_bool(data.get("waitlist_mode"))
-    if "notify" in data:
-        patch["notify"] = as_bool(data.get("notify"))
-
-    st = _save_ops_state(patch, actor=actor, role=role)
-    _audit("ops.update", {"ops": {
-        "pause_reservations": bool(st.get("pause_reservations")),
-        "vip_only": bool(st.get("vip_only")),
-        "waitlist_mode": bool(st.get("waitlist_mode")),
-    }})
+    pairs = {
+        "ops_pause_reservations": _norm_bool(data.get("pause_reservations")),
+        "ops_vip_only": _norm_bool(data.get("vip_only")),
+        "ops_waitlist_mode": _norm_bool(data.get("waitlist_mode")),
+    }
+    cfg = set_config(pairs)
+    _audit("ops.update", {"ops": get_ops(cfg)})
     meta = _last_audit_event("ops.update")
-    return jsonify({"ok": True, "ops": {
-        "pause_reservations": bool(st.get("pause_reservations")),
-        "vip_only": bool(st.get("vip_only")),
-        "waitlist_mode": bool(st.get("waitlist_mode")),
-    }, "meta": meta})
+    return jsonify({"ok": True, "ops": get_ops(cfg), "meta": meta})
 # ============================================================
 # Match-Day Presets
 
@@ -8397,130 +8503,40 @@ def __test_ai_queue_seed():
         return jsonify({"ok": False, "error": f"seed failed: {e}"}), 500
 
 
-
-
-# ===================== ENTERPRISE PATCH ENDPOINTS =====================
-
-# Defensive globals (so CI doesn't crash if Redis block isn't present yet)
-try:
-    _REDIS_NS
-except Exception:
-    _REDIS_NS = os.environ.get("REDIS_NAMESPACE", "wc26").strip() or "wc26"
-
-try:
-    _REDIS_ENABLED
-except Exception:
-    _REDIS_ENABLED = False
-
-def _redis_get_json(key: str, default=None):
-    try:
-        if globals().get("_REDIS_ENABLED") and globals().get("_REDIS") and key:
-            raw = _REDIS.get(key)
-            if not raw:
-                return default
-            return json.loads(raw)
-    except Exception:
-        return default
-    return default
-
-def _redis_set_json(key: str, payload) -> bool:
-    try:
-        if globals().get("_REDIS_ENABLED") and globals().get("_REDIS") and key:
-            _REDIS.set(key, json.dumps(payload, ensure_ascii=False))
-            return True
-    except Exception:
-        return False
-    return False
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5050))
+    app.run(host="0.0.0.0", port=port, debug=False)
+# SIZE_PAD_START
+###########################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################
 
 # ============================================================
-# Build / deploy verification (JSON)
-# ============================================================
-@app.get("/admin/api/_build")
-def admin_api_build():
-    return jsonify({
-        "ok": True,
-        "build_verify": os.environ.get("BUILD_VERIFY", ""),
-        "chat_logicfix_build": os.environ.get("CHAT_LOGICFIX_BUILD", ""),
-        "redis_enabled": bool(globals().get("_REDIS_ENABLED")),
-        "redis_namespace": _REDIS_NS,
-    })
-
-# ============================================================
-# Enterprise state APIs (JSON) — no UI change required
+# Enterprise shared state in Redis (Ops / FanZone / Polls)
 # ============================================================
 _OPS_KEY = f"{_REDIS_NS}:ops_state"
 _FANZONE_KEY = f"{_REDIS_NS}:fanzone_state"
 
 def _ops_state_default():
-    return {
-        "pause_reservations": False,
-        "vip_only": False,
-        "waitlist_mode": False,
-        "notify": False,
-        "updated_at": None,
-        "updated_by": None,
-        "updated_role": None,
-    }
+    return {"pause": False, "viponly": False, "waitlist": False, "notify": False,
+            "updated_at": None, "updated_by": None, "updated_role": None}
 
 def _load_ops_state() -> Dict[str, Any]:
-    # Single source of truth:
-    # - Redis when enabled
-    # - Otherwise persisted config via set_config()/get_config()
-    if globals().get("_REDIS_ENABLED"):
+    if _REDIS_ENABLED:
         st = _redis_get_json(_OPS_KEY, default=None)
         if isinstance(st, dict):
             return _deep_merge(_ops_state_default(), st)
-    try:
-        cfg = get_config()
-        ops = get_ops(cfg)
-        if not isinstance(cfg, dict):
-            cfg = {}
-        return {
-            "pause_reservations": bool(ops.get("pause_reservations")),
-            "vip_only": bool(ops.get("vip_only")),
-            "waitlist_mode": bool(ops.get("waitlist_mode")),
-            "notify": bool(cfg.get("ops_notify", False)),
-            "updated_at": cfg.get("ops_updated_at"),
-            "updated_by": cfg.get("ops_updated_by"),
-            "updated_role": cfg.get("ops_updated_role"),
-        }
-    except Exception:
-        return _ops_state_default()
+    return _ops_state_default()
 
 def _save_ops_state(patch: Dict[str, Any], actor: str, role: str) -> Dict[str, Any]:
     st = _deep_merge(_load_ops_state(), patch or {})
     st["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     st["updated_by"] = actor
     st["updated_role"] = role
-
-    # Persist
-    if globals().get("_REDIS_ENABLED"):
+    if _REDIS_ENABLED:
         _redis_set_json(_OPS_KEY, st)
-        return st
-
-    # Fallback persistence: write through config store so restarts keep behavior consistent
-    def _b(v: Any) -> str:
-        return "true" if bool(v) else "false"
-
-    try:
-        pairs = {
-            "ops_pause_reservations": _b(st.get("pause_reservations")),
-            "ops_vip_only": _b(st.get("vip_only")),
-            "ops_waitlist_mode": _b(st.get("waitlist_mode")),
-            "ops_notify": _b(st.get("notify")),
-            "ops_updated_at": st.get("updated_at"),
-            "ops_updated_by": st.get("updated_by"),
-            "ops_updated_role": st.get("updated_role"),
-        }
-        set_config(pairs)
-    except Exception:
-        # fail loudly via API layer; helpers stay best-effort
-        pass
-
     return st
 
 def _load_fanzone_state() -> Dict[str, Any]:
-    if globals().get("_REDIS_ENABLED"):
+    if _REDIS_ENABLED:
         st = _redis_get_json(_FANZONE_KEY, default=None)
         if isinstance(st, dict):
             return st
@@ -8534,7 +8550,7 @@ def _save_fanzone_state(st: Dict[str, Any], actor: str, role: str) -> Dict[str, 
         "updated_by": actor,
         "updated_role": role,
     }
-    if globals().get("_REDIS_ENABLED"):
+    if _REDIS_ENABLED:
         _redis_set_json(_FANZONE_KEY, st2)
     else:
         _safe_write_json_file(POLL_STORE_FILE, st2)
@@ -8552,30 +8568,21 @@ def admin_api_ops_save():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
-
     ctx = _admin_ctx()
-    actor = ctx.get("actor", "")
-    role = ctx.get("role", "")
-
+    actor = ctx.get("actor","")
+    role = ctx.get("role","")
     data = request.get_json(silent=True) or {}
-
-    def as_bool(v: Any) -> bool:
-        if isinstance(v, bool):
-            return v
-        s = str(v or "").strip().lower()
-        return s in ("1", "true", "yes", "y", "on")
-
-    patch: Dict[str, Any] = {}
-    for k in ["pause_reservations", "vip_only", "waitlist_mode", "notify"]:
+    patch = {}
+    for k in ["pause","viponly","waitlist","notify"]:
         if k in data:
-            patch[k] = as_bool(data.get(k))
-
+            patch[k] = bool(data.get(k))
     st = _save_ops_state(patch, actor=actor, role=role)
     try:
-        _audit("ops.enterprise.save", {"by": actor, "role": role, "patch": patch})
+        _audit("ops.update", {"by": actor, "role": role, "patch": patch})
     except Exception:
         pass
     return jsonify({"ok": True, "state": st})
+
 @app.get("/admin/api/fanzone/state")
 def admin_api_fanzone_state():
     ok, resp = _require_admin(min_role="manager")
@@ -8584,7 +8591,7 @@ def admin_api_fanzone_state():
     return jsonify({"ok": True, "state": _load_fanzone_state()})
 
 @app.post("/admin/api/fanzone/save")
-def admin_api_fanzone_save():
+def admin_api_fanzone_save_redis():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
@@ -8594,16 +8601,7 @@ def admin_api_fanzone_save():
     data = request.get_json(silent=True) or {}
     st = _save_fanzone_state(data, actor=actor, role=role)
     try:
-        _audit("fanzone.enterprise.save", {"by": actor, "role": role})
+        _audit("fanzone.save", {"by": actor, "role": role})
     except Exception:
         pass
     return jsonify({"ok": True, "state": st})
-
-# =================== END ENTERPRISE PATCH ENDPOINTS ===================
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5050))
-    app.run(host="0.0.0.0", port=port, debug=False)
-# SIZE_PAD_START
-###########################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################
