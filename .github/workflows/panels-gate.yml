@@ -71,9 +71,9 @@ jobs:
         shell: bash
         env:
           PORT: "5000"
-          ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
-          ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
-          E2E_TEST_TOKEN: ${{ secrets.E2E_TEST_TOKEN }}
+          ADMIN_OWNER_KEY: "${{ secrets.ADMIN_OWNER_KEY }}"
+          ADMIN_MANAGER_KEY: "${{ secrets.ADMIN_MANAGER_KEY }}"
+          E2E_TEST_TOKEN: "${{ secrets.E2E_TEST_TOKEN }}"
         run: |
           set -euo pipefail
 
@@ -113,10 +113,10 @@ jobs:
 
       - name: Run panels tests
         env:
-          BASE_URL: ${{ env.BASE_URL }}
-          ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
-          ADMIN_MANAGER_KEY: ${{ secrets.ADMIN_MANAGER_KEY }}
-          E2E_TEST_TOKEN: ${{ secrets.E2E_TEST_TOKEN }}
+          BASE_URL: "${{ env.BASE_URL }}"
+          ADMIN_OWNER_KEY: "${{ secrets.ADMIN_OWNER_KEY }}"
+          ADMIN_MANAGER_KEY: "${{ secrets.ADMIN_MANAGER_KEY }}"
+          E2E_TEST_TOKEN: "${{ secrets.E2E_TEST_TOKEN }}"
         shell: bash
         run: |
           set -euo pipefail
@@ -133,21 +133,15 @@ jobs:
             npx playwright test --project=chromium --workers=1 --reporter=line
           fi
 
-      - name: Enterprise gate: Redis must be enabled (deployed mode)
+      - name: "Enterprise gate: Redis must be enabled (deployed mode)"
         if: env.MODE == 'deployed'
         env:
-          ADMIN_OWNER_KEY: ${{ secrets.ADMIN_OWNER_KEY }}
+          ADMIN_OWNER_KEY: "${{ secrets.ADMIN_OWNER_KEY }}"
         shell: bash
         run: |
           set -euo pipefail
           echo "Checking Redis runtime status…"
-          curl -fsS "$BASE_URL/admin/api/_build?key=$ADMIN_OWNER_KEY" | python3 - <<'EOF'
-import sys, json
-d = json.load(sys.stdin)
-if not d.get("redis_enabled"):
-    raise SystemExit("redis_enabled is false")
-print("✅ redis_enabled=true")
-EOF
+          curl -fsS "$BASE_URL/admin/api/_build?key=$ADMIN_OWNER_KEY" | python3 -c 'import sys,json; d=json.load(sys.stdin); import sys as _s; _s.exit(0 if d.get("redis_enabled") else 1)'
 
       - name: Upload artifacts (always)
         if: always()
