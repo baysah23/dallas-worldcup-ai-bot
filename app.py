@@ -16,6 +16,62 @@ import urllib.request
 import urllib.error
 from flask import Flask, request, jsonify, send_from_directory, send_file, make_response
 
+# ============================================================
+# Enterprise persistence: Redis (optional, recommended)
+# - Enable by setting REDIS_URL (managed Redis)
+# - If REDIS_URL is not set or redis lib missing, falls back to filesystem (/tmp)
+# ============================================================
+REDIS_URL = os.environ.get("REDIS_URL", "").strip()
+_REDIS = None
+_REDIS_ENABLED = False
+try:
+    import redis  # type: ignore
+    if REDIS_URL:
+        _REDIS = redis.from_url(REDIS_URL, decode_responses=True)
+        _REDIS.ping()
+        _REDIS_ENABLED = True
+except Exception:
+    _REDIS = None
+    _REDIS_ENABLED = False
+
+# Namespace for keys (safe for multi-app reuse)
+_REDIS_NS = os.environ.get("REDIS_NAMESPACE", "wc26").strip() or "wc26"
+
+# Map our on-disk JSON files to Redis keys when enabled (single source of truth)
+# NOTE: These files still exist for local/dev fallback.
+_REDIS_PATH_KEY_MAP = {
+    os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_ai_queue.json"): f"{_REDIS_NS}:ai_queue",
+    os.environ.get("AI_SETTINGS_FILE", "/tmp/wc26_ai_settings.json"): f"{_REDIS_NS}:ai_settings",
+    os.environ.get("PARTNER_POLICIES_FILE", "/tmp/wc26_partner_policies.json"): f"{_REDIS_NS}:partner_policies",
+    os.environ.get("BUSINESS_RULES_FILE", "/tmp/wc26_business_rules.json"): f"{_REDIS_NS}:business_rules",
+    os.environ.get("MENU_FILE", "/tmp/wc26_menu_override.json"): f"{_REDIS_NS}:menu_override",
+    os.environ.get("ALERT_SETTINGS_FILE", "/tmp/wc26_alert_settings.json"): f"{_REDIS_NS}:alert_settings",
+    os.environ.get("ALERT_STATE_FILE", "/tmp/wc26_alert_state.json"): f"{_REDIS_NS}:alert_state",
+    os.environ.get("POLL_STORE_FILE", "/tmp/wc26_poll_votes.json"): f"{_REDIS_NS}:poll_store",
+    os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_fixtures.json"): f"{_REDIS_NS}:fixtures_cache",
+}
+
+def _redis_get_json(key: str, default=None):
+    if not (_REDIS_ENABLED and _REDIS and key):
+        return default
+    try:
+        raw = _REDIS.get(key)
+        if not raw:
+            return default
+        return json.loads(raw)
+    except Exception:
+        return default
+
+def _redis_set_json(key: str, payload) -> bool:
+    if not (_REDIS_ENABLED and _REDIS and key):
+        return False
+    try:
+        _REDIS.set(key, json.dumps(payload, ensure_ascii=False))
+        return True
+    except Exception:
+        return False
+
+
 # OpenAI client (compat: works with both newer and older openai python packages)
 # NOTE: We keep the server running even if OpenAI SDK isn't installed.
 # Chat endpoints will return a clear config error instead of crashing the whole app.
@@ -1450,10 +1506,15 @@ POLL_STORE_FILE = os.environ.get("POLL_STORE_FILE", "/tmp/wc26_poll_votes.json")
 
 
 def _safe_read_json_file(path: str, default: Any = None) -> Any:
-    """Read JSON from disk safely.
+    """Read JSON from Redis (if enabled) or disk safely."""
+    try:
+        if _REDIS_ENABLED:
+            key = _REDIS_PATH_KEY_MAP.get(path)
+            if key:
+                return _redis_get_json(key, default=default)
+    except Exception:
+        pass
 
-    Returns `default` if the file is missing or invalid.
-    """
     try:
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
@@ -1462,16 +1523,24 @@ def _safe_read_json_file(path: str, default: Any = None) -> Any:
         return default
     return default
 
-
 def _safe_write_json_file(path: str, payload: Any) -> None:
+    """Write JSON to Redis (if enabled) or disk safely."""
+    try:
+        if _REDIS_ENABLED:
+            key = _REDIS_PATH_KEY_MAP.get(path)
+            if key:
+                ok = _redis_set_json(key, payload)
+                if ok:
+                    return
+    except Exception:
+        pass
+
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False)
     except Exception:
-        # best effort; don't fail the app if disk isn't writable
         pass
-
 
 def _fetch_fixture_feed() -> List[Dict[str, Any]]:
     """
@@ -8385,76 +8454,99 @@ if __name__ == "__main__":
 # SIZE_PAD_START
 ###########################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################
 
+# ============================================================
+# Enterprise shared state in Redis (Ops / FanZone / Polls)
+# ============================================================
+_OPS_KEY = f"{_REDIS_NS}:ops_state"
+_FANZONE_KEY = f"{_REDIS_NS}:fanzone_state"
 
-# ========================= PATCH: AI Queue + Reply + Fan Zone =========================
+def _ops_state_default():
+    return {"pause": False, "viponly": False, "waitlist": False, "notify": False,
+            "updated_at": None, "updated_by": None, "updated_role": None}
 
-@app.post("/admin/api/ai/queue/action")
-def admin_ai_queue_action():
-    ok, err = _require_admin("manager")
-    if not ok:
-        return err
+def _load_ops_state() -> Dict[str, Any]:
+    if _REDIS_ENABLED:
+        st = _redis_get_json(_OPS_KEY, default=None)
+        if isinstance(st, dict):
+            return _deep_merge(_ops_state_default(), st)
+    return _ops_state_default()
 
-    data = request.json or {}
-    qid = data.get("id")
-    decision = data.get("decision")
+def _save_ops_state(patch: Dict[str, Any], actor: str, role: str) -> Dict[str, Any]:
+    st = _deep_merge(_load_ops_state(), patch or {})
+    st["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    st["updated_by"] = actor
+    st["updated_role"] = role
+    if _REDIS_ENABLED:
+        _redis_set_json(_OPS_KEY, st)
+    return st
 
-    queue = _load_ai_queue()
-    item = _queue_find(queue, qid)
-    if not item:
-        return jsonify(ok=False, error="Queue item not found"), 404
+def _load_fanzone_state() -> Dict[str, Any]:
+    if _REDIS_ENABLED:
+        st = _redis_get_json(_FANZONE_KEY, default=None)
+        if isinstance(st, dict):
+            return st
+    st = _safe_read_json_file(POLL_STORE_FILE, default={})
+    return st if isinstance(st, dict) else {}
 
-    ctx = _admin_ctx()
-
-    if decision == "approve":
-        results = []
-        for act in item.get("actions", []):
-            results.append(_queue_apply_action(act, ctx))
-        item["status"] = "approved"
-        item["applied"] = results
-        _audit("ai.queue.approved", {"id": qid})
-    elif decision == "deny":
-        item["status"] = "denied"
-        _audit("ai.queue.denied", {"id": qid})
+def _save_fanzone_state(st: Dict[str, Any], actor: str, role: str) -> Dict[str, Any]:
+    st2 = st if isinstance(st, dict) else {}
+    st2["_meta"] = {
+        "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "updated_by": actor,
+        "updated_role": role,
+    }
+    if _REDIS_ENABLED:
+        _redis_set_json(_FANZONE_KEY, st2)
     else:
-        return jsonify(ok=False, error="Invalid decision"), 400
+        _safe_write_json_file(POLL_STORE_FILE, st2)
+    return st2
 
-    _save_ai_queue(queue)
-    return jsonify(ok=True, status=item["status"])
+@app.get("/admin/api/ops/state")
+def admin_api_ops_state():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    return jsonify({"ok": True, "state": _load_ops_state()})
 
+@app.post("/admin/api/ops/save")
+def admin_api_ops_save():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    actor = ctx.get("actor","")
+    role = ctx.get("role","")
+    data = request.get_json(silent=True) or {}
+    patch = {}
+    for k in ["pause","viponly","waitlist","notify"]:
+        if k in data:
+            patch[k] = bool(data.get(k))
+    st = _save_ops_state(patch, actor=actor, role=role)
+    try:
+        _audit("ops.update", {"by": actor, "role": role, "patch": patch})
+    except Exception:
+        pass
+    return jsonify({"ok": True, "state": st})
 
-# Patch reply_draft to persist
-_old_queue_apply = _queue_apply_action
-def _queue_apply_action(action, ctx):
-    typ = str(action.get("type") or "").strip()
-    payload = action.get("payload") or {}
-
-    if typ == "reply_draft":
-        draft = str(payload.get("draft") or "").strip()
-        row = int(payload.get("row") or 0)
-        if not draft or row < 2:
-            return {"ok": False, "error": "Invalid reply_draft payload"}
-        gc = get_gspread_client()
-        ws = gc.open(SHEET_NAME).sheet1
-        hmap = header_map(ws.row_values(1))
-        col = hmap.get("reply_draft")
-        if not col:
-            return {"ok": False, "error": "reply_draft column missing"}
-        ws.update_cell(row, col, draft)
-        _audit("ai.reply_draft.apply", {"row": row})
-        return {"ok": True, "applied": "reply_draft"}
-
-    return _old_queue_apply(action, ctx)
-
+@app.get("/admin/api/fanzone/state")
+def admin_api_fanzone_state():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    return jsonify({"ok": True, "state": _load_fanzone_state()})
 
 @app.post("/admin/api/fanzone/save")
-def admin_fanzone_save():
-    ok, err = _require_admin("manager")
+def admin_api_fanzone_save_redis():
+    ok, resp = _require_admin(min_role="manager")
     if not ok:
-        return err
-
-    data = request.json or {}
-    _safe_write_json_file(POLL_STORE_FILE, data)
-    _audit("fanzone.update", {"keys": list(data.keys())})
-    return jsonify(ok=True)
-
-# ======================= END PATCH =======================
+        return resp
+    ctx = _admin_ctx()
+    actor = ctx.get("actor","")
+    role = ctx.get("role","")
+    data = request.get_json(silent=True) or {}
+    st = _save_fanzone_state(data, actor=actor, role=role)
+    try:
+        _audit("fanzone.save", {"by": actor, "role": role})
+    except Exception:
+        pass
+    return jsonify({"ok": True, "state": st})
