@@ -204,6 +204,38 @@ if os.environ.get("RENDER") == "true":
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
 
 
+# ============================================================
+# Public platform probes (Azure/App Service friendly)
+# - These MUST be fast and must not touch Redis/DB/Sheets/OpenAI/network.
+# - They exist so platforms can verify the container is serving HTTP.
+# ============================================================
+@app.get("/_wsgi")
+def public_wsgi_probe():
+    server_sw = request.environ.get("SERVER_SOFTWARE", "") or ""
+    looks_like_gunicorn = ("gunicorn" in server_sw.lower())
+    return jsonify({
+        "ok": True,
+        "service": "wc-concierge-app",
+        "looks_like_gunicorn": bool(looks_like_gunicorn),
+        "server_software": server_sw,
+        "python": (os.environ.get("PYTHON_VERSION") or ""),
+    })
+
+@app.get("/_prod_gate")
+def public_prod_gate():
+    # Keep this endpoint *very* cheap: only runtime/process proof.
+    server_sw = request.environ.get("SERVER_SOFTWARE", "") or ""
+    looks_like_gunicorn = ("gunicorn" in server_sw.lower())
+    ok_all = bool(looks_like_gunicorn)
+    return jsonify({
+        "ok": ok_all,
+        "checks": {
+            "gunicorn": {"ok": bool(looks_like_gunicorn), "server_software": server_sw},
+        },
+        "service": "wc-concierge-app",
+    }), (200 if ok_all else 500)
+
+
 @app.after_request
 def add_no_cache_headers(response):
     # === PHASE 2: SMART CACHE HEADERS (AUTO-INSERTED) ===
