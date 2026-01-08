@@ -1688,6 +1688,7 @@ def _safe_read_json_file(path: str, default: Any = None) -> Any:
     return default
 
 def _safe_write_json_file(path: str, payload: Any) -> None:
+    global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
     """Write JSON to Redis (if enabled) or disk safely."""
     try:
         if _REDIS_ENABLED:
@@ -1697,13 +1698,11 @@ def _safe_write_json_file(path: str, payload: Any) -> None:
                 if ok:
                     return
                 # Redis was enabled, but write failed — mark fallback for enterprise gate
-                global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
                 _REDIS_FALLBACK_USED = True
                 _REDIS_FALLBACK_LAST_PATH = str(path)
     except Exception:
         # Mark fallback on unexpected redis path errors too (best effort)
         try:
-            global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
             _REDIS_FALLBACK_USED = True
             _REDIS_FALLBACK_LAST_PATH = str(path)
         except Exception:
