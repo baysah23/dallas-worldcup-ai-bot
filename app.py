@@ -8464,12 +8464,46 @@ def _load_ops_state() -> Dict[str, Any]:
         return _ops_state_default()
 
 def _save_ops_state(patch: Dict[str, Any], actor: str, role: str) -> Dict[str, Any]:
+    """Persist ops state.
+
+    - If Redis enabled: write to Redis key (single source of truth).
+    - Else: write to existing CONFIG via set_config so UI + API share the same truth.
+    """
     st = _deep_merge(_load_ops_state(), patch or {})
     st["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     st["updated_by"] = actor
     st["updated_role"] = role
+
     if globals().get("_REDIS_ENABLED"):
         _redis_set_json(_OPS_KEY, st)
+        return st
+
+    # Fallback (no Redis): persist to CONFIG so it survives refresh/restart.
+    def _b(v: Any) -> str:
+        return "true" if bool(v) else "false"
+
+    pairs: Dict[str, str] = {}
+    if "pause_reservations" in st:
+        pairs["ops_pause_reservations"] = _b(st.get("pause_reservations"))
+    if "vip_only" in st:
+        pairs["ops_vip_only"] = _b(st.get("vip_only"))
+    if "waitlist_mode" in st:
+        pairs["ops_waitlist_mode"] = _b(st.get("waitlist_mode"))
+    if "notify" in st:
+        pairs["ops_notify"] = _b(st.get("notify"))
+
+    try:
+        cfg = set_config(pairs) if pairs else get_config()
+        ops = get_ops(cfg)
+        st["pause_reservations"] = bool(ops.get("pause_reservations"))
+        st["vip_only"] = bool(ops.get("vip_only"))
+        st["waitlist_mode"] = bool(ops.get("waitlist_mode"))
+        st["notify"] = bool(cfg.get("ops_notify", False) if isinstance(cfg, dict) else False)
+        st["updated_at"] = (cfg.get("_updated_at") if isinstance(cfg, dict) else st.get("updated_at"))
+    except Exception:
+        # keep st as-is; but do not lie about success elsewhere (caller should audit)
+        pass
+
     return st
 
 def _load_fanzone_state() -> Dict[str, Any]:
