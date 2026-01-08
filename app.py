@@ -8724,3 +8724,22 @@ def admin_api_fanzone_save_redis():
     except Exception:
         pass
     return jsonify({"ok": True, "state": st})
+
+
+# ============================================================
+# Enterprise hard-gate: WSGI / Gunicorn verification
+# ============================================================
+@app.get("/admin/api/_wsgi")
+def admin_api_wsgi():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    server_sw = request.environ.get("SERVER_SOFTWARE", "") or ""
+    return jsonify({
+        "ok": True,
+        "wsgi_loaded": bool(app.config.get("WSGI_LOADED")),
+        "looks_like_gunicorn": "gunicorn" in server_sw.lower(),
+        "server_software": server_sw,
+    })
+
