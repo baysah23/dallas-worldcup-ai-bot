@@ -187,6 +187,18 @@ except Exception:
 # ============================================================
 app = Flask(__name__)
 
+# ============================================================
+# HARD SAFETY: forbid Flask dev server in production (Render)
+# - wsgi.py sets WCG_WSGI=1 BEFORE importing app.py
+# ============================================================
+if os.environ.get("RENDER") == "true":
+    # Must be loaded via gunicorn + wsgi.py
+    if os.environ.get("WCG_WSGI") != "1":
+        raise RuntimeError(
+            "FATAL: Flask dev server detected in production. "
+            "Use: gunicorn wsgi:application"
+        )
+
 
 
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
@@ -1397,20 +1409,9 @@ def admin_api_build():
     if not ok:
         return resp
 
-    rs = _redis_runtime_status()
-    return jsonify({
-        "ok": True,
-        "redis_enabled": bool(rs.get("redis_enabled")),
-        "redis_namespace": rs.get("redis_namespace") or "",
-        "redis_url_present": bool(rs.get("redis_url_present")),
-        "redis_url_effective": rs.get("redis_url_effective") or "",
-        "redis_error": rs.get("redis_error") or "",
-        "build_verify": os.environ.get("BUILD_VERIFY", ""),
-        "chat_logicfix_build": os.environ.get("CHAT_LOGICFIX_BUILD", ""),
-    })
+
 
 @app.route("/admin/api/_redis_smoke", methods=["GET"])
-
 def admin_api_redis_smoke():
     """Enterprise smoke: verify Redis write/read works and NO disk fallback occurs."""
     ok, resp = _require_admin(min_role="manager")
@@ -8736,7 +8737,6 @@ def admin_api_fanzone_save_redis():
         pass
     return jsonify({"ok": True, "state": st})
 
-
 # ============================================================
 # Enterprise hard-gate: WSGI / Gunicorn verification
 # ============================================================
@@ -8754,3 +8754,73 @@ def admin_api_wsgi():
         "server_software": server_sw,
     })
 
+# ============================================================
+# Enterprise hard-gate: unified production readiness check
+# - Single endpoint for CI and ops validation.
+# ============================================================
+@app.get("/admin/api/_prod_gate")
+def admin_api_prod_gate():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    # WSGI / Gunicorn proof
+    server_sw = request.environ.get("SERVER_SOFTWARE", "") or ""
+    looks_like_gunicorn = ("gunicorn" in server_sw.lower())
+    wsgi_loaded = bool(app.config.get("WSGI_LOADED"))
+
+    # Redis proof (no fallback allowed)
+    try:
+        _redis_init_if_needed()
+    except Exception:
+        pass
+
+    rs = _redis_runtime_status()
+    redis_enabled = bool(rs.get("redis_enabled"))
+    redis_namespace = rs.get("redis_namespace") or ""
+
+    # Run the same write/read smoke used by CI, and ensure no disk fallback
+    global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
+    _REDIS_FALLBACK_USED = False
+    _REDIS_FALLBACK_LAST_PATH = ""
+
+    smoke_ok = False
+    smoke_detail = {}
+    if redis_enabled:
+        payload = {
+            "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "pid": os.getpid(),
+            "nonce": secrets.token_hex(6),
+        }
+        try:
+            _safe_write_json_file(CI_SMOKE_FILE, payload)
+            got = _safe_read_json_file(CI_SMOKE_FILE, default=None)
+            match = (got == payload)
+            smoke_ok = bool(match) and (not _REDIS_FALLBACK_USED)
+            smoke_detail = {
+                "match": bool(match),
+                "fallback_used": bool(_REDIS_FALLBACK_USED),
+                "fallback_last_path": _REDIS_FALLBACK_LAST_PATH,
+            }
+        except Exception as e:
+            smoke_ok = False
+            smoke_detail = {"error": str(e)}
+
+    ok_all = bool(looks_like_gunicorn and wsgi_loaded and redis_enabled and smoke_ok)
+
+    return jsonify({
+        "ok": ok_all,
+        "checks": {
+            "gunicorn": {"ok": bool(looks_like_gunicorn), "server_software": server_sw},
+            "wsgi_loaded": {"ok": bool(wsgi_loaded)},
+            "redis_enabled": {"ok": bool(redis_enabled), "namespace": redis_namespace},
+            "redis_smoke": {"ok": bool(smoke_ok), **(smoke_detail or {})},
+        },
+        "redis": {
+            "redis_enabled": bool(rs.get("redis_enabled")),
+            "redis_namespace": redis_namespace,
+            "redis_url_present": bool(rs.get("redis_url_present")),
+            "redis_url_effective": rs.get("redis_url_effective") or "",
+            "redis_error": rs.get("redis_error") or "",
+        },
+    }), (200 if ok_all else 500)

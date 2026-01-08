@@ -36,6 +36,16 @@ jobs:
 
           if [[ -n "$BASE_URL_CI" ]]; then
             if echo "$BASE_URL_CI" | grep -Eq '^(http://)?(127\.0\.0\.1|localhost|0\.0\.0\.0)(:|/|$)'; then
+
+      - name: "Enterprise gate: prod readiness (Gunicorn + WSGI + Redis)"
+        if: env.MODE == 'deployed'
+        shell: bash
+        env:
+          ADMIN_OWNER_KEY: "${{ secrets.ADMIN_OWNER_KEY }}"
+        run: |
+          set -euo pipefail
+          curl -fsS "$BASE_URL/admin/api/_prod_gate?key=$ADMIN_OWNER_KEY" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok') is True, d; print('✅ prod gate ok')"
+
               echo "::error::BASE_URL_CI is localhost ($BASE_URL_CI). Set BASE_URL_CI to your deployed URL (e.g., https://dallas-worldcup-ai-bot.onrender.com)."
               exit 1
             fi
@@ -120,25 +130,6 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsS "$BASE_URL/admin/api/_build?key=$ADMIN_OWNER_KEY" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('redis_enabled') is True, d; print('✅ redis_enabled=true')"
-      - name: "Enterprise smoke: Redis write/read + no disk fallback (deployed mode)"
-        if: env.MODE == 'deployed'
-        shell: bash
-        env:
-          ADMIN_OWNER_KEY: "${{ secrets.ADMIN_OWNER_KEY }}"
-        run: |
-          set -euo pipefail
-          curl -fsS "$BASE_URL/admin/api/_redis_smoke?key=$ADMIN_OWNER_KEY" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok') is True, d; assert d.get('fallback_used') is False, d; print('✅ redis smoke ok (no fallback)')"
-
-      - name: "Enterprise gate: Gunicorn/WSGI must be enforced (deployed mode)"
-        if: env.MODE == 'deployed'
-        shell: bash
-        env:
-          ADMIN_OWNER_KEY: "${{ secrets.ADMIN_OWNER_KEY }}"
-        run: |
-          set -euo pipefail
-          curl -fsS "$BASE_URL/admin/api/_wsgi?key=$ADMIN_OWNER_KEY" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('ok') is True, d; assert d.get('wsgi_loaded') is True, d; assert d.get('looks_like_gunicorn') is True, d; print('✅ gunicorn/wsgi enforced')"
-
-
       - name: Upload artifacts (always)
         if: always()
         uses: actions/upload-artifact@v4
