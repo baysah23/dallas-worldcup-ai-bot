@@ -2,19 +2,19 @@ const { test, expect } = require("@playwright/test");
 
 const ADMIN_URL =
   process.env.ADMIN_URL ||
-  "http://127.0.0.1:5050/admin?key=REPLACE_ADMIN_KEY";
+  "http://127.0.0.1:5000/admin?key=REPLACE_ADMIN_KEY";
 
 const MANAGER_URL =
   process.env.MANAGER_URL ||
-  "http://127.0.0.1:5050/manager?key=REPLACE_MANAGER_KEY";
+  "http://127.0.0.1:5000/manager?key=REPLACE_MANAGER_KEY";
 
 const FANZONE_URL =
   process.env.FANZONE_URL ||
-  "http://127.0.0.1:5050/admin/fanzone?key=REPLACE_ADMIN_KEY";
+  "http://127.0.0.1:5000/admin/fanzone?key=REPLACE_ADMIN_KEY";
 
 /**
  * Extracts origin + key from a URL like:
- * http://127.0.0.1:5050/admin?key=XYZ
+ * http://127.0.0.1:5000/admin?key=XYZ
  */
 function parseOriginAndKey(url) {
   const u = new URL(url);

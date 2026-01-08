@@ -25,20 +25,17 @@ jobs:
       - name: Install Node deps
         run: npm ci
 
-      - name: Install Playwright (Chromium)
+      - name: Install Playwright browsers (Chromium)
         run: npx playwright install --with-deps chromium
 
       - name: Decide BASE_URL (deployed vs local)
         shell: bash
         run: |
           set -euo pipefail
-
-          # If BASE_URL_CI is set (as a repo/org variable or in workflow env), test the deployed app.
-          # Otherwise, start the app locally inside the runner.
           BASE_URL_CI="${BASE_URL_CI:-}"
 
           if [[ -n "$BASE_URL_CI" ]]; then
-            # Guardrail: GitHub runners cannot reach your laptop localhost.
+            # Guardrail: GitHub-hosted runners cannot reach your laptop localhost.
             if echo "$BASE_URL_CI" | grep -Eq '^(http://)?(127\.0\.0\.1|localhost|0\.0\.0\.0)(:|/|$)'; then
               echo "::error::BASE_URL_CI is localhost ($BASE_URL_CI). Set BASE_URL_CI to your deployed URL (e.g., https://dallas-worldcup-ai-bot.onrender.com)."
               exit 1
@@ -71,13 +68,8 @@ jobs:
         shell: bash
         env:
           PORT: "5000"
-          ADMIN_OWNER_KEY: "${{ secrets.ADMIN_OWNER_KEY }}"
-          ADMIN_MANAGER_KEY: "${{ secrets.ADMIN_MANAGER_KEY }}"
-          E2E_TEST_TOKEN: "${{ secrets.E2E_TEST_TOKEN }}"
         run: |
           set -euo pipefail
-
-          # Start in background
           nohup python -u app.py > server.log 2>&1 &
           echo $! > server.pid
 
@@ -94,54 +86,46 @@ jobs:
           tail -n 200 server.log || true
           exit 1
 
-      - name: Wait for deployed app (deployed mode)
-        if: env.MODE == 'deployed'
+      - name: Export panel URLs for tests
         shell: bash
-        run: |
-          set -euo pipefail
-          echo "Waiting for deployed app at $BASE_URL ..."
-          for i in {1..120}; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/" || true)
-            if [[ "$code" != "000" ]]; then
-              echo "Deployed app responded with HTTP $code"
-              exit 0
-            fi
-            sleep 2
-          done
-          echo "Deployed app not reachable from runner." >&2
-          exit 1
-
-      - name: Run panels tests
         env:
-          BASE_URL: "${{ env.BASE_URL }}"
           ADMIN_OWNER_KEY: "${{ secrets.ADMIN_OWNER_KEY }}"
           ADMIN_MANAGER_KEY: "${{ secrets.ADMIN_MANAGER_KEY }}"
-          E2E_TEST_TOKEN: "${{ secrets.E2E_TEST_TOKEN }}"
-        shell: bash
         run: |
           set -euo pipefail
-
-          export BASE_URL="$BASE_URL"
-          export ADMIN_KEY="$ADMIN_OWNER_KEY"
-          export MANAGER_KEY="$ADMIN_MANAGER_KEY"
-
-          # If your package.json already has test:panels, use it.
-          if npm run -s | grep -q "test:panels"; then
-            npm run test:panels
-          else
-            # Fallback: run a known spec (adjust if needed)
-            npx playwright test --project=chromium --workers=1 --reporter=line
+          if [[ -z "${ADMIN_OWNER_KEY:-}" ]]; then
+            echo "::error::Missing secrets.ADMIN_OWNER_KEY"
+            exit 1
           fi
+          if [[ -z "${ADMIN_MANAGER_KEY:-}" ]]; then
+            echo "::error::Missing secrets.ADMIN_MANAGER_KEY"
+            exit 1
+          fi
+          echo "ADMIN_URL=$BASE_URL/admin?key=$ADMIN_OWNER_KEY" >> "$GITHUB_ENV"
+          echo "MANAGER_URL=$BASE_URL/manager?key=$ADMIN_MANAGER_KEY" >> "$GITHUB_ENV"
+          echo "FANZONE_URL=$BASE_URL/admin/fanzone?key=$ADMIN_OWNER_KEY" >> "$GITHUB_ENV"
 
-      - name: "Enterprise gate: Redis must be enabled (deployed mode)"
+      - name: Run panels tests
+        shell: bash
+        env:
+          ADMIN_URL: "${{ env.ADMIN_URL }}"
+          MANAGER_URL: "${{ env.MANAGER_URL }}"
+          FANZONE_URL: "${{ env.FANZONE_URL }}"
+          E2E_TEST_TOKEN: "${{ secrets.E2E_TEST_TOKEN }}"
+        run: |
+          set -euo pipefail
+          echo "ADMIN_URL=$ADMIN_URL"
+          echo "MANAGER_URL=$MANAGER_URL"
+          npm run test:panels
+
+      - name: Redis gate (deployed mode)
         if: env.MODE == 'deployed'
+        shell: bash
         env:
           ADMIN_OWNER_KEY: "${{ secrets.ADMIN_OWNER_KEY }}"
-        shell: bash
         run: |
           set -euo pipefail
-          echo "Checking Redis runtime status…"
-          curl -fsS "$BASE_URL/admin/api/_build?key=$ADMIN_OWNER_KEY" | python3 -c 'import sys,json; d=json.load(sys.stdin); import sys as _s; _s.exit(0 if d.get("redis_enabled") else 1)'
+          curl -fsS "$BASE_URL/admin/api/_build?key=$ADMIN_OWNER_KEY" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d.get('redis_enabled') is True, d; print('✅ redis_enabled=true')"
 
       - name: Upload artifacts (always)
         if: always()
