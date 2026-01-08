@@ -187,6 +187,18 @@ except Exception:
 # ============================================================
 app = Flask(__name__)
 
+# ============================================================
+# HARD SAFETY: forbid Flask dev server in production (Render)
+# ============================================================
+if os.environ.get("RENDER") == "true":
+    # Must be loaded via gunicorn + wsgi.py
+    if not app.config.get("WSGI_LOADED", False):
+        raise RuntimeError(
+            "FATAL: Flask dev server detected in production. "
+            "Use: gunicorn wsgi:application"
+        )
+
+
 
 
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
