@@ -39,11 +39,11 @@ _REDIS_NS = os.environ.get("REDIS_NAMESPACE", "wc26").strip() or "wc26"
 
 
 # CI smoke file/key for enterprise gate (safe; does not touch production data)
-CI_SMOKE_FILE = os.environ.get(\"CI_SMOKE_FILE\", \"/tmp/wc26_ci_smoke.json\")
+CI_SMOKE_FILE = os.environ.get("CI_SMOKE_FILE", "/tmp/wc26_ci_smoke.json")
 
 # Track if Redis write failed and we fell back to disk (enterprise detector)
 _REDIS_FALLBACK_USED = False
-_REDIS_FALLBACK_LAST_PATH = \"\"
+_REDIS_FALLBACK_LAST_PATH = ""
 # Map our on-disk JSON files to Redis keys when enabled (single source of truth)
 # NOTE: These files still exist for local/dev fallback.
 _REDIS_PATH_KEY_MAP = {
@@ -3335,7 +3335,7 @@ def _fetch_qualified_teams_remote() -> List[str]:
     # Grab a few candidate wikitables and pick the first one that looks like a
     # qualified-teams table (must contain a "Team" header AND a "Method/Qualification"-ish header).
     candidates = re.findall(
-        r"<table[^>]*class=\"[^\"]*wikitable[^\"]*\"[^>]*>.*?</table>",
+        r"<table[^>]*class="[^"]*wikitable[^"]*"[^>]*>.*?</table>",
         sub,
         flags=re.S | re.I,
     )
@@ -3395,7 +3395,7 @@ def _fetch_qualified_teams_remote() -> List[str]:
 
         # Prefer the first wiki link text that isn't a File:/Category:/Help: etc.
         link_m = None
-        for m in re.finditer(r"<a[^>]+href=\"([^\"]+)\"[^>]*>([^<]+)</a>", cell, flags=re.I):
+        for m in re.finditer(r"<a[^>]+href="([^"]+)"[^>]*>([^<]+)</a>", cell, flags=re.I):
             href = (m.group(1) or "").strip()
             txt = (m.group(2) or "").strip()
             if not txt:
@@ -3487,7 +3487,7 @@ def _json_with_etag(payload: Dict[str, Any]):
     body = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
     etag = hashlib.sha256(body.encode("utf-8")).hexdigest()[:16]
     resp = jsonify(payload)
-    resp.headers["ETag"] = f"\"{etag}\""
+    resp.headers["ETag"] = f""{etag}""
     resp.headers["Cache-Control"] = "no-store"
     return resp
 
@@ -5822,11 +5822,11 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     html.append("<div class='pills'>")
     html.append(f"<span class='pill'><b>Ops</b> {len(body)}</span>")
     html.append(f"<span class='pill'><b>VIP</b> {vip_count}</span>")
-    html.append("<button class='pill' id='notifBtn' type='button' onclick=\"openNotifications()\">🔔 <b id='notifCount'>0</b></button>")
+    html.append("<button class='pill' id='notifBtn' type='button' onclick="openNotifications()">🔔 <b id='notifCount'>0</b></button>")
 
-    html.append("<button class='pill pillbtn' id='refreshBtn' type='button' onclick=\"refreshAll('manual')\">↻ <b>Refresh</b></button>")
-    html.append("<button class='pill pillbtn' id='autoBtn' type='button' onclick=\"toggleAutoRefresh()\">⟳ <b id='autoLabel'>Auto: Off</b></button>")
-    html.append("<select class='pillselect' id='autoEvery' onchange=\"autoEveryChanged()\"><option value='10'>10s</option><option value='30' selected>30s</option><option value='60'>60s</option></select>")
+    html.append("<button class='pill pillbtn' id='refreshBtn' type='button' onclick="refreshAll('manual')">↻ <b>Refresh</b></button>")
+    html.append("<button class='pill pillbtn' id='autoBtn' type='button' onclick="toggleAutoRefresh()">⟳ <b id='autoLabel'>Auto: Off</b></button>")
+    html.append("<select class='pillselect' id='autoEvery' onchange="autoEveryChanged()"><option value='10'>10s</option><option value='30' selected>30s</option><option value='60'>60s</option></select>")
     html.append("<span class='pill' id='lastRef'>Last refresh: —</span>")
     for k, v in status_counts.items():
         html.append(f"<span class='pill'><b>{k}</b> {v}</span>")
