@@ -8539,22 +8539,73 @@ def admin_api_ops_save():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
+
     ctx = _admin_ctx()
-    actor = ctx.get("actor","")
-    role = ctx.get("role","")
+    actor = ctx.get("actor", "")
+    role = ctx.get("role", "")
+
     data = request.get_json(silent=True) or {}
+
+    # normalize bools like existing ops update endpoint
+    def _norm_bool(v: Any) -> str:
+        if isinstance(v, bool):
+            return "true" if v else "false"
+        s = str(v or "").strip().lower()
+        return "true" if s in ("1", "true", "yes", "y", "on") else "false"
+
+    # Enterprise contract keys (API)
     patch = {}
-    for k in ["pause_reservations","vip_only","waitlist_mode","notify"]:
+    for k in ["pause_reservations", "vip_only", "waitlist_mode", "notify"]:
         if k in data:
-            patch[k] = bool(data.get(k))
-    st = _save_ops_state(patch, actor=actor, role=role)
+            patch[k] = bool(str(data.get(k)).strip().lower() in ("1","true","yes","y","on"))
+
+    # Persist:
+    # - Redis if enabled
+    # - Otherwise delegate to existing config store (set_config) used by UI
+    if globals().get("_REDIS_ENABLED"):
+        st = _save_ops_state(patch, actor=actor, role=role)
+        try:
+            _audit("ops.enterprise.save", {"by": actor, "role": role, "patch": patch})
+        except Exception:
+            pass
+        return jsonify({"ok": True, "state": st})
+
+    # Fallback: write to config via set_config() (source of truth when Redis is off)
+    pairs = {}
+    if "pause_reservations" in data:
+        pairs["ops_pause_reservations"] = _norm_bool(data.get("pause_reservations"))
+    if "vip_only" in data:
+        pairs["ops_vip_only"] = _norm_bool(data.get("vip_only"))
+    if "waitlist_mode" in data:
+        pairs["ops_waitlist_mode"] = _norm_bool(data.get("waitlist_mode"))
+    if "notify" in data:
+        pairs["ops_notify"] = _norm_bool(data.get("notify"))
+
     try:
-        _audit("ops.enterprise.save", {"by": actor, "role": role, "patch": patch})
+        cfg = set_config(pairs)
+        ops = get_ops(cfg)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Ops save failed: {e}"}), 500
+
+    try:
+        _audit("ops.update", {"ops": ops})
     except Exception:
         pass
-    return jsonify({"ok": True, "state": st})
 
-@app.get("/admin/api/fanzone/state")
+    # Return enterprise-shaped state
+    state = {
+        "pause_reservations": bool(ops.get("pause_reservations")),
+        "vip_only": bool(ops.get("vip_only")),
+        "waitlist_mode": bool(ops.get("waitlist_mode")),
+        "notify": bool(cfg.get("ops_notify", False) if isinstance(cfg, dict) else False),
+        "updated_at": None,
+        "updated_by": actor,
+        "updated_role": role,
+    }
+    return jsonify({"ok": True, "state": state})
+
+@app.
+get("/admin/api/fanzone/state")
 def admin_api_fanzone_state():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
