@@ -283,6 +283,8 @@ ADMIN_KEY = os.environ.get("ADMIN_KEY", "")  # required to view /admin
 # - Back-compat: ADMIN_KEY continues to work as the Owner key.
 # - Provide managers a separate key so they can view ops/leads without editing rules/menu.
 ADMIN_OWNER_KEY = (os.environ.get("ADMIN_OWNER_KEY") or ADMIN_KEY or "").strip()
+SUPER_ADMIN_KEY = (os.environ.get("SUPER_ADMIN_KEY") or "").strip()
+APP_VERSION = (os.environ.get("APP_VERSION") or "1.0.0").strip()
 # Either a single key via ADMIN_MANAGER_KEY, or a comma-separated list via ADMIN_MANAGER_KEYS
 _ADMIN_MANAGER_KEYS_RAW = (os.environ.get("ADMIN_MANAGER_KEYS") or os.environ.get("ADMIN_MANAGER_KEY") or "").strip()
 ADMIN_MANAGER_KEYS = [k.strip() for k in _ADMIN_MANAGER_KEYS_RAW.split(",") if k.strip()]
@@ -1665,15 +1667,16 @@ def admin_api_build():
     if not ok:
         return resp
 
-    # Lightweight build / config snapshot (safe for admin)
     return jsonify({
         "ok": True,
         "version": APP_VERSION,
-        "redis_enabled": bool(REDIS_ENABLED),
+        "env": (os.environ.get("APP_ENV") or "").strip() or "prod",
+        "redis_enabled": bool(_REDIS_ENABLED and _REDIS),
         "redis_namespace": _REDIS_NS,
         "multi_venue": bool(MULTI_VENUE_ENABLED),
-        "env": (os.environ.get("APP_ENV") or "").strip() or "prod",
+        "pid": os.getpid(),
     })
+
 
 @app.route("/admin/api/_redis_smoke", methods=["GET"])
 def admin_api_redis_smoke():
@@ -1748,6 +1751,27 @@ def admin_api_redis_smoke():
         "chat_logicfix_build": os.environ.get("CHAT_LOGICFIX_BUILD", ""),
     })
 
+
+def _is_super_admin_request() -> bool:
+    """Return True iff caller presents SUPER_ADMIN_KEY.
+
+    Accepted:
+      - super_key query param
+      - X-Super-Key header
+      - key query param on /super/* endpoints
+    """
+    try:
+        sk = (request.args.get("super_key") or request.headers.get("X-Super-Key") or "").strip()
+        if SUPER_ADMIN_KEY and sk == SUPER_ADMIN_KEY:
+            return True
+        # Allow /super/* calls that pass SUPER key as the standard key param
+        k = (request.args.get("key") or "").strip()
+        if SUPER_ADMIN_KEY and k == SUPER_ADMIN_KEY:
+            return True
+    except Exception:
+        pass
+    return False
+
 def _require_admin(min_role: str = "manager"):
     """Enforce admin access.
 
@@ -1766,31 +1790,6 @@ def _require_admin(min_role: str = "manager"):
         request._admin_ctx = ctx  # type: ignore[attr-defined]
     except Exception:
         pass
-    return True, None
-
-
-
-def _super_auth() -> Dict[str, str]:
-    """Return super admin auth context: {ok, actor}.
-
-    Auth mechanism: ?key=...
-    - SUPER_ADMIN_KEY (env) => ok
-    NOTE: This is intentionally distinct from ADMIN_OWNER_KEY.
-    """
-    key = (request.args.get("key", "") or "").strip()
-    if not key or not SUPER_ADMIN_KEY:
-        return {"ok": False, "actor": ""}
-    if key != SUPER_ADMIN_KEY:
-        return {"ok": False, "actor": ""}
-    actor = "super:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
-    return {"ok": True, "actor": actor}
-
-
-def _require_super():
-    """Fail-closed guard for /super/* routes."""
-    ctx = _super_auth()
-    if not ctx.get("ok"):
-        return False, jsonify({"ok": False, "error": "unauthorized"}), 401
     return True, None
 
 def _admin_ctx() -> Dict[str, str]:
@@ -8086,47 +8085,6 @@ try{ setupTabs(); }catch(e){}
 
 
 
-
-@app.route("/super/admin", methods=["GET"])
-def super_admin_console():
-    ok, resp = _require_super()
-    if not ok:
-        return resp
-    return render_template("super_console.html", version=APP_VERSION)
-
-
-@app.route("/super/api/overview", methods=["GET"])
-def super_api_overview():
-    ok, resp = _require_super()
-    if not ok:
-        return resp
-
-    queue = _load_ai_queue()
-    by_venue = {}
-    for q in queue:
-        vid = str(q.get("venue_id") or "default")
-        st = str(q.get("status") or "pending").lower()
-        by_venue.setdefault(vid, {"queue": {"pending": 0, "approved": 0, "denied": 0, "overridden": 0, "other": 0}})
-        bucket = "other"
-        if st in ("pending", "proposed"):
-            bucket = "pending"
-        elif st in ("approved",):
-            bucket = "approved"
-        elif st in ("denied", "rejected"):
-            bucket = "denied"
-        elif st in ("override", "overridden"):
-            bucket = "overridden"
-        by_venue[vid]["queue"][bucket] += 1
-
-    return jsonify({
-        "ok": True,
-        "version": APP_VERSION,
-        "venues": sorted(by_venue.keys()),
-        "by_venue": by_venue,
-        "totals": {"queue": len(queue)}
-    })
-
-
 @app.route("/admin/api/ai/draft-reply", methods=["POST"])
 def admin_api_ai_draft_reply():
     """Owner-only: generate a reply draft for a specific lead row and enqueue it for approval.
@@ -8996,6 +8954,59 @@ def __test_ai_queue_seed():
         return jsonify({"ok": True, "id": entry["id"], "item": entry})
     except Exception as e:
         return jsonify({"ok": False, "error": f"seed failed: {e}"}), 500
+
+
+
+# ============================================================
+# Super Admin (Platform Owner) — hard isolated surface
+# ============================================================
+@app.get("/super/admin")
+def super_admin_console():
+    if not _is_super_admin_request():
+        return "Forbidden", 403
+    try:
+        return render_template("super_console.html")
+    except Exception:
+        # fallback path if you later move to templates/super/
+        return render_template("super/super_console.html")
+
+@app.get("/super/api/overview")
+def super_api_overview():
+    if not _is_super_admin_request():
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    venues = _load_venues_from_disk()
+    out = []
+    total = {"venues": 0, "ai_queue": 0}
+    for vid, cfg in (venues or {}).items():
+        try:
+            # count AI queue items per venue without relying on request-scoped _venue_id()
+            count = 0
+            if _REDIS_ENABLED and _REDIS:
+                try:
+                    payload = _redis_get_json(f"{_REDIS_NS}:{vid}:ai_queue", default=[])
+                    if isinstance(payload, list):
+                        count = len(payload)
+                except Exception:
+                    count = 0
+            else:
+                path = str(AI_QUEUE_FILE).replace("{venue}", vid)
+                payload = _safe_read_json_file(path, default=[])
+                if isinstance(payload, list):
+                    count = len(payload)
+            out.append({
+                "venue_id": vid,
+                "venue_name": str((cfg or {}).get("venue_name") or (cfg or {}).get("name") or vid),
+                "ai_queue": int(count),
+            })
+            total["venues"] += 1
+            total["ai_queue"] += int(count)
+        except Exception:
+            # best effort — never break the dashboard
+            continue
+
+    out.sort(key=lambda x: x.get("venue_id",""))
+    return jsonify({"ok": True, "total": total, "venues": out})
 
 
 if __name__ == "__main__":
