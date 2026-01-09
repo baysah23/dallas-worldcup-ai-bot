@@ -14,7 +14,7 @@ from typing import Dict, Any, Optional, List, Tuple
 import time
 import urllib.request
 import urllib.error
-from flask import Flask, request, jsonify, send_from_directory, send_file, make_response, g
+from flask import Flask, request, jsonify, send_from_directory, send_file, make_response, g, render_template
 
 # ============================================================
 # Enterprise persistence: Redis (optional, recommended)
@@ -5929,6 +5929,25 @@ def admin_export_csv():
         "Content-Disposition": "attachment; filename=leads_export.csv",
         "Cache-Control": "no-store",
     }
+
+
+
+@app.get("/admin_tpl")
+def admin_tpl():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    role = ctx.get("role", "manager")
+    is_owner = (role == "owner")
+    page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
+    page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
+    return render_template(
+        "admin_console.html",
+        page_title=page_title,
+        page_sub=page_sub,
+        role=role,
+    )
 
 
 @app.route("/admin")
