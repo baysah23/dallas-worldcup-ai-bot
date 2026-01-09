@@ -27,7 +27,13 @@ _REDIS_ENABLED = False
 try:
     import redis  # type: ignore
     if REDIS_URL:
-        _REDIS = redis.from_url(REDIS_URL, decode_responses=True)
+        _REDIS = redis.from_url(
+            REDIS_URL,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+            retry_on_timeout=True,
+        )
         _REDIS.ping()
         _REDIS_ENABLED = True
 except Exception:
@@ -72,7 +78,13 @@ def _redis_init_if_needed() -> None:
         return
     try:
         import redis  # type: ignore
-        r = redis.from_url(url, decode_responses=True)
+        r = redis.from_url(
+            url,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+            retry_on_timeout=True,
+        )
         r.ping()
         _REDIS = r
         _REDIS_ENABLED = True
@@ -90,7 +102,13 @@ def _redis_init_if_needed() -> None:
         try:
             if url.startswith("redis://"):
                 import redis  # type: ignore
-                r = redis.from_url("rediss://" + url[len("redis://"):], decode_responses=True)
+                r = redis.from_url(
+                    "rediss://" + url[len("redis://"):],
+                    decode_responses=True,
+                    socket_connect_timeout=2,
+                    socket_timeout=2,
+                    retry_on_timeout=True,
+                )
                 r.ping()
                 _REDIS = r
                 _REDIS_ENABLED = True
