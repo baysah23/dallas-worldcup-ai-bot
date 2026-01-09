@@ -6233,7 +6233,20 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 }
 </style>
 """)
-    html.append("</head><body><div class='wrap'>")
+    html.append("
+<script>
+window.escapeHtml = window.escapeHtml || function(str) {
+  if (str === undefined || str === null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+</script>
+
+</head><body><div class='wrap'>")
 
     html.append("<div class='topbar'>")
     html.append("<div>")
@@ -7224,7 +7237,7 @@ async function loadPartnerList(){
     const partners = (j.partners||[]).filter(Boolean);
     if(box){
       box.innerHTML = partners.length
-        ? ('<b>Known partners:</b> ' + partners.map(p=>'<code style="padding:2px 6px;border:1px solid rgba(255,255,255,.12);border-radius:10px">'+escapeHtml(p)+'</code>').join(' '))
+        ? ('<b>Known partners:</b> ' + partners.map(p=>'<code style="padding:2px 6px;border:1px solid rgba(255,255,255,.12);border-radius:10px">'+window.escapeHtml(p)+'</code>').join(' '))
         : 'No partner policies saved yet (only default).';
     }
     if(msg) msg.textContent='Loaded ✔';
@@ -7518,11 +7531,11 @@ async function loadAllLeads(){
     }
 
     if(head){
-      head.innerHTML = keys.map(k=>'<th>'+escapeHtml(k)+'</th>').join('');
+      head.innerHTML = keys.map(k=>'<th>'+window.escapeHtml(k)+'</th>').join('');
     }
     if(body){
       const rows = items.map(it=>{
-        return '<tr>' + keys.map(k=>'<td>'+escapeHtml((it && it[k]!==undefined) ? String(it[k]) : '')+'</td>').join('') + '</tr>';
+        return '<tr>' + keys.map(k=>'<td>'+window.escapeHtml((it && it[k]!==undefined) ? String(it[k]) : '')+'</td>').join('') + '</tr>';
       }).join('');
       body.innerHTML = rows;
     }
@@ -8539,7 +8552,20 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .tel{color:var(--text);text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
 .toast{position:fixed;right:14px;bottom:14px;background:rgba(0,0,0,.55);border:1px solid var(--line);padding:10px 12px;border-radius:12px;font-size:12px;display:none}
 </style>""")
-    html.append("</head><body><div class='wrap'>")
+    html.append("
+<script>
+window.escapeHtml = window.escapeHtml || function(str) {
+  if (str === undefined || str === null) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+</script>
+
+</head><body><div class='wrap'>")
 
     html.append("<div class='topbar'>")
     html.append(f"<div><div class='h1'>Fan Zone Admin — {_hesc(SHEET_NAME or 'World Cup')}</div><div class='sub'>Poll controls (Sponsor text + Match of the Day) • Key required</div></div>")
@@ -8641,12 +8667,12 @@ tr:hover td{background:rgba(255,255,255,.03)}
       for(const r of top){
         const name = String(r.name||"");
         const votes = String(r.votes||0);
-        rows += `<div class="row"><div>${escapeHtml(name)}</div><div class="mono">${escapeHtml(votes)}</div></div>`;
+        rows += `<div class="row"><div>${window.escapeHtml(name)}</div><div class="mono">${window.escapeHtml(votes)}</div></div>`;
       }
       if(!rows) rows = '<div class="sub">No votes yet</div>';
 
       setPollStatus(
-        `<div class="h2">${escapeHtml(title)}</div>` +
+        `<div class="h2">${window.escapeHtml(title)}</div>` +
         `<div class="small">${locked ? "🔒 Locked" : "🟢 Open"}</div>` +
         `<div style="margin-top:10px;display:grid;gap:8px">${rows}</div>`
       );
@@ -8655,7 +8681,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
     }
   }
 
-  function escapeHtml(s){
+  function window.escapeHtml(s){
     return String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
