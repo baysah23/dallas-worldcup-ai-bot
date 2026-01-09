@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+import pathlib
 import json
 import hashlib
 import secrets
@@ -387,7 +388,7 @@ def _resolve_venue_id() -> str:
     except Exception:
         pass
     try:
-        q = (request.args.get("venue") or "").strip()
+        q = (request.args.get("venue_id") or request.args.get("venue") or "").strip()
         if q:
             return _slugify_venue_id(q)
     except Exception:
@@ -441,7 +442,8 @@ def _open_default_spreadsheet(gc, venue_id: Optional[str] = None):
     sid = _venue_sheet_id(venue_id)
     if sid:
         return gc.open_by_key(sid)
-    return _open_default_spreadsheet(gc)
+    # single-sheet fallback (legacy)
+    return gc.open(SHEET_NAME)
 
 def get_sheet(tab: Optional[str] = None, venue_id: Optional[str] = None):
     """Return a worksheet for the current venue."""
