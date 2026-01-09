@@ -14,7 +14,7 @@ from typing import Dict, Any, Optional, List, Tuple
 import time
 import urllib.request
 import urllib.error
-from flask import Flask, request, jsonify, send_from_directory, send_file, make_response, g, render_template
+from flask import Flask, request, jsonify, send_from_directory, send_file, make_response, g, render_template, render_template_string
 
 # ============================================================
 # Enterprise persistence: Redis (optional, recommended)
@@ -8968,15 +8968,369 @@ def __test_ai_queue_seed():
 # ============================================================
 # Super Admin (Platform Owner) — hard isolated surface
 # ============================================================
+
+# Embedded Super Admin UI HTML (avoids template path issues in some deploys)
+SUPER_CONSOLE_HTML = r"""<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>World Cup Concierge — Super Admin</title>
+  <style>
+    :root{--bg:#070A10;--card:#0E1424;--muted:#9AA3B2;--text:#E9EEF7;--line:rgba(255,255,255,.08)}
+    html,body{height:100%;background:radial-gradient(900px 700px at 20% 10%, #132752 0%, var(--bg) 55%);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:1080px;margin:0 auto;padding:20px}
+    .top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .title{font-size:18px;font-weight:700;letter-spacing:.2px}
+    .pill{font-size:12px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:rgba(255,255,255,.03)}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    .k{font-size:11px;color:var(--muted)}
+    .v{font-size:22px;font-weight:800;margin-top:6px}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}
+    th{color:var(--muted);font-weight:600}
+    .right{text-align:right}
+    .err{color:#ffb4b4;font-size:12px;margin-top:10px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top">
+      <div>
+        <div class="title">Super Admin — Global Overview</div>
+        <div class="pill">Hard isolated • Read-only by default</div>
+      </div>
+      <div class="pill" id="ts">Loading…</div>
+    </div>
+
+    <div class="grid">
+  
+    
+    <div class="card" style="margin-top:12px">
+      <div class="k">Venue Onboarding (creates config pack)</div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+        <input id="v_name" placeholder="Venue name" style="flex:1;min-width:220px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
+        <input id="v_id" placeholder="Venue id (optional)" style="min-width:200px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
+        <input id="v_sheet" placeholder="Google Sheet ID (optional)" style="min-width:260px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
+        <select id="v_plan" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
+          <option value="standard" selected>standard</option>
+          <option value="premium">premium</option>
+          <option value="enterprise">enterprise</option>
+        </select>
+        <button class="btn" id="createVenue">Create</button>
+        <button class="btn ghost" id="checkSheet">Check Sheet</button>
+        <button class="btn ghost" id="refreshVenues">Refresh</button>
+      </div>
+
+      <div class="err" id="venueErr" style="display:none"></div>
+      <div style="margin-top:10px;display:none" id="venueOutWrap">
+        <div class="k">Generated (copy + store safely)</div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
+          <button class="btn" id="copyPack">Copy JSON</button>
+          <button class="btn ghost" id="downloadPack">Download JSON</button>
+        </div>
+        <pre id="venueOut" style="white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:8px;font-size:12px;line-height:1.35"></pre>
+      </div>
+
+      <table id="venuesTable" style="margin-top:10px">
+        <thead>
+          <tr>
+            <th>Venue ID</th>
+            <th>Venue</th>
+            <th>Plan</th>
+            <th>Sheet</th>
+            <th>Status</th>
+            <th class="right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="venueRows"></tbody>
+      </table>
+    </div>
+
+
+    <div class="card" style="margin-top:12px">
+      <div class="k">All Leads (cross-venue)</div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+        <input id="q" placeholder="Search name/phone/venue…" style="flex:1;min-width:220px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
+        <select id="limit" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
+          <option value="200">200</option>
+          <option value="500" selected>500</option>
+          <option value="1000">1000</option>
+        </select>
+        <button id="reload" style="background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--text);cursor:pointer">Reload</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Venue</th>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>Date/Time</th>
+            <th class="right">Party</th>
+            <th>Status</th>
+            <th>Tier</th>
+            <th>Queue</th>
+          </tr>
+        </thead>
+        <tbody id="leadRows"></tbody>
+      </table>
+      <div class="err" id="leadErr"></div>
+    </div>
+
+    <div class="card"><div class="k">Venues</div><div class="v" id="venues">—</div></div>
+      <div class="card"><div class="k">AI Queue items</div><div class="v" id="aiq">—</div></div>
+      <div class="card"><div class="k">Build</div><div class="v" id="build">—</div></div>
+    </div>
+
+    <div class="card">
+      <div class="k">Per-venue</div>
+      <table>
+        <thead>
+          <tr><th>Venue</th><th>Venue ID</th><th class="right">AI Queue</th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+      <div class="err" id="err"></div>
+    </div>
+  </div>
+
+<script>
+(async function(){
+  const q = new URLSearchParams(window.location.search);
+  const key = q.get("key") || "";
+  const venueErr = document.getElementById("venueErr");
+  const venueOutWrap = document.getElementById("venueOutWrap");
+  const venueOut = document.getElementById("venueOut");
+
+  async function loadVenues(){
+    try{
+      const r = await fetch("/super/api/venues?key="+encodeURIComponent(key));
+      const j = await r.json();
+      const rows = document.getElementById("venueRows");
+      rows.innerHTML = "";
+      if(!j.ok){ throw new Error(j.error||"failed"); }
+      (j.venues||[]).forEach(v=>{
+        const tr = document.createElement("tr");
+        const vid = (v.venue_id||"");
+        tr.innerHTML = `<td>${vid}</td><td>${(v.venue_name||"")}</td><td>${(v.plan||"")}</td><td>${(v.google_sheet_id||"")}</td><td>${(v.status||"")}</td><td class="right"><button class="btn ghost" data-rotate="${vid}">Rotate Keys</button></td>`;
+        rows.appendChild(tr);
+      });
+
+      // bind rotate buttons
+      rows.querySelectorAll("[data-rotate]").forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const vid = btn.getAttribute("data-rotate");
+          if(!vid) return;
+          if(!confirm("Rotate keys for '"+vid+"'? This will invalidate existing venue keys.")) return;
+          try{
+            const r = await fetch("/super/api/venues/rotate_keys?key="+encodeURIComponent(key), {
+              method:"POST",
+              headers:{"Content-Type":"application/json"},
+              body: JSON.stringify({venue_id: vid, rotate_admin:true, rotate_manager:true})
+            });
+            const j2 = await r.json();
+            if(!j2.ok) throw new Error(j2.error||"rotate failed");
+            venueOut.textContent = JSON.stringify(j2, null, 2);
+            venueOutWrap.style.display="block";
+            await loadVenues();
+          }catch(e){
+            venueErr.style.display="block";
+            venueErr.textContent="Rotate error: " + (e.message||e);
+          }
+        });
+      });
+    }catch(e){
+      venueErr.style.display="block";
+      venueErr.textContent="Venue list error: " + (e.message||e);
+    }
+  }
+
+  async function createVenue(){
+    venueErr.style.display="none";
+    venueOutWrap.style.display="none";
+    const venue_name = (document.getElementById("v_name").value||"").trim();
+    const venue_id = (document.getElementById("v_id").value||"").trim();
+    const google_sheet_id = (document.getElementById("v_sheet").value||"").trim();
+    const plan = (document.getElementById("v_plan").value||"standard").trim();
+    if(!venue_name){
+      venueErr.style.display="block";
+      venueErr.textContent="Enter a venue name.";
+      return;
+    }
+    try{
+      const r = await fetch("/super/api/venues/create?key="+encodeURIComponent(key), {
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({venue_name, venue_id, google_sheet_id, plan})
+      });
+      const j = await r.json();
+      if(!j.ok){ throw new Error(j.error||"failed"); }
+      venueOut.textContent = JSON.stringify(j, null, 2);
+      venueOutWrap.style.display="block";
+      await loadVenues();
+    }catch(e){
+      venueErr.style.display="block";
+      venueErr.textContent="Create error: " + (e.message||e);
+    }
+  }
+
+  document.getElementById("createVenue")?.addEventListener("click", createVenue);
+  document.getElementById("refreshVenues")?.addEventListener("click", loadVenues);
+
+  document.getElementById("copyPack")?.addEventListener("click", async ()=>{
+    try{
+      await navigator.clipboard.writeText(venueOut.textContent||"");
+      venueErr.style.display="block";
+      venueErr.textContent="Copied to clipboard.";
+      setTimeout(()=>{ venueErr.style.display="none"; }, 1500);
+    }catch(e){
+      venueErr.style.display="block";
+      venueErr.textContent="Copy failed: " + (e.message||e);
+    }
+  });
+
+  document.getElementById("downloadPack")?.addEventListener("click", ()=>{
+    try{
+      const txt = venueOut.textContent||"";
+      if(!txt.trim()) return;
+      const blob = new Blob([txt], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "venue_pack.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    }catch(e){
+      venueErr.style.display="block";
+      venueErr.textContent="Download failed: " + (e.message||e);
+    }
+  });
+
+  document.getElementById("checkSheet")?.addEventListener("click", async ()=>{
+    venueErr.style.display="none";
+    const sid = (document.getElementById("v_sheet").value||"").trim();
+    if(!sid){
+      venueErr.style.display="block";
+      venueErr.textContent="Enter a Google Sheet ID to check.";
+      return;
+    }
+    try{
+      const r = await fetch("/super/api/sheets/check?key="+encodeURIComponent(key)+"&sheet_id="+encodeURIComponent(sid));
+      const j = await r.json();
+      if(!j.ok) throw new Error(j.error||"check failed");
+      venueErr.style.display="block";
+      venueErr.textContent="Sheet OK: " + (j.title||"opened");
+      setTimeout(()=>{ venueErr.style.display="none"; }, 2000);
+    }catch(e){
+      venueErr.style.display="block";
+      venueErr.textContent="Sheet check error: " + (e.message||e);
+    }
+  });
+
+  const super_key = q.get("super_key") || key; // allow SUPER key as key param
+  const headers = super_key ? {"X-Super-Key": super_key} : {};
+
+  const leadRowsEl = document.getElementById("leadRows");
+  const leadErrEl = document.getElementById("leadErr");
+  const qEl = document.getElementById("q");
+  const limitEl = document.getElementById("limit");
+  const reloadBtn = document.getElementById("reload");
+
+  async function loadLeads(){
+    if(!leadRowsEl) return;
+    leadErrEl.textContent = "";
+    leadRowsEl.innerHTML = "<tr><td colspan=\"8\">Loading…</td></tr>";
+    const limit = (limitEl && limitEl.value) ? limitEl.value : "500";
+    const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)+"&super_key="+encodeURIComponent(super_key)+"&limit="+encodeURIComponent(limit);
+    try{
+      const r = await fetch(url, {headers});
+      const j = await r.json();
+      if(!j.ok) throw new Error(j.error || "forbidden");
+      const query = (qEl && qEl.value || "").trim().toLowerCase();
+      const rows = (j.leads || []).filter(x=>{
+        if(!query) return true;
+        const hay = ((x._venue_id||"")+" "+(x.name||"")+" "+(x.phone||"")).toLowerCase();
+        return hay.includes(query);
+      }).slice(0, Number(limit));
+      leadRowsEl.innerHTML = "";
+      if(!rows.length){
+        leadRowsEl.innerHTML = "<tr><td colspan=\"8\">No leads found.</td></tr>";
+        return;
+      }
+      for(const x of rows){
+        const dt = ((x.date||"") + " " + (x.time||"")).trim();
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${(x._venue_id||"")}</td>
+          <td>${(x.name||"")}</td>
+          <td>${(x.phone||"")}</td>
+          <td>${dt || (x.timestamp||"")}</td>
+          <td class="right">${(x.party_size||"")}</td>
+          <td>${(x.status||"")}</td>
+          <td>${(x.tier||"")}</td>
+          <td>${(x.queue||"")}</td>
+        `;
+        leadRowsEl.appendChild(tr);
+      }
+    }catch(e){
+      leadRowsEl.innerHTML = "";
+      leadErrEl.textContent = "Error: " + (e.message||e);
+    }
+  }
+
+  if(reloadBtn){
+    reloadBtn.addEventListener("click", ()=>loadLeads());
+  }
+  if(qEl){
+    qEl.addEventListener("input", ()=>loadLeads());
+  }
+  if(limitEl){
+    limitEl.addEventListener("change", ()=>loadLeads());
+  }
+
+  try{
+    const r = await fetch("/super/api/overview?key="+encodeURIComponent(key)+"&super_key="+encodeURIComponent(super_key), {headers});
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error || "forbidden");
+    document.getElementById("venues").textContent = (j.total && j.total.venues) || 0;
+    document.getElementById("aiq").textContent = (j.total && j.total.ai_queue) || 0;
+    const tb = document.getElementById("rows");
+    tb.innerHTML = "";
+    (j.venues || []).forEach(v=>{
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${(v.venue_name||"")}</td><td>${(v.venue_id||"")}</td><td class="right">${(v.ai_queue||0)}</td>`;
+      tb.appendChild(tr);
+    });
+    document.getElementById("ts").textContent = new Date().toLocaleString();
+  }catch(e){
+    document.getElementById("err").textContent = "Error: " + (e.message||e);
+  }
+  await loadVenues();
+  await loadLeads();
+  try{
+    const b = await fetch("/admin/api/_build?key="+encodeURIComponent(key));
+    const bj = await b.json();
+    document.getElementById("build").textContent = (bj.version || "—");
+  }catch(e){}
+})();
+</script>
+</body>
+</html>
+"""
+
 @app.get("/super/admin")
 def super_admin_console():
     if not _is_super_admin_request():
         return "Forbidden", 403
     try:
-        return render_template("super_console.html")
-    except Exception:
-        # fallback path if you later move to templates/super/
-        return render_template("super/super_console.html")
+        return render_template_string(SUPER_CONSOLE_HTML)
+    except Exception as e:
+        # Last-resort: return minimal page so you never get a 500 here
+        return (f"<h1>Super Admin</h1><p>UI failed to render.</p><pre>{str(e)}</pre>", 200)
+
 
 @app.get("/super/api/overview")
 def super_api_overview():
