@@ -2,6 +2,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+import html
+import traceback
 import json
 import hashlib
 import secrets
@@ -9323,13 +9325,44 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
 
 @app.get("/super/admin")
 def super_admin_console():
-    if not _is_super_admin_request():
-        return "Forbidden", 403
+    """
+    Super Admin console. Must NEVER hard-500; if something goes wrong we return
+    a minimal diagnostic page so you can see the real exception (production-safe
+    because it's still protected by SUPER_ADMIN_KEY).
+    """
     try:
+        if not _is_super_admin_request():
+            return "Forbidden", 403
         return render_template_string(SUPER_CONSOLE_HTML)
     except Exception as e:
-        # Last-resort: return minimal page so you never get a 500 here
-        return (f"<h1>Super Admin</h1><p>UI failed to render.</p><pre>{str(e)}</pre>", 200)
+        tb = traceback.format_exc()
+        # still return 200 so the platform doesn't show a generic error page
+        return (
+            "<h1>Super Admin</h1>"
+            "<p>Dashboard failed to render. Copy the details below.</p>"
+            f"<pre>{html.escape(tb)}</pre>",
+            200,
+        )
+
+
+@app.get("/super/api/diag")
+def super_api_diag():
+    """Quick diagnostics for Super Admin (requires SUPER_ADMIN_KEY)."""
+    if not _is_super_admin_request():
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    try:
+        # Basic environment + template sanity
+        return jsonify({
+            "ok": True,
+            "path": request.path,
+            "has_super_key": bool(SUPER_ADMIN_KEY),
+            "redis_enabled": bool(_REDIS_ENABLED),
+            "redis_namespace": _REDIS_NAMESPACE,
+            "venues_count": (len(_load_venues_from_disk() or {}) if isinstance(_load_venues_from_disk(), dict) else 0),
+            "app_version": (os.environ.get("APP_VERSION") or "1.4.2"),
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.get("/super/api/overview")
