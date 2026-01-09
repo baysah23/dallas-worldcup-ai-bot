@@ -5934,6 +5934,7 @@ def admin_export_csv():
 
 @app.get("/admin_tpl")
 def admin_tpl():
+    # Template-based admin console (Phase 1+)
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
@@ -5942,12 +5943,10 @@ def admin_tpl():
     is_owner = (role == "owner")
     page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
     page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
-    return render_template(
-        "admin_console.html",
-        page_title=page_title,
-        page_sub=page_sub,
-        role=role,
-    )
+    return render_template("admin_console.html",
+                           page_title=page_title,
+                           page_sub=page_sub,
+                           role=role)
 
 
 @app.route("/admin")
@@ -9115,3 +9114,119 @@ def admin_api_prod_gate():
             "redis_error": rs.get("redis_error") or "",
         },
     }), (200 if ok_all else 500)
+
+@app.get("/admin/api/leads_all")
+def admin_api_leads_all():
+    """Owner-only: merge leads across all venues (SUPER_ADMIN_KEY or global owner key).
+
+    Enterprise behavior:
+    - Never hard-fail the entire request because one venue is misconfigured.
+    - Return `errors[]` per venue so UI can show what needs fixing.
+    """
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+
+    # Only platform owner can query cross-venue
+    if not _is_super_admin_request():
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    try:
+        limit = int(request.args.get("limit") or 500)
+    except Exception:
+        limit = 500
+    try:
+        per_venue = int(request.args.get("per_venue") or 300)
+    except Exception:
+        per_venue = 300
+
+    limit = max(0, min(5000, limit))
+    per_venue = max(1, min(2000, per_venue))
+
+    errors: List[Dict[str, Any]] = []
+    items: List[Dict[str, Any]] = []
+
+    # helper: map sheet rows to objects using header row 1
+    def rows_to_items(rows: List[List[str]], venue_id: str) -> None:
+        if not rows or len(rows) < 2:
+            return
+        header = rows[0] or []
+        body = rows[1:] or []
+
+        # normalize header -> index
+        hmap: Dict[str, int] = {}
+        for i, h in enumerate(header):
+            try:
+                hmap[_normalize_header(h)] = i
+            except Exception:
+                pass
+
+        def get_cell(r: List[str], key: str) -> str:
+            i = hmap.get(_normalize_header(key), -1)
+            if i < 0 or i >= len(r):
+                return ""
+            v = r[i]
+            return "" if v is None else str(v)
+
+        # keep correct sheet row numbers: header is row 1, data starts row 2
+        for off, r in enumerate(body):
+            if not isinstance(r, list):
+                continue
+            obj = {
+                "_venue_id": venue_id,
+                "sheet_row": off + 2,
+                "timestamp": get_cell(r, "timestamp"),
+                "name": get_cell(r, "name"),
+                "phone": get_cell(r, "phone"),
+                "date": get_cell(r, "date"),
+                "time": get_cell(r, "time"),
+                "party_size": get_cell(r, "party_size"),
+                "language": get_cell(r, "language"),
+                "status": get_cell(r, "status"),
+                "vip": get_cell(r, "vip"),
+                "entry_point": get_cell(r, "entry_point"),
+                "tier": get_cell(r, "tier"),
+                "queue": get_cell(r, "queue"),
+                "business_context": get_cell(r, "business_context"),
+                "budget": get_cell(r, "budget"),
+                "notes": get_cell(r, "notes"),
+                "vibe": get_cell(r, "vibe"),
+            }
+
+            # add any extra columns (future-proof)
+            try:
+                for i, h in enumerate(header):
+                    k = _normalize_header(h)
+                    if k and k not in set(_normalize_header(x) for x in obj.keys()):
+                        if i < len(r):
+                            obj[h] = r[i]
+            except Exception:
+                pass
+
+            items.append(obj)
+
+    # iterate through venue configs
+    venues = _iter_venue_json_configs() or []
+    if not venues:
+        return jsonify({"ok": True, "count": 0, "items": [], "errors": [{"venue_id": "", "error": "No venue configs found in config/venues/"}]})
+
+    for vid, _cfg in venues:
+        try:
+            rows = read_leads(limit=per_venue, venue_id=vid) or []
+            rows_to_items(rows, vid)
+        except Exception as e:
+            errors.append({"venue_id": vid, "error": str(e)})
+
+    # newest-first best-effort (timestamp string sort)
+    def _ts(o: Dict[str, Any]) -> str:
+        for k in ("timestamp", "created_at", "created", "ts", "Submitted At", "submitted_at"):
+            v = o.get(k)
+            if v:
+                return str(v)
+        return ""
+
+    items.sort(key=_ts, reverse=True)
+    if limit and len(items) > limit:
+        items = items[:limit]
+
+    return jsonify({"ok": True, "count": len(items), "items": items, "errors": errors})
