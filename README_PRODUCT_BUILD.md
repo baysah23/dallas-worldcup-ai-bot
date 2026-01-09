@@ -1,16 +1,21 @@
-# World Cup Concierge – Product Build v1 (Baseline)
+# World Cup Concierge — Product Build v1.1.0
 
-This bundle is built from your latest attached files and is treated as v1.0 baseline.
+This bundle is generated from your latest baseline and is intended to be dropped in as-is.
 
-## New in this build
-- Fixed `/admin/api/_build` (now returns version + runtime flags)
-- Added Super Admin separation:
-  - `GET /super/admin?key=SUPER_ADMIN_KEY`
-  - `GET /super/api/overview?key=SUPER_ADMIN_KEY` (read-only, cross-venue queue counts)
-- Added missing helper `_is_super_admin_request()` used by `/admin/api/leads_all`:
-  - Call: `/admin/api/leads_all?key=ADMIN_OWNER_KEY&super_key=SUPER_ADMIN_KEY`
+## What's in this build
+- Fixes: `/admin/api/_build` now returns build info + version.
+- Adds: `SUPER_ADMIN_KEY` support and `/super/admin` hard-isolated console.
+- Adds: `/super/api/overview` cross-venue AI Queue counts (best-effort, never hard-fails).
 
-## Environment variables
-- `ADMIN_OWNER_KEY` (existing)
-- `SUPER_ADMIN_KEY` (new, required for /super/* and for cross-venue leads_all)
-- `APP_VERSION` (optional; default 1.0.0)
+## Usage
+Set env vars:
+- ADMIN_OWNER_KEY=...
+- ADMIN_MANAGER_KEYS=...
+- SUPER_ADMIN_KEY=...   (platform-owner only)
+- APP_VERSION=1.1.0
+
+Super Admin:
+`/super/admin?key=SUPER_ADMIN_KEY`
+
+Build check:
+`/admin/api/_build?key=ADMIN_OWNER_KEY`
