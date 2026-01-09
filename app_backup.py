@@ -16,6 +16,142 @@ import urllib.request
 import urllib.error
 from flask import Flask, request, jsonify, send_from_directory, send_file, make_response
 
+# ============================================================
+# Enterprise persistence: Redis (optional, recommended)
+# - Enable by setting REDIS_URL (managed Redis)
+# - If REDIS_URL is not set or redis lib missing, falls back to filesystem (/tmp)
+# ============================================================
+REDIS_URL = os.environ.get("REDIS_URL", "").strip()
+_REDIS = None
+_REDIS_ENABLED = False
+try:
+    import redis  # type: ignore
+    if REDIS_URL:
+        _REDIS = redis.from_url(
+            REDIS_URL,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+            retry_on_timeout=True,
+        )
+        _REDIS.ping()
+        _REDIS_ENABLED = True
+except Exception:
+    _REDIS = None
+    _REDIS_ENABLED = False
+
+# Namespace for keys (safe for multi-app reuse)
+_REDIS_NS = os.environ.get("REDIS_NAMESPACE", "wc26").strip() or "wc26"
+
+# CI smoke file/key for enterprise gate (safe; does not touch production data)
+CI_SMOKE_FILE = os.environ.get("CI_SMOKE_FILE", "/tmp/wc26_ci_smoke.json")
+
+# Track if Redis write failed and we fell back to disk (enterprise detector)
+_REDIS_FALLBACK_USED = False
+_REDIS_FALLBACK_LAST_PATH = ""
+
+# Map our on-disk JSON files to Redis keys when enabled (single source of truth)
+# NOTE: These files still exist for local/dev fallback.
+_REDIS_PATH_KEY_MAP = {
+    os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_ai_queue.json"): f"{_REDIS_NS}:ai_queue",
+    os.environ.get("AI_SETTINGS_FILE", "/tmp/wc26_ai_settings.json"): f"{_REDIS_NS}:ai_settings",
+    os.environ.get("PARTNER_POLICIES_FILE", "/tmp/wc26_partner_policies.json"): f"{_REDIS_NS}:partner_policies",
+    os.environ.get("BUSINESS_RULES_FILE", "/tmp/wc26_business_rules.json"): f"{_REDIS_NS}:business_rules",
+    os.environ.get("MENU_FILE", "/tmp/wc26_menu_override.json"): f"{_REDIS_NS}:menu_override",
+    os.environ.get("ALERT_SETTINGS_FILE", "/tmp/wc26_alert_settings.json"): f"{_REDIS_NS}:alert_settings",
+    os.environ.get("ALERT_STATE_FILE", "/tmp/wc26_alert_state.json"): f"{_REDIS_NS}:alert_state",
+    os.environ.get("POLL_STORE_FILE", "/tmp/wc26_poll_votes.json"): f"{_REDIS_NS}:poll_store",
+    os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_fixtures.json"): f"{_REDIS_NS}:fixtures_cache",
+}
+
+def _redis_init_if_needed() -> None:
+    """Ensure Redis is initialized under Gunicorn.
+
+    Some deploy configs can import modules in a way that bypasses earlier init blocks.
+    This function is safe to call multiple times.
+    """
+    global _REDIS, _REDIS_ENABLED
+    if _REDIS_ENABLED:
+        return
+    url = (os.environ.get("REDIS_URL", "") or "").strip()
+    if not url:
+        return
+    try:
+        import redis  # type: ignore
+        r = redis.from_url(
+            url,
+            decode_responses=True,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+            retry_on_timeout=True,
+        )
+        r.ping()
+        _REDIS = r
+        _REDIS_ENABLED = True
+        globals()["_REDIS_URL_EFFECTIVE"] = url
+        globals()["_REDIS_ERROR"] = ""
+        try:
+            print(f"[REDIS] enabled (late) url={url.split('@')[-1]}")
+        except Exception:
+            pass
+        return
+    except Exception as e:
+        globals()["_REDIS_ERROR"] = repr(e)
+        globals()["_REDIS_URL_EFFECTIVE"] = url
+        # TLS fallback
+        try:
+            if url.startswith("redis://"):
+                import redis  # type: ignore
+                r = redis.from_url(
+                    "rediss://" + url[len("redis://"):],
+                    decode_responses=True,
+                    socket_connect_timeout=2,
+                    socket_timeout=2,
+                    retry_on_timeout=True,
+                )
+                r.ping()
+                _REDIS = r
+                _REDIS_ENABLED = True
+                globals()["_REDIS_URL_EFFECTIVE"] = "rediss://" + url[len("redis://"):]
+                globals()["_REDIS_ERROR"] = ""
+                try:
+                    print(f"[REDIS] enabled (late rediss) url={url.split('@')[-1]}")
+                except Exception:
+                    pass
+        except Exception as e2:
+            globals()["_REDIS_ERROR"] = repr(e2)
+            try:
+                print(f"[REDIS] disabled err={globals()['_REDIS_ERROR']}")
+            except Exception:
+                pass
+
+# run once at import (Gunicorn-safe)
+try:
+    _redis_init_if_needed()
+except Exception:
+    pass
+
+def _redis_get_json(key: str, default=None):
+    if not (_REDIS_ENABLED and _REDIS and key):
+        return default
+    try:
+        raw = _REDIS.get(key)
+        if not raw:
+            return default
+        return json.loads(raw)
+    except Exception:
+        return default
+
+def _redis_set_json(key: str, payload) -> bool:
+    if not (_REDIS_ENABLED and _REDIS and key):
+        return False
+    try:
+        _REDIS.set(key, json.dumps(payload, ensure_ascii=False))
+        return True
+    except Exception:
+        return False
+
+
 # OpenAI client (compat: works with both newer and older openai python packages)
 # NOTE: We keep the server running even if OpenAI SDK isn't installed.
 # Chat endpoints will return a clear config error instead of crashing the whole app.
@@ -69,9 +205,53 @@ except Exception:
 # ============================================================
 app = Flask(__name__)
 
+# ============================================================
+# HARD SAFETY: forbid Flask dev server in production (Render)
+# - wsgi.py sets WCG_WSGI=1 BEFORE importing app.py
+# ============================================================
+if os.environ.get("RENDER") == "true":
+    # Must be loaded via gunicorn + wsgi.py
+    if os.environ.get("WCG_WSGI") != "1":
+        raise RuntimeError(
+            "FATAL: Flask dev server detected in production. "
+            "Use: gunicorn wsgi:application"
+        )
+
 
 
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0
+
+
+# ============================================================
+# Public platform probes (Azure/App Service friendly)
+# - These MUST be fast and must not touch Redis/DB/Sheets/OpenAI/network.
+# - They exist so platforms can verify the container is serving HTTP.
+# ============================================================
+@app.get("/_wsgi")
+def public_wsgi_probe():
+    server_sw = request.environ.get("SERVER_SOFTWARE", "") or ""
+    looks_like_gunicorn = ("gunicorn" in server_sw.lower())
+    return jsonify({
+        "ok": True,
+        "service": "wc-concierge-app",
+        "looks_like_gunicorn": bool(looks_like_gunicorn),
+        "server_software": server_sw,
+        "python": (os.environ.get("PYTHON_VERSION") or ""),
+    })
+
+@app.get("/_prod_gate")
+def public_prod_gate():
+    # Keep this endpoint *very* cheap: only runtime/process proof.
+    server_sw = request.environ.get("SERVER_SOFTWARE", "") or ""
+    looks_like_gunicorn = ("gunicorn" in server_sw.lower())
+    ok_all = bool(looks_like_gunicorn)
+    return jsonify({
+        "ok": ok_all,
+        "checks": {
+            "gunicorn": {"ok": bool(looks_like_gunicorn), "server_software": server_sw},
+        },
+        "service": "wc-concierge-app",
+    }), (200 if ok_all else 500)
 
 
 @app.after_request
@@ -1272,6 +1452,88 @@ def admin_api_whoami():
     ctx = _admin_ctx()
     return jsonify(ok=bool(ctx.get("ok")), role=ctx.get("role", ""), actor=ctx.get("actor", ""))
 
+
+@app.route("/admin/api/_build", methods=["GET"])
+def admin_api_build():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+
+
+@app.route("/admin/api/_redis_smoke", methods=["GET"])
+def admin_api_redis_smoke():
+    """Enterprise smoke: verify Redis write/read works and NO disk fallback occurs."""
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    # runtime re-init (Gunicorn-safe)
+    try:
+        _redis_init_if_needed()
+    except Exception:
+        pass
+
+    if not (_REDIS_ENABLED and _REDIS):
+        return jsonify({
+            "ok": False,
+            "error": "Redis not enabled",
+            "redis_enabled": bool(_REDIS_ENABLED),
+            "redis_url_present": bool((os.environ.get("REDIS_URL","") or "").strip()),
+            "redis_namespace": _REDIS_NS,
+        }), 503
+
+    # reset fallback flags for this check
+    global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
+    _REDIS_FALLBACK_USED = False
+    _REDIS_FALLBACK_LAST_PATH = ""
+
+    payload = {
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "pid": os.getpid(),
+        "nonce": secrets.token_hex(6),
+    }
+
+    # Use the app's persistence layer (tests the real path mapping)
+    try:
+        _safe_write_json_file(CI_SMOKE_FILE, payload)
+        got = _safe_read_json_file(CI_SMOKE_FILE, default=None)
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "error": f"Smoke failed: {e}",
+            "redis_enabled": True,
+            "fallback_used": bool(_REDIS_FALLBACK_USED),
+            "fallback_last_path": _REDIS_FALLBACK_LAST_PATH,
+        }), 500
+
+    match = (got == payload)
+    ok_all = bool(match) and (not _REDIS_FALLBACK_USED)
+
+    return jsonify({
+        "ok": ok_all,
+        "redis_enabled": True,
+        "redis_namespace": _REDIS_NS,
+        "key": f"{_REDIS_NS}:ci_smoke",
+        "fallback_used": bool(_REDIS_FALLBACK_USED),
+        "fallback_last_path": _REDIS_FALLBACK_LAST_PATH,
+        "match": bool(match),
+        "payload": payload,
+        "got": got,
+    }), (200 if ok_all else 500)
+
+    rs = _redis_runtime_status()
+    return jsonify({
+        "ok": True,
+        "redis_enabled": bool(rs.get("redis_enabled")),
+        "redis_namespace": rs.get("redis_namespace") or "",
+        "redis_url_present": bool(rs.get("redis_url_present")),
+        "redis_url_effective": rs.get("redis_url_effective") or "",
+        "redis_error": rs.get("redis_error") or "",
+        "build_verify": os.environ.get("BUILD_VERIFY", ""),
+        "chat_logicfix_build": os.environ.get("CHAT_LOGICFIX_BUILD", ""),
+    })
+
 def _require_admin(min_role: str = "manager"):
     """Enforce admin access.
 
@@ -1303,6 +1565,26 @@ def _admin_ctx() -> Dict[str, str]:
     if isinstance(ctx, dict) and ctx.get("ok"):
         return ctx
     return {"ok": False, "role": "", "actor": ""}
+
+
+def _redis_runtime_status() -> Dict[str, Any]:
+    """Runtime Redis truth (Gunicorn-safe): re-init + ping where possible."""
+    try:
+        _redis_init_if_needed()
+    except Exception:
+        pass
+
+    url_present = bool((os.environ.get("REDIS_URL", "") or "").strip())
+    err = str(globals().get("_REDIS_ERROR", "") or "")
+    url_eff = str(globals().get("_REDIS_URL_EFFECTIVE", "") or "")
+
+    return {
+        "redis_enabled": bool(_REDIS_ENABLED),
+        "redis_namespace": _REDIS_NS,
+        "redis_url_present": url_present,
+        "redis_url_effective": url_eff,
+        "redis_error": err,
+    }
 
 def get_menu_for_lang(lang: str) -> Dict[str, Any]:
     """Return a normalized menu payload for a given language.
@@ -1450,10 +1732,15 @@ POLL_STORE_FILE = os.environ.get("POLL_STORE_FILE", "/tmp/wc26_poll_votes.json")
 
 
 def _safe_read_json_file(path: str, default: Any = None) -> Any:
-    """Read JSON from disk safely.
+    """Read JSON from Redis (if enabled) or disk safely."""
+    try:
+        if _REDIS_ENABLED:
+            key = _REDIS_PATH_KEY_MAP.get(path)
+            if key:
+                return _redis_get_json(key, default=default)
+    except Exception:
+        pass
 
-    Returns `default` if the file is missing or invalid.
-    """
     try:
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
@@ -1462,16 +1749,34 @@ def _safe_read_json_file(path: str, default: Any = None) -> Any:
         return default
     return default
 
-
 def _safe_write_json_file(path: str, payload: Any) -> None:
+    global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
+    """Write JSON to Redis (if enabled) or disk safely."""
+    try:
+        if _REDIS_ENABLED:
+            key = _REDIS_PATH_KEY_MAP.get(path)
+            if key:
+                ok = _redis_set_json(key, payload)
+                if ok:
+                    return
+                # Redis was enabled, but write failed — mark fallback for enterprise gate
+                _REDIS_FALLBACK_USED = True
+                _REDIS_FALLBACK_LAST_PATH = str(path)
+    except Exception:
+        # Mark fallback on unexpected redis path errors too (best effort)
+        try:
+            _REDIS_FALLBACK_USED = True
+            _REDIS_FALLBACK_LAST_PATH = str(path)
+        except Exception:
+            pass
+
+
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             json.dump(payload, f, ensure_ascii=False)
     except Exception:
-        # best effort; don't fail the app if disk isn't writable
         pass
-
 
 def _fetch_fixture_feed() -> List[Dict[str, Any]]:
     """
@@ -4598,6 +4903,151 @@ def admin_api_ai_settings():
 # AI Queue API (Admin/Manager)
 # ============================================================
 
+
+
+@app.route("/admin/api/ai/run", methods=["POST"])
+def admin_api_ai_run():
+    """Manually run AI triage from Admin UI (Option B).
+
+    This does NOT auto-apply anything. It only proposes actions into the AI Queue
+    so managers/owners can approve/deny.
+    Payload:
+      { "mode": "new", "limit": 5 }  -> run on newest leads with status "New"
+      { "row": 12 }                 -> run on a specific sheet row (2..N)
+    """
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    ctx = _admin_ctx()
+    actor = ctx.get("actor", "")
+    role = ctx.get("role", "")
+
+    data = request.get_json(silent=True) or {}
+    mode = (data.get("mode") or "new").strip().lower()
+    try:
+        limit = int(data.get("limit") or 5)
+    except Exception:
+        limit = 5
+    limit = max(1, min(25, limit))
+
+    try:
+        row_num = int(data.get("row") or 0)
+    except Exception:
+        row_num = 0
+
+    # Load sheet (best-effort). If Sheets isn't configured, return a friendly error.
+    try:
+        gc = get_gspread_client()
+        ws = gc.open(SHEET_NAME).sheet1
+        header = ensure_sheet_schema(ws)
+        hmap = header_map(header)
+    except Exception as e:
+        return jsonify({"ok": False, "error": "Sheets not available", "detail": str(e)[:300]}), 400
+
+    def _lead_from_row(row_vals: list) -> dict:
+        def get(col: str) -> str:
+            idx = hmap.get(_normalize_header(col))
+            if not idx:
+                return ""
+            i0 = idx - 1
+            return (row_vals[i0] if i0 < len(row_vals) else "") or ""
+        lead = {
+            "name": get("name"),
+            "phone": get("phone"),
+            "date": get("date"),
+            "time": get("time"),
+            "party_size": get("party_size"),
+            "language": get("language"),
+            "entry_point": get("entry_point"),
+            "tier": get("tier"),
+            "queue": get("queue"),
+            "business_context": get("business_context"),
+            "budget": get("budget"),
+            "notes": get("notes"),
+            "vibe": get("vibe"),
+            "status": get("status"),
+            "vip": get("vip"),
+        }
+        # Normalize vip to bool-ish for the AI prompt
+        lead["vip"] = str(lead.get("vip") or "").strip().lower() in ["1","true","yes","y"]
+        return lead
+
+    targets = []
+    if row_num >= 2:
+        try:
+            row_vals = ws.row_values(row_num) or []
+            targets = [(row_num, _lead_from_row(row_vals))]
+        except Exception as e:
+            return jsonify({"ok": False, "error": "Failed to read row", "detail": str(e)[:300]}), 400
+    else:
+        # mode "new": newest first, status == "New"
+        try:
+            rows = ws.get_all_values()
+        except Exception as e:
+            return jsonify({"ok": False, "error": "Failed to read sheet", "detail": str(e)[:300]}), 400
+
+        if not rows or len(rows) < 2:
+            return jsonify({"ok": True, "ran": 0, "proposed": 0, "queue_ids": []})
+
+        status_col = hmap.get("status")  # 1-based
+        # Walk from bottom (newest) upward, collect "New"
+        for i in range(len(rows)-1, 0, -1):
+            if len(targets) >= limit:
+                break
+            rv = rows[i]
+            st = ""
+            if status_col and (status_col-1) < len(rv):
+                st = (rv[status_col-1] or "").strip().lower()
+            if st in ["new", ""]:
+                sheet_row = i + 1  # rows includes header at index 0
+                targets.append((sheet_row, _lead_from_row(rv)))
+
+    proposed_ids = []
+    ran = 0
+
+    # Run AI and push proposals into the queue
+    for sheet_row, lead in targets:
+        ran += 1
+        out = _ai_suggest_actions_for_lead(lead, sheet_row=sheet_row)
+        if not out or not out.get("ok"):
+            continue
+        conf = float(out.get("confidence") or 0.0)
+        try:
+            conf = max(0.0, min(1.0, conf))
+        except Exception:
+            conf = 0.0
+        actions = out.get("actions") or []
+        for a in actions:
+            typ = str(a.get("type") or "").strip()
+            payload = a.get("payload") or {}
+            # Always attach sheet_row for safe apply handlers
+            if isinstance(payload, dict) and "sheet_row" not in payload:
+                payload["sheet_row"] = sheet_row
+            rationale = str(a.get("reason") or out.get("notes") or "")[:1500]
+            entry = {
+                "id": _queue_new_id(),
+                "type": typ,
+                "payload": payload,
+                "confidence": conf,
+                "rationale": rationale,
+                "status": "pending",
+                "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "created_by": actor,
+                "created_role": role,
+                "reviewed_at": None,
+                "reviewed_by": None,
+                "reviewed_role": None,
+                "applied_result": None,
+            }
+            _queue_add(entry)
+            proposed_ids.append(entry["id"])
+
+    if proposed_ids:
+        _audit("ai.run.manual", {"mode": mode, "row": row_num or None, "ran": ran, "proposed": len(proposed_ids)})
+        _notify("ai.run.manual", {"ran": ran, "proposed": len(proposed_ids), "by": actor, "role": role}, targets=["owner","manager"])
+
+    return jsonify({"ok": True, "ran": ran, "proposed": len(proposed_ids), "queue_ids": proposed_ids})
 @app.route("/admin/api/ai/queue", methods=["GET"])
 def admin_api_ai_queue_list():
     ok, resp = _require_admin(min_role="manager")
@@ -5787,6 +6237,12 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     <div class="small">Proposed AI actions wait here for <b>Approve</b>, <b>Deny</b>, or <b>Owner Override</b>. This keeps automation powerful but controlled.</div>
     <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <button class="btn2" onclick="loadAIQueue()">Refresh</button>
+      <span class="note" style="opacity:.6">|</span>
+      <input id="ai-run-limit" class="inp" type="number" min="1" max="25" step="1" value="5" style="max-width:90px" title="How many newest New leads to analyze" />
+      <button class="btn2" onclick="runAINew()">Run AI (New)</button>
+      <input id="ai-run-row" class="inp" type="number" min="2" step="1" placeholder="Row #" style="max-width:110px" title="Run AI for a specific Google Sheet row number" />
+      <button class="btn2" onclick="runAIRow()">Run AI (Row)</button>
+
       <select id="aiq-filter" class="inp" style="max-width:180px" onchange="loadAIQueue()">
         <option value="">All</option>
         <option value="pending">Pending</option>
@@ -6818,6 +7274,47 @@ async function loadAIQueue(){
     if(list) list.textContent = 'Failed to load queue.';
   }
 }
+
+async function runAINew(){
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running AI…';
+  const lim = parseInt(qs('#ai-run-limit')?.value || '5', 10);
+  try{
+    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({mode:'new', limit: isNaN(lim)?5:lim})
+    });
+    const data = await r.json();
+    if(!data.ok) throw new Error(data.error || 'Failed');
+    if(msg) msg.textContent = `Ran ${data.ran||0}. Proposed ${data.proposed||0}.`;
+    await loadAIQueue();
+  }catch(e){
+    if(msg) msg.textContent = 'Run failed: ' + (e.message || e);
+  }
+}
+
+async function runAIRow(){
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running AI…';
+  const row = parseInt(qs('#ai-run-row')?.value || '0', 10);
+  if(!row || row < 2){
+    if(msg) msg.textContent = 'Enter a valid sheet Row # (>= 2).';
+    return;
+  }
+  try{
+    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({row})
+    });
+    const data = await r.json();
+    if(!data.ok) throw new Error(data.error || 'Failed');
+    if(msg) msg.textContent = `Row ${row}: Proposed ${data.proposed||0}.`;
+    await loadAIQueue();
+  }catch(e){
+    if(msg) msg.textContent = 'Run failed: ' + (e.message || e);
+  }
+}
+
 
 function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -8090,8 +8587,290 @@ def lead():
 
     return jsonify({"ok": True, "sheet_ok": bool(sheet_ok), "sheet_row": int(sheet_row or 0)})
 
+
+# ============================================================
+# E2E Test Hooks (CI-safe, opt-in)
+# - Disabled by default. Enable by setting E2E_TEST_MODE=1.
+# - These endpoints are designed for deterministic Playwright runs (no UI flake).
+# ============================================================
+
+E2E_TEST_MODE = str(os.environ.get("E2E_TEST_MODE", "0")).strip() == "1"
+E2E_TEST_TOKEN = str(os.environ.get("E2E_TEST_TOKEN", "")).strip()
+
+def _require_e2e_test_access() -> Tuple[bool, str]:
+    """Return (ok, reason). Only allows access when E2E_TEST_MODE=1 and caller is authorized."""
+    if not E2E_TEST_MODE:
+        return False, "E2E test mode is disabled"
+    # Prefer a dedicated token for CI. Fallback: owner key can be used locally.
+    token = (request.headers.get("X-E2E-Test-Token") or request.args.get("test_token") or "").strip()
+    key = (request.args.get("key") or "").strip()
+    if E2E_TEST_TOKEN:
+        if token != E2E_TEST_TOKEN:
+            return False, "Missing/invalid test token"
+        return True, ""
+    # If no token configured, allow OWNER key as a last resort (local-only convenience).
+    if ADMIN_OWNER_KEY and key == ADMIN_OWNER_KEY:
+        return True, ""
+    return False, "Missing authorization (set E2E_TEST_TOKEN or pass owner ?key=)"
+
+@app.route("/__test__/health", methods=["GET"])
+def __test_health():
+    """
+    CI readiness probe (read-only).
+    - Always returns HTTP 200 so GitHub Actions can reliably wait for the Flask server to boot.
+    - Does NOT require auth/tokens; state-changing __test__ endpoints remain protected.
+    """
+    try:
+        e2e_mode = str(os.environ.get("E2E_TEST_MODE", "0")).strip() == "1"
+        token_set = bool(str(os.environ.get("E2E_TEST_TOKEN", "")).strip())
+    except Exception:
+        e2e_mode = False
+        token_set = False
+
+    resp = jsonify({
+        "ok": True,
+        "e2e_test_mode": bool(e2e_mode),
+        "token_configured": bool(token_set),
+        "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    })
+    resp.headers["Cache-Control"] = "no-store"
+    return resp, 200
+
+
+@app.route("/__test__/reset", methods=["POST"])
+def __test_reset():
+    """
+    Reset minimal state for deterministic tests.
+    Safe: only resets AI queue (and optionally leaves other state untouched).
+    """
+    ok, reason = _require_e2e_test_access()
+    if not ok:
+        return jsonify({"ok": False, "error": reason}), 403
+    try:
+        _safe_write_json_file(AI_QUEUE_FILE, [])
+        return jsonify({"ok": True, "reset": ["ai_queue"]})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"reset failed: {e}"}), 500
+
+@app.route("/__test__/ai_queue/seed", methods=["POST"])
+def __test_ai_queue_seed():
+    """
+    Seed a single AI Queue item with a stable schema.
+    This bypasses "AI suggestion" generation so UI tests don't depend on OpenAI/Sheets.
+    """
+    ok, reason = _require_e2e_test_access()
+    if not ok:
+        return jsonify({"ok": False, "error": reason}), 403
+
+    body = request.get_json(silent=True) or {}
+    action_type = str(body.get("type") or body.get("action_type") or "reply_draft").strip().lower()
+    if action_type not in ("vip_tag", "status_update", "reply_draft"):
+        return jsonify({"ok": False, "error": "Invalid type. Use vip_tag | status_update | reply_draft"}), 400
+
+    entry = {
+        "id": _queue_new_id(),
+        "type": action_type,
+        "title": str(body.get("title") or "CI Seed Item"),
+        "details": str(body.get("details") or "Seeded by E2E test hook"),
+        "status": "pending",
+        "payload": body.get("payload") if isinstance(body.get("payload"), dict) else {},
+        "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "created_by": "e2e",
+    }
+    try:
+        _queue_add(entry)
+        return jsonify({"ok": True, "id": entry["id"], "item": entry})
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"seed failed: {e}"}), 500
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
     app.run(host="0.0.0.0", port=port, debug=False)
 # SIZE_PAD_START
 ###########################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################
+
+# ============================================================
+# Enterprise shared state in Redis (Ops / FanZone / Polls)
+# ============================================================
+_OPS_KEY = f"{_REDIS_NS}:ops_state"
+_FANZONE_KEY = f"{_REDIS_NS}:fanzone_state"
+
+def _ops_state_default():
+    return {"pause": False, "viponly": False, "waitlist": False, "notify": False,
+            "updated_at": None, "updated_by": None, "updated_role": None}
+
+def _load_ops_state() -> Dict[str, Any]:
+    if _REDIS_ENABLED:
+        st = _redis_get_json(_OPS_KEY, default=None)
+        if isinstance(st, dict):
+            return _deep_merge(_ops_state_default(), st)
+    return _ops_state_default()
+
+def _save_ops_state(patch: Dict[str, Any], actor: str, role: str) -> Dict[str, Any]:
+    st = _deep_merge(_load_ops_state(), patch or {})
+    st["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    st["updated_by"] = actor
+    st["updated_role"] = role
+    if _REDIS_ENABLED:
+        _redis_set_json(_OPS_KEY, st)
+    return st
+
+def _load_fanzone_state() -> Dict[str, Any]:
+    if _REDIS_ENABLED:
+        st = _redis_get_json(_FANZONE_KEY, default=None)
+        if isinstance(st, dict):
+            return st
+    st = _safe_read_json_file(POLL_STORE_FILE, default={})
+    return st if isinstance(st, dict) else {}
+
+def _save_fanzone_state(st: Dict[str, Any], actor: str, role: str) -> Dict[str, Any]:
+    st2 = st if isinstance(st, dict) else {}
+    st2["_meta"] = {
+        "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "updated_by": actor,
+        "updated_role": role,
+    }
+    if _REDIS_ENABLED:
+        _redis_set_json(_FANZONE_KEY, st2)
+    else:
+        _safe_write_json_file(POLL_STORE_FILE, st2)
+    return st2
+
+@app.get("/admin/api/ops/state")
+def admin_api_ops_state():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    return jsonify({"ok": True, "state": _load_ops_state()})
+
+@app.post("/admin/api/ops/save")
+def admin_api_ops_save():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    actor = ctx.get("actor","")
+    role = ctx.get("role","")
+    data = request.get_json(silent=True) or {}
+    patch = {}
+    for k in ["pause","viponly","waitlist","notify"]:
+        if k in data:
+            patch[k] = bool(data.get(k))
+    st = _save_ops_state(patch, actor=actor, role=role)
+    try:
+        _audit("ops.update", {"by": actor, "role": role, "patch": patch})
+    except Exception:
+        pass
+    return jsonify({"ok": True, "state": st})
+
+@app.get("/admin/api/fanzone/state")
+def admin_api_fanzone_state():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    return jsonify({"ok": True, "state": _load_fanzone_state()})
+
+@app.post("/admin/api/fanzone/save")
+def admin_api_fanzone_save_redis():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    actor = ctx.get("actor","")
+    role = ctx.get("role","")
+    data = request.get_json(silent=True) or {}
+    st = _save_fanzone_state(data, actor=actor, role=role)
+    try:
+        _audit("fanzone.save", {"by": actor, "role": role})
+    except Exception:
+        pass
+    return jsonify({"ok": True, "state": st})
+
+# ============================================================
+# Enterprise hard-gate: WSGI / Gunicorn verification
+# ============================================================
+@app.get("/admin/api/_wsgi")
+def admin_api_wsgi():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    server_sw = request.environ.get("SERVER_SOFTWARE", "") or ""
+    return jsonify({
+        "ok": True,
+        "wsgi_loaded": bool(app.config.get("WSGI_LOADED")),
+        "looks_like_gunicorn": "gunicorn" in server_sw.lower(),
+        "server_software": server_sw,
+    })
+
+# ============================================================
+# Enterprise hard-gate: unified production readiness check
+# - Single endpoint for CI and ops validation.
+# ============================================================
+@app.get("/admin/api/_prod_gate")
+def admin_api_prod_gate():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    # WSGI / Gunicorn proof
+    server_sw = request.environ.get("SERVER_SOFTWARE", "") or ""
+    looks_like_gunicorn = ("gunicorn" in server_sw.lower())
+    wsgi_loaded = bool(app.config.get("WSGI_LOADED"))
+
+    # Redis proof (no fallback allowed)
+    try:
+        _redis_init_if_needed()
+    except Exception:
+        pass
+
+    rs = _redis_runtime_status()
+    redis_enabled = bool(rs.get("redis_enabled"))
+    redis_namespace = rs.get("redis_namespace") or ""
+
+    # Run the same write/read smoke used by CI, and ensure no disk fallback
+    global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
+    _REDIS_FALLBACK_USED = False
+    _REDIS_FALLBACK_LAST_PATH = ""
+
+    smoke_ok = False
+    smoke_detail = {}
+    if redis_enabled:
+        payload = {
+            "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "pid": os.getpid(),
+            "nonce": secrets.token_hex(6),
+        }
+        try:
+            _safe_write_json_file(CI_SMOKE_FILE, payload)
+            got = _safe_read_json_file(CI_SMOKE_FILE, default=None)
+            match = (got == payload)
+            smoke_ok = bool(match) and (not _REDIS_FALLBACK_USED)
+            smoke_detail = {
+                "match": bool(match),
+                "fallback_used": bool(_REDIS_FALLBACK_USED),
+                "fallback_last_path": _REDIS_FALLBACK_LAST_PATH,
+            }
+        except Exception as e:
+            smoke_ok = False
+            smoke_detail = {"error": str(e)}
+
+    ok_all = bool(looks_like_gunicorn and wsgi_loaded and redis_enabled and smoke_ok)
+
+    return jsonify({
+        "ok": ok_all,
+        "checks": {
+            "gunicorn": {"ok": bool(looks_like_gunicorn), "server_software": server_sw},
+            "wsgi_loaded": {"ok": bool(wsgi_loaded)},
+            "redis_enabled": {"ok": bool(redis_enabled), "namespace": redis_namespace},
+            "redis_smoke": {"ok": bool(smoke_ok), **(smoke_detail or {})},
+        },
+        "redis": {
+            "redis_enabled": bool(rs.get("redis_enabled")),
+            "redis_namespace": redis_namespace,
+            "redis_url_present": bool(rs.get("redis_url_present")),
+            "redis_url_effective": rs.get("redis_url_effective") or "",
+            "redis_error": rs.get("redis_error") or "",
+        },
+    }), (200 if ok_all else 500)
