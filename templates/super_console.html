@@ -33,7 +33,37 @@
     </div>
 
     <div class="grid">
-      <div class="card"><div class="k">Venues</div><div class="v" id="venues">—</div></div>
+  
+    <div class="card" style="margin-top:12px">
+      <div class="k">All Leads (cross-venue)</div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+        <input id="q" placeholder="Search name/phone/venue…" style="flex:1;min-width:220px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
+        <select id="limit" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
+          <option value="200">200</option>
+          <option value="500" selected>500</option>
+          <option value="1000">1000</option>
+        </select>
+        <button id="reload" style="background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--text);cursor:pointer">Reload</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Venue</th>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>Date/Time</th>
+            <th class="right">Party</th>
+            <th>Status</th>
+            <th>Tier</th>
+            <th>Queue</th>
+          </tr>
+        </thead>
+        <tbody id="leadRows"></tbody>
+      </table>
+      <div class="err" id="leadErr"></div>
+    </div>
+
+    <div class="card"><div class="k">Venues</div><div class="v" id="venues">—</div></div>
       <div class="card"><div class="k">AI Queue items</div><div class="v" id="aiq">—</div></div>
       <div class="card"><div class="k">Build</div><div class="v" id="build">—</div></div>
     </div>
@@ -56,6 +86,65 @@
   const key = q.get("key") || "";
   const super_key = q.get("super_key") || key; // allow SUPER key as key param
   const headers = super_key ? {"X-Super-Key": super_key} : {};
+
+  const leadRowsEl = document.getElementById("leadRows");
+  const leadErrEl = document.getElementById("leadErr");
+  const qEl = document.getElementById("q");
+  const limitEl = document.getElementById("limit");
+  const reloadBtn = document.getElementById("reload");
+
+  async function loadLeads(){
+    if(!leadRowsEl) return;
+    leadErrEl.textContent = "";
+    leadRowsEl.innerHTML = "<tr><td colspan=\"8\">Loading…</td></tr>";
+    const limit = (limitEl && limitEl.value) ? limitEl.value : "500";
+    const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)+"&super_key="+encodeURIComponent(super_key)+"&limit="+encodeURIComponent(limit);
+    try{
+      const r = await fetch(url, {headers});
+      const j = await r.json();
+      if(!j.ok) throw new Error(j.error || "forbidden");
+      const query = (qEl && qEl.value || "").trim().toLowerCase();
+      const rows = (j.leads || []).filter(x=>{
+        if(!query) return true;
+        const hay = ((x._venue_id||"")+" "+(x.name||"")+" "+(x.phone||"")).toLowerCase();
+        return hay.includes(query);
+      }).slice(0, Number(limit));
+      leadRowsEl.innerHTML = "";
+      if(!rows.length){
+        leadRowsEl.innerHTML = "<tr><td colspan=\"8\">No leads found.</td></tr>";
+        return;
+      }
+      for(const x of rows){
+        const dt = ((x.date||"") + " " + (x.time||"")).trim();
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${(x._venue_id||"")}</td>
+          <td>${(x.name||"")}</td>
+          <td>${(x.phone||"")}</td>
+          <td>${dt || (x.timestamp||"")}</td>
+          <td class="right">${(x.party_size||"")}</td>
+          <td>${(x.status||"")}</td>
+          <td>${(x.tier||"")}</td>
+          <td>${(x.queue||"")}</td>
+        `;
+        leadRowsEl.appendChild(tr);
+      }
+    }catch(e){
+      leadRowsEl.innerHTML = "";
+      leadErrEl.textContent = "Error: " + (e.message||e);
+    }
+  }
+
+  if(reloadBtn){
+    reloadBtn.addEventListener("click", ()=>loadLeads());
+  }
+  if(qEl){
+    qEl.addEventListener("input", ()=>loadLeads());
+  }
+  if(limitEl){
+    limitEl.addEventListener("change", ()=>loadLeads());
+  }
+
   try{
     const r = await fetch("/super/api/overview?key="+encodeURIComponent(key)+"&super_key="+encodeURIComponent(super_key), {headers});
     const j = await r.json();
@@ -73,6 +162,7 @@
   }catch(e){
     document.getElementById("err").textContent = "Error: " + (e.message||e);
   }
+  await loadLeads();
   try{
     const b = await fetch("/admin/api/_build?key="+encodeURIComponent(key));
     const bj = await b.json();

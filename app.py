@@ -9208,13 +9208,13 @@ def admin_api_leads_all():
     - Never hard-fail the entire request because one venue is misconfigured.
     - Return `errors[]` per venue so UI can show what needs fixing.
     """
-    ok, resp = _require_admin(min_role="owner")
-    if not ok:
-        return resp
-
-    # Only platform owner can query cross-venue
+    # Super Admin can query cross-venue without presenting a venue admin key.
     if not _is_super_admin_request():
+        ok, resp = _require_admin(min_role="owner")
+        if not ok:
+            return resp
         return jsonify({"ok": False, "error": "forbidden"}), 403
+
 
     try:
         limit = int(request.args.get("limit") or 500)
