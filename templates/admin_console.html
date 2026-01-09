@@ -3,11 +3,259 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="dark light"/>
   <title>{{ page_title }} — World Cup Concierge</title>
+
+  <style>
+  :root{color-scheme:dark;--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;}
+  body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(900px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);color:var(--text);}
+  .wrap{max-width:1200px;margin:0 auto;padding:18px 14px 60px;}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px;}
+  .h1{font-size:22px;font-weight:800;letter-spacing:.2px;}
+  .sub{font-size:12px;color:var(--muted);margin-top:4px;}
+  .btn{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.10);color:var(--text);padding:10px 12px;border-radius:12px;cursor:pointer}
+  .tabs{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0 10px;}
+  .tabbtn{padding:10px 12px;border-radius:14px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.06);cursor:pointer;color:var(--text);font-weight:700;font-size:13px}
+  .tabbtn.active{outline:2px solid rgba(212,175,55,.35);background:rgba(212,175,55,.10)}
+  .pane{display:none;border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));border-radius:18px;padding:16px;margin-top:12px}
+  .pane.active{display:block}
+  .muted{color:var(--muted);font-size:12px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px}
+  th,td{border-bottom:1px solid rgba(255,255,255,.08);padding:8px 6px;text-align:left;vertical-align:top}
+  th{color:var(--muted);font-weight:700}
+  .badge{display:inline-block;padding:2px 8px;border:1px solid rgba(255,255,255,.12);border-radius:999px;margin-left:6px}
+  .toast{position:fixed;right:14px;bottom:14px;background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.12);padding:10px 12px;border-radius:12px;z-index:9999}
+  select,input{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);color:var(--text);padding:9px 10px;border-radius:12px}
+  </style>
 </head>
 <body>
-  <h1>{{ page_title }}</h1>
-  <p>{{ page_sub }}</p>
-  <p>Admin UI extraction Phase 1 active.</p>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <div class="h1">{{ page_title }}</div>
+      <div class="sub">Template UI (Phase 2) · {{ page_sub }}</div>
+    </div>
+    <div class="row">
+      <button class="btn" onclick="location.href='/admin'+location.search">Legacy /admin</button>
+      <button class="btn" onclick="location.href='/admin/fanzone'+location.search">Fan Zone</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button class="tabbtn" data-tab="ops">Ops</button>
+    <button class="tabbtn" data-tab="leads">Leads</button>
+    <button class="tabbtn" data-tab="allleads" data-minrole="owner">All Leads</button>
+  </div>
+
+  <div class="pane" id="pane-ops">
+    <div class="muted">Phase 2: All Leads extracted. Ops stays in legacy /admin for now.</div>
+  </div>
+
+  <div class="pane" id="pane-leads">
+    <div class="row">
+      <button class="btn" onclick="loadLeads()">Refresh</button>
+      <span class="muted" id="leads-status"></span>
+    </div>
+    <div id="leads-out" class="muted" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="pane" id="pane-allleads">
+    <div class="row">
+      <button class="btn" onclick="loadAllLeads()">Refresh</button>
+      <input id="allleads-limit" type="number" min="0" max="5000" value="500" style="width:110px" />
+      <input id="allleads-pervenue" type="number" min="1" max="2000" value="300" style="width:120px" />
+      <select id="allleads-venuefilter" style="min-width:180px">
+        <option value="">All venues</option>
+      </select>
+      <span class="muted" id="allleads-status"></span>
+      <span class="badge" id="allleads-errors-badge" style="display:none"></span>
+    </div>
+
+    <div class="muted" id="allleads-errors" style="margin-top:8px;"></div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Venue</th>
+          <th>Row</th>
+          <th>Name</th>
+          <th>Phone</th>
+          <th>Date/Time</th>
+          <th>Status</th>
+          <th>VIP</th>
+          <th>Budget</th>
+          <th>Notes</th>
+        </tr>
+      </thead>
+      <tbody id="allleads-body"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const __ADMIN_ROLE__ = "{{ role }}";
+</script>
+
+<script>
+const KEY = (new URLSearchParams(window.location.search).get('key') || '');
+let ROLE = (__ADMIN_ROLE__ || 'manager');
+const ROLE_RANK = { "manager": 1, "owner": 2 };
+
+function toast(msg){
+  try{
+    const el = document.createElement('div');
+    el.className='toast';
+    el.textContent=msg;
+    document.body.appendChild(el);
+    setTimeout(()=>{ try{ el.remove(); }catch(e){} }, 2200);
+  }catch(e){ alert(msg); }
+}
+
+function setActive(tab){
+  document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
+  document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
+  const pane = document.getElementById('pane-'+tab);
+  if(pane) pane.classList.add('active');
+  try{ history.replaceState(null,'','#'+tab); }catch(e){}
+}
+
+window.showTab = function(tab){
+  try{
+    const b = document.querySelector('.tabbtn[data-tab="'+tab+'"]');
+    const minr = (b && b.getAttribute) ? (b.getAttribute('data-minrole') || 'manager') : 'manager';
+    if(ROLE_RANK[ROLE] < ROLE_RANK[minr]){ toast('Owner only — redirected to Ops'); setActive('ops'); return false; }
+  }catch(e){}
+  if(tab==='allleads') loadAllLeads();
+  if(tab==='leads') loadLeads();
+  setActive(tab); return false;
+};
+
+(function(){
+  const _origFetch = window.fetch;
+  window.fetch = function(input, init){
+    try{
+      let url = (typeof input === 'string') ? input : (input && input.url) ? input.url : '';
+      if(url && url.startsWith('/')){
+        if((url.startsWith('/admin') || url.startsWith('/api') || url.startsWith('/health')) && url.indexOf('key=')===-1){
+          url += (url.indexOf('?')===-1 ? '?' : '&') + 'key=' + encodeURIComponent(KEY||'');
+          if(typeof input === 'string') input = url;
+          else input = new Request(url, input);
+        }
+      }
+    }catch(e){}
+    return _origFetch(input, init);
+  };
+})();
+
+async function refreshRole(){
+  try{
+    const r = await fetch(`/admin/api/whoami?key=${encodeURIComponent(KEY||'')}`, {cache:'no-store'});
+    const j = await r.json();
+    if(j && j.ok && j.role) ROLE = j.role;
+  }catch(e){}
+}
+
+function escapeHtml(s){
+  return String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function loadLeads(){
+  const st = document.getElementById('leads-status');
+  const out = document.getElementById('leads-out');
+  st.textContent = 'Loading...';
+  try{
+    const r = await fetch('/admin/api/leads', {cache:'no-store'});
+    const j = await r.json();
+    if(!j || !j.ok){ st.textContent = 'Failed'; out.textContent = JSON.stringify(j||{}); return; }
+    const items = j.items || j.leads || [];
+    st.textContent = `OK (${items.length})`;
+    out.innerHTML = items.slice(0,50).map(x => `<div>• ${escapeHtml(x.name||x.contact||'')} — ${escapeHtml(x.status||'')}</div>`).join('') || '<div class="muted">No leads.</div>';
+  }catch(e){
+    st.textContent = 'Failed';
+    out.textContent = String(e);
+  }
+}
+
+function renderAllLeads(items){
+  const body = document.getElementById('allleads-body');
+  const vf = document.getElementById('allleads-venuefilter');
+  const wanted = (vf.value||'').trim();
+  const show = wanted ? items.filter(x => (x._venue_id||'')===wanted) : items;
+
+  body.innerHTML = show.slice(0, 500).map(x => {
+    const dt = ((x.date||'') + ' ' + (x.time||'')).trim();
+    return `<tr>
+      <td>${escapeHtml(x._venue_id||'')}</td>
+      <td>${escapeHtml(x.sheet_row||'')}</td>
+      <td>${escapeHtml(x.name||'')}</td>
+      <td>${escapeHtml(x.phone||'')}</td>
+      <td>${escapeHtml(dt)}</td>
+      <td>${escapeHtml(x.status||'')}</td>
+      <td>${escapeHtml(x.vip||'')}</td>
+      <td>${escapeHtml(x.budget||'')}</td>
+      <td>${escapeHtml(x.notes||'')}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="9" class="muted">No leads.</td></tr>`;
+}
+
+async function loadAllLeads(){
+  const st = document.getElementById('allleads-status');
+  const errBox = document.getElementById('allleads-errors');
+  const badge = document.getElementById('allleads-errors-badge');
+  const vf = document.getElementById('allleads-venuefilter');
+  st.textContent = 'Loading...';
+  errBox.textContent = '';
+  badge.style.display='none';
+
+  const limit = parseInt(document.getElementById('allleads-limit').value || '500', 10);
+  const perv = parseInt(document.getElementById('allleads-pervenue').value || '300', 10);
+
+  try{
+    const r = await fetch(`/admin/api/leads_all?limit=${encodeURIComponent(limit)}&per_venue=${encodeURIComponent(perv)}`, {cache:'no-store'});
+    const j = await r.json();
+    if(!j || !j.ok){
+      st.textContent = 'Failed';
+      errBox.textContent = JSON.stringify(j||{});
+      return;
+    }
+    const items = j.items || [];
+    const errors = j.errors || [];
+    st.textContent = `OK (${items.length})`;
+
+    // Populate venue filter options once per refresh
+    const venues = Array.from(new Set(items.map(x => x._venue_id).filter(Boolean))).sort();
+    const prev = vf.value;
+    vf.innerHTML = `<option value="">All venues</option>` + venues.map(v => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+    if(venues.includes(prev)) vf.value = prev;
+
+    if(errors.length){
+      badge.textContent = `${errors.length} venue errors`;
+      badge.style.display='inline-block';
+      errBox.innerHTML = errors.map(e => `<div>• <b>${escapeHtml(e.venue_id||'')}</b>: ${escapeHtml(e.error||'')}</div>`).join('');
+    }
+
+    renderAllLeads(items);
+    vf.onchange = () => renderAllLeads(items);
+  }catch(e){
+    st.textContent = 'Failed';
+    errBox.textContent = String(e);
+  }
+}
+
+(function bind(){
+  document.querySelectorAll('.tabbtn').forEach(b=>{
+    b.addEventListener('click', (ev)=>{ ev.preventDefault(); showTab(b.getAttribute('data-tab')); });
+  });
+  refreshRole();
+  const h = (location.hash||'').replace('#','').trim();
+  if(h && document.querySelector('.tabbtn[data-tab="'+h+'"]')) showTab(h);
+  else showTab('ops');
+  window.addEventListener('hashchange', ()=> {
+    const t = (location.hash||'').replace('#','').trim();
+    if(t && document.querySelector('.tabbtn[data-tab="'+t+'"]')) showTab(t);
+  });
+})();
+</script>
 </body>
 </html>
