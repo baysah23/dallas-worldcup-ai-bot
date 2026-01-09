@@ -47,12 +47,17 @@
           <option value="enterprise">enterprise</option>
         </select>
         <button class="btn" id="createVenue">Create</button>
+        <button class="btn ghost" id="checkSheet">Check Sheet</button>
         <button class="btn ghost" id="refreshVenues">Refresh</button>
       </div>
 
       <div class="err" id="venueErr" style="display:none"></div>
       <div style="margin-top:10px;display:none" id="venueOutWrap">
         <div class="k">Generated (copy + store safely)</div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
+          <button class="btn" id="copyPack">Copy JSON</button>
+          <button class="btn ghost" id="downloadPack">Download JSON</button>
+        </div>
         <pre id="venueOut" style="white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:8px;font-size:12px;line-height:1.35"></pre>
       </div>
 
@@ -64,6 +69,7 @@
             <th>Plan</th>
             <th>Sheet</th>
             <th>Status</th>
+            <th class="right">Actions</th>
           </tr>
         </thead>
         <tbody id="venueRows"></tbody>
@@ -134,8 +140,33 @@
       if(!j.ok){ throw new Error(j.error||"failed"); }
       (j.venues||[]).forEach(v=>{
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${(v.venue_id||"")}</td><td>${(v.venue_name||"")}</td><td>${(v.plan||"")}</td><td>${(v.google_sheet_id||"")}</td><td>${(v.status||"")}</td>`;
+        const vid = (v.venue_id||"");
+        tr.innerHTML = `<td>${vid}</td><td>${(v.venue_name||"")}</td><td>${(v.plan||"")}</td><td>${(v.google_sheet_id||"")}</td><td>${(v.status||"")}</td><td class="right"><button class="btn ghost" data-rotate="${vid}">Rotate Keys</button></td>`;
         rows.appendChild(tr);
+      });
+
+      // bind rotate buttons
+      rows.querySelectorAll("[data-rotate]").forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const vid = btn.getAttribute("data-rotate");
+          if(!vid) return;
+          if(!confirm("Rotate keys for '"+vid+"'? This will invalidate existing venue keys.")) return;
+          try{
+            const r = await fetch("/super/api/venues/rotate_keys?key="+encodeURIComponent(key), {
+              method:"POST",
+              headers:{"Content-Type":"application/json"},
+              body: JSON.stringify({venue_id: vid, rotate_admin:true, rotate_manager:true})
+            });
+            const j2 = await r.json();
+            if(!j2.ok) throw new Error(j2.error||"rotate failed");
+            venueOut.textContent = JSON.stringify(j2, null, 2);
+            venueOutWrap.style.display="block";
+            await loadVenues();
+          }catch(e){
+            venueErr.style.display="block";
+            venueErr.textContent="Rotate error: " + (e.message||e);
+          }
+        });
       });
     }catch(e){
       venueErr.style.display="block";
@@ -174,6 +205,58 @@
 
   document.getElementById("createVenue")?.addEventListener("click", createVenue);
   document.getElementById("refreshVenues")?.addEventListener("click", loadVenues);
+
+  document.getElementById("copyPack")?.addEventListener("click", async ()=>{
+    try{
+      await navigator.clipboard.writeText(venueOut.textContent||"");
+      venueErr.style.display="block";
+      venueErr.textContent="Copied to clipboard.";
+      setTimeout(()=>{ venueErr.style.display="none"; }, 1500);
+    }catch(e){
+      venueErr.style.display="block";
+      venueErr.textContent="Copy failed: " + (e.message||e);
+    }
+  });
+
+  document.getElementById("downloadPack")?.addEventListener("click", ()=>{
+    try{
+      const txt = venueOut.textContent||"";
+      if(!txt.trim()) return;
+      const blob = new Blob([txt], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "venue_pack.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    }catch(e){
+      venueErr.style.display="block";
+      venueErr.textContent="Download failed: " + (e.message||e);
+    }
+  });
+
+  document.getElementById("checkSheet")?.addEventListener("click", async ()=>{
+    venueErr.style.display="none";
+    const sid = (document.getElementById("v_sheet").value||"").trim();
+    if(!sid){
+      venueErr.style.display="block";
+      venueErr.textContent="Enter a Google Sheet ID to check.";
+      return;
+    }
+    try{
+      const r = await fetch("/super/api/sheets/check?key="+encodeURIComponent(key)+"&sheet_id="+encodeURIComponent(sid));
+      const j = await r.json();
+      if(!j.ok) throw new Error(j.error||"check failed");
+      venueErr.style.display="block";
+      venueErr.textContent="Sheet OK: " + (j.title||"opened");
+      setTimeout(()=>{ venueErr.style.display="none"; }, 2000);
+    }catch(e){
+      venueErr.style.display="block";
+      venueErr.textContent="Sheet check error: " + (e.message||e);
+    }
+  });
 
   const super_key = q.get("super_key") || key; // allow SUPER key as key param
   const headers = super_key ? {"X-Super-Key": super_key} : {};
