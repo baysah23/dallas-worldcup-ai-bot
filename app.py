@@ -2,7 +2,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
-import pathlib
 import json
 import hashlib
 import secrets
@@ -388,7 +387,7 @@ def _resolve_venue_id() -> str:
     except Exception:
         pass
     try:
-        q = (request.args.get("venue_id") or request.args.get("venue") or "").strip()
+        q = (request.args.get("venue") or "").strip()
         if q:
             return _slugify_venue_id(q)
     except Exception:
@@ -442,8 +441,7 @@ def _open_default_spreadsheet(gc, venue_id: Optional[str] = None):
     sid = _venue_sheet_id(venue_id)
     if sid:
         return gc.open_by_key(sid)
-    # single-sheet fallback (legacy)
-    return gc.open(SHEET_NAME)
+    return _open_default_spreadsheet(gc)
 
 def get_sheet(tab: Optional[str] = None, venue_id: Optional[str] = None):
     """Return a worksheet for the current venue."""
@@ -1583,12 +1581,6 @@ def _admin_auth() -> Dict[str, str]:
 
     # Global owner key (all venues)
     if ADMIN_OWNER_KEY and key == ADMIN_OWNER_KEY:
-        actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
-        return {"ok": True, "role": "owner", "actor": actor, "venue_id": vid}
-
-    # Super-admin key (platform-level owner)
-    super_key = (os.environ.get("SUPER_ADMIN_KEY") or "").strip()
-    if super_key and key == super_key:
         actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
         return {"ok": True, "role": "owner", "actor": actor, "venue_id": vid}
 
@@ -6235,20 +6227,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 }
 </style>
 """)
-    html.append("
-<script>
-window.escapeHtml = window.escapeHtml || function(str) {
-  if (str === undefined || str === null) return "";
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-};
-</script>
-
-</head><body><div class='wrap'>")
+    html.append("</head><body><div class='wrap'>")
 
     html.append("<div class='topbar'>")
     html.append("<div>")
@@ -7239,7 +7218,7 @@ async function loadPartnerList(){
     const partners = (j.partners||[]).filter(Boolean);
     if(box){
       box.innerHTML = partners.length
-        ? ('<b>Known partners:</b> ' + partners.map(p=>'<code style="padding:2px 6px;border:1px solid rgba(255,255,255,.12);border-radius:10px">'+window.escapeHtml(p)+'</code>').join(' '))
+        ? ('<b>Known partners:</b> ' + partners.map(p=>'<code style="padding:2px 6px;border:1px solid rgba(255,255,255,.12);border-radius:10px">'+escapeHtml(p)+'</code>').join(' '))
         : 'No partner policies saved yet (only default).';
     }
     if(msg) msg.textContent='Loaded ✔';
@@ -7533,11 +7512,11 @@ async function loadAllLeads(){
     }
 
     if(head){
-      head.innerHTML = keys.map(k=>'<th>'+window.escapeHtml(k)+'</th>').join('');
+      head.innerHTML = keys.map(k=>'<th>'+escapeHtml(k)+'</th>').join('');
     }
     if(body){
       const rows = items.map(it=>{
-        return '<tr>' + keys.map(k=>'<td>'+window.escapeHtml((it && it[k]!==undefined) ? String(it[k]) : '')+'</td>').join('') + '</tr>';
+        return '<tr>' + keys.map(k=>'<td>'+escapeHtml((it && it[k]!==undefined) ? String(it[k]) : '')+'</td>').join('') + '</tr>';
       }).join('');
       body.innerHTML = rows;
     }
@@ -8554,20 +8533,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .tel{color:var(--text);text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
 .toast{position:fixed;right:14px;bottom:14px;background:rgba(0,0,0,.55);border:1px solid var(--line);padding:10px 12px;border-radius:12px;font-size:12px;display:none}
 </style>""")
-    html.append("
-<script>
-window.escapeHtml = window.escapeHtml || function(str) {
-  if (str === undefined || str === null) return "";
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-};
-</script>
-
-</head><body><div class='wrap'>")
+    html.append("</head><body><div class='wrap'>")
 
     html.append("<div class='topbar'>")
     html.append(f"<div><div class='h1'>Fan Zone Admin — {_hesc(SHEET_NAME or 'World Cup')}</div><div class='sub'>Poll controls (Sponsor text + Match of the Day) • Key required</div></div>")
@@ -8669,12 +8635,12 @@ window.escapeHtml = window.escapeHtml || function(str) {
       for(const r of top){
         const name = String(r.name||"");
         const votes = String(r.votes||0);
-        rows += `<div class="row"><div>${window.escapeHtml(name)}</div><div class="mono">${window.escapeHtml(votes)}</div></div>`;
+        rows += `<div class="row"><div>${escapeHtml(name)}</div><div class="mono">${escapeHtml(votes)}</div></div>`;
       }
       if(!rows) rows = '<div class="sub">No votes yet</div>';
 
       setPollStatus(
-        `<div class="h2">${window.escapeHtml(title)}</div>` +
+        `<div class="h2">${escapeHtml(title)}</div>` +
         `<div class="small">${locked ? "🔒 Locked" : "🟢 Open"}</div>` +
         `<div style="margin-top:10px;display:grid;gap:8px">${rows}</div>`
       );
@@ -8683,7 +8649,7 @@ window.escapeHtml = window.escapeHtml || function(str) {
     }
   }
 
-  function window.escapeHtml(s){
+  function escapeHtml(s){
     return String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
