@@ -3,6 +3,7 @@ load_dotenv()
 
 import os
 import json
+import pathlib
 import hashlib
 import secrets
 import re
@@ -379,32 +380,41 @@ def _resolve_venue_id() -> str:
     """Resolve venue_id from request (path/query/cookie/header) with optional VENUE_LOCK."""
     if VENUE_LOCK:
         return VENUE_LOCK
+
+    # 1) /v/<venue_id>/... path prefix (preferred for multi-tenant routing)
     try:
-        # /v/<venue_id>/...
         m = re.match(r"^/v/([^/]+)", (request.path or ""))
         if m:
             return _slugify_venue_id(m.group(1))
     except Exception:
         pass
+
+    # 2) Query params (support both 'venue_id' and legacy 'venue')
     try:
-        q = (request.args.get("venue") or "").strip()
+        q = (request.args.get("venue_id") or request.args.get("venue") or "").strip()
         if q:
             return _slugify_venue_id(q)
     except Exception:
         pass
+
+    # 3) Cookie
     try:
         c = (request.cookies.get("venue_id") or "").strip()
         if c:
             return _slugify_venue_id(c)
     except Exception:
         pass
+
+    # 4) Header
     try:
         h = (request.headers.get("X-Venue-Id") or "").strip()
         if h:
             return _slugify_venue_id(h)
     except Exception:
         pass
+
     return DEFAULT_VENUE_ID
+
 
 @app.before_request
 def _set_venue_ctx():
@@ -436,20 +446,27 @@ def _venue_features(venue_id: Optional[str] = None) -> Dict[str, Any]:
     feat = cfg.get("features") if isinstance(cfg.get("features"), dict) else {}
     return dict(feat or {})
 
-def _open_default_spreadsheet(gc, venue_id: Optional[str] = None):
-    """Open the venue-scoped spreadsheet (by sheet_id if present) else fall back to SHEET_NAME."""
+def _open_spreadsheet(gc, venue_id: Optional[str] = None):
+    """Open the venue-scoped spreadsheet.
+
+    Priority:
+      1) venue config: data.google_sheet_id (or google_sheet_id)
+      2) env: GOOGLE_SHEET_NAME (SHEET_NAME)
+    """
     sid = _venue_sheet_id(venue_id)
     if sid:
         return gc.open_by_key(sid)
-    return _open_default_spreadsheet(gc)
+    # fallback to configured sheet name (single-sheet mode)
+    return gc.open(SHEET_NAME)
 
 def get_sheet(tab: Optional[str] = None, venue_id: Optional[str] = None):
     """Return a worksheet for the current venue."""
     gc = get_gspread_client()
-    sh = _open_default_spreadsheet(gc, venue_id=venue_id)
+    sh = _open_spreadsheet(gc, venue_id=venue_id)
     if tab:
         return sh.worksheet(tab)
     return sh.sheet1
+
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -1158,7 +1175,7 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
     # Use the same Sheets update logic as /admin/update-lead
     try:
         gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        ws = _open_spreadsheet(gc).sheet1
         header = ws.row_values(1) or []
         hmap = header_map(header)
 
@@ -2786,7 +2803,7 @@ def header_map(header: List[str]) -> Dict[str, int]:
 
 def append_lead_to_sheet(lead: Dict[str, Any]):
     gc = get_gspread_client()
-    ws = _open_default_spreadsheet(gc).sheet1
+    ws = _open_spreadsheet(gc).sheet1
 
     header = ensure_sheet_schema(ws)
     hmap = header_map(header)
@@ -4514,7 +4531,7 @@ def _safe_write_json(path: str, data: dict) -> None:
         pass
 
 def _ensure_ws(gc, title: str):
-    sh = _open_default_spreadsheet(gc)
+    sh = _open_spreadsheet(gc)
     try:
         return sh.worksheet(title)
     except Exception:
@@ -5297,7 +5314,7 @@ def admin_api_ai_run():
     # Load sheet (best-effort). If Sheets isn't configured, return a friendly error.
     try:
         gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        ws = _open_spreadsheet(gc).sheet1
         header = ensure_sheet_schema(ws)
         hmap = header_map(header)
     except Exception as e:
@@ -6014,7 +6031,7 @@ def admin_update_lead():
             return jsonify({"ok": False, "error": "Invalid vip"}), 400
 
     gc = get_gspread_client()
-    ws = _open_default_spreadsheet(gc).sheet1
+    ws = _open_spreadsheet(gc).sheet1
     header = ensure_sheet_schema(ws)
     hmap = header_map(header)
 
@@ -6043,7 +6060,7 @@ def admin_export_csv():
     key = (request.args.get("key","") or "").strip()
 
     gc = get_gspread_client()
-    ws = _open_default_spreadsheet(gc).sheet1
+    ws = _open_spreadsheet(gc).sheet1
     rows = ws.get_all_values() or []
     if not rows:
         return "", 200, {"Content-Type": "text/csv; charset=utf-8"}
@@ -8254,7 +8271,7 @@ def admin_api_ai_draft_reply():
 
     try:
         gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        ws = _open_spreadsheet(gc).sheet1
         header = ws.row_values(1) or []
         vals = ws.row_values(row_num) or []
         hmap = header_map(header)
@@ -8349,7 +8366,7 @@ def admin_api_load_forecast():
 
     try:
         gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        ws = _open_spreadsheet(gc).sheet1
         header = ws.row_values(1) or []
         hmap = header_map(header)
 
@@ -8443,7 +8460,7 @@ def admin_api_ai_replay():
 
     try:
         gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        ws = _open_spreadsheet(gc).sheet1
         header = ws.row_values(1) or []
         vals = ws.row_values(row_num) or []
         hmap = header_map(header)
@@ -8945,7 +8962,7 @@ def _append_lead_google_sheet(row: dict) -> tuple[bool, int]:
         if GOOGLE_SHEET_ID:
             sh = gc.open_by_key(GOOGLE_SHEET_ID)
         else:
-            sh = _open_default_spreadsheet(gc)
+            sh = _open_spreadsheet(gc)
         try:
             ws = sh.worksheet("Leads")
         except Exception:
