@@ -1665,7 +1665,15 @@ def admin_api_build():
     if not ok:
         return resp
 
-
+    # Lightweight build / config snapshot (safe for admin)
+    return jsonify({
+        "ok": True,
+        "version": APP_VERSION,
+        "redis_enabled": bool(REDIS_ENABLED),
+        "redis_namespace": _REDIS_NS,
+        "multi_venue": bool(MULTI_VENUE_ENABLED),
+        "env": (os.environ.get("APP_ENV") or "").strip() or "prod",
+    })
 
 @app.route("/admin/api/_redis_smoke", methods=["GET"])
 def admin_api_redis_smoke():
@@ -1758,6 +1766,31 @@ def _require_admin(min_role: str = "manager"):
         request._admin_ctx = ctx  # type: ignore[attr-defined]
     except Exception:
         pass
+    return True, None
+
+
+
+def _super_auth() -> Dict[str, str]:
+    """Return super admin auth context: {ok, actor}.
+
+    Auth mechanism: ?key=...
+    - SUPER_ADMIN_KEY (env) => ok
+    NOTE: This is intentionally distinct from ADMIN_OWNER_KEY.
+    """
+    key = (request.args.get("key", "") or "").strip()
+    if not key or not SUPER_ADMIN_KEY:
+        return {"ok": False, "actor": ""}
+    if key != SUPER_ADMIN_KEY:
+        return {"ok": False, "actor": ""}
+    actor = "super:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+    return {"ok": True, "actor": actor}
+
+
+def _require_super():
+    """Fail-closed guard for /super/* routes."""
+    ctx = _super_auth()
+    if not ctx.get("ok"):
+        return False, jsonify({"ok": False, "error": "unauthorized"}), 401
     return True, None
 
 def _admin_ctx() -> Dict[str, str]:
@@ -8051,6 +8084,47 @@ try{ setupTabs(); }catch(e){}
     return "".join(html)
 
 
+
+
+
+@app.route("/super/admin", methods=["GET"])
+def super_admin_console():
+    ok, resp = _require_super()
+    if not ok:
+        return resp
+    return render_template("super_console.html", version=APP_VERSION)
+
+
+@app.route("/super/api/overview", methods=["GET"])
+def super_api_overview():
+    ok, resp = _require_super()
+    if not ok:
+        return resp
+
+    queue = _load_ai_queue()
+    by_venue = {}
+    for q in queue:
+        vid = str(q.get("venue_id") or "default")
+        st = str(q.get("status") or "pending").lower()
+        by_venue.setdefault(vid, {"queue": {"pending": 0, "approved": 0, "denied": 0, "overridden": 0, "other": 0}})
+        bucket = "other"
+        if st in ("pending", "proposed"):
+            bucket = "pending"
+        elif st in ("approved",):
+            bucket = "approved"
+        elif st in ("denied", "rejected"):
+            bucket = "denied"
+        elif st in ("override", "overridden"):
+            bucket = "overridden"
+        by_venue[vid]["queue"][bucket] += 1
+
+    return jsonify({
+        "ok": True,
+        "version": APP_VERSION,
+        "venues": sorted(by_venue.keys()),
+        "by_venue": by_venue,
+        "totals": {"queue": len(queue)}
+    })
 
 
 @app.route("/admin/api/ai/draft-reply", methods=["POST"])
