@@ -1,6 +1,11 @@
+// tests/11_e2e_core_flows.spec.js
 const { test, expect } = require("@playwright/test");
+
+// ✅ mustEnv lives here (and your file is correct)
+const { mustEnv } = require("./helpers/env");
+
+// ✅ panels helper should NOT be responsible for env parsing
 const {
-  mustEnv,
   buildUrl,
   attachConsoleCollectors,
   forceDesktopViewport,
@@ -66,34 +71,36 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
     await page.goto(ADMIN_URL, { waitUntil: "domcontentloaded" });
     await waitForReady(page);
 
-    const opsTab = await page.getByRole("button", { name: /^Ops$/i }).count().catch(() => 0);
-    if (opsTab) await clickTabAndWait(page, "Ops");
+    const opsTabCount = await page
+      .getByRole("button", { name: /^Ops$/i })
+      .count()
+      .catch(() => 0);
 
+    if (opsTabCount) await clickTabAndWait(page, "Ops");
     await assertSinglePaneVisibleIfTabPanesExist(page);
 
     const toggle = page.locator("input[type='checkbox']").first();
     expect(await toggle.count(), "No Ops checkbox found (need at least one toggle in Ops)").toBeGreaterThan(0);
 
-    // Best-effort: some builds auto-save toggles, others require an explicit Save button.
-    // We treat "toggle is clickable + no JS crash" as required, and validate network save if it happens.
     const before = await toggle.isChecked().catch(() => null);
 
     const savePromise = page
       .waitForResponse(
-        (r) => r.url().includes("update-config") || r.url().includes("update_config") || r.url().includes("updateConfig"),
+        (r) =>
+          r.url().includes("update-config") ||
+          r.url().includes("update_config") ||
+          r.url().includes("updateConfig"),
         { timeout: 15000 }
       )
       .catch(() => null);
 
     await toggle.click({ force: true });
 
-    // Ensure the UI actually reacted to the click.
     const after = await toggle.isChecked().catch(() => null);
     if (before !== null && after !== null) {
       expect(after, "Ops toggle did not change state after click").not.toBe(before);
     }
 
-    // If an autosave call happens, it must succeed.
     const saveResp = await savePromise;
     if (saveResp) {
       expect(saveResp.status(), "Save endpoint returned error").toBeLessThan(400);
@@ -102,7 +109,6 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
     await page.reload({ waitUntil: "domcontentloaded" });
     await waitForReady(page);
   });
-
 
   test("Admin: AI Queue approve/deny works if items exist", async ({ page }) => {
     await forceDesktopViewport(page);
@@ -123,20 +129,25 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
 
     if (hasEmptyHint && approveCount === 0 && denyCount === 0) return;
 
-    expect(approveCount + denyCount, "AI Queue: expected approve/deny buttons or an explicit empty state").toBeGreaterThan(0);
+    expect(
+      approveCount + denyCount,
+      "AI Queue: expected approve/deny buttons or an explicit empty state"
+    ).toBeGreaterThan(0);
 
     const btn = approveCount ? approve.first() : deny.first();
 
-    const actionRespPromise = page.waitForResponse(
-      (r) =>
-        r.request().method() === "POST" &&
-        (r.url().includes("/api/aiq") ||
-          r.url().includes("/aiq") ||
-          r.url().includes("approve") ||
-          r.url().includes("deny") ||
-          r.url().includes("reject")),
-      { timeout: 8000 }
-    ).catch(() => null);
+    const actionRespPromise = page
+      .waitForResponse(
+        (r) =>
+          r.request().method() === "POST" &&
+          (r.url().includes("/api/aiq") ||
+            r.url().includes("/aiq") ||
+            r.url().includes("approve") ||
+            r.url().includes("deny") ||
+            r.url().includes("reject")),
+        { timeout: 8000 }
+      )
+      .catch(() => null);
 
     await btn.click({ force: true }).catch(() => {});
     const actionResp = await actionRespPromise;
@@ -151,17 +162,27 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
     const ownerTabs = ["Configure", "AI Settings", "Rules"];
 
     for (const t of ownerTabs) {
-      const tab = await page.getByRole("button", { name: new RegExp(`^${t}$`, "i") }).count().catch(() => 0);
-      if (!tab) continue;
+      const tabCount = await page
+        .getByRole("button", { name: new RegExp(`^${t}$`, "i") })
+        .count()
+        .catch(() => 0);
 
-      const before = page.url();
-      await page.getByRole("button", { name: new RegExp(`^${t}$`, "i") }).first().click({ force: true }).catch(() => {});
+      if (!tabCount) continue;
+
+      const beforeUrl = page.url();
+
+      await page
+        .getByRole("button", { name: new RegExp(`^${t}$`, "i") })
+        .first()
+        .click({ force: true })
+        .catch(() => {});
+
       await waitForReady(page);
 
       const blockedMsg = page.getByText(/locked|owner only|not authorized|permission/i);
       const blockedVisible = (await blockedMsg.count().catch(() => 0)) > 0;
 
-      expect(blockedVisible || page.url() === before, `Manager should be blocked from ${t}`).toBeTruthy();
+      expect(blockedVisible || page.url() === beforeUrl, `Manager should be blocked from ${t}`).toBeTruthy();
     }
   });
 
@@ -179,12 +200,14 @@ test.describe("FILE 11: Core E2E flows (fail fast)", () => {
     const radioCandidate = page.locator("input[type='radio']").first();
     const btnCandidate = page.getByRole("button", { name: /vote|submit/i }).first();
 
-    const voteRespPromise = page.waitForResponse(
-      (r) =>
-        r.request().method() === "POST" &&
-        (r.url().includes("/api/poll/vote") || r.url().includes("/poll/vote")),
-      { timeout: 8000 }
-    ).catch(() => null);
+    const voteRespPromise = page
+      .waitForResponse(
+        (r) =>
+          r.request().method() === "POST" &&
+          (r.url().includes("/api/poll/vote") || r.url().includes("/poll/vote")),
+        { timeout: 8000 }
+      )
+      .catch(() => null);
 
     if (await radioCandidate.count().catch(() => 0)) {
       await radioCandidate.check().catch(() => {});
