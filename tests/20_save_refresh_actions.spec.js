@@ -1,52 +1,94 @@
-
 const { test, expect } = require("@playwright/test");
 
 const ADMIN_URL = process.env.ADMIN_URL;
 const MANAGER_URL = process.env.MANAGER_URL;
 const FANZONE_URL = process.env.FANZONE_URL;
 
-async function safeGoto(page, url) {
-  try {
-    const r = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 5000 });
-    return r && r.status() < 500;
-  } catch {
-    return false;
-  }
+function mustUrl(name, value) {
+  expect(value, `${name} must be set`).toBeTruthy();
+  return value;
+}
+
+async function gotoOrFail(page, url) {
+  const r = await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+  expect(r).toBeTruthy();
+  expect(r.status()).toBeLessThan(500);
 }
 
 async function ready(page) {
-  const root = page.locator("[data-testid='app-root']");
-  if (await root.count()) {
-    await expect(root.first()).toBeVisible();
+  const rootSel = process.env.APP_ROOT_SELECTOR || "[data-testid='app-root']";
+  if (await page.locator(rootSel).count()) {
+    await expect(page.locator(rootSel).first()).toBeVisible();
   } else {
     await expect(page.locator("body")).toContainText(/./);
   }
 }
 
-test("ADMIN Ops toggle survives refresh (if reachable)", async ({ page }) => {
-  test.skip(!ADMIN_URL, "ADMIN_URL not set");
-  if (!(await safeGoto(page, ADMIN_URL))) test.skip(true, "Admin not reachable");
+async function gotoOps(page) {
+  const btn = page.locator('.tabbtn[data-tab="ops"]').first();
+  if (await btn.count()) {
+    await btn.click({ force: true });
+    await ready(page);
+    return true;
+  }
+  return false;
+}
+
+async function findOpsToggle(page) {
+  const selectors = [
+    '[data-testid^="ops-toggle"]',
+    'button[aria-pressed]',
+    '.ops-toggle'
+  ];
+
+  for (const sel of selectors) {
+    const el = page.locator(sel).first();
+    if (await el.count()) return el;
+  }
+  return null;
+}
+
+test("ADMIN Ops toggle survives refresh (if present)", async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+
+  await gotoOrFail(page, mustUrl("ADMIN_URL", ADMIN_URL));
   await ready(page);
+  await gotoOps(page);
 
-  const toggle = page.locator("input[type='checkbox']").first();
-  if (!(await toggle.count())) test.skip(true, "No toggle found");
+  const toggle = await findOpsToggle(page);
+  if (!toggle) test.skip(true, "No Ops toggles rendered");
 
+  const before = await toggle.getAttribute("aria-pressed");
   await toggle.click({ force: true });
-  await page.reload();
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await ready(page);
+  await gotoOps(page);
+
+  const toggle2 = await findOpsToggle(page);
+  expect(toggle2).toBeTruthy();
+
+  const after = await toggle2.getAttribute("aria-pressed");
+  expect(after).toBe(before === "true" ? "false" : "true");
+});
+
+test("MANAGER Ops toggle optional (no crash)", async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
+
+  await gotoOrFail(page, mustUrl("MANAGER_URL", MANAGER_URL));
+  await ready(page);
+  await gotoOps(page);
+
+  const toggle = await findOpsToggle(page);
+  if (!toggle) return; // valid by design
+
+  await toggle.click({ force: true }).catch(() => {});
   await ready(page);
 });
 
-test("MANAGER Ops interaction safe (if reachable)", async ({ page }) => {
-  test.skip(!MANAGER_URL, "MANAGER_URL not set");
-  if (!(await safeGoto(page, MANAGER_URL))) test.skip(true, "Manager not reachable");
-  await ready(page);
+test("FAN ZONE loads", async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 900 });
 
-  const t = page.locator("input[type='checkbox']").first();
-  if (await t.count()) await t.click({ force: true });
-});
-
-test("FAN ZONE loads or skips cleanly", async ({ page }) => {
-  test.skip(!FANZONE_URL, "FANZONE_URL not set");
-  if (!(await safeGoto(page, FANZONE_URL))) test.skip(true, "Fan Zone not reachable");
+  await gotoOrFail(page, mustUrl("FANZONE_URL", FANZONE_URL));
   await ready(page);
 });

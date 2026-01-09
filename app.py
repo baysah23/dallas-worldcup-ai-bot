@@ -14,7 +14,7 @@ from typing import Dict, Any, Optional, List, Tuple
 import time
 import urllib.request
 import urllib.error
-from flask import Flask, request, jsonify, send_from_directory, send_file, make_response
+from flask import Flask, request, jsonify, send_from_directory, send_file, make_response, g
 
 # ============================================================
 # Enterprise persistence: Redis (optional, recommended)
@@ -27,13 +27,7 @@ _REDIS_ENABLED = False
 try:
     import redis  # type: ignore
     if REDIS_URL:
-        _REDIS = redis.from_url(
-            REDIS_URL,
-            decode_responses=True,
-            socket_connect_timeout=2,
-            socket_timeout=2,
-            retry_on_timeout=True,
-        )
+        _REDIS = redis.from_url(REDIS_URL, decode_responses=True)
         _REDIS.ping()
         _REDIS_ENABLED = True
 except Exception:
@@ -52,16 +46,17 @@ _REDIS_FALLBACK_LAST_PATH = ""
 
 # Map our on-disk JSON files to Redis keys when enabled (single source of truth)
 # NOTE: These files still exist for local/dev fallback.
-_REDIS_PATH_KEY_MAP = {
-    os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_ai_queue.json"): f"{_REDIS_NS}:ai_queue",
-    os.environ.get("AI_SETTINGS_FILE", "/tmp/wc26_ai_settings.json"): f"{_REDIS_NS}:ai_settings",
-    os.environ.get("PARTNER_POLICIES_FILE", "/tmp/wc26_partner_policies.json"): f"{_REDIS_NS}:partner_policies",
-    os.environ.get("BUSINESS_RULES_FILE", "/tmp/wc26_business_rules.json"): f"{_REDIS_NS}:business_rules",
-    os.environ.get("MENU_FILE", "/tmp/wc26_menu_override.json"): f"{_REDIS_NS}:menu_override",
-    os.environ.get("ALERT_SETTINGS_FILE", "/tmp/wc26_alert_settings.json"): f"{_REDIS_NS}:alert_settings",
-    os.environ.get("ALERT_STATE_FILE", "/tmp/wc26_alert_state.json"): f"{_REDIS_NS}:alert_state",
-    os.environ.get("POLL_STORE_FILE", "/tmp/wc26_poll_votes.json"): f"{_REDIS_NS}:poll_store",
-    os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_fixtures.json"): f"{_REDIS_NS}:fixtures_cache",
+_REDIS_PATH_KEY_MAP = {  # values are suffixes; full key includes namespace + venue
+
+    os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_ai_queue.json"): "ai_queue",
+    os.environ.get("AI_SETTINGS_FILE", "/tmp/wc26_ai_settings.json"): "ai_settings",
+    os.environ.get("PARTNER_POLICIES_FILE", "/tmp/wc26_partner_policies.json"): "partner_policies",
+    os.environ.get("BUSINESS_RULES_FILE", "/tmp/wc26_business_rules.json"): "business_rules",
+    os.environ.get("MENU_FILE", "/tmp/wc26_menu_override.json"): "menu_override",
+    os.environ.get("ALERT_SETTINGS_FILE", "/tmp/wc26_alert_settings.json"): "alert_settings",
+    os.environ.get("ALERT_STATE_FILE", "/tmp/wc26_alert_state.json"): "alert_state",
+    os.environ.get("POLL_STORE_FILE", "/tmp/wc26_poll_votes.json"): "poll_store",
+    os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_fixtures.json"): "fixtures_cache",
 }
 
 def _redis_init_if_needed() -> None:
@@ -78,13 +73,7 @@ def _redis_init_if_needed() -> None:
         return
     try:
         import redis  # type: ignore
-        r = redis.from_url(
-            url,
-            decode_responses=True,
-            socket_connect_timeout=2,
-            socket_timeout=2,
-            retry_on_timeout=True,
-        )
+        r = redis.from_url(url, decode_responses=True)
         r.ping()
         _REDIS = r
         _REDIS_ENABLED = True
@@ -102,13 +91,7 @@ def _redis_init_if_needed() -> None:
         try:
             if url.startswith("redis://"):
                 import redis  # type: ignore
-                r = redis.from_url(
-                    "rediss://" + url[len("redis://"):],
-                    decode_responses=True,
-                    socket_connect_timeout=2,
-                    socket_timeout=2,
-                    retry_on_timeout=True,
-                )
+                r = redis.from_url("rediss://" + url[len("redis://"):], decode_responses=True)
                 r.ping()
                 _REDIS = r
                 _REDIS_ENABLED = True
@@ -308,6 +291,166 @@ RATE_LIMIT_PER_MIN = int(os.environ.get("RATE_LIMIT_PER_MIN", "30"))
 
 SHEET_NAME = os.environ.get("GOOGLE_SHEET_NAME", "World Cup AI Reservations")
 
+# ============================================================
+# Multi-venue (tenant) support (safe defaults)
+# - Enable by placing per-venue configs in ./config/venues/*.yaml|*.yml|*.json
+# - Optional lock for dedicated deployments: VENUE_LOCK=<venue_id>
+# - If no venue is resolved, we fall back to DEFAULT_VENUE_ID (or "default")
+# ============================================================
+VENUE_LOCK = (os.environ.get("VENUE_LOCK") or "").strip()
+DEFAULT_VENUE_ID = (os.environ.get("DEFAULT_VENUE_ID") or "default").strip() or "default"
+VENUES_DIR = os.environ.get("VENUES_DIR", os.path.join(os.path.dirname(__file__), "config", "venues"))
+_MULTI_VENUE_CACHE: Dict[str, Any] = {"ts": 0.0, "venues": {}}
+
+def _slugify_venue_id(s: str) -> str:
+    s = (s or "").strip().lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = re.sub(r"-{2,}", "-", s).strip("-")
+    return s or "default"
+
+def _load_venues_from_disk() -> Dict[str, Any]:
+    """Load venue configs from VENUES_DIR. Returns dict keyed by venue_id."""
+    now = time.time()
+    cached = _MULTI_VENUE_CACHE.get("venues")
+    if isinstance(cached, dict) and (now - float(_MULTI_VENUE_CACHE.get("ts") or 0.0) < 2.0):
+        return cached
+
+    venues: Dict[str, Any] = {}
+    try:
+        if not os.path.isdir(VENUES_DIR):
+            _MULTI_VENUE_CACHE["ts"] = now
+            _MULTI_VENUE_CACHE["venues"] = venues
+            return venues
+
+        files = []
+        for fn in os.listdir(VENUES_DIR):
+            if fn.lower().endswith((".yaml", ".yml", ".json")):
+                files.append(os.path.join(VENUES_DIR, fn))
+        files.sort()
+
+        yaml_mod = None
+        try:
+            import yaml  # type: ignore
+            yaml_mod = yaml
+        except Exception:
+            yaml_mod = None
+
+        for fp in files:
+            try:
+                raw = pathlib.Path(fp).read_text(encoding="utf-8")
+            except Exception:
+                continue
+
+            cfg = None
+            if fp.lower().endswith(".json"):
+                try:
+                    cfg = json.loads(raw)
+                except Exception:
+                    cfg = None
+            else:
+                if yaml_mod is None:
+                    # YAML file present but parser missing: fail loud for ops clarity
+                    raise RuntimeError("YAML venue file detected but PyYAML is not installed. Add pyyaml to requirements.txt or use .json venue configs.")
+                try:
+                    cfg = yaml_mod.safe_load(raw)
+                except Exception:
+                    cfg = None
+
+            if not isinstance(cfg, dict):
+                continue
+
+            vid = _slugify_venue_id(str(cfg.get("venue_id") or cfg.get("venue") or ""))
+            cfg["venue_id"] = vid
+            venues[vid] = cfg
+
+    except Exception as e:
+        # Keep app running; multi-tenant just becomes unavailable.
+        try:
+            print(f"[VENUES] load failed: {e}")
+        except Exception:
+            pass
+        venues = {}
+
+    _MULTI_VENUE_CACHE["ts"] = now
+    _MULTI_VENUE_CACHE["venues"] = venues
+    return venues
+
+def _resolve_venue_id() -> str:
+    """Resolve venue_id from request (path/query/cookie/header) with optional VENUE_LOCK."""
+    if VENUE_LOCK:
+        return VENUE_LOCK
+    try:
+        # /v/<venue_id>/...
+        m = re.match(r"^/v/([^/]+)", (request.path or ""))
+        if m:
+            return _slugify_venue_id(m.group(1))
+    except Exception:
+        pass
+    try:
+        q = (request.args.get("venue") or "").strip()
+        if q:
+            return _slugify_venue_id(q)
+    except Exception:
+        pass
+    try:
+        c = (request.cookies.get("venue_id") or "").strip()
+        if c:
+            return _slugify_venue_id(c)
+    except Exception:
+        pass
+    try:
+        h = (request.headers.get("X-Venue-Id") or "").strip()
+        if h:
+            return _slugify_venue_id(h)
+    except Exception:
+        pass
+    return DEFAULT_VENUE_ID
+
+@app.before_request
+def _set_venue_ctx():
+    try:
+        g.venue_id = _resolve_venue_id()
+    except Exception:
+        g.venue_id = DEFAULT_VENUE_ID
+
+def _venue_id() -> str:
+    try:
+        return _slugify_venue_id(getattr(g, "venue_id", "") or DEFAULT_VENUE_ID)
+    except Exception:
+        return DEFAULT_VENUE_ID
+
+def _venue_cfg(venue_id: Optional[str] = None) -> Dict[str, Any]:
+    venues = _load_venues_from_disk()
+    vid = _slugify_venue_id(venue_id or _venue_id())
+    cfg = venues.get(vid) if isinstance(venues, dict) else None
+    return cfg if isinstance(cfg, dict) else {"venue_id": vid, "status": "implicit"}
+
+def _venue_sheet_id(venue_id: Optional[str] = None) -> str:
+    cfg = _venue_cfg(venue_id)
+    data = cfg.get("data") if isinstance(cfg.get("data"), dict) else {}
+    sid = str((data or {}).get("google_sheet_id") or (cfg.get("google_sheet_id") or "")).strip()
+    return sid
+
+def _venue_features(venue_id: Optional[str] = None) -> Dict[str, Any]:
+    cfg = _venue_cfg(venue_id)
+    feat = cfg.get("features") if isinstance(cfg.get("features"), dict) else {}
+    return dict(feat or {})
+
+def _open_default_spreadsheet(gc, venue_id: Optional[str] = None):
+    """Open the venue-scoped spreadsheet (by sheet_id if present) else fall back to SHEET_NAME."""
+    sid = _venue_sheet_id(venue_id)
+    if sid:
+        return gc.open_by_key(sid)
+    return _open_default_spreadsheet(gc)
+
+def get_sheet(tab: Optional[str] = None, venue_id: Optional[str] = None):
+    """Return a worksheet for the current venue."""
+    gc = get_gspread_client()
+    sh = _open_default_spreadsheet(gc, venue_id=venue_id)
+    if tab:
+        return sh.worksheet(tab)
+    return sh.sheet1
+
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
@@ -356,8 +499,8 @@ BUSINESS_RULES = {
 # ============================================================
 # Admin-persisted overrides (Rules + Menu)
 # ============================================================
-BUSINESS_RULES_FILE = os.environ.get("BUSINESS_RULES_FILE", "/tmp/wc26_business_rules.json")
-MENU_FILE = os.environ.get("MENU_FILE", "/tmp/wc26_menu_override.json")
+BUSINESS_RULES_FILE = os.environ.get("BUSINESS_RULES_FILE", "/tmp/wc26_{venue}_business_rules.json")
+MENU_FILE = os.environ.get("MENU_FILE", "/tmp/wc26_{venue}_menu_override.json")
 
 
 # ============================================================
@@ -373,8 +516,8 @@ MENU_FILE = os.environ.get("MENU_FILE", "/tmp/wc26_menu_override.json")
 # - Alerts are best-effort and never crash the app
 # - Rate-limited to prevent spam
 # ============================================================
-ALERT_SETTINGS_FILE = os.environ.get("ALERT_SETTINGS_FILE", "/tmp/wc26_alert_settings.json")
-ALERT_STATE_FILE = os.environ.get("ALERT_STATE_FILE", "/tmp/wc26_alert_state.json")
+ALERT_SETTINGS_FILE = os.environ.get("ALERT_SETTINGS_FILE", "/tmp/wc26_{venue}_alert_settings.json")
+ALERT_STATE_FILE = os.environ.get("ALERT_STATE_FILE", "/tmp/wc26_{venue}_alert_state.json")
 
 def _default_alert_settings() -> Dict[str, Any]:
     return {
@@ -509,7 +652,7 @@ def _dispatch_alert(title: str, details: str, key: str, severity: str = "error")
         pass
     return {"ok": True, "sent": sent, "rate_limited": False}
 
-AI_SETTINGS_FILE = os.environ.get("AI_SETTINGS_FILE", "/tmp/wc26_ai_settings.json")
+AI_SETTINGS_FILE = os.environ.get("AI_SETTINGS_FILE", "/tmp/wc26_{venue}_ai_settings.json")
 
 def _default_ai_settings() -> Dict[str, Any]:
     return {
@@ -591,7 +734,7 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
 # - Enforced BOTH when suggestions are created and when actions are applied.
 # - Stored on disk (/tmp) so it survives restarts on Render.
 # ============================================================
-PARTNER_POLICIES_FILE = os.environ.get("PARTNER_POLICIES_FILE", "/tmp/wc26_partner_policies.json")
+PARTNER_POLICIES_FILE = os.environ.get("PARTNER_POLICIES_FILE", "/tmp/wc26_{venue}_partner_policies.json")
 
 def _default_partner_policy() -> Dict[str, Any]:
     # Restrictive defaults (safe):
@@ -818,7 +961,7 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
 # - Owners can override payload before applying
 # - Persisted to disk (/tmp) for durability
 # ============================================================
-AI_QUEUE_FILE = os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_ai_queue.json")
+AI_QUEUE_FILE = os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_{venue}_ai_queue.json")
 
 def _load_ai_queue() -> List[Dict[str, Any]]:
     q = _safe_read_json_file(AI_QUEUE_FILE, default=[])
@@ -1015,7 +1158,7 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
     # Use the same Sheets update logic as /admin/update-lead
     try:
         gc = get_gspread_client()
-        ws = gc.open(SHEET_NAME).sheet1
+        ws = _open_default_spreadsheet(gc).sheet1
         header = ws.row_values(1) or []
         hmap = header_map(header)
 
@@ -1423,35 +1566,98 @@ except Exception:
 
 
 def _admin_auth() -> Dict[str, str]:
-    """Return admin auth context: {ok, role, actor}.
+    """Return admin auth context: {ok, role, actor, venue_id}.
 
     Auth mechanism: ?key=...
-    - If key matches ADMIN_OWNER_KEY => role=owner
-    - If key matches any ADMIN_MANAGER_KEYS => role=manager
+    - Owner key (global) => role=owner (all venues)
+    - Venue-scoped keys in config/venues/<venue_id>.yaml => role=owner|manager for that venue
+    - Legacy ADMIN_MANAGER_KEYS still works (manager, current venue context)
     """
     key = (request.args.get("key", "") or "").strip()
     if not key:
-        return {"ok": False, "role": "", "actor": ""}
+        return {"ok": False, "role": "", "actor": "", "venue_id": ""}
 
-    role = ""
+    vid = _venue_id()
+
+    # Global owner key (all venues)
     if ADMIN_OWNER_KEY and key == ADMIN_OWNER_KEY:
-        role = "owner"
-    elif ADMIN_MANAGER_KEYS and key in ADMIN_MANAGER_KEYS:
-        role = "manager"
+        actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+        return {"ok": True, "role": "owner", "actor": actor, "venue_id": vid}
 
-    if not role:
-        return {"ok": False, "role": "", "actor": ""}
+    # Venue-scoped keys
+    vc = _venue_cfg(vid)
+    access = vc.get("access") if isinstance(vc.get("access"), dict) else {}
+    akeys = access.get("admin_keys") if isinstance(access.get("admin_keys"), list) else []
+    mkeys = access.get("manager_keys") if isinstance(access.get("manager_keys"), list) else []
 
-    actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
-    return {"ok": True, "role": role, "actor": actor}
+    if key in [str(k).strip() for k in akeys if str(k).strip()]:
+        actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+        return {"ok": True, "role": "owner", "actor": actor, "venue_id": vid}
+
+    if key in [str(k).strip() for k in mkeys if str(k).strip()]:
+        actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+        return {"ok": True, "role": "manager", "actor": actor, "venue_id": vid}
+
+    # Legacy manager keys (fallback)
+    if ADMIN_MANAGER_KEYS and key in ADMIN_MANAGER_KEYS:
+        actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+        return {"ok": True, "role": "manager", "actor": actor, "venue_id": vid}
+
+    return {"ok": False, "role": "", "actor": "", "venue_id": ""}
 
 
 @app.get("/admin/api/whoami")
 def admin_api_whoami():
     """Return the server-truth role for the current key (owner/manager) so UI locks can't drift."""
     ctx = _admin_ctx()
-    return jsonify(ok=bool(ctx.get("ok")), role=ctx.get("role", ""), actor=ctx.get("actor", ""))
+    return jsonify(ok=bool(ctx.get("ok")), role=ctx.get("role", ""), actor=ctx.get("actor", ""), venue_id=ctx.get("venue_id",""))
 
+
+@app.post("/admin/api/venues/create")
+def admin_api_venues_create():
+    """Owner-only: generate a Venue Pack (does NOT write files)."""
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+    body = request.get_json(silent=True) or {}
+    venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
+    plan = str(body.get("plan") or "standard").strip().lower() or "standard"
+
+    admin_key = secrets.token_hex(16)
+    manager_key = secrets.token_hex(16)
+
+    pack = {
+        "venue_name": venue_name,
+        "venue_id": venue_id,
+        "status": "active",
+        "plan": plan,
+        "qr_url": f"https://worldcupconcierge.app/v/{venue_id}",
+        "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={admin_key}",
+        "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={manager_key}",
+        "keys": {"admin_key": admin_key, "manager_key": manager_key},
+        "data": {"google_sheet_id": "", "redis_namespace": f"{_REDIS_NS}:{venue_id}"},
+        "features": body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True},
+        "yaml_template": (
+            "venue_id: " + venue_id + "\n"
+            "venue_name: \"" + venue_name.replace('\"','') + "\"\n"
+            "status: active\n"
+            "plan: " + plan + "\n\n"
+            "access:\n"
+            "  admin_keys:\n"
+            "    - \"" + admin_key + "\"\n"
+            "  manager_keys:\n"
+            "    - \"" + manager_key + "\"\n\n"
+            "data:\n"
+            "  google_sheet_id: \"\"  # paste sheet id\n"
+            "  redis_namespace: \"wc26:" + venue_id + "\"\n\n"
+            "features:\n"
+            "  vip: true\n"
+            "  waitlist: false\n"
+            "  ai_queue: true\n"
+        ),
+    }
+    return jsonify({"ok": True, "pack": pack})
 
 @app.route("/admin/api/_build", methods=["GET"])
 def admin_api_build():
@@ -1514,7 +1720,7 @@ def admin_api_redis_smoke():
         "ok": ok_all,
         "redis_enabled": True,
         "redis_namespace": _REDIS_NS,
-        "key": f"{_REDIS_NS}:ci_smoke",
+        "key": "ci_smoke",
         "fallback_used": bool(_REDIS_FALLBACK_USED),
         "fallback_last_path": _REDIS_FALLBACK_LAST_PATH,
         "match": bool(match),
@@ -1727,17 +1933,25 @@ DEMO_FIXTURES_RAW: List[Dict[str, Any]] = [
 # In-memory cache (plus optional disk cache) so we don't hit the feed too often.
 _fixtures_cache: Dict[str, Any] = {"loaded_at": 0, "matches": [], "source": "empty", "last_error": None}
 FIXTURE_CACHE_SECONDS = int(os.environ.get("FIXTURE_CACHE_SECONDS", str(6 * 60 * 60)))  # 6h
-FIXTURE_CACHE_FILE = os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_fixtures.json")
-POLL_STORE_FILE = os.environ.get("POLL_STORE_FILE", "/tmp/wc26_poll_votes.json")
+FIXTURE_CACHE_FILE = os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_{venue}_fixtures.json")
+POLL_STORE_FILE = os.environ.get("POLL_STORE_FILE", "/tmp/wc26_{venue}_poll_votes.json")
 
 
 def _safe_read_json_file(path: str, default: Any = None) -> Any:
     """Read JSON from Redis (if enabled) or disk safely."""
+    # Multi-venue: expand {venue} placeholder
+    try:
+        vid = _venue_id()
+        if '{venue}' in str(path):
+            path = str(path).replace('{venue}', vid)
+    except Exception:
+        pass
     try:
         if _REDIS_ENABLED:
-            key = _REDIS_PATH_KEY_MAP.get(path)
-            if key:
-                return _redis_get_json(key, default=default)
+            suffix = _REDIS_PATH_KEY_MAP.get(path)
+            if suffix:
+                full_key = f"{_REDIS_NS}:{_venue_id()}:{suffix}"
+                return _redis_get_json(full_key, default=default)
     except Exception:
         pass
 
@@ -1752,11 +1966,19 @@ def _safe_read_json_file(path: str, default: Any = None) -> Any:
 def _safe_write_json_file(path: str, payload: Any) -> None:
     global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
     """Write JSON to Redis (if enabled) or disk safely."""
+    # Multi-venue: expand {venue} placeholder
+    try:
+        vid = _venue_id()
+        if '{venue}' in str(path):
+            path = str(path).replace('{venue}', vid)
+    except Exception:
+        pass
     try:
         if _REDIS_ENABLED:
-            key = _REDIS_PATH_KEY_MAP.get(path)
-            if key:
-                ok = _redis_set_json(key, payload)
+            suffix = _REDIS_PATH_KEY_MAP.get(path)
+            if suffix:
+                full_key = f"{_REDIS_NS}:{_venue_id()}:{suffix}"
+                ok = _redis_set_json(full_key, payload)
                 if ok:
                     return
                 # Redis was enabled, but write failed — mark fallback for enterprise gate
@@ -2447,7 +2669,7 @@ def header_map(header: List[str]) -> Dict[str, int]:
 
 def append_lead_to_sheet(lead: Dict[str, Any]):
     gc = get_gspread_client()
-    ws = gc.open(SHEET_NAME).sheet1
+    ws = _open_default_spreadsheet(gc).sheet1
 
     header = ensure_sheet_schema(ws)
     hmap = header_map(header)
@@ -2503,7 +2725,7 @@ def read_leads(limit: int = 200) -> List[List[str]]:
 
     try:
         gc = get_gspread_client()
-        ws = gc.open(SHEET_NAME).sheet1
+        ws = _open_default_spreadsheet(gc).sheet1
         rows = ws.get_all_values() or []
         _LEADS_CACHE["ts"] = now
         _LEADS_CACHE["rows"] = rows
@@ -3996,7 +4218,7 @@ def _hesc(s: Any) -> str:
 DATA_DIR = os.environ.get("DATA_DIR", os.path.join("/tmp", "worldcup_app_data"))
 # Store small JSON state in a writable directory (Render slug is read-only)
 os.makedirs(DATA_DIR, exist_ok=True)
-CONFIG_FILE = os.path.join(DATA_DIR, "app_config.json")
+CONFIG_FILE = os.path.join(DATA_DIR, "app_config_{venue}.json")
 AUDIT_LOG_FILE = os.path.join(DATA_DIR, "audit_log.jsonl")
 
 NOTIFICATIONS_FILE = os.path.join(DATA_DIR, "notifications.jsonl")
@@ -4156,7 +4378,7 @@ def _safe_write_json(path: str, data: dict) -> None:
         pass
 
 def _ensure_ws(gc, title: str):
-    sh = gc.open(SHEET_NAME)
+    sh = _open_default_spreadsheet(gc)
     try:
         return sh.worksheet(title)
     except Exception:
@@ -4939,7 +5161,7 @@ def admin_api_ai_run():
     # Load sheet (best-effort). If Sheets isn't configured, return a friendly error.
     try:
         gc = get_gspread_client()
-        ws = gc.open(SHEET_NAME).sheet1
+        ws = _open_default_spreadsheet(gc).sheet1
         header = ensure_sheet_schema(ws)
         hmap = header_map(header)
     except Exception as e:
@@ -5656,7 +5878,7 @@ def admin_update_lead():
             return jsonify({"ok": False, "error": "Invalid vip"}), 400
 
     gc = get_gspread_client()
-    ws = gc.open(SHEET_NAME).sheet1
+    ws = _open_default_spreadsheet(gc).sheet1
     header = ensure_sheet_schema(ws)
     hmap = header_map(header)
 
@@ -5685,7 +5907,7 @@ def admin_export_csv():
     key = (request.args.get("key","") or "").strip()
 
     gc = get_gspread_client()
-    ws = gc.open(SHEET_NAME).sheet1
+    ws = _open_default_spreadsheet(gc).sheet1
     rows = ws.get_all_values() or []
     if not rows:
         return "", 200, {"Content-Type": "text/csv; charset=utf-8"}
@@ -7835,7 +8057,7 @@ def admin_api_ai_draft_reply():
 
     try:
         gc = get_gspread_client()
-        ws = gc.open(SHEET_NAME).sheet1
+        ws = _open_default_spreadsheet(gc).sheet1
         header = ws.row_values(1) or []
         vals = ws.row_values(row_num) or []
         hmap = header_map(header)
@@ -7930,7 +8152,7 @@ def admin_api_load_forecast():
 
     try:
         gc = get_gspread_client()
-        ws = gc.open(SHEET_NAME).sheet1
+        ws = _open_default_spreadsheet(gc).sheet1
         header = ws.row_values(1) or []
         hmap = header_map(header)
 
@@ -8024,7 +8246,7 @@ def admin_api_ai_replay():
 
     try:
         gc = get_gspread_client()
-        ws = gc.open(SHEET_NAME).sheet1
+        ws = _open_default_spreadsheet(gc).sheet1
         header = ws.row_values(1) or []
         vals = ws.row_values(row_num) or []
         hmap = header_map(header)
@@ -8526,7 +8748,7 @@ def _append_lead_google_sheet(row: dict) -> tuple[bool, int]:
         if GOOGLE_SHEET_ID:
             sh = gc.open_by_key(GOOGLE_SHEET_ID)
         else:
-            sh = gc.open(SHEET_NAME)
+            sh = _open_default_spreadsheet(gc)
         try:
             ws = sh.worksheet("Leads")
         except Exception:
@@ -8693,8 +8915,8 @@ if __name__ == "__main__":
 # ============================================================
 # Enterprise shared state in Redis (Ops / FanZone / Polls)
 # ============================================================
-_OPS_KEY = f"{_REDIS_NS}:ops_state"
-_FANZONE_KEY = f"{_REDIS_NS}:fanzone_state"
+_OPS_KEY = "ops_state"
+_FANZONE_KEY = "fanzone_state"
 
 def _ops_state_default():
     return {"pause": False, "viponly": False, "waitlist": False, "notify": False,

@@ -1,0 +1,30 @@
+{
+  "venue_id": "demo",
+  "venue_name": "Demo Venue",
+  "status": "active",
+  "plan": "standard",
+
+  "access": {
+    "admin_keys": [
+      "DEMO_ADMIN_KEY_1"
+    ],
+    "manager_keys": [
+      "DEMO_MANAGER_KEY_1"
+    ]
+  },
+
+  "data": {
+    "google_sheet_id": "1OYMR1DLKjNzqaejcmDPx6rywP6xo2646h03vtxXKw00",
+    "redis_namespace": "wc26:demo"
+  },
+
+  "features": {
+    "vip": true,
+    "waitlist": false,
+    "ai_queue": true
+  },
+
+  "branding": {
+    "venue_label_text": "Demo Venue"
+  }
+}
