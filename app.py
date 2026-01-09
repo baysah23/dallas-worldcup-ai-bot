@@ -9345,6 +9345,34 @@ def super_admin_console():
         )
 
 
+
+
+# ============================================================
+# Super Admin: error trap (ensures /super/* never returns a generic 500)
+# ============================================================
+from werkzeug.exceptions import HTTPException
+from flask import Response
+
+@app.errorhandler(Exception)
+def _handle_any_exception(e):
+    # Let Flask/werkzeug handle HTTP errors normally (404/403/etc.)
+    if isinstance(e, HTTPException):
+        return e
+    try:
+        # Only expose diagnostics for Super Admin paths AND only with valid super key.
+        if request.path.startswith("/super") and _is_super_admin_request():
+            tb = traceback.format_exc()
+            return Response(
+                "<h3>Super Admin Error</h3><pre style='white-space:pre-wrap'>%s</pre>"
+                % html.escape(tb),
+                status=500,
+                mimetype="text/html",
+            )
+    except Exception:
+        pass
+    # Default generic error
+    return ("Internal Server Error", 500)
+
 @app.get("/super/api/diag")
 def super_api_diag():
     """Quick diagnostics for Super Admin (requires SUPER_ADMIN_KEY)."""
