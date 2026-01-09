@@ -295,6 +295,9 @@ ADMIN_KEY = os.environ.get("ADMIN_KEY", "")  # required to view /admin
 ADMIN_OWNER_KEY = (os.environ.get("ADMIN_OWNER_KEY") or ADMIN_KEY or "").strip()
 SUPER_ADMIN_KEY = (os.environ.get("SUPER_ADMIN_KEY") or "").strip()
 APP_VERSION = (os.environ.get("APP_VERSION") or "1.4.0").strip()
+
+# Multi-venue flag (safe default)
+MULTI_VENUE_ENABLED = (os.environ.get("MULTI_VENUE_ENABLED","").strip() or "0") in ("1","true","True","yes","on")
 # Either a single key via ADMIN_MANAGER_KEY, or a comma-separated list via ADMIN_MANAGER_KEYS
 _ADMIN_MANAGER_KEYS_RAW = (os.environ.get("ADMIN_MANAGER_KEYS") or os.environ.get("ADMIN_MANAGER_KEY") or "").strip()
 ADMIN_MANAGER_KEYS = [k.strip() for k in _ADMIN_MANAGER_KEYS_RAW.split(",") if k.strip()]
@@ -1673,19 +1676,30 @@ def admin_api_venues_create():
 
 @app.route("/admin/api/_build", methods=["GET"])
 def admin_api_build():
-    ok, resp = _require_admin(min_role="manager")
-    if not ok:
-        return resp
+    """
+    Lightweight build/health metadata endpoint (must NEVER 500).
+    """
+    try:
+        ok, resp = _require_admin(min_role="manager")
+        if not ok:
+            return resp
 
-    return jsonify({
-        "ok": True,
-        "version": APP_VERSION,
-        "env": (os.environ.get("APP_ENV") or "").strip() or "prod",
-        "redis_enabled": bool(_REDIS_ENABLED and _REDIS),
-        "redis_namespace": _REDIS_NS,
-        "multi_venue": bool(MULTI_VENUE_ENABLED),
-        "pid": os.getpid(),
-    })
+        return jsonify({
+            "ok": True,
+            "version": globals().get("APP_VERSION", "unknown"),
+            "env": (os.environ.get("APP_ENV") or "").strip() or "prod",
+            "redis_enabled": bool(globals().get("_REDIS_ENABLED") and globals().get("_REDIS")),
+            "redis_namespace": globals().get("_REDIS_NS", ""),
+            "multi_venue": bool(globals().get("MULTI_VENUE_ENABLED", False)),
+            "pid": os.getpid(),
+        })
+    except Exception as e:
+        # Fail-closed but informative for admins
+        return jsonify({
+            "ok": False,
+            "error": "build_endpoint_exception",
+            "detail": str(e),
+        }), 500
 
 
 @app.route("/admin/api/_redis_smoke", methods=["GET"])
