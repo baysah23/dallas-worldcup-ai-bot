@@ -2,7 +2,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
-import pathlib
 import json
 import hashlib
 import secrets
@@ -388,7 +387,7 @@ def _resolve_venue_id() -> str:
     except Exception:
         pass
     try:
-        q = (request.args.get("venue_id") or request.args.get("venue") or "").strip()
+        q = (request.args.get("venue") or "").strip()
         if q:
             return _slugify_venue_id(q)
     except Exception:
@@ -442,7 +441,7 @@ def _open_default_spreadsheet(gc, venue_id: Optional[str] = None):
     sid = _venue_sheet_id(venue_id)
     if sid:
         return gc.open_by_key(sid)
-    return gc.open(SHEET_NAME)
+    return _open_default_spreadsheet(gc)
 
 def get_sheet(tab: Optional[str] = None, venue_id: Optional[str] = None):
     """Return a worksheet for the current venue."""
@@ -1585,12 +1584,6 @@ def _admin_auth() -> Dict[str, str]:
         actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
         return {"ok": True, "role": "owner", "actor": actor, "venue_id": vid}
 
-    # Super-admin key (platform-level owner)
-    super_key = (os.environ.get("SUPER_ADMIN_KEY") or "").strip()
-    if super_key and key == super_key:
-        actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
-        return {"ok": True, "role": "owner", "actor": actor, "venue_id": vid}
-
     # Venue-scoped keys
     vc = _venue_cfg(vid)
     access = vc.get("access") if isinstance(vc.get("access"), dict) else {}
@@ -1619,117 +1612,6 @@ def admin_api_whoami():
     ctx = _admin_ctx()
     return jsonify(ok=bool(ctx.get("ok")), role=ctx.get("role", ""), actor=ctx.get("actor", ""), venue_id=ctx.get("venue_id",""))
 
-
-# ============================================================
-# Owner "All Venues" Leads (proper multi-venue aggregator)
-# - Super-admin access: SUPER_ADMIN_KEY OR global ADMIN_OWNER_KEY
-# - Returns merged leads with _venue_id attached
-# ============================================================
-SUPER_ADMIN_KEY = (os.environ.get("SUPER_ADMIN_KEY") or "").strip()
-
-def _is_super_admin_request() -> bool:
-    k = (request.args.get("key", "") or "").strip()
-    if SUPER_ADMIN_KEY and k == SUPER_ADMIN_KEY:
-        return True
-    # Global owner key is allowed (owner controls the platform)
-    if ADMIN_OWNER_KEY and k == ADMIN_OWNER_KEY:
-        return True
-    return False
-
-def _iter_venue_json_configs() -> List[Tuple[str, Dict[str, Any]]]:
-    out: List[Tuple[str, Dict[str, Any]]] = []
-    try:
-        base = VENUES_DIR
-        if not os.path.isdir(base):
-            return out
-        for fn in sorted(os.listdir(base)):
-            if not fn.lower().endswith(".json"):
-                continue
-            fp = os.path.join(base, fn)
-            try:
-                raw = open(fp, "r", encoding="utf-8").read()
-                cfg = json.loads(raw)
-                if not isinstance(cfg, dict):
-                    continue
-                vid = _slugify_venue_id(os.path.splitext(fn)[0])
-                cfg["venue_id"] = cfg.get("venue_id") or vid
-                out.append((vid, cfg))
-            except Exception:
-                continue
-    except Exception:
-        return out
-    return out
-
-@app.get("/admin/api/leads_all")
-def admin_api_leads_all():
-    """Owner-only: merge leads across all venues (SUPER_ADMIN_KEY or global owner key)."""
-    ok, resp = _require_admin(min_role="owner")
-    if not ok:
-        return resp
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
-
-    try:
-        limit = int(request.args.get("limit") or 500)
-    except Exception:
-        limit = 500
-    try:
-        per_venue = int(request.args.get("per_venue") or 300)
-    except Exception:
-        per_venue = 300
-
-    items: List[Dict[str, Any]] = []
-    errors: List[Dict[str, Any]] = []
-
-    try:
-        gc = get_gspread_client()
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"Sheets not configured: {e}"}), 500
-
-    for vid, cfg in _iter_venue_json_configs():
-        # sheet id can be at cfg.google_sheet_id or cfg.data.google_sheet_id
-        sid = ""
-        try:
-            data = cfg.get("data") if isinstance(cfg.get("data"), dict) else {}
-            sid = str((data or {}).get("google_sheet_id") or cfg.get("google_sheet_id") or "").strip()
-        except Exception:
-            sid = ""
-
-        if not sid:
-            errors.append({"venue_id": vid, "error": "missing google_sheet_id"})
-            continue
-
-        try:
-            ws = gc.open_by_key(sid).sheet1
-            rows = ws.get_all_values() or []
-            if not rows:
-                continue
-            header = rows[0]
-            body = rows[1:]
-            body = body[-per_venue:]
-
-            for r in body:
-                obj: Dict[str, Any] = {"_venue_id": vid}
-                for i, col in enumerate(header):
-                    k = str(col or "").strip() or f"col_{i+1}"
-                    obj[k] = (r[i] if i < len(r) else "")
-                items.append(obj)
-        except Exception as e:
-            errors.append({"venue_id": vid, "error": str(e)})
-
-    # best-effort newest-first (if you have a timestamp column)
-    def _ts(o: Dict[str, Any]) -> str:
-        for k in ("timestamp", "created_at", "created", "ts", "Submitted At", "submitted_at"):
-            v = o.get(k)
-            if v:
-                return str(v)
-        return ""
-
-    items.sort(key=_ts, reverse=True)
-    if limit and len(items) > limit:
-        items = items[:limit]
-
-    return jsonify({"ok": True, "count": len(items), "items": items, "errors": errors})
 
 @app.post("/admin/api/venues/create")
 def admin_api_venues_create():
@@ -2824,22 +2706,16 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
     ws.append_row(row, value_input_option="USER_ENTERED")
 
 
-def read_leads(limit: int = 200, venue_id: Optional[str] = None) -> List[List[str]]:
-    """Read leads from Google Sheets (venue-scoped) with a small cache.
+def read_leads(limit: int = 200) -> List[List[str]]:
+    """Read leads from Google Sheets with a small cache.
 
-    - Uses per-venue sheet_id when present in config/venues/<venue>.json
-    - Falls back to GOOGLE_SHEET_NAME when no per-venue sheet_id exists
-    - Caches per-venue to reduce Sheets quota errors
+    Switching between Admin tabs can trigger repeated reads; caching avoids
+    Sheets 429 quota errors. If Sheets errors, we fall back to cached rows.
     """
     now = time.time()
-    vid = _slugify_venue_id(venue_id or _venue_id())
 
-    # Per-venue cache slots (avoid cross-tenant bleed)
-    ts_key = f"ts:{vid}"
-    rows_key = f"rows:{vid}"
-
-    rows_cached = _LEADS_CACHE.get(rows_key)
-    if isinstance(rows_cached, list) and (now - float(_LEADS_CACHE.get(ts_key, 0.0)) < 90.0):
+    rows_cached = _LEADS_CACHE.get("rows")
+    if isinstance(rows_cached, list) and (now - float(_LEADS_CACHE.get("ts", 0.0)) < 90.0):
         if not rows_cached:
             return []
         header = rows_cached[0]
@@ -2849,23 +2725,10 @@ def read_leads(limit: int = 200, venue_id: Optional[str] = None) -> List[List[st
 
     try:
         gc = get_gspread_client()
-
-        # Resolve the correct spreadsheet for this venue.
-        sid = ""
-        try:
-            sid = _venue_sheet_id(vid)
-        except Exception:
-            sid = ""
-
-        if sid:
-            ws = gc.open_by_key(sid).sheet1
-        else:
-            # Global fallback (legacy single-venue behavior)
-            ws = gc.open(SHEET_NAME).sheet1
-
+        ws = _open_default_spreadsheet(gc).sheet1
         rows = ws.get_all_values() or []
-        _LEADS_CACHE[ts_key] = now
-        _LEADS_CACHE[rows_key] = rows
+        _LEADS_CACHE["ts"] = now
+        _LEADS_CACHE["rows"] = rows
 
         if not rows:
             return []
@@ -2874,7 +2737,7 @@ def read_leads(limit: int = 200, venue_id: Optional[str] = None) -> List[List[st
         body = body[-limit:]
         return [header] + body
     except Exception:
-        rows = _LEADS_CACHE.get(rows_key) or []
+        rows = _LEADS_CACHE.get("rows") or []
         if rows:
             header = rows[0]
             body = rows[1:]
@@ -6234,20 +6097,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
 }
 </style>
 """)
-    html.append(r"""
-<script>
-window.escapeHtml = window.escapeHtml || function(str) {
-  if (str === undefined || str === null) return "";
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-};
-</script>
-
-</head><body><div class='wrap'>""")
+    html.append("</head><body><div class='wrap'>")
 
     html.append("<div class='topbar'>")
     html.append("<div>")
@@ -6281,7 +6131,6 @@ window.escapeHtml = window.escapeHtml || function(str) {
     <span class="tablabel">Operate</span>
     <button type="button" class="tabbtn active" data-tab="ops" onclick="showTab('ops');return false;">Ops</button>
     <button type="button" class="tabbtn" data-tab="leads" onclick="showTab('leads');return false;">Leads</button>
-    <button type="button" class="tabbtn" data-tab="allleads" data-minrole="owner" onclick="showTab(\'allleads\');return false;">All Leads</button>
     <button type="button" class="tabbtn" data-tab="aiq" onclick="showTab('aiq');return false;">AI Queue</button>
     <button type="button" class="tabbtn" data-tab="monitor" onclick="showTab('monitor');return false;">Monitoring</button>
     <button type="button" class="tabbtn" data-tab="audit" onclick="showTab('audit');return false;">Audit</button>
@@ -6604,25 +6453,6 @@ window.escapeHtml = window.escapeHtml || function(str) {
     <pre id="replayOut" style="margin-top:10px;white-space:pre-wrap;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:10px;max-height:260px;overflow:auto"></pre>
   </div>
 
-<div id="tab-allleads" class="tabpane hidden">
-  <div class="card">
-    <div class="h2">All Leads (All Venues)</div>
-    <div class="small">Owner-only. Merged across all venue Sheets. Includes <code>_venue_id</code>.</div>
-    <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button class="btn" onclick="loadAllLeads();return false;">Refresh</button>
-      <span id="allleads-msg" class="note"></span>
-    </div>
-  </div>
-  <div class="card">
-    <div class="tablewrap">
-      <table id="allleads-table">
-        <thead><tr id="allleads-head"></tr></thead>
-        <tbody id="allleads-body"></tbody>
-      </table>
-    </div>
-  </div>
-</div>
-
 <div id="tab-aiq" class="tabpane hidden">
   <div class="card">
     <div class="h2">AI Approval Queue</div>
@@ -6868,7 +6698,6 @@ window.escapeHtml = window.escapeHtml || function(str) {
         }
       }
     }catch(e){}
-    try{ if(tab==='allleads') loadAllLeads(); }catch(e){}
     setActive(tab); return false;
   };
 
@@ -6900,7 +6729,7 @@ for(var i=0;i<btns.length;i++){
                   if(ROLE_RANK[ROLE] < ROLE_RANK[minr]){ try{ toast('Owner only — redirected to Ops', 'warn'); }catch(e){} setActive('ops'); return; }
                 }
               }catch(e){}
-              showTab(t);
+              setActive(t);
             }
           });
         }catch(e){}
@@ -7238,7 +7067,7 @@ async function loadPartnerList(){
     const partners = (j.partners||[]).filter(Boolean);
     if(box){
       box.innerHTML = partners.length
-        ? ('<b>Known partners:</b> ' + partners.map(p=>'<code style="padding:2px 6px;border:1px solid rgba(255,255,255,.12);border-radius:10px">'+window.escapeHtml(p)+'</code>').join(' '))
+        ? ('<b>Known partners:</b> ' + partners.map(p=>'<code style="padding:2px 6px;border:1px solid rgba(255,255,255,.12);border-radius:10px">'+escapeHtml(p)+'</code>').join(' '))
         : 'No partner policies saved yet (only default).';
     }
     if(msg) msg.textContent='Loaded ✔';
@@ -7503,46 +7332,6 @@ function _renderOpsMeta(meta){
     const who = (meta.role? meta.role.toUpperCase():'') + (meta.actor? ' ('+meta.actor+')':'');
     el.textContent = `Last updated: ${meta.ts} ${who}`;
   }catch(e){}
-}
-
-async function loadAllLeads(){
-  const msg = qs('#allleads-msg'); if(msg) msg.textContent = 'Loading...';
-  try{
-    const r = await fetch('/admin/api/leads_all?key='+encodeURIComponent(KEY), {cache:'no-store'});
-    const j = await r.json().catch(()=>null);
-    if(!j || !j.ok){
-      if(msg) msg.textContent = 'Failed: ' + ((j && j.error) ? j.error : 'unknown');
-      return;
-    }
-    const items = j.items || [];
-    if(msg) msg.textContent = items.length ? ('Loaded ' + items.length + ' leads') : 'No leads yet.';
-    const head = qs('#allleads-head');
-    const body = qs('#allleads-body');
-    if(head) head.innerHTML = '';
-    if(body) body.innerHTML = '';
-
-    if(!items.length){ return; }
-
-    // Columns: always include _venue_id first, then up to 10 more keys (keeps UI fast)
-    const keys = [];
-    if(items[0] && typeof items[0] === 'object'){
-      keys.push('_venue_id');
-      const more = Object.keys(items[0]).filter(k=>k!=='_venue_id');
-      for(let i=0;i<more.length && keys.length<12;i++) keys.push(more[i]);
-    }
-
-    if(head){
-      head.innerHTML = keys.map(k=>'<th>'+window.escapeHtml(k)+'</th>').join('');
-    }
-    if(body){
-      const rows = items.map(it=>{
-        return '<tr>' + keys.map(k=>'<td>'+window.escapeHtml((it && it[k]!==undefined) ? String(it[k]) : '')+'</td>').join('') + '</tr>';
-      }).join('');
-      body.innerHTML = rows;
-    }
-  }catch(e){
-    if(msg) msg.textContent = 'Load failed: ' + (e && e.message ? e.message : e);
-  }
 }
 
 async function loadOps(){
@@ -8553,20 +8342,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
 .tel{color:var(--text);text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
 .toast{position:fixed;right:14px;bottom:14px;background:rgba(0,0,0,.55);border:1px solid var(--line);padding:10px 12px;border-radius:12px;font-size:12px;display:none}
 </style>""")
-    html.append("
-<script>
-window.escapeHtml = window.escapeHtml || function(str) {
-  if (str === undefined || str === null) return "";
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-};
-</script>
-
-</head><body><div class='wrap'>")
+    html.append("</head><body><div class='wrap'>")
 
     html.append("<div class='topbar'>")
     html.append(f"<div><div class='h1'>Fan Zone Admin — {_hesc(SHEET_NAME or 'World Cup')}</div><div class='sub'>Poll controls (Sponsor text + Match of the Day) • Key required</div></div>")
@@ -8668,12 +8444,12 @@ window.escapeHtml = window.escapeHtml || function(str) {
       for(const r of top){
         const name = String(r.name||"");
         const votes = String(r.votes||0);
-        rows += `<div class="row"><div>${window.escapeHtml(name)}</div><div class="mono">${window.escapeHtml(votes)}</div></div>`;
+        rows += `<div class="row"><div>${escapeHtml(name)}</div><div class="mono">${escapeHtml(votes)}</div></div>`;
       }
       if(!rows) rows = '<div class="sub">No votes yet</div>';
 
       setPollStatus(
-        `<div class="h2">${window.escapeHtml(title)}</div>` +
+        `<div class="h2">${escapeHtml(title)}</div>` +
         `<div class="small">${locked ? "🔒 Locked" : "🟢 Open"}</div>` +
         `<div style="margin-top:10px;display:grid;gap:8px">${rows}</div>`
       );
@@ -8682,7 +8458,7 @@ window.escapeHtml = window.escapeHtml || function(str) {
     }
   }
 
-  function window.escapeHtml(s){
+  function escapeHtml(s){
     return String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
