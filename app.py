@@ -284,7 +284,7 @@ ADMIN_KEY = os.environ.get("ADMIN_KEY", "")  # required to view /admin
 # - Provide managers a separate key so they can view ops/leads without editing rules/menu.
 ADMIN_OWNER_KEY = (os.environ.get("ADMIN_OWNER_KEY") or ADMIN_KEY or "").strip()
 SUPER_ADMIN_KEY = (os.environ.get("SUPER_ADMIN_KEY") or "").strip()
-APP_VERSION = (os.environ.get("APP_VERSION") or "1.0.0").strip()
+APP_VERSION = (os.environ.get("APP_VERSION") or "1.3.0").strip()
 # Either a single key via ADMIN_MANAGER_KEY, or a comma-separated list via ADMIN_MANAGER_KEYS
 _ADMIN_MANAGER_KEYS_RAW = (os.environ.get("ADMIN_MANAGER_KEYS") or os.environ.get("ADMIN_MANAGER_KEY") or "").strip()
 ADMIN_MANAGER_KEYS = [k.strip() for k in _ADMIN_MANAGER_KEYS_RAW.split(",") if k.strip()]
@@ -9061,6 +9061,77 @@ def _save_fanzone_state(st: Dict[str, Any], actor: str, role: str) -> Dict[str, 
     else:
         _safe_write_json_file(POLL_STORE_FILE, st2)
     return st2
+
+# ============================================================
+# Super Admin: Venue Onboarding (writes config when possible)
+# ============================================================
+@app.get("/super/api/venues")
+def super_api_venues_list():
+    if not _is_super_admin_request():
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    venues = _load_venues_from_disk()
+    out = []
+    if isinstance(venues, dict):
+        for vid, cfg in sorted(venues.items(), key=lambda kv: kv[0]):
+            if not isinstance(cfg, dict):
+                continue
+            name = str(cfg.get("venue_name") or cfg.get("name") or vid)
+            plan = str(cfg.get("plan") or "")
+            sid = ""
+            try:
+                sid = _venue_sheet_id(vid)
+            except Exception:
+                sid = ""
+            out.append({
+                "venue_id": vid,
+                "venue_name": name,
+                "plan": plan,
+                "google_sheet_id": sid,
+                "status": str(cfg.get("status") or ""),
+            })
+    return jsonify({"ok": True, "venues": out})
+
+@app.post("/super/api/venues/create")
+def super_api_venues_create():
+    """Super-admin: generate venue pack and attempt to persist to config/venues/<venue>.json."""
+    if not _is_super_admin_request():
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    body = request.get_json(silent=True) or {}
+    venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
+    plan = str(body.get("plan") or "standard").strip().lower() or "standard"
+
+    admin_key = secrets.token_hex(16)
+    manager_key = secrets.token_hex(16)
+
+    pack = {
+        "venue_name": venue_name,
+        "venue_id": venue_id,
+        "status": "active",
+        "plan": plan,
+        "keys": {"admin_key": admin_key, "manager_key": manager_key},
+        "data": {"google_sheet_id": str(body.get("google_sheet_id") or "").strip(), "redis_namespace": f"{_REDIS_NS}:{venue_id}"},
+        "features": body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True},
+        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+
+    # Attempt to write config file (works locally; may be read-only in some hosts)
+    wrote = False
+    write_path = ""
+    err = ""
+    try:
+        os.makedirs(VENUES_DIR, exist_ok=True)
+        write_path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+        with open(write_path, "w", encoding="utf-8") as f:
+            json.dump(pack, f, indent=2, sort_keys=True)
+        wrote = True
+        # refresh cache immediately
+        _MULTI_VENUE_CACHE["ts"] = 0.0
+    except Exception as e:
+        err = str(e)
+
+    return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": write_path, "error": err})
 
 @app.get("/admin/api/ops/state")
 def admin_api_ops_state():
