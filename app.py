@@ -185,8 +185,16 @@ except Exception:
 
 # ============================================================
 # App + cache-busting (helps Render show latest index.html)
+#
+# IMPORTANT: make template/static resolution robust across:
+# - `python app.py`
+# - `gunicorn app:app`
+# - dynamic loaders / CI import checks
 # ============================================================
-app = Flask(__name__)
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_TEMPLATE_DIR = os.path.join(_BASE_DIR, "templates")
+_STATIC_DIR = os.path.join(_BASE_DIR, "static")
+app = Flask(__name__, template_folder=_TEMPLATE_DIR, static_folder=_STATIC_DIR)
 
 # ============================================================
 # HARD SAFETY: forbid Flask dev server in production (Render)
@@ -284,7 +292,7 @@ ADMIN_KEY = os.environ.get("ADMIN_KEY", "")  # required to view /admin
 # - Provide managers a separate key so they can view ops/leads without editing rules/menu.
 ADMIN_OWNER_KEY = (os.environ.get("ADMIN_OWNER_KEY") or ADMIN_KEY or "").strip()
 SUPER_ADMIN_KEY = (os.environ.get("SUPER_ADMIN_KEY") or "").strip()
-APP_VERSION = (os.environ.get("APP_VERSION") or "1.3.0").strip()
+APP_VERSION = (os.environ.get("APP_VERSION") or "1.4.0").strip()
 # Either a single key via ADMIN_MANAGER_KEY, or a comma-separated list via ADMIN_MANAGER_KEYS
 _ADMIN_MANAGER_KEYS_RAW = (os.environ.get("ADMIN_MANAGER_KEYS") or os.environ.get("ADMIN_MANAGER_KEY") or "").strip()
 ADMIN_MANAGER_KEYS = [k.strip() for k in _ADMIN_MANAGER_KEYS_RAW.split(",") if k.strip()]
@@ -9131,7 +9139,94 @@ def super_api_venues_create():
     except Exception as e:
         err = str(e)
 
+    try:
+        _audit("super.venues.create", {"venue_id": venue_id, "persisted": wrote, "path": write_path, "error": err})
+    except Exception:
+        pass
     return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": write_path, "error": err})
+
+
+@app.post("/super/api/venues/rotate_keys")
+def super_api_venues_rotate_keys():
+    """Super-admin: rotate a venue's keys and attempt to persist."""
+    if not _is_super_admin_request():
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    if not venue_id:
+        return jsonify({"ok": False, "error": "venue_id required"}), 400
+
+    rotate_admin = bool(body.get("rotate_admin", True))
+    rotate_manager = bool(body.get("rotate_manager", True))
+
+    venues = _load_venues_from_disk() or {}
+    cfg = venues.get(venue_id)
+    if not isinstance(cfg, dict):
+        return jsonify({"ok": False, "error": "unknown venue"}), 404
+
+    keys = cfg.get("keys") if isinstance(cfg.get("keys"), dict) else {}
+    new_admin = secrets.token_hex(16) if rotate_admin else keys.get("admin_key")
+    new_manager = secrets.token_hex(16) if rotate_manager else keys.get("manager_key")
+    keys = {"admin_key": new_admin, "manager_key": new_manager}
+    cfg["keys"] = keys
+    cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    wrote = False
+    write_path = ""
+    err = ""
+    try:
+        os.makedirs(VENUES_DIR, exist_ok=True)
+        write_path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+        with open(write_path, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2, sort_keys=True)
+        wrote = True
+        _MULTI_VENUE_CACHE["ts"] = 0.0
+    except Exception as e:
+        err = str(e)
+
+    try:
+        _audit("super.venues.rotate_keys", {"venue_id": venue_id, "persisted": wrote, "path": write_path, "error": err, "rotate_admin": rotate_admin, "rotate_manager": rotate_manager})
+    except Exception:
+        pass
+
+    return jsonify({"ok": True, "venue_id": venue_id, "keys": keys, "persisted": wrote, "path": write_path, "error": err})
+
+
+@app.get("/super/api/sheets/check")
+def super_api_sheets_check():
+    """Best-effort validation that the service account can open the given sheet."""
+    if not _is_super_admin_request():
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    sheet_id = (request.args.get("sheet_id") or "").strip()
+    if not sheet_id:
+        return jsonify({"ok": False, "error": "sheet_id required"}), 400
+
+    if not _GSPREAD_AVAILABLE:
+        return jsonify({"ok": False, "error": "gspread not available in this runtime"}), 400
+
+    try:
+        gc = _get_gspread_client()
+        sh = gc.open_by_key(sheet_id)
+        title = getattr(sh, "title", "")
+        try:
+            ws = sh.sheet1
+            _ = ws.row_values(1)
+        except Exception:
+            pass
+        try:
+            _audit("super.sheets.check", {"sheet_id": sheet_id, "title": title})
+        except Exception:
+            pass
+        return jsonify({"ok": True, "sheet_id": sheet_id, "title": title})
+    except Exception as e:
+        try:
+            _audit("super.sheets.check_failed", {"sheet_id": sheet_id, "error": str(e)})
+        except Exception:
+            pass
+        return jsonify({"ok": False, "error": str(e)}), 400
+
 
 @app.get("/admin/api/ops/state")
 def admin_api_ops_state():
