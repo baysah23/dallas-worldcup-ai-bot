@@ -8979,13 +8979,13 @@ def api_intake():
     except Exception as e:
         return jsonify({"ok": False, "error": "Failed to store intake"}), 500
 
-# ============================================================
-# Leads intake (used by the new UI)
-# - Stores locally to static/data/leads.jsonl
-# - Optionally appends to Google Sheets if configured (same creds as admin/chat)
-# ============================================================
-LEADS_STORE_PATH = os.environ.get("LEADS_STORE_PATH", "static/data/leads.jsonl")
-GOOGLE_SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "").strip()
+    # ============================================================
+    # Leads intake (used by the new UI)
+    # - Stores locally to static/data/leads.jsonl
+    # - Optionally appends to Google Sheets if configured (same creds as admin/chat)
+    # ============================================================
+    LEADS_STORE_PATH = os.environ.get("LEADS_STORE_PATH", "static/data/leads.jsonl")
+    GOOGLE_SHEET_ID = os.environ.get("GOOGLE_SHEET_ID", "").strip()
 
 def _append_lead_local(row: dict) -> None:
     try:
