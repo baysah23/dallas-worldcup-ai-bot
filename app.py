@@ -9256,6 +9256,9 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
   </div>
 
 <script>
+// --- Demo Mode helpers (safe defaults) ---
+const _demoHeaders = (enabled) => (enabled ? {"X-Demo-Mode":"1"} : {});
+
 (async function(){
   const q = new URLSearchParams(window.location.search);
   const key = q.get("key") || "";
