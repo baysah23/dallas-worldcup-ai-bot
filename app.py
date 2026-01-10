@@ -9176,7 +9176,18 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
           <button class="btn ghost" id="downloadPack">Download JSON</button>
         </div>
         <pre id="venueOut" style="white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:8px;font-size:12px;line-height:1.35"></pre>
-      </div>
+      <div id="venueLinks" style="margin-top:10px;display:none">
+          <div class="k">Quick Links</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+            <a class="btn" id="openAdmin" target="_blank" rel="noopener">Open Admin</a>
+            <a class="btn ghost" id="openManager" target="_blank" rel="noopener">Open Manager</a>
+            <a class="btn ghost" id="openQR" target="_blank" rel="noopener">Open Fan Link</a>
+            <button class="btn ghost" id="copyAdminUrl" type="button">Copy Admin URL</button>
+            <button class="btn ghost" id="copyManagerUrl" type="button">Copy Manager URL</button>
+          </div>
+          <div class="note" id="venueLinksNote" style="margin-top:6px"></div>
+        </div>
+        </div>
 
       <table id="venuesTable" style="margin-top:10px">
         <thead>
@@ -9292,6 +9303,28 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
     }catch(e){
       venueErr.style.display="block";
       venueErr.textContent="Venue list error: " + (e.message||e);
+    }
+  }
+
+  function _setVenueLinks(resp){
+    try{
+      const pack = (resp && (resp.pack || resp)) || {};
+      const adminUrl = pack.admin_url || resp.admin_url || "";
+      const managerUrl = pack.manager_url || resp.manager_url || "";
+      const qrUrl = pack.qr_url || resp.qr_url || "";
+      const links = document.getElementById("venueLinks");
+      const note = document.getElementById("venueLinksNote");
+      const aAdmin = document.getElementById("openAdmin");
+      const aMgr = document.getElementById("openManager");
+      const aQR = document.getElementById("openQR");
+      if(aAdmin) aAdmin.href = adminUrl || "#";
+      if(aMgr) aMgr.href = managerUrl || "#";
+      if(aQR) aQR.href = qrUrl || "#";
+      if(note) note.textContent = adminUrl ? "Admin + Manager links are ready." : "Links unavailable (older venue pack).";
+      if(links) links.style.display = (adminUrl || managerUrl || qrUrl) ? "block" : "none";
+    }catch(e){
+      const links = document.getElementById("venueLinks");
+      if(links) links.style.display="none";
     }
   }
 
@@ -9770,6 +9803,9 @@ def super_api_venues_create():
         "venue_id": venue_id,
         "status": "active",
         "plan": plan,
+        "qr_url": f"https://worldcupconcierge.app/v/{venue_id}",
+        "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={admin_key}",
+        "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={manager_key}",
         "keys": {"admin_key": admin_key, "manager_key": manager_key},
         "data": {"google_sheet_id": str(body.get("google_sheet_id") or "").strip(), "redis_namespace": f"{_REDIS_NS}:{venue_id}"},
         "features": body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True},
@@ -9842,7 +9878,7 @@ def super_api_venues_rotate_keys():
     except Exception:
         pass
 
-    return jsonify({"ok": True, "venue_id": venue_id, "keys": keys, "persisted": wrote, "path": write_path, "error": err})
+    return jsonify({"ok": True, "venue_id": venue_id, "keys": keys, "qr_url": f"https://worldcupconcierge.app/v/{venue_id}", "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={keys.get('admin_key')}", "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={keys.get('manager_key')}", "persisted": wrote, "path": write_path, "error": err})
 
 
 @app.get("/super/api/sheets/check")
