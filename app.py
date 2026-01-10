@@ -26,6 +26,8 @@ MULTI_VENUE_ENABLED = MULTI_VENUE
 import html
 import traceback
 import json
+import csv
+import io
 import hashlib
 import secrets
 import re
@@ -1969,6 +1971,34 @@ def admin_api_build():
         }), 500
 
 
+
+@app.get("/admin/api/leads/export")
+def admin_api_leads_export():
+    """Export leads as CSV. Supports ?days=7 or ?days=30."""
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    days = int(request.args.get("days") or 0)
+    try:
+        rows = read_leads(limit=2000) or []
+    except Exception:
+        rows = []
+    if days in (7, 30):
+        rows = _filter_leads_by_days(rows, days)
+
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    for r in (rows or []):
+        w.writerow(r if isinstance(r, list) else [])
+    csv_bytes = buf.getvalue().encode("utf-8")
+
+    suffix = f"{days}d" if days in (7, 30) else "all"
+    fname = f"leads_{suffix}_{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.csv"
+    resp2 = make_response(csv_bytes)
+    resp2.headers["Content-Type"] = "text/csv; charset=utf-8"
+    resp2.headers["Content-Disposition"] = f'attachment; filename="{fname}"'
+    return resp2
+
 @app.route("/admin/api/_redis_smoke", methods=["GET"])
 def admin_api_redis_smoke():
     """Enterprise smoke: verify Redis write/read works and NO disk fallback occurs."""
@@ -2947,6 +2977,59 @@ def get_gspread_client():
 
 def _normalize_header(h: str) -> str:
     return (h or "").strip().lower().replace(" ", "_")
+
+
+def _lead_ts_to_dt(ts: str) -> Optional[datetime]:
+    """Parse common timestamp formats from the sheet into an aware UTC datetime (best-effort)."""
+    try:
+        raw = str(ts or "").strip()
+        if not raw:
+            return None
+        if raw.endswith("Z"):
+            try:
+                dt = datetime.fromisoformat(raw[:-1])
+                return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc))
+            except Exception:
+                pass
+        try:
+            dt = datetime.fromisoformat(raw)
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            pass
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%m/%d/%Y %H:%M:%S", "%Y-%m-%d %H:%M", "%m/%d/%Y %H:%M"):
+            try:
+                return datetime.strptime(raw, fmt).replace(tzinfo=timezone.utc)
+            except Exception:
+                continue
+        return None
+    except Exception:
+        return None
+
+def _filter_leads_by_days(rows: List[List[str]], days: int) -> List[List[str]]:
+    """Return leads filtered to last N days. Expects header in rows[0]."""
+    try:
+        if not rows or len(rows) < 2 or days <= 0:
+            return rows
+        header = rows[0]
+        body = rows[1:]
+        i_ts = -1
+        for i, h in enumerate(header):
+            if _normalize_header(h) == "timestamp":
+                i_ts = i
+                break
+        if i_ts < 0:
+            return rows
+        cutoff = datetime.now(timezone.utc) - timedelta(days=int(days))
+        kept = []
+        for r in body:
+            ts = r[i_ts] if isinstance(r, list) and i_ts < len(r) else ""
+            dt = _lead_ts_to_dt(ts)
+            if dt and dt >= cutoff:
+                kept.append(r)
+        return [header] + kept
+    except Exception:
+        return rows
+
 
 
 def ensure_sheet_schema(ws) -> List[str]:
@@ -6289,6 +6372,9 @@ def admin():
     leads_err = None
     try:
         rows = read_leads(limit=600) or []
+        days = int(request.args.get("days") or 0)
+        if days in (7, 30):
+            rows = _filter_leads_by_days(rows, days)
     except Exception as e:
         leads_err = repr(e)
         rows = []
@@ -6337,11 +6423,19 @@ def admin():
     numbered = list(reversed(numbered))
 
     admin_key_q = f"?key={key}"
+    days_q = ""
+    try:
+        d0 = int(request.args.get("days") or 0)
+        if d0 in (7,30):
+            days_q = f"&days={d0}"
+    except Exception:
+        days_q = ""
 
     html = []
     html.append("<!doctype html><html><head><meta charset='utf-8'>")
     html.append("<meta name='viewport' content='width=device-width, initial-scale=1'/><meta name='color-scheme' content='dark light'/>")
     html.append(f"<title>{page_title} — World Cup Concierge</title>")
+    html.append("\n<div class=\"card\" style=\"margin-top:12px\">\n  <div class=\"row\" style=\"display:flex;gap:10px;flex-wrap:wrap;align-items:center\">\n    <a class=\"btn2\" href=\"/admin?key=__KEY__\">All</a>\n    <a class=\"btn2\" href=\"/admin?key=__KEY__&days=7\">Last 7 days</a>\n    <a class=\"btn2\" href=\"/admin?key=__KEY__&days=30\">Last 30 days</a>\n    <a class=\"btn\" href=\"/admin/api/leads/export?key=__KEY____DAYS__\">Export CSV</a>\n    <span class=\"note\" style=\"margin-left:auto;opacity:.75\">Export matches current filter</span>\n  </div>\n</div>\n".replace('__KEY__', html.escape(key)).replace('__DAYS__', days_q))
     html.append(r"""
 <style>
 :root{color-scheme:dark;--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
