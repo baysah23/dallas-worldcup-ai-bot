@@ -26,7 +26,7 @@ from flask import Flask, request, jsonify, send_from_directory, send_file, make_
 # ============================================================
 
 # ===== Build/version (single source of truth; NEVER redefine elsewhere) =====
-CODE_VERSION = "1.4.8"
+CODE_VERSION = "1.4.9"
 APP_VERSION = (os.environ.get("APP_VERSION") or CODE_VERSION).strip()
 
 REDIS_URL = os.environ.get("REDIS_URL", "").strip()
@@ -395,6 +395,34 @@ def _load_venues_from_disk() -> Dict[str, Any]:
     _MULTI_VENUE_CACHE["venues"] = venues
     return venues
 
+
+
+def _iter_venue_json_configs() -> List[Dict[str, Any]]:
+    """Return venue config descriptors from VENUES_DIR.
+
+    Used by cross-venue endpoints (Super Admin / enterprise ops).
+    Never throws; returns [] if VENUES_DIR missing or unreadable.
+    Each item contains:
+      - venue_id
+      - path (best-effort)
+      - config (parsed dict)
+    """
+    out: List[Dict[str, Any]] = []
+    try:
+        venues = _load_venues_from_disk() or {}
+        # _load_venues_from_disk returns dict keyed by venue_id.
+        for vid, cfg in venues.items():
+            try:
+                out.append({
+                    "venue_id": str(vid),
+                    "path": str((cfg or {}).get("_path") or ""),
+                    "config": cfg or {},
+                })
+            except Exception:
+                continue
+    except Exception:
+        return []
+    return out
 def _resolve_venue_id() -> str:
     """Resolve venue_id from request (path/query/cookie/header) with optional VENUE_LOCK."""
     if VENUE_LOCK:
