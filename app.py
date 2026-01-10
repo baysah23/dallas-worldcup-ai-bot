@@ -2,8 +2,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
-CODE_VERSION = "1.4.7"
-APP_VERSION = os.environ.get("APP_VERSION") or CODE_VERSION
 MULTI_VENUE_ENABLED = str(os.environ.get("MULTI_VENUE_ENABLED","0")).strip().lower() in ("1","true","yes","y")
 import html
 import traceback
@@ -26,6 +24,11 @@ from flask import Flask, request, jsonify, send_from_directory, send_file, make_
 # - Enable by setting REDIS_URL (managed Redis)
 # - If REDIS_URL is not set or redis lib missing, falls back to filesystem (/tmp)
 # ============================================================
+
+# ===== Build/version (single source of truth; NEVER redefine elsewhere) =====
+CODE_VERSION = "1.4.8"
+APP_VERSION = (os.environ.get("APP_VERSION") or CODE_VERSION).strip()
+
 REDIS_URL = os.environ.get("REDIS_URL", "").strip()
 _REDIS = None
 _REDIS_ENABLED = False
@@ -297,7 +300,6 @@ ADMIN_KEY = os.environ.get("ADMIN_KEY", "")  # required to view /admin
 # - Provide managers a separate key so they can view ops/leads without editing rules/menu.
 ADMIN_OWNER_KEY = (os.environ.get("ADMIN_OWNER_KEY") or ADMIN_KEY or "").strip()
 SUPER_ADMIN_KEY = (os.environ.get("SUPER_ADMIN_KEY") or "").strip()
-APP_VERSION = (os.environ.get("APP_VERSION") or "1.4.0").strip()
 
 # Multi-venue flag (safe default)
 MULTI_VENUE_ENABLED = (os.environ.get("MULTI_VENUE_ENABLED","").strip() or "0") in ("1","true","True","yes","on")
@@ -1689,12 +1691,13 @@ def admin_api_build():
 
         return jsonify({
             "ok": True,
-            "version": globals().get("APP_VERSION", "unknown"),
+            "version": APP_VERSION,
+            "code_version": CODE_VERSION,
+            "app_version_env": os.environ.get("APP_VERSION"),
             "env": (os.environ.get("APP_ENV") or "").strip() or "prod",
             "redis_enabled": bool(globals().get("_REDIS_ENABLED") and globals().get("_REDIS")),
             "redis_namespace": globals().get("_REDIS_NS", ""),
             "multi_venue": bool(globals().get("MULTI_VENUE_ENABLED", False)),
-            "app_sha256": hashlib.sha256(open(__file__, "rb").read()).hexdigest()[:12],
             "pid": os.getpid(),
         })
     except Exception as e:
