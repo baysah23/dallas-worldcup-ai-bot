@@ -9188,7 +9188,7 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
 
   async function loadVenues(){
     try{
-      const r = await fetch("/super/api/venues?key="+encodeURIComponent(key));
+      const r = await fetch("/super/api/venues?super_key="+encodeURIComponent(super_key), {headers});
       const j = await r.json();
       const rows = document.getElementById("venueRows");
       rows.innerHTML = "";
@@ -9207,9 +9207,9 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
           if(!vid) return;
           if(!confirm("Rotate keys for '"+vid+"'? This will invalidate existing venue keys.")) return;
           try{
-            const r = await fetch("/super/api/venues/rotate_keys?key="+encodeURIComponent(key), {
+            const r = await fetch("/super/api/venues/rotate_keys?super_key="+encodeURIComponent(super_key), {
               method:"POST",
-              headers:{"Content-Type":"application/json"},
+              headers:Object.assign({"Content-Type":"application/json"}, headers),
               body: JSON.stringify({venue_id: vid, rotate_admin:true, rotate_manager:true})
             });
             const j2 = await r.json();
@@ -9242,9 +9242,9 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
       return;
     }
     try{
-      const r = await fetch("/super/api/venues/create?key="+encodeURIComponent(key), {
+      const r = await fetch("/super/api/venues/create?super_key="+encodeURIComponent(super_key), {
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers:Object.assign({"Content-Type":"application/json"}, headers),
         body: JSON.stringify({venue_name, venue_id, google_sheet_id, plan})
       });
       const j = await r.json();
@@ -9301,7 +9301,7 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
       return;
     }
     try{
-      const r = await fetch("/super/api/sheets/check?key="+encodeURIComponent(key)+"&sheet_id="+encodeURIComponent(sid));
+      const r = await fetch("/super/api/sheets/check?super_key="+encodeURIComponent(super_key)+"&sheet_id="+encodeURIComponent(sid), {headers});
       const j = await r.json();
       if(!j.ok) throw new Error(j.error||"check failed");
       venueErr.style.display="block";
@@ -9375,7 +9375,7 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
   }
 
   try{
-    const r = await fetch("/super/api/overview?key="+encodeURIComponent(key)+"&super_key="+encodeURIComponent(super_key), {headers});
+    const r = await fetch("/super/api/overview?super_key="+encodeURIComponent(super_key), {headers});
     const j = await r.json();
     if(!j.ok) throw new Error(j.error || "forbidden");
     document.getElementById("venues").textContent = (j.total && j.total.venues) || 0;
@@ -9394,9 +9394,9 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
   await loadVenues();
   await loadLeads();
   try{
-    const b = await fetch("/admin/api/_build?key="+encodeURIComponent(key));
+    const b = await fetch("/super/api/diag?super_key="+encodeURIComponent(super_key), {headers});
     const bj = await b.json();
-    document.getElementById("build").textContent = (bj.version || "—");
+    document.getElementById("build").textContent = (bj.app_version || bj.app_version_env || "—");
   }catch(e){}
 })();
 </script>
