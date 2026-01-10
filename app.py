@@ -9280,6 +9280,7 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
       (j.venues||[]).forEach(v=>{
         const tr = document.createElement("tr");
         const vid = (v.venue_id||"");
+        try{ tr.setAttribute("data-vid", vid); }catch(e){}
         const sheet = String(v.google_sheet_id||"").trim();
         const sheetDisp = sheet ? (sheet.length>16 ? (sheet.slice(0,8)+"…"+sheet.slice(-6)) : sheet) : "—";
         const badge = sheet
@@ -9299,7 +9300,25 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
         rows.appendChild(tr);
       });
 
-      // bind rotate buttons
+      
+      // refresh venue filter dropdown (keeps current selection)
+      try{
+        const sel = document.getElementById("venueFilter");
+        if(sel){
+          const cur = (sel.value||"").trim();
+          sel.innerHTML = '<option value="">All venues</option>';
+          (j.venues||[]).forEach(v=>{
+            const vid = String(v.venue_id||"").trim();
+            if(!vid) return;
+            const opt = document.createElement("option");
+            opt.value = vid;
+            opt.textContent = vid;
+            sel.appendChild(opt);
+          });
+          if(cur && Array.from(sel.options).some(o=>o.value===cur)) sel.value = cur;
+        }
+      }catch(e){}
+// bind rotate buttons
       rows.querySelectorAll("[data-rotate]").forEach(btn=>{
         btn.addEventListener("click", async ()=>{
           const vid = btn.getAttribute("data-rotate");
@@ -9316,6 +9335,24 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
             venueOut.textContent = JSON.stringify(j2, null, 2);
             venueOutWrap.style.display="block";
             await loadVenues();
+      // Auto-select new venue in the leads filter + scroll it into view
+      try{
+        const newVid = (j.pack && j.pack.venue_id) ? j.pack.venue_id : (j.venue_id || "");
+        if(newVid){
+          const sel = document.getElementById("venueFilter");
+          if(sel){
+            sel.value = newVid;
+          }
+          try{ await loadLeads(); }catch(e){}
+          const row = document.querySelector('#venueRows tr[data-vid="'+newVid.replace(/"/g,'\"')+'"]');
+          if(row){
+            row.scrollIntoView({behavior:"smooth", block:"center"});
+            const prev = row.style.boxShadow;
+            row.style.boxShadow = "0 0 0 2px rgba(99,102,241,.55), 0 0 24px rgba(99,102,241,.25)";
+            setTimeout(()=>{ try{ row.style.boxShadow = prev; }catch(_){} }, 1400);
+          }
+        }
+      }catch(e){}
           }catch(e){
             venueErr.style.display="block";
             venueErr.textContent="Rotate error: " + (e.message||e);
