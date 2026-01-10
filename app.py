@@ -11955,7 +11955,7 @@ def next_question(sess: Dict[str, Any]) -> str:
 # Public endpoints
 # ============================================================
 @app.route("/")
-def home():
+def home_root_alt():
     # Prevent stale caching so deploys always serve the latest index.html
     resp = make_response(send_from_directory(".", "index.html"))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
