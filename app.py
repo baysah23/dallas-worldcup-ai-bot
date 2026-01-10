@@ -521,6 +521,47 @@ def _venue_features(venue_id: Optional[str] = None) -> Dict[str, Any]:
     feat = cfg.get("features") if isinstance(cfg.get("features"), dict) else {}
     return dict(feat or {})
 
+
+def _venue_identity_location_line(venue_id: Optional[str] = None) -> str:
+    """Optional, branding-safe identity line shown under the hero.
+
+    Venue config example:
+      identity:
+        location_line: "Irving Lounge · Downtown Dallas"
+      features:
+        show_location_line: true
+    """
+    cfg = _venue_cfg(venue_id)
+    ident = cfg.get("identity") if isinstance(cfg.get("identity"), dict) else {}
+    line = str((ident or {}).get("location_line") or "").strip()
+    return line
+
+def _venue_feature_show_location_line(venue_id: Optional[str] = None) -> bool:
+    feat = _venue_features(venue_id)
+    # canonical flag: features.show_location_line
+    # allow a couple safe aliases for back-compat
+    return bool(feat.get("show_location_line") or feat.get("venue_location_line") or feat.get("location_line"))
+
+@app.get("/api/venue_identity")
+def api_venue_identity():
+    """Fan-safe venue identity metadata (no secrets)."""
+    try:
+        vid = _venue_id()
+        show = _venue_feature_show_location_line(vid)
+        line = _venue_identity_location_line(vid) if show else ""
+        resp = jsonify({
+            "ok": True,
+            "venue_id": vid,
+            "show_location_line": bool(show),
+            "location_line": line,
+        })
+        try:
+            resp.headers["Cache-Control"] = "no-store"
+        except Exception:
+            pass
+        return resp
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 200
 def _open_default_spreadsheet(gc, venue_id: Optional[str] = None):
     """Open the venue-scoped spreadsheet (by sheet_id if present) else fall back to SHEET_NAME."""
     sid = _venue_sheet_id(venue_id)
