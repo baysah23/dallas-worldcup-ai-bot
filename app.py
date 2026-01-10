@@ -9465,58 +9465,6 @@ def _require_super_admin():
         return False, (jsonify({"ok": False, "error": "forbidden"}), 403)
     return True, None
 
-@app.route("/super/api/diag", methods=["GET"])
-def super_api_diag():
-    ok, resp = _require_super_admin()
-    if not ok:
-        return resp
-    return jsonify({
-        "ok": True,
-        "version": APP_VERSION,
-        "pid": os.getpid(),
-        "env": (os.environ.get("APP_ENV") or "").strip() or "prod",
-        "redis_enabled": bool(globals().get("_REDIS_ENABLED")),
-        "redis_namespace": globals().get("_REDIS_NAMESPACE", ""),
-        "multi_venue": bool(MULTI_VENUE_ENABLED),
-        "super_key_present": bool(_get_super_admin_key()),
-    })
-
-@app.route("/super/admin", methods=["GET"])
-def super_admin_dashboard():
-    ok, resp = _require_super_admin()
-    if not ok:
-        return resp
-    key = (request.args.get("key") or request.args.get("super_key") or "").strip()
-    # Inline render to avoid TemplateNotFound
-    return render_template_string("""<!doctype html>
-<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Super Admin • World Cup Concierge</title>
-<style>
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;margin:0;background:#0b0f14;color:#e8eef6}
-  .wrap{max-width:1000px;margin:0 auto;padding:24px}
-  .card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:18px;margin:14px 0}
-  a{color:#9bd3ff;text-decoration:none}
-  code{background:rgba(0,0,0,.25);padding:2px 6px;border-radius:8px}
-  .row{display:flex;gap:12px;flex-wrap:wrap}
-  .pill{display:inline-block;border:1px solid rgba(255,255,255,.12);padding:8px 12px;border-radius:999px;background:rgba(255,255,255,.04)}
-</style></head>
-<body><div class="wrap">
-  <h1>Super Admin</h1>
-  <div class="row">
-    <span class="pill">Version: {{version}}</span>
-    <span class="pill">Env: {{env}}</span>
-    <span class="pill">PID: {{pid}}</span>
-  </div>
-  <div class="card">
-    <h2>Diagnostics</h2>
-    <p><a href="/super/api/diag?key={{key}}">/super/api/diag</a></p>
-    <p><a href="/admin/api/_build?key={{key}}">/admin/api/_build</a></p>
-  </div>
-  <div class="card">
-    <h2>Next</h2>
-    <p>This dashboard is intentionally minimal and cannot crash due to missing templates.</p>
-  </div>
-</div></body></html>""", version=APP_VERSION, env=(os.environ.get("APP_ENV") or "").strip() or "prod", pid=os.getpid(), key=key)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
