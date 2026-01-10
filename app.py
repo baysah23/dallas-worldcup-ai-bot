@@ -9270,7 +9270,12 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
   }
 
 
-  async function loadVenues(){
+  
+
+  function esc(s){
+    return String(s ?? "").replace(/[&<>"']/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
+  }
+async function loadVenues(){
     try{
       const r = await fetch("/super/api/venues?super_key="+encodeURIComponent(super_key), {headers});
       const j = await r.json();
@@ -9295,8 +9300,32 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
             : (st==="MISSING_SHEET")
               ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING SHEET</span>`
               : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.22);color:#e2e8f0;font-size:12px;">${st||"—"}</span>`;
-        tr.innerHTML = `<td>${vid}</td><td>${(v.venue_name||"")}</td><td>${(v.plan||"")}</td><td>${sidDisp}</td><td>${statusBadge}</td><td class="right"><button class="btn ghost" data-rotate="${vid}">Rotate Keys</button></td>`;
+        tr.innerHTML = `<td>${esc(vid)}</td><td>${esc(v.venue_name||"")}</td><td>${esc(v.plan||"")}</td><td title="${esc(sid)}">${esc(sidDisp)}</td><td>${statusBadge}</td><td><button class="btn ghost" data-recheck="${esc(vid)}">Re-check</button> <button class="btn ghost" data-rotate="${esc(vid)}">Rotate Keys</button></td>`;
         rows.appendChild(tr);
+      });
+
+      // bind re-check buttons
+      rows.querySelectorAll("[data-recheck]").forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const vid = btn.getAttribute("data-recheck");
+          if(!vid) return;
+          try{
+            venueErr.style.display="none";
+            const r = await fetch("/super/api/venues/check_sheet?super_key="+encodeURIComponent(super_key), {
+              method:"POST",
+              headers:Object.assign({"Content-Type":"application/json"}, headers),
+              body: JSON.stringify({venue_id: vid})
+            });
+            const j2 = await r.json();
+            if(!j2.ok) throw new Error(j2.error||"check failed");
+            venueOut.textContent = JSON.stringify(j2, null, 2);
+            venueOutWrap.style.display="block";
+            await loadVenues();
+          }catch(e){
+            venueErr.style.display="block";
+            venueErr.textContent="Re-check error: " + (e.message||e);
+          }
+        });
       });
 
       // bind rotate buttons
