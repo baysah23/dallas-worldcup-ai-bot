@@ -2,11 +2,29 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
-MULTI_VENUE_ENABLED = str(os.environ.get("MULTI_VENUE_ENABLED","0")).strip().lower() in ("1","true","yes","y")
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    """Parse boolean env vars safely."""
+    try:
+        v = os.environ.get(name)
+        if v is None:
+            return default
+        s = str(v).strip().lower()
+        if s == "":
+            return default
+        return s in ("1", "true", "yes", "y", "on")
+    except Exception:
+        return default
+
+# Multi-venue flag (back-compat):
+# - Preferred: MULTI_VENUE=1
+# - Legacy: MULTI_VENUE_ENABLED=1
+MULTI_VENUE = _env_bool("MULTI_VENUE", default=_env_bool("MULTI_VENUE_ENABLED", default=False))
+MULTI_VENUE_ENABLED = MULTI_VENUE
+
 import html
 import traceback
 import json
-import pathlib
 import hashlib
 import secrets
 import re
@@ -302,8 +320,7 @@ ADMIN_KEY = os.environ.get("ADMIN_KEY", "")  # required to view /admin
 ADMIN_OWNER_KEY = (os.environ.get("ADMIN_OWNER_KEY") or ADMIN_KEY or "").strip()
 SUPER_ADMIN_KEY = (os.environ.get("SUPER_ADMIN_KEY") or "").strip()
 
-# Multi-venue flag (safe default)
-MULTI_VENUE_ENABLED = (os.environ.get("MULTI_VENUE_ENABLED","").strip() or "0") in ("1","true","True","yes","on")
+# Multi-venue flag is initialized near the top via MULTI_VENUE / MULTI_VENUE_ENABLED env vars.
 # Either a single key via ADMIN_MANAGER_KEY, or a comma-separated list via ADMIN_MANAGER_KEYS
 _ADMIN_MANAGER_KEYS_RAW = (os.environ.get("ADMIN_MANAGER_KEYS") or os.environ.get("ADMIN_MANAGER_KEY") or "").strip()
 ADMIN_MANAGER_KEYS = [k.strip() for k in _ADMIN_MANAGER_KEYS_RAW.split(",") if k.strip()]
@@ -480,13 +497,6 @@ def _venue_sheet_id(venue_id: Optional[str] = None) -> str:
     sid = str((data or {}).get("google_sheet_id") or (cfg.get("google_sheet_id") or "")).strip()
     return sid
 
-
-def _venue_sheet_tab(venue_id: Optional[str] = None) -> str:
-    cfg = _venue_cfg(venue_id)
-    data = cfg.get("data") if isinstance(cfg.get("data"), dict) else {}
-    tab = str((data or {}).get("sheet_name") or (cfg.get("sheet_name") or "")).strip()
-    return tab
-
 def _venue_features(venue_id: Optional[str] = None) -> Dict[str, Any]:
     cfg = _venue_cfg(venue_id)
     feat = cfg.get("features") if isinstance(cfg.get("features"), dict) else {}
@@ -497,16 +507,12 @@ def _open_default_spreadsheet(gc, venue_id: Optional[str] = None):
     sid = _venue_sheet_id(venue_id)
     if sid:
         return gc.open_by_key(sid)
-    # Fall back to the configured default spreadsheet name (single-venue mode)
-    return gc.open(SHEET_NAME)
+    return _open_default_spreadsheet(gc)
 
 def get_sheet(tab: Optional[str] = None, venue_id: Optional[str] = None):
     """Return a worksheet for the current venue."""
     gc = get_gspread_client()
     sh = _open_default_spreadsheet(gc, venue_id=venue_id)
-    # If no explicit tab requested, prefer the venue config's sheet_name.
-    if not tab:
-        tab = _venue_sheet_tab(venue_id) or ""
     if tab:
         return sh.worksheet(tab)
     return sh.sheet1
@@ -2809,20 +2815,16 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
     ws.append_row(row, value_input_option="USER_ENTERED")
 
 
-def read_leads(limit: int = 200, venue_id: Optional[str] = None) -> List[List[str]]:
-    """Read leads from Google Sheets with a small cache (per-venue).
+def read_leads(limit: int = 200) -> List[List[str]]:
+    """Read leads from Google Sheets with a small cache.
 
     Switching between Admin tabs can trigger repeated reads; caching avoids
     Sheets 429 quota errors. If Sheets errors, we fall back to cached rows.
     """
     now = time.time()
-    vid = _slugify_venue_id(venue_id or _venue_id())
 
-    # Cache is per-venue so cross-venue endpoints don't collide.
-    cache_key = f"rows:{vid}"
-    rows_cached = _LEADS_CACHE.get(cache_key)
-    ts_cached = _LEADS_CACHE.get(f"ts:{vid}", 0.0)
-    if isinstance(rows_cached, list) and (now - float(ts_cached) < 90.0):
+    rows_cached = _LEADS_CACHE.get("rows")
+    if isinstance(rows_cached, list) and (now - float(_LEADS_CACHE.get("ts", 0.0)) < 90.0):
         if not rows_cached:
             return []
         header = rows_cached[0]
@@ -2831,24 +2833,37 @@ def read_leads(limit: int = 200, venue_id: Optional[str] = None) -> List[List[st
         return [header] + body
 
     try:
-        ws = get_sheet(venue_id=vid)
+        gc = get_gspread_client()
+        ws = _open_default_spreadsheet(gc).sheet1
         rows = ws.get_all_values() or []
+        _LEADS_CACHE["ts"] = now
+        _LEADS_CACHE["rows"] = rows
+
+        if not rows:
+            return []
+        header = rows[0]
+        body = rows[1:]
+        body = body[-limit:]
+        return [header] + body
+    except Exception:
+        rows = _LEADS_CACHE.get("rows") or []
         if rows:
-            # newest rows at bottom
             header = rows[0]
             body = rows[1:]
             body = body[-limit:]
-            out = [header] + body
-        else:
-            out = []
-        _LEADS_CACHE[cache_key] = out
-        _LEADS_CACHE[f"ts:{vid}"] = now
-        return out
-    except Exception as e:
-        # fall back to cached rows on error
-        if isinstance(rows_cached, list):
-            return rows_cached
-        raise
+            return [header] + body
+        return []
+
+def get_session_id() -> str:
+    """
+    Front-end should send session_id for stable memory.
+    Fallback: IP + UA.
+    """
+    data = request.get_json(silent=True) or {}
+    sid = (data.get("session_id") or "").strip()
+    if sid:
+        return sid
+    return f"{client_ip()}::{request.headers.get('User-Agent','')[:40]}"
 
 
 def get_session(sid: str) -> Dict[str, Any]:
@@ -9946,10 +9961,7 @@ def admin_api_leads_all():
     if not venues:
         return jsonify({"ok": True, "count": 0, "items": [], "errors": [{"venue_id": "", "error": "No venue configs found in config/venues/"}]})
 
-    for v in venues:
-        vid = str((v or {}).get("venue_id") or "").strip()
-        if not vid:
-            continue
+    for vid, _cfg in venues:
         try:
             rows = read_leads(limit=per_venue, venue_id=vid) or []
             rows_to_items(rows, vid)
