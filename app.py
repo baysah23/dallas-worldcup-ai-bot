@@ -9996,3 +9996,30 @@ def admin_api_leads_all():
         items = items[:limit]
 
     return jsonify({"ok": True, "count": len(items), "items": items, "errors": errors})
+
+
+# ============================================================
+# Owner / Manager HARDENING (server-side)
+# Safe shim using existing _require_admin(min_role=...)
+# ============================================================
+
+_ROLE_RANK = {"manager": 1, "owner": 2, "super": 3}
+
+def require_role(min_role: str):
+    def _wrap(fn):
+        def _inner(*args, **kwargs):
+            try:
+                ok, resp = _require_admin(min_role=min_role)
+                if not ok:
+                    return resp
+            except Exception:
+                return jsonify({"ok": False, "error": "forbidden"}), 403
+            return fn(*args, **kwargs)
+        _inner.__name__ = fn.__name__
+        return _inner
+    return _wrap
+
+# NOTE:
+# This app already uses _require_admin(min_role=...) across admin mutation endpoints.
+# This shim standardizes the decorator form without altering behavior.
+# ============================================================
