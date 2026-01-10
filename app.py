@@ -9263,6 +9263,13 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
   const venueOutWrap = document.getElementById("venueOutWrap");
   const venueOut = document.getElementById("venueOut");
 
+  function _slugify(s){
+    s=(s||"").toLowerCase().trim();
+    s=s.replace(/[^a-z0-9]+/g,'-').replace(/-{2,}/g,'-').replace(/^-|-$/g,'');
+    return s||"default";
+  }
+
+
   async function loadVenues(){
     try{
       const r = await fetch("/super/api/venues?super_key="+encodeURIComponent(super_key), {headers});
@@ -9405,7 +9412,41 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
       if(!j.ok) throw new Error(j.error||"check failed");
       venueErr.style.display="block";
       venueErr.textContent="Sheet OK: " + (j.title||"opened");
-      setTimeout(()=>{ venueErr.style.display="none"; }, 2000);
+      setTimeout(()=>{ ven
+
+
+document.getElementById("saveSheet")?.addEventListener("click", async ()=>{
+  venueErr.style.display="none";
+  const vid = (document.getElementById("v_id").value||"").trim() || _slugify((document.getElementById("v_name").value||"").trim());
+  const sid = (document.getElementById("v_sheet").value||"").trim();
+  if(!vid){
+    venueErr.style.display="block";
+    venueErr.textContent="Enter a venue id (or venue name) first.";
+    return;
+  }
+  if(!sid){
+    venueErr.style.display="block";
+    venueErr.textContent="Enter a Google Sheet ID first.";
+    return;
+  }
+  try{
+    const r = await fetch("/super/api/venues/set_sheet?super_key="+encodeURIComponent(super_key), {
+      method:"POST",
+      headers:Object.assign({"Content-Type":"application/json"}, headers),
+      body: JSON.stringify({venue_id: vid, google_sheet_id: sid})
+    });
+    const j = await r.json();
+    if(!j.ok){ throw new Error(j.error||"failed"); }
+    venueErr.style.display="block";
+    venueErr.textContent = "Saved sheet to venue: " + vid;
+    setTimeout(()=>{ venueErr.style.display="none"; }, 1800);
+    await loadVenues();
+  }catch(e){
+    venueErr.style.display="block";
+    venueErr.textContent="Save sheet error: " + (e.message||e);
+  }
+});
+ueErr.style.display="none"; }, 2000);
     }catch(e){
       venueErr.style.display="block";
       venueErr.textContent="Sheet check error: " + (e.message||e);
@@ -9832,6 +9873,64 @@ def super_api_venues_create():
     except Exception:
         pass
     return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": write_path, "error": err})
+
+@app.post("/super/api/venues/set_sheet")
+def super_api_venues_set_sheet():
+    """Super-admin: update a venue's google_sheet_id in its config file (best effort)."""
+    if not _is_super_admin_request():
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or ""))
+    sheet_id = str(body.get("google_sheet_id") or "").strip()
+    if not venue_id:
+        return jsonify({"ok": False, "error": "missing_venue_id"}), 400
+    if not sheet_id:
+        return jsonify({"ok": False, "error": "missing_google_sheet_id"}), 400
+
+    venues = _load_venues_from_disk() or {}
+    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
+    if not isinstance(cfg, dict):
+        return jsonify({"ok": False, "error": "venue_not_found"}), 404
+
+    path = str(cfg.get("_path") or "")
+    if not path:
+        # fallback to expected json path
+        path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+
+    wrote = False
+    err = ""
+    try:
+        # load existing file as dict
+        cur = {}
+        try:
+            cur_txt = pathlib.Path(path).read_text(encoding="utf-8")
+            cur = json.loads(cur_txt) if cur_txt else {}
+        except Exception:
+            cur = cfg.copy()
+
+        if not isinstance(cur, dict):
+            cur = {}
+
+        data = cur.get("data") if isinstance(cur.get("data"), dict) else {}
+        data["google_sheet_id"] = sheet_id
+        cur["data"] = data
+
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(cur, f, indent=2, sort_keys=True)
+
+        wrote = True
+        _MULTI_VENUE_CACHE["ts"] = 0.0
+    except Exception as e:
+        err = str(e)
+
+    try:
+        _audit("super.venues.set_sheet", {"venue_id": venue_id, "sheet_id": sheet_id, "persisted": wrote, "path": path, "error": err})
+    except Exception:
+        pass
+
+    return jsonify({"ok": True, "venue_id": venue_id, "google_sheet_id": sheet_id, "persisted": wrote, "path": path, "error": err})
 
 
 @app.post("/super/api/venues/rotate_keys")
