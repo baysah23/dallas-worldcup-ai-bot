@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
+import pathlib
 
 def _env_bool(name: str, default: bool = False) -> bool:
     """Parse boolean env vars safely."""
@@ -388,7 +389,17 @@ def _load_venues_from_disk() -> Dict[str, Any]:
             else:
                 if yaml_mod is None:
                     # YAML file present but parser missing: fail loud for ops clarity
-                    raise RuntimeError("YAML venue file detected but PyYAML is not installed. Add pyyaml to requirements.txt or use .json venue configs.")
+                    # YAML venue file present but PyYAML missing: skip YAML so JSON venues still work
+
+                    try:
+
+                        print('[VENUES] skipping YAML (pyyaml not installed): ' + os.path.basename(fp))
+
+                    except Exception:
+
+                        pass
+
+                    continue
                 try:
                     cfg = yaml_mod.safe_load(raw)
                 except Exception:
@@ -399,6 +410,7 @@ def _load_venues_from_disk() -> Dict[str, Any]:
 
             vid = _slugify_venue_id(str(cfg.get("venue_id") or cfg.get("venue") or ""))
             cfg["venue_id"] = vid
+            cfg["_path"] = fp
             venues[vid] = cfg
 
     except Exception as e:
@@ -497,6 +509,13 @@ def _venue_sheet_id(venue_id: Optional[str] = None) -> str:
     sid = str((data or {}).get("google_sheet_id") or (cfg.get("google_sheet_id") or "")).strip()
     return sid
 
+def _venue_sheet_tab(venue_id: Optional[str] = None) -> str:
+    cfg = _venue_cfg(venue_id)
+    data = cfg.get("data") if isinstance(cfg.get("data"), dict) else {}
+    tab = str((data or {}).get("sheet_name") or (cfg.get("sheet_name") or "")).strip()
+    return tab
+
+
 def _venue_features(venue_id: Optional[str] = None) -> Dict[str, Any]:
     cfg = _venue_cfg(venue_id)
     feat = cfg.get("features") if isinstance(cfg.get("features"), dict) else {}
@@ -507,12 +526,17 @@ def _open_default_spreadsheet(gc, venue_id: Optional[str] = None):
     sid = _venue_sheet_id(venue_id)
     if sid:
         return gc.open_by_key(sid)
-    return _open_default_spreadsheet(gc)
+    return gc.open(SHEET_NAME)
 
 def get_sheet(tab: Optional[str] = None, venue_id: Optional[str] = None):
-    """Return a worksheet for the current venue."""
+    """Return a worksheet for the specified venue (or current venue)."""
     gc = get_gspread_client()
     sh = _open_default_spreadsheet(gc, venue_id=venue_id)
+
+    # If no explicit tab requested, prefer the venue config's sheet_name.
+    if not tab:
+        tab = _venue_sheet_tab(venue_id) or ""
+
     if tab:
         return sh.worksheet(tab)
     return sh.sheet1
@@ -2815,43 +2839,33 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
     ws.append_row(row, value_input_option="USER_ENTERED")
 
 
-def read_leads(limit: int = 200) -> List[List[str]]:
-    """Read leads from Google Sheets with a small cache.
+# Small per-venue read cache to avoid Sheets 429s
+_LEADS_CACHE_BY_VENUE: Dict[str, Dict[str, Any]] = {}
 
-    Switching between Admin tabs can trigger repeated reads; caching avoids
-    Sheets 429 quota errors. If Sheets errors, we fall back to cached rows.
+def read_leads(limit: int = 200, venue_id: Optional[str] = None) -> List[List[str]]:
+    """Read leads from the venue's Google Sheet tab (best-effort, cached).
+
+    Returns rows including header row (row 1) as rows[0].
     """
+    vid = _slugify_venue_id(venue_id or _venue_id())
     now = time.time()
 
-    rows_cached = _LEADS_CACHE.get("rows")
-    if isinstance(rows_cached, list) and (now - float(_LEADS_CACHE.get("ts", 0.0)) < 90.0):
-        if not rows_cached:
-            return []
-        header = rows_cached[0]
-        body = rows_cached[1:]
-        body = body[-limit:]
-        return [header] + body
+    cache = _LEADS_CACHE_BY_VENUE.get(vid) or {}
+    rows_cached = cache.get("rows")
+    if isinstance(rows_cached, list) and (now - float(cache.get("ts") or 0.0) < 9.0):
+        return rows_cached[:limit] if limit else rows_cached
 
     try:
-        gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        ws = get_sheet(venue_id=vid)  # uses venue sheet_name when present
         rows = ws.get_all_values() or []
-        _LEADS_CACHE["ts"] = now
-        _LEADS_CACHE["rows"] = rows
-
-        if not rows:
-            return []
-        header = rows[0]
-        body = rows[1:]
-        body = body[-limit:]
-        return [header] + body
+        # cache regardless; even empty is useful to avoid hammering
+        _LEADS_CACHE_BY_VENUE[vid] = {"ts": now, "rows": rows}
+        return rows[:limit] if limit else rows
     except Exception:
-        rows = _LEADS_CACHE.get("rows") or []
+        # fallback to cached rows on error
+        rows = rows_cached if isinstance(rows_cached, list) else []
         if rows:
-            header = rows[0]
-            body = rows[1:]
-            body = body[-limit:]
-            return [header] + body
+            return rows[:limit] if limit else rows
         return []
 
 def get_session_id() -> str:
@@ -9961,7 +9975,8 @@ def admin_api_leads_all():
     if not venues:
         return jsonify({"ok": True, "count": 0, "items": [], "errors": [{"venue_id": "", "error": "No venue configs found in config/venues/"}]})
 
-    for vid, _cfg in venues:
+    for v in venues:
+        vid = str((v or {}).get('venue_id') or '')
         try:
             rows = read_leads(limit=per_venue, venue_id=vid) or []
             rows_to_items(rows, vid)
