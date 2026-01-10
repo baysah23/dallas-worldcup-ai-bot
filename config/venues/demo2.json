@@ -3,7 +3,6 @@
   "venue_name": "Demo Venue Two",
   "status": "active",
   "plan": "standard",
-
   "access": {
     "admin_keys": [
       "DEMO2_ADMIN_KEY_1"
@@ -12,19 +11,28 @@
       "DEMO2_MANAGER_KEY_1"
     ]
   },
-
   "data": {
     "google_sheet_id": "1OYMR1DLKjNzqaejcmDPx6rywP6xo2646h03vtxXKw00",
-    "redis_namespace": "wc26:demo2"
+    "redis_namespace": "wc26:demo2",
+    "sheet_name": "Sheet1",
+    "header_row": 1,
+    "start_row": 2
   },
-
   "features": {
     "vip": false,
     "waitlist": true,
     "ai_queue": true
   },
-
   "branding": {
     "venue_label_text": "Demo Venue Two"
-  }
+  },
+  "google_sheet_id": "1OYMR1DLKjNzqaejcmDPx6rywP6xo2646h03vtxXKw00",
+  "sheet_name": "Sheet1",
+  "redis_namespace": "wc26:demo2",
+  "admin_keys": [
+    "DEMO2_ADMIN_KEY_1"
+  ],
+  "manager_keys": [
+    "DEMO2_MANAGER_KEY_1"
+  ]
 }
