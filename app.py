@@ -9280,7 +9280,12 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
       (j.venues||[]).forEach(v=>{
         const tr = document.createElement("tr");
         const vid = (v.venue_id||"");
-        tr.innerHTML = `<td>${vid}</td><td>${(v.venue_name||"")}</td><td>${(v.plan||"")}</td><td>${(v.google_sheet_id||"")}</td><td>${(v.status||"")}</td><td class="right"><button class="btn ghost" data-rotate="${vid}">Rotate Keys</button></td>`;
+        const sheet = String(v.google_sheet_id||"").trim();
+        const sheetDisp = sheet ? (sheet.length>16 ? (sheet.slice(0,8)+"…"+sheet.slice(-6)) : sheet) : "—";
+        const badge = sheet
+          ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">READY</span>`
+          : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING SHEET</span>`;
+        tr.innerHTML = `<td>${vid}</td><td>${(v.venue_name||"")}</td><td>${(v.plan||"")}</td><td>${sheetDisp}</td><td>${badge}</td><td class="right"><button class="btn ghost" data-rotate="${vid}">Rotate Keys</button></td>`;
         rows.appendChild(tr);
       });
 
