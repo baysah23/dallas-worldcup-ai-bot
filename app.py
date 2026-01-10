@@ -1905,14 +1905,14 @@ def admin_api_venues_create_and_save():
     wrote, write_path, err = _write_venue_config(venue_id, pack)
 
 
-# === ONE-CLICK ONBOARDING (v1.0 polish) ===
-# If a Sheet ID is provided at creation time, validate it immediately
-# and persist PASS/FAIL + READY state onto the venue config.
-try:
+    # === ONE-CLICK ONBOARDING (v1.0 polish) ===
+    # If a Sheet ID is provided at creation time, validate it immediately
+    # and persist PASS/FAIL + READY state onto the venue config.
+    try:
     sid = str(((pack.get("data") or {}).get("google_sheet_id")) or "").strip()
-except Exception:
+    except Exception:
     sid = ""
-if sid:
+    if sid:
     chk = _check_sheet_id(sid)
     try:
         pack["_sheet_check"] = chk
