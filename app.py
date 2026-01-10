@@ -9218,7 +9218,7 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
               <select id="venueFilter" class="inp" style="max-width:180px;margin-left:8px;">
                 <option value="">All venues</option>
               </select>
-              <button id="exportCsv" class="btn" style="margin-left:8px;">Export CSV</button>
+              <label style="display:inline-flex;align-items:center;gap:8px;margin-left:10px;font-size:12px;color:rgba(255,255,255,0.82)"><input type="checkbox" id="demoToggle" style="transform:scale(1.1)"><span>Demo Mode</span><span id="demoBadge" style="display:none;padding:2px 8px;border-radius:999px;background:rgba(240,180,60,0.18);border:1px solid rgba(240,180,60,0.45);color:rgba(240,180,60,0.95)">ON</span></label><button id="exportCsv" class="btn" style="margin-left:8px;">Export CSV</button>
       </div>
       <table>
         <thead>
@@ -9538,7 +9538,7 @@ ueErr.style.display="none"; }, 2000);
     const limit = (limitEl && limitEl.value) ? limitEl.value : "500";
     const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)+"&super_key="+encodeURIComponent(super_key)+"&limit="+encodeURIComponent(limit);
     try{
-      const r = await fetch(url, {headers});
+      const r = await fetch(url, {headers:_demoHeaders()});
       const j = await r.json();
       if(!j.ok) throw new Error(j.error || "forbidden");
       const query = (qEl && qEl.value || "").trim().toLowerCase();
@@ -9584,6 +9584,8 @@ ueErr.style.display="none"; }, 2000);
   
   if(exportBtn){
     exportBtn.addEventListener("click", ()=>{
+      if(__demo){ try{ leadErrEl.textContent = "Demo Mode: export disabled."; }catch(_){} return; }
+
       try{
         const rows = (__lastLeadRows || []).slice(0, 5000);
         const esc = (v)=>{
@@ -9622,7 +9624,7 @@ if(qEl){
   
   if(venueSel){ venueSel.addEventListener("change", ()=>loadLeads()); }
 try{
-    const r = await fetch("/super/api/overview?super_key="+encodeURIComponent(super_key), {headers});
+    const r = await fetch("/super/api/overview?super_key="+encodeURIComponent(super_key), {headers:_demoHeaders()});
     const j = await r.json();
     if(!j.ok) throw new Error(j.error || "forbidden");
     document.getElementById("venues").textContent = (j.total && j.total.venues) || 0;
@@ -9641,7 +9643,7 @@ try{
   await loadVenues();
   await loadLeads();
   try{
-    const b = await fetch("/super/api/diag?super_key="+encodeURIComponent(super_key), {headers});
+    const b = await fetch("/super/api/diag?super_key="+encodeURIComponent(super_key), {headers:_demoHeaders()});
     const bj = await b.json();
     document.getElementById("build").textContent = (bj.app_version || bj.app_version_env || "—");
   }catch(e){}
@@ -9795,6 +9797,88 @@ def super_api_overview():
 def _get_super_admin_key():
     return (os.environ.get("SUPER_ADMIN_KEY") or "").strip()
 
+
+# =========================
+# Demo Mode (Super Admin)
+# - UI-safe demos: mask PII + disable writes/exports/AI apply
+# - Activated by Super Admin via cookie + header X-Demo-Mode: 1
+# =========================
+def _demo_mode_enabled() -> bool:
+    try:
+        # Explicit header wins (used by Super Admin UI fetches)
+        if str(request.headers.get("X-Demo-Mode","")).strip() in ("1","true","yes","on"):
+            return True
+    except Exception:
+        pass
+    try:
+        # Cookie set by /super/api/demo_mode
+        if str(request.cookies.get("demo_mode","")).strip() in ("1","true","yes","on"):
+            return True
+    except Exception:
+        pass
+    try:
+        if str(request.args.get("demo","")).strip() in ("1","true","yes","on"):
+            return True
+    except Exception:
+        pass
+    return False
+
+def _mask_phone(v: str) -> str:
+    s = str(v or "").strip()
+    if not s:
+        return ""
+    digits = re.sub(r"\D+", "", s)
+    if len(digits) >= 4:
+        return "•••-•••-" + digits[-4:]
+    return "•••"
+
+def _mask_email(v: str) -> str:
+    s = str(v or "").strip()
+    if "@" not in s:
+        return "•••"
+    user, dom = s.split("@", 1)
+    u = (user[:1] + "•••") if user else "•••"
+    # keep TLD hint
+    parts = dom.split(".")
+    if len(parts) >= 2:
+        d = (parts[0][:1] + "•••") + "." + parts[-1]
+    else:
+        d = dom[:1] + "•••"
+    return u + "@" + d
+
+def _apply_demo_mask_to_lead(item: Dict[str, Any]) -> Dict[str, Any]:
+    x = dict(item or {})
+    # Common fields across your lead schemas
+    if "phone" in x:
+        x["phone"] = _mask_phone(x.get("phone"))
+    if "email" in x:
+        x["email"] = _mask_email(x.get("email"))
+    if "contact" in x and isinstance(x.get("contact"), str):
+        # if contact stores phone/email
+        c = x.get("contact") or ""
+        if "@" in c:
+            x["contact"] = _mask_email(c)
+        else:
+            x["contact"] = _mask_phone(c)
+    return x
+
+@app.route("/super/api/demo_mode", methods=["POST","OPTIONS"])
+def super_api_demo_mode():
+    if request.method == "OPTIONS":
+        return ("", 204, {"Access-Control-Allow-Methods":"POST, OPTIONS","Access-Control-Allow-Headers":"Content-Type, X-Super-Key"})
+    if not _is_super_admin_request():
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    try:
+        payload = request.get_json(silent=True) or {}
+        enabled = bool(payload.get("enabled"))
+        resp = jsonify({"ok": True, "enabled": enabled})
+        # cookie scoped to super/admin paths; Lax is fine for same-site demos
+        resp.set_cookie("demo_mode", ("1" if enabled else ""), httponly=False, samesite="Lax")
+        return resp
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 def _is_super_admin_request():
     k = (request.args.get("key") or request.args.get("super_key") or request.headers.get("X-Super-Key") or "").strip()
     sk = _get_super_admin_key()
@@ -9919,6 +10003,10 @@ def super_api_venues_create():
     if not _is_super_admin_request():
         return jsonify({"ok": False, "error": "forbidden"}), 403
 
+
+    if _demo_mode_enabled():
+        return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
+
     body = request.get_json(silent=True) or {}
     venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
     venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
@@ -10026,6 +10114,10 @@ def super_api_venues_rotate_keys():
     """Super-admin: rotate a venue's keys and attempt to persist."""
     if not _is_super_admin_request():
         return jsonify({"ok": False, "error": "forbidden"}), 403
+
+
+    if _demo_mode_enabled():
+        return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
 
     body = request.get_json(silent=True) or {}
     venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
@@ -10432,6 +10524,14 @@ def admin_api_leads_all():
     items.sort(key=_ts, reverse=True)
     if limit and len(items) > limit:
         items = items[:limit]
+
+
+    # Demo Mode: mask PII for safe demos
+    if _demo_mode_enabled():
+        try:
+            items = [_apply_demo_mask_to_lead(x) for x in (items or [])]
+        except Exception:
+            pass
 
     return jsonify({"ok": True, "count": len(items), "items": items, "errors": errors})
 
