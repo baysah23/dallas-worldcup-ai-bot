@@ -2,7 +2,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 import os
-APP_VERSION = os.environ.get("APP_VERSION","1.4.5")
+CODE_VERSION = "1.4.7"
+APP_VERSION = os.environ.get("APP_VERSION") or CODE_VERSION
 MULTI_VENUE_ENABLED = str(os.environ.get("MULTI_VENUE_ENABLED","0")).strip().lower() in ("1","true","yes","y")
 import html
 import traceback
@@ -1693,6 +1694,7 @@ def admin_api_build():
             "redis_enabled": bool(globals().get("_REDIS_ENABLED") and globals().get("_REDIS")),
             "redis_namespace": globals().get("_REDIS_NS", ""),
             "multi_venue": bool(globals().get("MULTI_VENUE_ENABLED", False)),
+            "app_sha256": hashlib.sha256(open(__file__, "rb").read()).hexdigest()[:12],
             "pid": os.getpid(),
         })
     except Exception as e:
