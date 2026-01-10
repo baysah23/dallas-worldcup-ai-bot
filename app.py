@@ -8926,9 +8926,10 @@ async function replayAI(){
 @app.route("/api/intake", methods=["POST"])
 def api_intake():
     payload = request.get_json(silent=True) or {}
-# Venue deactivation: block fan intake when the venue is inactive.
-vid = _venue_id()
-if not _venue_is_active(vid):
+    # Venue deactivation: block fan intake when the venue is inactive.
+    vid = _venue_id()
+    if not _venue_is_active(vid):
+        return jsonify({"ok": False, "error": "Venue is inactive"}), 403
 
 
 
