@@ -1703,6 +1703,25 @@ def admin_api_whoami():
     return jsonify(ok=bool(ctx.get("ok")), role=ctx.get("role", ""), actor=ctx.get("actor", ""), venue_id=ctx.get("venue_id",""))
 
 
+
+def _write_venue_config(venue_id: str, pack: Dict[str, Any]) -> Tuple[bool, str, str]:
+    """Persist venue config into VENUES_DIR as <venue_id>.json (best effort)."""
+    wrote = False
+    write_path = ""
+    err = ""
+    try:
+        os.makedirs(VENUES_DIR, exist_ok=True)
+        write_path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+        with open(write_path, "w", encoding="utf-8") as f:
+            json.dump(pack, f, indent=2, sort_keys=True)
+        wrote = True
+        # refresh cache immediately
+        _MULTI_VENUE_CACHE["ts"] = 0.0
+    except Exception as e:
+        err = str(e)
+    return wrote, write_path, err
+
+
 @app.post("/admin/api/venues/create")
 def admin_api_venues_create():
     """Owner-only: generate a Venue Pack (does NOT write files)."""
@@ -1748,6 +1767,49 @@ def admin_api_venues_create():
         ),
     }
     return jsonify({"ok": True, "pack": pack})
+
+
+@app.post("/admin/api/venues/create_and_save")
+def admin_api_venues_create_and_save():
+    """Owner-only: generate venue pack AND persist to config/venues/<venue>.json."""
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+
+    body = request.get_json(silent=True) or {}
+    venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
+    plan = str(body.get("plan") or "standard").strip().lower() or "standard"
+
+    admin_key = secrets.token_hex(16)
+    manager_key = secrets.token_hex(16)
+
+    pack = {
+        "venue_name": venue_name,
+        "venue_id": venue_id,
+        "status": "active",
+        "plan": plan,
+        "access": {
+            "admin_keys": [admin_key],
+            "manager_keys": [manager_key],
+        },
+        "data": {
+            "google_sheet_id": str(body.get("google_sheet_id") or "").strip(),
+            "redis_namespace": f"{_REDIS_NS}:{venue_id}",
+        },
+        "features": body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True},
+        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+
+    wrote, write_path, err = _write_venue_config(venue_id, pack)
+
+    try:
+        _audit("admin.venues.create_and_save", {"venue_id": venue_id, "persisted": wrote, "path": write_path, "error": err})
+    except Exception:
+        pass
+
+    return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": write_path, "error": err})
+
 
 @app.route("/admin/api/_build", methods=["GET"])
 def admin_api_build():
@@ -1862,7 +1924,7 @@ def _is_super_admin_request() -> bool:
       - key query param on /super/* endpoints
     """
     try:
-        sk = (request.args.get("super_key") or request.headers.get("X-Super-Key") or "").strip()
+        sk = (request.args.get("super_key") or request.headers.get("X-Super-Key") or request.cookies.get("super_key") or "").strip()
         if SUPER_ADMIN_KEY and sk == SUPER_ADMIN_KEY:
             return True
         # Allow /super/* calls that pass SUPER key as the standard key param
@@ -9188,7 +9250,7 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
 
   async function loadVenues(){
     try{
-      const r = await fetch("/super/api/venues?key="+encodeURIComponent(key));
+      const r = await fetch("/super/api/venues?super_key="+encodeURIComponent(super_key), {headers});
       const j = await r.json();
       const rows = document.getElementById("venueRows");
       rows.innerHTML = "";
@@ -9207,9 +9269,9 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
           if(!vid) return;
           if(!confirm("Rotate keys for '"+vid+"'? This will invalidate existing venue keys.")) return;
           try{
-            const r = await fetch("/super/api/venues/rotate_keys?key="+encodeURIComponent(key), {
+            const r = await fetch("/super/api/venues/rotate_keys?super_key="+encodeURIComponent(super_key), {
               method:"POST",
-              headers:{"Content-Type":"application/json"},
+              headers:Object.assign({"Content-Type":"application/json"}, headers),
               body: JSON.stringify({venue_id: vid, rotate_admin:true, rotate_manager:true})
             });
             const j2 = await r.json();
@@ -9242,9 +9304,9 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
       return;
     }
     try{
-      const r = await fetch("/super/api/venues/create?key="+encodeURIComponent(key), {
+      const r = await fetch("/super/api/venues/create?super_key="+encodeURIComponent(super_key), {
         method:"POST",
-        headers:{"Content-Type":"application/json"},
+        headers:Object.assign({"Content-Type":"application/json"}, headers),
         body: JSON.stringify({venue_name, venue_id, google_sheet_id, plan})
       });
       const j = await r.json();
@@ -9301,7 +9363,7 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
       return;
     }
     try{
-      const r = await fetch("/super/api/sheets/check?key="+encodeURIComponent(key)+"&sheet_id="+encodeURIComponent(sid));
+      const r = await fetch("/super/api/sheets/check?super_key="+encodeURIComponent(super_key)+"&sheet_id="+encodeURIComponent(sid), {headers});
       const j = await r.json();
       if(!j.ok) throw new Error(j.error||"check failed");
       venueErr.style.display="block";
@@ -9375,7 +9437,7 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
   }
 
   try{
-    const r = await fetch("/super/api/overview?key="+encodeURIComponent(key)+"&super_key="+encodeURIComponent(super_key), {headers});
+    const r = await fetch("/super/api/overview?super_key="+encodeURIComponent(super_key), {headers});
     const j = await r.json();
     if(!j.ok) throw new Error(j.error || "forbidden");
     document.getElementById("venues").textContent = (j.total && j.total.venues) || 0;
@@ -9394,15 +9456,36 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
   await loadVenues();
   await loadLeads();
   try{
-    const b = await fetch("/admin/api/_build?key="+encodeURIComponent(key));
+    const b = await fetch("/super/api/diag?super_key="+encodeURIComponent(super_key), {headers});
     const bj = await b.json();
-    document.getElementById("build").textContent = (bj.version || "—");
+    document.getElementById("build").textContent = (bj.app_version || bj.app_version_env || "—");
   }catch(e){}
 })();
 </script>
 </body>
 </html>
 """
+
+@app.get("/admin/api/super")
+def admin_api_super_console_redirect():
+    """Back-compat: super admin UI entrypoint.
+
+    Historically some links used /admin/api/super. The Super Admin console UI
+    actually lives at /super/admin. This route keeps old links working and
+    prevents falling back to the fan UI shell.
+    """
+    try:
+        if not _is_super_admin_request():
+            return "Forbidden", 403
+        # Preserve query params so the embedded console JS can call /super/api/*
+        # NOTE: keep both `key` and `super_key` in the URL.
+        q = request.query_string.decode("utf-8") if request.query_string else ""
+        url = "/super/admin"
+        if q:
+            url = url + "?" + q
+        return redirect(url, code=302)
+    except Exception:
+        return ("Forbidden", 403)
 
 @app.get("/super/admin")
 def super_admin_console():
@@ -9414,7 +9497,14 @@ def super_admin_console():
     try:
         if not _is_super_admin_request():
             return "Forbidden", 403
-        return render_template_string(SUPER_CONSOLE_HTML)
+        resp = make_response(render_template_string(SUPER_CONSOLE_HTML))
+        try:
+            sk = (request.args.get("super_key") or request.headers.get("X-Super-Key") or "").strip()
+            if sk:
+                resp.set_cookie("super_key", sk, httponly=True, samesite="Lax")
+        except Exception:
+            pass
+        return resp
     except Exception as e:
         tb = traceback.format_exc()
         # still return 200 so the platform doesn't show a generic error page
@@ -9889,11 +9979,11 @@ def admin_api_leads_all():
     - Return `errors[]` per venue so UI can show what needs fixing.
     """
     # Super Admin can query cross-venue without presenting a venue admin key.
+    # Owners may also query cross-venue.
     if not _is_super_admin_request():
         ok, resp = _require_admin(min_role="owner")
         if not ok:
             return resp
-        return jsonify({"ok": False, "error": "forbidden"}), 403
 
 
     try:
@@ -9996,3 +10086,30 @@ def admin_api_leads_all():
         items = items[:limit]
 
     return jsonify({"ok": True, "count": len(items), "items": items, "errors": errors})
+
+
+# ============================================================
+# Owner / Manager HARDENING (server-side)
+# Safe shim using existing _require_admin(min_role=...)
+# ============================================================
+
+_ROLE_RANK = {"manager": 1, "owner": 2, "super": 3}
+
+def require_role(min_role: str):
+    def _wrap(fn):
+        def _inner(*args, **kwargs):
+            try:
+                ok, resp = _require_admin(min_role=min_role)
+                if not ok:
+                    return resp
+            except Exception:
+                return jsonify({"ok": False, "error": "forbidden"}), 403
+            return fn(*args, **kwargs)
+        _inner.__name__ = fn.__name__
+        return _inner
+    return _wrap
+
+# NOTE:
+# This app already uses _require_admin(min_role=...) across admin mutation endpoints.
+# This shim standardizes the decorator form without altering behavior.
+# ============================================================
