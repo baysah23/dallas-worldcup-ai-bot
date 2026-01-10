@@ -9712,7 +9712,7 @@ def super_api_diag():
             "path": request.path,
             "has_super_key": bool(SUPER_ADMIN_KEY),
             "redis_enabled": bool(_REDIS_ENABLED),
-            "redis_namespace": _REDIS_NAMESPACE,
+            "redis_namespace": _REDIS_NS,
             "venues_count": (len(_load_venues_from_disk() or {}) if isinstance(_load_venues_from_disk(), dict) else 0),
             "app_version": (os.environ.get("APP_VERSION") or "1.4.2"),
         })
@@ -9876,9 +9876,17 @@ def super_api_venues_list():
             })
     return jsonify({"ok": True, "venues": out})
 
-@app.post("/super/api/venues/create")
+@app.route("/super/api/venues/create", methods=["POST","OPTIONS"])
 def super_api_venues_create():
     """Super-admin: generate venue pack and attempt to persist to config/venues/<venue>.json."""
+    if request.method == "OPTIONS":
+        # Some proxies/browsers can issue an OPTIONS-like request even on same-origin calls.
+        resp = make_response("", 204)
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Super-Key"
+        return resp
+
     if not _is_super_admin_request():
         return jsonify({"ok": False, "error": "forbidden"}), 403
 
