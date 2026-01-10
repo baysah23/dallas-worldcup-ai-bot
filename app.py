@@ -6981,7 +6981,7 @@ let ROLE = (__ADMIN_ROLE__ || 'manager');
 async function _refreshRole(){
   try{
     const r = await fetch(`/admin/api/whoami?key=${encodeURIComponent(KEY||'')}`, {cache:'no-store'});
-    const j = await r.json();
+    
     if(j && j.ok && j.role){ ROLE = j.role; }
   }catch(e){}
 }
@@ -8010,7 +8010,7 @@ async function clearNotifs(){
   const msg = qs('#notif-msg'); if(msg) msg.textContent='Clearing…';
   try{
     const r = await fetch(`/admin/api/notifications/clear?key=${encodeURIComponent(KEY||'')}`, {method:'POST'});
-    const j = await r.json();
+    
     if(j.ok){
       if(msg) msg.textContent='Cleared';
       loadNotifs();
@@ -8114,7 +8114,7 @@ async function loadHealth(){
   const body = qs('#health-body'); if(body) body.textContent='';
   try{
     const r = await fetch(`/admin/api/health?key=${encodeURIComponent(KEY)}`, {cache:'no-store'});
-    const j = await r.json();
+    
     if(!j.ok) throw new Error(j.error||'Failed');
     const rep = j.report || {};
     if(msg) {
@@ -8141,7 +8141,7 @@ async function runHealth(){
   const body = qs('#health-body'); if(body) body.textContent='';
   try{
     const r = await fetch(`/admin/api/health/run?key=${encodeURIComponent(KEY)}`, {method:'POST'});
-    const j = await r.json();
+    
     if(!j.ok) throw new Error(j.error||'Failed');
     const rep = j.report || {};
     if(msg){
@@ -9257,6 +9257,23 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
 
 <script>
 (async function(){
+  // Hotfix: never leave the page stuck on "Loading" if a fetch hangs or a JS error occurs.
+  try{ var _ts=document.getElementById('ts'); if(_ts) _ts.textContent=new Date().toLocaleString(); }catch(e){}
+  const _FETCH_TIMEOUT_MS = 12000;
+  async function _fetch_json(url, opts){
+    const ctrl = (window.AbortController ? new AbortController() : null);
+    const to = ctrl ? setTimeout(()=>{ try{ ctrl.abort(); }catch(e){} }, _FETCH_TIMEOUT_MS) : null;
+    try{
+      const o = Object.assign({}, (opts||{}), ctrl ? {signal: ctrl.signal} : {});
+      const r = await fetch(url, o);
+      let j=null;
+      try{ j = await r.json(); }catch(e){ j=null; }
+      if(!r.ok){ throw new Error((j && (j.error||j.message)) || ('HTTP '+r.status)); }
+      return j;
+    } finally {
+      if(to) try{ clearTimeout(to); }catch(e){}
+    }
+  }
   const q = new URLSearchParams(window.location.search);
   const key = q.get("key") || "";
   const venueErr = document.getElementById("venueErr");
@@ -9272,8 +9289,7 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
 
   async function loadVenues(){
     try{
-      const r = await fetch("/super/api/venues?super_key="+encodeURIComponent(super_key), {headers});
-      const j = await r.json();
+      const j = await _fetch_json("/super/api/venues?super_key="+encodeURIComponent(super_key), {headers});
       const rows = document.getElementById("venueRows");
       rows.innerHTML = "";
       if(!j.ok){ throw new Error(j.error||"failed"); }
@@ -9400,12 +9416,12 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
       return;
     }
     try{
-      const r = await fetch("/super/api/venues/create?super_key="+encodeURIComponent(super_key), {
+      const j = await _fetch_json("/super/api/venues/create?super_key="+encodeURIComponent(super_key), {
         method:"POST",
         headers:Object.assign({"Content-Type":"application/json"}, headers),
         body: JSON.stringify({venue_name, venue_id, google_sheet_id, plan})
       });
-      const j = await r.json();
+
       if(!j.ok){ throw new Error(j.error||"failed"); }
       venueOut.textContent = JSON.stringify(j, null, 2);
       venueOutWrap.style.display="block";
@@ -9479,7 +9495,7 @@ await loadVenues();
     }
     try{
       const r = await fetch("/super/api/sheets/check?super_key="+encodeURIComponent(super_key)+"&sheet_id="+encodeURIComponent(sid), {headers});
-      const j = await r.json();
+
       if(!j.ok) throw new Error(j.error||"check failed");
       venueErr.style.display="block";
       venueErr.textContent="Sheet OK: " + (j.title||"opened");
@@ -9506,7 +9522,7 @@ document.getElementById("saveSheet")?.addEventListener("click", async ()=>{
       headers:Object.assign({"Content-Type":"application/json"}, headers),
       body: JSON.stringify({venue_id: vid, google_sheet_id: sid})
     });
-    const j = await r.json();
+    
     if(!j.ok){ throw new Error(j.error||"failed"); }
     venueErr.style.display="block";
     venueErr.textContent = "Saved sheet to venue: " + vid;
@@ -9545,9 +9561,10 @@ ueErr.style.display="none"; }, 2000);
     leadRowsEl.innerHTML = "<tr><td colspan=\"8\">Loading…</td></tr>";
     const limit = (limitEl && limitEl.value) ? limitEl.value : "500";
     const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)+"&super_key="+encodeURIComponent(super_key)+"&limit="+encodeURIComponent(limit);
+
     try{
-      const r = await fetch(url, {headers});
-      const j = await r.json();
+      const j = await _fetch_json(url, {headers});
+
       if(!j.ok) throw new Error(j.error || "forbidden");
       const query = (qEl && qEl.value || "").trim().toLowerCase();
       const vfilter = (venueSel && venueSel.value || "").trim().toLowerCase();
@@ -9630,8 +9647,7 @@ if(qEl){
   
   if(venueSel){ venueSel.addEventListener("change", ()=>loadLeads()); }
 try{
-    const r = await fetch("/super/api/overview?super_key="+encodeURIComponent(super_key), {headers});
-    const j = await r.json();
+    const j = await _fetch_json("/super/api/overview?super_key="+encodeURIComponent(super_key), {headers});
     if(!j.ok) throw new Error(j.error || "forbidden");
     document.getElementById("venues").textContent = (j.total && j.total.venues) || 0;
     document.getElementById("aiq").textContent = (j.total && j.total.ai_queue) || 0;
@@ -9649,10 +9665,12 @@ try{
   await loadVenues();
   await loadLeads();
   try{
-    const b = await fetch("/super/api/diag?super_key="+encodeURIComponent(super_key), {headers});
-    const bj = await b.json();
+    const bj = await _fetch_json("/super/api/diag?super_key="+encodeURIComponent(super_key), {headers});
     document.getElementById("build").textContent = (bj.app_version || bj.app_version_env || "—");
   }catch(e){}
+  }
+  catch(e){ try{ document.getElementById("err").textContent = "Error: "+(e.message||e); }catch(_e){} }
+  finally{ try{ var _ts2=document.getElementById("ts"); if(_ts2 && (_ts2.textContent||"").toLowerCase().includes("loading")) _ts2.textContent=new Date().toLocaleString(); }catch(_e){} }
 })();
 </script>
 </body>
