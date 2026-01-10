@@ -9204,6 +9204,10 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
           <option value="1000">1000</option>
         </select>
         <button id="reload" style="background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--text);cursor:pointer">Reload</button>
+              <select id="venueFilter" class="inp" style="max-width:180px;margin-left:8px;">
+                <option value="">All venues</option>
+              </select>
+              <button id="exportCsv" class="btn" style="margin-left:8px;">Export CSV</button>
       </div>
       <table>
         <thead>
@@ -9384,25 +9388,33 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
   const limitEl = document.getElementById("limit");
   const reloadBtn = document.getElementById("reload");
 
+  
+
+  const venueSel = document.getElementById("venueFilter");
+  const exportBtn = document.getElementById("exportCsv");
+  let __lastLeadRows = [];
+
   async function loadLeads(){
     if(!leadRowsEl) return;
     leadErrEl.textContent = "";
     leadRowsEl.innerHTML = "<tr><td colspan=\"8\">Loading…</td></tr>";
     const limit = (limitEl && limitEl.value) ? limitEl.value : "500";
-    const url = "/admin/api/leads_all?super_key="+encodeURIComponent(super_key)+"&limit="+encodeURIComponent(limit);
+    const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)+"&super_key="+encodeURIComponent(super_key)+"&limit="+encodeURIComponent(limit);
     try{
       const r = await fetch(url, {headers});
       const j = await r.json();
-      // leads_all returns {count, items:[...]}; older builds may return {ok, leads:[...]}
-      if(r.status === 403) throw new Error("forbidden");
-      if(j && j.ok === false) throw new Error(j.error || "forbidden");
-      const items = (j && (j.items || j.leads)) || [];
+      if(!j.ok) throw new Error(j.error || "forbidden");
       const query = (qEl && qEl.value || "").trim().toLowerCase();
-      const rows = (items || []).filter(x=>{
+      const vfilter = (venueSel && venueSel.value || "").trim().toLowerCase();
+      const raw = (j.items || j.leads || []);
+      const rowsAll = raw.filter(x=>{
+        if(vfilter && String(x._venue_id||"").toLowerCase() !== vfilter) return false;
         if(!query) return true;
         const hay = ((x._venue_id||"")+" "+(x.name||"")+" "+(x.phone||"")).toLowerCase();
         return hay.includes(query);
-      }).slice(0, Number(limit));
+      });
+      const rows = rowsAll.slice(0, Number(limit));
+      __lastLeadRows = rowsAll;
       leadRowsEl.innerHTML = "";
       if(!rows.length){
         leadRowsEl.innerHTML = "<tr><td colspan=\"8\">No leads found.</td></tr>";
@@ -9432,14 +9444,47 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
   if(reloadBtn){
     reloadBtn.addEventListener("click", ()=>loadLeads());
   }
-  if(qEl){
+  
+  if(exportBtn){
+    exportBtn.addEventListener("click", ()=>{
+      try{
+        const rows = (__lastLeadRows || []).slice(0, 5000);
+        const esc = (v)=>{
+          const s = String(v==null? "": v);
+          if(/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+          return s;
+        };
+        const header = ["venue","name","phone","date_time","party","status","tier","queue"];
+        const lines = [header.join(",")];
+        rows.forEach(x=>{
+          const dt = ((x.date||"") + " " + (x.time||"")).trim() || (x.timestamp||"");
+          const line = [x._venue_id, x.name, x.phone, dt, x.party_size, x.status, x.tier, x.queue].map(esc).join(",");
+          lines.push(line);
+        });
+        const blob = new Blob([lines.join("\n")], {type:"text/csv"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "leads_all.csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(()=>URL.revokeObjectURL(url), 1500);
+      }catch(e){
+        try{ leadErrEl.textContent = "Export failed: " + (e.message||e); }catch(_){}
+      }
+    });
+  }
+if(qEl){
     qEl.addEventListener("input", ()=>loadLeads());
   }
   if(limitEl){
     limitEl.addEventListener("change", ()=>loadLeads());
   }
 
-  try{
+  
+  if(venueSel){ venueSel.addEventListener("change", ()=>loadLeads()); }
+try{
     const r = await fetch("/super/api/overview?super_key="+encodeURIComponent(super_key), {headers});
     const j = await r.json();
     if(!j.ok) throw new Error(j.error || "forbidden");
