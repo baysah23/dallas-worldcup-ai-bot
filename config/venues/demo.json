@@ -15,12 +15,33 @@
 
   "data": {
     "google_sheet_id": "1OYMR1DLKjNzqaejcmDPx6rywP6xo2646h03vtxXKw00",
+    "sheet_name": "Sheet1",
+    "header_row": 1,
+    "start_row": 2,
     "redis_namespace": "wc26:demo"
+  },
+
+  "schema": {
+    "timestamp": "timestamp",
+    "name": "name",
+    "phone": "phone",
+    "date": "date",
+    "time": "time",
+    "party_size": "party_size",
+    "language": "language",
+    "status": "status",
+    "vip": "vip",
+    "entry_point": "entry_point",
+    "tier": "tier",
+    "queue": "queue",
+    "business_context": "business_context",
+    "budget": "budget",
+    "notes": "notes"
   },
 
   "features": {
     "vip": true,
-    "waitlist": false,
+    "waitlist": true,
     "ai_queue": true
   },
 
