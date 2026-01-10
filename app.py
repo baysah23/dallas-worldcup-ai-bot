@@ -9404,6 +9404,27 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
 </html>
 """
 
+@app.get("/admin/api/super")
+def admin_api_super_console_redirect():
+    """Back-compat: super admin UI entrypoint.
+
+    Historically some links used /admin/api/super. The Super Admin console UI
+    actually lives at /super/admin. This route keeps old links working and
+    prevents falling back to the fan UI shell.
+    """
+    try:
+        if not _is_super_admin_request():
+            return "Forbidden", 403
+        # Preserve query params so the embedded console JS can call /super/api/*
+        # NOTE: keep both `key` and `super_key` in the URL.
+        q = request.query_string.decode("utf-8") if request.query_string else ""
+        url = "/super/admin"
+        if q:
+            url = url + "?" + q
+        return redirect(url, code=302)
+    except Exception:
+        return ("Forbidden", 403)
+
 @app.get("/super/admin")
 def super_admin_console():
     """
