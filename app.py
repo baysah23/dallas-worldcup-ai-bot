@@ -1749,6 +1749,73 @@ def admin_api_venues_create():
     }
     return jsonify({"ok": True, "pack": pack})
 
+
+
+def _write_venue_pack_to_disk(pack: Dict[str, Any]) -> Tuple[bool, str, str]:
+    """Persist a venue config pack to VENUES_DIR as JSON.
+
+    Returns: (ok, path, error)
+    """
+    try:
+        vid = _slugify_venue_id(str((pack or {}).get("venue_id") or ""))
+        if not vid:
+            return False, "", "missing_venue_id"
+        # Ensure directory exists (safe even if already present)
+        try:
+            os.makedirs(VENUES_DIR, exist_ok=True)
+        except Exception:
+            pass
+        write_path = os.path.join(VENUES_DIR, f"{vid}.json")
+        with open(write_path, "w", encoding="utf-8") as f:
+            json.dump(pack, f, indent=2, sort_keys=True)
+        # refresh cache immediately
+        try:
+            _MULTI_VENUE_CACHE["ts"] = 0.0
+        except Exception:
+            pass
+        return True, write_path, ""
+    except Exception as e:
+        return False, "", str(e)
+
+
+@app.post("/admin/api/venues/create_and_save")
+def admin_api_venues_create_and_save():
+    """Owner-only: generate a Venue Pack AND persist to config/venues/<venue>.json."""
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+
+    body = request.get_json(silent=True) or {}
+    venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
+    plan = str(body.get("plan") or "standard").strip().lower() or "standard"
+
+    admin_key = secrets.token_hex(16)
+    manager_key = secrets.token_hex(16)
+
+    pack = {
+        "venue_name": venue_name,
+        "venue_id": venue_id,
+        "status": "active",
+        "plan": plan,
+        "qr_url": f"https://worldcupconcierge.app/v/{venue_id}",
+        "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={admin_key}",
+        "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={manager_key}",
+        "keys": {"admin_key": admin_key, "manager_key": manager_key},
+        "data": {"google_sheet_id": str(body.get("google_sheet_id") or "").strip(), "redis_namespace": f"{_REDIS_NS}:{venue_id}"},
+        "features": body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True},
+    }
+
+    wrote, path, err = _write_venue_pack_to_disk(pack)
+
+    try:
+        _audit("venues.create_and_save", {"venue_id": venue_id, "persisted": wrote, "path": path, "error": err})
+    except Exception:
+        pass
+
+    return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": path, "error": err})
+
+
 @app.route("/admin/api/_build", methods=["GET"])
 def admin_api_build():
     """
@@ -9660,25 +9727,13 @@ def super_api_venues_create():
     }
 
     # Attempt to write config file (works locally; may be read-only in some hosts)
-    wrote = False
-    write_path = ""
-    err = ""
-    try:
-        os.makedirs(VENUES_DIR, exist_ok=True)
-        write_path = os.path.join(VENUES_DIR, f"{venue_id}.json")
-        with open(write_path, "w", encoding="utf-8") as f:
-            json.dump(pack, f, indent=2, sort_keys=True)
-        wrote = True
-        # refresh cache immediately
-        _MULTI_VENUE_CACHE["ts"] = 0.0
-    except Exception as e:
-        err = str(e)
+    wrote, write_path, err = _write_venue_pack_to_disk(pack)
 
-    try:
-        _audit("super.venues.create", {"venue_id": venue_id, "persisted": wrote, "path": write_path, "error": err})
-    except Exception:
-        pass
-    return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": write_path, "error": err})
+try:
+    _audit("super.venues.create", {"venue_id": venue_id, "persisted": wrote, "path": write_path, "error": err})
+except Exception:
+    pass
+return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": write_path, "error": err})
 
 
 @app.post("/super/api/venues/rotate_keys")
