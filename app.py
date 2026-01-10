@@ -8929,7 +8929,6 @@ def api_intake():
 # Venue deactivation: block fan intake when the venue is inactive.
 vid = _venue_id()
 if not _venue_is_active(vid):
-    return jsonify({"ok": False, "error": "Venue is inactive"}), 403
 
 
 
