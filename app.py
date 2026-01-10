@@ -53,6 +53,9 @@ REDIS_URL = os.environ.get("REDIS_URL", "").strip()
 _REDIS = None
 _REDIS_ENABLED = False
 try:
+        sid = str(((pack.get("data") or {}).get("google_sheet_id")) or "").strip()
+    except Exception:
+        sid = ""
     import redis  # type: ignore
     if REDIS_URL:
         _REDIS = redis.from_url(REDIS_URL, decode_responses=True)
@@ -138,6 +141,9 @@ def _redis_init_if_needed() -> None:
 
 # run once at import (Gunicorn-safe)
 try:
+        sid = str(((pack.get("data") or {}).get("google_sheet_id")) or "").strip()
+    except Exception:
+        sid = ""
     _redis_init_if_needed()
 except Exception:
     pass
@@ -170,6 +176,9 @@ client = None
 _OPENAI_MODE = "missing"
 _OPENAI_AVAILABLE = False
 try:
+        sid = str(((pack.get("data") or {}).get("google_sheet_id")) or "").strip()
+    except Exception:
+        sid = ""
     from openai import OpenAI  # new SDK
     client = OpenAI()
     _OPENAI_MODE = "new"
@@ -203,6 +212,9 @@ except Exception:
         _OPENAI_MODE = "missing"
         _OPENAI_AVAILABLE = False
 try:
+        sid = str(((pack.get("data") or {}).get("google_sheet_id")) or "").strip()
+    except Exception:
+        sid = ""
     import gspread
     from google.oauth2.service_account import Credentials
     _GSPREAD_AVAILABLE = True
@@ -1018,6 +1030,9 @@ def _policy_check_action(partner: str, action_type: str, payload: Dict[str, Any]
 # ============================================================
 
 try:
+        sid = str(((pack.get("data") or {}).get("google_sheet_id")) or "").strip()
+    except Exception:
+        sid = ""
     import requests  # type: ignore
 except Exception:
     requests = None  # type: ignore
@@ -1697,16 +1712,25 @@ def _load_menu_from_disk() -> Optional[Dict[str, Any]]:
 
 # Load persisted overrides at boot (best effort)
 try:
+        sid = str(((pack.get("data") or {}).get("google_sheet_id")) or "").strip()
+    except Exception:
+        sid = ""
     _load_rules_from_disk()
 except Exception:
     pass
 
 try:
+        sid = str(((pack.get("data") or {}).get("google_sheet_id")) or "").strip()
+    except Exception:
+        sid = ""
     _load_ai_settings_from_disk()
 except Exception:
     pass
 
 try:
+        sid = str(((pack.get("data") or {}).get("google_sheet_id")) or "").strip()
+    except Exception:
+        sid = ""
     _load_partner_policies_from_disk()
 except Exception:
     pass
@@ -1715,6 +1739,9 @@ except Exception:
 
 _MENU_OVERRIDE: Optional[Dict[str, Any]] = None
 try:
+        sid = str(((pack.get("data") or {}).get("google_sheet_id")) or "").strip()
+    except Exception:
+        sid = ""
     _MENU_OVERRIDE = _load_menu_from_disk()
 except Exception:
     _MENU_OVERRIDE = None
@@ -1905,14 +1932,16 @@ def admin_api_venues_create_and_save():
     wrote, write_path, err = _write_venue_config(venue_id, pack)
 
 
-    # === ONE-CLICK ONBOARDING (v1.0 polish) ===
-    # If a Sheet ID is provided at creation time, validate it immediately
-    # and persist PASS/FAIL + READY state onto the venue config.
-    try:
-    sid = str(((pack.get("data") or {}).get("google_sheet_id")) or "").strip()
+# === ONE-CLICK ONBOARDING (v1.0 polish) ===
+# If a Sheet ID is provided at creation time, validate it immediately
+# and persist PASS/FAIL + READY state onto the venue config.
+try:
+        sid = str(((pack.get("data") or {}).get("google_sheet_id")) or "").strip()
     except Exception:
+        sid = ""
+except Exception:
     sid = ""
-    if sid:
+if sid:
     chk = _check_sheet_id(sid)
     try:
         pack["_sheet_check"] = chk
