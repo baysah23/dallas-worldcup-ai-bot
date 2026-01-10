@@ -9389,13 +9389,16 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
     leadErrEl.textContent = "";
     leadRowsEl.innerHTML = "<tr><td colspan=\"8\">Loading…</td></tr>";
     const limit = (limitEl && limitEl.value) ? limitEl.value : "500";
-    const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)+"&super_key="+encodeURIComponent(super_key)+"&limit="+encodeURIComponent(limit);
+    const url = "/admin/api/leads_all?super_key="+encodeURIComponent(super_key)+"&limit="+encodeURIComponent(limit);
     try{
       const r = await fetch(url, {headers});
       const j = await r.json();
-      if(!j.ok) throw new Error(j.error || "forbidden");
+      // leads_all returns {count, items:[...]}; older builds may return {ok, leads:[...]}
+      if(r.status === 403) throw new Error("forbidden");
+      if(j && j.ok === false) throw new Error(j.error || "forbidden");
+      const items = (j && (j.items || j.leads)) || [];
       const query = (qEl && qEl.value || "").trim().toLowerCase();
-      const rows = (j.leads || []).filter(x=>{
+      const rows = (items || []).filter(x=>{
         if(!query) return true;
         const hay = ((x._venue_id||"")+" "+(x.name||"")+" "+(x.phone||"")).toLowerCase();
         return hay.includes(query);
