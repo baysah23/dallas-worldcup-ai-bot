@@ -521,47 +521,36 @@ def _venue_features(venue_id: Optional[str] = None) -> Dict[str, Any]:
     feat = cfg.get("features") if isinstance(cfg.get("features"), dict) else {}
     return dict(feat or {})
 
+def _venue_is_active(venue_id: Optional[str] = None) -> bool:
+    """Return whether a venue is active (fan-facing intake allowed).
 
-def _venue_identity_location_line(venue_id: Optional[str] = None) -> str:
-    """Optional, branding-safe identity line shown under the hero.
-
-    Venue config example:
-      identity:
-        location_line: "Irving Lounge · Downtown Dallas"
-      features:
-        show_location_line: true
+    Back-compat rules:
+      - If cfg has boolean `active`, that is the source of truth.
+      - Otherwise fall back to `status` string (active|inactive|disabled|off).
+      - Default: active.
     """
-    cfg = _venue_cfg(venue_id)
-    ident = cfg.get("identity") if isinstance(cfg.get("identity"), dict) else {}
-    line = str((ident or {}).get("location_line") or "").strip()
-    return line
-
-def _venue_feature_show_location_line(venue_id: Optional[str] = None) -> bool:
-    feat = _venue_features(venue_id)
-    # canonical flag: features.show_location_line
-    # allow a couple safe aliases for back-compat
-    return bool(feat.get("show_location_line") or feat.get("venue_location_line") or feat.get("location_line"))
-
-@app.get("/api/venue_identity")
-def api_venue_identity():
-    """Fan-safe venue identity metadata (no secrets)."""
     try:
-        vid = _venue_id()
-        show = _venue_feature_show_location_line(vid)
-        line = _venue_identity_location_line(vid) if show else ""
-        resp = jsonify({
-            "ok": True,
-            "venue_id": vid,
-            "show_location_line": bool(show),
-            "location_line": line,
-        })
-        try:
-            resp.headers["Cache-Control"] = "no-store"
-        except Exception:
-            pass
-        return resp
-    except Exception as e:
-        return jsonify({"ok": False, "error": str(e)}), 200
+        cfg = _venue_cfg(venue_id)
+        if not isinstance(cfg, dict):
+            return True
+        if "active" in cfg:
+            v = cfg.get("active")
+            if isinstance(v, bool):
+                return v
+            sv = str(v or "").strip().lower()
+            if sv in ("0","false","no","n","off"):
+                return False
+            if sv in ("1","true","yes","y","on"):
+                return True
+        st = str(cfg.get("status") or "").strip().lower()
+        if st in ("inactive","disabled","off"):
+            return False
+        return True
+    except Exception:
+        return True
+
+
+
 def _open_default_spreadsheet(gc, venue_id: Optional[str] = None):
     """Open the venue-scoped spreadsheet (by sheet_id if present) else fall back to SHEET_NAME."""
     sid = _venue_sheet_id(venue_id)
@@ -1761,6 +1750,42 @@ def _write_venue_config(venue_id: str, pack: Dict[str, Any]) -> Tuple[bool, str,
     except Exception as e:
         err = str(e)
     return wrote, write_path, err
+
+
+@app.post("/admin/api/venues/set_active")
+def admin_api_venues_set_active():
+    """Owner-only: set a venue active/inactive flag (data preserved, fan intake blocked)."""
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    if not venue_id:
+        return jsonify({"ok": False, "error": "Missing venue_id"}), 400
+
+    active_in = body.get("active")
+    if isinstance(active_in, bool):
+        active = active_in
+    else:
+        active = str(active_in or "").strip().lower() in ("1","true","yes","y","on")
+
+    venues = _load_venues_from_disk() or {}
+    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
+    if not isinstance(cfg, dict):
+        return jsonify({"ok": False, "error": "Venue not found"}), 404
+
+    cfg["active"] = bool(active)
+    cfg["status"] = "active" if active else "inactive"
+    cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
+
+    wrote, write_path, err = _write_venue_config(venue_id, cfg)
+    try:
+        _audit("admin.venues.set_active", {"venue_id": venue_id, "active": bool(active), "persisted": wrote, "path": write_path, "error": err})
+    except Exception:
+        pass
+
+    return jsonify({"ok": True, "venue_id": venue_id, "active": bool(active), "persisted": wrote, "path": write_path, "error": err})
 
 
 @app.post("/admin/api/venues/create")
@@ -8901,6 +8926,11 @@ async function replayAI(){
 @app.route("/api/intake", methods=["POST"])
 def api_intake():
     payload = request.get_json(silent=True) or {}
+# Venue deactivation: block fan intake when the venue is inactive.
+vid = _venue_id()
+if not _venue_is_active(vid):
+    return jsonify({"ok": False, "error": "Venue is inactive"}), 403
+
 
 
     entry_point = (payload.get("entry_point") or "").strip() or "reserve_now"
@@ -9821,6 +9851,7 @@ def super_api_overview():
                     count = len(payload)
             out.append({
                 "venue_id": vid,
+                "active": bool(_venue_is_active(vid)),
                 "venue_name": str((cfg or {}).get("venue_name") or (cfg or {}).get("name") or vid),
                 "ai_queue": int(count),
             })

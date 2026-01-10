@@ -67,6 +67,20 @@
       border-radius: var(--r16);
     }
 
+    /* Venue identity line (branding-safe, optional) */
+    .venueIdentityLine{
+      margin: 4px 6px 10px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: rgba(185,199,238,.82);
+      opacity: .92;
+      text-shadow: 0 10px 22px rgba(0,0,0,.35);
+      user-select: none;
+    }
+
     .hero{
       /* remove internal top padding that was making the banner look "cut off" */
       padding-top: 0;
@@ -3808,6 +3822,9 @@ body[data-sec="schedule"] #sec-schedule #pager .pill{
 
 </section>
 
+
+    <div id=\"venueIdentityLine\" class=\"venueIdentityLine\" hidden></div>
+
     <!-- COUNTDOWN (ultra-thin Apple-glass, embedded under hero) -->
     <main>
       <!-- HOME -->
@@ -5285,6 +5302,23 @@ function bindModal(){
 }
 
 // ---------- boot ----------
+
+async function loadVenueIdentityLine(){
+  const el = $('venueIdentityLine');
+  if(!el) return;
+  try{
+    const r = await fetch('/api/venue_identity' + (location.search || ''), {cache:'no-store'});
+    const d = await r.json().catch(()=>null);
+    const ok = d && d.ok && d.show_location_line && d.location_line;
+    if(ok){
+      el.textContent = String(d.location_line || '').trim();
+      el.hidden = !el.textContent;
+      return;
+    }
+  }catch(e){}
+  try{ el.textContent=''; el.hidden = true; }catch(e){}
+}
+
 function init(){
   // state-derived UI
   setLang(state.lang);
@@ -5296,6 +5330,7 @@ function init(){
   bindModal();
   initScheduleHandlers();
   startHeroCountdown();
+  loadVenueIdentityLine();
   relocateMatchDayOpsToggles();
   setSection('home');
   ensureChatWelcome();
