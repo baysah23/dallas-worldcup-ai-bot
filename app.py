@@ -284,7 +284,7 @@ def add_no_cache_headers(response):
         path = ""
 
     # Never cache: HTML shell + admin/chat actions
-    if path == "/" or path.startswith("/admin") or path.startswith("/chat"):
+    if path == "/" or path.startswith("/admin") or path.startswith("/chat") or path.startswith("/super"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -6981,7 +6981,7 @@ let ROLE = (__ADMIN_ROLE__ || 'manager');
 async function _refreshRole(){
   try{
     const r = await fetch(`/admin/api/whoami?key=${encodeURIComponent(KEY||'')}`, {cache:'no-store'});
-    
+    const j = await r.json();
     if(j && j.ok && j.role){ ROLE = j.role; }
   }catch(e){}
 }
@@ -8010,7 +8010,7 @@ async function clearNotifs(){
   const msg = qs('#notif-msg'); if(msg) msg.textContent='Clearing…';
   try{
     const r = await fetch(`/admin/api/notifications/clear?key=${encodeURIComponent(KEY||'')}`, {method:'POST'});
-    
+    const j = await r.json();
     if(j.ok){
       if(msg) msg.textContent='Cleared';
       loadNotifs();
@@ -8114,7 +8114,7 @@ async function loadHealth(){
   const body = qs('#health-body'); if(body) body.textContent='';
   try{
     const r = await fetch(`/admin/api/health?key=${encodeURIComponent(KEY)}`, {cache:'no-store'});
-    
+    const j = await r.json();
     if(!j.ok) throw new Error(j.error||'Failed');
     const rep = j.report || {};
     if(msg) {
@@ -8141,7 +8141,7 @@ async function runHealth(){
   const body = qs('#health-body'); if(body) body.textContent='';
   try{
     const r = await fetch(`/admin/api/health/run?key=${encodeURIComponent(KEY)}`, {method:'POST'});
-    
+    const j = await r.json();
     if(!j.ok) throw new Error(j.error||'Failed');
     const rep = j.report || {};
     if(msg){
@@ -9257,23 +9257,6 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
 
 <script>
 (async function(){
-  // Hotfix: never leave the page stuck on "Loading" if a fetch hangs or a JS error occurs.
-  try{ var _ts=document.getElementById('ts'); if(_ts) _ts.textContent=new Date().toLocaleString(); }catch(e){}
-  const _FETCH_TIMEOUT_MS = 12000;
-  async function _fetch_json(url, opts){
-    const ctrl = (window.AbortController ? new AbortController() : null);
-    const to = ctrl ? setTimeout(()=>{ try{ ctrl.abort(); }catch(e){} }, _FETCH_TIMEOUT_MS) : null;
-    try{
-      const o = Object.assign({}, (opts||{}), ctrl ? {signal: ctrl.signal} : {});
-      const r = await fetch(url, o);
-      let j=null;
-      try{ j = await r.json(); }catch(e){ j=null; }
-      if(!r.ok){ throw new Error((j && (j.error||j.message)) || ('HTTP '+r.status)); }
-      return j;
-    } finally {
-      if(to) try{ clearTimeout(to); }catch(e){}
-    }
-  }
   const q = new URLSearchParams(window.location.search);
   const key = q.get("key") || "";
   const venueErr = document.getElementById("venueErr");
@@ -9289,52 +9272,34 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
 
   async function loadVenues(){
     try{
-      const j = await _fetch_json("/super/api/venues?super_key="+encodeURIComponent(super_key), {headers});
+      const r = await fetch("/super/api/venues?super_key="+encodeURIComponent(super_key), {headers});
+      const j = await r.json();
       const rows = document.getElementById("venueRows");
       rows.innerHTML = "";
       if(!j.ok){ throw new Error(j.error||"failed"); }
       (j.venues||[]).forEach(v=>{
         const tr = document.createElement("tr");
         const vid = (v.venue_id||"");
-        try{ tr.setAttribute("data-vid", vid); }catch(e){}
         const sheet = String(v.google_sheet_id||"").trim();
         const sheetDisp = sheet ? (sheet.length>16 ? (sheet.slice(0,8)+"…"+sheet.slice(-6)) : sheet) : "—";
-        const badge = sheet
+        const sheetBadge = sheet
           ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">READY</span>`
           : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING SHEET</span>`;
         const sid = String(v.google_sheet_id||"").trim();
         const sidDisp = sid ? (sid.length>16 ? (sid.slice(0,8)+"…"+sid.slice(-6)) : sid) : "—";
         const st = String(v.status||"").trim();
-        const badge = (st==="READY")
+        const statusBadge = (st==="READY")
           ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">READY</span>`
           : (st==="SHEET_FAIL")
             ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);color:#fecaca;font-size:12px;">SHEET FAIL</span>`
             : (st==="MISSING_SHEET")
               ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING SHEET</span>`
               : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.22);color:#e2e8f0;font-size:12px;">${st||"—"}</span>`;
-        tr.innerHTML = `<td>${vid}</td><td>${(v.venue_name||"")}</td><td>${(v.plan||"")}</td><td>${sidDisp}</td><td>${badge}</td><td class="right"><button class="btn ghost" data-rotate="${vid}">Rotate Keys</button></td>`;
+        tr.innerHTML = `<td>${vid}</td><td>${(v.venue_name||"")}</td><td>${(v.plan||"")}</td><td>${sidDisp}</td><td>${statusBadge}</td><td class="right"><button class="btn ghost" data-rotate="${vid}">Rotate Keys</button></td>`;
         rows.appendChild(tr);
       });
 
-      
-      // refresh venue filter dropdown (keeps current selection)
-      try{
-        const sel = document.getElementById("venueFilter");
-        if(sel){
-          const cur = (sel.value||"").trim();
-          sel.innerHTML = '<option value="">All venues</option>';
-          (j.venues||[]).forEach(v=>{
-            const vid = String(v.venue_id||"").trim();
-            if(!vid) return;
-            const opt = document.createElement("option");
-            opt.value = vid;
-            opt.textContent = vid;
-            sel.appendChild(opt);
-          });
-          if(cur && Array.from(sel.options).some(o=>o.value===cur)) sel.value = cur;
-        }
-      }catch(e){}
-// bind rotate buttons
+      // bind rotate buttons
       rows.querySelectorAll("[data-rotate]").forEach(btn=>{
         btn.addEventListener("click", async ()=>{
           const vid = btn.getAttribute("data-rotate");
@@ -9351,24 +9316,6 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
             venueOut.textContent = JSON.stringify(j2, null, 2);
             venueOutWrap.style.display="block";
             await loadVenues();
-      // Auto-select new venue in the leads filter + scroll it into view
-      try{
-        const newVid = (j.pack && j.pack.venue_id) ? j.pack.venue_id : (j.venue_id || "");
-        if(newVid){
-          const sel = document.getElementById("venueFilter");
-          if(sel){
-            sel.value = newVid;
-          }
-          try{ await loadLeads(); }catch(e){}
-          const row = document.querySelector('#venueRows tr[data-vid="'+newVid.replace(/"/g,'\"')+'"]');
-          if(row){
-            row.scrollIntoView({behavior:"smooth", block:"center"});
-            const prev = row.style.boxShadow;
-            row.style.boxShadow = "0 0 0 2px rgba(99,102,241,.55), 0 0 24px rgba(99,102,241,.25)";
-            setTimeout(()=>{ try{ row.style.boxShadow = prev; }catch(_){} }, 1400);
-          }
-        }
-      }catch(e){}
           }catch(e){
             venueErr.style.display="block";
             venueErr.textContent="Rotate error: " + (e.message||e);
@@ -9416,12 +9363,12 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
       return;
     }
     try{
-      const j = await _fetch_json("/super/api/venues/create?super_key="+encodeURIComponent(super_key), {
+      const r = await fetch("/super/api/venues/create?super_key="+encodeURIComponent(super_key), {
         method:"POST",
         headers:Object.assign({"Content-Type":"application/json"}, headers),
         body: JSON.stringify({venue_name, venue_id, google_sheet_id, plan})
       });
-
+      const j = await r.json();
       if(!j.ok){ throw new Error(j.error||"failed"); }
       venueOut.textContent = JSON.stringify(j, null, 2);
       venueOutWrap.style.display="block";
@@ -9495,7 +9442,7 @@ await loadVenues();
     }
     try{
       const r = await fetch("/super/api/sheets/check?super_key="+encodeURIComponent(super_key)+"&sheet_id="+encodeURIComponent(sid), {headers});
-
+      const j = await r.json();
       if(!j.ok) throw new Error(j.error||"check failed");
       venueErr.style.display="block";
       venueErr.textContent="Sheet OK: " + (j.title||"opened");
@@ -9522,7 +9469,7 @@ document.getElementById("saveSheet")?.addEventListener("click", async ()=>{
       headers:Object.assign({"Content-Type":"application/json"}, headers),
       body: JSON.stringify({venue_id: vid, google_sheet_id: sid})
     });
-    
+    const j = await r.json();
     if(!j.ok){ throw new Error(j.error||"failed"); }
     venueErr.style.display="block";
     venueErr.textContent = "Saved sheet to venue: " + vid;
@@ -9561,10 +9508,9 @@ ueErr.style.display="none"; }, 2000);
     leadRowsEl.innerHTML = "<tr><td colspan=\"8\">Loading…</td></tr>";
     const limit = (limitEl && limitEl.value) ? limitEl.value : "500";
     const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)+"&super_key="+encodeURIComponent(super_key)+"&limit="+encodeURIComponent(limit);
-
     try{
-      const j = await _fetch_json(url, {headers});
-
+      const r = await fetch(url, {headers});
+      const j = await r.json();
       if(!j.ok) throw new Error(j.error || "forbidden");
       const query = (qEl && qEl.value || "").trim().toLowerCase();
       const vfilter = (venueSel && venueSel.value || "").trim().toLowerCase();
@@ -9647,7 +9593,8 @@ if(qEl){
   
   if(venueSel){ venueSel.addEventListener("change", ()=>loadLeads()); }
 try{
-    const j = await _fetch_json("/super/api/overview?super_key="+encodeURIComponent(super_key), {headers});
+    const r = await fetch("/super/api/overview?super_key="+encodeURIComponent(super_key), {headers});
+    const j = await r.json();
     if(!j.ok) throw new Error(j.error || "forbidden");
     document.getElementById("venues").textContent = (j.total && j.total.venues) || 0;
     document.getElementById("aiq").textContent = (j.total && j.total.ai_queue) || 0;
@@ -9665,12 +9612,10 @@ try{
   await loadVenues();
   await loadLeads();
   try{
-    const bj = await _fetch_json("/super/api/diag?super_key="+encodeURIComponent(super_key), {headers});
+    const b = await fetch("/super/api/diag?super_key="+encodeURIComponent(super_key), {headers});
+    const bj = await b.json();
     document.getElementById("build").textContent = (bj.app_version || bj.app_version_env || "—");
   }catch(e){}
-  }
-  catch(e){ try{ document.getElementById("err").textContent = "Error: "+(e.message||e); }catch(_e){} }
-  finally{ try{ var _ts2=document.getElementById("ts"); if(_ts2 && (_ts2.textContent||"").toLowerCase().includes("loading")) _ts2.textContent=new Date().toLocaleString(); }catch(_e){} }
 })();
 </script>
 </body>
