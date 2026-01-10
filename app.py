@@ -571,6 +571,41 @@ def get_sheet(tab: Optional[str] = None, venue_id: Optional[str] = None):
         return sh.worksheet(tab)
     return sh.sheet1
 
+
+def _check_sheet_id(sheet_id: str) -> Dict[str, Any]:
+    """Best-effort Google Sheet validation for onboarding.
+
+    Never raises. Returns:
+      { ok: bool, sheet_id, title, error, checked_at, details? }
+    """
+    sid = str(sheet_id or "").strip()
+    chk: Dict[str, Any] = {
+        "ok": False,
+        "sheet_id": sid,
+        "title": "",
+        "error": "",
+        "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+    if not sid:
+        chk["error"] = "missing sheet_id"
+        return chk
+    try:
+        gc = get_gspread_client()
+        sh = gc.open_by_key(sid)
+        chk["title"] = str(getattr(sh, "title", "") or "")
+        chk["ok"] = True
+        try:
+            ws = sh.sheet1
+            header = ws.row_values(1) or []
+            chk["details"] = {"header": header[:64]}
+        except Exception:
+            pass
+    except Exception as e:
+        chk["ok"] = False
+        chk["error"] = str(e)
+    return chk
+
+
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive",
@@ -1868,6 +1903,38 @@ def admin_api_venues_create_and_save():
     }
 
     wrote, write_path, err = _write_venue_config(venue_id, pack)
+
+
+# === ONE-CLICK ONBOARDING (v1.0 polish) ===
+# If a Sheet ID is provided at creation time, validate it immediately
+# and persist PASS/FAIL + READY state onto the venue config.
+try:
+    sid = str(((pack.get("data") or {}).get("google_sheet_id")) or "").strip()
+except Exception:
+    sid = ""
+if sid:
+    chk = _check_sheet_id(sid)
+    try:
+        pack["_sheet_check"] = chk
+    except Exception:
+        pass
+    try:
+        pack["ready"] = bool(chk.get("ok"))
+        pack["ready_state"] = "PASS" if bool(chk.get("ok")) else "FAIL"
+        pack["ready_checked_at"] = chk.get("checked_at")
+    except Exception:
+        pass
+    # write again so this is atomic for operators (one call → ready/pass-fail recorded)
+    try:
+        wrote2, write_path2, err2 = _write_venue_config(venue_id, pack)
+        wrote = bool(wrote or wrote2)
+        if write_path2:
+            write_path = write_path2
+        if err2:
+            err = err2
+    except Exception:
+        pass
+
 
     try:
         _audit("admin.venues.create_and_save", {"venue_id": venue_id, "persisted": wrote, "path": write_path, "error": err})
