@@ -284,7 +284,7 @@ def add_no_cache_headers(response):
         path = ""
 
     # Never cache: HTML shell + admin/chat actions
-    if path == "/" or path.startswith("/admin") or path.startswith("/chat") or path.startswith("/super"):
+    if path == "/" or path.startswith("/admin") or path.startswith("/chat"):
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -9282,20 +9282,10 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
         const vid = (v.venue_id||"");
         const sheet = String(v.google_sheet_id||"").trim();
         const sheetDisp = sheet ? (sheet.length>16 ? (sheet.slice(0,8)+"…"+sheet.slice(-6)) : sheet) : "—";
-        const sheetBadge = sheet
+        const badge = sheet
           ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">READY</span>`
           : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING SHEET</span>`;
-        const sid = String(v.google_sheet_id||"").trim();
-        const sidDisp = sid ? (sid.length>16 ? (sid.slice(0,8)+"…"+sid.slice(-6)) : sid) : "—";
-        const st = String(v.status||"").trim();
-        const statusBadge = (st==="READY")
-          ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">READY</span>`
-          : (st==="SHEET_FAIL")
-            ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);color:#fecaca;font-size:12px;">SHEET FAIL</span>`
-            : (st==="MISSING_SHEET")
-              ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING SHEET</span>`
-              : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.22);color:#e2e8f0;font-size:12px;">${st||"—"}</span>`;
-        tr.innerHTML = `<td>${vid}</td><td>${(v.venue_name||"")}</td><td>${(v.plan||"")}</td><td>${sidDisp}</td><td>${statusBadge}</td><td class="right"><button class="btn ghost" data-rotate="${vid}">Rotate Keys</button></td>`;
+        tr.innerHTML = `<td>${vid}</td><td>${(v.venue_name||"")}</td><td>${(v.plan||"")}</td><td>${sheetDisp}</td><td>${badge}</td><td class="right"><button class="btn ghost" data-rotate="${vid}">Rotate Keys</button></td>`;
         rows.appendChild(tr);
       });
 
@@ -9372,26 +9362,7 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
       if(!j.ok){ throw new Error(j.error||"failed"); }
       venueOut.textContent = JSON.stringify(j, null, 2);
       venueOutWrap.style.display="block";
-            _setVenueLinks(j);
-      // Auto-check sheet for this venue (PASS/FAIL) when sheet id is provided
-      try{
-        const vid = (j.pack && j.pack.venue_id) ? j.pack.venue_id : (j.venue_id || (j.pack||{}).venue_id || "");
-        const sid = (google_sheet_id || "").trim();
-        if(vid && sid){
-          const rc = await fetch("/super/api/venues/check_sheet?super_key="+encodeURIComponent(super_key), {
-            method:"POST",
-            headers:Object.assign({"Content-Type":"application/json"}, headers),
-            body: JSON.stringify({venue_id: vid})
-          });
-          const jc = await rc.json();
-          if(jc && jc.ok && jc.check){
-            venueErr.style.display="block";
-            venueErr.textContent = jc.check.ok ? ("Sheet PASS: " + (jc.check.title||"OK")) : ("Sheet FAIL: " + (jc.check.error||"error"));
-            setTimeout(()=>{ try{ venueErr.style.display="none"; }catch(_){} }, 2500);
-          }
-        }
-      }catch(e){}
-await loadVenues();
+      await loadVenues();
     }catch(e){
       venueErr.style.display="block";
       venueErr.textContent="Create error: " + (e.message||e);
@@ -9850,29 +9821,12 @@ def super_api_venues_list():
                 sid = _venue_sheet_id(vid)
             except Exception:
                 sid = ""
-            status = str(cfg.get("status") or "")
-            # Super Admin onboarding status (does not affect fan/admin app behavior)
-            try:
-                sheet_ok = None
-                chk = cfg.get("_sheet_check") if isinstance(cfg.get("_sheet_check"), dict) else None
-                if isinstance(chk, dict):
-                    sheet_ok = chk.get("ok")
-                if not sid:
-                    status = "MISSING_SHEET"
-                elif sheet_ok is True:
-                    status = "READY"
-                elif sheet_ok is False:
-                    status = "SHEET_FAIL"
-                else:
-                    status = status or "SHEET_SET"
-            except Exception:
-                pass
             out.append({
                 "venue_id": vid,
                 "venue_name": name,
                 "plan": plan,
                 "google_sheet_id": sid,
-                "status": status,
+                "status": str(cfg.get("status") or ""),
             })
     return jsonify({"ok": True, "venues": out})
 
@@ -10030,83 +9984,6 @@ def super_api_venues_rotate_keys():
 
     return jsonify({"ok": True, "venue_id": venue_id, "keys": keys, "qr_url": f"https://worldcupconcierge.app/v/{venue_id}", "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={keys.get('admin_key')}", "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={keys.get('manager_key')}", "persisted": wrote, "path": write_path, "error": err})
 
-
-
-@app.post("/super/api/venues/check_sheet")
-def super_api_venues_check_sheet():
-    """Super-admin: validate a venue's configured sheet and persist PASS/FAIL to venue config."""
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
-
-    body = request.get_json(silent=True) or {}
-    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
-    if not venue_id:
-        return jsonify({"ok": False, "error": "venue_id required"}), 400
-
-    venues = _load_venues_from_disk() or {}
-    cfg = venues.get(venue_id)
-    if not isinstance(cfg, dict):
-        return jsonify({"ok": False, "error": "unknown venue"}), 404
-
-    sid = ""
-    try:
-        sid = _venue_sheet_id(venue_id)
-    except Exception:
-        sid = str(cfg.get("google_sheet_id") or "").strip()
-    if not sid:
-        return jsonify({"ok": False, "error": "venue has no google_sheet_id"}), 400
-
-    # Run the existing sheet check logic by calling the same helpers used by /super/api/sheets/check
-    ok = False
-    title = ""
-    err = ""
-    details = {}
-    try:
-        # Reuse gspread client
-        gc = get_gspread_client()
-        sh = gc.open_by_key(sid)
-        title = str(getattr(sh, "title", "") or "")
-        ok = True
-        # Best-effort: read header row
-        try:
-            ws = sh.sheet1
-            header = ws.row_values(1) or []
-            details["header"] = header[:64]
-        except Exception:
-            pass
-    except Exception as e:
-        ok = False
-        err = str(e)
-
-    chk = {
-        "ok": bool(ok),
-        "sheet_id": sid,
-        "title": title,
-        "error": err,
-        "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    }
-    if details:
-        chk["details"] = details
-
-    # Persist into the venue config file
-    try:
-        cfg2 = dict(cfg)
-        cfg2["_sheet_check"] = chk
-        # write back to original path if known
-        path = str(cfg.get("_path") or os.path.join(VENUES_DIR, f"{venue_id}.json"))
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(cfg2, f, indent=2, sort_keys=True)
-        _MULTI_VENUE_CACHE["ts"] = 0.0
-    except Exception:
-        pass
-
-    try:
-        _audit("super.venues.check_sheet", {"venue_id": venue_id, "ok": bool(ok), "title": title, "error": err})
-    except Exception:
-        pass
-
-    return jsonify({"ok": True, "venue_id": venue_id, "check": chk})
 
 @app.get("/super/api/sheets/check")
 def super_api_sheets_check():
