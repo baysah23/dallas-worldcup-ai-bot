@@ -11966,7 +11966,7 @@ def home_root_alt():
 
 
 @app.route("/<path:path>")
-def catch_all(path):
+def catch_all_alt(path):
     # Serve static files if they exist; otherwise serve the SPA shell.
     try:
         if os.path.exists(path) and os.path.isfile(path):
