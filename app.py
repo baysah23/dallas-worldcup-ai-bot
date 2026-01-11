@@ -10427,12 +10427,19 @@ def super_api_venues_list():
             })
     return jsonify({"ok": True, "venues": out})
 
-@app.post("/super/api/venues/create")
+@app.route("/super/api/venues/create", methods=["POST","OPTIONS"])
 def super_api_venues_create():
     """Super-admin: create/persist a new venue config in VENUES_DIR (JSON).
 
     This is the "one-click onboarding" entry point for Super Admin.
     """
+    if request.method == "OPTIONS":
+        resp = make_response("", 204)
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Super-Key"
+        return resp
+
     if not _is_super_admin_request():
         return jsonify({"ok": False, "error": "forbidden"}), 403
     body = request.get_json(silent=True) or {}
@@ -10486,67 +10493,6 @@ def super_api_venues_create():
         pass
 
     return jsonify({"ok": True, "venue_id": venue_id, "path": fp})
-
-@app.route("/super/api/venues/create", methods=["POST","OPTIONS"])
-def super_api_venues_create():
-    """Super-admin: generate venue pack and attempt to persist to config/venues/<venue>.json."""
-    if request.method == "OPTIONS":
-        # Some proxies/browsers can issue an OPTIONS-like request even on same-origin calls.
-        resp = make_response("", 204)
-        resp.headers["Access-Control-Allow-Origin"] = "*"
-        resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Super-Key"
-        return resp
-
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
-
-
-    if _demo_mode_enabled():
-        return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
-
-    body = request.get_json(silent=True) or {}
-    venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
-    venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
-    plan = str(body.get("plan") or "standard").strip().lower() or "standard"
-
-    admin_key = secrets.token_hex(16)
-    manager_key = secrets.token_hex(16)
-
-    pack = {
-        "venue_name": venue_name,
-        "venue_id": venue_id,
-        "status": "active",
-        "plan": plan,
-        "qr_url": f"https://worldcupconcierge.app/v/{venue_id}",
-        "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={admin_key}",
-        "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={manager_key}",
-        "keys": {"admin_key": admin_key, "manager_key": manager_key},
-        "data": {"google_sheet_id": str(body.get("google_sheet_id") or "").strip(), "redis_namespace": f"{_REDIS_NS}:{venue_id}"},
-        "features": body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True},
-        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    }
-
-    # Attempt to write config file (works locally; may be read-only in some hosts)
-    wrote = False
-    write_path = ""
-    err = ""
-    try:
-        os.makedirs(VENUES_DIR, exist_ok=True)
-        write_path = os.path.join(VENUES_DIR, f"{venue_id}.json")
-        with open(write_path, "w", encoding="utf-8") as f:
-            json.dump(pack, f, indent=2, sort_keys=True)
-        wrote = True
-        # refresh cache immediately
-        _MULTI_VENUE_CACHE["ts"] = 0.0
-    except Exception as e:
-        err = str(e)
-
-    try:
-        _audit("super.venues.create", {"venue_id": venue_id, "persisted": wrote, "path": write_path, "error": err})
-    except Exception:
-        pass
-    return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": write_path, "error": err})
 
 @app.post("/super/api/venues/set_sheet")
 def super_api_venues_set_sheet():
