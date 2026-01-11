@@ -9375,7 +9375,7 @@ def __test_ai_queue_seed():
 # ============================================================
 
 # Embedded Super Admin UI HTML (avoids template path issues in some deploys)
-SUPER_CONSOLE_HTML = r"""<!doctype html>
+LEGACY_SUPER_CONSOLE_HTML = r"""<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -10154,6 +10154,474 @@ try{
 </body>
 </html>
 """
+
+# Super Admin UI (Option A command layout)
+SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>World Cup Concierge — Super Admin</title>
+  <style>
+    :root{--bg0:#05070c; --bg1:#0a1020; --card: rgba(255,255,255,.06); --stroke: rgba(255,255,255,.10); --text:#eef2ff; --muted: rgba(238,242,255,.65); --good:#36d399; --warn:#fbbf24; --bad:#fb7185;}
+    html,body{height:100%; margin:0; background: radial-gradient(1200px 700px at 15% 10%, #10224a 0%, transparent 55%), linear-gradient(180deg,var(--bg1),var(--bg0)); color:var(--text); font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
+    a{color:#a7c7ff}
+    .wrap{max-width:1240px; margin:0 auto; padding:18px 16px 36px;}
+    .topbar{position:sticky; top:0; z-index:20; backdrop-filter: blur(16px); background: linear-gradient(180deg, rgba(5,7,12,.92), rgba(5,7,12,.55)); border:1px solid var(--stroke); border-radius:18px; padding:14px; box-shadow: 0 12px 40px rgba(0,0,0,.45);}
+    .toprow{display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;}
+    .title{display:flex; gap:10px; align-items:baseline;}
+    .title h1{font-size:18px; margin:0;}
+    .title small{color:var(--muted)}
+    .tabs{display:flex; gap:8px;}
+    .tabbtn{border:1px solid var(--stroke); background: rgba(255,255,255,.04); color:var(--text); padding:7px 12px; border-radius:999px; cursor:pointer; font-size:13px;}
+    .tabbtn.active{background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.18);}
+    .chips{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+    .chip{display:inline-flex; gap:8px; align-items:center; border:1px solid var(--stroke); background: rgba(255,255,255,.04); padding:7px 10px; border-radius:999px; cursor:pointer; font-size:12px;}
+    .chip.active{background: rgba(255,255,255,.10);}
+    .dot{width:8px; height:8px; border-radius:999px; background:#94a3b8;}
+    .pill{padding:5px 9px; border:1px solid rgba(255,255,255,.10); border-radius:999px; font-size:12px; color:var(--muted);}
+    .meta{display:flex; gap:10px; align-items:center; color:var(--muted); font-size:12px;}
+    .grid{display:grid; grid-template-columns: 340px 1fr; gap:14px; margin-top:14px;}
+    .card{border:1px solid var(--stroke); background: var(--card); border-radius:18px; padding:12px; box-shadow: 0 12px 40px rgba(0,0,0,.35);}
+    .card h2{margin:0 0 8px 0; font-size:13px; color:var(--muted); font-weight:600;}
+    .btn{border:1px solid var(--stroke); background: rgba(255,255,255,.06); color:var(--text); padding:8px 10px; border-radius:10px; cursor:pointer; font-size:13px;}
+    .btn.primary{background: rgba(96,165,250,.18); border-color: rgba(96,165,250,.28);}
+    input,select{background: rgba(0,0,0,.28); border:1px solid var(--stroke); color:var(--text); border-radius:10px; padding:8px 10px; font-size:13px;}
+    .rail{display:flex; flex-direction:column; gap:10px;}
+    .rail .actions{display:flex; gap:8px;}
+    .rail .list{border:1px solid var(--stroke); border-radius:14px; overflow:auto; max-height: 62vh; background: rgba(0,0,0,.18);}
+    .vrow{display:flex; gap:10px; align-items:center; padding:10px; border-bottom:1px solid rgba(255,255,255,.06); cursor:pointer;}
+    .vrow:hover{background: rgba(255,255,255,.05);}
+    .vrow.active{background: rgba(255,255,255,.09);}
+    .vname{font-weight:600; font-size:13px;}
+    .vid{font-size:12px; color:var(--muted);}
+    .badges{display:flex; gap:6px; margin-left:auto;}
+    .badge{font-size:11px; padding:3px 7px; border-radius:999px; border:1px solid rgba(255,255,255,.10); background: rgba(255,255,255,.05); color:var(--muted);}
+    .badge.good{border-color: rgba(54,211,153,.35); color: rgba(54,211,153,.95);}
+    .badge.warn{border-color: rgba(251,191,36,.35); color: rgba(251,191,36,.95);}
+    .badge.bad{border-color: rgba(251,113,133,.35); color: rgba(251,113,133,.95);}
+    .main{display:flex; flex-direction:column; gap:14px;}
+    .panel{border:1px solid var(--stroke); background: var(--card); border-radius:18px; overflow:hidden;}
+    .panelhead{display:flex; align-items:center; justify-content:space-between; padding:12px; border-bottom:1px solid rgba(255,255,255,.08);}
+    .panelhead .left{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+    .panelhead .right{display:flex; gap:8px; align-items:center;}
+    .tablewrap{max-height: 52vh; overflow:auto;}
+    table{width:100%; border-collapse:collapse; font-size:13px;}
+    th,td{padding:10px; border-bottom:1px solid rgba(255,255,255,.06); text-align:left; vertical-align:top;}
+    th{position:sticky; top:0; z-index:2; background: rgba(0,0,0,.35); color:var(--muted); font-weight:600; font-size:12px;}
+    .muted{color:var(--muted)}
+    .section{display:none;}
+    .section.active{display:block;}
+    .diag{white-space:pre-wrap; font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; font-size:12px; color:rgba(238,242,255,.78); background: rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.10); border-radius:12px; padding:10px; max-height: 170px; overflow:auto;}
+    .pager{display:flex; gap:8px; align-items:center; justify-content:flex-end; padding:10px 12px; border-top:1px solid rgba(255,255,255,.08); background: rgba(0,0,0,.18);}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div class="toprow">
+      <div class="title">
+        <h1>Super Admin</h1>
+        <small>Command view • bounded panels • problems float to the top</small>
+      </div>
+      <div class="tabs">
+        <button class="tabbtn active" id="tabVenues" type="button">Venues</button>
+        <button class="tabbtn" id="tabLeads" type="button">Leads</button>
+      </div>
+      <div class="chips" id="healthChips">
+        <div class="chip active" data-filter="all"><span class="dot"></span>All <span class="pill" id="c_all">—</span></div>
+        <div class="chip" data-filter="active"><span class="dot" style="background:var(--good)"></span>Active <span class="pill" id="c_active">—</span></div>
+        <div class="chip" data-filter="inactive"><span class="dot" style="background:var(--warn)"></span>Inactive <span class="pill" id="c_inactive">—</span></div>
+        <div class="chip" data-filter="needs"><span class="dot" style="background:var(--bad)"></span>Needs attention <span class="pill" id="c_needs">—</span></div>
+        <div class="chip" data-filter="sheetfail"><span class="dot" style="background:var(--bad)"></span>Sheet fail <span class="pill" id="c_sheetfail">—</span></div>
+        <div class="chip" data-filter="notready"><span class="dot" style="background:var(--warn)"></span>Not ready <span class="pill" id="c_notready">—</span></div>
+      </div>
+      <div class="meta"><span id="ts">—</span><span>Build</span><strong id="build">—</strong></div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="card rail" id="venuesRailCard">
+      <h2>Venue control rail</h2>
+      <div class="actions">
+        <button class="btn primary" id="btnCreate" type="button">+ Create venue</button>
+        <button class="btn" id="btnRefresh" type="button">Refresh</button>
+      </div>
+      <input id="venueSearch" placeholder="Search venue name/id…" />
+      <div class="list" id="venuesRail"><div class="vrow"><div class="vname">Loading venues…</div></div></div>
+      <div class="muted" style="font-size:12px">Tip: click a venue → details + actions on the right.</div>
+    </div>
+
+    <div class="main">
+      <div class="card">
+        <h2>Venue details + quick actions</h2>
+        <div id="venueDetails" class="muted">Select a venue from the left rail.</div>
+      </div>
+
+      <div class="panel section active" id="sectionVenues">
+        <div class="panelhead">
+          <div class="left"><strong style="font-size:13px">Venues status</strong><span class="muted" style="font-size:12px">Issues first • bounded table</span></div>
+          <div class="right">
+            <span class="muted" style="font-size:12px">Filter:</span>
+            <select id="venuesFilter">
+              <option value="all">All</option><option value="active">Active</option><option value="inactive">Inactive</option>
+              <option value="needs">Needs attention</option><option value="sheetfail">Sheet fail</option><option value="notready">Not ready</option>
+            </select>
+          </div>
+        </div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Venue</th><th>Plan</th><th>Sheet</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="venuesTbody"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="panel section" id="sectionLeads">
+        <div class="panelhead">
+          <div class="left">
+            <strong style="font-size:13px">All Leads (cross-venue)</strong>
+            <input id="leadsSearch" placeholder="Search name/phone/venue…" style="min-width:220px" />
+            <select id="leadsPerPage"><option value="10">10 / page</option><option value="25">25 / page</option><option value="50">50 / page</option></select>
+            <select id="leadsVenueState"><option value="all">All venues</option><option value="active">Active venues</option><option value="inactive">Inactive venues</option></select>
+            <select id="leadsVenueId"><option value="">All venues</option></select>
+          </div>
+          <div class="right">
+            <button class="btn" id="btnReloadLeads" type="button">Reload</button>
+            <button class="btn" id="btnExportCsv" type="button">Export CSV</button>
+          </div>
+        </div>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Venue</th><th>Name</th><th>Phone</th><th>Date/Time</th><th>Party</th><th>Status</th><th>Tier</th><th>Queue</th></tr></thead>
+            <tbody id="leadsTbody"><tr><td colspan="8" class="muted">Click Leads to load…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="pager">
+          <span class="muted" id="leadsCount">—</span>
+          <button class="btn" id="btnPrev" type="button">Prev</button>
+          <button class="btn" id="btnNext" type="button">Next</button>
+        </div>
+        <div class="card" style="margin:12px"><h2>Diagnostics</h2><div id="leadsDiag" class="diag">—</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const qs = new URLSearchParams(location.search);
+  const super_key = (qs.get('super_key') || qs.get('key') || '').trim() || (document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)?.[1] ? decodeURIComponent(document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)[1]) : '');
+  const state = {venues:[], filter:'all', selected:'', leadsPage:1, leadsTotal:0};
+
+  function hesc(s){s=(s===null||s===undefined)?'':String(s);return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+  function hdrs(extra){const h={'Content-Type':'application/json'}; if(super_key) h['X-Super-Key']=super_key; if(extra) Object.assign(h,extra); return h;}
+
+  function setActiveTab(which){
+    document.getElementById('tabVenues').classList.toggle('active', which==='venues');
+    document.getElementById('tabLeads').classList.toggle('active', which==='leads');
+    document.getElementById('sectionVenues').classList.toggle('active', which==='venues');
+    document.getElementById('sectionLeads').classList.toggle('active', which==='leads');
+    if(which==='leads'){ state.leadsPage=1; loadLeads(); }
+  }
+  function applyChipFilter(f){
+    state.filter=f;
+    document.querySelectorAll('#healthChips .chip').forEach(el=>el.classList.toggle('active', el.dataset.filter===f));
+    document.getElementById('venuesFilter').value = (f==='needs'||f==='sheetfail'||f==='notready'||f==='active'||f==='inactive') ? f : 'all';
+    renderVenues();
+  }
+  function venueFlags(v){
+    const active = (typeof v.active==='boolean') ? v.active : true;
+    const sheet_ok = !!(v.sheet && v.sheet.ok);
+    const ready = !!(v.ready);
+    const needs = active && (!sheet_ok || !ready);
+    return {active, sheet_ok, ready, needs};
+  }
+  function computeCounts(){
+    const vs=state.venues||[]; let all=vs.length, active=0, inactive=0, sheetfail=0, notready=0, needs=0;
+    vs.forEach(v=>{const f=venueFlags(v); if(f.active) active++; else inactive++; if(!f.sheet_ok) sheetfail++; if(!f.ready) notready++; if(f.needs) needs++;});
+    document.getElementById('c_all').textContent=String(all);
+    document.getElementById('c_active').textContent=String(active);
+    document.getElementById('c_inactive').textContent=String(inactive);
+    document.getElementById('c_sheetfail').textContent=String(sheetfail);
+    document.getElementById('c_notready').textContent=String(notready);
+    document.getElementById('c_needs').textContent=String(needs);
+  }
+  function matchesFilter(v){
+    const f=state.filter; const x=venueFlags(v);
+    if(f==='active') return x.active;
+    if(f==='inactive') return !x.active;
+    if(f==='sheetfail') return !x.sheet_ok;
+    if(f==='notready') return !x.ready;
+    if(f==='needs') return x.needs;
+    return true;
+  }
+  function matchesSearch(v){
+    const q=(document.getElementById('venueSearch').value||'').trim().toLowerCase();
+    if(!q) return true;
+    return String(v.venue_id||'').toLowerCase().includes(q) || String(v.name||v.venue_name||'').toLowerCase().includes(q);
+  }
+
+  function renderVenues(){
+    const list=document.getElementById('venuesRail');
+    const tbody=document.getElementById('venuesTbody');
+    const filtered=(state.venues||[]).filter(v=>matchesFilter(v)&&matchesSearch(v));
+
+    filtered.sort((a,b)=>{
+      const fa=venueFlags(a), fb=venueFlags(b);
+      const sa=(fa.needs?0:1)+(!fa.sheet_ok?0:1)+(!fa.ready?0:1)+(fa.active?0:1);
+      const sb=(fb.needs?0:1)+(!fb.sheet_ok?0:1)+(!fb.ready?0:1)+(fb.active?0:1);
+      if(sa!==sb) return sa-sb;
+      return String(a.venue_id||'').localeCompare(String(b.venue_id||''));
+    });
+
+    list.innerHTML='';
+    if(!filtered.length){
+      list.innerHTML='<div class="vrow"><div class="vname">No venues match.</div></div>';
+    } else {
+      filtered.forEach(v=>{
+        const f=venueFlags(v);
+        const badges=[
+          '<span class="badge '+(f.active?'good':'warn')+'">'+(f.active?'ACTIVE':'INACTIVE')+'</span>',
+          '<span class="badge '+(f.sheet_ok?'good':'bad')+'">'+(f.sheet_ok?'SHEET OK':'SHEET FAIL')+'</span>',
+          '<span class="badge '+(f.ready?'good':'warn')+'">'+(f.ready?'READY':'NOT READY')+'</span>'
+        ];
+        const el=document.createElement('div');
+        el.className='vrow'+(state.selected===v.venue_id?' active':'');
+        el.innerHTML='<div><div class="vname">'+hesc(v.name||v.venue_name||v.venue_id)+'</div><div class="vid">'+hesc(v.venue_id||'')+'</div></div><div class="badges">'+badges.join('')+'</div>';
+        el.onclick=()=>{state.selected=v.venue_id; renderVenues(); renderVenueDetails();};
+        list.appendChild(el);
+      });
+    }
+
+    tbody.innerHTML='';
+    if(!filtered.length){
+      tbody.innerHTML='<tr><td colspan="5" class="muted">No venues to show.</td></tr>';
+    } else {
+      filtered.forEach(v=>{
+        const f=venueFlags(v);
+        const sheet=v.sheet||{};
+        const sheetTxt = sheet && sheet.sheet_id ? (String(sheet.sheet_id).slice(0,8)+'…') : '—';
+        const sheetBadge='<span class="badge '+(f.sheet_ok?'good':'bad')+'">'+(f.sheet_ok?'OK':'FAIL')+'</span>';
+        const actBadge='<span class="badge '+(f.active?'good':'warn')+'">'+(f.active?'ACTIVE':'INACTIVE')+'</span>';
+        const readyBadge='<span class="badge '+(f.ready?'good':'warn')+'">'+(f.ready?'READY':'NOT READY')+'</span>';
+        const actions='<button class="btn" data-act="check" data-vid="'+hesc(v.venue_id||'')+'">Re-check</button> '+
+                      '<button class="btn" data-act="rotate" data-vid="'+hesc(v.venue_id||'')+'">Rotate Keys</button> '+
+                      '<a href="/admin?venue='+encodeURIComponent(v.venue_id||'')+'" target="_blank">Open</a>';
+        const tr=document.createElement('tr');
+        tr.innerHTML='<td><div><div style="font-weight:700">'+hesc(v.name||v.venue_name||v.venue_id)+'</div><div class="muted">'+hesc(v.venue_id||'')+'</div></div></td>'+
+                     '<td>'+hesc(v.plan||'standard')+'</td>'+
+                     '<td>'+hesc(sheetTxt)+' '+sheetBadge+'</td>'+
+                     '<td>'+actBadge+' '+readyBadge+'</td>'+
+                     '<td>'+actions+'</td>';
+        tbody.appendChild(tr);
+      });
+    }
+
+    const sel=document.getElementById('leadsVenueId');
+    const cur=sel.value;
+    sel.innerHTML='<option value="">All venues</option>'+(state.venues||[]).map(v=>'<option value="'+hesc(v.venue_id||'')+'">'+hesc(v.name||v.venue_id)+'</option>').join('');
+    if([].slice.call(sel.options).some(o=>o.value===cur)) sel.value=cur;
+
+    computeCounts();
+  }
+
+  function renderVenueDetails(){
+    const box=document.getElementById('venueDetails');
+    const v=(state.venues||[]).find(x=>x.venue_id===state.selected);
+    if(!v){ box.textContent='Select a venue from the left rail.'; return; }
+    const f=venueFlags(v); const sheet=v.sheet||{};
+    box.innerHTML=
+      '<div><strong>'+hesc(v.name||v.venue_id)+'</strong> <span class="muted">('+hesc(v.venue_id||'')+')</span></div>'+
+      '<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap">'+
+        '<span class="badge '+(f.active?'good':'warn')+'">'+(f.active?'ACTIVE':'INACTIVE')+'</span>'+
+        '<span class="badge '+(f.sheet_ok?'good':'bad')+'">'+(f.sheet_ok?'SHEET OK':'SHEET FAIL')+'</span>'+
+        '<span class="badge '+(f.ready?'good':'warn')+'">'+(f.ready?'READY':'NOT READY')+'</span>'+
+      '</div>'+
+      '<div class="muted" style="margin-top:8px; font-size:12px">'+hesc(sheet.title||sheet.error||'')+'</div>'+
+      '<div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">'+
+        '<button class="btn" id="vdCheck">Re-check Sheet</button>'+
+        '<button class="btn" id="vdRotate">Rotate Keys</button>'+
+        '<button class="btn" id="vdSetSheet">Set Sheet…</button>'+
+        '<a class="btn" style="text-decoration:none" href="/admin?venue='+encodeURIComponent(v.venue_id||'')+'" target="_blank">Open Admin</a>'+
+      '</div>';
+    document.getElementById('vdCheck').onclick=()=>doVenueAction('check', v.venue_id);
+    document.getElementById('vdRotate').onclick=()=>doVenueAction('rotate', v.venue_id);
+    document.getElementById('vdSetSheet').onclick=async ()=>{
+      const sid=prompt('Paste Google Sheet ID for '+(v.venue_id||''), (sheet.sheet_id||''));
+      if(sid===null) return;
+      await doVenueAction('set_sheet', v.venue_id, {sheet_id: sid.trim()});
+    };
+  }
+
+  async function doVenueAction(act, venue_id, extra){
+    const vid=(venue_id||'').trim(); if(!vid) return;
+    let url=''; let payload=Object.assign({venue_id:vid}, extra||{});
+    if(act==='check') url='/super/api/venues/check_sheet';
+    if(act==='rotate') url='/super/api/venues/rotate_keys';
+    if(act==='set_sheet') url='/super/api/venues/set_sheet';
+    if(!url) return;
+    try{
+      const r=await fetch(url+'?super_key='+encodeURIComponent(super_key), {method:'POST', headers: hdrs(), body: JSON.stringify(payload)});
+      const j=await r.json().catch(()=>({}));
+      if(!j.ok) alert('Action failed: '+(j.error||r.status));
+      await loadVenues();
+    }catch(e){
+      alert('Action failed: '+(e.message||e));
+    }
+  }
+
+  async function loadVenues(){
+    try{
+      const r=await fetch('/super/api/venues?super_key='+encodeURIComponent(super_key), {headers: hdrs()});
+      const j=await r.json();
+      if(!j.ok) throw new Error(j.error||'venues failed');
+      state.venues=j.venues||[];
+      if(!state.selected && state.venues.length) state.selected=state.venues[0].venue_id;
+      renderVenues(); renderVenueDetails();
+      document.getElementById('ts').textContent=new Date().toLocaleString();
+    }catch(e){
+      document.getElementById('venuesRail').innerHTML='<div class="vrow"><div class="vname">Failed to load venues</div><div class="vid">'+hesc(e.message||e)+'</div></div>';
+      document.getElementById('venuesTbody').innerHTML='<tr><td colspan="5" class="muted">Failed to load venues: '+hesc(e.message||e)+'</td></tr>';
+    }
+  }
+
+  function setLeadsDiag(s){ document.getElementById('leadsDiag').textContent=String(s||''); }
+
+  async function loadLeads(){
+    const q=(document.getElementById('leadsSearch').value||'').trim();
+    const per_page=parseInt(document.getElementById('leadsPerPage').value||'10',10)||10;
+    const venue_state=(document.getElementById('leadsVenueState').value||'all').trim();
+    const venue_id=(document.getElementById('leadsVenueId').value||'').trim();
+    const params=new URLSearchParams();
+    params.set('super_key', super_key);
+    params.set('page', String(state.leadsPage||1));
+    params.set('per_page', String(per_page));
+    if(q) params.set('q', q);
+    if(venue_state && venue_state!=='all') params.set('venue_state', venue_state);
+    if(venue_id) params.set('venue_id', venue_id);
+
+    const url='/admin/api/leads_all?'+params.toString();
+    document.getElementById('leadsTbody').innerHTML='<tr><td colspan="8" class="muted">Loading…</td></tr>';
+    setLeadsDiag('Fetching: '+url);
+
+    try{
+      const r=await fetch(url, {headers: hdrs()});
+      const raw=await r.text();
+      let j={}; try{ j=JSON.parse(raw); }catch(_){ j={ok:false, error:'non-json', raw: raw.slice(0,600)}; }
+      if(!r.ok || !j.ok){
+        setLeadsDiag('HTTP '+r.status+'\n'+raw.slice(0,900));
+        document.getElementById('leadsTbody').innerHTML='<tr><td colspan="8" class="muted">Failed to load leads.</td></tr>';
+        return;
+      }
+      const items=j.items||[];
+      const errors=j.errors||[];
+      state.leadsTotal=parseInt(j.total||0,10)||0;
+      document.getElementById('leadsCount').textContent='Total: '+state.leadsTotal+' • Page '+state.leadsPage;
+      if(!items.length){
+        setLeadsDiag(JSON.stringify({note:'No leads returned', total: state.leadsTotal, errors: errors}, null, 2));
+        document.getElementById('leadsTbody').innerHTML='<tr><td colspan="8" class="muted">No leads found.</td></tr>';
+        return;
+      }
+      setLeadsDiag(JSON.stringify({total: state.leadsTotal, returned: items.length, errors: errors.slice(0,6)}, null, 2));
+      const tbody=document.getElementById('leadsTbody'); tbody.innerHTML='';
+      items.forEach(it=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML=
+          '<td>'+hesc(it.venue_id||it.venue||'')+'</td>'+
+          '<td>'+hesc(it.name||it.contact_name||'')+'</td>'+
+          '<td>'+hesc(it.phone||it.contact||it.email||'')+'</td>'+
+          '<td>'+hesc(it.datetime||it.date_time||it.time||'')+'</td>'+
+          '<td>'+hesc(it.party_size||it.party||'')+'</td>'+
+          '<td>'+hesc(it.status||'')+'</td>'+
+          '<td>'+hesc(it.tier||it.vip||'')+'</td>'+
+          '<td>'+hesc(it.queue||'')+'</td>';
+        tbody.appendChild(tr);
+      });
+    }catch(e){
+      setLeadsDiag('Error: '+(e.message||e));
+      document.getElementById('leadsTbody').innerHTML='<tr><td colspan="8" class="muted">Failed to load leads.</td></tr>';
+    }
+  }
+
+  async function exportCsv(){
+    const q=(document.getElementById('leadsSearch').value||'').trim();
+    const venue_state=(document.getElementById('leadsVenueState').value||'all').trim();
+    const venue_id=(document.getElementById('leadsVenueId').value||'').trim();
+    const per_page=200;
+    let page=1; let all=[];
+    for(let guard=0; guard<50; guard++){
+      const p=new URLSearchParams();
+      p.set('super_key', super_key); p.set('page', String(page)); p.set('per_page', String(per_page));
+      if(q) p.set('q', q);
+      if(venue_state && venue_state!=='all') p.set('venue_state', venue_state);
+      if(venue_id) p.set('venue_id', venue_id);
+      const r=await fetch('/admin/api/leads_all?'+p.toString(), {headers: hdrs()});
+      const j=await r.json().catch(()=>({ok:false}));
+      if(!j.ok) break;
+      const items=j.items||[];
+      all=all.concat(items);
+      if(items.length<per_page) break;
+      page++;
+    }
+    const cols=['venue_id','name','phone','datetime','party_size','status','tier','queue'];
+    const lines=[cols.join(',')].concat(all.map(it=>cols.map(c=>('\"'+String(it[c]||'').replace(/\"/g,'\"\"')+'\"')).join(',')));
+    const blob=new Blob([lines.join('\n')], {type:'text/csv'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='leads_export.csv'; document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  document.getElementById('tabVenues').onclick=()=>setActiveTab('venues');
+  document.getElementById('tabLeads').onclick=()=>setActiveTab('leads');
+  document.getElementById('btnRefresh').onclick=()=>loadVenues();
+  document.getElementById('venueSearch').oninput=()=>renderVenues();
+  document.getElementById('venuesFilter').onchange=(e)=>applyChipFilter(e.target.value);
+  document.querySelectorAll('#healthChips .chip').forEach(el=>{ el.onclick=()=>applyChipFilter(el.dataset.filter); });
+
+  document.getElementById('btnReloadLeads').onclick=()=>{state.leadsPage=1; loadLeads();};
+  document.getElementById('leadsSearch').onkeydown=(e)=>{ if(e.key==='Enter'){ state.leadsPage=1; loadLeads(); } };
+  document.getElementById('leadsPerPage').onchange=()=>{ state.leadsPage=1; loadLeads(); };
+  document.getElementById('leadsVenueState').onchange=()=>{ state.leadsPage=1; loadLeads(); };
+  document.getElementById('leadsVenueId').onchange=()=>{ state.leadsPage=1; loadLeads(); };
+  document.getElementById('btnPrev').onclick=()=>{ if(state.leadsPage>1){ state.leadsPage--; loadLeads(); } };
+  document.getElementById('btnNext').onclick=()=>{ state.leadsPage++; loadLeads(); };
+  document.getElementById('btnExportCsv').onclick=()=>exportCsv();
+
+  document.addEventListener('click',(ev)=>{
+    const t=ev.target;
+    if(!t || !t.getAttribute) return;
+    const act=t.getAttribute('data-act');
+    const vid=t.getAttribute('data-vid');
+    if(act && vid){ ev.preventDefault(); doVenueAction(act, vid); }
+  });
+
+  document.getElementById('btnCreate').onclick=async ()=>{
+    const name=prompt('Venue name (display)',''); if(name===null) return;
+    const vid=prompt('Venue id (optional)',''); if(vid===null) return;
+    const sheet=prompt('Google Sheet ID (optional)',''); if(sheet===null) return;
+    const plan=prompt('Plan (standard/premium)','standard'); if(plan===null) return;
+    const payload={venue_name:name.trim(), venue_id:(vid||'').trim(), sheet_id:(sheet||'').trim(), plan:(plan||'standard').trim()};
+    try{
+      const r=await fetch('/super/api/venues/create?super_key='+encodeURIComponent(super_key), {method:'POST', headers: hdrs(), body: JSON.stringify(payload)});
+      const j=await r.json().catch(()=>({}));
+      if(!j.ok) alert('Create failed: '+(j.error||r.status));
+      await loadVenues();
+    }catch(e){ alert('Create failed: '+(e.message||e)); }
+  };
+
+  document.getElementById('ts').textContent=new Date().toLocaleString();
+  loadVenues();
+  fetch('/super/api/diag?super_key='+encodeURIComponent(super_key), {headers: hdrs()}).then(r=>r.json()).then(j=>{
+    document.getElementById('build').textContent=(j.app_version || j.app_version_env || '—');
+  }).catch(()=>{});
+})();
+</script>
+</body>
+</html>
+"""
+
+# Active Super Admin UI
+SUPER_CONSOLE_HTML = SUPER_CONSOLE_HTML_OPTIONA
+
 
 @app.get("/admin/api/super")
 def admin_api_super_console_redirect():
