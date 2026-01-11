@@ -7963,51 +7963,58 @@ async function runAIRow(){
 }
 
 
-function esc(s){ return (s==null?"":String(s)).replace(/[&<>\"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
+function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function renderAIQueue(items){
   const list = qs('#aiq-list');
   if(!list) return;
+
+  // Explicit empty state for CI tests + clarity
   if(!items || !items.length){
-    list.innerHTML = '<div class="note">No queued AI actions.</div>';
+    list.innerHTML = '<div class="note">AI Queue empty — no queued actions.</div>';
     return;
   }
 
-  const rows = items.map(it=>{
-    const id = esc(it.id);
-    const typ = esc(it.type);
-    const st = esc(it.status);
-    const conf = (typeof it.confidence === 'number' ? it.confidence.toFixed(2) : '');
+  const rows = (items || []).map((it)=>{
+    const id = esc(it.id || '');
+    const typ = esc(it.type || '');
+    const st  = esc(it.status || '');
+    const conf = (typeof it.confidence === 'number') ? it.confidence.toFixed(2) : '';
     const when = esc(it.created_at || '');
-    const rationale = esc(it.rationale || '');
+    const why  = esc(it.why || it.reason || '');
     const payload = esc(JSON.stringify(it.payload || {}));
 
     const canAct = (st === 'pending');
-    const approveBtn = `<button type="button" class="btn" ${canAct?'':'disabled'} onclick="aiqApprove('${id}', this)">Approve</button>`;
-    const denyBtn = `<button class="btn2" ${canAct?'':'disabled'} onclick="aiqDeny('${id}', this)">Deny</button>`;
-    const isOutbound = (typ||'').toLowerCase().startsWith('send_');
-    const canSend = isOutbound && (st==='approved') && !(it && it.sent_at);
-    const sendLabel = (typ||'').toLowerCase()==='send_email' ? 'Send Email' : ((typ||'').toLowerCase()==='send_sms' ? 'Send SMS' : 'Send WhatsApp');
-    const sendBtn = `<button type="button" class="btn" ${canSend?'' : 'disabled'} onclick="aiqSend('${id}', this)">${sendLabel}</button>`;
-    const ovBtn = `<button type="button" class="btn" data-min-role="owner" onclick="aiqOverride('${id}', this)">Owner Override</button>`;
+
+    const approveBtn = `<button type="button" class="btn" ${canAct ? '' : 'disabled'} onclick="aiqApprove('${id}', this)">Approve</button>`;
+    const denyBtn    = `<button type="button" class="btn2" ${canAct ? '' : 'disabled'} onclick="aiqDeny('${id}', this)">Deny</button>`;
+    const overrideBtn = `<button type="button" class="btn" onclick="aiqOverride('${id}', this)">Owner Override</button>`;
 
     return `
-      <div style="padding:12px;border:1px solid rgba(255,255,255,.16);border-radius:14px;margin-bottom:10px;background:rgba(255,255,255,.06)">
+      <div class="card" style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
-          <div><b>${typ}</b> <span class="chip" style="margin-left:8px">${st}</span> <span class="note" style="margin-left:8px">conf ${conf}</span></div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">${approveBtn}${denyBtn}${ovBtn}</div>
+          <div>
+            <b>${typ || 'AI item'}</b>
+            <span class="chip" style="margin-left:8px">${st || 'unknown'}</span>
+            ${conf ? `<span class="note" style="margin-left:8px">conf ${conf}</span>` : ``}
+          </div>
+          <div class="note">${when}</div>
         </div>
-        <div class="note" style="margin-top:6px">id: ${id} · ${when}</div>
-        ${rationale?`<div class="small" style="margin-top:8px"><b>Why:</b> ${rationale}</div>`:''}
+        ${why ? `<div class="small" style="margin-top:8px;opacity:.9">${why}</div>` : ``}
         <details style="margin-top:8px">
           <summary class="small">Payload</summary>
-          <pre style="white-space:pre-wrap;word-break:break-word;margin-top:8px;font-size:12px;opacity:.9">${payload}</pre>
+          <pre class="small" style="white-space:pre-wrap;opacity:.9">${payload}</pre>
         </details>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+          ${approveBtn}
+          ${denyBtn}
+          ${overrideBtn}
+        </div>
       </div>
     `;
-  }).join('');
+  });
 
-  list.innerHTML = rows;
+  list.innerHTML = rows.join('');
 }
 
 async function aiqApprove(id, btn){
