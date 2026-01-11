@@ -9390,7 +9390,15 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
     th{color:var(--muted);font-weight:600}
     .right{text-align:right}
     .err{color:#ffb4b4;font-size:12px;margin-top:10px}
-  </style>
+  
+  .tabbtn{background:rgba(255,255,255,.04);border:1px solid var(--line);padding:10px 12px;border-radius:999px;color:var(--text);cursor:pointer}
+  .tabbtn.active{background:rgba(240,180,60,.14);border-color:rgba(240,180,60,.35)}
+  .tabpane{display:none}
+  .tabpane.active{display:block}
+  .scrollbox{max-height:65vh; overflow:auto; border-radius:14px}
+  .stickyHead thead th{position:sticky;top:0;background:rgba(0,0,0,.65);backdrop-filter: blur(10px); z-index:2}
+
+</style>
 </head>
 <body>
   <div class="wrap">
@@ -9402,7 +9410,13 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
       <div class="pill" id="ts">Loading…</div>
     </div>
 
+    <div class="tabs" style="display:flex;gap:8px;align-items:center;margin:10px 0 6px 0;flex-wrap:wrap">
+      <button class="tabbtn active" data-tabbtn="venues">Venues</button>
+      <button class="tabbtn" data-tabbtn="leads">Leads</button>
+    </div>
+
     <div class="grid">
+    <div class="tabpane active" data-tab="venues">
   
     
     <div class="card" style="margin-top:12px">
@@ -9442,7 +9456,16 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
         </div>
         </div>
 
-      <table id="venuesTable" style="margin-top:10px">
+      
+      <div id="venueChips" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="pill" data-vchip="all">All</button>
+        <button class="pill" data-vchip="active">Active</button>
+        <button class="pill" data-vchip="inactive">Inactive</button>
+        <button class="pill" data-vchip="needs">Needs attention</button>
+        <button class="pill" data-vchip="sheetfail">Sheet fail</button>
+        <button class="pill" data-vchip="notready">Not ready</button>
+      </div>
+<div class="scrollbox stickyHead" style="margin-top:10px"><table id="venuesTable">
         <thead>
           <tr>
             <th>Venue ID</th>
@@ -9458,7 +9481,9 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
     </div>
 
 
-    <div class="card" style="margin-top:12px">
+        </div>
+    <div class="tabpane" data-tab="leads">
+<div class="card" style="margin-top:12px">
       <div class="k">All Leads (cross-venue)</div>
       <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
         <input id="q" placeholder="Search name/phone/venue…" style="flex:1;min-width:220px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
@@ -9490,7 +9515,7 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
           </tr>
         </thead>
         <tbody id="leadRows"></tbody>
-      </table>
+      </table></div>
       <div id="pager" style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:10px;flex-wrap:wrap">
         <button id="prevPage" class="btn" style="opacity:.9">Prev</button>
         <div class="pill" id="pageInfo">Page 1</div>
@@ -9499,22 +9524,27 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
       <div class="err" id="leadErr"></div>
     </div>
 
-    <div class="card"><div class="k">Venues</div><div class="v" id="venues">—</div></div>
+        </div>
+    <div class="tabpane" data-tab="venues">
+<div class="card"><div class="k">Venues</div><div class="v" id="venues">—</div></div>
       <div class="card"><div class="k">AI Queue items</div><div class="v" id="aiq">—</div></div>
       <div class="card"><div class="k">Build</div><div class="v" id="build">—</div></div>
     </div>
+    </div>
 
-    <div class="card">
+        <div class="tabpane active" data-tab="venues">
+<div class="card">
       <div class="k">Per-venue</div>
-      <table>
+      <div class="scrollbox stickyHead" style="margin-top:10px"><table style="width:100%;">
         <thead>
           <tr><th>Venue</th><th>Venue ID</th><th class="right">AI Queue</th></tr>
         </thead>
         <tbody id="rows"></tbody>
-      </table>
+      </table></div>
       <div class="err" id="err"></div>
     </div>
   </div>
+    </div>
 
 <script>
 // --- Demo Mode helpers (safe defaults) ---
@@ -9539,6 +9569,86 @@ const _demoHeaders = (enabled) => (enabled ? {"X-Demo-Mode":"1"} : {});
   function esc(s){
     return String(s ?? "").replace(/[&<>"']/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
   }
+
+let _venuesCache = [];
+let _venueChipMode = "all";
+function _venueNeedsAttention(v){
+  try{
+    const st = String(v.status||"").toUpperCase();
+    const sheetOk = (v.sheet_ok===true);
+    if(!sheetOk) return true;
+    if(st.includes("FAIL") || st.includes("MISSING")) return true;
+    if(st.includes("PENDING") || st.includes("NOT_READY")) return true;
+    return false;
+  }catch(e){ return false; }
+}
+function renderVenues(){
+  const rows = document.getElementById("venueRows");
+  rows.innerHTML = "";
+  const arr = (_venuesCache||[]).slice();
+  const filtered = arr.filter(v=>{
+    if(_venueChipMode==="active") return !!v.active;
+    if(_venueChipMode==="inactive") return !v.active;
+    if(_venueChipMode==="sheetfail") return (v.sheet_ok===false);
+    if(_venueChipMode==="notready") return String(v.status||"").toUpperCase().includes("PENDING") || String(v.status||"").toUpperCase().includes("NOT_READY");
+    if(_venueChipMode==="needs") return _venueNeedsAttention(v);
+    return true;
+  });
+  // issues-first sort for "needs" and default view
+  filtered.sort((a,b)=>{
+    const ia=_venueNeedsAttention(a)?1:0, ib=_venueNeedsAttention(b)?1:0;
+    if(ia!==ib) return ib-ia;
+    return String(a.venue_id||"").localeCompare(String(b.venue_id||""));
+  });
+  filtered.forEach(v=>{
+    const tr = document.createElement("tr");
+    const vid = (v.venue_id||"");
+    const sheet = String(v.google_sheet_id||"").trim();
+    const sheetDisp = sheet ? (sheet.length>16 ? (sheet.slice(0,8)+"…"+sheet.slice(-6)) : sheet) : "—";
+    const sheetBadge = sheet
+      ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">SET</span>`
+      : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING</span>`;
+    const act = v.active ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">ACTIVE</span>` : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);color:#fca5a5;font-size:12px;">INACTIVE</span>`;
+    const st = String(v.status||"").toUpperCase();
+    const stBadge = _venueNeedsAttention(v)
+      ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);color:#fca5a5;font-size:12px;">${esc(st||"ISSUE")}</span>`
+      : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">${esc(st||"OK")}</span>`;
+    const dash = `/admin?key=${encodeURIComponent(key)}&venue=${encodeURIComponent(vid)}`;
+    tr.innerHTML = `
+      <td style="font-family:ui-monospace,monospace">${esc(vid)}</td>
+      <td>${esc(v.venue_name||vid)}</td>
+      <td>${esc(v.plan||"")}</td>
+      <td title="${esc(sheet)}" style="white-space:nowrap">${sheetDisp} ${sheetBadge}</td>
+      <td style="white-space:nowrap">${act} ${stBadge}</td>
+      <td class="right"><a class="btn ghost" href="${dash}">Open</a></td>
+    `;
+    rows.appendChild(tr);
+  });
+
+  // update chip labels w/ counts
+  try{
+    const all = (_venuesCache||[]).length;
+    const active = (_venuesCache||[]).filter(v=>!!v.active).length;
+    const inactive = all-active;
+    const sheetfail = (_venuesCache||[]).filter(v=>v.sheet_ok===false).length;
+    const notready = (_venuesCache||[]).filter(v=>String(v.status||"").toUpperCase().includes("PENDING") || String(v.status||"").toUpperCase().includes("NOT_READY")).length;
+    const needs = (_venuesCache||[]).filter(v=>_venueNeedsAttention(v)).length;
+    document.querySelectorAll("#venueChips .pill").forEach(btn=>{
+      const mode = btn.getAttribute("data-vchip");
+      let label = btn.textContent.split(" (")[0];
+      if(mode==="all") label="All";
+      if(mode==="active") label="Active";
+      if(mode==="inactive") label="Inactive";
+      if(mode==="needs") label="Needs attention";
+      if(mode==="sheetfail") label="Sheet fail";
+      if(mode==="notready") label="Not ready";
+      const count = (mode==="all")?all:(mode==="active")?active:(mode==="inactive")?inactive:(mode==="sheetfail")?sheetfail:(mode==="notready")?notready:(mode==="needs")?needs:0;
+      btn.textContent = `${label} (${count})`;
+      btn.style.borderColor = (_venueChipMode===mode)? "rgba(240,180,60,.55)" : "var(--line)";
+    });
+  }catch(e){}
+}
+
 async function loadVenues(){
     try{
       const r = await fetch("/super/api/venues?super_key="+encodeURIComponent(super_key), {headers});
@@ -9576,6 +9686,10 @@ async function loadVenues(){
           addGroup("Inactive venues", inactive);
         }
       }catch(e){}
+      _venuesCache = (j.venues||[]);
+      renderVenues();
+      return;
+      /* legacy render removed */
       (j.venues||[]).forEach(v=>{
         const tr = document.createElement("tr");
         const vid = (v.venue_id||"");
@@ -9822,6 +9936,27 @@ ueErr.style.display="none"; }, 2000);
   
 
   const venueSel = document.getElementById("venueFilter");
+
+  // Tabs (Venues / Leads)
+  function setTab(tab){
+    document.querySelectorAll(".tabbtn").forEach(b=>b.classList.toggle("active", b.getAttribute("data-tabbtn")===tab));
+    document.querySelectorAll(".tabpane").forEach(p=>p.classList.toggle("active", p.getAttribute("data-tab")===tab));
+    try{ localStorage.setItem("super_tab", tab);}catch(e){}
+  }
+  document.querySelectorAll(".tabbtn").forEach(b=>{
+    b.addEventListener("click", ()=> setTab(b.getAttribute("data-tabbtn")));
+  });
+  try{
+    const saved = localStorage.getItem("super_tab");
+    if(saved) setTab(saved);
+  }catch(e){}
+  // Venue status chips
+  document.querySelectorAll("#venueChips .pill").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      _venueChipMode = btn.getAttribute("data-vchip")||"all";
+      renderVenues();
+    });
+  });
   const exportBtn = document.getElementById("exportCsv");
   let __lastLeadRows = [];
   let __lastLeadMeta = {total:0,page:1,pages:1,per_page:10};
