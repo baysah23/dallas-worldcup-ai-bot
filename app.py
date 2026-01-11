@@ -1918,7 +1918,6 @@ def admin_api_venues_create():
     }
     return jsonify({"ok": True, "pack": pack})
 
-
 @app.post("/admin/api/venues/create_and_save")
 def admin_api_venues_create_and_save():
     """Owner-only: generate venue pack AND persist to config/venues/<venue>.json."""
@@ -1927,6 +1926,7 @@ def admin_api_venues_create_and_save():
         return resp
 
     body = request.get_json(silent=True) or {}
+
     venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
     venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
     plan = str(body.get("plan") or "standard").strip().lower() or "standard"
@@ -1947,12 +1947,38 @@ def admin_api_venues_create_and_save():
             "google_sheet_id": str(body.get("google_sheet_id") or "").strip(),
             "redis_namespace": f"{_REDIS_NS}:{venue_id}",
         },
-        "features": body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True},
+        "features": body.get("features")
+        if isinstance(body.get("features"), dict)
+        else {"vip": True, "waitlist": False, "ai_queue": True},
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
 
     wrote, write_path, err = _write_venue_config(venue_id, pack)
 
+    if not wrote:
+        return jsonify({
+            "ok": False,
+            "error": err or "Failed to write venue config",
+        }), 500
+
+    _invalidate_venues_cache()
+
+    return jsonify({
+        "ok": True,
+        "venue_id": venue_id,
+        "path": write_path,
+        "admin_key": admin_key,
+        "manager_key": manager_key,
+    })
+
+
+@app.post("/super/admin/api/venue/create")
+def super_admin_api_venue_create():
+    """
+    Super Admin alias for venue creation.
+    Delegates to the existing owner-only create_and_save logic.
+    """
+    return admin_api_venues_create_and_save()
 
     # === ONE-CLICK ONBOARDING (v1.0 polish) ===
     # If a Sheet ID is provided at creation time, validate it immediately
@@ -11326,6 +11352,22 @@ def super_api_venues_check_sheet():
     # Run sheet validation
     chk = _check_sheet_id(sheet_id)
 
+    if chk.get("ok"):
+        cfg["sheet_ok"] = True
+        cfg["ready"] = True
+        cfg["active"] = True
+
+        cfg["data"] = cfg.get("data", {})
+        cfg["data"]["google_sheet_id"] = sheet_id
+    else:
+        cfg["sheet_ok"] = False
+        cfg["ready"] = False
+
+    cfg["last_checked"] = chk.get("checked_at")
+
+    _safe_write_json_file(cfg["_path"], cfg)
+    _invalidate_venues_cache()
+    
     # Persist results so UI does NOT revert
     cfg["sheet_ok"] = chk.get("ok", False)
     cfg["ready"] = bool(cfg.get("sheet_ok") and cfg.get("active", True))
