@@ -10258,6 +10258,11 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
         <div id="venueDetails" class="muted">Select a venue from the left rail.</div>
       </div>
 
+      <div class="card" style="margin-top:12px">
+        <h2>Diagnostics</h2>
+        <pre id="diagBox" style="white-space:pre-wrap;word-break:break-word;min-height:44px;margin:0" class="muted">—</pre>
+      </div>
+
       <div class="panel section active" id="sectionVenues">
         <div class="panelhead">
           <div class="left"><strong style="font-size:13px">Venues status</strong><span class="muted" style="font-size:12px">Issues first • bounded table</span></div>
@@ -10308,7 +10313,337 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
   </div>
 </div>
 
-<script src="/super/static/console.js" defer></script>
+<script>
+(function(){
+  const qs = new URLSearchParams(location.search);
+  const super_key = (qs.get('super_key') || qs.get('key') || '').trim() || (document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)?.[1] ? decodeURIComponent(document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)[1]) : '');
+  const state = {venues:[], filter:'all', selected:'', leadsPage:1, leadsTotal:0};
+  let demoEnabled = (document.cookie||'').includes('demo_mode=1');
+  function setDiag(s){const el=document.getElementById('diagBox')||document.getElementById('leadsDiag'); if(el) el.textContent=String(s||'');}
+  async function toggleDemoMode(){
+    try{
+      const next = !demoEnabled;
+      const r = await fetch('/super/api/demo_mode?super_key='+encodeURIComponent(super_key), {method:'POST', headers: hdrs(), body: JSON.stringify({enabled: next})});
+      const j = await r.json().catch(()=>({}));
+      if(!j.ok) throw new Error(j.error||('HTTP '+r.status));
+      demoEnabled = !!j.enabled;
+      setDiag('demo_mode='+(demoEnabled?'ON':'OFF'));
+      await loadVenues();
+      renderVenueDetails();
+    }catch(e){ alert('Demo mode failed: '+(e.message||e)); }
+  }
+
+
+  function hesc(s){s=(s===null||s===undefined)?'':String(s);return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+  function hdrs(extra){const h={'Content-Type':'application/json'}; if(super_key) h['X-Super-Key']=super_key; if(demoEnabled) h['X-Demo-Mode']='1'; if(extra) Object.assign(h,extra); return h;}
+
+  function setActiveTab(which){
+    document.getElementById('tabVenues').classList.toggle('active', which==='venues');
+    document.getElementById('tabLeads').classList.toggle('active', which==='leads');
+    document.getElementById('sectionVenues').classList.toggle('active', which==='venues');
+    document.getElementById('sectionLeads').classList.toggle('active', which==='leads');
+    if(which==='leads'){ state.leadsPage=1; loadLeads(); }
+  }
+  function applyChipFilter(f){
+    state.filter=f;
+    document.querySelectorAll('#healthChips .chip').forEach(el=>el.classList.toggle('active', el.dataset.filter===f));
+    document.getElementById('venuesFilter').value = (f==='needs'||f==='sheetfail'||f==='notready'||f==='active'||f==='inactive') ? f : 'all';
+    renderVenues();
+  }
+  function venueFlags(v){
+    const active = (typeof v.active==='boolean') ? v.active : true;
+    const sheet_ok = !!(v.sheet && v.sheet.ok);
+    const ready = !!(v.ready);
+    const needs = active && (!sheet_ok || !ready);
+    return {active, sheet_ok, ready, needs};
+  }
+  function computeCounts(){
+    const vs=state.venues||[]; let all=vs.length, active=0, inactive=0, sheetfail=0, notready=0, needs=0;
+    vs.forEach(v=>{const f=venueFlags(v); if(f.active) active++; else inactive++; if(!f.sheet_ok) sheetfail++; if(!f.ready) notready++; if(f.needs) needs++;});
+    document.getElementById('c_all').textContent=String(all);
+    document.getElementById('c_active').textContent=String(active);
+    document.getElementById('c_inactive').textContent=String(inactive);
+    document.getElementById('c_sheetfail').textContent=String(sheetfail);
+    document.getElementById('c_notready').textContent=String(notready);
+    document.getElementById('c_needs').textContent=String(needs);
+  }
+  function matchesFilter(v){
+    const f=state.filter; const x=venueFlags(v);
+    if(f==='active') return x.active;
+    if(f==='inactive') return !x.active;
+    if(f==='sheetfail') return !x.sheet_ok;
+    if(f==='notready') return !x.ready;
+    if(f==='needs') return x.needs;
+    return true;
+  }
+  function matchesSearch(v){
+    const q=(document.getElementById('venueSearch').value||'').trim().toLowerCase();
+    if(!q) return true;
+    return String(v.venue_id||'').toLowerCase().includes(q) || String(v.name||v.venue_name||'').toLowerCase().includes(q);
+  }
+
+  function renderVenues(){
+    const list=document.getElementById('venuesRail');
+    const tbody=document.getElementById('venuesTbody');
+    const filtered=(state.venues||[]).filter(v=>matchesFilter(v)&&matchesSearch(v));
+
+    filtered.sort((a,b)=>{
+      const fa=venueFlags(a), fb=venueFlags(b);
+      const sa=(fa.needs?0:1)+(!fa.sheet_ok?0:1)+(!fa.ready?0:1)+(fa.active?0:1);
+      const sb=(fb.needs?0:1)+(!fb.sheet_ok?0:1)+(!fb.ready?0:1)+(fb.active?0:1);
+      if(sa!==sb) return sa-sb;
+      return String(a.venue_id||'').localeCompare(String(b.venue_id||''));
+    });
+
+    list.innerHTML='';
+    if(!filtered.length){
+      list.innerHTML='<div class="vrow"><div class="vname">No venues match.</div></div>';
+    } else {
+      filtered.forEach(v=>{
+        const f=venueFlags(v);
+        const badges=[
+          '<span class="badge '+(f.active?'good':'warn')+'">'+(f.active?'ACTIVE':'INACTIVE')+'</span>',
+          '<span class="badge '+(f.sheet_ok?'good':'bad')+'">'+(f.sheet_ok?'SHEET OK':'SHEET FAIL')+'</span>',
+          '<span class="badge '+(f.ready?'good':'warn')+'">'+(f.ready?'READY':'NOT READY')+'</span>'
+        ];
+        const el=document.createElement('div');
+        el.className='vrow'+(state.selected===v.venue_id?' active':'');
+        el.innerHTML='<div><div class="vname">'+hesc(v.name||v.venue_name||v.venue_id)+'</div><div class="vid">'+hesc(v.venue_id||'')+'</div></div><div class="badges">'+badges.join('')+'</div>';
+        el.onclick=()=>{state.selected=v.venue_id; renderVenues(); renderVenueDetails();};
+        list.appendChild(el);
+      });
+    }
+
+    tbody.innerHTML='';
+    if(!filtered.length){
+      tbody.innerHTML='<tr><td colspan="5" class="muted">No venues to show.</td></tr>';
+    } else {
+      filtered.forEach(v=>{
+        const f=venueFlags(v);
+        const sheet=v.sheet||{};
+        const sheetTxt = sheet && sheet.sheet_id ? (String(sheet.sheet_id).slice(0,8)+'…') : '—';
+        const sheetBadge='<span class="badge '+(f.sheet_ok?'good':'bad')+'">'+(f.sheet_ok?'OK':'FAIL')+'</span>';
+        const actBadge='<span class="badge '+(f.active?'good':'warn')+'">'+(f.active?'ACTIVE':'INACTIVE')+'</span>';
+        const readyBadge='<span class="badge '+(f.ready?'good':'warn')+'">'+(f.ready?'READY':'NOT READY')+'</span>';
+        const actions='<button class="btn" data-act="check" data-vid="'+hesc(v.venue_id||'')+'">Re-check</button> '+
+                      '<button class="btn" data-act="rotate" data-vid="'+hesc(v.venue_id||'')+'">Rotate Keys</button> '+
+                      '<a href="/admin?venue='+encodeURIComponent(v.venue_id||'')+'" target="_blank">Open</a>';
+        const tr=document.createElement('tr');
+        tr.innerHTML='<td><div><div style="font-weight:700">'+hesc(v.name||v.venue_name||v.venue_id)+'</div><div class="muted">'+hesc(v.venue_id||'')+'</div></div></td>'+
+                     '<td>'+hesc(v.plan||'standard')+'</td>'+
+                     '<td>'+hesc(sheetTxt)+' '+sheetBadge+'</td>'+
+                     '<td>'+actBadge+' '+readyBadge+'</td>'+
+                     '<td>'+actions+'</td>';
+        tbody.appendChild(tr);
+      });
+    }
+
+    const sel=document.getElementById('leadsVenueId');
+    const cur=sel.value;
+    sel.innerHTML='<option value="">All venues</option>'+(state.venues||[]).map(v=>'<option value="'+hesc(v.venue_id||'')+'">'+hesc(v.name||v.venue_id)+'</option>').join('');
+    if([].slice.call(sel.options).some(o=>o.value===cur)) sel.value=cur;
+
+    computeCounts();
+  }
+
+  function renderVenueDetails(){
+    const box=document.getElementById('venueDetails');
+    const v=(state.venues||[]).find(x=>x.venue_id===state.selected);
+    if(!v){ box.textContent='Select a venue from the left rail.'; return; }
+    const f=venueFlags(v); const sheet=v.sheet||{};
+    box.innerHTML=
+      '<div><strong>'+hesc(v.name||v.venue_id)+'</strong> <span class="muted">('+hesc(v.venue_id||'')+')</span></div>'+
+      '<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap">'+
+        '<span class="badge '+(f.active?'good':'warn')+'">'+(f.active?'ACTIVE':'INACTIVE')+'</span>'+
+        '<span class="badge '+(f.sheet_ok?'good':'bad')+'">'+(f.sheet_ok?'SHEET OK':'SHEET FAIL')+'</span>'+
+        '<span class="badge '+(f.ready?'good':'warn')+'">'+(f.ready?'READY':'NOT READY')+'</span>'+
+      '</div>'+
+      '<div class="muted" style="margin-top:8px; font-size:12px">'+hesc(sheet.title||sheet.error||'')+'</div>'+
+      '<div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">'+
+        '<button class="btn" id="vdActive">'+(f.active?'Deactivate':'Activate')+'</button>'+
+        '<button class="btn" id="vdDemo">Demo Mode: '+(demoEnabled?'ON':'OFF')+'</button>'+
+        '<button class="btn" id="vdCheck">Re-check Sheet</button>'+
+        '<button class="btn" id="vdRotate">Rotate Keys</button>'+
+        '<button class="btn" id="vdSetSheet">Set Sheet…</button>'+
+        '<a class="btn" style="text-decoration:none" href="/admin?venue='+encodeURIComponent(v.venue_id||'')+'" target="_blank">Open Admin</a>'+
+      '</div>';
+    document.getElementById('vdCheck').onclick=()=>doVenueAction('check', v.venue_id);
+    document.getElementById('vdRotate').onclick=()=>doVenueAction('rotate', v.venue_id);
+    const _vdA=document.getElementById('vdActive'); if(_vdA) _vdA.onclick=()=>doVenueAction('set_active', v.venue_id, {active: !f.active});
+    const _vdD=document.getElementById('vdDemo'); if(_vdD) _vdD.onclick=()=>toggleDemoMode();
+    document.getElementById('vdSetSheet').onclick=async ()=>{
+      const sid=prompt('Paste Google Sheet ID for '+(v.venue_id||''), (sheet.sheet_id||''));
+      if(sid===null) return;
+      let s=sid.trim();
+      // accept full Google Sheets URL
+      const m=(s.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)||[]); if(m[1]) s=m[1];
+      await doVenueAction('set_sheet', v.venue_id, {sheet_id: s});
+    };
+  }
+
+  async function doVenueAction(act, venue_id, extra){
+    const vid=(venue_id||'').trim(); if(!vid) return;
+    let url=''; let payload=Object.assign({venue_id:vid}, extra||{});
+    if(act==='check') url='/super/api/venues/check_sheet';
+    if(act==='rotate') url='/super/api/venues/rotate_keys';
+    if(act==='set_sheet') url='/super/api/venues/set_sheet';
+    if(act==='set_active') url='/super/api/venues/set_active';
+    if(!url) return;
+    try{
+      const r=await fetch(url+'?super_key='+encodeURIComponent(super_key), {method:'POST', headers: hdrs(), body: JSON.stringify(payload)});
+      const j=await r.json().catch(()=>({}));
+      if(!j.ok){ setDiag(JSON.stringify(j||{}, null, 2)); alert('Action failed: '+(j.error||r.status)); }
+      else { setDiag(JSON.stringify(j||{}, null, 2)); }
+      await loadVenues();
+    }catch(e){
+      alert('Action failed: '+(e.message||e));
+    }
+  }
+
+  async function loadVenues(){
+    try{
+      const r=await fetch('/super/api/venues?super_key='+encodeURIComponent(super_key), {headers: hdrs()});
+      const j=await r.json();
+      if(!j.ok) throw new Error(j.error||'venues failed');
+      state.venues=j.venues||[];
+      if(!state.selected && state.venues.length) state.selected=state.venues[0].venue_id;
+      renderVenues(); renderVenueDetails();
+      document.getElementById('ts').textContent=new Date().toLocaleString();
+    }catch(e){
+      document.getElementById('venuesRail').innerHTML='<div class="vrow"><div class="vname">Failed to load venues</div><div class="vid">'+hesc(e.message||e)+'</div></div>';
+      document.getElementById('venuesTbody').innerHTML='<tr><td colspan="5" class="muted">Failed to load venues: '+hesc(e.message||e)+'</td></tr>';
+    }
+  }
+
+  function setLeadsDiag(s){ document.getElementById('leadsDiag').textContent=String(s||''); }
+
+  async function loadLeads(){
+    const q=(document.getElementById('leadsSearch').value||'').trim();
+    const per_page=parseInt(document.getElementById('leadsPerPage').value||'10',10)||10;
+    const venue_state=(document.getElementById('leadsVenueState').value||'all').trim();
+    const venue_id=(document.getElementById('leadsVenueId').value||'').trim();
+    const params=new URLSearchParams();
+    params.set('super_key', super_key);
+    params.set('page', String(state.leadsPage||1));
+    params.set('per_page', String(per_page));
+    if(q) params.set('q', q);
+    if(venue_state && venue_state!=='all') params.set('venue_state', venue_state);
+    if(venue_id) params.set('venue_id', venue_id);
+
+    const url='/admin/api/leads_all?'+params.toString();
+    document.getElementById('leadsTbody').innerHTML='<tr><td colspan="8" class="muted">Loading…</td></tr>';
+    setLeadsDiag('Fetching: '+url);
+
+    try{
+      const r=await fetch(url, {headers: hdrs()});
+      const raw=await r.text();
+      let j={}; try{ j=JSON.parse(raw); }catch(_){ j={ok:false, error:'non-json', raw: raw.slice(0,600)}; }
+      if(!r.ok || !j.ok){
+        setLeadsDiag('HTTP '+r.status+'\n'+raw.slice(0,900));
+        document.getElementById('leadsTbody').innerHTML='<tr><td colspan="8" class="muted">Failed to load leads.</td></tr>';
+        return;
+      }
+      const items=j.items||[];
+      const errors=j.errors||[];
+      state.leadsTotal=parseInt(j.total||0,10)||0;
+      document.getElementById('leadsCount').textContent='Total: '+state.leadsTotal+' • Page '+state.leadsPage;
+      if(!items.length){
+        setLeadsDiag(JSON.stringify({note:'No leads returned', total: state.leadsTotal, errors: errors}, null, 2));
+        document.getElementById('leadsTbody').innerHTML='<tr><td colspan="8" class="muted">No leads found.</td></tr>';
+        return;
+      }
+      setLeadsDiag(JSON.stringify({total: state.leadsTotal, returned: items.length, errors: errors.slice(0,6)}, null, 2));
+      const tbody=document.getElementById('leadsTbody'); tbody.innerHTML='';
+      items.forEach(it=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML=
+          '<td>'+hesc(it.venue_id||it.venue||'')+'</td>'+
+          '<td>'+hesc(it.name||it.contact_name||'')+'</td>'+
+          '<td>'+hesc(it.phone||it.contact||it.email||'')+'</td>'+
+          '<td>'+hesc(it.datetime||it.date_time||it.time||'')+'</td>'+
+          '<td>'+hesc(it.party_size||it.party||'')+'</td>'+
+          '<td>'+hesc(it.status||'')+'</td>'+
+          '<td>'+hesc(it.tier||it.vip||'')+'</td>'+
+          '<td>'+hesc(it.queue||'')+'</td>';
+        tbody.appendChild(tr);
+      });
+    }catch(e){
+      setLeadsDiag('Error: '+(e.message||e));
+      document.getElementById('leadsTbody').innerHTML='<tr><td colspan="8" class="muted">Failed to load leads.</td></tr>';
+    }
+  }
+
+  async function exportCsv(){
+    const q=(document.getElementById('leadsSearch').value||'').trim();
+    const venue_state=(document.getElementById('leadsVenueState').value||'all').trim();
+    const venue_id=(document.getElementById('leadsVenueId').value||'').trim();
+    const per_page=200;
+    let page=1; let all=[];
+    for(let guard=0; guard<50; guard++){
+      const p=new URLSearchParams();
+      p.set('super_key', super_key); p.set('page', String(page)); p.set('per_page', String(per_page));
+      if(q) p.set('q', q);
+      if(venue_state && venue_state!=='all') p.set('venue_state', venue_state);
+      if(venue_id) p.set('venue_id', venue_id);
+      const r=await fetch('/admin/api/leads_all?'+p.toString(), {headers: hdrs()});
+      const j=await r.json().catch(()=>({ok:false}));
+      if(!j.ok) break;
+      const items=j.items||[];
+      all=all.concat(items);
+      if(items.length<per_page) break;
+      page++;
+    }
+    const cols=['venue_id','name','phone','datetime','party_size','status','tier','queue'];
+    const lines=[cols.join(',')].concat(all.map(it=>cols.map(c=>('\"'+String(it[c]||'').replace(/\"/g,'\"\"')+'\"')).join(',')));
+    const blob=new Blob([lines.join('\n')], {type:'text/csv'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='leads_export.csv'; document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  document.getElementById('tabVenues').onclick=()=>setActiveTab('venues');
+  document.getElementById('tabLeads').onclick=()=>setActiveTab('leads');
+  document.getElementById('btnRefresh').onclick=()=>loadVenues();
+  document.getElementById('venueSearch').oninput=()=>renderVenues();
+  document.getElementById('venuesFilter').onchange=(e)=>applyChipFilter(e.target.value);
+  document.querySelectorAll('#healthChips .chip').forEach(el=>{ el.onclick=()=>applyChipFilter(el.dataset.filter); });
+
+  document.getElementById('btnReloadLeads').onclick=()=>{state.leadsPage=1; loadLeads();};
+  document.getElementById('leadsSearch').onkeydown=(e)=>{ if(e.key==='Enter'){ state.leadsPage=1; loadLeads(); } };
+  document.getElementById('leadsPerPage').onchange=()=>{ state.leadsPage=1; loadLeads(); };
+  document.getElementById('leadsVenueState').onchange=()=>{ state.leadsPage=1; loadLeads(); };
+  document.getElementById('leadsVenueId').onchange=()=>{ state.leadsPage=1; loadLeads(); };
+  document.getElementById('btnPrev').onclick=()=>{ if(state.leadsPage>1){ state.leadsPage--; loadLeads(); } };
+  document.getElementById('btnNext').onclick=()=>{ state.leadsPage++; loadLeads(); };
+  document.getElementById('btnExportCsv').onclick=()=>exportCsv();
+
+  document.addEventListener('click',(ev)=>{
+    const t=ev.target;
+    if(!t || !t.getAttribute) return;
+    const act=t.getAttribute('data-act');
+    const vid=t.getAttribute('data-vid');
+    if(act && vid){ ev.preventDefault(); doVenueAction(act, vid); }
+  });
+
+  document.getElementById('btnCreate').onclick=async ()=>{
+    const name=prompt('Venue name (display)',''); if(name===null) return;
+    const vid=prompt('Venue id (optional)',''); if(vid===null) return;
+    const sheet=prompt('Google Sheet ID (optional)',''); if(sheet===null) return;
+    const plan=prompt('Plan (standard/premium)','standard'); if(plan===null) return;
+    const payload={venue_name:name.trim(), venue_id:(vid||'').trim(), sheet_id:(sheet||'').trim(), plan:(plan||'standard').trim()};
+    try{
+      const r=await fetch('/super/api/venues/create?super_key='+encodeURIComponent(super_key), {method:'POST', headers: hdrs(), body: JSON.stringify(payload)});
+      const j=await r.json().catch(()=>({}));
+      if(!j.ok) alert('Create failed: '+(j.error||r.status));
+      await loadVenues();
+    }catch(e){ alert('Create failed: '+(e.message||e)); }
+  };
+
+  document.getElementById('ts').textContent=new Date().toLocaleString();
+  loadVenues();
+  fetch('/super/api/diag?super_key='+encodeURIComponent(super_key), {headers: hdrs()}).then(r=>r.json()).then(j=>{
+    document.getElementById('build').textContent=(j.app_version || j.app_version_env || '—');
+  }).catch(()=>{});
+})();
+</script>
 </body>
 </html>
 """
@@ -10368,291 +10703,6 @@ def super_admin_console():
 
 
 
-
-
-
-@app.get("/super/static/console.js")
-def super_static_console_js():
-    """External Super Admin console JS.
-
-    Some production setups block inline <script> execution. Serving JS from a
-    dedicated endpoint avoids "dead" UIs where nothing is clickable.
-
-    Auth: we do NOT embed secrets; the JS reads the super_key from the page URL
-    (super/admin?super_key=...) and includes it in API calls.
-    """
-    # Always allow the browser to fetch fresh JS (prevents stale cached UI bugs)
-    js = r"""(function(){
-  function banner(msg){
-    try{
-      var d=document.createElement('div');
-      d.style.cssText='position:fixed;left:12px;right:12px;top:12px;z-index:999999;padding:10px 12px;border-radius:14px;background:rgba(255,50,80,.18);border:1px solid rgba(255,50,80,.35);color:#fff;font:12px ui-monospace,Menlo,Consolas,monospace;backdrop-filter:blur(12px)';
-      d.textContent='Super Admin JS error: '+msg;
-      document.body.appendChild(d);
-    }catch(_){ }
-  }
-  window.addEventListener('error', function(e){ banner((e && (e.message||e.error)) || 'error'); });
-  window.addEventListener('unhandledrejection', function(e){ banner((e && e.reason && (e.reason.message||String(e.reason))) || 'unhandled rejection'); });
-
-  function qs(){ try{ return new URLSearchParams(location.search||''); }catch(_){ return new URLSearchParams(''); } }
-  function getKey(){
-    var p=qs();
-    return (p.get('super_key')||p.get('key')||'').trim();
-  }
-  function $(id){ return document.getElementById(id); }
-  function esc(s){ s = (s===null||s===undefined)?'':String(s); return s.replace(/[&<>\"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]); }); }
-
-  function hdrs(){
-    var h={'Content-Type':'application/json'};
-    try{
-      if(document.cookie && document.cookie.indexOf('demo_mode=1')>=0){
-        h['X-Demo-Mode'] = '1';
-      }
-      if(window.__DEMO_HEADERS__ && typeof window.__DEMO_HEADERS__==='object'){
-        for(var k in window.__DEMO_HEADERS__) h[k]=window.__DEMO_HEADERS__[k];
-      }
-    }catch(_){ }
-    return h;
-  }
-
-  var state = { venues: [], activeTab: 'venues', selected: null, filter: 'all' };
-
-  function setCounts(){
-    try{
-      var all = state.venues.length;
-      var active = state.venues.filter(v=>v.active).length;
-      var inactive = state.venues.filter(v=>!v.active).length;
-      var needs = state.venues.filter(v=>String(v.status||'').toUpperCase()==='SHEET_FAIL' || String(v.status||'').toUpperCase()==='MISSING_SHEET').length;
-      var sheetfail = state.venues.filter(v=>String(v.status||'').toUpperCase()==='SHEET_FAIL').length;
-      var notready = state.venues.filter(v=>String(v.status||'').toUpperCase()!=='READY').length;
-      if($('c_all')) $('c_all').textContent=all;
-      if($('c_active')) $('c_active').textContent=active;
-      if($('c_inactive')) $('c_inactive').textContent=inactive;
-      if($('c_needs')) $('c_needs').textContent=needs;
-      if($('c_sheetfail')) $('c_sheetfail').textContent=sheetfail;
-      if($('c_notready')) $('c_notready').textContent=notready;
-    }catch(_){ }
-  }
-
-  function filterVenue(v){
-    var f = (state.filter||'all');
-    var st = String(v.status||'').toUpperCase();
-    if(f==='all') return true;
-    if(f==='active') return !!v.active;
-    if(f==='inactive') return !v.active;
-    if(f==='needs') return (st==='SHEET_FAIL' || st==='MISSING_SHEET');
-    if(f==='sheetfail') return st==='SHEET_FAIL';
-    if(f==='notready') return st!=='READY';
-    return true;
-  }
-
-  function renderRail(){
-    var rail = $('venuesRail');
-    if(!rail) return;
-    var q = (($('venueSearch')&&$('venueSearch').value)||'').trim().toLowerCase();
-    var items = state.venues.filter(filterVenue).filter(v=>{
-      if(!q) return true;
-      return String(v.venue_name||v.name||'').toLowerCase().includes(q) || String(v.venue_id||'').toLowerCase().includes(q);
-    });
-    if(!items.length){
-      rail.innerHTML = '<div class="vrow"><div class="vname">No venues match.</div></div>';
-      return;
-    }
-    rail.innerHTML='';
-    items.forEach(v=>{
-      var row=document.createElement('div');
-      row.className='vrow'+(state.selected && state.selected.venue_id===v.venue_id ? ' active':'');
-      row.setAttribute('data-vid', v.venue_id);
-      var badges=[];
-      var st=String(v.status||'').toUpperCase();
-      if(v.active) badges.push('<span class="badge good">Active</span>'); else badges.push('<span class="badge warn">Inactive</span>');
-      if(st==='READY') badges.push('<span class="badge good">READY</span>');
-      else if(st==='SHEET_FAIL') badges.push('<span class="badge bad">SHEET FAIL</span>');
-      else if(st==='MISSING_SHEET') badges.push('<span class="badge warn">NO SHEET</span>');
-      else if(st) badges.push('<span class="badge">'+esc(st)+'</span>');
-      row.innerHTML = '<div><div class="vname">'+esc(v.venue_name||v.name||v.venue_id)+'</div><div class="vid">'+esc(v.venue_id)+'</div></div><div class="badges">'+badges.join('')+'</div>';
-      row.addEventListener('click', ()=>{ state.selected=v; renderRail(); renderDetails(); });
-      rail.appendChild(row);
-    });
-  }
-
-  function renderTable(){
-    var tb=$('venuesTbody');
-    if(!tb) return;
-    var items = state.venues.filter(filterVenue);
-    if(!items.length){
-      tb.innerHTML = '<tr><td colspan="5" class="muted">No venues.</td></tr>';
-      return;
-    }
-    tb.innerHTML='';
-    items.forEach(v=>{
-      var st=String(v.status||'').toUpperCase();
-      var sheet = v.google_sheet_id ? ('<span class="muted">'+esc(String(v.google_sheet_id).slice(0,8))+'…</span>') : '<span class="muted">—</span>';
-      var statusBadge = st==='READY' ? '<span class="badge good">READY</span>' : (st==='SHEET_FAIL' ? '<span class="badge bad">SHEET FAIL</span>' : (st==='MISSING_SHEET' ? '<span class="badge warn">NO SHEET</span>' : '<span class="badge">'+esc(st||'—')+'</span>'));
-      var tr=document.createElement('tr');
-      tr.innerHTML = '<td><strong>'+esc(v.venue_name||v.name||v.venue_id)+'</strong><div class="muted">'+esc(v.venue_id)+'</div></td>'
-        +'<td>'+esc(v.plan||'')+'</td>'
-        +'<td>'+sheet+'</td>'
-        +'<td>'+statusBadge+'</td>'
-        +'<td><a href="#" data-act="select" data-vid="'+esc(v.venue_id)+'">Open</a></td>';
-      tr.querySelector('a').addEventListener('click', (ev)=>{ ev.preventDefault(); state.selected=v; renderRail(); renderDetails(); });
-      tb.appendChild(tr);
-    });
-  }
-
-  async function api(path, opts){
-    opts = opts || {};
-    var k=getKey();
-    if(!k){ throw new Error('Missing super_key in URL'); }
-    var glue = path.includes('?') ? '&' : '?';
-    var url = path + glue + 'super_key=' + encodeURIComponent(k);
-    var r = await fetch(url, opts);
-    var j = await r.json().catch(()=>({}));
-    if(!j.ok){ throw new Error(j.error || ('HTTP '+r.status)); }
-    return j;
-  }
-
-  async function loadVenues(){
-    try{
-      var j = await api('/super/api/venues');
-      state.venues = (j.venues||[]);
-      setCounts();
-      renderRail();
-      renderTable();
-      if(state.selected){
-        var found = state.venues.find(x=>x.venue_id===state.selected.venue_id);
-        if(found) state.selected=found;
-      }
-      renderDetails();
-    }catch(e){
-      try{ $('venuesRail').innerHTML='<div class="vrow"><div class="vname">Failed to load venues: '+esc(e.message||e)+'</div></div>'; }catch(_){ }
-      try{ $('venuesTbody').innerHTML='<tr><td colspan="5" class="muted">Failed to load venues.</td></tr>'; }catch(_){ }
-    }
-  }
-
-  function renderDetails(){
-    var el = $('venueDetails');
-    if(!el) return;
-    if(!state.selected){
-      el.className='muted';
-      el.textContent='Select a venue from the left rail.';
-      return;
-    }
-    var v = state.selected;
-    var st = String(v.status||'').toUpperCase();
-    var activeTxt = v.active ? 'Active' : 'Inactive';
-    el.className='';
-    el.innerHTML = ''
-      +'<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'
-      +'<div><div style="font-weight:700">'+esc(v.venue_name||v.name||v.venue_id)+'</div><div class="muted" style="font-size:12px">'+esc(v.venue_id)+'</div></div>'
-      +'<span class="badge '+(v.active?'good':'warn')+'">'+activeTxt+'</span>'
-      +'<span class="badge '+(st==='READY'?'good':(st==='SHEET_FAIL'?'bad':'warn'))+'">'+esc(st||'—')+'</span>'
-      +'</div>'
-      +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">'
-      +'<button class="btn" id="btnToggleActive" type="button">'+(v.active?'Deactivate':'Activate')+'</button>'
-      +'<button class="btn" id="btnSetSheet" type="button">Attach sheet</button>'
-      +'<button class="btn" id="btnCheckSheet" type="button">Check sheet</button>'
-      +'<button class="btn" id="btnRotateKeys" type="button">Rotate keys</button>'
-      +'</div>'
-      +'<div style="display:flex;gap:10px;align-items:center;margin-top:12px">'
-      +'<label class="chip" style="cursor:pointer"><input id="demoToggle" type="checkbox" style="margin-right:8px"/> Demo Mode</label>'
-      +'<span class="muted" style="font-size:12px">Demo Mode masks lead PII and disables writes.</span>'
-      +'</div>'
-      +'<div class="muted" style="font-size:12px;margin-top:10px">Sheet ID: <strong>'+esc(v.google_sheet_id||'—')+'</strong></div>';
-      +'<div class="card" style="margin-top:12px"><h2>Diagnostics</h2><div id="venueDiag" class="diag">—</div></div>';
-
-    // bind buttons (right panel only)
-    try{
-      var t=$('demoToggle');
-      if(t){ t.checked = document.cookie.includes('demo_mode=1'); t.addEventListener('change', async ()=>{
-        try{ const r = await fetch('/super/api/demo_mode?super_key='+encodeURIComponent(getKey()), {method:'POST', headers: hdrs(), body: JSON.stringify({enabled: !!t.checked})}); const j = await r.json().catch(()=>({})); try{ if($('venueDiag')) $('venueDiag').textContent = JSON.stringify({action:'demo_mode', response:j}, null, 2); }catch(_){ } }
-        catch(e){ banner(e.message||e); }
-        await loadVenues();
-      }); }
-    }catch(_){ }
-
-    var b1=$('btnToggleActive');
-    if(b1){ b1.addEventListener('click', async ()=>{
-      try{ var _r = await api('/super/api/venues/set_active', {method:'POST', headers: hdrs(), body: JSON.stringify({venue_id:v.venue_id, active: !v.active})}); try{ if($('venueDiag')) $('venueDiag').textContent = JSON.stringify({action:'set_active', response:_r}, null, 2); }catch(_){ } }
-      catch(e){ alert('Active toggle failed: '+(e.message||e)); }
-      await loadVenues();
-    }); }
-
-    var b2=$('btnSetSheet');
-    if(b2){ b2.addEventListener('click', async ()=>{
-      var sid = prompt('Google Sheet ID', v.google_sheet_id||'');
-      if(sid===null) return;
-      sid = (sid||'').trim();
-      if(!sid){ alert('Sheet ID required'); return; }
-      try{ var _r = await api('/super/api/venues/set_sheet', {method:'POST', headers: hdrs(), body: JSON.stringify({venue_id:v.venue_id, google_sheet_id:sid})}); try{ if($('venueDiag')) $('venueDiag').textContent = JSON.stringify({action:'attach_sheet', response:_r}, null, 2); }catch(_){ } }
-      catch(e){ alert('Attach failed: '+(e.message||e)); }
-      await loadVenues();
-    }); }
-
-    var b3=$('btnCheckSheet');
-    if(b3){ b3.addEventListener('click', async ()=>{
-      try{ var _r = await api('/super/api/venues/check_sheet', {method:'POST', headers: hdrs(), body: JSON.stringify({venue_id:v.venue_id})}); try{ if($('venueDiag')) $('venueDiag').textContent = JSON.stringify({action:'check_sheet', response:_r}, null, 2); }catch(_){ } }
-      catch(e){ alert('Check failed: '+(e.message||e)); }
-      await loadVenues();
-    }); }
-
-    var b4=$('btnRotateKeys');
-    if(b4){ b4.addEventListener('click', async ()=>{
-      if(!confirm('Rotate admin + manager keys for '+v.venue_id+'?')) return;
-      try{ var _r = await api('/super/api/venues/rotate_keys', {method:'POST', headers: hdrs(), body: JSON.stringify({venue_id:v.venue_id})}); try{ if($('venueDiag')) $('venueDiag').textContent = JSON.stringify({action:'rotate_keys', response:_r}, null, 2); }catch(_){ } }
-      catch(e){ alert('Rotate failed: '+(e.message||e)); }
-      await loadVenues();
-    }); }
-  }
-
-  function showTab(name){
-    state.activeTab = name;
-    if($('sectionVenues')) $('sectionVenues').classList.toggle('active', name==='venues');
-    if($('sectionLeads')) $('sectionLeads').classList.toggle('active', name==='leads');
-    if($('tabVenues')) $('tabVenues').classList.toggle('active', name==='venues');
-    if($('tabLeads')) $('tabLeads').classList.toggle('active', name==='leads');
-  }
-
-  function init(){
-    try{ if($('ts')) $('ts').textContent=new Date().toLocaleString(); }catch(_){ }
-    try{ fetch('/super/api/diag?super_key='+encodeURIComponent(getKey()), {headers: hdrs()}).then(r=>r.json()).then(j=>{ if(j && j.ok && $('build')) $('build').textContent = (j.app_version||j.app_version_env||'—'); }).catch(()=>{}); }catch(_){ }
-
-    if($('btnRefresh')) $('btnRefresh').addEventListener('click', loadVenues);
-    if($('btnCreate')) $('btnCreate').addEventListener('click', async ()=>{
-      var name=prompt('Venue name (display)',''); if(name===null) return;
-      var vid=prompt('Venue id (optional)',''); if(vid===null) return;
-      var sheet=prompt('Google Sheet ID (optional)',''); if(sheet===null) return;
-      var plan=prompt('Plan (standard/premium)','standard'); if(plan===null) return;
-      var payload={venue_name:(name||'').trim(), venue_id:(vid||'').trim(), google_sheet_id:(sheet||'').trim(), plan:(plan||'standard').trim()};
-      try{ await api('/super/api/venues/create', {method:'POST', headers: hdrs(), body: JSON.stringify(payload)}); }
-      catch(e){ alert('Create failed: '+(e.message||e)); }
-      await loadVenues();
-    });
-
-    if($('venueSearch')) $('venueSearch').addEventListener('input', renderRail);
-    if($('venuesFilter')) $('venuesFilter').addEventListener('change', function(){ state.filter=this.value||'all'; renderRail(); renderTable(); });
-
-    if($('tabVenues')) $('tabVenues').addEventListener('click', ()=>showTab('venues'));
-    if($('tabLeads')) $('tabLeads').addEventListener('click', ()=>{ showTab('leads'); try{ if(window.__SUPER_LOAD_LEADS__) window.__SUPER_LOAD_LEADS__(); }catch(_){ } });
-
-    // health chips
-    var hc=$('healthChips');
-    if(hc){ Array.from(hc.querySelectorAll('.chip')).forEach(ch=>{
-      ch.addEventListener('click', ()=>{ Array.from(hc.querySelectorAll('.chip')).forEach(x=>x.classList.remove('active')); ch.classList.add('active'); state.filter = ch.getAttribute('data-filter')||'all'; if($('venuesFilter')) $('venuesFilter').value=state.filter; renderRail(); renderTable(); });
-    }); }
-
-    loadVenues();
-  }
-
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', init);
-  else init();
-})();"""
-
-    resp = Response(js, mimetype="application/javascript")
-    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    resp.headers["Pragma"] = "no-cache"
-    resp.headers["Expires"] = "0"
-    return resp
 
 # ============================================================
 # Super Admin: error trap (ensures /super/* never returns a generic 500)
@@ -10823,7 +10873,7 @@ def super_api_demo_mode():
         enabled = bool(payload.get("enabled"))
         resp = jsonify({"ok": True, "enabled": enabled})
         # cookie scoped to super/admin paths; Lax is fine for same-site demos
-        resp.set_cookie("demo_mode", ("1" if enabled else ""), httponly=False, samesite="Lax", path="/")
+        resp.set_cookie("demo_mode", ("1" if enabled else ""), httponly=False, samesite="Lax")
         return resp
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -10896,6 +10946,50 @@ def _save_fanzone_state(st: Dict[str, Any], actor: str, role: str) -> Dict[str, 
 # ============================================================
 # Super Admin: Venue Onboarding (writes config when possible)
 # ============================================================
+@app.get("/super/api/venues")
+def super_api_venues_list():
+    if not _is_super_admin_request():
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    venues = _load_venues_from_disk()
+    out = []
+    if isinstance(venues, dict):
+        for vid, cfg in sorted(venues.items(), key=lambda kv: kv[0]):
+            if not isinstance(cfg, dict):
+                continue
+            name = str(cfg.get("venue_name") or cfg.get("name") or vid)
+            plan = str(cfg.get("plan") or "")
+            sid = ""
+            try:
+                sid = _venue_sheet_id(vid)
+            except Exception:
+                sid = ""
+            status = str(cfg.get("status") or "")
+            # Super Admin onboarding status (does not affect fan/admin app behavior)
+            try:
+                sheet_ok = None
+                chk = cfg.get("_sheet_check") if isinstance(cfg.get("_sheet_check"), dict) else None
+                if isinstance(chk, dict):
+                    sheet_ok = chk.get("ok")
+                if not sid:
+                    status = "MISSING_SHEET"
+                elif sheet_ok is True:
+                    status = "READY"
+                elif sheet_ok is False:
+                    status = "SHEET_FAIL"
+                else:
+                    status = status or "SHEET_SET"
+            except Exception:
+                pass
+            out.append({
+                "venue_id": vid,
+                "venue_name": name,
+                "plan": plan,
+                "google_sheet_id": sid,
+                "status": status,
+                "active": bool(_venue_is_active(vid)),
+                "sheet_ok": sheet_ok,
+            })
+    return jsonify({"ok": True, "venues": out})
 
 @app.route("/super/api/venues/create", methods=["POST","OPTIONS"])
 def super_api_venues_create():
@@ -10932,7 +11026,7 @@ def super_api_venues_create():
         "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={admin_key}",
         "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={manager_key}",
         "keys": {"admin_key": admin_key, "manager_key": manager_key},
-        "data": {"google_sheet_id": str((body.get("google_sheet_id") or body.get("sheet_id") or body.get("google_sheet") or "")).strip(), "redis_namespace": f"{_REDIS_NS}:{venue_id}"},
+        "data": {"google_sheet_id": str(body.get("google_sheet_id") or "").strip(), "redis_namespace": f"{_REDIS_NS}:{venue_id}"},
         "features": body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True},
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
@@ -10952,35 +11046,6 @@ def super_api_venues_create():
     except Exception as e:
         err = str(e)
 
-    
-    # === ONE-CLICK ONBOARDING (Super Admin) ===
-    # If a Sheet ID is provided at creation time, validate it immediately and persist
-    # PASS/FAIL + READY state onto the venue config (Create → Attach → Check → READY).
-    try:
-        sid = str(((pack.get("data") or {}).get("google_sheet_id")) or "").strip()
-    except Exception:
-        sid = ""
-    if sid:
-        try:
-            chk = _check_sheet_id(sid)
-        except Exception as e:
-            chk = {"ok": False, "sheet_id": sid, "error": str(e), "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00","Z")}
-        try:
-            pack["_sheet_check"] = chk
-            pack["ready"] = bool(chk.get("ok"))
-            pack["ready_state"] = "PASS" if bool(chk.get("ok")) else "FAIL"
-            pack["ready_checked_at"] = chk.get("checked_at")
-        except Exception:
-            pass
-        # Best-effort: write again so READY state is persisted in the same action
-        try:
-            if write_path:
-                with open(write_path, "w", encoding="utf-8") as f:
-                    json.dump(pack, f, indent=2, sort_keys=True)
-                wrote = True
-                _MULTI_VENUE_CACHE["ts"] = 0.0
-        except Exception:
-            pass
     try:
         _audit("super.venues.create", {"venue_id": venue_id, "persisted": wrote, "path": write_path, "error": err})
     except Exception:
@@ -10995,7 +11060,7 @@ def super_api_venues_set_sheet():
 
     body = request.get_json(silent=True) or {}
     venue_id = _slugify_venue_id(str(body.get("venue_id") or ""))
-    sheet_id = str(body.get("google_sheet_id") or body.get("sheet_id") or body.get("google_sheet") or "").strip()
+    sheet_id = str(body.get("google_sheet_id") or "").strip()
     if not venue_id:
         return jsonify({"ok": False, "error": "missing_venue_id"}), 400
     if not sheet_id:
@@ -11044,121 +11109,6 @@ def super_api_venues_set_sheet():
         pass
 
     return jsonify({"ok": True, "venue_id": venue_id, "google_sheet_id": sheet_id, "persisted": wrote, "path": path, "error": err})
-
-
-
-
-@app.post("/super/api/venues/check_sheet")
-def super_api_venues_check_sheet():
-    """Super-admin: validate a venue's configured sheet and persist PASS/FAIL + READY to venue config."""
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
-
-    if _demo_mode_enabled():
-        return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
-
-    body = request.get_json(silent=True) or {}
-    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
-    if not venue_id:
-        return jsonify({"ok": False, "error": "missing_venue_id"}), 400
-
-    venues = _load_venues_from_disk() or {}
-    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
-    if not isinstance(cfg, dict):
-        return jsonify({"ok": False, "error": "venue_not_found"}), 404
-
-    sid = ""
-    try:
-        sid = str(_venue_sheet_id(venue_id) or "").strip()
-    except Exception:
-        sid = str(((cfg.get("data") or {}).get("google_sheet_id")) or "").strip()
-
-    if not sid:
-        return jsonify({"ok": False, "error": "missing_google_sheet_id"}), 400
-
-    chk = _check_sheet_id(sid)
-    try:
-        cfg2 = dict(cfg)
-        cfg2["_sheet_check"] = chk
-        cfg2["ready"] = bool(chk.get("ok"))
-        cfg2["ready_state"] = "PASS" if bool(chk.get("ok")) else "FAIL"
-        cfg2["ready_checked_at"] = chk.get("checked_at")
-        path = str(cfg.get("_path") or os.path.join(VENUES_DIR, f"{venue_id}.json"))
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(cfg2, f, indent=2, sort_keys=True)
-        _MULTI_VENUE_CACHE["ts"] = 0.0
-    except Exception:
-        pass
-
-    try:
-        _audit("super.venues.check_sheet", {"venue_id": venue_id, "ok": bool(chk.get("ok")), "error": chk.get("error")})
-    except Exception:
-        pass
-
-    return jsonify({"ok": True, "venue_id": venue_id, "check": chk, "ready": bool(chk.get("ok"))})
-
-@app.post("/super/api/venues/set_active")
-def super_api_venues_set_active():
-    """Super-admin: activate/deactivate a venue.
-
-    This is the single source of truth for the fan-facing availability gate.
-    UI requirement: exposed only through the right-side Venue details panel.
-    """
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
-
-    if _demo_mode_enabled():
-        return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
-
-    body = request.get_json(silent=True) or {}
-    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
-    active = body.get("active")
-    if not venue_id:
-        return jsonify({"ok": False, "error": "missing_venue_id"}), 400
-    if active is None:
-        return jsonify({"ok": False, "error": "missing_active"}), 400
-
-    venues = _load_venues_from_disk() or {}
-    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
-    if not isinstance(cfg, dict):
-        return jsonify({"ok": False, "error": "venue_not_found"}), 404
-
-    path = str(cfg.get("_path") or "")
-    if not path:
-        path = os.path.join(VENUES_DIR, f"{venue_id}.json")
-
-    wrote = False
-    err = ""
-    try:
-        # load existing file as dict
-        try:
-            cur_txt = pathlib.Path(path).read_text(encoding="utf-8")
-            cur = json.loads(cur_txt) if cur_txt else {}
-        except Exception:
-            cur = dict(cfg)
-        if not isinstance(cur, dict):
-            cur = {}
-
-        cur["active"] = bool(active)
-        cur["status"] = "active" if bool(active) else "inactive"
-        cur["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(cur, f, indent=2, sort_keys=True)
-
-        wrote = True
-        _MULTI_VENUE_CACHE["ts"] = 0.0
-    except Exception as e:
-        err = str(e)
-
-    try:
-        _audit("super.venues.set_active", {"venue_id": venue_id, "active": bool(active), "persisted": wrote, "path": path, "error": err})
-    except Exception:
-        pass
-
-    return jsonify({"ok": True, "venue_id": venue_id, "active": bool(active), "persisted": wrote, "path": path, "error": err})
 
 
 @app.post("/super/api/venues/rotate_keys")
@@ -11213,124 +11163,148 @@ def super_api_venues_rotate_keys():
 
 
 
-@app.get("/super/api/venues")
-def super_api_venues_list():
-    """List venues with status/health details for Super Admin UI.
 
-    IMPORTANT:
-    - This endpoint must be read-only and fast (no network calls).
-    - It should surface enough metadata for the Super Admin console to operate:
-      sheet id + last sheet check + READY state + admin link building.
-    """
+@app.get("/super/api/leads")
+def super_api_leads():
+    """Cross-venue leads for Super Admin (read-only)."""
+    ok, resp = _require_super_admin()
+    if not ok:
+        return resp
+    try:
+        q = (request.args.get("q") or "").strip().lower()
+        venue_id = _slugify_venue_id((request.args.get("venue_id") or "").strip()) if (request.args.get("venue_id") or "").strip() else ""
+        page = int(request.args.get("page") or 1)
+        per_page = int(request.args.get("per_page") or 10)
+        page = max(1, page)
+        per_page = max(1, min(100, per_page))
+
+        venues = _load_venues_from_disk() or {}
+        vids = [venue_id] if venue_id else list(venues.keys())
+        all_items = []
+        for vid in vids:
+            try:
+                rows = read_leads(limit=2000, venue_id=vid) or []
+            except Exception:
+                rows = []
+            if not rows or len(rows) < 2:
+                continue
+            header = rows[0]
+            hm = header_map(header)
+            for r in rows[1:]:
+                if not isinstance(r, list):
+                    continue
+                def gcol(name):
+                    idx = hm.get(name)
+                    if not idx:
+                        return ""
+                    j = idx - 1
+                    return str(r[j] if j < len(r) else "")
+                item = {
+                    "venue_id": vid,
+                    "name": gcol("name"),
+                    "phone": gcol("phone"),
+                    "datetime": gcol("datetime"),
+                    "party_size": gcol("party_size"),
+                    "status": gcol("status"),
+                    "vip": gcol("vip"),
+                    "queue": gcol("queue"),
+                }
+                if q:
+                    blob = " ".join([item.get("venue_id",""), item.get("name",""), item.get("phone",""), item.get("datetime",""), item.get("status",""), item.get("vip",""), item.get("queue","")]).lower()
+                    if q not in blob:
+                        continue
+                all_items.append(item)
+
+        # newest-ish first by datetime string
+        try:
+            all_items.sort(key=lambda x: x.get("datetime",""), reverse=True)
+        except Exception:
+            pass
+
+        total = len(all_items)
+        start_i = (page-1)*per_page
+        end_i = start_i + per_page
+        page_items = all_items[start_i:end_i]
+
+        return jsonify({"ok": True, "items": page_items, "total": total, "page": page, "per_page": per_page})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+@app.post("/super/api/venues/check_sheet")
+def super_api_venues_check_sheet():
+    """Super-admin: validate a venue's configured sheet and persist PASS/FAIL to venue config."""
     if not _is_super_admin_request():
         return jsonify({"ok": False, "error": "forbidden"}), 403
 
-    venues = _load_venues_from_disk()
-    out: List[Dict[str, Any]] = []
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    if not venue_id:
+        return jsonify({"ok": False, "error": "venue_id required"}), 400
 
-    def _extract_keys(cfg: Dict[str, Any]) -> Dict[str, str]:
-        # Support both legacy {"keys":{...}} and newer {"access":{"admin_keys":[...],...}}
-        admin_key = ""
-        manager_key = ""
+    venues = _load_venues_from_disk() or {}
+    cfg = venues.get(venue_id)
+    if not isinstance(cfg, dict):
+        return jsonify({"ok": False, "error": "unknown venue"}), 404
+
+    sid = ""
+    try:
+        sid = _venue_sheet_id(venue_id)
+    except Exception:
+        sid = str(cfg.get("google_sheet_id") or "").strip()
+    if not sid:
+        return jsonify({"ok": False, "error": "venue has no google_sheet_id"}), 400
+
+    # Run the existing sheet check logic by calling the same helpers used by /super/api/sheets/check
+    ok = False
+    title = ""
+    err = ""
+    details = {}
+    try:
+        # Reuse gspread client
+        gc = get_gspread_client()
+        sh = gc.open_by_key(sid)
+        title = str(getattr(sh, "title", "") or "")
+        ok = True
+        # Best-effort: read header row
         try:
-            k = cfg.get("keys") if isinstance(cfg.get("keys"), dict) else {}
-            admin_key = str(k.get("admin_key") or "").strip()
-            manager_key = str(k.get("manager_key") or "").strip()
+            ws = sh.sheet1
+            header = ws.row_values(1) or []
+            details["header"] = header[:64]
         except Exception:
             pass
-        try:
-            access = cfg.get("access") if isinstance(cfg.get("access"), dict) else {}
-            ak = access.get("admin_keys") if isinstance(access.get("admin_keys"), list) else []
-            mk = access.get("manager_keys") if isinstance(access.get("manager_keys"), list) else []
-            if not admin_key and ak:
-                admin_key = str(ak[0] or "").strip()
-            if not manager_key and mk:
-                manager_key = str(mk[0] or "").strip()
-        except Exception:
-            pass
-        return {"admin_key": admin_key, "manager_key": manager_key}
+    except Exception as e:
+        ok = False
+        err = str(e)
 
-    if isinstance(venues, dict):
-        for vid, cfg in sorted(venues.items(), key=lambda kv: kv[0]):
-            if not isinstance(cfg, dict):
-                continue
+    chk = {
+        "ok": bool(ok),
+        "sheet_id": sid,
+        "title": title,
+        "error": err,
+        "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+    if details:
+        chk["details"] = details
 
-            name = str(cfg.get("venue_name") or cfg.get("name") or vid)
-            plan = str(cfg.get("plan") or "")
-            keys = _extract_keys(cfg)
+    # Persist into the venue config file
+    try:
+        cfg2 = dict(cfg)
+        cfg2["_sheet_check"] = chk
+        # write back to original path if known
+        path = str(cfg.get("_path") or os.path.join(VENUES_DIR, f"{venue_id}.json"))
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(cfg2, f, indent=2, sort_keys=True)
+        _MULTI_VENUE_CACHE["ts"] = 0.0
+    except Exception:
+        pass
 
-            # Sheet id: prefer canonical helper (reads cfg.data.google_sheet_id)
-            sid = ""
-            try:
-                sid = str(_venue_sheet_id(vid) or "").strip()
-            except Exception:
-                try:
-                    sid = str(((cfg.get("data") or {}).get("google_sheet_id")) or "").strip()
-                except Exception:
-                    sid = ""
+    try:
+        _audit("super.venues.check_sheet", {"venue_id": venue_id, "ok": bool(ok), "title": title, "error": err})
+    except Exception:
+        pass
 
-            # Last sheet check (persisted by check endpoints / create_and_save flow)
-            chk = {}
-            try:
-                chk = cfg.get("_sheet_check") if isinstance(cfg.get("_sheet_check"), dict) else {}
-            except Exception:
-                chk = {}
-            # Normalize sheet object for the UI
-            sheet_obj: Dict[str, Any] = {
-                "sheet_id": sid,
-                "ok": bool(chk.get("ok")) if chk else False,
-                "title": str(chk.get("title") or ""),
-                "error": str(chk.get("error") or ""),
-                "checked_at": str(chk.get("checked_at") or ""),
-            }
-            if not sid:
-                sheet_obj["ok"] = False
-                sheet_obj["error"] = "missing_google_sheet_id"
-
-            # READY state (persisted by one-click onboarding)
-            ready = bool(cfg.get("ready")) if isinstance(cfg.get("ready"), bool) else bool(sheet_obj.get("ok"))
-            ready_state = str(cfg.get("ready_state") or ("PASS" if ready else "FAIL")).strip()
-            active = bool(_venue_is_active(vid))
-
-            # Human-friendly status for table chips
-            status = "ACTIVE" if active else "INACTIVE"
-            if not sid:
-                status = "NO_SHEET"
-            elif sheet_obj.get("ok"):
-                status = "READY" if ready else "SHEET_OK"
-            else:
-                status = "SHEET_FAIL"
-
-            admin_url = ""
-            manager_url = ""
-            try:
-                # Prefer explicit URLs if present (super create writes these)
-                admin_url = str(cfg.get("admin_url") or "").strip()
-                manager_url = str(cfg.get("manager_url") or "").strip()
-            except Exception:
-                pass
-            if not admin_url and keys.get("admin_key"):
-                admin_url = f"/admin?venue={vid}&key={keys.get('admin_key')}"
-            if not manager_url and keys.get("manager_key"):
-                manager_url = f"/manager?venue={vid}&key={keys.get('manager_key')}"
-
-            out.append({
-                "venue_id": vid,
-                "venue_name": name,
-                "name": name,
-                "plan": plan,
-                "active": active,
-                "status": status,
-                "ready": ready,
-                "ready_state": ready_state,
-                "google_sheet_id": sid,
-                "sheet": sheet_obj,
-                "keys": keys,
-                "admin_url": admin_url,
-                "manager_url": manager_url,
-            })
-
-    return jsonify({"ok": True, "venues": out})
+    return jsonify({"ok": True, "venue_id": venue_id, "check": chk})
 
 @app.get("/super/api/sheets/check")
 def super_api_sheets_check():
