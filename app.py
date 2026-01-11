@@ -10339,6 +10339,7 @@ def super_api_venues_list():
                 "google_sheet_id": sid,
                 "status": status,
                 "active": bool(_venue_is_active(vid)),
+                "sheet_ok": sheet_ok,
             })
     return jsonify({"ok": True, "venues": out})
 
@@ -10762,7 +10763,6 @@ def admin_api_prod_gate():
             "redis_error": rs.get("redis_error") or "",
         },
     }), (200 if ok_all else 500)
-
 @app.get("/admin/api/leads_all")
 def admin_api_leads_all():
     """Owner-only: merge leads across all venues (SUPER_ADMIN_KEY or global owner key).
@@ -10788,27 +10788,34 @@ def admin_api_leads_all():
     except Exception:
         per_venue = 300
 
-    limit = max(0, min(5000, limit))
-    per_venue = max(1, min(2000, per_venue))
 
-    # Optional server-side filters/pagination (used by Super Admin console)
-    venue_id_filter = (request.args.get("venue_id") or request.args.get("venue") or "").strip()
-    venue_state = (request.args.get("venue_state") or "").strip().lower() or "all"
-    if venue_state not in ("all", "active", "inactive"):
-        venue_state = "all"
-    q = (request.args.get("q") or request.args.get("query") or "").strip().lower()
-
-    paginate = ("page" in request.args) or ("per_page" in request.args) or ("perpage" in request.args)
+    # v1.0: pagination + filtering (back-compat with `limit`)
+    q = (request.args.get("q") or "").strip()
+    venue_id = (request.args.get("venue_id") or "").strip()
+    venue_state = (request.args.get("venue_state") or "").strip().lower()  # active|inactive|all
     try:
-        page = int(request.args.get("page") or 1)
+        page = int(request.args.get("page") or "1")
+        if page < 1:
+            page = 1
     except Exception:
         page = 1
     try:
-        per_page = int(request.args.get("per_page") or request.args.get("perpage") or 10)
+        per_page = int(request.args.get("per_page") or "")
     except Exception:
+        per_page = 0
+
+    # If caller still uses legacy `limit` (e.g., old UI), keep working.
+    if not per_page:
+        try:
+            per_page = int(limit) if limit else 10
+        except Exception:
+            per_page = 10
+    if per_page <= 0:
         per_page = 10
-    page = max(1, page)
-    per_page = max(1, min(200, per_page))
+    if per_page > 200:
+        per_page = 200
+    limit = max(0, min(5000, limit))
+    per_venue = max(1, min(2000, per_venue))
 
     errors: List[Dict[str, Any]] = []
     items: List[Dict[str, Any]] = []
@@ -10874,16 +10881,6 @@ def admin_api_leads_all():
 
     # iterate through venue configs
     venues = _iter_venue_json_configs() or []
-
-    # Venue scope filters (optional)
-    try:
-        if venue_id_filter:
-            venues = [v for v in venues if str((v or {}).get("venue_id") or "").lower() == venue_id_filter.lower()]
-        elif venue_state in ("active", "inactive"):
-            want_active = (venue_state == "active")
-            venues = [v for v in venues if bool(_venue_is_active(str((v or {}).get("venue_id") or ""))) == want_active]
-    except Exception:
-        pass
     if not venues:
         return jsonify({"ok": True, "count": 0, "items": [], "errors": [{"venue_id": "", "error": "No venue configs found in config/venues/"}]})
 
@@ -10915,36 +10912,60 @@ def admin_api_leads_all():
         except Exception:
             pass
 
-    # Server-side search (optional)
-    if q:
-        try:
-            def _hay(o: Dict[str, Any]) -> str:
-                return (str(o.get("_venue_id","")) + " " + str(o.get("name","")) + " " + str(o.get("phone",""))).lower()
-            items = [o for o in (items or []) if q in _hay(o)]
-        except Exception:
-            pass
+    
+    # Apply filters (defensive; never hard-fail)
+    try:
+        if venue_id:
+            items = [o for o in items if str(o.get("venue_id") or o.get("_venue_id") or "") == venue_id]
+    except Exception:
+        pass
+    try:
+        if venue_state in ("active", "inactive"):
+            want = (venue_state == "active")
+            items = [o for o in items if bool(_venue_is_active(str(o.get("venue_id") or o.get("_venue_id") or ""))) == want]
+    except Exception:
+        pass
+    try:
+        if q:
+            qq = q.lower()
+            def _matches(o):
+                hay = " ".join([
+                    str(o.get("venue_name") or o.get("_venue_name") or ""),
+                    str(o.get("venue_id") or o.get("_venue_id") or ""),
+                    str(o.get("name") or o.get("customer_name") or ""),
+                    str(o.get("phone") or o.get("phone_number") or ""),
+                    str(o.get("status") or ""),
+                    str(o.get("tier") or ""),
+                ]).lower()
+                return qq in hay
+            items = [o for o in items if _matches(o)]
+    except Exception:
+        pass
 
-    if paginate:
-        total = len(items or [])
-        perp = max(1, min(200, per_page))
-        pages = max(1, (total + perp - 1) // perp)
-        pg = max(1, min(pages, page))
-        start = (pg - 1) * perp
-        items_page = (items or [])[start:start + perp]
-        return jsonify({
-            "ok": True,
-            "count": len(items_page),
-            "total": total,
-            "page": pg,
-            "per_page": perp,
-            "pages": pages,
-            "items": items_page,
-            "errors": errors,
-        })
+    total = len(items)
 
-    return jsonify({"ok": True, "count": len(items), "items": items, "errors": errors})
+    # Paginate
+    start_i = (page - 1) * per_page
+    end_i = start_i + per_page
+    page_items = items[start_i:end_i]
 
+    pages = 1
+    try:
+        pages = int((total + per_page - 1) / per_page) if per_page else 1
+        if pages < 1:
+            pages = 1
+    except Exception:
+        pages = 1
 
+    return jsonify({
+        "ok": True,
+        "count": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": pages,
+        "items": page_items,
+        "errors": errors
+    })
 # ============================================================
 # Owner / Manager HARDENING (server-side)
 # Safe shim using existing _require_admin(min_role=...)
@@ -13125,6 +13146,7 @@ def _require_e2e_test_access() -> Tuple[bool, str]:
     if ADMIN_OWNER_KEY and key == ADMIN_OWNER_KEY:
         return True, ""
     return False, "Missing authorization (set E2E_TEST_TOKEN or pass owner ?key=)"
+
 
 @app.errorhandler(Exception)
 def _handle_any_exception(e):
