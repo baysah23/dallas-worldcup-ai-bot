@@ -9462,14 +9462,17 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
       <div class="k">All Leads (cross-venue)</div>
       <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
         <input id="q" placeholder="Search name/phone/venue…" style="flex:1;min-width:220px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
-        <select id="limit" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
-          <option value="200">200</option>
-          <option value="500" selected>500</option>
-          <option value="1000">1000</option>
+        <select id="perPage" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
+          <option value="10" selected>10</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
         </select>
         <button id="reload" style="background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--text);cursor:pointer">Reload</button>
-              <select id="venueFilter" class="inp" style="max-width:180px;margin-left:8px;">
+              <select id="venueFilter" class="inp" style="max-width:220px;margin-left:8px;">
                 <option value="">All venues</option>
+                <option value="__active__">Active venues</option>
+                <option value="__inactive__">Inactive venues</option>
+                <option value="__divider__" disabled>────────</option>
               </select>
               <label style="display:inline-flex;align-items:center;gap:8px;margin-left:10px;font-size:12px;color:rgba(255,255,255,0.82)"><input type="checkbox" id="demoToggle" style="transform:scale(1.1)"><span>Demo Mode</span><span id="demoBadge" style="display:none;padding:2px 8px;border-radius:999px;background:rgba(240,180,60,0.18);border:1px solid rgba(240,180,60,0.45);color:rgba(240,180,60,0.95)">ON</span></label><button id="exportCsv" class="btn" style="margin-left:8px;">Export CSV</button>
       </div>
@@ -9488,6 +9491,11 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
         </thead>
         <tbody id="leadRows"></tbody>
       </table>
+      <div id="pager" style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:10px;flex-wrap:wrap">
+        <button id="prevPage" class="btn" style="opacity:.9">Prev</button>
+        <div class="pill" id="pageInfo">Page 1</div>
+        <button id="nextPage" class="btn" style="opacity:.9">Next</button>
+      </div>
       <div class="err" id="leadErr"></div>
     </div>
 
@@ -9538,6 +9546,36 @@ async function loadVenues(){
       const rows = document.getElementById("venueRows");
       rows.innerHTML = "";
       if(!j.ok){ throw new Error(j.error||"failed"); }
+
+      // populate venue filter dropdown (All/Active/Inactive + per-venue)
+      try{
+        if(venueSel){
+          // keep first 4 options (All/Active/Inactive/divider)
+          const keep = Array.from(venueSel.options).slice(0,4).map(o=>({value:o.value,text:o.text,disabled:o.disabled}));
+          venueSel.innerHTML = "";
+          keep.forEach(o=>{
+            const opt = document.createElement("option");
+            opt.value = o.value; opt.textContent = o.text; opt.disabled = !!o.disabled;
+            venueSel.appendChild(opt);
+          });
+          const active = (j.venues||[]).filter(v=>v.active);
+          const inactive = (j.venues||[]).filter(v=>!v.active);
+          const addGroup = (label, arr)=>{
+            if(!arr.length) return;
+            const og = document.createElement("optgroup");
+            og.label = label;
+            arr.forEach(v=>{
+              const opt = document.createElement("option");
+              opt.value = v.venue_id||"";
+              opt.textContent = (v.venue_name||v.venue_id||"");
+              og.appendChild(opt);
+            });
+            venueSel.appendChild(og);
+          };
+          addGroup("Active venues", active);
+          addGroup("Inactive venues", inactive);
+        }
+      }catch(e){}
       (j.venues||[]).forEach(v=>{
         const tr = document.createElement("tr");
         const vid = (v.venue_id||"");
@@ -9778,7 +9816,7 @@ ueErr.style.display="none"; }, 2000);
   const leadRowsEl = document.getElementById("leadRows");
   const leadErrEl = document.getElementById("leadErr");
   const qEl = document.getElementById("q");
-  const limitEl = document.getElementById("limit");
+  const perPageEl = document.getElementById("perPage");
   const reloadBtn = document.getElementById("reload");
 
   
@@ -9786,85 +9824,142 @@ ueErr.style.display="none"; }, 2000);
   const venueSel = document.getElementById("venueFilter");
   const exportBtn = document.getElementById("exportCsv");
   let __lastLeadRows = [];
+  let __lastLeadMeta = {total:0,page:1,pages:1,per_page:10};
+  let __leadPage = 1;
+
+  function resetLeadsPage(){ __leadPage = 1; }
+
+  if(reloadBtn){ reloadBtn.addEventListener("click", ()=>{ resetLeadsPage(); loadLeads(); }); }
+  if(perPageEl){ perPageEl.addEventListener("change", ()=>{ resetLeadsPage(); loadLeads(); }); }
+  if(venueSel){ venueSel.addEventListener("change", ()=>{ resetLeadsPage(); loadLeads(); }); }
+  if(qEl){
+    let __qT = null;
+    qEl.addEventListener("input", ()=>{
+      if(__qT) clearTimeout(__qT);
+      __qT = setTimeout(()=>{ resetLeadsPage(); loadLeads(); }, 250);
+    });
+  }
+  const prevBtn = document.getElementById("prevPage");
+  const nextBtn = document.getElementById("nextPage");
+  if(prevBtn){ prevBtn.addEventListener("click", ()=>{ if(__leadPage>1){ __leadPage--; loadLeads(); } }); }
+  if(nextBtn){ nextBtn.addEventListener("click", ()=>{ const pages=__lastLeadMeta.pages||1; if(__leadPage < pages){ __leadPage++; loadLeads(); } }); }
+
 
   async function loadLeads(){
     if(!leadRowsEl) return;
     leadErrEl.textContent = "";
     leadRowsEl.innerHTML = "<tr><td colspan=\"8\">Loading…</td></tr>";
-    const limit = (limitEl && limitEl.value) ? limitEl.value : "500";
-    const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)+"&super_key="+encodeURIComponent(super_key)+"&limit="+encodeURIComponent(limit);
+
+    const perPage = (perPageEl && perPageEl.value) ? Number(perPageEl.value) : 10;
+    const query = (qEl && qEl.value || "").trim();
+    const vsel = (venueSel && venueSel.value || "").trim();
+    const isScope = (vsel === "__active__" || vsel === "__inactive__");
+    const venue_state = isScope ? (vsel === "__active__" ? "active" : "inactive") : "all";
+    const venue_id = (!isScope && vsel && vsel !== "__divider__") ? vsel : "";
+
+    const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)+"&super_key="+encodeURIComponent(super_key)
+      +"&page="+encodeURIComponent(__leadPage)
+      +"&per_page="+encodeURIComponent(perPage)
+      +"&venue_state="+encodeURIComponent(venue_state)
+      +"&venue_id="+encodeURIComponent(venue_id)
+      +"&q="+encodeURIComponent(query);
+
     try{
       const r = await fetch(url, {headers:_demoHeaders()});
       const j = await r.json();
       if(!j.ok) throw new Error(j.error || "forbidden");
-      const query = (qEl && qEl.value || "").trim().toLowerCase();
-      const vfilter = (venueSel && venueSel.value || "").trim().toLowerCase();
-      const raw = (j.items || j.leads || []);
-      const rowsAll = raw.filter(x=>{
-        if(vfilter && String(x._venue_id||"").toLowerCase() !== vfilter) return false;
-        if(!query) return true;
-        const hay = ((x._venue_id||"")+" "+(x.name||"")+" "+(x.phone||"")).toLowerCase();
-        return hay.includes(query);
-      });
-      const rows = rowsAll.slice(0, Number(limit));
-      __lastLeadRows = rowsAll;
+
+      const rows = (j.items || j.leads || []);
+      __lastLeadRows = rows;
+      __lastLeadMeta = {total:j.total||rows.length, page:j.page||1, pages:j.pages||1, per_page:j.per_page||perPage};
+
       leadRowsEl.innerHTML = "";
       if(!rows.length){
         leadRowsEl.innerHTML = "<tr><td colspan=\"8\">No leads found.</td></tr>";
-        return;
+      }else{
+        rows.forEach(x=>{
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${esc(x._venue_id||"")}</td>
+            <td>${esc(x.name||"")}</td>
+            <td>${esc(x.phone||"")}</td>
+            <td>${esc(x.datetime||x["Date/Time"]||x.date||x.timestamp||"")}</td>
+            <td class="right">${esc(x.party_size||x.party||"")}</td>
+            <td>${esc(x.status||"")}</td>
+            <td>${esc(x.tier||"")}</td>
+            <td>${esc(x.queue||"")}</td>
+          `;
+          leadRowsEl.appendChild(tr);
+        });
       }
-      for(const x of rows){
-        const dt = ((x.date||"") + " " + (x.time||"")).trim();
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${(x._venue_id||"")}</td>
-          <td>${(x.name||"")}</td>
-          <td>${(x.phone||"")}</td>
-          <td>${dt || (x.timestamp||"")}</td>
-          <td class="right">${(x.party_size||"")}</td>
-          <td>${(x.status||"")}</td>
-          <td>${(x.tier||"")}</td>
-          <td>${(x.queue||"")}</td>
-        `;
-        leadRowsEl.appendChild(tr);
-      }
+
+      // pager
+      const pg = (__lastLeadMeta.page||1);
+      const pages = (__lastLeadMeta.pages||1);
+      const total = (__lastLeadMeta.total||0);
+      const pageInfo = document.getElementById("pageInfo");
+      if(pageInfo) pageInfo.textContent = `Page ${pg} / ${pages} • ${total} total`;
+      const prevBtn = document.getElementById("prevPage");
+      const nextBtn = document.getElementById("nextPage");
+      if(prevBtn) prevBtn.disabled = (pg<=1);
+      if(nextBtn) nextBtn.disabled = (pg>=pages);
+
     }catch(e){
       leadRowsEl.innerHTML = "";
       leadErrEl.textContent = "Error: " + (e.message||e);
     }
   }
 
-  if(reloadBtn){
-    reloadBtn.addEventListener("click", ()=>loadLeads());
-  }
   
   if(exportBtn){
-    exportBtn.addEventListener("click", ()=>{
+    exportBtn.addEventListener("click", async ()=>{
       if(__demo){ try{ leadErrEl.textContent = "Demo Mode: export disabled."; }catch(_){} return; }
-
       try{
-        const rows = (__lastLeadRows || []).slice(0, 5000);
-        const esc = (v)=>{
-          const s = String(v==null? "": v);
-          if(/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
-          return s;
-        };
-        const header = ["venue","name","phone","date_time","party","status","tier","queue"];
-        const lines = [header.join(",")];
-        rows.forEach(x=>{
-          const dt = ((x.date||"") + " " + (x.time||"")).trim() || (x.timestamp||"");
-          const line = [x._venue_id, x.name, x.phone, dt, x.party_size, x.status, x.tier, x.queue].map(esc).join(",");
-          lines.push(line);
+        const query = (qEl && qEl.value || "").trim();
+        const vsel = (venueSel && venueSel.value || "").trim();
+        const isScope = (vsel === "__active__" || vsel === "__inactive__");
+        const venue_state = isScope ? (vsel === "__active__" ? "active" : "inactive") : "all";
+        const venue_id = (!isScope && vsel && vsel !== "__divider__") ? vsel : "";
+
+        const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)
+          +"&super_key="+encodeURIComponent(super_key)
+          +"&limit=5000"
+          +"&venue_state="+encodeURIComponent(venue_state)
+          +"&venue_id="+encodeURIComponent(venue_id)
+          +"&q="+encodeURIComponent(query);
+
+        const r = await fetch(url, {headers:_demoHeaders()});
+        const j = await r.json();
+        if(!j.ok) throw new Error(j.error || "forbidden");
+        const rows = (j.items || j.leads || []);
+
+        const headersCsv = ["venue_id","name","phone","datetime","party_size","status","tier","queue"];
+        const escCsv = (v)=>(""+(v??"")).replace(/\r?\n/g," ").replace(/"/g,'""');
+        const lines = [];
+        lines.push(headersCsv.map(h=>'"'+escCsv(h)+'"').join(","));
+        (rows||[]).forEach(x=>{
+          const vals = [
+            x._venue_id||"",
+            x.name||"",
+            x.phone||"",
+            x.datetime||x["Date/Time"]||x.date||x.timestamp||"",
+            x.party_size||x.party||"",
+            x.status||"",
+            x.tier||"",
+            x.queue||"",
+          ];
+          lines.push(vals.map(v=>'"'+escCsv(v)+'"').join(","));
         });
-        const blob = new Blob([lines.join("\n")], {type:"text/csv"});
-        const url = URL.createObjectURL(blob);
+        const csv = lines.join("\n");
+        const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+        const urlObj = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url;
-        a.download = "leads_all.csv";
+        a.href = urlObj;
+        a.download = "super_leads_export.csv";
         document.body.appendChild(a);
         a.click();
         a.remove();
-        setTimeout(()=>URL.revokeObjectURL(url), 1500);
+        setTimeout(()=>URL.revokeObjectURL(urlObj), 2000);
       }catch(e){
         try{ leadErrEl.textContent = "Export failed: " + (e.message||e); }catch(_){}
       }
@@ -9873,8 +9968,8 @@ ueErr.style.display="none"; }, 2000);
 if(qEl){
     qEl.addEventListener("input", ()=>loadLeads());
   }
-  if(limitEl){
-    limitEl.addEventListener("change", ()=>loadLeads());
+  if(perPageEl){
+    perPageEl.addEventListener("change", ()=>loadLeads());
   }
 
   
@@ -10243,6 +10338,7 @@ def super_api_venues_list():
                 "plan": plan,
                 "google_sheet_id": sid,
                 "status": status,
+                "active": bool(_venue_is_active(vid)),
             })
     return jsonify({"ok": True, "venues": out})
 
@@ -10695,6 +10791,25 @@ def admin_api_leads_all():
     limit = max(0, min(5000, limit))
     per_venue = max(1, min(2000, per_venue))
 
+    # Optional server-side filters/pagination (used by Super Admin console)
+    venue_id_filter = (request.args.get("venue_id") or request.args.get("venue") or "").strip()
+    venue_state = (request.args.get("venue_state") or "").strip().lower() or "all"
+    if venue_state not in ("all", "active", "inactive"):
+        venue_state = "all"
+    q = (request.args.get("q") or request.args.get("query") or "").strip().lower()
+
+    paginate = ("page" in request.args) or ("per_page" in request.args) or ("perpage" in request.args)
+    try:
+        page = int(request.args.get("page") or 1)
+    except Exception:
+        page = 1
+    try:
+        per_page = int(request.args.get("per_page") or request.args.get("perpage") or 10)
+    except Exception:
+        per_page = 10
+    page = max(1, page)
+    per_page = max(1, min(200, per_page))
+
     errors: List[Dict[str, Any]] = []
     items: List[Dict[str, Any]] = []
 
@@ -10759,6 +10874,16 @@ def admin_api_leads_all():
 
     # iterate through venue configs
     venues = _iter_venue_json_configs() or []
+
+    # Venue scope filters (optional)
+    try:
+        if venue_id_filter:
+            venues = [v for v in venues if str((v or {}).get("venue_id") or "").lower() == venue_id_filter.lower()]
+        elif venue_state in ("active", "inactive"):
+            want_active = (venue_state == "active")
+            venues = [v for v in venues if bool(_venue_is_active(str((v or {}).get("venue_id") or ""))) == want_active]
+    except Exception:
+        pass
     if not venues:
         return jsonify({"ok": True, "count": 0, "items": [], "errors": [{"venue_id": "", "error": "No venue configs found in config/venues/"}]})
 
@@ -10789,6 +10914,33 @@ def admin_api_leads_all():
             items = [_apply_demo_mask_to_lead(x) for x in (items or [])]
         except Exception:
             pass
+
+    # Server-side search (optional)
+    if q:
+        try:
+            def _hay(o: Dict[str, Any]) -> str:
+                return (str(o.get("_venue_id","")) + " " + str(o.get("name","")) + " " + str(o.get("phone",""))).lower()
+            items = [o for o in (items or []) if q in _hay(o)]
+        except Exception:
+            pass
+
+    if paginate:
+        total = len(items or [])
+        perp = max(1, min(200, per_page))
+        pages = max(1, (total + perp - 1) // perp)
+        pg = max(1, min(pages, page))
+        start = (pg - 1) * perp
+        items_page = (items or [])[start:start + perp]
+        return jsonify({
+            "ok": True,
+            "count": len(items_page),
+            "total": total,
+            "page": pg,
+            "per_page": perp,
+            "pages": pages,
+            "items": items_page,
+            "errors": errors,
+        })
 
     return jsonify({"ok": True, "count": len(items), "items": items, "errors": errors})
 
