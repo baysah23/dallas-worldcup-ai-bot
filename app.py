@@ -10312,7 +10312,7 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
 (function(){
   const qs = new URLSearchParams(location.search);
   const super_key = (qs.get('super_key') || qs.get('key') || '').trim() || (document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)?.[1] ? decodeURIComponent(document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)[1]) : '');
-  const state = {venues:[], filter:'all', selected:'', leadsPage:1, leadsTotal:0};
+  const state = {venues:[], filter:'all', selected:'', leadsPage:1, leadsTotal:0, demo_mode:false};
 
   function hesc(s){s=(s===null||s===undefined)?'':String(s);return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
   function hdrs(extra){const h={'Content-Type':'application/json'}; if(super_key) h['X-Super-Key']=super_key; if(extra) Object.assign(h,extra); return h;}
@@ -10443,7 +10443,14 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
         '<button class="btn" id="vdCheck">Re-check Sheet</button>'+
         '<button class="btn" id="vdRotate">Rotate Keys</button>'+
         '<button class="btn" id="vdSetSheet">Set Sheet…</button>'+
+        '<button class="btn" id="vdToggleActive">'+(f.active?'Deactivate':'Activate')+'</button>'+
         '<a class="btn" style="text-decoration:none" href="/admin?venue='+encodeURIComponent(v.venue_id||'')+'" target="_blank">Open Admin</a>'+
+      '</div>'+
+      '<div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap">'+
+        '<label class="muted" style="display:inline-flex; gap:8px; align-items:center; font-size:12px">'+
+          '<input type="checkbox" id="vdDemo" style="transform: translateY(1px)" /> Demo Mode'+
+        '</label>'+ 
+        '<span class="muted" id="vdDemoMsg" style="font-size:12px"></span>'+
       '</div>';
     document.getElementById('vdCheck').onclick=()=>doVenueAction('check', v.venue_id);
     document.getElementById('vdRotate').onclick=()=>doVenueAction('rotate', v.venue_id);
@@ -10451,7 +10458,27 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
       const sid=prompt('Paste Google Sheet ID for '+(v.venue_id||''), (sheet.sheet_id||''));
       if(sid===null) return;
       await doVenueAction('set_sheet', v.venue_id, {sheet_id: sid.trim()});
-    };
+    const tbtn = document.getElementById('vdToggleActive');
+    if(tbtn){
+      tbtn.onclick = async ()=>{ await doVenueAction('set_active', v.venue_id, {active: !f.active}); };
+    }
+    const dcb = document.getElementById('vdDemo');
+    const dmsg = document.getElementById('vdDemoMsg');
+    if(dcb){
+      dcb.checked = !!state.demo_mode;
+      dcb.onchange = async ()=>{
+        try{ if(dmsg) dmsg.textContent='Saving…'; await setDemoMode(!!dcb.checked); if(dmsg) dmsg.textContent='Saved ✔'; }
+        catch(e){ if(dmsg) dmsg.textContent='Failed'; alert('Demo mode failed: '+(e.message||e)); }
+      };
+    }
+
+  }
+
+  async function setDemoMode(enabled){
+    const r = await fetch('/super/api/demo_mode?super_key='+encodeURIComponent(super_key), {method:'POST', headers: hdrs(), body: JSON.stringify({enabled: !!enabled})});
+    const j = await r.json().catch(()=>({}));
+    if(!(j && j.ok)) throw new Error((j && j.error) ? j.error : ('HTTP '+r.status));
+    state.demo_mode = !!j.enabled;
   }
 
   async function doVenueAction(act, venue_id, extra){
@@ -10460,6 +10487,7 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
     if(act==='check') url='/super/api/venues/check_sheet';
     if(act==='rotate') url='/super/api/venues/rotate_keys';
     if(act==='set_sheet') url='/super/api/venues/set_sheet';
+    if(act==='set_active') url='/super/api/venues/set_active';
     if(!url) return;
     try{
       const r=await fetch(url+'?super_key='+encodeURIComponent(super_key), {method:'POST', headers: hdrs(), body: JSON.stringify(payload)});
@@ -10612,6 +10640,7 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
   loadVenues();
   fetch('/super/api/diag?super_key='+encodeURIComponent(super_key), {headers: hdrs()}).then(r=>r.json()).then(j=>{
     document.getElementById('build').textContent=(j.app_version || j.app_version_env || '—');
+      try{ state.demo_mode = !!j.demo_mode; renderVenueDetails(); }catch(_){ }
   }).catch(()=>{});
 })();
 </script>
@@ -10707,15 +10736,20 @@ def super_api_diag():
     if not _is_super_admin_request():
         return jsonify({"ok": False, "error": "forbidden"}), 403
     try:
-        # Basic environment + template sanity
+        try:
+            _redis_init_if_needed()
+        except Exception:
+            pass
         return jsonify({
             "ok": True,
             "path": request.path,
             "has_super_key": bool(SUPER_ADMIN_KEY),
+            "demo_mode": bool(_demo_mode_enabled()),
             "redis_enabled": bool(_REDIS_ENABLED),
             "redis_namespace": _REDIS_NS,
             "venues_count": (len(_load_venues_from_disk() or {}) if isinstance(_load_venues_from_disk(), dict) else 0),
-            "app_version": (os.environ.get("APP_VERSION") or "1.4.2"),
+            "app_version": APP_VERSION,
+            "app_version_env": (os.environ.get("APP_VERSION") or ""),
         })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -10919,54 +10953,103 @@ def _save_fanzone_state(st: Dict[str, Any], actor: str, role: str) -> Dict[str, 
 # ============================================================
 @app.get("/super/api/venues")
 def super_api_venues_list():
+    """List all venues for Super Admin UI.
+
+    Contract (used by Option A UI):
+      - venues[].venue_id
+      - venues[].name
+      - venues[].plan
+      - venues[].active (bool)
+      - venues[].ready (bool)
+      - venues[].google_sheet_id
+      - venues[].sheet {ok, title, error, checked_at, sheet_id}
+    """
     if not _is_super_admin_request():
         return jsonify({"ok": False, "error": "forbidden"}), 403
-    venues = _load_venues_from_disk()
-    out = []
-    if isinstance(venues, dict):
-        for vid, cfg in sorted(venues.items(), key=lambda kv: kv[0]):
-            if not isinstance(cfg, dict):
-                continue
-            name = str(cfg.get("venue_name") or cfg.get("name") or vid)
-            plan = str(cfg.get("plan") or "")
-            sid = ""
-            try:
-                sid = _venue_sheet_id(vid)
-            except Exception:
+    try:
+        venues = _load_venues_from_disk()
+        out = []
+        if isinstance(venues, dict):
+            for vid, cfg in sorted(venues.items(), key=lambda kv: kv[0]):
+                if not isinstance(cfg, dict):
+                    continue
+
+                name = str(cfg.get("venue_name") or cfg.get("name") or vid).strip() or vid
+                plan = str(cfg.get("plan") or "").strip()
                 sid = ""
-            status = str(cfg.get("status") or "")
-            # Super Admin onboarding status (does not affect fan/admin app behavior)
-            try:
+                try:
+                    sid = _venue_sheet_id(vid)
+                except Exception:
+                    sid = ""
+
+                # sheet check snapshot (persisted by check_sheet / set_sheet / create)
+                chk = cfg.get("_sheet_check") if isinstance(cfg.get("_sheet_check"), dict) else {}
                 sheet_ok = None
-                chk = cfg.get("_sheet_check") if isinstance(cfg.get("_sheet_check"), dict) else None
-                if isinstance(chk, dict):
-                    sheet_ok = chk.get("ok")
-                if not sid:
-                    status = "MISSING_SHEET"
-                elif sheet_ok is True:
-                    status = "READY"
-                elif sheet_ok is False:
-                    status = "SHEET_FAIL"
-                else:
-                    status = status or "SHEET_SET"
-            except Exception:
-                pass
-            out.append({
-                "venue_id": vid,
-                "venue_name": name,
-                "plan": plan,
-                "google_sheet_id": sid,
-                "status": status,
-                "active": bool(_venue_is_active(vid)),
-                "sheet_ok": sheet_ok,
-            })
-    return jsonify({"ok": True, "venues": out})
+                try:
+                    if isinstance(chk, dict) and "ok" in chk:
+                        sheet_ok = bool(chk.get("ok"))
+                except Exception:
+                    sheet_ok = None
+
+                # ready: explicit flag wins, else infer from sheet_ok + sid
+                ready = None
+                if "ready" in cfg:
+                    try:
+                        ready = bool(cfg.get("ready"))
+                    except Exception:
+                        ready = None
+                if ready is None:
+                    ready = bool(sid) and (sheet_ok is True)
+
+                active = bool(_venue_is_active(vid))
+
+                # status string (UI uses badges; table uses this too)
+                status = str(cfg.get("status") or "").strip()
+                try:
+                    if not sid:
+                        status = "MISSING_SHEET"
+                    elif sheet_ok is True and ready:
+                        status = "READY"
+                    elif sheet_ok is False:
+                        status = "SHEET_FAIL"
+                    else:
+                        status = status or "SHEET_SET"
+                except Exception:
+                    pass
+
+                sheet_obj = {
+                    "ok": sheet_ok,
+                    "title": str((chk or {}).get("title") or ""),
+                    "error": str((chk or {}).get("error") or ""),
+                    "checked_at": str((chk or {}).get("checked_at") or ""),
+                    "sheet_id": str((chk or {}).get("sheet_id") or sid or ""),
+                }
+
+                out.append({
+                    "venue_id": vid,
+                    "name": name,
+                    "plan": plan,
+                    "google_sheet_id": sid,
+                    "status": status,
+                    "active": active,
+                    "ready": bool(ready),
+                    "sheet": sheet_obj,
+                })
+        return jsonify({"ok": True, "venues": out})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e), "venues": []}), 500
+
 
 @app.route("/super/api/venues/create", methods=["POST","OPTIONS"])
 def super_api_venues_create():
-    """Super-admin: generate venue pack and attempt to persist to config/venues/<venue>.json."""
+    """Super-admin: generate venue pack and attempt to persist to config/venues/<venue>.json.
+
+    One-click onboarding behavior:
+      - Create venue config
+      - If google_sheet_id provided: run _check_sheet_id and store _sheet_check
+      - Set ready=True only when sheet check passes
+    """
     if request.method == "OPTIONS":
-        # Some proxies/browsers can issue an OPTIONS-like request even on same-origin calls.
         resp = make_response("", 204)
         resp.headers["Access-Control-Allow-Origin"] = "*"
         resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
@@ -10975,7 +11058,6 @@ def super_api_venues_create():
 
     if not _is_super_admin_request():
         return jsonify({"ok": False, "error": "forbidden"}), 403
-
 
     if _demo_mode_enabled():
         return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
@@ -10988,21 +11070,38 @@ def super_api_venues_create():
     admin_key = secrets.token_hex(16)
     manager_key = secrets.token_hex(16)
 
+    sheet_id = str(body.get("google_sheet_id") or body.get("google_sheet_id".upper()) or "").strip()
+
     pack = {
         "venue_name": venue_name,
         "venue_id": venue_id,
+        # fan-facing gate:
+        "active": True,
+        # onboarding gate (fan-facing list under hero can rely on this later):
+        "ready": False,
         "status": "active",
         "plan": plan,
         "qr_url": f"https://worldcupconcierge.app/v/{venue_id}",
         "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={admin_key}",
         "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={manager_key}",
         "keys": {"admin_key": admin_key, "manager_key": manager_key},
-        "data": {"google_sheet_id": str(body.get("google_sheet_id") or "").strip(), "redis_namespace": f"{_REDIS_NS}:{venue_id}"},
-        "features": body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True},
+        "data": {
+            "google_sheet_id": sheet_id,
+            "redis_namespace": f"{_REDIS_NS}:{venue_id}",
+        },
+        "features": (body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True}),
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
 
-    # Attempt to write config file (works locally; may be read-only in some hosts)
+    # If sheet provided, validate immediately and mark READY only when it passes
+    try:
+        if sheet_id:
+            chk = _check_sheet_id(sheet_id)
+            pack["_sheet_check"] = chk
+            pack["ready"] = bool(chk.get("ok"))
+    except Exception:
+        pass
+
     wrote = False
     write_path = ""
     err = ""
@@ -11012,26 +11111,26 @@ def super_api_venues_create():
         with open(write_path, "w", encoding="utf-8") as f:
             json.dump(pack, f, indent=2, sort_keys=True)
         wrote = True
-        # refresh cache immediately
         _MULTI_VENUE_CACHE["ts"] = 0.0
     except Exception as e:
         err = str(e)
 
-    try:
-        _audit("super.venues.create", {"venue_id": venue_id, "persisted": wrote, "path": write_path, "error": err})
-    except Exception:
-        pass
+    # Always return the pack so the UI can display keys even if persistence failed
     return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": write_path, "error": err})
+
 
 @app.post("/super/api/venues/set_sheet")
 def super_api_venues_set_sheet():
-    """Super-admin: update a venue's google_sheet_id in its config file (best effort)."""
+    """Super-admin: update a venue's google_sheet_id and immediately re-check."""
     if not _is_super_admin_request():
         return jsonify({"ok": False, "error": "forbidden"}), 403
+    if _demo_mode_enabled():
+        return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
 
     body = request.get_json(silent=True) or {}
     venue_id = _slugify_venue_id(str(body.get("venue_id") or ""))
-    sheet_id = str(body.get("google_sheet_id") or "").strip()
+    # back-compat: sheet_id alias
+    sheet_id = str(body.get("google_sheet_id") or body.get("sheet_id") or "").strip()
     if not venue_id:
         return jsonify({"ok": False, "error": "missing_venue_id"}), 400
     if not sheet_id:
@@ -11040,46 +11139,33 @@ def super_api_venues_set_sheet():
     venues = _load_venues_from_disk() or {}
     cfg = venues.get(venue_id) if isinstance(venues, dict) else None
     if not isinstance(cfg, dict):
-        return jsonify({"ok": False, "error": "venue_not_found"}), 404
+        return jsonify({"ok": False, "error": "unknown_venue"}), 404
 
-    path = str(cfg.get("_path") or "")
-    if not path:
-        # fallback to expected json path
-        path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+    # Update config
+    data = cfg.get("data") if isinstance(cfg.get("data"), dict) else {}
+    data["google_sheet_id"] = sheet_id
+    cfg["data"] = data
+
+    # Validate and set READY
+    chk = _check_sheet_id(sheet_id)
+    cfg["_sheet_check"] = chk
+    cfg["ready"] = bool(chk.get("ok"))
 
     wrote = False
+    write_path = str(cfg.get("_path") or "")
     err = ""
     try:
-        # load existing file as dict
-        cur = {}
-        try:
-            cur_txt = pathlib.Path(path).read_text(encoding="utf-8")
-            cur = json.loads(cur_txt) if cur_txt else {}
-        except Exception:
-            cur = cfg.copy()
-
-        if not isinstance(cur, dict):
-            cur = {}
-
-        data = cur.get("data") if isinstance(cur.get("data"), dict) else {}
-        data["google_sheet_id"] = sheet_id
-        cur["data"] = data
-
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(cur, f, indent=2, sort_keys=True)
-
+        if not write_path:
+            os.makedirs(VENUES_DIR, exist_ok=True)
+            write_path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+        with open(write_path, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2, sort_keys=True)
         wrote = True
         _MULTI_VENUE_CACHE["ts"] = 0.0
     except Exception as e:
         err = str(e)
 
-    try:
-        _audit("super.venues.set_sheet", {"venue_id": venue_id, "sheet_id": sheet_id, "persisted": wrote, "path": path, "error": err})
-    except Exception:
-        pass
-
-    return jsonify({"ok": True, "venue_id": venue_id, "google_sheet_id": sheet_id, "persisted": wrote, "path": path, "error": err})
+    return jsonify({"ok": True, "venue_id": venue_id, "sheet": chk, "ready": bool(cfg.get("ready")), "persisted": wrote, "path": write_path, "error": err})
 
 
 @app.post("/super/api/venues/rotate_keys")
@@ -11136,79 +11222,100 @@ def super_api_venues_rotate_keys():
 
 @app.post("/super/api/venues/check_sheet")
 def super_api_venues_check_sheet():
-    """Super-admin: validate a venue's configured sheet and persist PASS/FAIL to venue config."""
+    """Super-admin: run sheet validation for a venue and persist the result."""
     if not _is_super_admin_request():
         return jsonify({"ok": False, "error": "forbidden"}), 403
+    if _demo_mode_enabled():
+        return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
 
     body = request.get_json(silent=True) or {}
-    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or ""))
     if not venue_id:
-        return jsonify({"ok": False, "error": "venue_id required"}), 400
+        return jsonify({"ok": False, "error": "missing_venue_id"}), 400
 
     venues = _load_venues_from_disk() or {}
-    cfg = venues.get(venue_id)
+    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
     if not isinstance(cfg, dict):
-        return jsonify({"ok": False, "error": "unknown venue"}), 404
+        return jsonify({"ok": False, "error": "unknown_venue"}), 404
 
     sid = ""
     try:
         sid = _venue_sheet_id(venue_id)
     except Exception:
-        sid = str(cfg.get("google_sheet_id") or "").strip()
+        sid = ""
     if not sid:
-        return jsonify({"ok": False, "error": "venue has no google_sheet_id"}), 400
+        chk = {"ok": False, "sheet_id": "", "title": "", "error": "missing sheet id", "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00","Z")}
+        cfg["_sheet_check"] = chk
+        cfg["ready"] = False
+    else:
+        chk = _check_sheet_id(sid)
+        cfg["_sheet_check"] = chk
+        cfg["ready"] = bool(chk.get("ok"))
 
-    # Run the existing sheet check logic by calling the same helpers used by /super/api/sheets/check
-    ok = False
-    title = ""
+    wrote = False
+    write_path = str(cfg.get("_path") or "")
     err = ""
-    details = {}
     try:
-        # Reuse gspread client
-        gc = get_gspread_client()
-        sh = gc.open_by_key(sid)
-        title = str(getattr(sh, "title", "") or "")
-        ok = True
-        # Best-effort: read header row
-        try:
-            ws = sh.sheet1
-            header = ws.row_values(1) or []
-            details["header"] = header[:64]
-        except Exception:
-            pass
+        if not write_path:
+            os.makedirs(VENUES_DIR, exist_ok=True)
+            write_path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+        with open(write_path, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2, sort_keys=True)
+        wrote = True
+        _MULTI_VENUE_CACHE["ts"] = 0.0
     except Exception as e:
-        ok = False
         err = str(e)
 
-    chk = {
-        "ok": bool(ok),
-        "sheet_id": sid,
-        "title": title,
-        "error": err,
-        "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    }
-    if details:
-        chk["details"] = details
+    return jsonify({"ok": True, "venue_id": venue_id, "sheet": chk, "ready": bool(cfg.get("ready")), "persisted": wrote, "path": write_path, "error": err})
 
-    # Persist into the venue config file
+@app.post("/super/api/venues/set_active")
+def super_api_venues_set_active():
+    """Super-admin: activate/deactivate a venue (fan-facing gating)."""
+    if not _is_super_admin_request():
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+    if _demo_mode_enabled():
+        return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or ""))
+    active = body.get("active")
+    if not venue_id:
+        return jsonify({"ok": False, "error": "missing_venue_id"}), 400
+    if active is None:
+        return jsonify({"ok": False, "error": "missing_active"}), 400
+
+    venues = _load_venues_from_disk() or {}
+    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
+    if not isinstance(cfg, dict):
+        return jsonify({"ok": False, "error": "unknown_venue"}), 404
+
+    # Apply change
+    new_active = bool(active)
+    cfg["active"] = new_active
+    # Keep status string roughly aligned for back-compat (does not override onboarding READY markers)
     try:
-        cfg2 = dict(cfg)
-        cfg2["_sheet_check"] = chk
-        # write back to original path if known
-        path = str(cfg.get("_path") or os.path.join(VENUES_DIR, f"{venue_id}.json"))
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(cfg2, f, indent=2, sort_keys=True)
+        st = str(cfg.get("status") or "").strip()
+        if st.lower() in ("active","inactive","disabled","off",""):
+            cfg["status"] = ("active" if new_active else "inactive")
+    except Exception:
+        pass
+
+    wrote = False
+    write_path = str(cfg.get("_path") or "")
+    err = ""
+    try:
+        if not write_path:
+            os.makedirs(VENUES_DIR, exist_ok=True)
+            write_path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+        with open(write_path, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2, sort_keys=True)
+        wrote = True
         _MULTI_VENUE_CACHE["ts"] = 0.0
-    except Exception:
-        pass
+    except Exception as e:
+        err = str(e)
 
-    try:
-        _audit("super.venues.check_sheet", {"venue_id": venue_id, "ok": bool(ok), "title": title, "error": err})
-    except Exception:
-        pass
+    return jsonify({"ok": True, "venue_id": venue_id, "active": new_active, "persisted": wrote, "path": write_path, "error": err})
 
-    return jsonify({"ok": True, "venue_id": venue_id, "check": chk})
 
 @app.get("/super/api/sheets/check")
 def super_api_sheets_check():
