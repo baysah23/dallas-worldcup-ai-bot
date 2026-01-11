@@ -1,6 +1,3 @@
-# SUPERADMIN_OPTION_A_VERIFIED_FULL
-# (Full file: merged into your original app.py; size difference is whitespace only.)
-
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -7966,7 +7963,7 @@ async function runAIRow(){
 }
 
 
-function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function esc(s){ return (s==null?"":String(s)).replace(/[&<>\"']/g, m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
 
 function renderAIQueue(items){
   const list = qs('#aiq-list');
@@ -9378,540 +9375,615 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>World Cup Concierge — Super Admin</title>
   <style>
-    :root{
-      --bg:#070A10;--card:#0E1424;--muted:#9AA3B2;--text:#E9EEF7;--line:rgba(255,255,255,.08);
-      --ok:#25c26e;--warn:#f7c948;--bad:#ff4d4d;--chip:rgba(255,255,255,.05);
-    }
-    html,body{height:100%;margin:0;background:radial-gradient(900px 700px at 20% 10%, rgba(94,132,255,.20), transparent 55%),
-      radial-gradient(700px 500px at 90% 0%, rgba(255,215,0,.10), transparent 50%), var(--bg);
-      color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    a{color:#9bb6ff}
-    .wrap{max-width:1180px;margin:0 auto;padding:16px}
-    .topbar{
-      position:sticky;top:0;z-index:20;
-      backdrop-filter: blur(10px);
-      background:linear-gradient(180deg, rgba(7,10,16,.82), rgba(7,10,16,.55));
-      border-bottom:1px solid var(--line);
-      border-radius:16px;
-      padding:12px 12px;
-      box-shadow:0 12px 40px rgba(0,0,0,.35);
-    }
-    .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-    .title{font-weight:800;letter-spacing:.2px}
-    .spacer{flex:1}
+    :root{--bg:#070A10;--card:#0E1424;--muted:#9AA3B2;--text:#E9EEF7;--line:rgba(255,255,255,.08)}
+    html,body{height:100%;background:radial-gradient(900px 700px at 20% 10%, #132752 0%, var(--bg) 55%);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:1080px;margin:0 auto;padding:20px}
+    .top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .title{font-size:18px;font-weight:700;letter-spacing:.2px}
     .pill{font-size:12px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:rgba(255,255,255,.03)}
-    .chip{
-      display:inline-flex;align-items:center;gap:8px;
-      border:1px solid var(--line);
-      background:var(--chip);
-      padding:7px 10px;border-radius:999px;
-      font-size:12px;color:var(--muted);cursor:pointer;user-select:none
-    }
-    .chip.active{border-color:rgba(155,182,255,.55);color:var(--text)}
-    .dot{width:8px;height:8px;border-radius:50%}
-    .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
-    .tabs{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
-    .tab{padding:8px 12px;font-size:12px;color:var(--muted);cursor:pointer;background:transparent;border:0}
-    .tab.active{color:var(--text);background:rgba(255,255,255,.06)}
-    .gridA{display:grid;grid-template-columns:280px 1fr;gap:12px;margin-top:12px;align-items:start}
-    .card{
-      background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
-      border:1px solid var(--line);
-      border-radius:18px;
-      padding:12px;
-      box-shadow:0 10px 30px rgba(0,0,0,.25);
-    }
-    .card h3{margin:0 0 8px 0;font-size:12px;color:var(--muted);font-weight:700;letter-spacing:.25px}
-    .btn{border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer;font-size:12px}
-    .btn:hover{background:rgba(255,255,255,.10)}
-    .inp, select{
-      width:100%;box-sizing:border-box;
-      background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--text);
-      padding:9px 10px;border-radius:12px;outline:none;font-size:12px
-    }
-    .muted{color:var(--muted);font-size:12px}
-    .railList{
-      margin-top:10px;
-      border:1px solid var(--line);
-      border-radius:14px;
-      overflow:auto;
-      max-height:calc(100vh - 260px);
-      background:rgba(0,0,0,.12);
-    }
-    .railItem{
-      display:flex;align-items:center;justify-content:space-between;gap:10px;
-      padding:10px 10px;
-      border-bottom:1px solid rgba(255,255,255,.06);
-      cursor:pointer;
-    }
-    .railItem:hover{background:rgba(255,255,255,.05)}
-    .railItem.active{background:rgba(155,182,255,.10);outline:1px solid rgba(155,182,255,.25)}
-    .railName{font-size:12px;font-weight:700}
-    .badge{font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid var(--line);color:var(--muted);background:rgba(255,255,255,.03);white-space:nowrap}
-    .badge.ok{color:#bff5d1;border-color:rgba(37,194,110,.35)}
-    .badge.warn{color:#ffe7a6;border-color:rgba(247,201,72,.35)}
-    .badge.bad{color:#ffd0d0;border-color:rgba(255,77,77,.35)}
-    .detailGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-    .kv{border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:10px;background:rgba(0,0,0,.10)}
-    .kv .k{font-size:11px;color:var(--muted)}
-    .kv .v{font-size:14px;font-weight:800;margin-top:4px}
-    .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-    .tableWrap{
-      border:1px solid var(--line);
-      border-radius:14px;
-      overflow:hidden;
-      background:rgba(0,0,0,.12);
-    }
-    table{width:100%;border-collapse:collapse;font-size:12px}
-    thead th{
-      text-align:left;color:var(--muted);font-weight:700;
-      background:rgba(0,0,0,.25);
-      padding:10px;border-bottom:1px solid rgba(255,255,255,.08);
-      position:sticky;top:0;z-index:1;
-    }
-    tbody td{padding:10px;border-bottom:1px solid rgba(255,255,255,.06);vertical-align:top}
-    tbody tr:hover{background:rgba(255,255,255,.04)}
-    .bounded{max-height:calc(100vh - 300px);overflow:auto}
-    .filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-    .filters .inp{max-width:340px}
-    .filters .small{width:auto;min-width:120px}
-    .pager{display:flex;align-items:center;gap:10px;justify-content:flex-end;padding:10px;border-top:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.25)}
-    .hidden{display:none !important}
-    .diag{margin-top:10px;font-size:12px;color:var(--muted)}
-    .diag pre{white-space:pre-wrap;background:rgba(0,0,0,.25);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px;max-height:180px;overflow:auto;color:var(--text)}
-  </style>
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+    .k{font-size:11px;color:var(--muted)}
+    .v{font-size:22px;font-weight:800;margin-top:6px}
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}
+    th{color:var(--muted);font-weight:600}
+    .right{text-align:right}
+    .err{color:#ffb4b4;font-size:12px;margin-top:10px}
+  
+  .tabbtn{background:rgba(255,255,255,.04);border:1px solid var(--line);padding:10px 12px;border-radius:999px;color:var(--text);cursor:pointer}
+  .tabbtn.active{background:rgba(240,180,60,.14);border-color:rgba(240,180,60,.35)}
+  .tabpane{display:none}
+  .tabpane.active{display:block}
+  .scrollbox{max-height:65vh; overflow:auto; border-radius:14px}
+  .stickyHead thead th{position:sticky;top:0;background:rgba(0,0,0,.65);backdrop-filter: blur(10px); z-index:2}
+
+</style>
 </head>
 <body>
   <div class="wrap">
-
-    <div class="topbar">
-      <div class="row">
-        <div class="title">Super Admin</div>
-
-        <div class="tabs" style="margin-left:10px">
-          <button id="tabVenues" class="tab active" type="button">Venues</button>
-          <button id="tabLeads" class="tab" type="button">Leads</button>
-        </div>
-
-        <div class="spacer"></div>
-
-        <div id="chipAll" class="chip active" title="All venues"><span class="dot ok"></span><span>All</span><span id="cAll">—</span></div>
-        <div id="chipActive" class="chip" title="Active venues"><span class="dot ok"></span><span>Active</span><span id="cActive">—</span></div>
-        <div id="chipInactive" class="chip" title="Inactive venues"><span class="dot warn"></span><span>Inactive</span><span id="cInactive">—</span></div>
-        <div id="chipNeeds" class="chip" title="Needs attention"><span class="dot bad"></span><span>Needs attention</span><span id="cNeeds">—</span></div>
-        <div id="chipSheetFail" class="chip" title="Sheet failures"><span class="dot bad"></span><span>Sheet fail</span><span id="cSheetFail">—</span></div>
-        <div id="chipNotReady" class="chip" title="Not ready"><span class="dot warn"></span><span>Not ready</span><span id="cNotReady">—</span></div>
-
-        <div class="pill">Build <span id="buildV">—</span></div>
+    <div class="top">
+      <div>
+        <div class="title">Super Admin — Global Overview</div>
+        <div class="pill">Hard isolated • Read-only by default</div>
       </div>
-      <div class="muted" style="margin-top:6px">Command view • bounded panels • problems float to the top</div>
+      <div class="pill" id="ts">Loading…</div>
     </div>
 
-    <!-- VENUES TAB -->
-    <div id="viewVenues" class="gridA">
-      <!-- Left rail -->
-      <div class="card">
-        <h3>Venue control rail</h3>
-        <div class="row" style="gap:8px">
-          <button id="btnCreateVenue" class="btn" type="button">+ Create venue</button>
-          <button id="btnRefreshVenues" class="btn" type="button">Refresh</button>
-        </div>
-        <div style="margin-top:10px">
-          <input id="venueSearch" class="inp" placeholder="Search venue name/id…" />
-        </div>
-
-        <div id="venueRail" class="railList" aria-label="Venue list">
-          <div class="muted" style="padding:12px">Loading venues…</div>
-        </div>
-
-        <div class="diag">
-          <div><b>Tip:</b> click a venue → details + actions on the right.</div>
-        </div>
-      </div>
-
-      <!-- Right panel -->
-      <div class="card">
-        <h3>Venue details + quick actions</h3>
-        <div id="venueDetail" class="muted">Select a venue from the left rail.</div>
-        <div style="height:12px"></div>
-        <div class="tableWrap">
-          <div class="bounded" style="max-height:46vh">
-            <table>
-              <thead>
-                <tr>
-                  <th style="width:120px">Venue ID</th>
-                  <th>Venue</th>
-                  <th style="width:120px">Active</th>
-                  <th style="width:120px">Status</th>
-                  <th style="width:120px">Sheet</th>
-                  <th style="width:120px">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="venuesTbody">
-                <tr><td colspan="6">Loading…</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+    <div class="tabs" style="display:flex;gap:8px;align-items:center;margin:10px 0 6px 0;flex-wrap:wrap">
+      <button class="tabbtn active" data-tabbtn="venues">Venues</button>
+      <button class="tabbtn" data-tabbtn="leads">Leads</button>
     </div>
 
-    <!-- LEADS TAB -->
-    <div id="viewLeads" class="hidden">
-      <div class="card">
-        <h3>Leads (paginated • scoped)</h3>
-        <div class="filters">
-          <input id="leadSearch" class="inp" placeholder="Search name / phone / notes…" />
-          <select id="leadVenueSel" class="small">
-            <option value="">All venues</option>
-            <option value="__active__">Active venues</option>
-            <option value="__inactive__">Inactive venues</option>
-            <option value="__divider__" disabled>────────</option>
-          </select>
-          <select id="perPage" class="small">
-            <option value="10" selected>10 / page</option>
-            <option value="25">25 / page</option>
-            <option value="50">50 / page</option>
-          </select>
-          <button id="btnReloadLeads" class="btn" type="button">Reload</button>
-          <button id="btnExportLeads" class="btn" type="button">Export CSV (filtered)</button>
-          <div class="spacer"></div>
-          <div id="leadStatus" class="muted"></div>
-        </div>
-
-        <div style="height:10px"></div>
-        <div class="tableWrap">
-          <div class="bounded" style="max-height:55vh">
-            <table>
-              <thead>
-                <tr>
-                  <th style="width:92px">Venue</th>
-                  <th>Name</th>
-                  <th style="width:140px">Phone</th>
-                  <th style="width:140px">Date/Time</th>
-                  <th style="width:70px">Party</th>
-                  <th style="width:90px">Status</th>
-                  <th style="width:80px">Tier</th>
-                  <th style="width:90px">Queue</th>
-                </tr>
-              </thead>
-              <tbody id="leadRows">
-                <tr><td colspan="8">Loading…</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="pager">
-            <button id="prevPage" class="btn" type="button">Prev</button>
-            <div id="pageInfo" class="muted">—</div>
-            <button id="nextPage" class="btn" type="button">Next</button>
-          </div>
-        </div>
-
-        <div class="diag">
-          <div id="leadErr" class="muted"></div>
-          <div id="leadDiag" class="hidden">
-            <div style="margin-top:10px"><b>Diagnostics</b> (shown when empty/errors)</div>
-            <pre id="leadDiagPre"></pre>
-          </div>
-        </div>
+    <div class="grid">
+    <div class="tabpane active" data-tab="venues">
+  
+    
+    <div class="card" style="margin-top:12px">
+      <div class="k">Venue Onboarding (creates config pack)</div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+        <input id="v_name" placeholder="Venue name" style="flex:1;min-width:220px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
+        <input id="v_id" placeholder="Venue id (optional)" style="min-width:200px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
+        <input id="v_sheet" placeholder="Google Sheet ID (optional)" style="min-width:260px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
+        <select id="v_plan" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
+          <option value="standard" selected>standard</option>
+          <option value="premium">premium</option>
+          <option value="enterprise">enterprise</option>
+        </select>
+        <button class="btn" id="createVenue">Create</button>
+        <button class="btn ghost" id="checkSheet">Check Sheet</button>
+        <button class="btn ghost" id="refreshVenues">Refresh</button>
       </div>
+
+      <div class="err" id="venueErr" style="display:none"></div>
+      <div style="margin-top:10px;display:none" id="venueOutWrap">
+        <div class="k">Generated (copy + store safely)</div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
+          <button class="btn" id="copyPack">Copy JSON</button>
+          <button class="btn ghost" id="downloadPack">Download JSON</button>
+        </div>
+        <pre id="venueOut" style="white-space:pre-wrap;word-break:break-word;background:rgba(0,0,0,.25);border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:8px;font-size:12px;line-height:1.35"></pre>
+      <div id="venueLinks" style="margin-top:10px;display:none">
+          <div class="k">Quick Links</div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">
+            <a class="btn" id="openAdmin" target="_blank" rel="noopener">Open Admin</a>
+            <a class="btn ghost" id="openManager" target="_blank" rel="noopener">Open Manager</a>
+            <a class="btn ghost" id="openQR" target="_blank" rel="noopener">Open Fan Link</a>
+            <button class="btn ghost" id="copyAdminUrl" type="button">Copy Admin URL</button>
+            <button class="btn ghost" id="copyManagerUrl" type="button">Copy Manager URL</button>
+          </div>
+          <div class="note" id="venueLinksNote" style="margin-top:6px"></div>
+        </div>
+        </div>
+
+      
+      <div id="venueChips" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="pill" data-vchip="all">All</button>
+        <button class="pill" data-vchip="active">Active</button>
+        <button class="pill" data-vchip="inactive">Inactive</button>
+        <button class="pill" data-vchip="needs">Needs attention</button>
+        <button class="pill" data-vchip="sheetfail">Sheet fail</button>
+        <button class="pill" data-vchip="notready">Not ready</button>
+      </div>
+<div class="scrollbox stickyHead" style="margin-top:10px"><table id="venuesTable">
+        <thead>
+          <tr>
+            <th>Venue ID</th>
+            <th>Venue</th>
+            <th>Plan</th>
+            <th>Sheet</th>
+            <th>Status</th>
+            <th class="right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="venueRows"></tbody>
+      </table>
     </div>
 
+
+        </div>
+    <div class="tabpane" data-tab="leads">
+<div class="card" style="margin-top:12px">
+      <div class="k">All Leads (cross-venue)</div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+        <input id="q" placeholder="Search name/phone/venue…" style="flex:1;min-width:220px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
+        <select id="perPage" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
+          <option value="10" selected>10</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+        </select>
+        <button id="reload" style="background:rgba(255,255,255,.06);border:1px solid var(--line);border-radius:12px;padding:10px 12px;color:var(--text);cursor:pointer">Reload</button>
+              <select id="venueFilter" class="inp" style="max-width:220px;margin-left:8px;">
+                <option value="">All venues</option>
+                <option value="__active__">Active venues</option>
+                <option value="__inactive__">Inactive venues</option>
+                <option value="__divider__" disabled>────────</option>
+              </select>
+              <label style="display:inline-flex;align-items:center;gap:8px;margin-left:10px;font-size:12px;color:rgba(255,255,255,0.82)"><input type="checkbox" id="demoToggle" style="transform:scale(1.1)"><span>Demo Mode</span><span id="demoBadge" style="display:none;padding:2px 8px;border-radius:999px;background:rgba(240,180,60,0.18);border:1px solid rgba(240,180,60,0.45);color:rgba(240,180,60,0.95)">ON</span></label><button id="exportCsv" class="btn" style="margin-left:8px;">Export CSV</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Venue</th>
+            <th>Name</th>
+            <th>Phone</th>
+            <th>Date/Time</th>
+            <th class="right">Party</th>
+            <th>Status</th>
+            <th>Tier</th>
+            <th>Queue</th>
+          </tr>
+        </thead>
+        <tbody id="leadRows"></tbody>
+      </table></div>
+      <div id="pager" style="display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:10px;flex-wrap:wrap">
+        <button id="prevPage" class="btn" style="opacity:.9">Prev</button>
+        <div class="pill" id="pageInfo">Page 1</div>
+        <button id="nextPage" class="btn" style="opacity:.9">Next</button>
+      </div>
+      <div class="err" id="leadErr"></div>
+    </div>
+
+        </div>
+    <div class="tabpane" data-tab="venues">
+<div class="card"><div class="k">Venues</div><div class="v" id="venues">—</div></div>
+      <div class="card"><div class="k">AI Queue items</div><div class="v" id="aiq">—</div></div>
+      <div class="card"><div class="k">Build</div><div class="v" id="build">—</div></div>
+    </div>
+    </div>
+
+        <div class="tabpane active" data-tab="venues">
+<div class="card">
+      <div class="k">Per-venue</div>
+      <div class="scrollbox stickyHead" style="margin-top:10px"><table style="width:100%;">
+        <thead>
+          <tr><th>Venue</th><th>Venue ID</th><th class="right">AI Queue</th></tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table></div>
+      <div class="err" id="err"></div>
+    </div>
   </div>
+    </div>
 
 <script>
-(function(){
-  const super_key = (new URLSearchParams(window.location.search)).get("super_key")
-    || (new URLSearchParams(window.location.search)).get("key")
-    || (document.cookie.match(/(?:^|; )super_key=([^;]+)/)||[])[1]
-    || "";
+// --- Demo Mode helpers (safe defaults) ---
+const _demoHeaders = (enabled) => (enabled ? {"X-Demo-Mode":"1"} : {});
 
-  function esc(s){ return (s==null?"":String(s)).replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m])); }
-  function cls(el, c, on){ if(!el) return; if(on) el.classList.add(c); else el.classList.remove(c); }
+(async function(){
+  const q = new URLSearchParams(window.location.search);
+  const key = q.get("key") || "";
+  const venueErr = document.getElementById("venueErr");
+  const venueOutWrap = document.getElementById("venueOutWrap");
+  const venueOut = document.getElementById("venueOut");
 
-  function setActiveTab(tab){
-    const vV=document.getElementById("viewVenues");
-    const vL=document.getElementById("viewLeads");
-    const tV=document.getElementById("tabVenues");
-    const tL=document.getElementById("tabLeads");
-    if(tab==="leads"){
-      cls(vV,"hidden",true); cls(vL,"hidden",false);
-      cls(tV,"active",false); cls(tL,"active",true);
-      __leadPage = 1;
-      loadLeads();
-    } else {
-      cls(vV,"hidden",false); cls(vL,"hidden",true);
-      cls(tV,"active",true); cls(tL,"active",false);
+  function _slugify(s){
+    s=(s||"").toLowerCase().trim();
+    s=s.replace(/[^a-z0-9]+/g,'-').replace(/-{2,}/g,'-').replace(/^-|-$/g,'');
+    return s||"default";
+  }
+
+
+  
+
+  function esc(s){
+    return String(s ?? "").replace(/[&<>"']/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
+  }
+
+let _venuesCache = [];
+let _venueChipMode = "all";
+function _venueNeedsAttention(v){
+  try{
+    const st = String(v.status||"").toUpperCase();
+    const sheetOk = (v.sheet_ok===true);
+    if(!sheetOk) return true;
+    if(st.includes("FAIL") || st.includes("MISSING")) return true;
+    if(st.includes("PENDING") || st.includes("NOT_READY")) return true;
+    return false;
+  }catch(e){ return false; }
+}
+function renderVenues(){
+  const rows = document.getElementById("venueRows");
+  rows.innerHTML = "";
+  const arr = (_venuesCache||[]).slice();
+  const filtered = arr.filter(v=>{
+    if(_venueChipMode==="active") return !!v.active;
+    if(_venueChipMode==="inactive") return !v.active;
+    if(_venueChipMode==="sheetfail") return (v.sheet_ok===false);
+    if(_venueChipMode==="notready") return String(v.status||"").toUpperCase().includes("PENDING") || String(v.status||"").toUpperCase().includes("NOT_READY");
+    if(_venueChipMode==="needs") return _venueNeedsAttention(v);
+    return true;
+  });
+  // issues-first sort for "needs" and default view
+  filtered.sort((a,b)=>{
+    const ia=_venueNeedsAttention(a)?1:0, ib=_venueNeedsAttention(b)?1:0;
+    if(ia!==ib) return ib-ia;
+    return String(a.venue_id||"").localeCompare(String(b.venue_id||""));
+  });
+  filtered.forEach(v=>{
+    const tr = document.createElement("tr");
+    const vid = (v.venue_id||"");
+    const sheet = String(v.google_sheet_id||"").trim();
+    const sheetDisp = sheet ? (sheet.length>16 ? (sheet.slice(0,8)+"…"+sheet.slice(-6)) : sheet) : "—";
+    const sheetBadge = sheet
+      ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">SET</span>`
+      : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING</span>`;
+    const act = v.active ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">ACTIVE</span>` : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);color:#fca5a5;font-size:12px;">INACTIVE</span>`;
+    const st = String(v.status||"").toUpperCase();
+    const stBadge = _venueNeedsAttention(v)
+      ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);color:#fca5a5;font-size:12px;">${esc(st||"ISSUE")}</span>`
+      : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">${esc(st||"OK")}</span>`;
+    const dash = `/admin?key=${encodeURIComponent(key)}&venue=${encodeURIComponent(vid)}`;
+    tr.innerHTML = `
+      <td style="font-family:ui-monospace,monospace">${esc(vid)}</td>
+      <td>${esc(v.venue_name||vid)}</td>
+      <td>${esc(v.plan||"")}</td>
+      <td title="${esc(sheet)}" style="white-space:nowrap">${sheetDisp} ${sheetBadge}</td>
+      <td style="white-space:nowrap">${act} ${stBadge}</td>
+      <td class="right"><a class="btn ghost" href="${dash}">Open</a></td>
+    `;
+    rows.appendChild(tr);
+  });
+
+  // update chip labels w/ counts
+  try{
+    const all = (_venuesCache||[]).length;
+    const active = (_venuesCache||[]).filter(v=>!!v.active).length;
+    const inactive = all-active;
+    const sheetfail = (_venuesCache||[]).filter(v=>v.sheet_ok===false).length;
+    const notready = (_venuesCache||[]).filter(v=>String(v.status||"").toUpperCase().includes("PENDING") || String(v.status||"").toUpperCase().includes("NOT_READY")).length;
+    const needs = (_venuesCache||[]).filter(v=>_venueNeedsAttention(v)).length;
+    document.querySelectorAll("#venueChips .pill").forEach(btn=>{
+      const mode = btn.getAttribute("data-vchip");
+      let label = btn.textContent.split(" (")[0];
+      if(mode==="all") label="All";
+      if(mode==="active") label="Active";
+      if(mode==="inactive") label="Inactive";
+      if(mode==="needs") label="Needs attention";
+      if(mode==="sheetfail") label="Sheet fail";
+      if(mode==="notready") label="Not ready";
+      const count = (mode==="all")?all:(mode==="active")?active:(mode==="inactive")?inactive:(mode==="sheetfail")?sheetfail:(mode==="notready")?notready:(mode==="needs")?needs:0;
+      btn.textContent = `${label} (${count})`;
+      btn.style.borderColor = (_venueChipMode===mode)? "rgba(240,180,60,.55)" : "var(--line)";
+    });
+  }catch(e){}
+}
+
+async function loadVenues(){
+    try{
+      const r = await fetch("/super/api/venues?super_key="+encodeURIComponent(super_key), {headers});
+      const j = await r.json();
+      const rows = document.getElementById("venueRows");
+      rows.innerHTML = "";
+      if(!j.ok){ throw new Error(j.error||"failed"); }
+
+      // populate venue filter dropdown (All/Active/Inactive + per-venue)
+      try{
+        if(venueSel){
+          // keep first 4 options (All/Active/Inactive/divider)
+          const keep = Array.from(venueSel.options).slice(0,4).map(o=>({value:o.value,text:o.text,disabled:o.disabled}));
+          venueSel.innerHTML = "";
+          keep.forEach(o=>{
+            const opt = document.createElement("option");
+            opt.value = o.value; opt.textContent = o.text; opt.disabled = !!o.disabled;
+            venueSel.appendChild(opt);
+          });
+          const active = (j.venues||[]).filter(v=>v.active);
+          const inactive = (j.venues||[]).filter(v=>!v.active);
+          const addGroup = (label, arr)=>{
+            if(!arr.length) return;
+            const og = document.createElement("optgroup");
+            og.label = label;
+            arr.forEach(v=>{
+              const opt = document.createElement("option");
+              opt.value = v.venue_id||"";
+              opt.textContent = (v.venue_name||v.venue_id||"");
+              og.appendChild(opt);
+            });
+            venueSel.appendChild(og);
+          };
+          addGroup("Active venues", active);
+          addGroup("Inactive venues", inactive);
+        }
+      }catch(e){}
+      _venuesCache = (j.venues||[]);
+      renderVenues();
+      return;
+      /* legacy render removed */
+      (j.venues||[]).forEach(v=>{
+        const tr = document.createElement("tr");
+        const vid = (v.venue_id||"");
+        const sheet = String(v.google_sheet_id||"").trim();
+        const sheetDisp = sheet ? (sheet.length>16 ? (sheet.slice(0,8)+"…"+sheet.slice(-6)) : sheet) : "—";
+        const sheetBadge = sheet
+          ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">READY</span>`
+          : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING SHEET</span>`;
+        const sid = String(v.google_sheet_id||"").trim();
+        const sidDisp = sid ? (sid.length>16 ? (sid.slice(0,8)+"…"+sid.slice(-6)) : sid) : "—";
+        const st = String(v.status||"").trim();
+        const statusBadge = (st==="READY")
+          ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">READY</span>`
+          : (st==="SHEET_FAIL")
+            ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);color:#fecaca;font-size:12px;">SHEET FAIL</span>`
+            : (st==="MISSING_SHEET")
+              ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING SHEET</span>`
+              : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.22);color:#e2e8f0;font-size:12px;">${st||"—"}</span>`;
+        tr.innerHTML = `<td>${esc(vid)}</td><td>${esc(v.venue_name||"")}</td><td>${esc(v.plan||"")}</td><td title="${esc(sid)}">${esc(sidDisp)}</td><td>${statusBadge}</td><td><button class="btn ghost" data-recheck="${esc(vid)}">Re-check</button> <button class="btn ghost" data-rotate="${esc(vid)}">Rotate Keys</button></td>`;
+        rows.appendChild(tr);
+      });
+
+      // bind re-check buttons
+      rows.querySelectorAll("[data-recheck]").forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const vid = btn.getAttribute("data-recheck");
+          if(!vid) return;
+          try{
+            venueErr.style.display="none";
+            const r = await fetch("/super/api/venues/check_sheet?super_key="+encodeURIComponent(super_key), {
+              method:"POST",
+              headers:Object.assign({"Content-Type":"application/json"}, headers),
+              body: JSON.stringify({venue_id: vid})
+            });
+            const j2 = await r.json();
+            if(!j2.ok) throw new Error(j2.error||"check failed");
+            venueOut.textContent = JSON.stringify(j2, null, 2);
+            venueOutWrap.style.display="block";
+            await loadVenues();
+          }catch(e){
+            venueErr.style.display="block";
+            venueErr.textContent="Re-check error: " + (e.message||e);
+          }
+        });
+      });
+
+      // bind rotate buttons
+      rows.querySelectorAll("[data-rotate]").forEach(btn=>{
+        btn.addEventListener("click", async ()=>{
+          const vid = btn.getAttribute("data-rotate");
+          if(!vid) return;
+          if(!confirm("Rotate keys for '"+vid+"'? This will invalidate existing venue keys.")) return;
+          try{
+            const r = await fetch("/super/api/venues/rotate_keys?super_key="+encodeURIComponent(super_key), {
+              method:"POST",
+              headers:Object.assign({"Content-Type":"application/json"}, headers),
+              body: JSON.stringify({venue_id: vid, rotate_admin:true, rotate_manager:true})
+            });
+            const j2 = await r.json();
+            if(!j2.ok) throw new Error(j2.error||"rotate failed");
+            venueOut.textContent = JSON.stringify(j2, null, 2);
+            venueOutWrap.style.display="block";
+            await loadVenues();
+          }catch(e){
+            venueErr.style.display="block";
+            venueErr.textContent="Rotate error: " + (e.message||e);
+          }
+        });
+      });
+    }catch(e){
+      venueErr.style.display="block";
+      venueErr.textContent="Venue list error: " + (e.message||e);
     }
   }
 
-  // ---- State
-  let __venues = [];
-  let __selectedVenueId = "";
-  let __venueScope = "all"; // all|active|inactive|needs|sheetfail|notready
-  let __leadPage = 1;
-  let __lastLeadMeta = {page:1,pages:1,total:0};
+  function _setVenueLinks(resp){
+    try{
+      const pack = (resp && (resp.pack || resp)) || {};
+      const adminUrl = pack.admin_url || resp.admin_url || "";
+      const managerUrl = pack.manager_url || resp.manager_url || "";
+      const qrUrl = pack.qr_url || resp.qr_url || "";
+      const links = document.getElementById("venueLinks");
+      const note = document.getElementById("venueLinksNote");
+      const aAdmin = document.getElementById("openAdmin");
+      const aMgr = document.getElementById("openManager");
+      const aQR = document.getElementById("openQR");
+      if(aAdmin) aAdmin.href = adminUrl || "#";
+      if(aMgr) aMgr.href = managerUrl || "#";
+      if(aQR) aQR.href = qrUrl || "#";
+      if(note) note.textContent = adminUrl ? "Admin + Manager links are ready." : "Links unavailable (older venue pack).";
+      if(links) links.style.display = (adminUrl || managerUrl || qrUrl) ? "block" : "none";
+    }catch(e){
+      const links = document.getElementById("venueLinks");
+      if(links) links.style.display="none";
+    }
+  }
 
-  // ---- Elements
-  const buildV = document.getElementById("buildV");
-  const venuesTbody = document.getElementById("venuesTbody");
-  const venueRail = document.getElementById("venueRail");
-  const venueDetail = document.getElementById("venueDetail");
-  const venueSearch = document.getElementById("venueSearch");
+  async function createVenue(){
+    venueErr.style.display="none";
+    venueOutWrap.style.display="none";
+    const venue_name = (document.getElementById("v_name").value||"").trim();
+    const venue_id = (document.getElementById("v_id").value||"").trim();
+    const google_sheet_id = (document.getElementById("v_sheet").value||"").trim();
+    const plan = (document.getElementById("v_plan").value||"standard").trim();
+    if(!venue_name){
+      venueErr.style.display="block";
+      venueErr.textContent="Enter a venue name.";
+      return;
+    }
+    try{
+      const r = await fetch("/super/api/venues/create?super_key="+encodeURIComponent(super_key), {
+        method:"POST",
+        headers:Object.assign({"Content-Type":"application/json"}, headers),
+        body: JSON.stringify({venue_name, venue_id, google_sheet_id, plan})
+      });
+      const j = await r.json();
+      if(!j.ok){ throw new Error(j.error||"failed"); }
+      venueOut.textContent = JSON.stringify(j, null, 2);
+      venueOutWrap.style.display="block";
+            _setVenueLinks(j);
+      // Auto-check sheet for this venue (PASS/FAIL) when sheet id is provided
+      try{
+        const vid = (j.pack && j.pack.venue_id) ? j.pack.venue_id : (j.venue_id || (j.pack||{}).venue_id || "");
+        const sid = (google_sheet_id || "").trim();
+        if(vid && sid){
+          const rc = await fetch("/super/api/venues/check_sheet?super_key="+encodeURIComponent(super_key), {
+            method:"POST",
+            headers:Object.assign({"Content-Type":"application/json"}, headers),
+            body: JSON.stringify({venue_id: vid})
+          });
+          const jc = await rc.json();
+          if(jc && jc.ok && jc.check){
+            venueErr.style.display="block";
+            venueErr.textContent = jc.check.ok ? ("Sheet PASS: " + (jc.check.title||"OK")) : ("Sheet FAIL: " + (jc.check.error||"error"));
+            setTimeout(()=>{ try{ venueErr.style.display="none"; }catch(_){} }, 2500);
+          }
+        }
+      }catch(e){}
+await loadVenues();
+    }catch(e){
+      venueErr.style.display="block";
+      venueErr.textContent="Create error: " + (e.message||e);
+    }
+  }
+
+  document.getElementById("createVenue")?.addEventListener("click", createVenue);
+  document.getElementById("refreshVenues")?.addEventListener("click", loadVenues);
+
+  document.getElementById("copyPack")?.addEventListener("click", async ()=>{
+    try{
+      await navigator.clipboard.writeText(venueOut.textContent||"");
+      venueErr.style.display="block";
+      venueErr.textContent="Copied to clipboard.";
+      setTimeout(()=>{ venueErr.style.display="none"; }, 1500);
+    }catch(e){
+      venueErr.style.display="block";
+      venueErr.textContent="Copy failed: " + (e.message||e);
+    }
+  });
+
+  document.getElementById("downloadPack")?.addEventListener("click", ()=>{
+    try{
+      const txt = venueOut.textContent||"";
+      if(!txt.trim()) return;
+      const blob = new Blob([txt], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "venue_pack.json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url), 1000);
+    }catch(e){
+      venueErr.style.display="block";
+      venueErr.textContent="Download failed: " + (e.message||e);
+    }
+  });
+
+  document.getElementById("checkSheet")?.addEventListener("click", async ()=>{
+    venueErr.style.display="none";
+    const sid = (document.getElementById("v_sheet").value||"").trim();
+    if(!sid){
+      venueErr.style.display="block";
+      venueErr.textContent="Enter a Google Sheet ID to check.";
+      return;
+    }
+    try{
+      const r = await fetch("/super/api/sheets/check?super_key="+encodeURIComponent(super_key)+"&sheet_id="+encodeURIComponent(sid), {headers});
+      const j = await r.json();
+      if(!j.ok) throw new Error(j.error||"check failed");
+      venueErr.style.display="block";
+      venueErr.textContent="Sheet OK: " + (j.title||"opened");
+      setTimeout(()=>{ ven
+
+
+document.getElementById("saveSheet")?.addEventListener("click", async ()=>{
+  venueErr.style.display="none";
+  const vid = (document.getElementById("v_id").value||"").trim() || _slugify((document.getElementById("v_name").value||"").trim());
+  const sid = (document.getElementById("v_sheet").value||"").trim();
+  if(!vid){
+    venueErr.style.display="block";
+    venueErr.textContent="Enter a venue id (or venue name) first.";
+    return;
+  }
+  if(!sid){
+    venueErr.style.display="block";
+    venueErr.textContent="Enter a Google Sheet ID first.";
+    return;
+  }
+  try{
+    const r = await fetch("/super/api/venues/set_sheet?super_key="+encodeURIComponent(super_key), {
+      method:"POST",
+      headers:Object.assign({"Content-Type":"application/json"}, headers),
+      body: JSON.stringify({venue_id: vid, google_sheet_id: sid})
+    });
+    const j = await r.json();
+    if(!j.ok){ throw new Error(j.error||"failed"); }
+    venueErr.style.display="block";
+    venueErr.textContent = "Saved sheet to venue: " + vid;
+    setTimeout(()=>{ venueErr.style.display="none"; }, 1800);
+    await loadVenues();
+  }catch(e){
+    venueErr.style.display="block";
+    venueErr.textContent="Save sheet error: " + (e.message||e);
+  }
+});
+ueErr.style.display="none"; }, 2000);
+    }catch(e){
+      venueErr.style.display="block";
+      venueErr.textContent="Sheet check error: " + (e.message||e);
+    }
+  });
+
+  const super_key = q.get("super_key") || key; // allow SUPER key as key param
+  const headers = super_key ? {"X-Super-Key": super_key} : {};
 
   const leadRowsEl = document.getElementById("leadRows");
   const leadErrEl = document.getElementById("leadErr");
-  const leadDiag = document.getElementById("leadDiag");
-  const leadDiagPre = document.getElementById("leadDiagPre");
-  const leadStatus = document.getElementById("leadStatus");
-  const qEl = document.getElementById("leadSearch");
+  const qEl = document.getElementById("q");
   const perPageEl = document.getElementById("perPage");
-  const venueSel = document.getElementById("leadVenueSel");
+  const reloadBtn = document.getElementById("reload");
 
-  function diagShow(obj){
-    if(!leadDiag || !leadDiagPre) return;
-    leadDiagPre.textContent = JSON.stringify(obj, null, 2);
-    cls(leadDiag, "hidden", false);
+  
+
+  const venueSel = document.getElementById("venueFilter");
+
+  // Tabs (Venues / Leads)
+  function setTab(tab){
+    document.querySelectorAll(".tabbtn").forEach(b=>b.classList.toggle("active", b.getAttribute("data-tabbtn")===tab));
+    document.querySelectorAll(".tabpane").forEach(p=>p.classList.toggle("active", p.getAttribute("data-tab")===tab));
+    try{ localStorage.setItem("super_tab", tab);}catch(e){}
   }
-  function diagHide(){
-    cls(leadDiag, "hidden", true);
-    if(leadDiagPre) leadDiagPre.textContent = "";
-  }
-
-  // ---- Chips (venue scope)
-  const chips = [
-    ["all","chipAll"],
-    ["active","chipActive"],
-    ["inactive","chipInactive"],
-    ["needs","chipNeeds"],
-    ["sheetfail","chipSheetFail"],
-    ["notready","chipNotReady"],
-  ];
-  function setScope(scope){
-    __venueScope = scope;
-    chips.forEach(([s,id])=>cls(document.getElementById(id),"active", (s===scope)));
-    renderVenues();
-    // keep lead selector aligned for common scopes
-    if(scope==="active") venueSel.value="__active__";
-    else if(scope==="inactive") venueSel.value="__inactive__";
-    else venueSel.value="";
-  }
-
-  function computeCounts(list){
-    const counts = {all:0, active:0, inactive:0, needs:0, sheetfail:0, notready:0};
-    (list||[]).forEach(v=>{
-      const active = !!v.active;
-      const status = String(v.status||"").toUpperCase();
-      const ready = (status === "READY");
-      const sheetfail = (status === "SHEET_FAIL");
-      const needs = active && (!ready || sheetfail);
-      counts.all += 1;
-      if(active) counts.active += 1; else counts.inactive += 1;
-      if(needs) counts.needs += 1;
-      if(sheetfail) counts.sheetfail += 1;
-      if(!ready) counts.notready += 1;
-    });
-    return counts;
-  }
-
-  function applyCounts(counts){
-    const byId = {
-      cAll: counts.all,
-      cActive: counts.active,
-      cInactive: counts.inactive,
-      cNeeds: counts.needs,
-      cSheetFail: counts.sheetfail,
-      cNotReady: counts.notready,
-    };
-    Object.keys(byId).forEach(id=>{
-      const el=document.getElementById(id);
-      if(el) el.textContent = String(byId[id]);
-    });
-  }
-
-  // ---- Data: overview + venues
-  async function fetchOverview(){
-    try{
-      const url="/super/api/overview?super_key="+encodeURIComponent(super_key);
-      const r=await fetch(url,{headers:{"X-Super-Key":super_key}});
-      const j=await r.json().catch(()=>null);
-      if(j && j.ok){
-        if(buildV) buildV.textContent = (j.build || j.version || j.app_version || "—");
-      }
-    }catch(e){}
-  }
-
-  async function fetchVenues(){
-    const url = "/super/api/venues?super_key="+encodeURIComponent(super_key);
-    const r = await fetch(url, {headers: {"X-Super-Key": super_key}});
-    const j = await r.json().catch(()=>null);
-    if(!j || !j.ok){ throw new Error((j&&j.error)||("venues fetch failed ("+r.status+")")); }
-    __venues = (j.venues||[]);
-    applyCounts(computeCounts(__venues));
-
-    // populate lead venue selector list (after divider)
-    if(venueSel){
-      while(venueSel.options.length > 4){ venueSel.remove(4); }
-      (__venues||[]).forEach(v=>{
-        const opt=document.createElement("option");
-        opt.value = v.venue_id||"";
-        opt.textContent = (v.venue_name||v.venue_id||"");
-        venueSel.appendChild(opt);
-      });
-    }
-    renderVenues();
-  }
-
-  function statusBadge(v){
-    const active = !!v.active;
-    const status = String(v.status||"").toUpperCase();
-    const ready = (status === "READY");
-    const sheetfail = (status === "SHEET_FAIL");
-    const sheetset = (status !== "" && status !== "MISSING_SHEET");
-    const needs = active && (!ready || sheetfail);
-    return {active, ready, sheetfail, sheetset, needs, status};
-  }
-
-  function railItemHTML(v){
-    const s=statusBadge(v);
-    const dot = s.needs ? "bad" : (s.active ? "ok" : "warn");
-    const tag = s.needs ? "Needs" : (s.active ? "Active" : "Inactive");
-    return `
-      <div class="railItem ${(__selectedVenueId===v.venue_id?'active':'')}" data-vid="${esc(v.venue_id)}">
-        <div>
-          <div class="railName">${esc(v.venue_name||v.venue_id||'')}</div>
-          <div class="muted">${esc(v.venue_id||'')}</div>
-        </div>
-        <div class="badge ${s.needs?'bad':(s.active?'ok':'warn')}"><span class="dot ${dot}" style="display:inline-block;margin-right:6px"></span>${tag}</div>
-      </div>
-    `;
-  }
-
-  function renderVenues(){
-    const q = (venueSearch && venueSearch.value || "").trim().toLowerCase();
-    let list = (__venues||[]).slice();
-
-    list = list.filter(v=>{
-      const s=statusBadge(v);
-      if(__venueScope==="active") return s.active;
-      if(__venueScope==="inactive") return !s.active;
-      if(__venueScope==="needs") return s.needs;
-      if(__venueScope==="sheetfail") return s.sheetfail;
-      if(__venueScope==="notready") return !s.ready;
-      return true;
-    });
-
-    if(q){
-      list = list.filter(v=>{
-        const hay=(String(v.venue_id||"")+" "+String(v.venue_name||"")).toLowerCase();
-        return hay.includes(q);
-      });
-    }
-
-    list.sort((a,b)=>{
-      const sa=statusBadge(a), sb=statusBadge(b);
-      const score = (s)=> (s.needs?100:0) + (s.sheetfail?50:0) + ((!s.ready)?20:0) + ((!s.active)?10:0);
-      const da=score(sa), db=score(sb);
-      if(db!==da) return db-da;
-      return String(a.venue_name||a.venue_id||"").localeCompare(String(b.venue_name||b.venue_id||""));
-    });
-
-    if(venueRail){
-      if(!list.length){
-        venueRail.innerHTML = `<div class="muted" style="padding:12px">No venues match.</div>`;
-      } else {
-        venueRail.innerHTML = list.map(railItemHTML).join("");
-        venueRail.querySelectorAll(".railItem").forEach(el=>{
-          el.addEventListener("click", ()=>{
-            __selectedVenueId = el.getAttribute("data-vid") || "";
-            renderVenues();
-            renderVenueDetail();
-          });
-        });
-      }
-    }
-
-    if(venuesTbody){
-      if(!list.length){
-        venuesTbody.innerHTML = `<tr><td colspan="6">No venues match.</td></tr>`;
-      } else {
-        venuesTbody.innerHTML = "";
-        list.forEach(v=>{
-          const s=statusBadge(v);
-          const activeB = `<span class="badge ${s.active?'ok':'warn'}">${s.active?'ACTIVE':'INACTIVE'}</span>`;
-          const stB = `<span class="badge ${s.ready?'ok':(s.sheetfail?'bad':'warn')}">${esc(s.status||'')}</span>`;
-          let sheetB = `<span class="badge warn">MISSING</span>`;
-          if(s.status==="READY" || s.status==="SHEET_SET") sheetB = `<span class="badge ok">SET</span>`;
-          if(s.sheetfail) sheetB = `<span class="badge bad">FAIL</span>`;
-          const tr=document.createElement("tr");
-          tr.innerHTML = `
-            <td>${esc(v.venue_id||"")}</td>
-            <td><b>${esc(v.venue_name||"")}</b></td>
-            <td>${activeB}</td>
-            <td>${stB}</td>
-            <td>${sheetB}</td>
-            <td>
-              <button class="btn" type="button" data-act="check" data-vid="${esc(v.venue_id||"")}" style="padding:6px 8px">Check</button>
-              <button class="btn" type="button" data-act="rotate" data-vid="${esc(v.venue_id||"")}" style="padding:6px 8px">Keys</button>
-            </td>
-          `;
-          tr.style.cursor="pointer";
-          tr.addEventListener("click", (e)=>{
-            const tgt = e.target;
-            if(tgt && tgt.getAttribute && tgt.getAttribute("data-act")) return;
-            __selectedVenueId = v.venue_id||"";
-            renderVenues();
-            renderVenueDetail();
-          });
-          venuesTbody.appendChild(tr);
-        });
-
-        venuesTbody.querySelectorAll("button[data-act]").forEach(btn=>{
-          btn.addEventListener("click", async (e)=>{
-            e.preventDefault(); e.stopPropagation();
-            const act = btn.getAttribute("data-act");
-            const vid = btn.getAttribute("data-vid");
-            if(!vid) return;
-            if(act==="check") await doCheckSheet(vid);
-            if(act==="rotate") await doRotateKeys(vid);
-          });
-        });
-      }
-    }
-
-    if(!__selectedVenueId && list.length){
-      __selectedVenueId = list[0].venue_id||"";
+  document.querySelectorAll(".tabbtn").forEach(b=>{
+    b.addEventListener("click", ()=> setTab(b.getAttribute("data-tabbtn")));
+  });
+  try{
+    const saved = localStorage.getItem("super_tab");
+    if(saved) setTab(saved);
+  }catch(e){}
+  // Venue status chips
+  document.querySelectorAll("#venueChips .pill").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      _venueChipMode = btn.getAttribute("data-vchip")||"all";
       renderVenues();
-      renderVenueDetail();
-    }
-  }
+    });
+  });
+  const exportBtn = document.getElementById("exportCsv");
+  let __lastLeadRows = [];
+  let __lastLeadMeta = {total:0,page:1,pages:1,per_page:10};
+  let __leadPage = 1;
 
-  function renderVenueDetail(){
-    if(!venueDetail) return;
-    const v = (__venues||[]).find(x=>String(x.venue_id||"")===String(__selectedVenueId||""));
-    if(!v){ venueDetail.textContent = "Select a venue from the left rail."; return; }
-    const s=statusBadge(v);
-    const sid = v.google_sheet_id ? String(v.google_sheet_id) : "";
-    venueDetail.innerHTML = `
-      <div class="detailGrid">
-        <div class="kv"><div class="k">Venue</div><div class="v">${esc(v.venue_name||"")}</div><div class="muted">${esc(v.venue_id||"")}</div></div>
-        <div class="kv"><div class="k">Health</div><div class="v">${s.needs?'Needs attention':(s.active?'Healthy':'Inactive')}</div><div class="muted">${esc(s.status||'')}</div></div>
-      </div>
-      <div class="actions">
-        <button class="btn" type="button" onclick="window.__superCheckSheet('${esc(v.venue_id||"")}')">Check Sheet</button>
-        <button class="btn" type="button" onclick="window.__superRotateKeys('${esc(v.venue_id||"")}')">Rotate Keys</button>
-        <button class="btn" type="button" onclick="window.__superSetSheet('${esc(v.venue_id||"")}')">Set Sheet ID</button>
-      </div>
-      ${sid ? `<div class="muted" style="margin-top:10px">Sheet ID: ${esc(sid)}</div>` : `<div class="muted" style="margin-top:10px">No Sheet ID set.</div>`}
-    `;
-  }
+  function resetLeadsPage(){ __leadPage = 1; }
 
-  // ---- Leads
+  if(reloadBtn){ reloadBtn.addEventListener("click", ()=>{ resetLeadsPage(); loadLeads(); }); }
+  if(perPageEl){ perPageEl.addEventListener("change", ()=>{ resetLeadsPage(); loadLeads(); }); }
+  if(venueSel){ venueSel.addEventListener("change", ()=>{ resetLeadsPage(); loadLeads(); }); }
+  if(qEl){
+    let __qT = null;
+    qEl.addEventListener("input", ()=>{
+      if(__qT) clearTimeout(__qT);
+      __qT = setTimeout(()=>{ resetLeadsPage(); loadLeads(); }, 250);
+    });
+  }
+  const prevBtn = document.getElementById("prevPage");
+  const nextBtn = document.getElementById("nextPage");
+  if(prevBtn){ prevBtn.addEventListener("click", ()=>{ if(__leadPage>1){ __leadPage--; loadLeads(); } }); }
+  if(nextBtn){ nextBtn.addEventListener("click", ()=>{ const pages=__lastLeadMeta.pages||1; if(__leadPage < pages){ __leadPage++; loadLeads(); } }); }
+
+
   async function loadLeads(){
     if(!leadRowsEl) return;
     leadErrEl.textContent = "";
-    diagHide();
-    leadRowsEl.innerHTML = "<tr><td colspan=\\"8\\">Loading…</td></tr>";
+    leadRowsEl.innerHTML = "<tr><td colspan=\"8\">Loading…</td></tr>";
 
     const perPage = (perPageEl && perPageEl.value) ? Number(perPageEl.value) : 10;
     const query = (qEl && qEl.value || "").trim();
@@ -9920,173 +9992,152 @@ SUPER_CONSOLE_HTML = r"""<!doctype html>
     const venue_state = isScope ? (vsel === "__active__" ? "active" : "inactive") : "all";
     const venue_id = (!isScope && vsel && vsel !== "__divider__") ? vsel : "";
 
-    const url = "/admin/api/leads_all?super_key="+encodeURIComponent(super_key)
+    const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)+"&super_key="+encodeURIComponent(super_key)
       +"&page="+encodeURIComponent(__leadPage)
       +"&per_page="+encodeURIComponent(perPage)
       +"&venue_state="+encodeURIComponent(venue_state)
       +"&venue_id="+encodeURIComponent(venue_id)
       +"&q="+encodeURIComponent(query);
 
-    if(leadStatus) leadStatus.textContent = "Loading…";
-
-    let r, text, j;
     try{
-      r = await fetch(url, {headers: {"X-Super-Key": super_key}});
-      text = await r.text();
-      try{ j = JSON.parse(text); }catch(e){ j = null; }
+      const r = await fetch(url, {headers:_demoHeaders()});
+      const j = await r.json();
+      if(!j.ok) throw new Error(j.error || "forbidden");
+
+      const rows = (j.items || j.leads || []);
+      __lastLeadRows = rows;
+      __lastLeadMeta = {total:j.total||rows.length, page:j.page||1, pages:j.pages||1, per_page:j.per_page||perPage};
+
+      leadRowsEl.innerHTML = "";
+      if(!rows.length){
+        leadRowsEl.innerHTML = "<tr><td colspan=\"8\">No leads found.</td></tr>";
+      }else{
+        rows.forEach(x=>{
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${esc(x._venue_id||"")}</td>
+            <td>${esc(x.name||"")}</td>
+            <td>${esc(x.phone||"")}</td>
+            <td>${esc(x.datetime||x["Date/Time"]||x.date||x.timestamp||"")}</td>
+            <td class="right">${esc(x.party_size||x.party||"")}</td>
+            <td>${esc(x.status||"")}</td>
+            <td>${esc(x.tier||"")}</td>
+            <td>${esc(x.queue||"")}</td>
+          `;
+          leadRowsEl.appendChild(tr);
+        });
+      }
+
+      // pager
+      const pg = (__lastLeadMeta.page||1);
+      const pages = (__lastLeadMeta.pages||1);
+      const total = (__lastLeadMeta.total||0);
+      const pageInfo = document.getElementById("pageInfo");
+      if(pageInfo) pageInfo.textContent = `Page ${pg} / ${pages} • ${total} total`;
+      const prevBtn = document.getElementById("prevPage");
+      const nextBtn = document.getElementById("nextPage");
+      if(prevBtn) prevBtn.disabled = (pg<=1);
+      if(nextBtn) nextBtn.disabled = (pg>=pages);
+
     }catch(e){
-      leadErrEl.textContent = "Leads fetch failed: "+String(e||"");
-      diagShow({url, error:String(e||"")});
-      if(leadStatus) leadStatus.textContent = "Error";
-      return;
+      leadRowsEl.innerHTML = "";
+      leadErrEl.textContent = "Error: " + (e.message||e);
     }
-
-    if(!r.ok || !j || !j.ok){
-      const err = (j && (j.error||j.message)) ? (j.error||j.message) : ("HTTP "+r.status);
-      leadErrEl.textContent = "Leads fetch error: "+err;
-      diagShow({url, http_status:r.status, body:text.slice(0,2000)});
-      if(leadStatus) leadStatus.textContent = "Error";
-      leadRowsEl.innerHTML = "<tr><td colspan=\\"8\\">No data</td></tr>";
-      return;
-    }
-
-    const items = (j.items||[]);
-    const errors = (j.errors||[]);
-    __lastLeadMeta = (j.meta||{});
-    let statusLine = `Loaded ${items.length} leads`;
-    if(errors && errors.length) statusLine += ` • ${errors.length} venue errors`;
-    if(leadStatus) leadStatus.textContent = statusLine;
-
-    leadRowsEl.innerHTML = "";
-    if(!items.length){
-      leadRowsEl.innerHTML = "<tr><td colspan=\\"8\\">No leads found for this scope.</td></tr>";
-      if(errors && errors.length) diagShow({note:"Per-venue errors may be preventing lead merge.", errors:errors.slice(0,25)});
-    } else {
-      items.forEach(x=>{
-        const tr=document.createElement("tr");
-        tr.innerHTML = `
-          <td>${esc(x.venue_id||"")}</td>
-          <td><b>${esc(x.name||"")}</b></td>
-          <td>${esc(x.phone||"")}</td>
-          <td>${esc(x.datetime||"")}</td>
-          <td>${esc(x.party_size||"")}</td>
-          <td>${esc(x.status||"")}</td>
-          <td>${esc(x.tier||"")}</td>
-          <td>${esc(x.queue||"")}</td>
-        `;
-        leadRowsEl.appendChild(tr);
-      });
-    }
-
-    const pg = (__lastLeadMeta.page||1);
-    const pages = (__lastLeadMeta.pages||1);
-    const total = (__lastLeadMeta.total||0);
-    const pageInfo = document.getElementById("pageInfo");
-    if(pageInfo) pageInfo.textContent = `Page ${pg} / ${pages} • ${total} total`;
-    const prevBtn = document.getElementById("prevPage");
-    const nextBtn = document.getElementById("nextPage");
-    if(prevBtn) prevBtn.disabled = (pg<=1);
-    if(nextBtn) nextBtn.disabled = (pg>=pages);
   }
 
-  async function exportLeads(){
-    const query = (qEl && qEl.value || "").trim();
-    const vsel = (venueSel && venueSel.value || "").trim();
-    const isScope = (vsel === "__active__" || vsel === "__inactive__");
-    const venue_state = isScope ? (vsel === "__active__" ? "active" : "inactive") : "all";
-    const venue_id = (!isScope && vsel && vsel !== "__divider__") ? vsel : "";
-    const url = "/admin/api/leads_all?super_key="+encodeURIComponent(super_key)
-      +"&export=1"
-      +"&venue_state="+encodeURIComponent(venue_state)
-      +"&venue_id="+encodeURIComponent(venue_id)
-      +"&q="+encodeURIComponent(query);
-    window.location.href = url;
+  
+  if(exportBtn){
+    exportBtn.addEventListener("click", async ()=>{
+      if(__demo){ try{ leadErrEl.textContent = "Demo Mode: export disabled."; }catch(_){} return; }
+      try{
+        const query = (qEl && qEl.value || "").trim();
+        const vsel = (venueSel && venueSel.value || "").trim();
+        const isScope = (vsel === "__active__" || vsel === "__inactive__");
+        const venue_state = isScope ? (vsel === "__active__" ? "active" : "inactive") : "all";
+        const venue_id = (!isScope && vsel && vsel !== "__divider__") ? vsel : "";
+
+        const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)
+          +"&super_key="+encodeURIComponent(super_key)
+          +"&limit=5000"
+          +"&venue_state="+encodeURIComponent(venue_state)
+          +"&venue_id="+encodeURIComponent(venue_id)
+          +"&q="+encodeURIComponent(query);
+
+        const r = await fetch(url, {headers:_demoHeaders()});
+        const j = await r.json();
+        if(!j.ok) throw new Error(j.error || "forbidden");
+        const rows = (j.items || j.leads || []);
+
+        const headersCsv = ["venue_id","name","phone","datetime","party_size","status","tier","queue"];
+        const escCsv = (v)=>(""+(v??"")).replace(/\r?\n/g," ").replace(/"/g,'""');
+        const lines = [];
+        lines.push(headersCsv.map(h=>'"'+escCsv(h)+'"').join(","));
+        (rows||[]).forEach(x=>{
+          const vals = [
+            x._venue_id||"",
+            x.name||"",
+            x.phone||"",
+            x.datetime||x["Date/Time"]||x.date||x.timestamp||"",
+            x.party_size||x.party||"",
+            x.status||"",
+            x.tier||"",
+            x.queue||"",
+          ];
+          lines.push(vals.map(v=>'"'+escCsv(v)+'"').join(","));
+        });
+        const csv = lines.join("\n");
+        const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+        const urlObj = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = urlObj;
+        a.download = "super_leads_export.csv";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(()=>URL.revokeObjectURL(urlObj), 2000);
+      }catch(e){
+        try{ leadErrEl.textContent = "Export failed: " + (e.message||e); }catch(_){}
+      }
+    });
+  }
+if(qEl){
+    qEl.addEventListener("input", ()=>loadLeads());
+  }
+  if(perPageEl){
+    perPageEl.addEventListener("change", ()=>loadLeads());
   }
 
-  // ---- Super venue actions
-  async function doCheckSheet(venue_id){
-    try{
-      const url="/super/api/venues/check_sheet?super_key="+encodeURIComponent(super_key);
-      const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","X-Super-Key":super_key},body:JSON.stringify({venue_id})});
-      const j=await r.json().catch(()=>null);
-      if(!j||!j.ok) alert("Check failed: "+((j&&j.error)||""));
-      await fetchVenues();
-    }catch(e){ alert("Check failed: "+String(e||"")); }
+  
+  if(venueSel){ venueSel.addEventListener("change", ()=>loadLeads()); }
+try{
+    const r = await fetch("/super/api/overview?super_key="+encodeURIComponent(super_key), {headers:_demoHeaders()});
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error || "forbidden");
+    document.getElementById("venues").textContent = (j.total && j.total.venues) || 0;
+    document.getElementById("aiq").textContent = (j.total && j.total.ai_queue) || 0;
+    const tb = document.getElementById("rows");
+    tb.innerHTML = "";
+    (j.venues || []).forEach(v=>{
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${(v.venue_name||"")}</td><td>${(v.venue_id||"")}</td><td class="right">${(v.ai_queue||0)}</td>`;
+      tb.appendChild(tr);
+    });
+    document.getElementById("ts").textContent = new Date().toLocaleString();
+  }catch(e){
+    document.getElementById("err").textContent = "Error: " + (e.message||e);
   }
-  async function doRotateKeys(venue_id){
-    try{
-      const url="/super/api/venues/rotate_keys?super_key="+encodeURIComponent(super_key);
-      const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","X-Super-Key":super_key},body:JSON.stringify({venue_id})});
-      const j=await r.json().catch(()=>null);
-      if(!j||!j.ok) alert("Rotate failed: "+((j&&j.error)||""));
-      await fetchVenues();
-    }catch(e){ alert("Rotate failed: "+String(e||"")); }
-  }
-  async function doSetSheet(venue_id, sheet_id){
-    try{
-      const url="/super/api/venues/set_sheet?super_key="+encodeURIComponent(super_key);
-      const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","X-Super-Key":super_key},body:JSON.stringify({venue_id, google_sheet_id: sheet_id})});
-      const j=await r.json().catch(()=>null);
-      if(!j||!j.ok) alert("Set sheet failed: "+((j&&j.error)||""));
-      await fetchVenues();
-    }catch(e){ alert("Set sheet failed: "+String(e||"")); }
-  }
-  window.__superCheckSheet = doCheckSheet;
-  window.__superRotateKeys = doRotateKeys;
-  window.__superSetSheet = function(venue_id){
-    const sheet_id = prompt("Google Sheet ID for "+venue_id+"?");
-    if(sheet_id==null) return;
-    doSetSheet(venue_id, sheet_id.trim());
-  }
-
-  // ---- Create venue (new endpoint, super-only)
-  async function doCreateVenue(){
-    const venue_name = (prompt("Venue name?")||"").trim();
-    if(!venue_name) return;
-    const venue_id = (prompt("Venue ID (optional)? Leave blank to auto-generate.")||"").trim();
-    const google_sheet_id = (prompt("Google Sheet ID (optional)?")||"").trim();
-    const plan = (prompt("Plan (standard/premium)?","standard")||"standard").trim();
-    try{
-      const url="/super/api/venues/create?super_key="+encodeURIComponent(super_key);
-      const r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","X-Super-Key":super_key},body:JSON.stringify({venue_name, venue_id, google_sheet_id, plan})});
-      const j=await r.json().catch(()=>null);
-      if(!j||!j.ok) return alert("Create failed: "+((j&&j.error)||""));
-      await fetchVenues();
-    }catch(e){ alert("Create failed: "+String(e||"")); }
-  }
-
-  // ---- Events
-  document.getElementById("tabVenues").addEventListener("click", ()=>setActiveTab("venues"));
-  document.getElementById("tabLeads").addEventListener("click", ()=>setActiveTab("leads"));
-
-  chips.forEach(([s,id])=>{
-    const el=document.getElementById(id);
-    if(el) el.addEventListener("click", ()=>setScope(s));
-  });
-  document.getElementById("btnRefreshVenues").addEventListener("click", fetchVenues);
-  document.getElementById("btnCreateVenue").addEventListener("click", doCreateVenue);
-  if(venueSearch) venueSearch.addEventListener("input", ()=>renderVenues());
-
-  document.getElementById("btnReloadLeads").addEventListener("click", ()=>{__leadPage=1;loadLeads();});
-  if(perPageEl) perPageEl.addEventListener("change", ()=>{__leadPage=1;loadLeads();});
-  if(qEl) qEl.addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ __leadPage=1; loadLeads(); }});
-  if(venueSel) venueSel.addEventListener("change", ()=>{__leadPage=1;loadLeads();});
-  document.getElementById("prevPage").addEventListener("click", ()=>{ if(__leadPage>1){__leadPage--; loadLeads();}});
-  document.getElementById("nextPage").addEventListener("click", ()=>{ const pages=(__lastLeadMeta.pages||1); if(__leadPage<pages){__leadPage++; loadLeads();}});
-  document.getElementById("btnExportLeads").addEventListener("click", exportLeads);
-
-  // boot
-  (async ()=>{
-    try{
-      await fetchOverview();
-      await fetchVenues();
-    }catch(e){
-      const msg = "Super Admin failed to load: "+String(e||"");
-      document.body.innerHTML = "<div style='padding:20px;color:white;font-family:system-ui'><h2>Super Admin error</h2><pre>"+esc(msg)+"</pre></div>";
-    }
-  })();
-})();</script>
-</body></html>"""
+  await loadVenues();
+  await loadLeads();
+  try{
+    const b = await fetch("/super/api/diag?super_key="+encodeURIComponent(super_key), {headers:_demoHeaders()});
+    const bj = await b.json();
+    document.getElementById("build").textContent = (bj.app_version || bj.app_version_env || "—");
+  }catch(e){}
+})();
+</script>
+</body>
+</html>
+"""
 
 @app.get("/admin/api/super")
 def admin_api_super_console_redirect():
@@ -10429,11 +10480,9 @@ def super_api_venues_list():
 
 @app.route("/super/api/venues/create", methods=["POST","OPTIONS"])
 def super_api_venues_create():
-    """Super-admin: create/persist a new venue config in VENUES_DIR (JSON).
-
-    This is the "one-click onboarding" entry point for Super Admin.
-    """
+    """Super-admin: generate venue pack and attempt to persist to config/venues/<venue>.json."""
     if request.method == "OPTIONS":
+        # Some proxies/browsers can issue an OPTIONS-like request even on same-origin calls.
         resp = make_response("", 204)
         resp.headers["Access-Control-Allow-Origin"] = "*"
         resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
@@ -10442,57 +10491,53 @@ def super_api_venues_create():
 
     if not _is_super_admin_request():
         return jsonify({"ok": False, "error": "forbidden"}), 403
+
+
+    if _demo_mode_enabled():
+        return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
+
     body = request.get_json(silent=True) or {}
-    venue_name = str(body.get("venue_name") or "").strip()
-    if not venue_name:
-        return jsonify({"ok": False, "error": "venue_name required"}), 400
-    venue_id_in = str(body.get("venue_id") or "").strip()
-    venue_id = _slugify_venue_id(venue_id_in or venue_name)
+    venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
+    plan = str(body.get("plan") or "standard").strip().lower() or "standard"
 
-    plan = str(body.get("plan") or "standard").strip() or "standard"
-    google_sheet_id = str(body.get("google_sheet_id") or "").strip()
+    admin_key = secrets.token_hex(16)
+    manager_key = secrets.token_hex(16)
 
-    # Ensure directory exists
+    pack = {
+        "venue_name": venue_name,
+        "venue_id": venue_id,
+        "status": "active",
+        "plan": plan,
+        "qr_url": f"https://worldcupconcierge.app/v/{venue_id}",
+        "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={admin_key}",
+        "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={manager_key}",
+        "keys": {"admin_key": admin_key, "manager_key": manager_key},
+        "data": {"google_sheet_id": str(body.get("google_sheet_id") or "").strip(), "redis_namespace": f"{_REDIS_NS}:{venue_id}"},
+        "features": body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True},
+        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+
+    # Attempt to write config file (works locally; may be read-only in some hosts)
+    wrote = False
+    write_path = ""
+    err = ""
     try:
         os.makedirs(VENUES_DIR, exist_ok=True)
-    except Exception:
-        pass
-
-    fp = os.path.join(VENUES_DIR, f"{venue_id}.json")
-    if os.path.exists(fp):
-        return jsonify({"ok": False, "error": "venue_id already exists", "venue_id": venue_id}), 409
-
-    cfg: Dict[str, Any] = {
-        "venue_id": venue_id,
-        "venue_name": venue_name,
-        "plan": plan,
-        "active": True,
-        "status": "active",
-    }
-    if google_sheet_id:
-        cfg["google_sheet_id"] = google_sheet_id
-        cfg["data"] = {"google_sheet_id": google_sheet_id}
-
-        # Best-effort sheet check + embed in config for Super console status
-        try:
-            chk = _check_sheet_id(google_sheet_id)
-            if isinstance(chk, dict):
-                cfg["_sheet_check"] = chk
-        except Exception:
-            pass
-
-    try:
-        pathlib.Path(fp).write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"write failed: {e}", "venue_id": venue_id}), 500
-
-    # Bust cache so new venue appears immediately
-    try:
+        write_path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+        with open(write_path, "w", encoding="utf-8") as f:
+            json.dump(pack, f, indent=2, sort_keys=True)
+        wrote = True
+        # refresh cache immediately
         _MULTI_VENUE_CACHE["ts"] = 0.0
+    except Exception as e:
+        err = str(e)
+
+    try:
+        _audit("super.venues.create", {"venue_id": venue_id, "persisted": wrote, "path": write_path, "error": err})
     except Exception:
         pass
-
-    return jsonify({"ok": True, "venue_id": venue_id, "path": fp})
+    return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": write_path, "error": err})
 
 @app.post("/super/api/venues/set_sheet")
 def super_api_venues_set_sheet():
