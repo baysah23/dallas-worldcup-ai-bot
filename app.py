@@ -9554,6 +9554,24 @@ LEGACY_SUPER_CONSOLE_HTML = r"""<!doctype html>
     </div>
 
 <script>
+(function(){
+  function __super_show_fatal(msg, err){
+    try{
+      console.error(msg, err||'');
+      var el=document.getElementById('superJsFatal');
+      if(!el){
+        el=document.createElement('div');
+        el.id='superJsFatal';
+        el.style.cssText='position:fixed;z-index:999999;left:12px;right:12px;bottom:12px;padding:12px 14px;border-radius:14px;background:rgba(180,0,0,.22);border:1px solid rgba(255,80,80,.35);backdrop-filter:blur(10px);color:#fff;font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;';
+        document.body.appendChild(el);
+      }
+      el.textContent = (msg||'Super Admin JS error') + (err && err.message ? (' — ' + err.message) : '');
+    }catch(_){ }
+  }
+  window.addEventListener('error', function(e){ __super_show_fatal('Super Admin JS error', e && e.error ? e.error : e); });
+  window.addEventListener('unhandledrejection', function(e){ __super_show_fatal('Super Admin JS promise rejection', e && e.reason ? e.reason : e); });
+  document.addEventListener('DOMContentLoaded', function(){
+    try{
 // --- Demo Mode helpers (safe defaults) ---
 const _demoHeaders = (enabled) => (enabled ? {"X-Demo-Mode":"1"} : {});
 
@@ -10149,6 +10167,10 @@ try{
     const bj = await b.json();
     document.getElementById("build").textContent = (bj.app_version || bj.app_version_env || "—");
   }catch(e){}
+})();
+
+    }catch(e){ __super_show_fatal('Super Admin JS crashed', e); }
+  });
 })();
 </script>
 </body>
