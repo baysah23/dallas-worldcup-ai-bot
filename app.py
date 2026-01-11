@@ -9949,6 +9949,15 @@ ueErr.style.display="none"; }, 2000);
     document.querySelectorAll(".tabbtn").forEach(b=>b.classList.toggle("active", b.getAttribute("data-tabbtn")===tab));
     document.querySelectorAll(".tabpane").forEach(p=>p.classList.toggle("active", p.getAttribute("data-tab")===tab));
     try{ localStorage.setItem("super_tab", tab);}catch(e){}
+    // Ensure data loads when a tab is opened (prevents "blank Leads" on first click)
+    try{
+      if(tab === "leads"){
+        if(typeof resetLeadsPage === "function") resetLeadsPage();
+        if(typeof loadLeads === "function") loadLeads();
+      }else if(tab === "venues"){
+        if(typeof loadVenues === "function") loadVenues();
+      }
+    }catch(e){}
   }
   document.querySelectorAll(".tabbtn").forEach(b=>{
     b.addEventListener("click", ()=> setTab(b.getAttribute("data-tabbtn")));
