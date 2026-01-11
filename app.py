@@ -9553,604 +9553,7 @@ LEGACY_SUPER_CONSOLE_HTML = r"""<!doctype html>
   </div>
     </div>
 
-<script>
-// --- Demo Mode helpers (safe defaults) ---
-const _demoHeaders = (enabled) => (enabled ? {"X-Demo-Mode":"1"} : {});
-
-(async function(){
-  const q = new URLSearchParams(window.location.search);
-  const key = q.get("key") || "";
-  const venueErr = document.getElementById("venueErr");
-  const venueOutWrap = document.getElementById("venueOutWrap");
-  const venueOut = document.getElementById("venueOut");
-
-  function _slugify(s){
-    s=(s||"").toLowerCase().trim();
-    s=s.replace(/[^a-z0-9]+/g,'-').replace(/-{2,}/g,'-').replace(/^-|-$/g,'');
-    return s||"default";
-  }
-
-
-  
-
-  function esc(s){
-    return String(s ?? "").replace(/[&<>"']/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
-  }
-
-let _venuesCache = [];
-let _venueChipMode = "all";
-function _venueNeedsAttention(v){
-  try{
-    const st = String(v.status||"").toUpperCase();
-    const sheetOk = (v.sheet_ok===true);
-    if(!sheetOk) return true;
-    if(st.includes("FAIL") || st.includes("MISSING")) return true;
-    if(st.includes("PENDING") || st.includes("NOT_READY")) return true;
-    return false;
-  }catch(e){ return false; }
-}
-function renderVenues(){
-  const rows = document.getElementById("venueRows");
-  rows.innerHTML = "";
-  const arr = (_venuesCache||[]).slice();
-  const filtered = arr.filter(v=>{
-    if(_venueChipMode==="active") return !!v.active;
-    if(_venueChipMode==="inactive") return !v.active;
-    if(_venueChipMode==="sheetfail") return (v.sheet_ok===false);
-    if(_venueChipMode==="notready") return String(v.status||"").toUpperCase().includes("PENDING") || String(v.status||"").toUpperCase().includes("NOT_READY");
-    if(_venueChipMode==="needs") return _venueNeedsAttention(v);
-    return true;
-  });
-  // issues-first sort for "needs" and default view
-  filtered.sort((a,b)=>{
-    const ia=_venueNeedsAttention(a)?1:0, ib=_venueNeedsAttention(b)?1:0;
-    if(ia!==ib) return ib-ia;
-    return String(a.venue_id||"").localeCompare(String(b.venue_id||""));
-  });
-  filtered.forEach(v=>{
-    const tr = document.createElement("tr");
-    const vid = (v.venue_id||"");
-    const sheet = String(v.google_sheet_id||"").trim();
-    const sheetDisp = sheet ? (sheet.length>16 ? (sheet.slice(0,8)+"…"+sheet.slice(-6)) : sheet) : "—";
-    const sheetBadge = sheet
-      ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">SET</span>`
-      : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING</span>`;
-    const act = v.active ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">ACTIVE</span>` : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);color:#fca5a5;font-size:12px;">INACTIVE</span>`;
-    const st = String(v.status||"").toUpperCase();
-    const stBadge = _venueNeedsAttention(v)
-      ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);color:#fca5a5;font-size:12px;">${esc(st||"ISSUE")}</span>`
-      : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">${esc(st||"OK")}</span>`;
-    const dash = `/admin?key=${encodeURIComponent(key)}&venue=${encodeURIComponent(vid)}`;
-    tr.innerHTML = `
-      <td style="font-family:ui-monospace,monospace">${esc(vid)}</td>
-      <td>${esc(v.venue_name||vid)}</td>
-      <td>${esc(v.plan||"")}</td>
-      <td title="${esc(sheet)}" style="white-space:nowrap">${sheetDisp} ${sheetBadge}</td>
-      <td style="white-space:nowrap">${act} ${stBadge}</td>
-      <td class="right"><a class="btn ghost" href="${dash}">Open</a></td>
-    `;
-    rows.appendChild(tr);
-  });
-
-  // update chip labels w/ counts
-  try{
-    const all = (_venuesCache||[]).length;
-    const active = (_venuesCache||[]).filter(v=>!!v.active).length;
-    const inactive = all-active;
-    const sheetfail = (_venuesCache||[]).filter(v=>v.sheet_ok===false).length;
-    const notready = (_venuesCache||[]).filter(v=>String(v.status||"").toUpperCase().includes("PENDING") || String(v.status||"").toUpperCase().includes("NOT_READY")).length;
-    const needs = (_venuesCache||[]).filter(v=>_venueNeedsAttention(v)).length;
-    document.querySelectorAll("#venueChips .pill").forEach(btn=>{
-      const mode = btn.getAttribute("data-vchip");
-      let label = btn.textContent.split(" (")[0];
-      if(mode==="all") label="All";
-      if(mode==="active") label="Active";
-      if(mode==="inactive") label="Inactive";
-      if(mode==="needs") label="Needs attention";
-      if(mode==="sheetfail") label="Sheet fail";
-      if(mode==="notready") label="Not ready";
-      const count = (mode==="all")?all:(mode==="active")?active:(mode==="inactive")?inactive:(mode==="sheetfail")?sheetfail:(mode==="notready")?notready:(mode==="needs")?needs:0;
-      btn.textContent = `${label} (${count})`;
-      btn.style.borderColor = (_venueChipMode===mode)? "rgba(240,180,60,.55)" : "var(--line)";
-    });
-  }catch(e){}
-}
-
-async function loadVenues(){
-    try{
-      const r = await fetch("/super/api/venues?super_key="+encodeURIComponent(super_key), {headers});
-      const j = await r.json();
-      const rows = document.getElementById("venueRows");
-      rows.innerHTML = "";
-      if(!j.ok){ throw new Error(j.error||"failed"); }
-
-      // populate venue filter dropdown (All/Active/Inactive + per-venue)
-      try{
-        if(venueSel){
-          // keep first 4 options (All/Active/Inactive/divider)
-          const keep = Array.from(venueSel.options).slice(0,4).map(o=>({value:o.value,text:o.text,disabled:o.disabled}));
-          venueSel.innerHTML = "";
-          keep.forEach(o=>{
-            const opt = document.createElement("option");
-            opt.value = o.value; opt.textContent = o.text; opt.disabled = !!o.disabled;
-            venueSel.appendChild(opt);
-          });
-          const active = (j.venues||[]).filter(v=>v.active);
-          const inactive = (j.venues||[]).filter(v=>!v.active);
-          const addGroup = (label, arr)=>{
-            if(!arr.length) return;
-            const og = document.createElement("optgroup");
-            og.label = label;
-            arr.forEach(v=>{
-              const opt = document.createElement("option");
-              opt.value = v.venue_id||"";
-              opt.textContent = (v.venue_name||v.venue_id||"");
-              og.appendChild(opt);
-            });
-            venueSel.appendChild(og);
-          };
-          addGroup("Active venues", active);
-          addGroup("Inactive venues", inactive);
-        }
-      }catch(e){}
-      _venuesCache = (j.venues||[]);
-      renderVenues();
-      return;
-      /* legacy render removed */
-      (j.venues||[]).forEach(v=>{
-        const tr = document.createElement("tr");
-        const vid = (v.venue_id||"");
-        const sheet = String(v.google_sheet_id||"").trim();
-        const sheetDisp = sheet ? (sheet.length>16 ? (sheet.slice(0,8)+"…"+sheet.slice(-6)) : sheet) : "—";
-        const sheetBadge = sheet
-          ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">READY</span>`
-          : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING SHEET</span>`;
-        const sid = String(v.google_sheet_id||"").trim();
-        const sidDisp = sid ? (sid.length>16 ? (sid.slice(0,8)+"…"+sid.slice(-6)) : sid) : "—";
-        const st = String(v.status||"").trim();
-        const statusBadge = (st==="READY")
-          ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">READY</span>`
-          : (st==="SHEET_FAIL")
-            ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);color:#fecaca;font-size:12px;">SHEET FAIL</span>`
-            : (st==="MISSING_SHEET")
-              ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING SHEET</span>`
-              : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.22);color:#e2e8f0;font-size:12px;">${st||"—"}</span>`;
-        tr.innerHTML = `<td>${esc(vid)}</td><td>${esc(v.venue_name||"")}</td><td>${esc(v.plan||"")}</td><td title="${esc(sid)}">${esc(sidDisp)}</td><td>${statusBadge}</td><td><button class="btn ghost" data-recheck="${esc(vid)}">Re-check</button> <button class="btn ghost" data-rotate="${esc(vid)}">Rotate Keys</button></td>`;
-        rows.appendChild(tr);
-      });
-
-      // bind re-check buttons
-      rows.querySelectorAll("[data-recheck]").forEach(btn=>{
-        btn.addEventListener("click", async ()=>{
-          const vid = btn.getAttribute("data-recheck");
-          if(!vid) return;
-          try{
-            venueErr.style.display="none";
-            const r = await fetch("/super/api/venues/check_sheet?super_key="+encodeURIComponent(super_key), {
-              method:"POST",
-              headers:Object.assign({"Content-Type":"application/json"}, headers),
-              body: JSON.stringify({venue_id: vid})
-            });
-            const j2 = await r.json();
-            if(!j2.ok) throw new Error(j2.error||"check failed");
-            venueOut.textContent = JSON.stringify(j2, null, 2);
-            venueOutWrap.style.display="block";
-            await loadVenues();
-          }catch(e){
-            venueErr.style.display="block";
-            venueErr.textContent="Re-check error: " + (e.message||e);
-          }
-        });
-      });
-
-      // bind rotate buttons
-      rows.querySelectorAll("[data-rotate]").forEach(btn=>{
-        btn.addEventListener("click", async ()=>{
-          const vid = btn.getAttribute("data-rotate");
-          if(!vid) return;
-          if(!confirm("Rotate keys for '"+vid+"'? This will invalidate existing venue keys.")) return;
-          try{
-            const r = await fetch("/super/api/venues/rotate_keys?super_key="+encodeURIComponent(super_key), {
-              method:"POST",
-              headers:Object.assign({"Content-Type":"application/json"}, headers),
-              body: JSON.stringify({venue_id: vid, rotate_admin:true, rotate_manager:true})
-            });
-            const j2 = await r.json();
-            if(!j2.ok) throw new Error(j2.error||"rotate failed");
-            venueOut.textContent = JSON.stringify(j2, null, 2);
-            venueOutWrap.style.display="block";
-            await loadVenues();
-          }catch(e){
-            venueErr.style.display="block";
-            venueErr.textContent="Rotate error: " + (e.message||e);
-          }
-        });
-      });
-    }catch(e){
-      venueErr.style.display="block";
-      venueErr.textContent="Venue list error: " + (e.message||e);
-    }
-  }
-
-  function _setVenueLinks(resp){
-    try{
-      const pack = (resp && (resp.pack || resp)) || {};
-      const adminUrl = pack.admin_url || resp.admin_url || "";
-      const managerUrl = pack.manager_url || resp.manager_url || "";
-      const qrUrl = pack.qr_url || resp.qr_url || "";
-      const links = document.getElementById("venueLinks");
-      const note = document.getElementById("venueLinksNote");
-      const aAdmin = document.getElementById("openAdmin");
-      const aMgr = document.getElementById("openManager");
-      const aQR = document.getElementById("openQR");
-      if(aAdmin) aAdmin.href = adminUrl || "#";
-      if(aMgr) aMgr.href = managerUrl || "#";
-      if(aQR) aQR.href = qrUrl || "#";
-      if(note) note.textContent = adminUrl ? "Admin + Manager links are ready." : "Links unavailable (older venue pack).";
-      if(links) links.style.display = (adminUrl || managerUrl || qrUrl) ? "block" : "none";
-    }catch(e){
-      const links = document.getElementById("venueLinks");
-      if(links) links.style.display="none";
-    }
-  }
-
-  async function createVenue(){
-    venueErr.style.display="none";
-    venueOutWrap.style.display="none";
-    const venue_name = (document.getElementById("v_name").value||"").trim();
-    const venue_id = (document.getElementById("v_id").value||"").trim();
-    const google_sheet_id = (document.getElementById("v_sheet").value||"").trim();
-    const plan = (document.getElementById("v_plan").value||"standard").trim();
-    if(!venue_name){
-      venueErr.style.display="block";
-      venueErr.textContent="Enter a venue name.";
-      return;
-    }
-    try{
-      const r = await fetch("/super/api/venues/create?super_key="+encodeURIComponent(super_key), {
-        method:"POST",
-        headers:Object.assign({"Content-Type":"application/json"}, headers),
-        body: JSON.stringify({venue_name, venue_id, google_sheet_id, plan})
-      });
-      const j = await r.json();
-      if(!j.ok){ throw new Error(j.error||"failed"); }
-      venueOut.textContent = JSON.stringify(j, null, 2);
-      venueOutWrap.style.display="block";
-            _setVenueLinks(j);
-      // Auto-check sheet for this venue (PASS/FAIL) when sheet id is provided
-      try{
-        const vid = (j.pack && j.pack.venue_id) ? j.pack.venue_id : (j.venue_id || (j.pack||{}).venue_id || "");
-        const sid = (google_sheet_id || "").trim();
-        if(vid && sid){
-          const rc = await fetch("/super/api/venues/check_sheet?super_key="+encodeURIComponent(super_key), {
-            method:"POST",
-            headers:Object.assign({"Content-Type":"application/json"}, headers),
-            body: JSON.stringify({venue_id: vid})
-          });
-          const jc = await rc.json();
-          if(jc && jc.ok && jc.check){
-            venueErr.style.display="block";
-            venueErr.textContent = jc.check.ok ? ("Sheet PASS: " + (jc.check.title||"OK")) : ("Sheet FAIL: " + (jc.check.error||"error"));
-            setTimeout(()=>{ try{ venueErr.style.display="none"; }catch(_){} }, 2500);
-          }
-        }
-      }catch(e){}
-await loadVenues();
-    }catch(e){
-      venueErr.style.display="block";
-      venueErr.textContent="Create error: " + (e.message||e);
-    }
-  }
-
-  document.getElementById("createVenue")?.addEventListener("click", createVenue);
-  document.getElementById("refreshVenues")?.addEventListener("click", loadVenues);
-
-  document.getElementById("copyPack")?.addEventListener("click", async ()=>{
-    try{
-      await navigator.clipboard.writeText(venueOut.textContent||"");
-      venueErr.style.display="block";
-      venueErr.textContent="Copied to clipboard.";
-      setTimeout(()=>{ venueErr.style.display="none"; }, 1500);
-    }catch(e){
-      venueErr.style.display="block";
-      venueErr.textContent="Copy failed: " + (e.message||e);
-    }
-  });
-
-  document.getElementById("downloadPack")?.addEventListener("click", ()=>{
-    try{
-      const txt = venueOut.textContent||"";
-      if(!txt.trim()) return;
-      const blob = new Blob([txt], {type:"application/json"});
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "venue_pack.json";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      setTimeout(()=>URL.revokeObjectURL(url), 1000);
-    }catch(e){
-      venueErr.style.display="block";
-      venueErr.textContent="Download failed: " + (e.message||e);
-    }
-  });
-
-  document.getElementById("checkSheet")?.addEventListener("click", async ()=>{
-    venueErr.style.display="none";
-    const sid = (document.getElementById("v_sheet").value||"").trim();
-    if(!sid){
-      venueErr.style.display="block";
-      venueErr.textContent="Enter a Google Sheet ID to check.";
-      return;
-    }
-    try{
-      const r = await fetch("/super/api/sheets/check?super_key="+encodeURIComponent(super_key)+"&sheet_id="+encodeURIComponent(sid), {headers});
-      const j = await r.json();
-      if(!j.ok) throw new Error(j.error||"check failed");
-      venueErr.style.display="block";
-      venueErr.textContent="Sheet OK: " + (j.title||"opened");
-      setTimeout(()=>{ ven
-
-
-document.getElementById("saveSheet")?.addEventListener("click", async ()=>{
-  venueErr.style.display="none";
-  const vid = (document.getElementById("v_id").value||"").trim() || _slugify((document.getElementById("v_name").value||"").trim());
-  const sid = (document.getElementById("v_sheet").value||"").trim();
-  if(!vid){
-    venueErr.style.display="block";
-    venueErr.textContent="Enter a venue id (or venue name) first.";
-    return;
-  }
-  if(!sid){
-    venueErr.style.display="block";
-    venueErr.textContent="Enter a Google Sheet ID first.";
-    return;
-  }
-  try{
-    const r = await fetch("/super/api/venues/set_sheet?super_key="+encodeURIComponent(super_key), {
-      method:"POST",
-      headers:Object.assign({"Content-Type":"application/json"}, headers),
-      body: JSON.stringify({venue_id: vid, google_sheet_id: sid})
-    });
-    const j = await r.json();
-    if(!j.ok){ throw new Error(j.error||"failed"); }
-    venueErr.style.display="block";
-    venueErr.textContent = "Saved sheet to venue: " + vid;
-    setTimeout(()=>{ venueErr.style.display="none"; }, 1800);
-    await loadVenues();
-  }catch(e){
-    venueErr.style.display="block";
-    venueErr.textContent="Save sheet error: " + (e.message||e);
-  }
-});
-ueErr.style.display="none"; }, 2000);
-    }catch(e){
-      venueErr.style.display="block";
-      venueErr.textContent="Sheet check error: " + (e.message||e);
-    }
-  });
-
-  const super_key = q.get("super_key") || key; // allow SUPER key as key param
-  const headers = super_key ? {"X-Super-Key": super_key} : {};
-
-  const leadRowsEl = document.getElementById("leadRows");
-  const leadErrEl = document.getElementById("leadErr");
-  const qEl = document.getElementById("q");
-  const perPageEl = document.getElementById("perPage");
-  const reloadBtn = document.getElementById("reload");
-
-  
-
-  const venueSel = document.getElementById("venueFilter");
-
-  // Tabs (Venues / Leads)
-  function setTab(tab){
-    document.querySelectorAll(".tabbtn").forEach(b=>b.classList.toggle("active", b.getAttribute("data-tabbtn")===tab));
-    document.querySelectorAll(".tabpane").forEach(p=>p.classList.toggle("active", p.getAttribute("data-tab")===tab));
-    try{ localStorage.setItem("super_tab", tab);}catch(e){}
-    // Ensure data loads when a tab is opened (prevents "blank Leads" on first click)
-    try{
-      if(tab === "leads"){
-        if(typeof resetLeadsPage === "function") resetLeadsPage();
-        if(typeof loadLeads === "function") loadLeads();
-      }else if(tab === "venues"){
-        if(typeof loadVenues === "function") loadVenues();
-      }
-    }catch(e){}
-  }
-  document.querySelectorAll(".tabbtn").forEach(b=>{
-    b.addEventListener("click", ()=> setTab(b.getAttribute("data-tabbtn")));
-  });
-  try{
-    const saved = localStorage.getItem("super_tab");
-    if(saved) setTab(saved);
-  }catch(e){}
-  // Venue status chips
-  document.querySelectorAll("#venueChips .pill").forEach(btn=>{
-    btn.addEventListener("click", ()=>{
-      _venueChipMode = btn.getAttribute("data-vchip")||"all";
-      renderVenues();
-    });
-  });
-  const exportBtn = document.getElementById("exportCsv");
-  let __lastLeadRows = [];
-  let __lastLeadMeta = {total:0,page:1,pages:1,per_page:10};
-  let __leadPage = 1;
-
-  function resetLeadsPage(){ __leadPage = 1; }
-
-  if(reloadBtn){ reloadBtn.addEventListener("click", ()=>{ resetLeadsPage(); loadLeads(); }); }
-  if(perPageEl){ perPageEl.addEventListener("change", ()=>{ resetLeadsPage(); loadLeads(); }); }
-  if(venueSel){ venueSel.addEventListener("change", ()=>{ resetLeadsPage(); loadLeads(); }); }
-  if(qEl){
-    let __qT = null;
-    qEl.addEventListener("input", ()=>{
-      if(__qT) clearTimeout(__qT);
-      __qT = setTimeout(()=>{ resetLeadsPage(); loadLeads(); }, 250);
-    });
-  }
-  const prevBtn = document.getElementById("prevPage");
-  const nextBtn = document.getElementById("nextPage");
-  if(prevBtn){ prevBtn.addEventListener("click", ()=>{ if(__leadPage>1){ __leadPage--; loadLeads(); } }); }
-  if(nextBtn){ nextBtn.addEventListener("click", ()=>{ const pages=__lastLeadMeta.pages||1; if(__leadPage < pages){ __leadPage++; loadLeads(); } }); }
-
-
-  async function loadLeads(){
-    if(!leadRowsEl) return;
-    leadErrEl.textContent = "";
-    leadRowsEl.innerHTML = "<tr><td colspan=\"8\">Loading…</td></tr>";
-
-    const perPage = (perPageEl && perPageEl.value) ? Number(perPageEl.value) : 10;
-    const query = (qEl && qEl.value || "").trim();
-    const vsel = (venueSel && venueSel.value || "").trim();
-    const isScope = (vsel === "__active__" || vsel === "__inactive__");
-    const venue_state = isScope ? (vsel === "__active__" ? "active" : "inactive") : "all";
-    const venue_id = (!isScope && vsel && vsel !== "__divider__") ? vsel : "";
-
-    const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)+"&super_key="+encodeURIComponent(super_key)
-      +"&page="+encodeURIComponent(__leadPage)
-      +"&per_page="+encodeURIComponent(perPage)
-      +"&venue_state="+encodeURIComponent(venue_state)
-      +"&venue_id="+encodeURIComponent(venue_id)
-      +"&q="+encodeURIComponent(query);
-
-    try{
-      const r = await fetch(url, {headers:_demoHeaders()});
-      const j = await r.json();
-      if(!j.ok) throw new Error(j.error || "forbidden");
-
-      const rows = (j.items || j.leads || []);
-      __lastLeadRows = rows;
-      __lastLeadMeta = {total:j.total||rows.length, page:j.page||1, pages:j.pages||1, per_page:j.per_page||perPage};
-
-      leadRowsEl.innerHTML = "";
-      if(!rows.length){
-        leadRowsEl.innerHTML = "<tr><td colspan=\"8\">No leads found.</td></tr>";
-      }else{
-        rows.forEach(x=>{
-          const tr = document.createElement("tr");
-          tr.innerHTML = `
-            <td>${esc(x._venue_id||"")}</td>
-            <td>${esc(x.name||"")}</td>
-            <td>${esc(x.phone||"")}</td>
-            <td>${esc(x.datetime||x["Date/Time"]||x.date||x.timestamp||"")}</td>
-            <td class="right">${esc(x.party_size||x.party||"")}</td>
-            <td>${esc(x.status||"")}</td>
-            <td>${esc(x.tier||"")}</td>
-            <td>${esc(x.queue||"")}</td>
-          `;
-          leadRowsEl.appendChild(tr);
-        });
-      }
-
-      // pager
-      const pg = (__lastLeadMeta.page||1);
-      const pages = (__lastLeadMeta.pages||1);
-      const total = (__lastLeadMeta.total||0);
-      const pageInfo = document.getElementById("pageInfo");
-      if(pageInfo) pageInfo.textContent = `Page ${pg} / ${pages} • ${total} total`;
-      const prevBtn = document.getElementById("prevPage");
-      const nextBtn = document.getElementById("nextPage");
-      if(prevBtn) prevBtn.disabled = (pg<=1);
-      if(nextBtn) nextBtn.disabled = (pg>=pages);
-
-    }catch(e){
-      leadRowsEl.innerHTML = "";
-      leadErrEl.textContent = "Error: " + (e.message||e);
-    }
-  }
-
-  
-  if(exportBtn){
-    exportBtn.addEventListener("click", async ()=>{
-      if(__demo){ try{ leadErrEl.textContent = "Demo Mode: export disabled."; }catch(_){} return; }
-      try{
-        const query = (qEl && qEl.value || "").trim();
-        const vsel = (venueSel && venueSel.value || "").trim();
-        const isScope = (vsel === "__active__" || vsel === "__inactive__");
-        const venue_state = isScope ? (vsel === "__active__" ? "active" : "inactive") : "all";
-        const venue_id = (!isScope && vsel && vsel !== "__divider__") ? vsel : "";
-
-        const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)
-          +"&super_key="+encodeURIComponent(super_key)
-          +"&limit=5000"
-          +"&venue_state="+encodeURIComponent(venue_state)
-          +"&venue_id="+encodeURIComponent(venue_id)
-          +"&q="+encodeURIComponent(query);
-
-        const r = await fetch(url, {headers:_demoHeaders()});
-        const j = await r.json();
-        if(!j.ok) throw new Error(j.error || "forbidden");
-        const rows = (j.items || j.leads || []);
-
-        const headersCsv = ["venue_id","name","phone","datetime","party_size","status","tier","queue"];
-        const escCsv = (v)=>(""+(v??"")).replace(/\r?\n/g," ").replace(/"/g,'""');
-        const lines = [];
-        lines.push(headersCsv.map(h=>'"'+escCsv(h)+'"').join(","));
-        (rows||[]).forEach(x=>{
-          const vals = [
-            x._venue_id||"",
-            x.name||"",
-            x.phone||"",
-            x.datetime||x["Date/Time"]||x.date||x.timestamp||"",
-            x.party_size||x.party||"",
-            x.status||"",
-            x.tier||"",
-            x.queue||"",
-          ];
-          lines.push(vals.map(v=>'"'+escCsv(v)+'"').join(","));
-        });
-        const csv = lines.join("\n");
-        const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
-        const urlObj = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = urlObj;
-        a.download = "super_leads_export.csv";
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(()=>URL.revokeObjectURL(urlObj), 2000);
-      }catch(e){
-        try{ leadErrEl.textContent = "Export failed: " + (e.message||e); }catch(_){}
-      }
-    });
-  }
-if(qEl){
-    qEl.addEventListener("input", ()=>loadLeads());
-  }
-  if(perPageEl){
-    perPageEl.addEventListener("change", ()=>loadLeads());
-  }
-
-  
-  if(venueSel){ venueSel.addEventListener("change", ()=>loadLeads()); }
-try{
-    const r = await fetch("/super/api/overview?super_key="+encodeURIComponent(super_key), {headers:_demoHeaders()});
-    const j = await r.json();
-    if(!j.ok) throw new Error(j.error || "forbidden");
-    document.getElementById("venues").textContent = (j.total && j.total.venues) || 0;
-    document.getElementById("aiq").textContent = (j.total && j.total.ai_queue) || 0;
-    const tb = document.getElementById("rows");
-    tb.innerHTML = "";
-    (j.venues || []).forEach(v=>{
-      const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${(v.venue_name||"")}</td><td>${(v.venue_id||"")}</td><td class="right">${(v.ai_queue||0)}</td>`;
-      tb.appendChild(tr);
-    });
-    document.getElementById("ts").textContent = new Date().toLocaleString();
-  }catch(e){
-    document.getElementById("err").textContent = "Error: " + (e.message||e);
-  }
-  await loadVenues();
-  await loadLeads();
-  try{
-    const b = await fetch("/super/api/diag?super_key="+encodeURIComponent(super_key), {headers:_demoHeaders()});
-    const bj = await b.json();
-    document.getElementById("build").textContent = (bj.app_version || bj.app_version_env || "—");
-  }catch(e){}
-})();
-</script>
+<script src="/super/static/console.js" defer></script>
 </body>
 </html>
 """
@@ -10308,13 +9711,8 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
   </div>
 </div>
 
-<script defer src="/super/static/console.js?super_key={{ super_key }}"></script>
-</body>
-</html>
-"""
-
-
-SUPER_CONSOLE_JS_OPTIONA = r"""(function(){
+<script>
+(function(){
   const qs = new URLSearchParams(location.search);
   const super_key = (qs.get('super_key') || qs.get('key') || '').trim() || (document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)?.[1] ? decodeURIComponent(document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)[1]) : '');
   const state = {venues:[], filter:'all', selected:'', leadsPage:1, leadsTotal:0, demo_mode:false};
@@ -10613,7 +10011,645 @@ SUPER_CONSOLE_JS_OPTIONA = r"""(function(){
   document.getElementById('btnReloadLeads').onclick=()=>{state.leadsPage=1; loadLeads();};
   document.getElementById('leadsSearch').onkeydown=(e)=>{ if(e.key==='Enter'){ state.leadsPage=1; loadLeads(); } };
   document.getElementById('leadsPerPage').onchange=()=>{ state.leadsPage=1; loadLeads(); };
-  document.getElementById('leadsVenueState').onchange=()=>{ state.leadsPage=1; loadLeads(); };
+  docu
+
+SUPER_CONSOLE_JS = r"""
+// Super Admin console JS (externalized to avoid inline-script blocking)
+(function(){
+  function showCrash(msg){
+    try{
+      var b=document.getElementById('jsCrash');
+      if(!b){
+        b=document.createElement('div');
+        b.id='jsCrash';
+        b.style.cssText='margin:12px 0;padding:10px 12px;border:1px solid rgba(255,120,120,.35);background:rgba(255,120,120,.08);border-radius:12px;color:#ffd2d2;font-size:13px;white-space:pre-wrap';
+        var w=document.querySelector('.wrap')||document.body;
+        w.insertBefore(b, w.firstChild);
+      }
+      b.textContent = 'Super Admin JS error: ' + msg;
+    }catch(_){}
+  }
+  window.addEventListener('error', function(e){ showCrash(e && (e.message||String(e))); });
+  window.addEventListener('unhandledrejection', function(e){ showCrash(e && (e.reason && (e.reason.message||String(e.reason))) || 'Unhandled promise rejection'); });
+
+  document.addEventListener('DOMContentLoaded', function(){
+    try{
+    
+    // --- Demo Mode helpers (safe defaults) ---
+    const _demoHeaders = (enabled) => (enabled ? {"X-Demo-Mode":"1"} : {});
+    
+    (async function(){
+      const q = new URLSearchParams(window.location.search);
+      const key = q.get("key") || "";
+      const venueErr = document.getElementById("venueErr");
+      const venueOutWrap = document.getElementById("venueOutWrap");
+      const venueOut = document.getElementById("venueOut");
+    
+      function _slugify(s){
+        s=(s||"").toLowerCase().trim();
+        s=s.replace(/[^a-z0-9]+/g,'-').replace(/-{2,}/g,'-').replace(/^-|-$/g,'');
+        return s||"default";
+      }
+    
+    
+      
+    
+      function esc(s){
+        return String(s ?? "").replace(/[&<>"']/g, ch=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[ch]));
+      }
+    
+    let _venuesCache = [];
+    let _venueChipMode = "all";
+    function _venueNeedsAttention(v){
+      try{
+        const st = String(v.status||"").toUpperCase();
+        const sheetOk = (v.sheet_ok===true);
+        if(!sheetOk) return true;
+        if(st.includes("FAIL") || st.includes("MISSING")) return true;
+        if(st.includes("PENDING") || st.includes("NOT_READY")) return true;
+        return false;
+      }catch(e){ return false; }
+    }
+    function renderVenues(){
+      const rows = document.getElementById("venueRows");
+      rows.innerHTML = "";
+      const arr = (_venuesCache||[]).slice();
+      const filtered = arr.filter(v=>{
+        if(_venueChipMode==="active") return !!v.active;
+        if(_venueChipMode==="inactive") return !v.active;
+        if(_venueChipMode==="sheetfail") return (v.sheet_ok===false);
+        if(_venueChipMode==="notready") return String(v.status||"").toUpperCase().includes("PENDING") || String(v.status||"").toUpperCase().includes("NOT_READY");
+        if(_venueChipMode==="needs") return _venueNeedsAttention(v);
+        return true;
+      });
+      // issues-first sort for "needs" and default view
+      filtered.sort((a,b)=>{
+        const ia=_venueNeedsAttention(a)?1:0, ib=_venueNeedsAttention(b)?1:0;
+        if(ia!==ib) return ib-ia;
+        return String(a.venue_id||"").localeCompare(String(b.venue_id||""));
+      });
+      filtered.forEach(v=>{
+        const tr = document.createElement("tr");
+        const vid = (v.venue_id||"");
+        const sheet = String(v.google_sheet_id||"").trim();
+        const sheetDisp = sheet ? (sheet.length>16 ? (sheet.slice(0,8)+"…"+sheet.slice(-6)) : sheet) : "—";
+        const sheetBadge = sheet
+          ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">SET</span>`
+          : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING</span>`;
+        const act = v.active ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">ACTIVE</span>` : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);color:#fca5a5;font-size:12px;">INACTIVE</span>`;
+        const st = String(v.status||"").toUpperCase();
+        const stBadge = _venueNeedsAttention(v)
+          ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);color:#fca5a5;font-size:12px;">${esc(st||"ISSUE")}</span>`
+          : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">${esc(st||"OK")}</span>`;
+        const dash = `/admin?key=${encodeURIComponent(key)}&venue=${encodeURIComponent(vid)}`;
+        tr.innerHTML = `
+          <td style="font-family:ui-monospace,monospace">${esc(vid)}</td>
+          <td>${esc(v.venue_name||vid)}</td>
+          <td>${esc(v.plan||"")}</td>
+          <td title="${esc(sheet)}" style="white-space:nowrap">${sheetDisp} ${sheetBadge}</td>
+          <td style="white-space:nowrap">${act} ${stBadge}</td>
+          <td class="right"><a class="btn ghost" href="${dash}">Open</a></td>
+        `;
+        rows.appendChild(tr);
+      });
+    
+      // update chip labels w/ counts
+      try{
+        const all = (_venuesCache||[]).length;
+        const active = (_venuesCache||[]).filter(v=>!!v.active).length;
+        const inactive = all-active;
+        const sheetfail = (_venuesCache||[]).filter(v=>v.sheet_ok===false).length;
+        const notready = (_venuesCache||[]).filter(v=>String(v.status||"").toUpperCase().includes("PENDING") || String(v.status||"").toUpperCase().includes("NOT_READY")).length;
+        const needs = (_venuesCache||[]).filter(v=>_venueNeedsAttention(v)).length;
+        document.querySelectorAll("#venueChips .pill").forEach(btn=>{
+          const mode = btn.getAttribute("data-vchip");
+          let label = btn.textContent.split(" (")[0];
+          if(mode==="all") label="All";
+          if(mode==="active") label="Active";
+          if(mode==="inactive") label="Inactive";
+          if(mode==="needs") label="Needs attention";
+          if(mode==="sheetfail") label="Sheet fail";
+          if(mode==="notready") label="Not ready";
+          const count = (mode==="all")?all:(mode==="active")?active:(mode==="inactive")?inactive:(mode==="sheetfail")?sheetfail:(mode==="notready")?notready:(mode==="needs")?needs:0;
+          btn.textContent = `${label} (${count})`;
+          btn.style.borderColor = (_venueChipMode===mode)? "rgba(240,180,60,.55)" : "var(--line)";
+        });
+      }catch(e){}
+    }
+    
+    async function loadVenues(){
+        try{
+          const r = await fetch("/super/api/venues?super_key="+encodeURIComponent(super_key), {headers});
+          const j = await r.json();
+          const rows = document.getElementById("venueRows");
+          rows.innerHTML = "";
+          if(!j.ok){ throw new Error(j.error||"failed"); }
+    
+          // populate venue filter dropdown (All/Active/Inactive + per-venue)
+          try{
+            if(venueSel){
+              // keep first 4 options (All/Active/Inactive/divider)
+              const keep = Array.from(venueSel.options).slice(0,4).map(o=>({value:o.value,text:o.text,disabled:o.disabled}));
+              venueSel.innerHTML = "";
+              keep.forEach(o=>{
+                const opt = document.createElement("option");
+                opt.value = o.value; opt.textContent = o.text; opt.disabled = !!o.disabled;
+                venueSel.appendChild(opt);
+              });
+              const active = (j.venues||[]).filter(v=>v.active);
+              const inactive = (j.venues||[]).filter(v=>!v.active);
+              const addGroup = (label, arr)=>{
+                if(!arr.length) return;
+                const og = document.createElement("optgroup");
+                og.label = label;
+                arr.forEach(v=>{
+                  const opt = document.createElement("option");
+                  opt.value = v.venue_id||"";
+                  opt.textContent = (v.venue_name||v.venue_id||"");
+                  og.appendChild(opt);
+                });
+                venueSel.appendChild(og);
+              };
+              addGroup("Active venues", active);
+              addGroup("Inactive venues", inactive);
+            }
+          }catch(e){}
+          _venuesCache = (j.venues||[]);
+          renderVenues();
+          return;
+          /* legacy render removed */
+          (j.venues||[]).forEach(v=>{
+            const tr = document.createElement("tr");
+            const vid = (v.venue_id||"");
+            const sheet = String(v.google_sheet_id||"").trim();
+            const sheetDisp = sheet ? (sheet.length>16 ? (sheet.slice(0,8)+"…"+sheet.slice(-6)) : sheet) : "—";
+            const sheetBadge = sheet
+              ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">READY</span>`
+              : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING SHEET</span>`;
+            const sid = String(v.google_sheet_id||"").trim();
+            const sidDisp = sid ? (sid.length>16 ? (sid.slice(0,8)+"…"+sid.slice(-6)) : sid) : "—";
+            const st = String(v.status||"").trim();
+            const statusBadge = (st==="READY")
+              ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">READY</span>`
+              : (st==="SHEET_FAIL")
+                ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);color:#fecaca;font-size:12px;">SHEET FAIL</span>`
+                : (st==="MISSING_SHEET")
+                  ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING SHEET</span>`
+                  : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.22);color:#e2e8f0;font-size:12px;">${st||"—"}</span>`;
+            tr.innerHTML = `<td>${esc(vid)}</td><td>${esc(v.venue_name||"")}</td><td>${esc(v.plan||"")}</td><td title="${esc(sid)}">${esc(sidDisp)}</td><td>${statusBadge}</td><td><button class="btn ghost" data-recheck="${esc(vid)}">Re-check</button> <button class="btn ghost" data-rotate="${esc(vid)}">Rotate Keys</button></td>`;
+            rows.appendChild(tr);
+          });
+    
+          // bind re-check buttons
+          rows.querySelectorAll("[data-recheck]").forEach(btn=>{
+            btn.addEventListener("click", async ()=>{
+              const vid = btn.getAttribute("data-recheck");
+              if(!vid) return;
+              try{
+                venueErr.style.display="none";
+                const r = await fetch("/super/api/venues/check_sheet?super_key="+encodeURIComponent(super_key), {
+                  method:"POST",
+                  headers:Object.assign({"Content-Type":"application/json"}, headers),
+                  body: JSON.stringify({venue_id: vid})
+                });
+                const j2 = await r.json();
+                if(!j2.ok) throw new Error(j2.error||"check failed");
+                venueOut.textContent = JSON.stringify(j2, null, 2);
+                venueOutWrap.style.display="block";
+                await loadVenues();
+              }catch(e){
+                venueErr.style.display="block";
+                venueErr.textContent="Re-check error: " + (e.message||e);
+              }
+            });
+          });
+    
+          // bind rotate buttons
+          rows.querySelectorAll("[data-rotate]").forEach(btn=>{
+            btn.addEventListener("click", async ()=>{
+              const vid = btn.getAttribute("data-rotate");
+              if(!vid) return;
+              if(!confirm("Rotate keys for '"+vid+"'? This will invalidate existing venue keys.")) return;
+              try{
+                const r = await fetch("/super/api/venues/rotate_keys?super_key="+encodeURIComponent(super_key), {
+                  method:"POST",
+                  headers:Object.assign({"Content-Type":"application/json"}, headers),
+                  body: JSON.stringify({venue_id: vid, rotate_admin:true, rotate_manager:true})
+                });
+                const j2 = await r.json();
+                if(!j2.ok) throw new Error(j2.error||"rotate failed");
+                venueOut.textContent = JSON.stringify(j2, null, 2);
+                venueOutWrap.style.display="block";
+                await loadVenues();
+              }catch(e){
+                venueErr.style.display="block";
+                venueErr.textContent="Rotate error: " + (e.message||e);
+              }
+            });
+          });
+        }catch(e){
+          venueErr.style.display="block";
+          venueErr.textContent="Venue list error: " + (e.message||e);
+        }
+      }
+    
+      function _setVenueLinks(resp){
+        try{
+          const pack = (resp && (resp.pack || resp)) || {};
+          const adminUrl = pack.admin_url || resp.admin_url || "";
+          const managerUrl = pack.manager_url || resp.manager_url || "";
+          const qrUrl = pack.qr_url || resp.qr_url || "";
+          const links = document.getElementById("venueLinks");
+          const note = document.getElementById("venueLinksNote");
+          const aAdmin = document.getElementById("openAdmin");
+          const aMgr = document.getElementById("openManager");
+          const aQR = document.getElementById("openQR");
+          if(aAdmin) aAdmin.href = adminUrl || "#";
+          if(aMgr) aMgr.href = managerUrl || "#";
+          if(aQR) aQR.href = qrUrl || "#";
+          if(note) note.textContent = adminUrl ? "Admin + Manager links are ready." : "Links unavailable (older venue pack).";
+          if(links) links.style.display = (adminUrl || managerUrl || qrUrl) ? "block" : "none";
+        }catch(e){
+          const links = document.getElementById("venueLinks");
+          if(links) links.style.display="none";
+        }
+      }
+    
+      async function createVenue(){
+        venueErr.style.display="none";
+        venueOutWrap.style.display="none";
+        const venue_name = (document.getElementById("v_name").value||"").trim();
+        const venue_id = (document.getElementById("v_id").value||"").trim();
+        const google_sheet_id = (document.getElementById("v_sheet").value||"").trim();
+        const plan = (document.getElementById("v_plan").value||"standard").trim();
+        if(!venue_name){
+          venueErr.style.display="block";
+          venueErr.textContent="Enter a venue name.";
+          return;
+        }
+        try{
+          const r = await fetch("/super/api/venues/create?super_key="+encodeURIComponent(super_key), {
+            method:"POST",
+            headers:Object.assign({"Content-Type":"application/json"}, headers),
+            body: JSON.stringify({venue_name, venue_id, google_sheet_id, plan})
+          });
+          const j = await r.json();
+          if(!j.ok){ throw new Error(j.error||"failed"); }
+          venueOut.textContent = JSON.stringify(j, null, 2);
+          venueOutWrap.style.display="block";
+                _setVenueLinks(j);
+          // Auto-check sheet for this venue (PASS/FAIL) when sheet id is provided
+          try{
+            const vid = (j.pack && j.pack.venue_id) ? j.pack.venue_id : (j.venue_id || (j.pack||{}).venue_id || "");
+            const sid = (google_sheet_id || "").trim();
+            if(vid && sid){
+              const rc = await fetch("/super/api/venues/check_sheet?super_key="+encodeURIComponent(super_key), {
+                method:"POST",
+                headers:Object.assign({"Content-Type":"application/json"}, headers),
+                body: JSON.stringify({venue_id: vid})
+              });
+              const jc = await rc.json();
+              if(jc && jc.ok && jc.check){
+                venueErr.style.display="block";
+                venueErr.textContent = jc.check.ok ? ("Sheet PASS: " + (jc.check.title||"OK")) : ("Sheet FAIL: " + (jc.check.error||"error"));
+                setTimeout(()=>{ try{ venueErr.style.display="none"; }catch(_){} }, 2500);
+              }
+            }
+          }catch(e){}
+    await loadVenues();
+        }catch(e){
+          venueErr.style.display="block";
+          venueErr.textContent="Create error: " + (e.message||e);
+        }
+      }
+    
+      document.getElementById("createVenue")?.addEventListener("click", createVenue);
+      document.getElementById("refreshVenues")?.addEventListener("click", loadVenues);
+    
+      document.getElementById("copyPack")?.addEventListener("click", async ()=>{
+        try{
+          await navigator.clipboard.writeText(venueOut.textContent||"");
+          venueErr.style.display="block";
+          venueErr.textContent="Copied to clipboard.";
+          setTimeout(()=>{ venueErr.style.display="none"; }, 1500);
+        }catch(e){
+          venueErr.style.display="block";
+          venueErr.textContent="Copy failed: " + (e.message||e);
+        }
+      });
+    
+      document.getElementById("downloadPack")?.addEventListener("click", ()=>{
+        try{
+          const txt = venueOut.textContent||"";
+          if(!txt.trim()) return;
+          const blob = new Blob([txt], {type:"application/json"});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "venue_pack.json";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(()=>URL.revokeObjectURL(url), 1000);
+        }catch(e){
+          venueErr.style.display="block";
+          venueErr.textContent="Download failed: " + (e.message||e);
+        }
+      });
+    
+      document.getElementById("checkSheet")?.addEventListener("click", async ()=>{
+        venueErr.style.display="none";
+        const sid = (document.getElementById("v_sheet").value||"").trim();
+        if(!sid){
+          venueErr.style.display="block";
+          venueErr.textContent="Enter a Google Sheet ID to check.";
+          return;
+        }
+        try{
+          const r = await fetch("/super/api/sheets/check?super_key="+encodeURIComponent(super_key)+"&sheet_id="+encodeURIComponent(sid), {headers});
+          const j = await r.json();
+          if(!j.ok) throw new Error(j.error||"check failed");
+          venueErr.style.display="block";
+          venueErr.textContent="Sheet OK: " + (j.title||"opened");
+          setTimeout(()=>{ ven
+    
+    
+    document.getElementById("saveSheet")?.addEventListener("click", async ()=>{
+      venueErr.style.display="none";
+      const vid = (document.getElementById("v_id").value||"").trim() || _slugify((document.getElementById("v_name").value||"").trim());
+      const sid = (document.getElementById("v_sheet").value||"").trim();
+      if(!vid){
+        venueErr.style.display="block";
+        venueErr.textContent="Enter a venue id (or venue name) first.";
+        return;
+      }
+      if(!sid){
+        venueErr.style.display="block";
+        venueErr.textContent="Enter a Google Sheet ID first.";
+        return;
+      }
+      try{
+        const r = await fetch("/super/api/venues/set_sheet?super_key="+encodeURIComponent(super_key), {
+          method:"POST",
+          headers:Object.assign({"Content-Type":"application/json"}, headers),
+          body: JSON.stringify({venue_id: vid, google_sheet_id: sid})
+        });
+        const j = await r.json();
+        if(!j.ok){ throw new Error(j.error||"failed"); }
+        venueErr.style.display="block";
+        venueErr.textContent = "Saved sheet to venue: " + vid;
+        setTimeout(()=>{ venueErr.style.display="none"; }, 1800);
+        await loadVenues();
+      }catch(e){
+        venueErr.style.display="block";
+        venueErr.textContent="Save sheet error: " + (e.message||e);
+      }
+    });
+    ueErr.style.display="none"; }, 2000);
+        }catch(e){
+          venueErr.style.display="block";
+          venueErr.textContent="Sheet check error: " + (e.message||e);
+        }
+      });
+    
+      const super_key = q.get("super_key") || key; // allow SUPER key as key param
+      const headers = super_key ? {"X-Super-Key": super_key} : {};
+    
+      const leadRowsEl = document.getElementById("leadRows");
+      const leadErrEl = document.getElementById("leadErr");
+      const qEl = document.getElementById("q");
+      const perPageEl = document.getElementById("perPage");
+      const reloadBtn = document.getElementById("reload");
+    
+      
+    
+      const venueSel = document.getElementById("venueFilter");
+    
+      // Tabs (Venues / Leads)
+      function setTab(tab){
+        document.querySelectorAll(".tabbtn").forEach(b=>b.classList.toggle("active", b.getAttribute("data-tabbtn")===tab));
+        document.querySelectorAll(".tabpane").forEach(p=>p.classList.toggle("active", p.getAttribute("data-tab")===tab));
+        try{ localStorage.setItem("super_tab", tab);}catch(e){}
+        // Ensure data loads when a tab is opened (prevents "blank Leads" on first click)
+        try{
+          if(tab === "leads"){
+            if(typeof resetLeadsPage === "function") resetLeadsPage();
+            if(typeof loadLeads === "function") loadLeads();
+          }else if(tab === "venues"){
+            if(typeof loadVenues === "function") loadVenues();
+          }
+        }catch(e){}
+      }
+      document.querySelectorAll(".tabbtn").forEach(b=>{
+        b.addEventListener("click", ()=> setTab(b.getAttribute("data-tabbtn")));
+      });
+      try{
+        const saved = localStorage.getItem("super_tab");
+        if(saved) setTab(saved);
+      }catch(e){}
+      // Venue status chips
+      document.querySelectorAll("#venueChips .pill").forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          _venueChipMode = btn.getAttribute("data-vchip")||"all";
+          renderVenues();
+        });
+      });
+      const exportBtn = document.getElementById("exportCsv");
+      let __lastLeadRows = [];
+      let __lastLeadMeta = {total:0,page:1,pages:1,per_page:10};
+      let __leadPage = 1;
+    
+      function resetLeadsPage(){ __leadPage = 1; }
+    
+      if(reloadBtn){ reloadBtn.addEventListener("click", ()=>{ resetLeadsPage(); loadLeads(); }); }
+      if(perPageEl){ perPageEl.addEventListener("change", ()=>{ resetLeadsPage(); loadLeads(); }); }
+      if(venueSel){ venueSel.addEventListener("change", ()=>{ resetLeadsPage(); loadLeads(); }); }
+      if(qEl){
+        let __qT = null;
+        qEl.addEventListener("input", ()=>{
+          if(__qT) clearTimeout(__qT);
+          __qT = setTimeout(()=>{ resetLeadsPage(); loadLeads(); }, 250);
+        });
+      }
+      const prevBtn = document.getElementById("prevPage");
+      const nextBtn = document.getElementById("nextPage");
+      if(prevBtn){ prevBtn.addEventListener("click", ()=>{ if(__leadPage>1){ __leadPage--; loadLeads(); } }); }
+      if(nextBtn){ nextBtn.addEventListener("click", ()=>{ const pages=__lastLeadMeta.pages||1; if(__leadPage < pages){ __leadPage++; loadLeads(); } }); }
+    
+    
+      async function loadLeads(){
+        if(!leadRowsEl) return;
+        leadErrEl.textContent = "";
+        leadRowsEl.innerHTML = "<tr><td colspan=\"8\">Loading…</td></tr>";
+    
+        const perPage = (perPageEl && perPageEl.value) ? Number(perPageEl.value) : 10;
+        const query = (qEl && qEl.value || "").trim();
+        const vsel = (venueSel && venueSel.value || "").trim();
+        const isScope = (vsel === "__active__" || vsel === "__inactive__");
+        const venue_state = isScope ? (vsel === "__active__" ? "active" : "inactive") : "all";
+        const venue_id = (!isScope && vsel && vsel !== "__divider__") ? vsel : "";
+    
+        const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)+"&super_key="+encodeURIComponent(super_key)
+          +"&page="+encodeURIComponent(__leadPage)
+          +"&per_page="+encodeURIComponent(perPage)
+          +"&venue_state="+encodeURIComponent(venue_state)
+          +"&venue_id="+encodeURIComponent(venue_id)
+          +"&q="+encodeURIComponent(query);
+    
+        try{
+          const r = await fetch(url, {headers:_demoHeaders()});
+          const j = await r.json();
+          if(!j.ok) throw new Error(j.error || "forbidden");
+    
+          const rows = (j.items || j.leads || []);
+          __lastLeadRows = rows;
+          __lastLeadMeta = {total:j.total||rows.length, page:j.page||1, pages:j.pages||1, per_page:j.per_page||perPage};
+    
+          leadRowsEl.innerHTML = "";
+          if(!rows.length){
+            leadRowsEl.innerHTML = "<tr><td colspan=\"8\">No leads found.</td></tr>";
+          }else{
+            rows.forEach(x=>{
+              const tr = document.createElement("tr");
+              tr.innerHTML = `
+                <td>${esc(x._venue_id||"")}</td>
+                <td>${esc(x.name||"")}</td>
+                <td>${esc(x.phone||"")}</td>
+                <td>${esc(x.datetime||x["Date/Time"]||x.date||x.timestamp||"")}</td>
+                <td class="right">${esc(x.party_size||x.party||"")}</td>
+                <td>${esc(x.status||"")}</td>
+                <td>${esc(x.tier||"")}</td>
+                <td>${esc(x.queue||"")}</td>
+              `;
+              leadRowsEl.appendChild(tr);
+            });
+          }
+    
+          // pager
+          const pg = (__lastLeadMeta.page||1);
+          const pages = (__lastLeadMeta.pages||1);
+          const total = (__lastLeadMeta.total||0);
+          const pageInfo = document.getElementById("pageInfo");
+          if(pageInfo) pageInfo.textContent = `Page ${pg} / ${pages} • ${total} total`;
+          const prevBtn = document.getElementById("prevPage");
+          const nextBtn = document.getElementById("nextPage");
+          if(prevBtn) prevBtn.disabled = (pg<=1);
+          if(nextBtn) nextBtn.disabled = (pg>=pages);
+    
+        }catch(e){
+          leadRowsEl.innerHTML = "";
+          leadErrEl.textContent = "Error: " + (e.message||e);
+        }
+      }
+    
+      
+      if(exportBtn){
+        exportBtn.addEventListener("click", async ()=>{
+          if(__demo){ try{ leadErrEl.textContent = "Demo Mode: export disabled."; }catch(_){} return; }
+          try{
+            const query = (qEl && qEl.value || "").trim();
+            const vsel = (venueSel && venueSel.value || "").trim();
+            const isScope = (vsel === "__active__" || vsel === "__inactive__");
+            const venue_state = isScope ? (vsel === "__active__" ? "active" : "inactive") : "all";
+            const venue_id = (!isScope && vsel && vsel !== "__divider__") ? vsel : "";
+    
+            const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)
+              +"&super_key="+encodeURIComponent(super_key)
+              +"&limit=5000"
+              +"&venue_state="+encodeURIComponent(venue_state)
+              +"&venue_id="+encodeURIComponent(venue_id)
+              +"&q="+encodeURIComponent(query);
+    
+            const r = await fetch(url, {headers:_demoHeaders()});
+            const j = await r.json();
+            if(!j.ok) throw new Error(j.error || "forbidden");
+            const rows = (j.items || j.leads || []);
+    
+            const headersCsv = ["venue_id","name","phone","datetime","party_size","status","tier","queue"];
+            const escCsv = (v)=>(""+(v??"")).replace(/\r?\n/g," ").replace(/"/g,'""');
+            const lines = [];
+            lines.push(headersCsv.map(h=>'"'+escCsv(h)+'"').join(","));
+            (rows||[]).forEach(x=>{
+              const vals = [
+                x._venue_id||"",
+                x.name||"",
+                x.phone||"",
+                x.datetime||x["Date/Time"]||x.date||x.timestamp||"",
+                x.party_size||x.party||"",
+                x.status||"",
+                x.tier||"",
+                x.queue||"",
+              ];
+              lines.push(vals.map(v=>'"'+escCsv(v)+'"').join(","));
+            });
+            const csv = lines.join("\n");
+            const blob = new Blob([csv], {type:"text/csv;charset=utf-8"});
+            const urlObj = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = urlObj;
+            a.download = "super_leads_export.csv";
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(()=>URL.revokeObjectURL(urlObj), 2000);
+          }catch(e){
+            try{ leadErrEl.textContent = "Export failed: " + (e.message||e); }catch(_){}
+          }
+        });
+      }
+    if(qEl){
+        qEl.addEventListener("input", ()=>loadLeads());
+      }
+      if(perPageEl){
+        perPageEl.addEventListener("change", ()=>loadLeads());
+      }
+    
+      
+      if(venueSel){ venueSel.addEventListener("change", ()=>loadLeads()); }
+    try{
+        const r = await fetch("/super/api/overview?super_key="+encodeURIComponent(super_key), {headers:_demoHeaders()});
+        const j = await r.json();
+        if(!j.ok) throw new Error(j.error || "forbidden");
+        document.getElementById("venues").textContent = (j.total && j.total.venues) || 0;
+        document.getElementById("aiq").textContent = (j.total && j.total.ai_queue) || 0;
+        const tb = document.getElementById("rows");
+        tb.innerHTML = "";
+        (j.venues || []).forEach(v=>{
+          const tr = document.createElement("tr");
+          tr.innerHTML = `<td>${(v.venue_name||"")}</td><td>${(v.venue_id||"")}</td><td class="right">${(v.ai_queue||0)}</td>`;
+          tb.appendChild(tr);
+        });
+        document.getElementById("ts").textContent = new Date().toLocaleString();
+      }catch(e){
+        document.getElementById("err").textContent = "Error: " + (e.message||e);
+      }
+      await loadVenues();
+      await loadLeads();
+      try{
+        const b = await fetch("/super/api/diag?super_key="+encodeURIComponent(super_key), {headers:_demoHeaders()});
+        const bj = await b.json();
+        document.getElementById("build").textContent = (bj.app_version || bj.app_version_env || "—");
+      }catch(e){}
+    })();
+    }catch(e){
+      showCrash(e && (e.stack||e.message||String(e)));
+    }
+  });
+})();
+"""
+
+@app.get("/super/static/console.js")
+def super_console_js():
+    try:
+        if not _is_super_admin_request():
+            return Response("", status=403, mimetype="application/javascript")
+        resp = Response(SUPER_CONSOLE_JS, mimetype="application/javascript")
+        # Make sure browsers re-fetch on deploys
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+        return resp
+    except Exception:
+        return Response("", status=500, mimetype="application/javascript")
+ment.getElementById('leadsVenueState').onchange=()=>{ state.leadsPage=1; loadLeads(); };
   document.getElementById('leadsVenueId').onchange=()=>{ state.leadsPage=1; loadLeads(); };
   document.getElementById('btnPrev').onclick=()=>{ if(state.leadsPage>1){ state.leadsPage--; loadLeads(); } };
   document.getElementById('btnNext').onclick=()=>{ state.leadsPage++; loadLeads(); };
@@ -10648,6 +10684,9 @@ SUPER_CONSOLE_JS_OPTIONA = r"""(function(){
       try{ state.demo_mode = !!j.demo_mode; renderVenueDetails(); }catch(_){ }
   }).catch(()=>{});
 })();
+</script>
+</body>
+</html>
 """
 
 # Active Super Admin UI
@@ -10685,7 +10724,7 @@ def super_admin_console():
     try:
         if not _is_super_admin_request():
             return "Forbidden", 403
-        resp = make_response(render_template_string(SUPER_CONSOLE_HTML, super_key=(request.args.get('super_key') or request.args.get('key') or '').strip()))
+        resp = make_response(render_template_string(SUPER_CONSOLE_HTML))
         try:
             sk = (request.args.get("super_key") or request.headers.get("X-Super-Key") or "").strip()
             if sk:
@@ -10704,20 +10743,6 @@ def super_admin_console():
         )
 
 
-
-
-
-@app.get("/super/static/console.js")
-def super_admin_console_js():
-    try:
-        if not _is_super_admin_request():
-            return ("Forbidden", 403)
-        resp = make_response(SUPER_CONSOLE_JS_OPTIONA)
-        resp.headers["Content-Type"] = "application/javascript; charset=utf-8"
-        resp.headers["Cache-Control"] = "no-store"
-        return resp
-    except Exception:
-        return ("", 500)
 
 
 # ============================================================
