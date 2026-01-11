@@ -343,6 +343,10 @@ DEFAULT_VENUE_ID = (os.environ.get("DEFAULT_VENUE_ID") or "default").strip() or 
 VENUES_DIR = os.environ.get("VENUES_DIR", os.path.join(os.path.dirname(__file__), "config", "venues"))
 _MULTI_VENUE_CACHE: Dict[str, Any] = {"ts": 0.0, "venues": {}}
 
+def _invalidate_venues_cache():
+    _MULTI_VENUE_CACHE["ts"] = 0
+    _MULTI_VENUE_CACHE["venues"] = {}
+
 def _slugify_venue_id(s: str) -> str:
     s = (s or "").strip().lower()
     s = re.sub(r"[^a-z0-9]+", "-", s)
@@ -1788,6 +1792,49 @@ def _write_venue_config(venue_id: str, pack: Dict[str, Any]) -> Tuple[bool, str,
         err = str(e)
     return wrote, write_path, err
 
+@app.post("/super/api/venues/set_active")
+def super_api_venues_set_active():
+    # Super Admin auth
+    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
+    if key != SUPER_ADMIN_KEY:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    if not venue_id:
+        return jsonify({"ok": False, "error": "Missing venue_id"}), 400
+
+    active_in = body.get("active")
+    if isinstance(active_in, bool):
+        active = active_in
+    else:
+        active = str(active_in or "").strip().lower() in ("1", "true", "yes", "y", "on")
+
+    venues = _load_venues_from_disk() or {}
+    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
+    if not isinstance(cfg, dict):
+        return jsonify({"ok": False, "error": "Venue not found"}), 404
+
+    cfg["active"] = bool(active)
+    cfg["status"] = "active" if active else "inactive"
+    cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    wrote, write_path, err = _write_venue_config(venue_id, cfg)
+
+    # CRITICAL: cache bust
+    try:
+        _invalidate_venues_cache()
+    except Exception:
+        pass
+
+    return jsonify({
+        "ok": True,
+        "venue_id": venue_id,
+        "active": bool(active),
+        "persisted": wrote,
+        "path": write_path,
+        "error": err,
+    })
 
 @app.post("/admin/api/venues/set_active")
 def admin_api_venues_set_active():
@@ -10865,19 +10912,69 @@ def _apply_demo_mask_to_lead(item: Dict[str, Any]) -> Dict[str, Any]:
 @app.route("/super/api/demo_mode", methods=["POST","OPTIONS"])
 def super_api_demo_mode():
     if request.method == "OPTIONS":
-        return ("", 204, {"Access-Control-Allow-Methods":"POST, OPTIONS","Access-Control-Allow-Headers":"Content-Type, X-Super-Key"})
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
+        return ("", 204, {
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, X-Super-Key",
+        })
+
+    # Normalized Super Admin auth
+    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
+    if key != SUPER_ADMIN_KEY:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
     try:
         payload = request.get_json(silent=True) or {}
         enabled = bool(payload.get("enabled"))
-        resp = jsonify({"ok": True, "enabled": enabled})
-        # cookie scoped to super/admin paths; Lax is fine for same-site demos
+
+        # Server-authoritative persistence (Redis if enabled, else /tmp)
+        demo_record = {
+            "enabled": bool(enabled),
+            "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+
+        persisted = False
+        persist_where = ""
+
+        # Redis (preferred)
+        try:
+            _redis_init_if_needed()
+            if _REDIS_ENABLED and _REDIS:
+                rkey = f"{_REDIS_NS}:demo_mode"
+                persisted = bool(_redis_set_json(rkey, demo_record))
+                persist_where = "redis" if persisted else ""
+        except Exception:
+            pass
+
+        # Disk fallback
+        if not persisted:
+            try:
+                demo_path = "/tmp/wc26_demo_mode.json"
+                _safe_write_json_file(demo_path, demo_record)
+                persisted = True
+                persist_where = "disk"
+            except Exception:
+                persisted = False
+                persist_where = ""
+
+        # Cache bust so UI reload reflects new state
+        try:
+            _invalidate_venues_cache()
+        except Exception:
+            pass
+
+        resp = jsonify({
+            "ok": True,
+            "enabled": bool(enabled),
+            "persisted": bool(persisted),
+            "persist_where": persist_where,
+        })
+
+        # Keep cookie for UI convenience (not source of truth)
         resp.set_cookie("demo_mode", ("1" if enabled else ""), httponly=False, samesite="Lax")
         return resp
+
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
-
 
 def _is_super_admin_request():
     k = (request.args.get("key") or request.args.get("super_key") or request.headers.get("X-Super-Key") or "").strip()
@@ -10890,9 +10987,6 @@ def _require_super_admin():
     return True, None
 
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5050))
-    app.run(host="0.0.0.0", port=port, debug=False)
 # SIZE_PAD_START
 ###########################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################
 
@@ -10948,115 +11042,110 @@ def _save_fanzone_state(st: Dict[str, Any], actor: str, role: str) -> Dict[str, 
 # ============================================================
 @app.get("/super/api/venues")
 def super_api_venues_list():
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
+    # Normalized Super Admin auth
+    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
+    if key != SUPER_ADMIN_KEY:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
+    # CRITICAL: force fresh disk read (Refresh must not be stale)
+    try:
+        _invalidate_venues_cache()
+    except Exception:
+        pass
+
     venues = _load_venues_from_disk()
     out = []
     if isinstance(venues, dict):
         for vid, cfg in sorted(venues.items(), key=lambda kv: kv[0]):
             if not isinstance(cfg, dict):
                 continue
+
             name = str(cfg.get("venue_name") or cfg.get("name") or vid)
             plan = str(cfg.get("plan") or "")
-            sid = ""
-            try:
-                sid = _venue_sheet_id(vid)
-            except Exception:
-                sid = ""
-            status = str(cfg.get("status") or "")
-            # Super Admin onboarding status (does not affect fan/admin app behavior)
-            try:
-                sheet_ok = None
-                chk = cfg.get("_sheet_check") if isinstance(cfg.get("_sheet_check"), dict) else None
-                if isinstance(chk, dict):
-                    sheet_ok = chk.get("ok")
-                if not sid:
-                    status = "MISSING_SHEET"
-                elif sheet_ok is True:
-                    status = "READY"
-                elif sheet_ok is False:
-                    status = "SHEET_FAIL"
-                else:
-                    status = status or "SHEET_SET"
-            except Exception:
-                pass
+
+            # Read sheet id directly from config
+            sid = str(cfg.get("google_sheet_id") or "").strip()
+
+            # Use the NEW persisted fields (not legacy _sheet_check)
+            sheet_ok = cfg.get("sheet_ok", None)
+            ready = bool(cfg.get("ready", False))
+            active = bool(_venue_is_active(vid))
+
+            status = str(cfg.get("status") or "").strip()
+            if not sid:
+                status = "MISSING_SHEET"
+            elif sheet_ok is True and ready:
+                status = "READY"
+            elif sheet_ok is False:
+                status = "SHEET_FAIL"
+            else:
+                status = status or "SHEET_SET"
+
             out.append({
                 "venue_id": vid,
                 "venue_name": name,
                 "plan": plan,
                 "google_sheet_id": sid,
                 "status": status,
-                "active": bool(_venue_is_active(vid)),
+                "active": active,
                 "sheet_ok": sheet_ok,
+                "ready": ready,
+                "last_checked": cfg.get("last_checked"),
             })
-    return jsonify({"ok": True, "venues": out})
 
-@app.route("/super/api/venues/create", methods=["POST","OPTIONS"])
-def super_api_venues_create():
-    """Super-admin: generate venue pack and attempt to persist to config/venues/<venue>.json."""
-    if request.method == "OPTIONS":
-        # Some proxies/browsers can issue an OPTIONS-like request even on same-origin calls.
-        resp = make_response("", 204)
-        resp.headers["Access-Control-Allow-Origin"] = "*"
-        resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Super-Key"
-        return resp
-
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
-
-
-    if _demo_mode_enabled():
-        return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
-
-    body = request.get_json(silent=True) or {}
-    venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
-    venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
-    plan = str(body.get("plan") or "standard").strip().lower() or "standard"
-
-    admin_key = secrets.token_hex(16)
-    manager_key = secrets.token_hex(16)
-
-    pack = {
-        "venue_name": venue_name,
-        "venue_id": venue_id,
-        "status": "active",
-        "plan": plan,
-        "qr_url": f"https://worldcupconcierge.app/v/{venue_id}",
-        "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={admin_key}",
-        "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={manager_key}",
-        "keys": {"admin_key": admin_key, "manager_key": manager_key},
-        "data": {"google_sheet_id": str(body.get("google_sheet_id") or "").strip(), "redis_namespace": f"{_REDIS_NS}:{venue_id}"},
-        "features": body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True},
-        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    }
-
-    # Attempt to write config file (works locally; may be read-only in some hosts)
-    wrote = False
-    write_path = ""
-    err = ""
-    try:
-        os.makedirs(VENUES_DIR, exist_ok=True)
-        write_path = os.path.join(VENUES_DIR, f"{venue_id}.json")
-        with open(write_path, "w", encoding="utf-8") as f:
-            json.dump(pack, f, indent=2, sort_keys=True)
-        wrote = True
-        # refresh cache immediately
-        _MULTI_VENUE_CACHE["ts"] = 0.0
-    except Exception as e:
-        err = str(e)
-
-    try:
-        _audit("super.venues.create", {"venue_id": venue_id, "persisted": wrote, "path": write_path, "error": err})
-    except Exception:
-        pass
-    return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": write_path, "error": err})
+        return jsonify({"ok": True, "venues": out})
 
 @app.post("/super/api/venues/set_sheet")
 def super_api_venues_set_sheet():
     """Super-admin: update a venue's google_sheet_id in its config file (best effort)."""
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
+    # STEP 4: normalized Super Admin auth
+    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
+    if key != SUPER_ADMIN_KEY:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    if not venue_id:
+        return jsonify({"ok": False, "error": "Missing venue_id"}), 400
+
+    sheet_id = str(body.get("sheet_id") or "").strip()
+    if not sheet_id:
+        return jsonify({"ok": False, "error": "Missing sheet_id"}), 400
+
+    venues = _load_venues_from_disk() or {}
+    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
+    if not isinstance(cfg, dict):
+        return jsonify({"ok": False, "error": "Venue not found"}), 404
+
+    # Persist sheet id
+    cfg["google_sheet_id"] = sheet_id
+    cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    # Immediately validate sheet and persist results
+    chk = _check_sheet_id(sheet_id)
+    cfg["sheet_ok"] = chk.get("ok", False)
+    cfg["ready"] = bool(cfg.get("sheet_ok") and cfg.get("active", True))
+    cfg["last_checked"] = chk.get("checked_at")
+
+    wrote, write_path, err = _write_venue_config(venue_id, cfg)
+
+    # CRITICAL: cache bust so UI updates immediately
+    try:
+        _invalidate_venues_cache()
+    except Exception:
+        pass
+
+    return jsonify({
+        "ok": True,
+        "venue_id": venue_id,
+        "sheet_id": sheet_id,
+        "sheet_ok": cfg.get("sheet_ok"),
+        "ready": cfg.get("ready"),
+        "checked_at": cfg.get("last_checked"),
+        "persisted": wrote,
+        "path": write_path,
+        "error": err,
+    })
 
     body = request.get_json(silent=True) or {}
     venue_id = _slugify_venue_id(str(body.get("venue_id") or ""))
@@ -11161,15 +11250,30 @@ def super_api_venues_rotate_keys():
 
     return jsonify({"ok": True, "venue_id": venue_id, "keys": keys, "qr_url": f"https://worldcupconcierge.app/v/{venue_id}", "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={keys.get('admin_key')}", "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={keys.get('manager_key')}", "persisted": wrote, "path": write_path, "error": err})
 
-
-
-
 @app.get("/super/api/leads")
 def super_api_leads():
     """Cross-venue leads for Super Admin (read-only)."""
-    ok, resp = _require_super_admin()
-    if not ok:
-        return resp
+    # Normalized Super Admin auth
+    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
+    if key != SUPER_ADMIN_KEY:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
+    # Server-authoritative demo mode (Redis preferred, disk fallback)
+    demo_enabled = False
+    try:
+        _redis_init_if_needed()
+        if _REDIS_ENABLED and _REDIS:
+            rec = _redis_get_json(f"{_REDIS_NS}:demo_mode", default={}) or {}
+            demo_enabled = bool(rec.get("enabled"))
+    except Exception:
+        pass
+    if not demo_enabled:
+        try:
+            rec = _safe_read_json_file("/tmp/wc26_demo_mode.json", default={}) or {}
+            demo_enabled = bool(rec.get("enabled"))
+        except Exception:
+            demo_enabled = False
+
     try:
         q = (request.args.get("q") or "").strip().lower()
         venue_id = _slugify_venue_id((request.args.get("venue_id") or "").strip()) if (request.args.get("venue_id") or "").strip() else ""
@@ -11178,42 +11282,9 @@ def super_api_leads():
         page = max(1, page)
         per_page = max(1, min(100, per_page))
 
-        venues = _load_venues_from_disk() or {}
-        vids = [venue_id] if venue_id else list(venues.keys())
-        all_items = []
-        for vid in vids:
-            try:
-                rows = read_leads(limit=2000, venue_id=vid) or []
-            except Exception:
-                rows = []
-            if not rows or len(rows) < 2:
-                continue
-            header = rows[0]
-            hm = header_map(header)
-            for r in rows[1:]:
-                if not isinstance(r, list):
-                    continue
-                def gcol(name):
-                    idx = hm.get(name)
-                    if not idx:
-                        return ""
-                    j = idx - 1
-                    return str(r[j] if j < len(r) else "")
-                item = {
-                    "venue_id": vid,
-                    "name": gcol("name"),
-                    "phone": gcol("phone"),
-                    "datetime": gcol("datetime"),
-                    "party_size": gcol("party_size"),
-                    "status": gcol("status"),
-                    "vip": gcol("vip"),
-                    "queue": gcol("queue"),
-                }
-                if q:
-                    blob = " ".join([item.get("venue_id",""), item.get("name",""), item.get("phone",""), item.get("datetime",""), item.get("status",""), item.get("vip",""), item.get("queue","")]).lower()
-                    if q not in blob:
-                        continue
-                all_items.append(item)
+        # Enforce: inactive venue => no leads unless demo mode ON
+        if venue_id and (not demo_enabled) and (not _venue_is_active(venue_id)):
+            return jsonify({"ok": True, "items": [], "total": 0, "page": page})
 
         # newest-ish first by datetime string
         try:
@@ -11233,8 +11304,53 @@ def super_api_leads():
 @app.post("/super/api/venues/check_sheet")
 def super_api_venues_check_sheet():
     """Super-admin: validate a venue's configured sheet and persist PASS/FAIL to venue config."""
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
+    # Normalized Super Admin auth
+    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
+    if key != SUPER_ADMIN_KEY:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    if not venue_id:
+        return jsonify({"ok": False, "error": "Missing venue_id"}), 400
+
+    venues = _load_venues_from_disk() or {}
+    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
+    if not isinstance(cfg, dict):
+        return jsonify({"ok": False, "error": "Venue not found"}), 404
+
+    sheet_id = str(cfg.get("google_sheet_id") or "").strip()
+    if not sheet_id:
+        return jsonify({"ok": False, "error": "No google_sheet_id configured"}), 400
+
+    # Run sheet validation
+    chk = _check_sheet_id(sheet_id)
+
+    # Persist results so UI does NOT revert
+    cfg["sheet_ok"] = chk.get("ok", False)
+    cfg["ready"] = bool(cfg.get("sheet_ok") and cfg.get("active", True))
+    cfg["last_checked"] = chk.get("checked_at")
+    cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    wrote, write_path, err = _write_venue_config(venue_id, cfg)
+
+    # CRITICAL: bust venue cache so UI updates immediately
+    try:
+        _invalidate_venues_cache()
+    except Exception:
+        pass
+
+    return jsonify({
+        "ok": True,
+        "venue_id": venue_id,
+        "sheet_id": sheet_id,
+        "sheet_ok": cfg.get("sheet_ok"),
+        "ready": cfg.get("ready"),
+        "checked_at": cfg.get("last_checked"),
+        "persisted": wrote,
+        "path": write_path,
+        "error": err,
+    })
 
     body = request.get_json(silent=True) or {}
     venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
