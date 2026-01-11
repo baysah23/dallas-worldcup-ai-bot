@@ -9554,24 +9554,6 @@ LEGACY_SUPER_CONSOLE_HTML = r"""<!doctype html>
     </div>
 
 <script>
-(function(){
-  function __super_show_fatal(msg, err){
-    try{
-      console.error(msg, err||'');
-      var el=document.getElementById('superJsFatal');
-      if(!el){
-        el=document.createElement('div');
-        el.id='superJsFatal';
-        el.style.cssText='position:fixed;z-index:999999;left:12px;right:12px;bottom:12px;padding:12px 14px;border-radius:14px;background:rgba(180,0,0,.22);border:1px solid rgba(255,80,80,.35);backdrop-filter:blur(10px);color:#fff;font:14px/1.35 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;';
-        document.body.appendChild(el);
-      }
-      el.textContent = (msg||'Super Admin JS error') + (err && err.message ? (' — ' + err.message) : '');
-    }catch(_){ }
-  }
-  window.addEventListener('error', function(e){ __super_show_fatal('Super Admin JS error', e && e.error ? e.error : e); });
-  window.addEventListener('unhandledrejection', function(e){ __super_show_fatal('Super Admin JS promise rejection', e && e.reason ? e.reason : e); });
-  document.addEventListener('DOMContentLoaded', function(){
-    try{
 // --- Demo Mode helpers (safe defaults) ---
 const _demoHeaders = (enabled) => (enabled ? {"X-Demo-Mode":"1"} : {});
 
@@ -10168,10 +10150,6 @@ try{
     document.getElementById("build").textContent = (bj.app_version || bj.app_version_env || "—");
   }catch(e){}
 })();
-
-    }catch(e){ __super_show_fatal('Super Admin JS crashed', e); }
-  });
-})();
 </script>
 </body>
 </html>
@@ -10330,8 +10308,13 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
   </div>
 </div>
 
-<script>
-(function(){
+<script defer src="/super/static/console.js?super_key={{ super_key }}"></script>
+</body>
+</html>
+"""
+
+
+SUPER_CONSOLE_JS_OPTIONA = r"""(function(){
   const qs = new URLSearchParams(location.search);
   const super_key = (qs.get('super_key') || qs.get('key') || '').trim() || (document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)?.[1] ? decodeURIComponent(document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)[1]) : '');
   const state = {venues:[], filter:'all', selected:'', leadsPage:1, leadsTotal:0, demo_mode:false};
@@ -10665,9 +10648,6 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
       try{ state.demo_mode = !!j.demo_mode; renderVenueDetails(); }catch(_){ }
   }).catch(()=>{});
 })();
-</script>
-</body>
-</html>
 """
 
 # Active Super Admin UI
@@ -10705,7 +10685,7 @@ def super_admin_console():
     try:
         if not _is_super_admin_request():
             return "Forbidden", 403
-        resp = make_response(render_template_string(SUPER_CONSOLE_HTML))
+        resp = make_response(render_template_string(SUPER_CONSOLE_HTML, super_key=(request.args.get('super_key') or request.args.get('key') or '').strip()))
         try:
             sk = (request.args.get("super_key") or request.headers.get("X-Super-Key") or "").strip()
             if sk:
@@ -10724,6 +10704,20 @@ def super_admin_console():
         )
 
 
+
+
+
+@app.get("/super/static/console.js")
+def super_admin_console_js():
+    try:
+        if not _is_super_admin_request():
+            return ("Forbidden", 403)
+        resp = make_response(SUPER_CONSOLE_JS_OPTIONA)
+        resp.headers["Content-Type"] = "application/javascript; charset=utf-8"
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+    except Exception:
+        return ("", 500)
 
 
 # ============================================================
