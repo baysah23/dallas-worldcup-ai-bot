@@ -10507,7 +10507,7 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
       state.venues=j.venues||[];
       if(!state.selected && state.venues.length) state.selected=state.venues[0].venue_id;
       renderVenues(); renderVenueDetails();
-      document.getElementById('ts').textContent=new Date().toLocaleString();
+      const tsEl=document.getElementById('ts'); if(tsEl){ tsEl.textContent=new Date().toLocaleString(); }
     }catch(e){
       document.getElementById('venuesRail').innerHTML='<div class="vrow"><div class="vname">Failed to load venues</div><div class="vid">'+hesc(e.message||e)+'</div></div>';
       document.getElementById('venuesTbody').innerHTML='<tr><td colspan="5" class="muted">Failed to load venues: '+hesc(e.message||e)+'</td></tr>';
@@ -10636,10 +10636,10 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
     }catch(e){ alert('Create failed: '+(e.message||e)); }
   };
 
-  document.getElementById('ts').textContent=new Date().toLocaleString();
+  const tsEl=document.getElementById('ts'); if(tsEl){ tsEl.textContent=new Date().toLocaleString(); }
   loadVenues();
   fetch('/super/api/diag?super_key='+encodeURIComponent(super_key), {headers: hdrs()}).then(r=>r.json()).then(j=>{
-    document.getElementById('build').textContent=(j.app_version || j.app_version_env || '—');
+    const bEl=document.getElementById('build'); if(bEl){ bEl.textContent=(j.app_version || j.app_version_env || '—'); }
       try{ state.demo_mode = !!j.demo_mode; renderVenueDetails(); }catch(_){ }
   }).catch(()=>{});
 })();
