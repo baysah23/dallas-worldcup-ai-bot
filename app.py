@@ -347,11 +347,13 @@ def _invalidate_venues_cache():
     _MULTI_VENUE_CACHE["ts"] = 0
     _MULTI_VENUE_CACHE["venues"] = {}
 
+
 def _slugify_venue_id(s: str) -> str:
     s = (s or "").strip().lower()
     s = re.sub(r"[^a-z0-9]+", "-", s)
     s = re.sub(r"-{2,}", "-", s).strip("-")
     return s or "default"
+
 
 def _load_venues_from_disk() -> Dict[str, Any]:
     """Load venue configs from VENUES_DIR. Returns dict keyed by venue_id."""
@@ -367,7 +369,7 @@ def _load_venues_from_disk() -> Dict[str, Any]:
             _MULTI_VENUE_CACHE["venues"] = venues
             return venues
 
-        files = []
+        files: List[str] = []
         for fn in os.listdir(VENUES_DIR):
             if fn.lower().endswith((".yaml", ".yml", ".json")):
                 files.append(os.path.join(VENUES_DIR, fn))
@@ -394,17 +396,11 @@ def _load_venues_from_disk() -> Dict[str, Any]:
                     cfg = None
             else:
                 if yaml_mod is None:
-                    # YAML file present but parser missing: fail loud for ops clarity
                     # YAML venue file present but PyYAML missing: skip YAML so JSON venues still work
-
                     try:
-
-                        print('[VENUES] skipping YAML (pyyaml not installed): ' + os.path.basename(fp))
-
+                        print("[VENUES] skipping YAML (pyyaml not installed): " + os.path.basename(fp))
                     except Exception:
-
                         pass
-
                     continue
                 try:
                     cfg = yaml_mod.safe_load(raw)
@@ -432,7 +428,6 @@ def _load_venues_from_disk() -> Dict[str, Any]:
     return venues
 
 
-
 def _iter_venue_json_configs() -> List[Dict[str, Any]]:
     """Return venue config descriptors from VENUES_DIR.
 
@@ -446,49 +441,58 @@ def _iter_venue_json_configs() -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     try:
         venues = _load_venues_from_disk() or {}
-        # _load_venues_from_disk returns dict keyed by venue_id.
         for vid, cfg in venues.items():
-            try:
-                out.append({
-                    "venue_id": str(vid),
-                    "path": str((cfg or {}).get("_path") or ""),
-                    "config": cfg or {},
-                })
-            except Exception:
+            if not isinstance(cfg, dict):
                 continue
+            out.append({
+                "venue_id": str(vid),
+                "path": str((cfg or {}).get("_path") or ""),
+                "config": cfg or {},
+            })
     except Exception:
         return []
     return out
+
+
 def _resolve_venue_id() -> str:
     """Resolve venue_id from request (path/query/cookie/header) with optional VENUE_LOCK."""
     if VENUE_LOCK:
         return VENUE_LOCK
+
+    # 1) /v/<venue_id>/... from path
     try:
-        # /v/<venue_id>/...
         m = re.match(r"^/v/([^/]+)", (request.path or ""))
         if m:
             return _slugify_venue_id(m.group(1))
     except Exception:
         pass
+
+    # 2) ?venue=<venue_id> query param
     try:
         q = (request.args.get("venue") or "").strip()
         if q:
             return _slugify_venue_id(q)
     except Exception:
         pass
+
+    # 3) venue_id cookie
     try:
         c = (request.cookies.get("venue_id") or "").strip()
         if c:
             return _slugify_venue_id(c)
     except Exception:
         pass
+
+    # 4) X-Venue-Id header
     try:
         h = (request.headers.get("X-Venue-Id") or "").strip()
         if h:
             return _slugify_venue_id(h)
     except Exception:
         pass
+
     return DEFAULT_VENUE_ID
+
 
 @app.before_request
 def _set_venue_ctx():
@@ -496,6 +500,7 @@ def _set_venue_ctx():
         g.venue_id = _resolve_venue_id()
     except Exception:
         g.venue_id = DEFAULT_VENUE_ID
+
 
 def _venue_id() -> str:
     try:
@@ -535,9 +540,31 @@ def _venue_is_active(venue_id: Optional[str] = None) -> bool:
     """Return whether a venue is active (fan-facing intake allowed)."""
     try:
         cfg = _venue_cfg(venue_id)
-        return bool(cfg.get("active", True))
+        if not isinstance(cfg, dict):
+            return True
+
+        # Back-compat rules:
+        # - If cfg has boolean `active`, that is the source of truth.
+        # - Otherwise fall back to `status` string (active|inactive|disabled|off).
+        # - Default: active.
+        if "active" in cfg:
+            v = cfg.get("active")
+            if isinstance(v, bool):
+                return v
+            sv = str(v or "").strip().lower()
+            if sv in ("0", "false", "no", "n", "off"):
+                return False
+            if sv in ("1", "true", "yes", "y", "on"):
+                return True
+
+        st = str(cfg.get("status") or "").strip().lower()
+        if st in ("inactive", "disabled", "off"):
+            return False
+
+        return True
     except Exception:
         return True
+
 
 def _public_base_url() -> str:
     """Return the correct public base URL when behind proxies (Azure / Render / Cloudflare)."""
