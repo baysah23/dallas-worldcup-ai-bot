@@ -62,19 +62,44 @@
       </div>
 
       <table id="venuesTable" style="margin-top:10px">
-        <thead>
-          <tr>
-            <th>Venue ID</th>
-            <th>Venue</th>
-            <th>Plan</th>
-            <th>Sheet</th>
-            <th>Status</th>
-            <th class="right">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="venueRows"></tbody>
-      </table>
-    </div>
+  <thead>
+    <tr>
+      <th>Venue ID</th>
+      <th>Venue</th>
+      <th>Plan</th>
+      <th>Sheet</th>
+      <th>Status</th>
+      <th class="right">Actions</th>
+    </tr>
+  </thead>
+  <tbody id="venueRows"></tbody>
+</table>
+
+<!-- Identity Line Editor (per-venue) -->
+<div class="card" style="margin-top:12px">
+  <div class="k">Identity line (fan page)</div>
+
+  <input id="identityLineInput"
+         placeholder="e.g. Uptown • Dallas"
+         style="width:100%;
+                margin-top:8px;
+                background:rgba(255,255,255,.03);
+                border:1px solid var(--line);
+                border-radius:12px;
+                padding:10px;
+                color:var(--text)">
+
+  <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12px">
+    <input type="checkbox" id="identityLineShow" checked>
+    Show identity line under hero
+  </label>
+
+  <button class="btn" style="margin-top:10px" onclick="saveIdentityLine()">
+    Save identity line
+  </button>
+
+  <div class="err" id="identityLineErr" style="display:none"></div>
+</div>
 
 
     <div class="card" style="margin-top:12px">
@@ -237,87 +262,128 @@
     }
   });
 
-  document.getElementById("checkSheet")?.addEventListener("click", async ()=>{
-    venueErr.style.display="none";
-    const sid = (document.getElementById("v_sheet").value||"").trim();
-    if(!sid){
-      venueErr.style.display="block";
-      venueErr.textContent="Enter a Google Sheet ID to check.";
+ document.getElementById("checkSheet")?.addEventListener("click", async ()=>{
+  venueErr.style.display="none";
+  const sid = (document.getElementById("v_sheet").value||"").trim();
+  if(!sid){
+    venueErr.style.display="block";
+    venueErr.textContent="Enter a Google Sheet ID to check.";
+    return;
+  }
+  try{
+    const r = await fetch("/super/api/sheets/check?key="+encodeURIComponent(key)+"&sheet_id="+encodeURIComponent(sid));
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error||"check failed");
+    venueErr.style.display="block";
+    venueErr.textContent="Sheet OK: " + (j.title||"opened");
+    setTimeout(()=>{ venueErr.style.display="none"; }, 2000);
+  }catch(e){
+    venueErr.style.display="block";
+    venueErr.textContent="Sheet check error: " + (e.message||e);
+  }
+});
+
+async function saveIdentityLine(){
+  const err = document.getElementById("identityLineErr");
+  if(err){ err.style.display = "none"; err.textContent = ""; }
+
+  const venue_id = (document.getElementById("v_id")?.value || "").trim();
+  const location_line = (document.getElementById("identityLineInput")?.value || "").trim();
+  const show_location_line = !!document.getElementById("identityLineShow")?.checked;
+
+  if(!venue_id){
+    if(err){ err.style.display = "block"; err.textContent = "Enter a Venue ID first."; }
+    return;
+  }
+  if(!location_line){
+    if(err){ err.style.display = "block"; err.textContent = "Enter an identity line (e.g., Uptown • Dallas)."; }
+    return;
+  }
+
+  try{
+    // your page uses ?key=... for super endpoints
+    const q = new URLSearchParams(window.location.search);
+    const k = q.get("key") || "";
+
+    const r = await fetch("/super/api/venues/set_identity?key=" + encodeURIComponent(k), {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ venue_id, location_line, show_location_line })
+    });
+
+    const j = await r.json().catch(()=>null);
+    if(!j || !j.ok) throw new Error((j && j.error) ? j.error : "save failed");
+
+    if(err){ err.style.display = "block"; err.textContent = "Saved ✓"; }
+    setTimeout(()=>{ if(err){ err.style.display="none"; } }, 1500);
+
+    // refresh venue list so you see latest status immediately
+    if(typeof loadVenues === "function"){ await loadVenues(); }
+  }catch(e){
+    if(err){ err.style.display = "block"; err.textContent = "Save failed: " + (e.message || e); }
+  }
+}
+
+const super_key = q.get("super_key") || key; // allow SUPER key as key param
+const headers = super_key ? {"X-Super-Key": super_key} : {};
+
+const leadRowsEl = document.getElementById("leadRows");
+const leadErrEl = document.getElementById("leadErr");
+const qEl = document.getElementById("q");
+const limitEl = document.getElementById("limit");
+const reloadBtn = document.getElementById("reload");
+
+async function loadLeads(){
+  if(!leadRowsEl) return;
+  leadErrEl.textContent = "";
+  leadRowsEl.innerHTML = "<tr><td colspan=\"8\">Loading…</td></tr>";
+  const limit = (limitEl && limitEl.value) ? limitEl.value : "500";
+  const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)+"&super_key="+encodeURIComponent(super_key)+"&limit="+encodeURIComponent(limit);
+  try{
+    const r = await fetch(url, {headers});
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error || "forbidden");
+    const query = (qEl && qEl.value || "").trim().toLowerCase();
+    const rows = (j.leads || []).filter(x=>{
+      if(!query) return true;
+      const hay = ((x._venue_id||"")+" "+(x.name||"")+" "+(x.phone||"")).toLowerCase();
+      return hay.includes(query);
+    }).slice(0, Number(limit));
+    leadRowsEl.innerHTML = "";
+    if(!rows.length){
+      leadRowsEl.innerHTML = "<tr><td colspan=\"8\">No leads found.</td></tr>";
       return;
     }
-    try{
-      const r = await fetch("/super/api/sheets/check?key="+encodeURIComponent(key)+"&sheet_id="+encodeURIComponent(sid));
-      const j = await r.json();
-      if(!j.ok) throw new Error(j.error||"check failed");
-      venueErr.style.display="block";
-      venueErr.textContent="Sheet OK: " + (j.title||"opened");
-      setTimeout(()=>{ venueErr.style.display="none"; }, 2000);
-    }catch(e){
-      venueErr.style.display="block";
-      venueErr.textContent="Sheet check error: " + (e.message||e);
+    for(const x of rows){
+      const dt = ((x.date||"") + " " + (x.time||"")).trim();
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${(x._venue_id||"")}</td>
+        <td>${(x.name||"")}</td>
+        <td>${(x.phone||"")}</td>
+        <td>${dt || (x.timestamp||"")}</td>
+        <td class="right">${(x.party_size||"")}</td>
+        <td>${(x.status||"")}</td>
+        <td>${(x.tier||"")}</td>
+        <td>${(x.queue||"")}</td>
+      `;
+      leadRowsEl.appendChild(tr);
     }
-  });
-
-  const super_key = q.get("super_key") || key; // allow SUPER key as key param
-  const headers = super_key ? {"X-Super-Key": super_key} : {};
-
-  const leadRowsEl = document.getElementById("leadRows");
-  const leadErrEl = document.getElementById("leadErr");
-  const qEl = document.getElementById("q");
-  const limitEl = document.getElementById("limit");
-  const reloadBtn = document.getElementById("reload");
-
-  async function loadLeads(){
-    if(!leadRowsEl) return;
-    leadErrEl.textContent = "";
-    leadRowsEl.innerHTML = "<tr><td colspan=\"8\">Loading…</td></tr>";
-    const limit = (limitEl && limitEl.value) ? limitEl.value : "500";
-    const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)+"&super_key="+encodeURIComponent(super_key)+"&limit="+encodeURIComponent(limit);
-    try{
-      const r = await fetch(url, {headers});
-      const j = await r.json();
-      if(!j.ok) throw new Error(j.error || "forbidden");
-      const query = (qEl && qEl.value || "").trim().toLowerCase();
-      const rows = (j.leads || []).filter(x=>{
-        if(!query) return true;
-        const hay = ((x._venue_id||"")+" "+(x.name||"")+" "+(x.phone||"")).toLowerCase();
-        return hay.includes(query);
-      }).slice(0, Number(limit));
-      leadRowsEl.innerHTML = "";
-      if(!rows.length){
-        leadRowsEl.innerHTML = "<tr><td colspan=\"8\">No leads found.</td></tr>";
-        return;
-      }
-      for(const x of rows){
-        const dt = ((x.date||"") + " " + (x.time||"")).trim();
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-          <td>${(x._venue_id||"")}</td>
-          <td>${(x.name||"")}</td>
-          <td>${(x.phone||"")}</td>
-          <td>${dt || (x.timestamp||"")}</td>
-          <td class="right">${(x.party_size||"")}</td>
-          <td>${(x.status||"")}</td>
-          <td>${(x.tier||"")}</td>
-          <td>${(x.queue||"")}</td>
-        `;
-        leadRowsEl.appendChild(tr);
-      }
-    }catch(e){
-      leadRowsEl.innerHTML = "";
-      leadErrEl.textContent = "Error: " + (e.message||e);
-    }
+  }catch(e){
+    leadRowsEl.innerHTML = "";
+    leadErrEl.textContent = "Error: " + (e.message||e);
   }
+}
 
-  if(reloadBtn){
-    reloadBtn.addEventListener("click", ()=>loadLeads());
-  }
-  if(qEl){
-    qEl.addEventListener("input", ()=>loadLeads());
-  }
-  if(limitEl){
-    limitEl.addEventListener("change", ()=>loadLeads());
-  }
+if(reloadBtn){
+  reloadBtn.addEventListener("click", ()=>loadLeads());
+}
+if(qEl){
+  qEl.addEventListener("input", ()=>loadLeads());
+}
+if(limitEl){
+  limitEl.addEventListener("change", ()=>loadLeads());
+}
 
   try{
     const r = await fetch("/super/api/overview?key="+encodeURIComponent(key)+"&super_key="+encodeURIComponent(super_key), {headers});

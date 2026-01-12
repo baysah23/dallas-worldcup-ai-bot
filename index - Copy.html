@@ -1,0 +1,5919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- CHAT_LOGICFIX_BUILD: 2026-01-01T12:41:14Z -->
+  <!-- BUILD_VERIFY: 2026-01-01T09:38:18Z -->
+<meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+  <meta name="format-detection" content="telephone=no"/>
+  <title>World Cup Concierge</title>
+  <!-- WC_BUILD_VERSION: V1-BUSINESS-NOCITY-FIX-20251230-222355 -->
+  <style>
+    :root{
+      --bg:#071022;
+      --panel:#0f1b33;
+      --panel2:#0b152c;
+      --line:rgba(255,255,255,.10);
+      --text:#eaf0ff;
+      --muted:#b9c7ee;
+      --gold:#d4af37;
+      --blue:#1f6feb;
+      --green:#2ea043;
+      --warn:#ffcc66;
+      --shadow: 0 10px 30px rgba(0,0,0,.45);
+      --r16:16px;
+
+      --glass: rgba(255,255,255,.08);
+      --glass2: rgba(255,255,255,.04);
+      --glass-border: rgba(255,255,255,.18);
+    }
+*{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color:var(--text);
+      background:
+        radial-gradient(1200px 600px at 20% -10%, rgba(31,111,235,.35), transparent 60%),
+        radial-gradient(900px 520px at 110% 20%, rgba(212,175,55,.22), transparent 55%),
+        radial-gradient(900px 520px at 40% 120%, rgba(46,160,67,.18), transparent 55%),
+        var(--bg);
+      overflow-x:hidden;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    .wrap{
+      max-width: 560px;
+      margin: 0 auto;
+      /* tighter top so the broadcast title sits directly over the hero (no gap) */
+      padding: 0 14px calc(84px + env(safe-area-inset-bottom));
+    }
+
+    
+    /* =========================================================
+       HERO / BANNER (RESET MODE: standalone, no inheritance)
+       Goal: cinematic motion + ultra-thin Apple-glass countdown
+       ========================================================= */
+
+    :root{
+      --gold: #E5AC00;
+      --gold2:#FFD36A;
+    }
+
+    #heroBanner{
+      /* no top gap between the broadcast title and hero */
+      margin: 0 0 8px;
+      border-radius: var(--r16);
+    }
+
+    /* Venue identity line (branding-safe, optional) */
+    .venueIdentityLine{
+      margin: 4px 6px 10px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: rgba(185,199,238,.82);
+      opacity: .92;
+      text-shadow: 0 10px 22px rgba(0,0,0,.35);
+      user-select: none;
+    }
+
+    .hero{
+      /* remove internal top padding that was making the banner look "cut off" */
+      padding-top: 0;
+
+      position: relative;
+      border-radius: var(--r16);
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.10);
+      box-shadow: 0 14px 40px rgba(0,0,0,.45);
+      background: transparent;
+    }
+
+    .heroMedia{
+      position: relative;
+      height: 218px;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    /* Cinematic layer: transform-only (prevents "blinking") */
+    .heroCine{
+      position:absolute;
+      inset:0;
+      transform: translate3d(0,0,0) scale(1.08);
+      will-change: transform;
+      animation: heroCinePan 13.5s ease-in-out infinite;
+    }
+
+    .heroImg{
+  width:100%;
+  height:100%;
+  display:block;
+  object-fit: cover;
+  object-position: center center;
+  transform: none !important;
+  filter: none !important;
+}
+
+    /* Subtle, non-muddy legibility lift (no heavy dark wash) */
+    .heroMedia::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  /* cinema-grade vignette: subtle edge falloff, zero mud */
+  background:
+    radial-gradient(120% 85% at 50% 20%, rgba(255,255,255,.04), rgba(0,0,0,0) 55%),
+    radial-gradient(140% 120% at 50% 50%, rgba(0,0,0,0), rgba(0,0,0,.28) 88%);
+}
+
+    @keyframes heroCinePan{
+      0%   { transform: translate3d(-1.0%, -0.8%, 0) scale(1.10); }
+      50%  { transform: translate3d( 1.1%,  0.6%, 0) scale(1.14); }
+      100% { transform: translate3d(-1.0%, -0.8%, 0) scale(1.10); }
+    }
+
+    @media (prefers-reduced-motion: reduce){
+      .heroCine{ animation:none; transform: none; }
+    }
+
+    /* Ultra-thin Apple-glass countdown bar (embedded) */
+    .countdownGlass{
+      margin: 8px 0 12px;
+      border-radius: 18px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(18, 28, 48, .22); /* lower opacity */
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      box-shadow: 0 10px 30px rgba(0,0,0,.40);
+      position: relative;
+      overflow: hidden;
+      padding: 10px 12px;
+    }
+
+    /* Specular edge + soft internal highlight line */
+    .countdownGlass::before{
+      content:"";
+      position:absolute;
+      inset:-2px;
+      background: linear-gradient(140deg, rgba(255,255,255,.26), rgba(255,255,255,0) 35%, rgba(255,255,255,.12) 60%, rgba(255,255,255,0));
+      opacity:.55;
+      pointer-events:none;
+    }
+    .countdownGlass::after{
+      content:"";
+      position:absolute;
+      left:10px; right:10px; top:9px;
+      height: 1px;
+      background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.40), rgba(255,255,255,0));
+      opacity:.55;
+      pointer-events:none;
+    }
+
+    .cdTop{
+      font-size: 11px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: rgba(232,240,255,.86);
+      margin: 0 0 6px;
+          display:flex; align-items:center; justify-content:center; gap:10px;
+    }
+    .cdBadge{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:4px 10px;
+      border-radius:999px;
+      font-size:10px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      font-weight:900;
+      border:1px solid rgba(212,175,55,.55);
+      background: rgba(212,175,55,.16);
+      color: rgba(255,255,255,.95);
+      box-shadow: 0 10px 22px rgba(0,0,0,.20);
+    }
+
+
+    .cdRow{
+      display:flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 10px; /* tighter */
+      flex-wrap: nowrap;
+    }
+
+    .cdCell{
+      display:flex;
+      align-items: baseline;
+      gap: 6px;
+      padding: 0; /* ultra-thin */
+      min-width: 0;
+    }
+
+    .cdNum{
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  color: rgba(255,255,255,.98);
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-shadow: 0 10px 26px rgba(0,0,0,.55);
+}
+
+    .cdLbl{
+      font-size: 11px;
+      letter-spacing: .10em;
+      color: rgba(232,240,255,.86);
+      transform: translateY(-1px);
+      white-space: nowrap;
+    }
+
+    .cdSep{
+      color: rgba(255,255,255,.45);
+      transform: translateY(-2px);
+      user-select:none;
+    }
+
+    /* Small phones: keep thin, avoid wrapping */
+    @media (max-width: 380px){
+      .heroMedia{ height: 204px; }
+      .cdNum{
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  color: rgba(255,255,255,.98);
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-shadow: 0 10px 26px rgba(0,0,0,.55);
+}
+      .cdRow{ gap: 8px; }
+    }
+/* === CARDS === */
+    .card{
+      margin-top: 14px;
+      border-radius: var(--r16);
+      border: 1px solid var(--glass-border);
+      background: linear-gradient(180deg, var(--glass), var(--glass2));
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+    }
+    .cardHead{ display:flex; align-items:center; justify-content:space-between; padding: 14px 14px 0; }
+    .cardTitle{ margin:0; font-size: 16px; letter-spacing:-0.01em; }
+    .cardBody{ padding: 14px 14px 16px; }
+    .hint{
+      margin: 8px 0 0;
+      font-size: 12px;
+      color: rgba(185,199,238,.9);
+      line-height: 1.35;
+    }
+
+    /* === HOME PHASE 2: MATCHDAY FLOW === */
+    .flow{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      margin-top: 8px;
+    }
+    .flowStep{
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(11,21,44,.52);
+      padding: 10px 10px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      min-height: 56px;
+    }
+    .flowLeft{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width: 0;
+    }
+    .stepNum{
+      width:28px; height:28px; border-radius: 10px;
+      display:flex; align-items:center; justify-content:center;
+      font-weight: 950;
+      font-size: 13px;
+      color: rgba(7,16,34,.98);
+      background: linear-gradient(180deg, rgba(212,175,55,1), rgba(168,129,30,1));
+      box-shadow: 0 10px 30px rgba(212,175,55,.18);
+      flex:0 0 auto;
+    }
+    .stepTxt{
+      min-width: 0;
+    }
+    .stepTitle{
+      font-weight: 950;
+      font-size: 13px;
+      margin:0;
+      letter-spacing:.01em;
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
+    }
+    .stepSub{
+      margin: 3px 0 0;
+      font-size: 12px;
+      color: rgba(185,199,238,.92);
+      white-space: nowrap;
+      overflow:hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* === BUTTONS (MICRO INTERACTIONS) === */
+    .heroActions{
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .cta{
+      height: 56px;
+      padding: 0 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(15,27,51,.86);
+      color: var(--text);
+      font-weight: 800;
+      font-size: 15px;
+      letter-spacing: -0.01em;
+      line-height: 1;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      box-shadow: 0 10px 24px rgba(0,0,0,.22);
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: transform .12s ease, filter .12s ease;
+      position: relative;
+      overflow:hidden;
+    }
+    .cta::after{
+      content:"";
+      position:absolute;
+      inset:-2px;
+      transform: translateX(-120%);
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent);
+      transition: transform .9s ease;
+      pointer-events:none;
+    }
+    .cta:active{ transform: translateY(1px) scale(.99); filter: brightness(1.06); }
+    .cta:active::after{ transform: translateX(120%); }
+    .cta:focus-visible{ outline:none; box-shadow: 0 0 0 4px rgba(31,111,235,.18); }
+
+    .cta.primary{
+      background: linear-gradient(180deg, rgba(212,175,55,1), rgba(168,129,30,1));
+      color: #070f1f;
+      border: 0;
+      box-shadow: 0 14px 30px rgba(212,175,55,.22);
+    }
+
+    .cta.small{
+      height: 44px;
+      font-size: 13px;
+      border-radius: 14px;
+      padding: 0 12px;
+      font-weight: 900;
+    }
+
+    /* === SECTIONS === */
+    .section{ display:none; }
+    body[data-sec="home"]     #sec-home{ display:block; }
+    body[data-sec="chat"]     #sec-chat{ display:block; }
+    body[data-sec="menu"]     #sec-menu{ display:block; }
+    body[data-sec="schedule"] #sec-schedule{ display:block; }
+    body[data-sec="fanzone"]  #sec-fanzone{ display:block; }
+    body[data-sec="vip"]      #sec-vip{ display:block; }
+
+    /* === CHAT (iOS premium) === */
+    /* Thread container */
+    .chatLog{
+      height: 46vh;
+      min-height: 300px;
+      max-height: 560px;
+      overflow:auto;
+      padding: 10px 8px 2px;
+      scroll-behavior:smooth;
+      scrollbar-width: thin;
+    }
+
+    .chatLine{
+      display:flex;
+      width:100%;
+      margin: 10px 0;
+    }
+    .chatLine.bot{ justify-content:flex-start; }
+    .chatLine.user{ justify-content:flex-end; }
+
+    /* Bubbles */
+    .bubble{
+      display:block;
+      max-width: 88%;
+      padding: 12px 14px;
+      border-radius: 18px;
+      font-size: 14px;
+      letter-spacing: .01em;
+      line-height: 1.35;
+      word-wrap: break-word;
+      box-shadow: 0 14px 34px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.10);
+    }
+    .chatLine.bot .bubble{
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.14);
+      -webkit-backdrop-filter: blur(14px) saturate(1.35);
+      backdrop-filter: blur(14px) saturate(1.35);
+      color: rgba(234,240,255,.96);
+    }
+    .chatLine.user .bubble{
+      background: linear-gradient(180deg, rgba(46,160,67,.58), rgba(46,160,67,.20));
+      border: 1px solid rgba(46,160,67,.48);
+      -webkit-backdrop-filter: blur(10px) saturate(1.2);
+      backdrop-filter: blur(10px) saturate(1.2);
+      color: rgba(246,255,248,.98);
+    }
+
+    /* iMessage-like input row */
+    .chatInputRow{
+      position: sticky;
+      bottom: 0;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      margin-top: 10px;
+      padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+      border-radius: 18px;
+      background: rgba(7,16,34,.82);
+      border: 1px solid rgba(255,255,255,.10);
+      -webkit-backdrop-filter: blur(18px) saturate(1.35);
+      backdrop-filter: blur(18px) saturate(1.35);
+    }
+
+    #msg{
+      flex:1 1 auto;
+      height: 46px;
+      padding: 0 14px;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: rgba(234,240,255,.96);
+      outline:none;
+      font-size: 14px;
+    }
+    #msg::placeholder{ color: rgba(185,199,238,.75); }
+
+    #sendBtn, #btnClear{
+      height: 44px;
+      padding: 0 14px;
+      border-radius: 16px;
+      font-weight: 700;
+      letter-spacing: .01em;
+      border: 1px solid rgba(255,255,255,.14);
+      -webkit-backdrop-filter: blur(14px) saturate(1.25);
+      backdrop-filter: blur(14px) saturate(1.25);
+      box-shadow: 0 10px 22px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.10);
+      transition: transform .12s ease, filter .12s ease;
+    }
+    #sendBtn{
+      background: linear-gradient(180deg, rgba(31,111,235,.78), rgba(31,111,235,.40));
+      border-color: rgba(31,111,235,.55);
+      color: #fff;
+    }
+    #btnClear{
+      background: rgba(255,255,255,.06);
+      color: rgba(234,240,255,.92);
+    }
+    #sendBtn:active, #btnClear:active{ transform: translateY(1px) scale(.99); filter: brightness(1.08); }
+    #sendBtn.busy{ opacity:.75; }
+
+    /* Chat language segmented control (make it look like iOS capsule) */
+    .segWrap{
+      position: relative;
+      display:flex;
+      gap: 2px;
+      padding: 3px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.12);
+      -webkit-backdrop-filter: blur(16px) saturate(1.35);
+      backdrop-filter: blur(16px) saturate(1.35);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .segWrap::before{
+      content:"";
+      position:absolute;
+      inset:3px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.06);
+      transform: translateX(var(--seg-left,0px));
+      width: var(--seg-width, 60px);
+      transition: transform .22s ease, width .22s ease;
+      pointer-events:none;
+      box-shadow: 0 8px 18px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.12);
+      border: 1px solid rgba(255,255,255,.14);
+    }
+    .segBtn{
+      position:relative;
+      z-index:1;
+      flex:1 1 auto;
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 0;
+      background: transparent;
+      color: rgba(234,240,255,.82);
+      font-weight: 800;
+      font-size: 12px;
+      letter-spacing: .02em;
+      cursor:pointer;
+    }
+    .segBtn[aria-selected="true"]{ color: rgba(255,255,255,.98); }
+
+/* Keep Chat language header on one line: allow horizontal scroll instead of wrapping */
+#chatLangRow.segmented{ scrollbar-width:none; }
+#chatLangRow.segmented::-webkit-scrollbar{ display:none; }
+#chatLangRow.segmented .segBtn{ flex:0 0 auto; white-space:nowrap; }
+
+
+/* === TOOLS ROW === */
+    .tools{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      align-items:center;
+    }
+    .select, .search{
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(7,16,34,.45);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 10px;
+      font-size: 13px;
+      outline:none;
+    }
+    .search{ flex: 1 1 140px; }
+
+    /* === BOTTOM NAV === */
+    .mobileNav{
+      position: fixed;
+      left: 0; right: 0;
+      bottom: 0;
+      padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+      background: rgba(7,16,34,.82);
+      border-top: 1px solid rgba(255,255,255,.10);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      display:flex;
+      justify-content: space-around;
+      gap: 6px;
+      z-index: 50;
+    }
+    .mnavBtn{
+      appearance:none;
+      border: 0;
+      background: transparent;
+      color: rgba(185,199,238,.95);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap: 4px;
+      min-width: 54px;
+      padding: 6px 8px;
+      border-radius: 14px;
+      cursor:pointer;
+      user-select:none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: transform .12s ease, filter .12s ease;
+    }
+    .mnavBtn .ico{ font-size: 18px; line-height: 1; }
+    .mnavBtn span{
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing:.01em;
+    }
+    .mnavBtn.active{
+      color: rgba(255,255,255,.98);
+      background: rgba(31,111,235,.16);
+      border: 1px solid rgba(31,111,235,.26);
+    }
+    .mnavBtn:active{ transform: translateY(1px) scale(.99); filter: brightness(1.06); }
+
+    .srOnly{
+      position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+      overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+    }
+
+    /* ===== Intake modal + toast (kept; home only uses it) ===== */
+    body.modalOpen{ overflow:hidden; }
+    .toast{
+      position:fixed; left:50%; transform:translateX(-50%);
+      bottom: calc(74px + env(safe-area-inset-bottom));
+      background: rgba(15,27,51,.92);
+      border: 1px solid rgba(255,255,255,.18);
+      color: rgba(234,240,255,.96);
+      padding: 10px 12px;
+      border-radius: 14px;
+      box-shadow: 0 14px 40px rgba(0,0,0,.45);
+      z-index: 60;
+      width: min(92%, 460px);
+      font-size: 13px;
+    }
+    .toast.hidden{ display:none; }
+    .modal{
+      position:fixed; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      background: rgba(0,0,0,.55);
+      z-index: 70;
+      padding: 18px;
+    }
+    .modal.hidden{ display:none; }
+
+/* =========================
+   MODAL CONTRAST FIX (v2)
+   - Stronger dark+blur scrim behind modal
+   - Modal card gets true opaque glass (~0.82) so fields pop
+   ========================= */
+body.modalOpen{ overflow:hidden; }
+
+/* Overlay scrim + blur */
+.modal{
+  background: rgba(5, 8, 16, 0.78) !important;
+  backdrop-filter: blur(10px) saturate(0.9) !important;
+  -webkit-backdrop-filter: blur(10px) saturate(0.9) !important;
+}
+
+/* Modal surface (the card) */
+.modalCard{
+  background: rgba(12, 18, 34, 0.82) !important; /* target 0.8-ish */
+  backdrop-filter: blur(18px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.2) !important;
+  border: 1px solid rgba(255,255,255,0.22) !important;
+  box-shadow: 0 26px 90px rgba(0,0,0,0.62) !important;
+}
+
+/* Inputs: slightly darker so text contrast stays crisp */
+.modalBody input,
+.modalBody select{
+  background: rgba(0,0,0,0.34) !important;
+  border-color: rgba(255,255,255,0.22) !important;
+}
+
+/* Improve label + helper readability */
+.modalHead h3,
+.modalBody label{
+  color: rgba(245,248,255,0.95) !important;
+}
+
+    .modalCard{
+      width: 100%;
+      max-width: 440px;
+      border-radius: 18px;
+      padding: 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
+      border: 1px solid rgba(255,255,255,.20);
+      box-shadow: 0 18px 70px rgba(0,0,0,.55);
+    }
+    .modalHead{
+      display:flex; justify-content:space-between; align-items:center;
+      gap: 10px;
+    }
+    .modalHead h3{ margin:0; font-size: 15px; letter-spacing:.02em; }
+    .iconBtn{ background:none; border:none; color:#fff; font-size:18px; padding: 6px 10px; border-radius: 12px; }
+    .iconBtn:active{ transform: translateY(1px); }
+    .modalBody label{ display:block; font-size:12px; opacity:.85; margin-top:10px; }
+    .modalBody label.required::after{ content:' *'; color: rgba(255,204,102,.95); font-weight: 900; }
+    .modalBody input,.modalBody select{
+      width:100%;
+      padding:10px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.2);
+      background:rgba(0,0,0,.2);
+      color:#fff;
+      margin-top:4px;
+      outline:none;
+    }
+    .modalBody input:focus,.modalBody select:focus{
+      border-color: rgba(212,175,55,.75);
+      box-shadow: 0 0 0 4px rgba(212,175,55,.12);
+    }
+    .ctaBtn{
+      margin-top:12px;
+      padding:12px 16px;
+      border-radius:14px;
+      border:1px solid rgba(212,175,55,.6);
+      background:linear-gradient(180deg, rgba(212,175,55,.25), rgba(212,175,55,.12));
+      color:#fff;
+      font-weight:900;
+      width:100%;
+    }
+    .ctaBtn:active{ transform: translateY(1px); }
+  
+    /* ===== HERO COUNTDOWN (ULTRA-TRANSPARENT GLASS) ===== */
+    .heroCountdown{
+      position:absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 8px;
+      width: min(92%, 420px);
+      border-radius: 16px;
+
+      /* ultra-thin Apple-glass */
+      border: 1px solid rgba(255,255,255,.16);
+      background: linear-gradient(180deg,
+        rgba(255,255,255,.16) 0%,
+        rgba(255,255,255,.08) 40%,
+        rgba(255,255,255,.06) 100%
+      );
+
+      backdrop-filter: blur(34px) saturate(2.0);
+      -webkit-backdrop-filter: blur(34px) saturate(2.0);
+
+      box-shadow:
+        0 14px 44px rgba(0,0,0,.22),
+        inset 0 1px 0 rgba(255,255,255,.20),
+        inset 0 -1px 0 rgba(0,0,0,.18);
+
+      padding: 6px 10px 9px;
+      z-index: 50;
+      pointer-events: none;
+      overflow:hidden;
+    }
+    .heroCountdown::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      border-radius: inherit;
+      background: radial-gradient(120% 180% at 20% 0%,
+        rgba(255,255,255,.18) 0%,
+        rgba(255,255,255,0) 55%
+      );
+      opacity:.55;
+      pointer-events:none;
+    }
+
+
+    /* subtle premium highlight line (gold shimmer) */
+    .heroCountdown::before{
+      content:"";
+      position:absolute;
+      left:14px; right:14px; top:8px;
+      height: 2px;
+      border-radius: 999px;
+      background: linear-gradient(90deg,
+        rgba(212,175,55,0) 0%,
+        rgba(212,175,55,.12) 28%,
+        rgba(255,255,255,.12) 50%,
+        rgba(212,175,55,.12) 72%,
+        rgba(212,175,55,0) 100%
+      );
+      opacity: .22;
+      transform: translateX(-16%);
+      filter: blur(.2px);
+      animation: heroShimmer 10.5s ease-in-out infinite;
+    }
+    @keyframes heroShimmer{
+      0%,100%{ transform: translateX(-16%); opacity:.18; }
+      50%{ transform: translateX(16%); opacity:.28; }
+    }
+
+    .heroCdTop{
+      text-align:center;
+      font-size: 10.5px;
+      font-weight: 950;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.95);
+      margin: 10px 0 6px;
+      text-shadow: 0 10px 26px rgba(0,0,0,.32);
+      position: relative;
+      z-index: 1;
+    }
+    .heroCdRow{
+      display:flex; align-items:center; justify-content:center; gap:10px;
+      position:relative; z-index:1;
+    }
+    .heroCdCell{ display:flex; flex-direction:column; align-items:center; min-width:48px; }
+    .heroCdNum{
+      font-variant-numeric: tabular-nums;
+      font-weight: 980;
+      letter-spacing: .02em;
+      font-size: 24px;
+      line-height: 1;
+      color: rgba(255,255,255,.99);
+      text-shadow: 0 12px 30px rgba(0,0,0,.30);
+    }
+    .heroCdLbl{
+      margin-top: 5px;
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .20em;
+      text-transform: uppercase;
+      color: rgba(255,255,255,.78);
+      text-shadow: 0 10px 24px rgba(0,0,0,.28);
+    }
+    .heroCdSep{
+      font-size: 18px;
+      line-height: 1;
+      opacity: .50;
+      color: rgba(255,255,255,.90);
+      transform: translateY(-2px);
+      text-shadow: 0 12px 26px rgba(0,0,0,.28);
+    }
+
+    /* ===== CINEMATIC HERO (SAFE, NOTICEABLE, PREMIUM) ===== */
+/* ===== CINEMATIC HERO MICRO-MOTION (single source of truth) ===== */
+    :root{ --heroY: 0px; }
+    #heroBanner .heroImg{
+  width:100%;
+  height:100%;
+  display:block;
+  object-fit: cover;
+  object-position: center center;
+  transform: none !important;
+  filter: none !important;
+}
+    @keyframes heroBreathe{
+      0%,100%{ filter: saturate(1.06) contrast(1.02); }
+    }
+    @media (prefers-reduced-motion: reduce){
+      #heroBanner .heroImg{
+  width:100%;
+  height:100%;
+  display:block;
+  object-fit: cover;
+  object-position: center center;
+  transform: none !important;
+  filter: none !important;
+}
+    }
+
+
+/* ===== Countdown-on-hero (compact, right-aligned, ultra-clear) ===== */
+.hero{ position: relative; overflow: hidden; }
+
+.countdownGlass{
+  position: absolute;
+  right: 14px;
+  left: auto;
+  transform: none;
+  bottom: clamp(10px, 2.0vw, 16px);
+
+  width: auto;
+  max-width: min(52vw, 300px);
+  padding: 8px 10px 8px;
+  border-radius: 18px;
+
+  /* Ultra-clear glass (no muddy tint) */
+  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+  border: 1px solid rgba(255,255,255,.20);
+  box-shadow: 0 14px 40px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.25);
+  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+
+  pointer-events: none; /* never blocks taps */
+}
+.countdownGlass::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius: inherit;
+  background: radial-gradient(120% 80% at 20% 0%, rgba(255,255,255,.26) 0%, rgba(255,255,255,.06) 30%, rgba(255,255,255,0) 62%);
+  opacity:.9;
+  pointer-events:none;
+}
+
+/* Hide top label row for compact watch look */
+.countdownGlass .cdRow{
+  display:flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
+}
+.countdownGlass .cdSep{ display:none; }
+.countdownGlass .cdCell{ display:flex; align-items: baseline; gap: 6px; }
+
+.countdownGlass .cdNum{
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  font-size: clamp(13px, 2.8vw, 17px);
+  color: #D4AF37; /* Broadcast Gold (Controlled FIFA Gold) */
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-shadow: 0 6px 16px rgba(0,0,0,.55);
+}
+.countdownGlass .cdLbl{
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  opacity: .9;
+  color: rgba(255,255,255,.88);
+}
+
+/* Rolex-style subtle tick */
+@keyframes cdTick{
+  0%   { opacity: .55; transform: translateY(-2px); }
+  60%  { opacity: 1;   transform: translateY(0); }
+  100% { opacity: 1;   transform: translateY(0); }
+}
+.countdownGlass .cdNum.tick{ animation: cdTick 320ms ease-out; }
+
+/* Hierarchy: D strongest, then H, then M, then S */
+.countdownGlass .cdCell:nth-of-type(1) .cdNum{
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  color: rgba(255,255,255,.98);
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-shadow: 0 10px 26px rgba(0,0,0,.55);
+}
+.countdownGlass .cdCell:nth-of-type(2) .cdNum{
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  color: rgba(255,255,255,.98);
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-shadow: 0 10px 26px rgba(0,0,0,.55);
+}
+.countdownGlass .cdCell:nth-of-type(3) .cdNum{
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  color: rgba(255,255,255,.98);
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-shadow: 0 10px 26px rgba(0,0,0,.55);
+}
+.countdownGlass .cdCell:nth-of-type(4) .cdNum{
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  color: rgba(255,255,255,.98);
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  text-shadow: 0 10px 26px rgba(0,0,0,.55);
+}
+
+/* Match Day badge */
+.countdownGlass .cdBadge{
+  display:none;
+  align-items:center;
+  justify-content:center;
+  width: 100%;
+  padding: 4px 0;
+  font-weight: 820;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: rgba(255, 240, 200, 1);
+  text-shadow: 0 10px 22px rgba(0,0,0,.28), 0 0 6px rgba(255,220,140,.18);
+}
+.countdownGlass.isMatchDay .cdRow{ display:none !important; }
+.countdownGlass.isMatchDay .cdBadge{ display:flex; }
+
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))){
+  .countdownGlass{ background: rgba(255,255,255,.10); }
+}
+
+
+/* ===== Ultra-top Broadcast Title ===== */
+.broadcast-title{
+  position: fixed;
+  top: env(safe-area-inset-top);
+  left: 0; right: 0;
+  height: 40px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight: 900;
+  letter-spacing: .18em;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #ffffff;
+  background: linear-gradient(
+    to bottom,
+    rgba(0,0,0,.78),
+    rgba(0,0,0,.48),
+    rgba(0,0,0,0)
+  );
+  text-shadow: 0 3px 18px rgba(0,0,0,.85);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index:1000;
+  pointer-events:none;
+}
+
+
+/* Day/Night gradient variants for title (tied to hero switch) */
+html[data-hero="day"] .broadcast-title{
+  position: fixed;
+  top: env(safe-area-inset-top);
+  left: 0; right: 0;
+  height: 40px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight: 900;
+  letter-spacing: .18em;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #ffffff;
+  background: linear-gradient(
+    to bottom,
+    rgba(0,0,0,.78),
+    rgba(0,0,0,.48),
+    rgba(0,0,0,0)
+  );
+  text-shadow: 0 3px 18px rgba(0,0,0,.85);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index:1000;
+  pointer-events:none;
+}
+html[data-hero="night"] .broadcast-title{
+  position: fixed;
+  top: env(safe-area-inset-top);
+  left: 0; right: 0;
+  height: 40px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight: 900;
+  letter-spacing: .18em;
+  font-size: 12px;
+  text-transform: uppercase;
+  color: #ffffff;
+  background: linear-gradient(
+    to bottom,
+    rgba(0,0,0,.78),
+    rgba(0,0,0,.48),
+    rgba(0,0,0,0)
+  );
+  text-shadow: 0 3px 18px rgba(0,0,0,.85);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index:1000;
+  pointer-events:none;
+}
+
+
+/* Landscape fix: let content breathe so panels expand with the hero/background */
+@media (orientation: landscape){
+  body{ min-height: 100vh; }
+  .wrap, .container, .shell, main{ width: 100%; max-width: 100%; }
+  .hero{ min-height: 60vh; }
+}
+
+
+/* Landscape hero image: show full banner (avoid crop) */
+@media (orientation: landscape){
+  .hero{
+    min-height: 56vh;
+  }
+  /* Ensure the hero image shows fully in landscape */
+  #heroImage{
+    object-fit: contain !important;
+    object-position: center center !important;
+  }
+  /* If the hero uses background-image instead of <img>, cover that too */
+  .hero{
+    background-size: contain !important;
+    background-position: center center !important;
+    background-repeat: no-repeat !important;
+  }
+  /* Premium filler behind "contain" letterboxing */
+  .hero::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background: radial-gradient(120% 90% at 50% 20%, rgba(255,255,255,.06), rgba(0,0,0,.25));
+    pointer-events:none;
+    z-index:1;
+  }
+  /* Keep hero content above the vignette */
+  .hero > *{ position: relative; z-index: 2; }
+}
+
+
+/* ===== v1.0 Countdown override (applies to ALL numbers) ===== */
+.countdownGlass .cdNum,
+.cdNum{
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  /* couple sizes down from the prior white version */
+  font-size: clamp(16px, 3.6vw, 22px) !important;
+  line-height: 1 !important;
+  letter-spacing: -0.02em !important;
+
+  /* Broadcast Gold (Controlled FIFA Gold) */
+  color: #D4AF37 !important;
+
+  text-shadow: 0 8px 20px rgba(0,0,0,.58) !important;
+}
+.countdownGlass .cdLbl,
+.cdLbl{
+  font-size: 10px !important;
+  font-weight: 850 !important;
+  letter-spacing: .04em !important;
+  color: rgba(255,255,255,.88) !important;
+}
+
+
+/* ===== v1.0 Countdown color lock: Warm Platinum (keep current size) ===== */
+.countdownGlass .cdNum,
+.heroCdNum,
+.cdNum{
+  color: #EAE6DC !important; /* Warm Platinum */
+}
+
+
+/* === EXPLORE TILES (iOS-glass) === */
+.exploreGrid{
+  display:grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+.tile{
+  width:100%;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 14px 36px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.14);
+  padding: 12px 12px;
+  display:flex;
+  align-items:center;
+  gap: 12px;
+  color: var(--text);
+  text-align:left;
+  cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: transform .12s ease, filter .12s ease;
+}
+.tile:active{ transform: translateY(1px) scale(.99); filter: brightness(1.06); }
+.tileIco{
+  width: 40px; height: 40px;
+  border-radius: 14px;
+  display:flex; align-items:center; justify-content:center;
+  background: rgba(31,111,235,.14);
+  border: 1px solid rgba(31,111,235,.20);
+  font-size: 18px;
+  flex: 0 0 auto;
+}
+.tileTxt{ min-width:0; }
+.tileTitle{
+  font-weight: 950;
+  font-size: 14px;
+  letter-spacing: .01em;
+}
+.tileSub{
+  margin-top: 3px;
+  font-size: 12px;
+  color: rgba(185,199,238,.92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (min-width: 420px){
+  .exploreGrid{ grid-template-columns: 1fr 1fr; }
+}
+
+
+/* =========================================================
+   v1.0 iOS 26.1 "Material" System
+   - One token set controls blur/opacity/borders/highlights
+   - Specular sweep (faint) on hover/press ONLY
+   - Icon glass puck upgrade
+   ========================================================= */
+:root{
+  --mat-blur: 16px;
+  --mat-sat: 1.55;
+
+  --mat-bg: rgba(255,255,255,.085);
+  --mat-bg2: rgba(255,255,255,.035);
+  --mat-border: rgba(255,255,255,.16);
+
+  --mat-press: rgba(255,255,255,.10);
+  --mat-shadow: 0 14px 40px rgba(0,0,0,.18);
+
+  --specular: rgba(255,255,255,.12);  /* super faint */
+  --specular2: rgba(255,255,255,0);
+
+  --puck-bg: rgba(255,255,255,.10);
+  --puck-border: rgba(255,255,255,.18);
+  --puck-blur: 18px;
+}
+
+/* Material apply: cards / tiles / buttons / countdown share same "glass DNA" */
+.card,
+.tile,
+.cta,
+.countdownGlass{
+  border-color: var(--mat-border) !important;
+  backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-sat)) !important;
+  -webkit-backdrop-filter: blur(var(--mat-blur)) saturate(var(--mat-sat)) !important;
+  box-shadow: var(--mat-shadow) !important;
+}
+
+/* Cards */
+.card{
+  background: linear-gradient(180deg, var(--mat-bg), var(--mat-bg2)) !important;
+}
+
+/* Tiles */
+.tile{
+  background: linear-gradient(180deg, var(--mat-bg), var(--mat-bg2)) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Buttons */
+.cta{
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(15,27,51,.82), rgba(15,27,51,.62)) !important;
+  border: 1px solid var(--mat-border) !important;
+}
+
+/* Keep primary CTA gold premium */
+.cta.primary{
+  box-shadow: 0 14px 30px rgba(212,175,55,.22) !important;
+}
+
+/* Countdown keeps your placement + shape; just aligns material */
+.countdownGlass{
+  background: linear-gradient(180deg, var(--mat-bg), var(--mat-bg2)) !important;
+}
+
+/* === Specular sweep (hover/press only) ===
+   - No constant motion
+   - Activates on :hover (desktop) and :active (mobile press)
+*/
+.tile::after,
+.cta::after{
+  content:"";
+  position:absolute;
+  inset:-2px;
+  transform: translateX(-140%);
+  background: linear-gradient(90deg, var(--specular2), var(--specular), var(--specular2));
+  opacity: .35;
+  pointer-events:none;
+  transition: transform .65s ease, opacity .35s ease;
+}
+
+/* desktop hover */
+@media (hover:hover){
+  .tile:hover::after,
+  .cta:hover::after{
+    transform: translateX(140%);
+    opacity: .55;
+  }
+}
+
+/* mobile press */
+.tile:active::after,
+.cta:active::after{
+  transform: translateX(140%);
+  opacity: .60;
+}
+
+/* === Icon glass puck upgrade === */
+.tileIco{
+  background: linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,.06)) !important;
+  border: 1px solid var(--puck-border) !important;
+  backdrop-filter: blur(var(--puck-blur)) saturate(1.7) !important;
+  -webkit-backdrop-filter: blur(var(--puck-blur)) saturate(1.7) !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,.14), inset 0 1px 0 rgba(255,255,255,.26) !important;
+  position: relative;
+  overflow: hidden;
+}
+
+/* brighter top edge line + subtle inner glow */
+.tileIco::before{
+  content:"";
+  position:absolute;
+  left:8px; right:8px; top:7px;
+  height: 1px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.55), rgba(255,255,255,0));
+  opacity: .55;
+  pointer-events:none;
+}
+.tileIco::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  border-radius: inherit;
+  background: radial-gradient(120% 120% at 20% 0%, rgba(255,255,255,.22), rgba(255,255,255,0) 60%);
+  opacity:.45;
+  pointer-events:none;
+}
+
+/* Slightly nicer "tap" feel */
+.tile:active,
+.cta:active{
+  filter: brightness(1.06);
+}
+
+
+    /* === Home actions: iPhone rhythm (stacked CTAs + chips) === */
+    .homeActions{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .homeActions .cta{
+      width:100%;
+      min-height:58px;
+      border-radius:16px;
+    }
+    .homeActions .cta.primary{
+      position:relative;
+      overflow:hidden;
+      box-shadow: 0 10px 22px rgba(0,0,0,.28);
+    }
+    .homeActions .cta.primary::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background: linear-gradient(180deg, rgba(255,255,255,.22), rgba(255,255,255,0) 40%);
+      mix-blend-mode: overlay;
+      pointer-events:none;
+    }
+    .quickChips{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:2px;
+    }
+    .chip{
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 10px 12px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: .02em;
+      backdrop-filter: blur(var(--blur, 14px));
+      -webkit-backdrop-filter: blur(var(--blur, 14px));
+    }
+    .chip:active{ transform: translateY(1px); }
+
+
+    /* === Primary CTA text color fix === */
+    .cta.primary{
+      color: rgba(255,255,255,0.96);
+      text-shadow: 0 1px 1px rgba(0,0,0,0.25);
+    }
+
+
+    /* === Primary CTA text color (lock) === */
+    .cta.primary{ color: rgba(255,255,255,.96) !important; }
+
+
+/* ===== v1.0 FIX (LOCK): UNTIL KICKOFF visibility + elite contrast ===== */
+.countdownGlass .cdTop{
+  display:block !important;
+  margin: 0 0 6px !important;
+  text-align: left !important;
+
+  font-size: 11px !important;
+  font-weight: 950 !important;
+  letter-spacing: .18em !important;
+  text-transform: uppercase !important;
+
+  color: rgba(255,255,255,.96) !important;
+  text-shadow:
+    0 2px 10px rgba(0,0,0,.75),
+    0 0 22px rgba(0,0,0,.45) !important;
+}
+
+
+    /* ===== MENU: Chef card + sections (premium glass) ===== */
+    .chefCard{
+      border:1px solid rgba(255,255,255,.14);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(0,0,0,.16));
+      border-radius:16px;
+      padding:12px;
+      margin: 2px 0 12px;
+      overflow:hidden;
+    }
+    .chefRow{display:flex; gap:12px; align-items:center;}
+    .chefPhoto{
+      width:74px; height:74px;
+      border-radius:16px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      display:flex; align-items:center; justify-content:center;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      flex: 0 0 auto;
+    }
+    .chefPhoto svg{width:48px; height:48px; opacity:.9;}
+    .chefMeta{display:flex; flex-direction:column; gap:6px; min-width:0;}
+    .chefTitle{font-weight:900; font-size:14px;}
+    .chefSub{color: var(--muted); font-size:12px; line-height:1.25;}
+    .chefCTA{
+      align-self:flex-start;
+      margin-top:4px;
+      background: rgba(255,255,255,.10);
+      border:1px solid rgba(255,255,255,.18);
+      color: var(--text);
+      padding:9px 12px;
+      border-radius:12px;
+      font-weight:800;
+      cursor:pointer;
+    }
+    .chefCTA:hover{ background: rgba(255,255,255,.14); transform: translateY(-1px); }
+    .menuSection{margin: 0 0 12px 0;}
+    .menuSectionHead{
+      font-weight:900;
+      font-size:12px;
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      color: rgba(234,240,255,.86);
+      margin: 8px 2px 8px;
+    }
+    /* ===== END MENU ===== */
+
+/* ===== MENU: Premium iOS item cards + filters (SAFE ADD) ===== */
+body[data-sec="menu"] #sec-menu .card{ overflow:hidden; }
+
+.menuFilters{
+  display:flex;
+  gap:8px;
+  flex-wrap: nowrap;
+  overflow-x:auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 8px 2px 10px;
+  margin-top: 6px;
+}
+.menuFilters::-webkit-scrollbar{ display:none; }
+.menuChip{
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 850;
+  letter-spacing: .01em;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  color: rgba(234,240,255,.92);
+  cursor:pointer;
+  user-select:none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .10s ease, background .12s ease, border-color .12s ease, opacity .12s ease;
+  opacity: .92;
+}
+.menuChip:active{ transform: translateY(1px) scale(.99); }
+.menuChip.active{
+  background: rgba(255,255,255,.16);
+  border-color: rgba(255,255,255,.22);
+  opacity: 1;
+}
+
+.menuUpsell{
+  margin-top: 6px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(0,0,0,.20));
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: 0 16px 44px rgba(0,0,0,.24);
+}
+.menuUpsell.hidden{ display:none; }
+.menuUpsellTop{
+  display:flex; align-items:center; justify-content:space-between;
+  gap:10px;
+  margin-bottom: 8px;
+}
+.menuUpsellTitle{
+  font-weight: 950;
+  font-size: 12px;
+  letter-spacing: .10em;
+  text-transform: uppercase;
+  opacity: .86;
+  white-space: nowrap;
+}
+.menuUpsellBadge{
+  font-size: 11px;
+  font-weight: 850;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  opacity:.9;
+  white-space:nowrap;
+}
+.menuUpsellItem{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+.menuUpsellName{ font-weight: 950; font-size: 14px; letter-spacing: -0.01em; }
+.menuUpsellDesc{ color: var(--muted); font-size: 12px; line-height: 1.35; margin-top: 4px; }
+.menuUpsellPrice{ font-weight: 950; font-size: 13px; opacity: .92; white-space:nowrap; }
+
+/* Menu section block */
+.menuSection{
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.03);
+  border-radius: 16px;
+  padding: 10px;
+  margin: 0 0 12px 0;
+  box-shadow: 0 12px 30px rgba(0,0,0,.18);
+}
+.menuTitle{
+  font-weight: 950;
+  font-size: 12px;
+  letter-spacing: .10em;
+  text-transform: uppercase;
+  color: rgba(234,240,255,.86);
+  margin: 2px 2px 10px;
+}
+
+/* Individual item card */
+.menuItem{
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.04);
+  border-radius: 14px;
+  padding: 10px 10px 9px;
+  margin: 0 0 9px 0;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.menuItem:last-child{ margin-bottom: 0; }
+.miTop{ display:flex; align-items:flex-start; justify-content:space-between; gap:10px; }
+.miName{
+  font-weight: 950;
+  font-size: 14px;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  min-width: 0;
+}
+.miMetaRow{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.miTag{
+  font-size: 11px;
+  font-weight: 850;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  opacity: .9;
+}
+.miPrice{
+  font-weight: 950;
+  font-size: 13px;
+  opacity: .92;
+  white-space: nowrap;
+}
+.miDesc{
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  margin-top: 6px;
+}
+/* ===== END MENU: Premium iOS item cards + filters ===== */
+
+
+
+/* =========================
+   Legacy Schedule / Fan Zone / VIP styles (restored)
+   ========================= */
+
+
+
+    /* Keep pagination controls visible (fix: pager off-screen in regular mode) */
+    #pager{
+      position: sticky;
+      bottom: 0;
+      z-index: 6;
+      background: rgba(7,16,34,.92);
+      backdrop-filter: blur(8px);
+      border-top: 1px solid rgba(255,255,255,.12);
+      margin-top: auto;
+    }
+
+
+/* Gold accent rules */
+.match-card.dallas{ border:1px solid rgba(255,204,102,.55) !important; box-shadow: 0 0 0 1px rgba(255,204,102,.15) inset; }
+
+.match-card.knockout{ border:1px solid rgba(255,204,102,.35) !important; }
+
+.match-card.finals{ border:1px solid rgba(255,204,102,.65) !important; box-shadow: 0 0 0 1px rgba(255,204,102,.22) inset; }
+
+
+/* Fan Zone panel */
+.fanzone{
+  margin: 14px 0 0 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+  padding: 12px;
+}
+
+.fz-row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between; }
+
+.fz-chip{
+  display:inline-flex; align-items:center; gap:8px;
+  border:1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: rgba(0,0,0,.15);
+}
+
+.fz-chip b{ font-weight:700; }
+
+
+/* Ensure supporter chip handles long country names gracefully */
+#supporterChip{ max-width:100%; min-width:0; flex-wrap:wrap; }
+
+#supporterChip b#supporterLabel{
+  display:inline-block;
+  max-width: 180px;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.1;
+}
+
+body.has-support #supporterChip{
+  background:
+    radial-gradient(220px 120px at 12% 18%, var(--supportA), transparent 60%),
+    linear-gradient(135deg, rgba(0,0,0,.18), rgba(0,0,0,.08));
+  border-color: color-mix(in srgb, var(--supportA) 55%, var(--supportBorder));
+  box-shadow: 0 14px 38px color-mix(in srgb, var(--supportGlow) 45%, transparent);
+}
+
+body.has-support #supporterChip span#supporterFlag{
+  filter: drop-shadow(0 8px 18px rgba(0,0,0,.35));
+}
+
+body.has-support .fz-modal .panel{
+  border-color: color-mix(in srgb, var(--supportA) 55%, rgba(255,255,255,.12));
+  box-shadow: 0 18px 55px rgba(0,0,0,.55);
+}
+
+body.has-support .fz-country:hover{
+  border-color: color-mix(in srgb, var(--supportA) 65%, rgba(255,255,255,.14));
+}
+
+.fz-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+
+.fz-btn{
+  border:1px solid var(--line);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor:pointer;
+}
+
+.fz-btn:hover{ transform: translateY(-1px); }
+
+
+.fz-grid{
+  display:grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 10px;
+  margin-top:10px;
+}
+
+.fz-card{
+  grid-column: span 12;
+  border:1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(0,0,0,.14);
+}
+
+  .fz-card.third{ grid-column: span 4; }
+
+.fz-card h3{ margin:0 0 8px 0; font-size: 14px; color: var(--text); }
+
+.fz-muted{ color: var(--muted); font-size: 12px; }
+
+
+/* Modal */
+.fz-modal{
+  position:fixed; inset:0;
+  display:flex;
+  align-items:center; justify-content:center;
+  background: rgba(0,0,0,.55);
+  z-index: 9999;
+
+  /* Hidden by default, but still transitionable */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 220ms ease;
+}
+
+.fz-modal.show{
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.fz-modal .panel{
+  width:min(720px, 92vw);
+  border:1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(10,18,40,.92);
+  padding: 14px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.55);
+
+  /* Premium open motion */
+  transform: translateY(12px) scale(.99);
+  opacity: 0;
+  transition: transform 240ms cubic-bezier(.2,.9,.2,1), opacity 240ms ease;
+}
+
+.fz-modal.show .panel{
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+.fz-modal.show{
+  backdrop-filter: blur(2px);
+}
+
+.fz-modal.show .panel{
+  animation: fzModalIn 420ms cubic-bezier(.16, 1, .3, 1) both;
+}
+
+.fz-modal .panel h2{ margin:0 0 10px 0; font-size: 16px; }
+
+
+.fz-country-grid{ display:grid; grid-template-columns: repeat(3, 1fr); gap:8px; }
+
+.fz-country{
+  border:1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255,255,255,.04);
+  cursor:pointer;
+  display:flex; gap:8px; align-items:center; justify-content:center;
+}
+
+.fz-country:hover{ outline: 1px solid rgba(255,204,102,.35); }
+
+.fz-flag{ font-size: 18px; }
+
+.fz-footer{ display:flex; justify-content:space-between; gap:10px; margin-top:10px; flex-wrap:wrap; }
+
+
+
+/* --- Fan Zone side rails (desktop) --- */
+/* --- Left rail stack (VIP above Fan Zone) --- */
+@media(min-width: 1200px){
+  .fz-left-stack{
+    position: fixed;
+    left: 16px;
+    top: 84px; /* below header */
+    width: 220px;
+    max-height: calc(100vh - 110px);
+    display: flex;
+    flex-direction: column;
+    gap: 12px; /* SPACE between VIP + Fan Zone */
+    z-index: 55;
+  }
+
+  /* Fan zone left becomes normal inside the stack */
+  #fanZoneLeft.fanzone-left{
+    position: static;
+    width: 100%;
+    max-height: none;
+    overflow: auto;
+  }
+
+  /* VIP rail matches width and never affects main layout */
+  #vipHoldRail{
+    position: static;
+    width: 100%;
+  }
+
+
+.fanzone-left, .fanzone-right{ width: 100%; }
+
+  .fanzone-left, .fanzone-right{
+    position: fixed;
+    top: 92px; /* below header */
+    max-height: calc(100vh - 110px);
+    overflow: auto;
+    z-index: 50;
+  }
+
+  .fanzone-left{ left: 16px; }
+
+  .fanzone-right{ right: 16px; }
+
+  .fanzone-left, .fanzone-right{
+    width: auto;
+    position: static;
+    margin-top: 12px;
+  }
+
+
+
+/* --- Fan Zone size reduction (compact rails) --- */
+.fanzone-left, .fanzone-right{
+  width: 100%;
+  font-size: 12px;
+}
+
+.fz-chip{
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.fz-btn{
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.fz-card{
+  padding: 8px;
+}
+
+.fz-card h3{
+  font-size: 13px;
+}
+
+
+
+/* =======================
+   FAN ZONE: ultra-compact + luxury rails
+   ======================= */
+.fanzone-left, .fanzone-right{
+  width: 220px;
+  font-size: 11px;
+  border-radius: 18px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.02));
+}
+
+.fz-card{ border-radius: 16px; background: rgba(0,0,0,.10); }
+
+.fz-btn{
+  border-radius: 999px;
+  background: rgba(255,255,255,.035);
+}
+
+.fz-actions{ gap:6px; }
+
+.fz-chip{ border-radius: 999px; background: rgba(0,0,0,.10); }
+
+  .fanzone-left, .fanzone-right{ top: 84px; }
+
+/* Auto-hide rails on scroll */
+body.fz-hidden .fanzone-left{ transform: translateX(-110%); opacity:0; pointer-events:none; }
+
+body.fz-hidden .fanzone-right{ transform: translateX(110%); opacity:0; pointer-events:none; }
+
+.fanzone-left, .fanzone-right{ transition: transform .22s ease, opacity .22s ease, box-shadow .22s ease; }
+
+/* Collapse to icon-only mode */
+.fz-iconbtn{
+  width: 34px; height: 34px;
+  border-radius: 999px;
+  border:1px solid var(--line);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  cursor:pointer;
+  display:inline-flex; align-items:center; justify-content:center;
+}
+
+.fz-iconbtn:hover{ transform: translateY(-1px); }
+
+.fz-minirow{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+
+
+body.fz-collapsed .fanzone-left,
+body.fz-collapsed .fanzone-right{ width: 56px; padding: 10px; }
+
+
+body.fz-collapsed .fanzone-left .fz-actions,
+body.fz-collapsed .fanzone-right .fz-actions{ justify-content:center; }
+
+
+body.fz-collapsed .fanzone-left .fz-btn,
+body.fz-collapsed .fanzone-right .fz-btn{ display:none; }
+
+
+body.fz-collapsed .fanzone-left .fz-card,
+body.fz-collapsed .fanzone-right .fz-card,
+body.fz-collapsed #supporterChip,
+body.fz-collapsed .fz-muted{ display:none !important; }
+
+
+body.fz-collapsed .fz-rail-title{ display:none; }
+
+body.fz-collapsed .fz-minirow{ justify-content:center; }
+
+
+
+/* Rails: slimmer + glass + premium border */
+.fanzone-left, .fanzone-right{
+  width: var(--fzW) !important;
+  font-size: 11px !important;
+  border-radius: 18px !important;
+  background: linear-gradient(180deg, var(--fzGlass), rgba(255,255,255,.02)) !important;
+  border: 1px solid var(--fzEdge) !important;
+  box-shadow:
+    0 14px 38px rgba(0,0,0,.30),
+    0 0 0 1px rgba(255,255,255,.06) inset !important;
+  backdrop-filter: blur(12px) saturate(1.15);
+  -webkit-backdrop-filter: blur(12px) saturate(1.15);
+  overflow: hidden;
+}
+
+  .fanzone-left, .fanzone-right{ top: 84px !important; }
+
+
+/* Inner cards: tighter, more luxury */
+.fz-card{
+  border-radius: 16px !important;
+  padding: 8px !important;
+  background: linear-gradient(180deg, rgba(0,0,0,.30), rgba(0,0,0,.18)) !important;
+  border: 1px solid rgba(255,255,255,.10) !important;
+}
+
+.fz-card h3{ font-size: 12px !important; letter-spacing: .02em; }
+
+
+/* Buttons/chips: slimmer */
+.fz-actions{ gap: 6px !important; }
+
+.fz-btn{
+  padding: 6px 8px !important;
+  font-size: 11px !important;
+  border-radius: 999px !important;
+  background: rgba(255,255,255,.08) !important;
+  border: 1px solid rgba(255,255,255,.14) !important;
+}
+
+.fz-chip{
+  padding: 6px 8px !important;
+  font-size: 11px !important;
+  border-radius: 999px !important;
+  background: rgba(0,0,0,.22) !important;
+  border: 1px solid rgba(255,255,255,.12) !important;
+}
+
+
+/* Icon buttons: premium round + subtle shine */
+.fz-iconbtn{
+  width: 34px !important; height: 34px !important;
+  border-radius: 999px !important;
+  background: radial-gradient(120px 60px at 30% 20%, rgba(255,255,255,.14), rgba(255,255,255,.06)) !important;
+  border: 1px solid rgba(255,255,255,.16) !important;
+  box-shadow: 0 10px 22px rgba(0,0,0,.22) !important;
+}
+
+.fz-iconbtn:hover{ transform: translateY(-1px); }
+
+
+/* Auto-hide rails on scroll: smoother */
+body.fz-hidden .fanzone-left{ transform: translateX(-120%) !important; opacity:0 !important; pointer-events:none !important; }
+
+body.fz-hidden .fanzone-right{ transform: translateX(120%) !important; opacity:0 !important; pointer-events:none !important; }
+
+.fanzone-left, .fanzone-right{ transition: transform .24s ease, opacity .24s ease, box-shadow .24s ease !important; }
+
+
+/* Collapsed: icon-only “luxury strip” */
+body.fz-collapsed .fanzone-left,
+body.fz-collapsed .fanzone-right{
+  width: 56px !important;
+  padding: 10px 8px !important;
+}
+
+body.fz-collapsed .fanzone-left .fz-btn,
+body.fz-collapsed .fanzone-right .fz-btn,
+body.fz-collapsed .fanzone-left .fz-chip,
+body.fz-collapsed .fanzone-right .fz-chip,
+body.fz-collapsed .fanzone-left .fz-muted,
+body.fz-collapsed .fanzone-right .fz-muted,
+body.fz-collapsed .fanzone-left #pollCard,
+body.fz-collapsed .fanzone-right #drinkCard{
+  display:none !important;
+}
+
+body.fz-collapsed .fanzone-left .fz-actions,
+body.fz-collapsed .fanzone-right .fz-actions{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:10px !important;
+  align-items:center !important;
+}
+
+body.has-match-today .fanzone-left,
+body.has-match-today .fanzone-right{
+  border-color: rgba(255,204,102,.32) !important;
+  animation: fzPulse 2.2s ease-in-out infinite;
+}
+
+
+
+/* =======================
+   FAN ZONE (RIGHT RAIL) — fit + no overflow
+   ======================= */
+.fanzone-left, .fanzone-right,
+.fanzone-left *, .fanzone-right *{
+  box-sizing: border-box;
+}
+
+
+.fanzone-left, .fanzone-right{
+  overflow-x: hidden;
+}
+
+
+.fanzone-left .fz-card, .fanzone-right .fz-card{
+  width: 100%;
+  max-width: 100%;
+}
+
+
+.fanzone-left .fz-grid, .fanzone-right .fz-grid{
+  width: 100%;
+}
+
+
+/* Stack QR + text so it never spills outside the rail */
+.fanzone-right .qrWrap{
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+
+.fanzone-right #qrImg{
+  width: 92px;
+  height: 92px;
+  max-width: 100%;
+}
+
+
+.fanzone-right .qrText{
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+
+.fanzone-right .qrText a{
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* If any long labels appear, wrap them cleanly */
+.fanzone-right, .fanzone-right .fz-muted{
+  word-break: break-word;
+}
+
+
+
+/* =======================
+   FAN ZONE RIGHT: overflow hardening (no horizontal scroll)
+   ======================= */
+.fanzone-right{ overflow-x:hidden; }
+
+.fanzone-right *{ max-width:100%; box-sizing:border-box; }
+
+.fanzone-right h3,
+.fanzone-right .fz-muted,
+.fanzone-right #drinkHighlight,
+.fanzone-right #drinkHighlight *{
+  overflow-wrap:anywhere;
+  word-break:break-word;
+  hyphens:auto;
+}
+
+.fanzone-right .qrWrap{ flex-direction:column; align-items:flex-start; }
+
+.fanzone-right #qrImg{ width:96px; height:96px; }
+
+.fanzone-right .qrText a{ display:block; overflow-wrap:anywhere; word-break:break-all; }
+
+
+
+/* =======================
+   FAN ZONE RIGHT RAIL — overflow hard-fix (no horizontal scroll)
+   ======================= */
+.fanzone-left, .fanzone-right{
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+}
+
+.fz-card, .fanzone, .fz-row, .fz-grid, .qrWrap{ max-width: 100%; }
+
+.fz-card{ overflow: hidden; }
+
+.fz-muted, .fz-card, .fz-chip, .fz-btn, .qrText{
+  min-width: 0;
+}
+
+
+/* Make the right rail content "taller" instead of wider */
+.fanzone-right .fz-card{ padding-bottom: 12px; }
+
+.fanzone-right .qrWrap{
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.fanzone-right #qrImg{
+  width: 92px;
+  height: 92px;
+}
+
+
+/* Right rail: stack content vertically to avoid cramped horizontal layouts */
+.fanzone-right .fz-row{ flex-direction: column; align-items: stretch; gap: 8px; }
+
+.fanzone-right .fz-actions{ width:100%; justify-content: flex-start; }
+
+.fanzone-right .fz-grid{ grid-template-columns: 1fr !important; }
+
+.fanzone-right .fz-card{ width:100%; }
+
+.fanzone-right .fz-card *{ max-width:100%; min-width:0; }
+
+
+/* Drink highlight: always vertical */
+.fz-drink{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  width:100%;
+}
+
+.fz-drinkTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+
+.fz-drinkName{
+  font-weight:900;
+  letter-spacing:.02em;
+}
+
+.fz-drinkMeta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+
+.fz-miniPill{
+  font-size:10.5px;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.14);
+  color: var(--muted);
+}
+
+
+/* Any long strings must break rather than create scroll */
+.fanzone-right, .fanzone-right *{
+  overflow-wrap:anywhere;
+  word-break:break-word;
+}
+
+
+
+/* =======================
+   FAN ZONE: drink highlight (vertical stack, zero overflow)
+   ======================= */
+.fz-drinkStack{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:0;
+}
+
+
+
+/* Last-resort: never allow a horizontal scrollbar anywhere */
+body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
+
+
+/* Sticky pager stays visible within schedule panel */
+#pager{ position: sticky; bottom: 0; }
+
+
+
+/* =======================
+   PAGER MINI (doesn't block schedule)
+   ======================= */
+#pager{
+  padding: 8px 10px !important;
+  border-top: 1px solid rgba(255,255,255,.10) !important;
+}
+
+#pager button{
+  padding: 7px 10px !important;
+  min-width: 66px !important;
+  border-radius: 10px !important;
+  font-size: 12px !important;
+}
+
+#pager .secondary{
+  padding: 7px 10px !important;
+}
+
+#pager .pill, #pager .pageLabel, #pager #pageIndicator{
+  font-size: 11px !important;
+  padding: 4px 8px !important;
+}
+
+
+
+/* =======================
+   ULTRA-SLEEK PAGER (icon-only, never blocks scrollbars)
+   ======================= */
+#pager{
+  position: sticky !important;
+  bottom: 6px !important;
+  margin: 0 8px 8px !important;
+  width: calc(100% - 16px) !important;
+  border-radius: 14px !important;
+  padding: 6px 8px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  background: rgba(7,16,34,.72) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  box-shadow: 0 10px 26px rgba(0,0,0,.22) !important;
+}
+
+
+/* Icon buttons */
+#pager button{
+  min-width: 34px !important;
+  width: 34px !important;
+  height: 30px !important;
+  padding: 0 !important;
+  border-radius: 12px !important;
+  font-size: 0 !important;            /* hide text */
+  line-height: 0 !important;
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+}
+
+
+/* Page indicator compact */
+#pageIndicator, .pageLabel, #pager .pill{
+  font-size: 11px !important;
+  padding: 4px 8px !important;
+  border-radius: 999px !important;
+  white-space: nowrap !important;
+}
+
+#pager .pill{ margin: 0 !important; }
+
+
+
+/* =======================
+   COMPACT TEXT PAGER (Prev/Next visible, ultra-sleek)
+   ======================= */
+#pager{
+  position: sticky !important;
+  bottom: 6px !important;
+  margin: 0 10px 8px !important;
+  width: calc(100% - 20px) !important;
+  border-radius: 14px !important;
+  padding: 6px 8px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  background: rgba(7,16,34,.70) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  box-shadow: 0 10px 24px rgba(0,0,0,.20) !important;
+  pointer-events:auto;
+}
+
+
+/* Buttons: small, readable */
+#pager button{
+  min-width: 64px !important;
+  height: 28px !important;
+  padding: 0 10px !important;
+  border-radius: 12px !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  letter-spacing: .06em !important;
+  line-height: 1 !important;
+}
+
+
+/* Page indicator tiny */
+#pageIndicator, .pageLabel, #pager .pill{
+  font-size: 10.5px !important;
+  padding: 4px 8px !important;
+  border-radius: 999px !important;
+  white-space: nowrap !important;
+}
+
+
+/* Keep pager slightly above bottom so it doesn't sit on scrollbar edge */
+#pager{
+  bottom: 10px !important;
+}
+
+
+/* Pager sits below the scroll area (no sticky overlay) */
+#pager{
+  position: relative !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  width: auto !important;
+  border-radius: 0 0 16px 16px !important;
+  box-shadow: none !important;
+}
+
+
+
+/* =======================
+   VIP TABLE HOLD (UI-only) — sleek + luxury
+   ======================= */
+.vip-gap{
+  height: 14px;
+  margin-top: 10px;
+}
+
+.vip-gap::after{
+  content:"";
+  display:block;
+  height:1px;
+  width:100%;
+  background: linear-gradient(90deg, transparent, rgba(255,204,102,.35), transparent);
+}
+
+
+.vip-rail{ width:220px; max-width:220px; }
+
+.vip-rail .vip-card{ width:100%; }
+
+
+
+.vip-hold{
+  margin-top: 18px;              /* space from Fan Zone card above */
+  padding: 10px 10px 11px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(0,0,0,.12));
+  border: 1px solid rgba(255,204,102,.28);
+  box-shadow:
+    0 18px 40px rgba(0,0,0,.28),
+    0 0 0 1px rgba(255,204,102,.10) inset;
+  position: relative;
+  overflow: hidden;
+}
+
+.vip-hold::before{
+  content:"";
+  position:absolute; inset:-2px;
+  background:
+    radial-gradient(220px 120px at 18% 18%, rgba(255,204,102,.22), transparent 60%),
+    radial-gradient(260px 160px at 85% 65%, rgba(31,111,235,.12), transparent 62%),
+    linear-gradient(135deg, rgba(255,204,102,.10), rgba(0,0,0,0) 45%);
+  pointer-events:none;
+}
+
+.vip-hold h3{
+  margin: 0 0 6px 0;
+  font-size: 12.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.vip-hold .fz-muted{
+  font-size: 11px;
+  line-height: 1.25;
+  color: rgba(234,240,255,.78);
+}
+
+.vip-hold .fz-actions{
+  margin-top: 8px !important;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+.vip-hold .fz-btn{
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  border-radius: 999px;
+  border: 1px solid rgba(255,204,102,.22);
+  background: rgba(255,255,255,.035);
+}
+
+.vip-hold .fz-btn:hover{
+  outline: 1px solid rgba(255,204,102,.30);
+}
+
+.vip-hold .fz-btn#vipHoldBtn{
+  background: linear-gradient(135deg, rgba(255,204,102,.22), rgba(46,160,67,.10));
+  border-color: rgba(255,204,102,.30);
+}
+
+
+
+/* =======================
+   VIP HOLD RAIL (separate from Fan Zone)
+   ======================= */
+.vip-rail{
+  margin-top: 12px;
+}
+
+.vip-rail .vip-hold{
+  border-radius: 16px;
+}
+
+.vip-rail .vip-hold h3{ font-size: 13px; margin:0 0 6px 0; }
+
+.vip-rail .fz-actions{ margin-top: 8px !important; gap:6px; }
+
+.vip-rail .fz-btn{ padding: 6px 10px; font-size: 12px; border-radius: 999px; }
+
+.vip-rail .fz-muted{ font-size: 11px; }
+
+
+/* Desktop: pin VIP rail above Fan Zone rails, then push Fan Zone down */
+
+}
+/* AUTO-FIX: close desktop @media block */
+
+@media(min-width: 1200px){
+  .vip-rail{
+    position: fixed;
+    top: 84px; /* below header */
+    left: 16px;
+    width: 220px;
+    z-index: 60;
+    max-height: 160px;
+    overflow: hidden;
+  }
+
+  /* Fan Zone rails start below VIP rail with clear separation */
+  .fanzone-left{ top: 264px !important; }
+
+
+
+/* ===== VIP HOLD (layout-safe, luxury compact) ===== */
+.vip-rail{
+  margin: 0 0 14px 0; /* space below VIP, before Fan Zone */
+  width: 220px;
+}
+
+.vip-card{
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: 18px;
+  padding: 10px 10px 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.02));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 18px 45px rgba(0,0,0,.25);
+}
+
+.vip-card h3{
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.vip-card .fz-muted{ font-size: 11px; line-height: 1.25; }
+
+.vip-card label{ font-size: 11px; color: var(--muted); }
+
+.vip-card input, .vip-card select, .vip-card textarea{
+  width: 100%;
+  font-size: 12px;
+  padding: 8px 9px;
+  border-radius: 12px;
+}
+
+.vip-card button, .vip-card .fz-btn{
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 12px;
+  border-radius: 999px;
+}
+
+.fanzone-left .fanzone{ margin-top: 14px; }
+ /* ensures visible gap even if VIP collapses */
+
+/* =========================
+   HERO 3D POP (SAFE, UI-only)
+   - Adds subtle depth to rotating star images
+   - No JS changes; respects reduced-motion
+*/
+
+/* ========================= */
+.hero{
+  perspective: 900px;
+  perspective-origin: 50% 45%;
+}
+
+
+  /* Fan Zone rails become normal cards (no fixed positioning) */
+  .fz-left-stack, .fanzone-left, .fanzone-right, #vipHoldRail{
+    position: static !important;
+    top:auto !important; left:auto !important; right:auto !important;
+    width: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    transform:none !important;
+    z-index: auto !important;
+  }
+
+
+  /* Pager should not be fixed on mobile (can block taps) */
+  #pager{ position: static !important; }
+
+
+  /* Reduce blur that looks “fuzzy” on iOS */
+  .cardhead, .devicebar, #pager, .heroCaption{
+    backdrop-filter:none !important;
+    -webkit-backdrop-filter:none !important;
+  }
+
+  body[data-msec="home"] .chatcard,
+  body[data-msec="home"] .menucard,
+  body[data-msec="home"] #fanZoneLeft,
+  body[data-msec="home"] #fanZoneRight,
+  body[data-msec="home"] #scheduleCard,
+  body[data-msec="home"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="chat"] .menucard,
+  body[data-msec="chat"] #fanZoneLeft,
+  body[data-msec="chat"] #fanZoneRight,
+  body[data-msec="chat"] #scheduleCard,
+  body[data-msec="chat"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="menu"] .chatcard,
+  body[data-msec="menu"] #fanZoneLeft,
+  body[data-msec="menu"] #fanZoneRight,
+  body[data-msec="menu"] #scheduleCard,
+  body[data-msec="menu"] #vipHoldRail{ display:none !important; }
+
+
+  body[data-msec="fanzone"] #fanZoneLeft{ display:block !important; }
+
+  body[data-msec="fanzone"] .chatcard,
+  body[data-msec="fanzone"] .menucard,
+  body[data-msec="fanzone"] #fanZoneRight,
+  body[data-msec="fanzone"] #scheduleCard{ display:none !important; }
+
+
+  body[data-msec="extras"] #fanZoneRight{ display:block !important; }
+
+  body[data-msec="extras"] .chatcard,
+  body[data-msec="extras"] .menucard,
+  body[data-msec="extras"] #fanZoneLeft,
+  body[data-msec="extras"] #scheduleCard{ display:none !important; }
+
+
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{ display:block !important; }
+
+  body:is([data-msec="schedule"],[data-sec="schedule"]) .chatcard,
+  body:is([data-msec="schedule"],[data-sec="schedule"]) .menucard,
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #fanZoneLeft,
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #fanZoneRight{ display:none !important; }
+
+
+  /* VIP shown alongside Fan Zone (if you want it there) */
+  body[data-msec="fanzone"] #vipHoldRail{ display:block !important; }
+
+  body[data-msec="extras"] #vipHoldRail{ display:none !important; }
+
+  #pager{ position: static !important; }
+
+  body[data-msec="vip"] .chatcard,
+  body[data-msec="vip"] .menucard,
+  body[data-msec="vip"] #fanZoneLeft,
+  body[data-msec="vip"] #fanZoneRight,
+  body[data-msec="vip"] #scheduleCard{ display:none !important; }
+
+  body[data-msec="fanzone"] #vipHoldRail{ display:block !important; }
+
+    body.msec-anim .chatcard,
+    body.msec-anim .menucard,
+    body.msec-anim #scheduleCard,
+    body.msec-anim #fanZoneLeft,
+    body.msec-anim #vipHoldRail{
+      animation: msecFade .18s ease both;
+      will-change: transform, opacity;
+    }
+
+
+  /* Rails: remove fixed/absolute positioning so they don't overlay and block taps */
+  .vip-rail, .fanzone, .fanzone-left, .fanzone-right, .fanzoneRail,
+  #vipHoldRail, #fanZoneLeft, #fanZoneRight{
+    position: static !important;
+    left: auto !important; right: auto !important; top: auto !important; bottom: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    transform: none !important;
+    margin: 10px 0 !important;
+    pointer-events: auto !important;
+  }
+
+
+  /* Schedule card: keep list scrollable in viewport and ensure last row visible */
+  #scheduleCard{ min-height: 0 !important; }
+
+  #pager{
+    position: static !important;
+    margin-top: 10px !important;
+  }
+
+  #scheduleCard, .menucard, .chatcard, #fanZoneLeft, #fanZoneRight, #vipHoldRail{ margin-bottom: 110px; }
+
+
+  /* Schedule/Menu panels: ensure they stay on-screen and scroll properly */
+  #scheduleCard{ max-height: none !important; overflow: visible !important; }
+
+
+/* Section visibility (mobile only): show one “primary” section at a time
+   - chat: chatcard
+   - menu: menucard
+   - schedule: scheduleCard
+   - fanzone: fanZoneLeft + fanZoneRight
+   - vip: vipHoldRail
+*/
+
+}
+/* AUTO-FIX: close VIP rail @media block */
+
+@media (max-width: 950px){
+  /* default: chat */
+  body[data-msec="chat"] .chatcard{ display:block !important; }
+
+  body[data-msec="chat"] .menucard,
+  body[data-msec="chat"] #scheduleCard,
+  body[data-msec="chat"] #fanZoneLeft,
+  body[data-msec="chat"] #fanZoneRight,
+  body[data-msec="chat"] #vipHoldRail{ display:none !important; }
+
+  body[data-msec="menu"] .chatcard,
+  body[data-msec="menu"] #scheduleCard,
+  body[data-msec="menu"] #fanZoneLeft,
+  body[data-msec="menu"] #fanZoneRight,
+  body[data-msec="menu"] #vipHoldRail{ display:none !important; }
+
+
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{ display:block !important; }
+
+  body:is([data-msec="schedule"],[data-sec="schedule"]) .chatcard,
+  body:is([data-msec="schedule"],[data-sec="schedule"]) .menucard,
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #fanZoneLeft,
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #fanZoneRight,
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #vipHoldRail{ display:none !important; }
+
+
+  body[data-msec="fanzone"] #fanZoneLeft,
+  body[data-msec="fanzone"] #fanZoneRight{ display:block !important; }
+
+  body[data-msec="fanzone"] .chatcard,
+  body[data-msec="fanzone"] .menucard,
+  body[data-msec="fanzone"] #scheduleCard,
+  body[data-msec="fanzone"] #vipHoldRail{ display:none !important; }
+
+
+  body[data-msec="vip"] #vipHoldRail{ display:block !important; }
+
+  body[data-msec="vip"] .chatcard,
+  body[data-msec="vip"] .menucard,
+  body[data-msec="vip"] #scheduleCard,
+  body[data-msec="vip"] #fanZoneLeft,
+  body[data-msec="vip"] #fanZoneRight{ display:none !important; }
+
+
+  /* Schedule/Menu: ensure they don't render off-screen */
+  #scheduleCard, .menucard{ overflow:visible !important; }
+
+  #pager, .pager{ position:sticky; bottom:0; z-index:5; }
+
+
+  /* Premium tap/press states (no layout shift) */
+  button, .langbtn, .fz-btn{
+    transition: transform 120ms ease, filter 120ms ease, background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button:active, .langbtn:active, .fz-btn:active{
+    transform: translateY(1px) scale(.99);
+    filter: brightness(1.06);
+  }
+
+  button:focus-visible, .langbtn:focus-visible, textarea:focus-visible, .fz-btn:focus-visible{
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(212,175,55,.22), 0 0 0 1px rgba(212,175,55,.45) inset;
+    border-color: rgba(212,175,55,.45) !important;
+  }
+
+  button:active, .langbtn:active, .fz-btn:active{ transform:none !important; }
+
+
+      /* Raise touch quality: minimum comfortable hit area */
+      button, .btn, .pill, .chip, .langbtn, .segBtn, .navBtn, .tabBtn {
+        min-height: 44px;
+      }
+
+
+    /* Buttons and chips: premium feel, consistent across devices */
+    button, .btn, .pill, .chip, .langbtn, .segBtn, .navBtn, .tabBtn {
+      border-radius: 999px;
+      border: 1px solid var(--lux-stroke);
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
+      box-shadow: 0 10px 22px rgba(0,0,0,.28);
+      transition: transform .12s ease, filter .12s ease, box-shadow .18s ease;
+      will-change: transform;
+    }
+
+    button:active, .btn:active, .pill:active, .chip:active, .langbtn:active, .segBtn:active, .navBtn:active, .tabBtn:active {
+      transform: translateY(1px) scale(.99);
+      filter: brightness(1.03);
+      box-shadow: 0 6px 14px rgba(0,0,0,.22);
+    }
+
+    button:hover, .btn:hover, .pill:hover, .chip:hover, .langbtn:hover, .segBtn:hover, .navBtn:hover, .tabBtn:hover {
+      filter: brightness(1.06);
+    }
+
+
+  /* Make sure the schedule card sits directly under the hero */
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{ margin-top: 0 !important; }
+
+
+  /* Small scroll offset so sticky header feels nicer */
+  body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{ scroll-margin-top: 8px; }
+
+/* =======================
+   MOBILE SCHEDULE GAP FIX (v5 - definitive)
+   Problem: Schedule tab hides the contents inside .leftcol, but .leftcol still participates
+   in the grid and can consume the full "1fr" row (especially on mobile where columns collapse),
+   creating a large blank gap before #scheduleCard.
+   Fix: remove .leftcol from layout in schedule mode, and make the grid auto-height (no 1fr stretch).
+   ======================= */
+body:is([data-msec="schedule"],[data-sec="schedule"]) .leftcol{ display:none !important; }
+
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleCard{
+  display:block !important;
+  grid-column: 1 / -1 !important;
+  grid-row: 2 !important;
+  margin-top: 0 !important;
+}
+
+
+
+
+/* Schedule sub-tabs (Fixtures / Live / Groups) — mobile & desktop safe */
+.metaLine{margin:8px 0 0; font-size:12px; letter-spacing:.2px; opacity:.72}
+
+.metaLine strong{opacity:.95}
+
+.segbar{
+  display:flex;
+  gap:6px;
+  padding:6px;
+  border:1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.03);
+  border-radius: 999px;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.segbar::-webkit-scrollbar{ height: 0; }
+
+.segbtn{
+  appearance:none;
+  border:0;
+  cursor:pointer;
+  padding:8px 12px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: .02em;
+  color: rgba(255,255,255,.82);
+  background: transparent;
+  white-space: nowrap;
+}
+
+.segbtn[aria-selected="true"]{
+  color: rgba(0,0,0,.88);
+  background: rgba(212,175,55,.95);
+  box-shadow: 0 10px 26px rgba(0,0,0,.30), inset 0 0 0 1px rgba(0,0,0,.22);
+}
+
+  .segbtn{ flex: 1; text-align:center; }
+
+
+
+
+
+
+/* =======================
+   SCHEDULE — iOS Premium Renderer (scoped)
+
+/* SCHEDULE LIST LAYOUT */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule #schedule{
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+   Only affects the Schedule screen + its subviews.
+   ======================= */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbar{
+  width: 100%;
+  padding: 6px;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.05);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbtn{
+  flex: 1;
+  min-height: 44px;
+  padding: 11px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: .02em;
+  background: transparent;
+  color: rgba(244,248,255,.92);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .12s ease, filter .12s ease;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbtn[aria-selected="true"]{
+  background: rgba(212,175,55,.96);
+  color: rgba(0,0,0,.88);
+  box-shadow: 0 12px 28px rgba(0,0,0,.34), inset 0 0 0 1px rgba(0,0,0,.22);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #scheduleMetaLine{
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: .78;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #schedule{
+  margin-top: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+/* Fixture / Live cards */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .matchRow{
+  border-radius: 18px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 14px 42px rgba(0,0,0,.32);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .matchRow:active{
+  transform: translateY(1px);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom: 8px;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mStage{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(244,248,255,.92);
+  background: rgba(255,255,255,.07);
+  border: 1px solid rgba(255,255,255,.10);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mDate{
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(234,240,255,.82);
+  opacity: .92;
+  text-align: right;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mTeams{
+  font-size: 15px;
+  line-height: 1.25;
+  font-weight: 900;
+  letter-spacing: .01em;
+  color: rgba(244,248,255,.96);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .vs{
+  display:inline-block;
+  margin: 0 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(244,248,255,.88);
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.10);
+  vertical-align: middle;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mVenue{
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: rgba(234,240,255,.72);
+}
+
+/* Live score emphasis */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .mScore{
+  font-size: 15px;
+  font-weight: 1000;
+  letter-spacing: .01em;
+}
+
+/* Groups / Standings */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standBlock{
+  border-radius: 18px;
+  padding: 12px 12px 10px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.055);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 14px 42px rgba(0,0,0,.30);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTitle{
+  font-size: 13px;
+  font-weight: 1000;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: rgba(244,248,255,.92);
+  margin-bottom: 8px;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTable{
+  width:100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTable thead th{
+  text-align:left;
+  font-size: 11px;
+  font-weight: 1000;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 10px 10px;
+  color: rgba(234,240,255,.78);
+  background: rgba(255,255,255,.05);
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTable td{
+  padding: 10px 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: rgba(244,248,255,.92);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTable tbody tr:last-child td{
+  border-bottom: 0;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .hint{
+  padding: 14px 12px;
+  border-radius: 16px;
+  border: 1px dashed rgba(255,255,255,.14);
+  color: rgba(234,240,255,.78);
+  background: rgba(255,255,255,.03);
+}
+
+/* --- Schedule premium extras (sticky dates, live pulse, non-empty banners) --- */
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .dateHeader{
+  position: sticky;
+  top: calc(env(safe-area-inset-top) + 0px);
+  z-index: 3;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(12,18,35,.66);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 14px 42px rgba(0,0,0,.28);
+  font-size: 12px;
+  font-weight: 1000;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(234,240,255,.88);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .infoBanner{
+  padding: 16px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.05);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 18px 50px rgba(0,0,0,.30);
+}
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .infoTitle{
+  font-size: 14px;
+  font-weight: 1000;
+  letter-spacing: .01em;
+}
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .infoSub{
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: .80;
+  line-height: 1.35;
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .liveDot{
+  display:inline-block;
+  width:8px;
+  height:8px;
+  border-radius:999px;
+  background: rgba(255,90,90,.95);
+  margin-right:8px;
+  box-shadow: 0 0 0 0 rgba(255,90,90,.45);
+  animation: livePulse 1.3s ease-in-out infinite;
+  transform: translateY(-1px);
+}
+@keyframes livePulse{
+  0%{ box-shadow: 0 0 0 0 rgba(255,90,90,.45); }
+  70%{ box-shadow: 0 0 0 10px rgba(255,90,90,0); }
+  100%{ box-shadow: 0 0 0 0 rgba(255,90,90,0); }
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .segbtn.tap,
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule #pager button.tap{
+  transform: translateY(1px) scale(.99);
+  filter: brightness(1.08);
+}
+
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .teamCell{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .rank{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:20px;
+  height:20px;
+  border-radius:10px;
+  background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.12);
+  font-size: 12px;
+  font-weight: 1000;
+  opacity: .9;
+}
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .qualBadge{
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 1000;
+  letter-spacing: .04em;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(212,175,55,.18);
+  border: 1px solid rgba(212,175,55,.35);
+  color: rgba(244,220,140,.95);
+}
+body:is([data-msec="schedule"],[data-sec="schedule"]) #sec-schedule .standTable td.pts{
+  font-weight: 1000;
+}
+
+/* =======================
+   FAN ZONE MODAL MOBILE SCROLL FIX
+   Ensures long lists (countries, polls) never render off-screen.
+   Keeps footer buttons reachable without awkward scrolling.
+======================= */
+.fz-modal .panel{
+  max-height: 88vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+#countryGrid,
+#pollList,
+#pollResults{
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.fz-footer{
+  margin-top: auto;
+  position: sticky;
+  bottom: 0;
+  background: rgba(10,18,40,.92);
+  padding-top: 10px;
+}
+
+/* =========================
+   CHAT LANGUAGE SELECTOR (iOS-like segmented)
+   ========================= */
+#chatLangRow{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+#chatLangRow .langLabel{
+  font-size:12px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color: rgba(235,245,255,.70);
+}
+#chatLangRow .langSegWrap{
+  display:flex;
+  gap:8px;
+  padding:6px;
+  border-radius:14px;
+  background: rgba(0,0,0,.22);
+  border: 1px solid rgba(255,255,255,.14);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+#chatLangRow .langSeg{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 12px;
+  min-height:44px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  color: rgba(244,248,255,.92);
+  font-weight:800;
+  cursor:pointer;
+  transition: transform .12s ease, background .12s ease, border-color .12s ease, box-shadow .12s ease;
+}
+#chatLangRow .langSeg:active{ transform: translateY(1px); }
+#chatLangRow .langSeg .langCode{
+  font-size:12px;
+  letter-spacing:.08em;
+  padding:4px 8px;
+  border-radius:10px;
+  background: rgba(0,0,0,.26);
+  border:1px solid rgba(255,255,255,.12);
+}
+#chatLangRow .langSeg .langName{ font-size:13px; opacity:.92; }
+#chatLangRow .langSeg.active{
+  background: rgba(255,255,255,.16);
+  border-color: rgba(255,255,255,.22);
+  box-shadow: 0 10px 24px rgba(0,0,0,.30);
+}
+
+
+/* =========================
+   CHAT UI — iOS 26 “moving capsule”
+   ========================= */
+.cardHead.chatHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:nowrap;
+}
+.chatHeadLeft{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.chatHeadLeft .cardTitle{ margin:0; font-size:16px; letter-spacing:-0.01em; }
+.chatLangCaption{ font-size:11px; font-weight:800; letter-spacing:.10em; text-transform:uppercase; color: rgba(235,245,255,.62); line-height:1.1; }
+
+#chatLangRow.segmented{
+  --seg-left: 3px;
+  --seg-width: 72px;
+  position: relative;
+  display:flex;
+  align-items:center;
+  gap:2px;
+  padding:3px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.055);
+  -webkit-backdrop-filter: blur(14px) saturate(1.35);
+  backdrop-filter: blur(14px) saturate(1.35);
+  box-shadow: 0 10px 24px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.12);
+  overflow-x:auto;
+  overflow-y:hidden;
+  -webkit-overflow-scrolling: touch;
+  height:34px;
+  flex:1 1 auto;
+  min-width:0;
+}
+#chatLangRow.segmented::before{
+  content:"";
+  position:absolute;
+  top:3px; bottom:3px;
+  left: var(--seg-left);
+  width: var(--seg-width);
+  border-radius:999px;
+  background: linear-gradient(180deg, rgba(255,255,255,.42) 0%, rgba(255,255,255,.26) 45%, rgba(255,255,255,.16) 100%);
+  border:1px solid rgba(255,255,255,.22);
+  box-shadow: 0 10px 22px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.60), inset 0 -1px 0 rgba(0,0,0,.20);
+  transition: left .22s cubic-bezier(.2,.9,.2,1), width .22s cubic-bezier(.2,.9,.2,1);
+  pointer-events:none;
+}
+#chatLangRow.segmented::after{
+  content:"";
+  position:absolute;
+  left:12px; right:12px; top:6px;
+  height:1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.18), rgba(255,255,255,0));
+  opacity:.55;
+  pointer-events:none;
+}
+#chatLangRow .segBtn{
+  position:relative;
+  z-index:1;
+  border:0;
+  background:transparent;
+  color: rgba(234,240,255,.78);
+  font-weight:750;
+  font-size:11.5px;
+  letter-spacing:-0.01em;
+  padding:7px 9px;
+  border-radius:999px;
+  cursor:pointer;
+  -webkit-tap-highlight-color: transparent;
+  white-space:nowrap;
+  opacity:.92;
+  transition: transform .10s ease, color .12s ease, opacity .12s ease;
+}
+#chatLangRow .segBtn:active{ transform: translateY(1px) scale(.99); }
+#chatLangRow .segBtn.active{ color: rgba(15,27,51,.92); opacity:1; }
+
+.chatInputRow{ display:flex; align-items:center; gap:8px; flex-wrap:nowrap; }
+#msg{ height:44px; border-radius:14px; }
+#sendBtn, #btnClear{ height:44px; border-radius:14px; }
+
+
+/* === Chat header one-line micro-polish === */
+#sec-chat .cardHead.chatHead{
+  align-items:center;
+  gap:10px;
+}
+
+#sec-chat .cardTitle{
+  font-weight: 800;          /* lighter than before */
+  font-size: 14px;           /* slightly smaller */
+  letter-spacing: .01em;
+  opacity: .85;              /* recede vs controls */
+  white-space: nowrap;
+}
+
+#sec-chat .segWrap{
+  margin-left: auto;         /* push languages to the right */
+  padding: 2px;              /* tighter capsule */
+}
+
+#sec-chat .segBtn{
+  padding: 6px 9px;          /* tighter buttons */
+  font-size: 11.5px;
+  letter-spacing: .02em;
+}
+
+
+/* === FORCE CHAT HEADER TO SINGLE LINE (FINAL FIX) === */
+#sec-chat .cardHead.chatHead{
+  display:flex;
+  align-items:center;
+  flex-wrap: nowrap;          /* prevent line break */
+}
+
+#sec-chat .chatHeadLeft{
+  display:flex;
+  align-items:center;
+  flex-direction: row;        /* stop vertical stacking */
+  gap:10px;
+  min-width: 0;
+}
+
+#sec-chat .cardTitle{
+  white-space: nowrap;
+  margin: 0;
+}
+
+#sec-chat .segWrap{
+  margin-left: auto;          /* keep languages on same row */
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   CHAT HEADER iOS 26 POLISH + GLASS RAIL (logicfix build 2026-01-01T12:41:14Z)
+   - Logic fix: #chatLangRow now also has .segWrap so ::before indicator works
+   ========================================================= */
+#sec-chat .cardHead.chatHead{
+  position: relative;
+  padding: 12px 12px 10px !important;
+  margin: 0 !important;
+
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap: 10px !important;
+  flex-wrap: nowrap !important;
+
+  background: linear-gradient(180deg, rgba(255,255,255,.075), rgba(255,255,255,.028)) !important;
+  border-bottom: 1px solid rgba(255,255,255,.10) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.45) !important;
+  backdrop-filter: blur(16px) saturate(1.45) !important;
+}
+#sec-chat .cardHead.chatHead::after{
+  content:"";
+  position:absolute;
+  left: 12px; right: 12px; top: 10px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.22), rgba(255,255,255,0));
+  opacity: .55;
+  pointer-events:none;
+}
+
+#sec-chat .chatHeadLeft{ display:flex !important; align-items:center !important; min-width:0 !important; }
+#sec-chat .chatHeadLeft .cardTitle{
+  margin:0 !important;
+  font-size: 15px !important;
+  font-weight: 950 !important;
+  letter-spacing: -0.01em !important;
+  line-height: 1.05 !important;
+  white-space: nowrap !important;
+  transform: translateY(1px) !important;
+}
+
+/* Keep the segmented control on one line; scroll sideways if needed */
+#chatLangRow.segmented{
+  white-space: nowrap !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  scrollbar-width: none !important;
+}
+#chatLangRow.segmented::-webkit-scrollbar{ display:none !important; }
+#chatLangRow.segmented .segBtn{ flex:0 0 auto !important; white-space:nowrap !important; }
+
+/* iOS-ish capsule refinements (piggybacks on existing .segWrap/.segBtn rules) */
+#chatLangRow.segWrap{
+  background: rgba(255,255,255,.055) !important;
+  border-color: rgba(255,255,255,.13) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.10), 0 10px 22px rgba(0,0,0,.18) !important;
+}
+#chatLangRow.segWrap::before{
+  background: rgba(255,255,255,.085) !important;
+  border-color: rgba(255,255,255,.16) !important;
+}
+
+
+}
+/* AUTO-FIX: close mobile msec @media block */
+
+
+/* =========================================================
+   SCHEDULE — iOS Premium (SAFE OVERRIDE)
+   - Scoped to Schedule only
+   - Fixes: tabs visibility, last-item cutoff, pager placement
+   ========================================================= */
+body[data-sec="schedule"] #sec-schedule{
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+
+body[data-sec="schedule"] #sec-schedule #scheduleTabs.segbar{
+  position: sticky;
+  top: 8px;
+  z-index: 20;
+  width: 100%;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px;
+  border-radius: 999px;
+  background: rgba(7,16,34,.72);
+  border: 1px solid rgba(255,255,255,.14);
+  -webkit-backdrop-filter: blur(16px) saturate(1.25);
+  backdrop-filter: blur(16px) saturate(1.25);
+  box-shadow: 0 14px 36px rgba(0,0,0,.25);
+}
+
+body[data-sec="schedule"] #sec-schedule #scheduleTabs .segbtn{
+  flex: 1 1 0;
+  height: 40px;
+  border-radius: 999px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: .02em;
+  border: 0;
+  background: transparent;
+  color: rgba(234,240,255,.90);
+  transition: transform .12s ease, filter .12s ease;
+}
+body[data-sec="schedule"] #sec-schedule #scheduleTabs .segbtn[aria-selected="true"]{
+  background: rgba(212,175,55,.96);
+  color: rgba(0,0,0,.86);
+  box-shadow: 0 12px 28px rgba(0,0,0,.30), inset 0 0 0 1px rgba(0,0,0,.22);
+}
+body[data-sec="schedule"] #sec-schedule #scheduleTabs .segbtn.tap{
+  transform: translateY(1px) scale(.99);
+  filter: brightness(1.05);
+}
+
+body[data-sec="schedule"] #sec-schedule #scheduleMetaLine{
+  margin-top: 10px;
+  font-size: 12px;
+  color: rgba(185,199,238,.92);
+}
+
+/* List container */
+body[data-sec="schedule"] #sec-schedule #schedule{
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding-bottom: calc(120px + env(safe-area-inset-bottom)); /* ensures last card is never hidden */
+}
+
+/* Sticky date headers */
+body[data-sec="schedule"] #sec-schedule .dateHeader{
+  position: sticky;
+  top: 58px; /* below sticky tabs */
+  z-index: 15;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(7,16,34,.80);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: rgba(234,240,255,.92);
+  margin-top: 6px;
+}
+
+/* Match cards */
+body[data-sec="schedule"] #sec-schedule .matchRow{
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+  -webkit-backdrop-filter: blur(14px) saturate(1.35);
+  backdrop-filter: blur(14px) saturate(1.35);
+  box-shadow: 0 14px 36px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.10);
+  padding: 12px 12px;
+}
+body[data-sec="schedule"] #sec-schedule .mTop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom: 8px;
+}
+body[data-sec="schedule"] #sec-schedule .mStage{
+  font-weight: 950;
+  font-size: 12px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: rgba(234,240,255,.92);
+}
+body[data-sec="schedule"] #sec-schedule .mDate{
+  font-size: 12px;
+  color: rgba(185,199,238,.92);
+}
+body[data-sec="schedule"] #sec-schedule .mTeams{
+  font-weight: 950;
+  font-size: 15px;
+  letter-spacing: -0.01em;
+  color: rgba(255,255,255,.98);
+}
+body[data-sec="schedule"] #sec-schedule .mTeams .vs{
+  font-weight: 900;
+  opacity: .7;
+  margin: 0 6px;
+}
+body[data-sec="schedule"] #sec-schedule .mVenue{
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(185,199,238,.90);
+}
+
+/* Live pulse */
+body[data-sec="schedule"] #sec-schedule .livePulse{
+  position: relative;
+}
+body[data-sec="schedule"] #sec-schedule .livePulse::before{
+  content:"";
+  position:absolute;
+  right: 12px;
+  top: 12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255,70,70,.95);
+  box-shadow: 0 0 0 0 rgba(255,70,70,.45);
+  animation: liveDotPulse 1.4s ease-in-out infinite;
+}
+@keyframes liveDotPulse{
+  0%{ box-shadow: 0 0 0 0 rgba(255,70,70,.35); opacity:.85; }
+  70%{ box-shadow: 0 0 0 12px rgba(255,70,70,0); opacity:1; }
+  100%{ box-shadow: 0 0 0 0 rgba(255,70,70,0); opacity:.90; }
+}
+
+/* Info banner */
+body[data-sec="schedule"] #sec-schedule .infoBanner{
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  -webkit-backdrop-filter: blur(16px) saturate(1.25);
+  backdrop-filter: blur(16px) saturate(1.25);
+  box-shadow: 0 14px 36px rgba(0,0,0,.18);
+  padding: 14px 14px;
+}
+body[data-sec="schedule"] #sec-schedule .infoTitle{
+  font-weight: 950;
+  letter-spacing: -0.01em;
+}
+body[data-sec="schedule"] #sec-schedule .infoSub{
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(185,199,238,.92);
+  line-height: 1.35;
+}
+
+/* Standings blocks */
+body[data-sec="schedule"] #sec-schedule .standBlock{
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  -webkit-backdrop-filter: blur(16px) saturate(1.25);
+  backdrop-filter: blur(16px) saturate(1.25);
+  box-shadow: 0 14px 36px rgba(0,0,0,.18);
+  padding: 12px 12px;
+}
+body[data-sec="schedule"] #sec-schedule .standTitle{
+  font-weight: 950;
+  font-size: 13px;
+  letter-spacing: .10em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  color: rgba(234,240,255,.92);
+}
+body[data-sec="schedule"] #sec-schedule .standTable{
+  width:100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+body[data-sec="schedule"] #sec-schedule .standTable th,
+body[data-sec="schedule"] #sec-schedule .standTable td{
+  padding: 8px 6px;
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+body[data-sec="schedule"] #sec-schedule .standTable th{
+  text-align:left;
+  color: rgba(185,199,238,.95);
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+body[data-sec="schedule"] #sec-schedule .teamCell .rank{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  margin-right: 8px;
+  background: rgba(255,255,255,.06);
+  border: 1px solid rgba(255,255,255,.12);
+  font-weight: 950;
+}
+body[data-sec="schedule"] #sec-schedule .qualBadge{
+  margin-left: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 950;
+  background: rgba(212,175,55,.20);
+  border: 1px solid rgba(212,175,55,.35);
+  color: rgba(255,255,255,.92);
+}
+body[data-sec="schedule"] #sec-schedule td.pts{
+  font-weight: 950;
+}
+
+/* Pager: keep above bottom nav, never blocks last item */
+body[data-sec="schedule"] #sec-schedule #pager{
+  position: sticky;
+  bottom: calc(74px + env(safe-area-inset-bottom));
+  z-index: 18;
+  padding-top: 12px !important;
+}
+body[data-sec="schedule"] #sec-schedule #pager > div{
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(7,16,34,.72);
+  -webkit-backdrop-filter: blur(16px) saturate(1.25);
+  backdrop-filter: blur(16px) saturate(1.25);
+  box-shadow: 0 14px 36px rgba(0,0,0,.22);
+  padding: 10px 10px;
+}
+body[data-sec="schedule"] #sec-schedule #pager .secondary{
+  height: 40px;
+  border-radius: 14px;
+  font-weight: 950;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  color: rgba(234,240,255,.92);
+}
+body[data-sec="schedule"] #sec-schedule #pager .secondary.tap{
+  transform: translateY(1px) scale(.99);
+  filter: brightness(1.06);
+}
+body[data-sec="schedule"] #sec-schedule #pager .pill{
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 950;
+  color: rgba(234,240,255,.92);
+}
+
+
+/* === FAN ZONE/VIP: safe premium fixes (2026-01-01) === */
+/* Mobile: ensure Fan Zone rails are in-flow and fit the viewport (no off-screen load) */
+@media (max-width: 950px){
+  body[data-msec="fanzone"] #fanZoneLeft,
+  body[data-msec="fanzone"] #fanZoneRight{
+    position: static !important;
+    top: auto !important; left: auto !important; right: auto !important;
+    width: min(560px, calc(100% - 16px)) !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 10px auto 0 !important;
+  }
+  body[data-msec="fanzone"] #fanZoneRight{ margin-bottom: 12px !important; }
+
+  /* prevent horizontal squeeze from legacy widths */
+  .fanzone-left, .fanzone-right{ width: 100% !important; }
+}
+
+/* Poll "mini sheet" inside card */
+#pollCard{
+  padding: 10px 12px;
+  overflow: hidden !important; /* body scroll lives on list */
+}
+#pollCard .fz-minirow{
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 2px 0 8px;
+  background: linear-gradient(180deg, rgba(7,16,34,.92), rgba(7,16,34,.70));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  margin-bottom: 10px !important;
+}
+#pollList{
+  max-height: 42vh;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+/* iOS-like poll rows */
+.fz-pollrow{
+  display: grid;
+  gap: 8px;
+  text-align: left;
+  padding: 11px 12px !important;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.055);
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+}
+.fz-pollrow:active{ transform: translateY(1px) scale(.99); filter: brightness(1.06); }
+
+.fz-polltop{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+}
+.fz-pollname{ font-weight: 900; letter-spacing: .01em; }
+.fz-pollpct{ font-variant-numeric: tabular-nums; white-space:nowrap; }
+
+/* QR card: keep image from overflowing */
+#qrCard img, #qrImg{
+  max-width: 100% !important;
+  height: auto !important;
+  display:block;
+}
+#qrCard{ overflow:hidden; }
+/* ===== MENU SCROLL FIX (APPLIED) ===== */
+#sec-menu .cardBody{
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#sec-menu #menuBody{
+  padding-bottom: 140px;
+}
+
+#sec-menu{
+  min-height: 0;
+}
+
+@supports (padding: max(0px)) {
+  #sec-menu #menuBody{
+    padding-bottom: max(140px, env(safe-area-inset-bottom));
+  }
+}
+/* ===== END MENU SCROLL FIX ===== */
+
+</style>
+</head>
+
+<body data-sec="home" data-kickoff-utc="2026-06-11T00:00:00Z">
+<!-- Ultra-top Broadcast Title -->
+<div class="broadcast-title">
+  FIFA WORLD CUP™ 2026 · CONCIERGE
+</div>
+
+  <div class="wrap">
+
+    <!-- PURE HERO IMAGE (NO OVERLAYS) -->
+    <section class="hero" id="heroBanner" aria-label="World Cup 2026 banner">
+      <div class="heroMedia" aria-hidden="true">
+        <div class="heroCine" id="heroCine">
+          <img class="heroImg" id="heroImg" src="/static/hero_stadium_night.png" alt="Stadium crowd under lights">
+        </div>
+      </div>
+      <section class="countdownGlass" aria-label="Live countdown">
+      <div class="cdTop"><span id="cdTopText">UNTIL KICKOFF</span><span id="cdBadge" class="cdBadge" hidden>GAME DAY</span></div>
+      <div class="cdRow" role="timer" aria-live="polite">
+        <div class="cdCell"><div class="cdNum" id="cdD">00</div><div class="cdLbl">D</div></div>
+        <div class="cdSep">•</div>
+        <div class="cdCell"><div class="cdNum" id="cdH">00</div><div class="cdLbl">H</div></div>
+        <div class="cdSep">•</div>
+        <div class="cdCell"><div class="cdNum" id="cdM">00</div><div class="cdLbl">M</div></div>
+        <div class="cdSep">•</div>
+        <div class="cdCell"><div class="cdNum" id="cdS">00</div><div class="cdLbl">S</div></div>
+      </div>
+    </section>
+
+</section>
+
+    <div id="venueIdentityLine" class="venueIdentityLine" hidden></div>
+
+
+
+    <div id=\"venueIdentityLine\" class=\"venueIdentityLine\" hidden></div>
+
+    <!-- COUNTDOWN (ultra-thin Apple-glass, embedded under hero) -->
+    <main>
+      <!-- HOME -->
+      <section class="section" id="sec-home" aria-label="Home">
+        <div class="card" aria-label="Primary actions">
+          <div class="cardHead">
+            <h2 class="cardTitle">Reserve in seconds</h2>
+          </div>
+          <div class="cardBody">
+            <p class="hint" style="margin-top:0">
+              </p>
+
+                        <div class="heroActions homeActions" style="margin-top:12px" aria-label="Primary buttons">
+              <button class="cta primary" id="ctaReserve" type="button">Reserve now</button>
+              <button class="cta" id="ctaChat" type="button">Chat concierge</button>
+
+              <div class="quickChips" aria-label="Quick reserve chips">
+                <button class="chip" type="button" data-q="VIP vibe">VIP vibe</button>
+                <button class="chip" type="button" data-q="Table for 4">Table for 4</button>
+                </div>
+            </div>
+
+            <p class="hint" style="margin-top:12px">
+              Tip: Try “Table for 4 • tonight 7pm • VIP vibe” — or ask in Spanish/Portuguese/French.
+            </p>
+          </div>
+        </div>
+
+
+
+        <div class="card" aria-label="Language support">
+          <div class="cardHead">
+            <h2 class="cardTitle">4 languages, same concierge</h2>
+          </div>
+          <div class="cardBody">
+            <p class="hint" style="margin-top:0">
+              Chat naturally in <b>English</b>, <b>Spanish</b>, <b>Portuguese</b>, or <b>French</b> — we keep the reservation details consistent.
+            </p>
+            <div class="heroActions" style="margin-top:12px">
+              <button class="cta small" id="pillLang" type="button" aria-label="Change language">EN · 4</button>
+              <button class="cta small" id="pillScope" type="button" aria-label="Toggle schedule scope">Scope: Global</button>
+            </div>
+            <p class="hint" style="margin-top:12px">
+              
+            </p>
+          </div>
+        </div>
+
+        <div class="card" aria-label="Explore">
+          <div class="cardHead">
+            <h2 class="cardTitle">Explore</h2>
+          </div>
+          <div class="cardBody">
+            <div class="exploreGrid" aria-label="Explore tiles">
+              <button class="tile" id="tileVIP" type="button" aria-label="VIP">
+                <div class="tileIco">⭐</div>
+                <div class="tileTxt">
+                  <div class="tileTitle">VIP</div>
+                  <div class="tileSub">Premium tables & hosted moments</div>
+                </div>
+              </button>
+
+              <button class="tile" id="tileFanzone" type="button" aria-label="Fan Zone">
+                <div class="tileIco">⚽</div>
+                <div class="tileTxt">
+                  <div class="tileTitle">Fan Zone</div>
+                  <div class="tileSub">Official events & watch parties</div>
+                </div>
+              </button>
+
+              <button class="tile" id="tileSchedule" type="button" aria-label="Schedule">
+                <div class="tileIco">📅</div>
+                <div class="tileTxt">
+                  <div class="tileTitle">Schedule</div>
+                  <div class="tileSub">Matches, venues, groups</div>
+                </div>
+              </button>
+
+              
+
+              <button class="tile" id="tilePlan" type="button" aria-label="Build my matchday">
+                <div class="tileIco">🗺️</div>
+                <div class="tileTxt">
+                  <div class="tileTitle">Build my matchday</div>
+                  <div class="tileSub">Pick a match → we route the plan</div>
+                </div>
+              </button>
+<button class="tile" id="tileMenu" type="button" aria-label="Menu">
+                <div class="tileIco">🍽️</div>
+                <div class="tileTxt">
+                  <div class="tileTitle">Menu</div>
+                  <div class="tileSub">What your venue offers</div>
+                </div>
+              </button>
+            </div>
+
+            <p class="hint" style="margin-top:12px">
+              .
+            </p>
+          </div>
+        </div>
+</section>
+
+      <!-- CHAT -->
+      <section class="section" id="sec-chat" aria-label="Chat">
+        <div class="card">
+          <div class="cardHead chatHead">
+  <div class="chatHeadLeft">
+    <h2 class="cardTitle">Chat</h2>
+</div>
+  <div class="segmented segWrap" id="chatLangRow" role="tablist" aria-label="Chat language selector">
+    <button class="segBtn" data-lang="en" type="button" role="tab" aria-selected="true">English</button>
+    <button class="segBtn" data-lang="es" type="button" role="tab" aria-selected="false">Español</button>
+    <button class="segBtn" data-lang="fr" type="button" role="tab" aria-selected="false">Français</button>
+    <button class="segBtn" data-lang="pt" type="button" role="tab" aria-selected="false">Português</button>
+  </div>
+</div>
+</div>
+          <div class="cardBody">
+            <div id="chatLog" class="chatLog" aria-live="polite"></div>
+            <div class="chatInputRow">
+              <label class="srOnly" for="msg">Message</label>
+              <input id="msg" autocomplete="off" inputmode="text"
+                     placeholder="Ask anything (EN/ES/PT/FR)…"/>
+              <button id="sendBtn" type="button">Send</button>
+              <button id="btnClear" class="secondary" type="button">Clear</button>
+            </div>
+            <p class="hint">Recall is enabled — context and follow-ups are remembered.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- MENU -->
+      <section class="section" id="sec-menu" aria-label="Menu">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle"><span id="menuTitle"></span></h2>
+            <button class="pill" id="reloadMenu" type="button">Refresh</button>
+          </div>
+          <div class="cardBody">
+            <div id="menuUpsell" class="menuUpsell" aria-live="polite"></div>
+            <div id="menuFilters" class="menuFilters" aria-label="Country filters"></div>
+            <div id="menuBody" class="list"></div>
+            <div id="menuHint" class="hint">Tap Refresh to load menu items.</div>
+          </div>
+        </div>
+
+        </section>
+
+      <!-- SCHEDULE -->
+      <section class="section" id="sec-schedule" aria-label="Schedule">
+  <div class="sidepad" style="padding-top:10px;">
+    <div class="segbar" id="scheduleTabs" role="tablist" aria-label="Schedule views">
+      <button class="segbtn" type="button" data-view="fixtures" aria-selected="true">Fixtures</button>
+      <button class="segbtn" type="button" data-view="live" aria-selected="false">Live</button>
+      <button class="segbtn" type="button" data-view="groups" aria-selected="false">Groups</button>
+    </div>
+    <div class="metaLine" id="scheduleMetaLine" aria-live="polite"></div>
+    <div class="schedule" id="schedule"></div>
+    <div class="sidepad" id="pager" style="display:none; padding-top:10px;">
+      <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
+        <button class="secondary" id="prevPage" style="min-width:88px;">Prev</button>
+        <div class="pill" id="pageIndicator">Page 1 of 1</div>
+        <button class="secondary" id="nextPage" style="min-width:88px;">Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+      <!-- FAN ZONE -->
+      <section class="section" id="sec-fanzone" aria-label="Fan Zone">
+<div class="sidepad" style="padding-top:10px;">
+  <div style="display:grid; gap:12px;">
+    <aside aria-label="Fan Zone Left Panel" class="fanzone fanzone-left" id="fanZoneLeft">
+<div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
+<span class="fz-muted fz-rail-title">Fan Zone</span>
+<button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button></div>
+<div class="fz-row" style="justify-content:flex-start;">
+<div class="fz-chip" id="supporterChip" title="Personalization stored on this device only">
+<span id="supporterFlag" aria-hidden="true">🏁</span><span>Supporting:</span> <b id="supporterLabel">Not set</b></div>
+</div>
+<div class="fz-actions" style="margin-top:10px;">
+<button class="fz-iconbtn" id="fzIconCountry" title="Pick country">🏁</button>
+<button class="fz-iconbtn" id="fzIconPoll" title="Fan poll">📊</button>
+<button class="fz-btn" id="btnPickCountry">Which country are you supporting?</button>
+<button class="fz-btn" id="btnOpenPoll">Match poll</button></div>
+<div class="fz-card lux-reveal" id="opsPanelMount" style="display:none; margin-top:10px;">
+  <div class="fz-minirow" style="justify-content:space-between; margin-bottom:6px;">
+    <span class="fz-muted fz-rail-title">Ops</span>
+    <span class="fz-muted" style="font-size:12px;">Admin</span>
+  </div>
+  <div id="opsPanelBody" style="display:grid; gap:10px;"></div>
+</div>
+</div>
+<div class="fz-card lux-reveal" id="pollCard" style="display:none; margin-top:10px; max-height:52vh; overflow:auto;">
+<div class="fz-minirow" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
+  <h3 style="margin:0;">⚔️ Match of the Day Poll</h3>
+  <button class="fz-iconbtn" id="closePollCard" type="button" aria-label="Close poll">✕</button>
+</div>
+<div class="fz-muted">Vote for who you think will win.</div>
+<div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
+</div>
+</aside>
+    <aside aria-label="Fan Zone Right Panel" class="fanzone fanzone-right" id="fanZoneRight">
+<div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
+<span class="fz-muted fz-rail-title">Extras</span>
+<button class="fz-iconbtn" id="fzCollapseToggle2" title="Collapse / expand">⫶</button></div>
+<div class="fz-actions" style="justify-content:flex-end;">
+<button class="fz-iconbtn" id="fzIconDrinks" title="Drink highlight">🍹</button>
+<button class="fz-iconbtn" id="fzIconQR" title="QR poster">📱</button>
+<button class="fz-btn" id="btnSharePoster">QR poster</button></div>
+<div class="fz-card lux-reveal" id="drinkCard" style="margin-top:10px;">
+<h3>🍹 Drink highlights</h3>
+<div id="drinkHighlight" style="margin-top:10px;">
+      <div style="border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:10px; background: rgba(0,0,0,.10);">
+        <div id="drinkName" style="font-weight:900;">Country-themed drink</div>
+        <div id="drinkDesc" class="fz-muted" style="margin-top:4px;"></div>
+      </div></div>
+</div>
+<div class="fz-card lux-reveal" id="qrCard" style="display:none; margin-top:10px;">
+<div class="fz-minirow" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
+  <h3 style="margin:0;">📱 QR poster</h3>
+  <button class="fz-iconbtn" id="closeQRCard" type="button" aria-label="Close QR">✕</button>
+</div>
+<div class="fz-muted">Print/display at the entrance. Scan to open the app.</div>
+<div class="qrWrap" style="margin-top:10px;">
+<img id="qrImg" alt="QR code" style="width:220px;height:220px;border-radius:12px;background:#fff;padding:10px;display:block;margin:0 auto;" />
+<div class="qrText">
+<div class="fz-muted" style="margin-bottom:6px;">Link:</div>
+<div><a href="#" id="qrLink" rel="noopener" target="_blank">Open app</a></div>
+</div>
+</div></div>
+</aside>
+  </div>
+</div>
+</section>
+
+      <!-- VIP -->
+      <section class="section" id="sec-vip" aria-label="VIP">
+<div class="sidepad" style="padding-top:10px;">
+  <div class="fz-card vip-hold vip-card lux-reveal" id="vipHoldCard">
+<h3>⭐ VIP Table Hold</h3>
+<div class="fz-muted" style="margin-top:6px;">Fast-track your best tables for big matches.</div>
+<div class="vip-actions" style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
+  <button class="fz-btn" id="vipHoldBtn">Hold VIP table</button>
+  <button class="fz-btn" id="vipHoldInfoBtn">How it works</button></div>
+</div>
+</div>
+</section>
+    </main>
+  </div>
+
+  <nav class="mobileNav" id="mobileNav" aria-label="Navigation">
+    <button class="mnavBtn active" data-sec="home" type="button"><span class="ico">🏠</span><span>Home</span></button>
+    <button class="mnavBtn" data-sec="chat" type="button"><span class="ico">💬</span><span>Chat</span></button>
+    <button class="mnavBtn" data-sec="menu" type="button"><span class="ico">🍽️</span><span>Menu</span></button>
+    <button class="mnavBtn" data-sec="schedule" type="button"><span class="ico">📅</span><span>Schedule</span></button>
+    <button class="mnavBtn" data-sec="fanzone" type="button"><span class="ico">⚽</span><span>Fan Zone</span></button>
+    <button class="mnavBtn" data-sec="vip" type="button"><span class="ico">⭐</span><span>VIP</span></button>
+  </nav>
+
+  <div id="toast" class="toast hidden" aria-live="polite"></div>
+
+  <!-- Intake modal (used by "Build my matchday") -->
+  <div id="intakeModal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Concierge intake">
+    <div class="modalCard" role="document">
+      <div class="modalHead">
+        <h3>Matchday request</h3>
+        <button class="iconBtn" id="closeModal" type="button" aria-label="Close">✕</button>
+      </div>
+      <div class="modalBody">
+        <label for="iCity">Business context (optional)</label>
+        <input id="iCity" placeholder="e.g., client name, suite name, or event context (optional)" />
+        <label class="required" for="iName">Name</label>
+        <input id="iName" placeholder="Guest name" />
+        <label class="required" for="iDate">Date</label>
+        <input id="iDate" type="date" />
+        <label class="required" for="iGroup">Party size</label>
+        <input id="iGroup" inputmode="numeric" placeholder="e.g., 4" />
+        <label class="required" for="iTime">Time window</label>
+        <input id="iTime" placeholder="e.g., 7–9pm" />
+        <label for="iVibe">Experience / vibe (optional)</label>
+        <input id="iVibe" placeholder="e.g., VIP, quiet lounge, lively, premium" />
+        <label for="iNotes">Notes (optional)</label>
+        <textarea id="iNotes" rows="3" placeholder="Any preferences, constraints, or special requests"></textarea>
+
+        <label for="iBudget">Budget (optional)</label>
+        <input id="iBudget" placeholder="e.g., $200–$400" />
+        <label class="required" for="iContact">Contact</label>
+        <input id="iContact" placeholder="Phone or email" />
+        <button class="ctaBtn" id="submitIntake" type="button">Submit request</button>
+        <div id="intakeMsg" class="hint"></div>
+        <div class="hint">Saved to your Admin Leads list. You can confirm details and follow up from there.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+
+/* World Cup Concierge — boot (nav + countdown + chat + menu + schedule) */
+const state = {
+  sec: 'home',
+  lang: (localStorage.getItem('wc_lang') || 'en'),
+  scope: (localStorage.getItem('wc_scope') || 'all'), // 'all' | 'featured' (future-proof)
+};
+
+const LANGS = ['en','es','pt','fr'];
+
+// ---------- helpers ----------
+const $ = (id)=>document.getElementById(id);
+const $$ = (sel, root=document)=>Array.from((root||document).querySelectorAll(sel));
+const escapeHtml = (s)=>String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+
+// ---------- concierge welcome copy (localized) ----------
+const WELCOME_PRIMARY_BY_LANG = {
+  en: "Greetings World Cup fans. I’m your concierge — here to assist with reservations, VIP experiences, and match-day planning for your business and guests. Tell me what you need, and I’ll take care of the details.",
+  es: "Saludos, fans del Mundial. Soy tu concierge — aquí para ayudarte con reservaciones, experiencias VIP y la planificación del día de partido para tu negocio y tus invitados. Dime qué necesitas y me encargo de los detalles.",
+  pt: "Saudações, fãs da Copa do Mundo. Sou seu concierge — aqui para ajudar com reservas, experiências VIP e o planejamento do dia do jogo para o seu negócio e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
+  fr: "Bonjour, fans de la Coupe du Monde. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et l’organisation du jour de match pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
+};
+const WELCOME_GAMEDAY_BY_LANG = {
+  en: "Greetings World Cup fans. It’s game day. I’m your concierge — here to assist with reservations, VIP experiences, and real-time match-day needs for your business and guests. Tell me what you need, and I’ll take care of the details.",
+  es: "Saludos, fans del Mundial. Hoy es día de partido. Soy tu concierge — aquí para ayudarte con reservaciones, experiencias VIP y necesidades en tiempo real para tu negocio y tus invitados. Dime qué necesitas y me encargo de los detalles.",
+  pt: "Saudações, fãs da Copa do Mundo. Hoje é dia de jogo. Sou seu concierge — aqui para ajudar com reservas, experiências VIP e necessidades em tempo real para o seu negócio e seus convidados. Diga o que você precisa e eu cuido dos detalhes.",
+  fr: "Bonjour, fans de la Coupe du Monde. C’est jour de match. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et les besoins en temps réel pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails."
+};
+
+function getWelcomeForState(lang){
+  const k = window.__wcCountdownStateKind || '';
+  const L = (lang || state.lang || 'en').toLowerCase();
+  const primary = WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
+  const gameday = WELCOME_GAMEDAY_BY_LANG[L] || WELCOME_GAMEDAY_BY_LANG.en;
+  return (k === 'game_day') ? gameday : primary;
+}
+// ---------- admin-only countdown indicator ----------
+function isAdminDebug(){
+  try{
+    const q = new URLSearchParams(location.search);
+    if(q.get('admin') === '1' || q.get('debug') === '1') return true;
+    if(localStorage.getItem('wc_admin') === '1') return true;
+  }catch(e){}
+  return false;
+}
+function ensureAdminBadge(){
+  if(!isAdminDebug()) return null;
+  let el = document.getElementById('adminCountdownState');
+  if(el) return el;
+  el = document.createElement('div');
+  el.id = 'adminCountdownState';
+  el.style.position = 'fixed';
+  el.style.right = '10px';
+  el.style.bottom = '10px';
+  el.style.zIndex = '9999';
+  el.style.padding = '6px 10px';
+  el.style.borderRadius = '10px';
+  el.style.fontSize = '12px';
+  el.style.letterSpacing = '.04em';
+  el.style.backdropFilter = 'blur(10px)';
+  el.style.webkitBackdropFilter = 'blur(10px)';
+  el.style.background = 'rgba(0,0,0,.35)';
+  el.style.border = '1px solid rgba(255,255,255,.18)';
+  el.style.color = '#fff';
+  el.textContent = 'STATE: …';
+  document.body.appendChild(el);
+  return el;
+}
+function updateAdminCountdownState(kind){
+  const el = ensureAdminBadge();
+  if(!el) return;
+  const map = {
+    pre_tournament: 'PRE_TOURNAMENT',
+    pre_game_day: 'BETWEEN_DAYS',
+    between_days: 'BETWEEN_DAYS',
+    post_day: 'BETWEEN_DAYS',
+    game_day: 'GAME_DAY',
+    complete: 'COMPLETE',
+    fallback: 'FALLBACK'
+  };
+  el.textContent = 'STATE: ' + (map[kind] || String(kind||'UNKNOWN').toUpperCase());
+}
+
+
+// ---------- admin ops panel: relocate Match-Day Ops Toggles ----------
+function relocateMatchDayOpsToggles(){
+  if(!isAdminDebug()) return;
+  const mount = $('opsPanelMount');
+  const body = $('opsPanelBody');
+  if(!mount || !body) return;
+  // Try common ids first
+  let block = document.getElementById('matchDayOpsToggles')
+           || document.getElementById('matchDayOps')
+           || document.getElementById('matchDayOpsPanel');
+  // Fallback: find a card whose header includes the label
+  if(!block){
+    const nodes = Array.from(document.querySelectorAll('.fz-card, .card, .panel, aside, section, div'));
+    block = nodes.find(el => {
+      const t = (el.textContent || '').trim();
+      return t.includes('Match-Day Ops Toggles');
+    }) || null;
+  }
+  if(block){
+    try{ body.appendChild(block); }catch(e){}
+    mount.style.display = '';
+  }
+}
+
+// ---------- proactive game-day chat prompt ----------
+function maybeTriggerGameDayMessage(kind){
+  if(kind !== 'game_day') return;
+  try{
+    const dayKey = new Date().toISOString().slice(0,10);
+    const k = 'wc_gameday_prompt_'+dayKey;
+    if(localStorage.getItem(k) === '1') return;
+    localStorage.setItem(k,'1');
+
+    // Only append if chat exists; do not force navigation.
+    const log = $('chatLog');
+    if(!log) return;
+
+    // If a non-game-day welcome is already present, append the game-day welcome once.
+    chatAppend('bot', WELCOME_GAMEDAY);
+  }catch(e){}
+}
+const clamp = (n,min,max)=>Math.max(min, Math.min(max, n));
+
+// ---------- SW cleanup (fix "buttons work sometimes" due to stale cached shell) ----------
+async function cleanupServiceWorker(){
+  try{
+    if(!('serviceWorker' in navigator)) return;
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r=>r.unregister().catch(()=>{})));
+  }catch(e){}
+  try{
+    if(!('caches' in window)) return;
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k=>caches.delete(k).catch(()=>{})));
+  }catch(e){}
+}
+
+// ---------- navigation ----------
+function setActiveNav(sec){
+  $$('#mobileNav .mnavBtn').forEach(btn=>{
+    btn.classList.toggle('active', (btn.dataset?.sec||'') === sec);
+  });
+}
+
+function setSection(sec){
+  state.sec = sec;
+  document.body.setAttribute('data-sec', sec);
+  setActiveNav(sec);
+
+  // lazy loads
+  if(sec === 'schedule'){ try{ loadSchedule(); }catch(e){} }
+  if(sec === 'menu'){ try{ loadMenu(); }catch(e){} }
+  if(sec === 'fanzone'){ try{ loadFanzone(); }catch(e){} }
+  if(sec === 'vip'){ try{ loadVIP(); }catch(e){} }
+  if(sec === 'chat'){ try{ focusChatInput(); }catch(e){} }
+
+  try{ window.scrollTo(0,0); }catch(e){}
+}
+
+function bindNav(){
+  const nav = $('mobileNav');
+  if(!nav) return;
+  $$('.mnavBtn', nav).forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      setSection(btn.dataset?.sec || 'home');
+    }, {passive:false});
+  });
+}
+
+// ---------- language ----------
+function setLang(lang){
+  lang = (lang || 'en').toLowerCase().trim();
+  if(!LANGS.includes(lang)) lang = 'en';
+  state.lang = lang;
+  localStorage.setItem('wc_lang', lang);
+
+  // Home pill
+  const homePill = $('pillLang');
+  if(homePill){
+    homePill.textContent = `${lang.toUpperCase()} · 4`;
+    homePill.setAttribute('aria-label', `Change language (current ${lang.toUpperCase()})`);
+  }
+
+  // Chat language selector
+  $$('#chatLangRow [data-lang]').forEach(btn=>{
+    const b = (btn.dataset?.lang||'').toLowerCase();
+    const isOn = b === (state.lang||'en').toLowerCase();
+    btn.classList.toggle('active', isOn);
+    // aria-selected drives the visual highlight (CSS targets [aria-selected="true"])
+    btn.setAttribute('aria-selected', isOn ? 'true' : 'false');
+  });
+  
+  // UI-only: iOS segmented capsule positioning
+  try{
+    const wrap = document.getElementById('chatLangRow');
+    if(wrap && wrap.classList.contains('segmented')){
+      const active = wrap.querySelector('[data-lang].active') || wrap.querySelector('.segBtn.active');
+      if(active){
+        const w = wrap.getBoundingClientRect();
+        const a = active.getBoundingClientRect();
+        wrap.style.setProperty('--seg-left', Math.max(3, Math.round(a.left - w.left)) + 'px');
+        wrap.style.setProperty('--seg-width', Math.max(44, Math.round(a.width)) + 'px');
+      }
+    }
+  }catch(e){}// Keep single welcome updated
+  try{ normalizeChatWelcome(); }catch(e){}
+}
+
+function cycleLang(){
+  const i = LANGS.indexOf(state.lang);
+  setLang(LANGS[(i+1) % LANGS.length]);
+}
+
+// ---------- scope (kept generic; no city/location) ----------
+function setScope(scope){
+  scope = (scope || 'all').toLowerCase().trim();
+  if(!['all','featured'].includes(scope)) scope = 'all';
+  state.scope = scope;
+  localStorage.setItem('wc_scope', scope);
+
+  const pill = $('pillScope');
+  if(pill){
+    pill.textContent = (scope === 'all') ? 'Scope: Global' : 'Scope: Featured';
+  }
+
+  // refresh schedule/standings if user is currently there
+  if(state.sec === 'schedule'){ try{ loadSchedule(true); }catch(e){} }
+}
+
+function toggleScope(){
+  setScope(state.scope === 'all' ? 'featured' : 'all');
+}
+
+// ---------- chat ----------
+function focusChatInput(){
+  const input = $('msg');
+  if(!input) return;
+  try{ input.focus({preventScroll:true}); }catch(e){ input.focus(); }
+}
+
+function chatAppend(role, text, opts){
+  const log = $('chatLog');
+  if(!log) return;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'chatLine ' + role;
+  if(opts && opts.welcome) wrap.setAttribute('data-welcome','1');
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = (text ?? '').toString();
+  wrap.appendChild(bubble);
+
+  log.appendChild(wrap);
+  log.scrollTop = log.scrollHeight;
+}function normalizeChatWelcome(){
+  const log = $('chatLog');
+  if(!log) return;
+
+  const welcomeText = getWelcomeForState(state.lang);
+
+  const welcomes = Array.from(log.querySelectorAll('.chatLine.bot[data-welcome="1"]'));
+  let keeper = welcomes[0] || null;
+
+  if(!keeper){
+    const firstBot = log.querySelector('.chatLine.bot');
+    if(firstBot){
+      keeper = firstBot;
+      keeper.setAttribute('data-welcome','1');
+    }
+  }
+
+  if(!keeper){
+    // prepend instead of append so it stays at the top
+    const wrap = document.createElement('div');
+    wrap.className = 'chatLine bot';
+    wrap.setAttribute('data-welcome','1');
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.textContent = welcomeText;
+    wrap.appendChild(bubble);
+    log.prepend(wrap);
+    log.dataset.hasWelcome = '1';
+    return;
+  }
+
+  welcomes.slice(1).forEach(x=>x.remove());
+
+  const bubble = keeper.querySelector('.bubble');
+  if(bubble) bubble.textContent = welcomeText;
+
+  log.dataset.hasWelcome = '1';
+}
+
+function ensureChatWelcome(){
+  normalizeChatWelcome();
+}
+
+function clearChatPreserveWelcome(){
+  const log = $('chatLog');
+  if(!log) return;
+  log.innerHTML = '';
+  log.dataset.hasWelcome = '';
+  try{ ensureChatWelcome(); }catch(e){ console.warn('chat welcome failed', e); }
+}
+
+async function sendChatMessage(text){
+  const msg = (text ?? $('msg')?.value ?? '').trim();
+  if(!msg) return;
+  const input = $('msg');
+  if(input) input.value = '';
+
+  ensureChatWelcome();
+  chatAppend('user', msg);
+
+  // disable send to prevent "stuck double-click" feeling
+  const sendBtn = $('sendBtn');
+  if(sendBtn){ sendBtn.disabled = true; sendBtn.classList.add('busy'); }
+
+  try{
+    const r = await fetch('/chat', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ message: msg, language: state.lang })
+    });
+    const data = await r.json().catch(()=>({reply:'Sorry — something went wrong.'}));
+    chatAppend('bot', data.reply || '…');
+  }catch(e){
+    chatAppend('bot', 'Network issue — please try again.');
+  }finally{
+    if(sendBtn){ sendBtn.disabled = false; sendBtn.classList.remove('busy'); }
+    focusChatInput();
+  }
+}
+
+function openChatPrefill(text){
+  setSection('chat');
+  ensureChatWelcome();
+  const input = $('msg');
+  if(input){
+    input.value = text || '';
+    focusChatInput();
+  }
+}
+
+// ---------- fetch helpers ----------
+async function fetchJSON(url){
+  const r = await fetch(url, {cache:'no-store'});
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+
+// ---------- countdown ----------
+function pad2(n){ return String(n).padStart(2,'0'); }
+
+function startHeroCountdown(){
+  const dEl = $('cdD'), hEl = $('cdH'), mEl = $('cdM'), sEl = $('cdS');
+  const topTextEl = $('cdTopText') || document.querySelector('.cdTop');
+  const badgeEl = $('cdBadge');
+
+  // Fallback static target if fixtures can't be loaded
+  const fallbackISO = document.body?.dataset?.kickoffUtc || "2026-06-11T00:00:00Z";
+
+  if(!dEl || !hEl || !mEl || !sEl) return;
+
+  let matches = null;
+  let timerId = null;
+
+  const MATCH_DURATION_MIN = 150; // conservative default for "day complete" logic
+
+  const isoDayUTC = (d)=> new Date(d).toISOString().slice(0,10);
+
+  const FIXTURE_CACHE_KEY = 'wc_fixtures_cache_v1';
+  const FIXTURE_CACHE_TTL_MS = 24*60*60*1000;
+
+  function readFixtureCache(){
+    try{
+      const raw = localStorage.getItem(FIXTURE_CACHE_KEY);
+      if(!raw) return null;
+      const obj = JSON.parse(raw);
+      if(!obj || !obj.ts || !obj.data) return null;
+      if((Date.now() - obj.ts) > FIXTURE_CACHE_TTL_MS) return null;
+      return obj.data;
+    }catch(e){ return null; }
+  }
+  function writeFixtureCache(data){
+    try{ localStorage.setItem(FIXTURE_CACHE_KEY, JSON.stringify({ts:Date.now(), data})); }catch(e){}
+  }
+
+  async function fetchJSONWithTimeout(url, timeoutMs=4500){
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort(), timeoutMs);
+    try{
+      const r = await fetch(url, {cache:'no-store', signal: ctrl.signal});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      return await r.json();
+    } finally {
+      clearTimeout(t);
+    }
+  }
+
+  function parseKickoff(m){
+    const iso = m?.datetime_utc || m?.kickoff_utc || m?.kickoffUtc || m?.datetimeUtc;
+    if(!iso) return null;
+    const dt = new Date(iso);
+    return isNaN(+dt) ? null : dt;
+  }
+
+  function setTop(text, showBadge){
+    if(topTextEl){
+      // If we have a dedicated span, only set its text; otherwise set the container's text.
+      if(topTextEl.id === 'cdTopText') topTextEl.textContent = text;
+      else topTextEl.textContent = text;
+    }
+    if(badgeEl){
+      badgeEl.hidden = !showBadge;
+    }
+  }
+
+  function renderDiff(target){
+    const now = new Date();
+    let diff = Math.max(0, target - now);
+    const sec = Math.floor(diff/1000);
+    const days = Math.floor(sec/86400);
+    const hrs  = Math.floor((sec%86400)/3600);
+    const mins = Math.floor((sec%3600)/60);
+    const secs = sec%60;
+    dEl.textContent = pad2(days);
+    hEl.textContent = pad2(hrs);
+    mEl.textContent = pad2(mins);
+    sEl.textContent = pad2(secs);
+  }
+
+  function computeState(now, ms){
+    // ms: array of {kickoff:Date, end:Date, dateKey:string}
+    if(!ms || !ms.length){
+      return { kind:'fallback', target:new Date(fallbackISO), top:'UNTIL KICKOFF', badge:false };
+    }
+
+    const first = ms[0];
+    const last  = ms[ms.length - 1];
+
+    if(now < first.kickoff){
+      return { kind:'pre_tournament', target:first.kickoff, top:'UNTIL KICKOFF', badge:false };
+    }
+    if(now >= last.end){
+      // tournament complete
+      return { kind:'complete', target:now, top:'TOURNAMENT COMPLETE', badge:false };
+    }
+
+    const todayKey = isoDayUTC(now);
+    const today = ms.filter(x => x.dateKey === todayKey);
+
+    if(today.length){
+      const firstKick = today[0].kickoff;
+      const lastEnd   = today[today.length-1].end;
+
+      if(now < firstKick){
+        return { kind:'pre_game_day', target:firstKick, top:'UNTIL TODAY\'S FIRST MATCH', badge:false };
+      }
+
+      if(now >= firstKick && now < lastEnd){
+        // GAME DAY: countdown to end-of-day (after all games complete)
+        return { kind:'game_day', target:lastEnd, top:'GAMES IN PROGRESS', badge:true };
+      }
+
+      // Post-day: next day / next match
+      const next = ms.find(x => x.kickoff > now);
+      if(next){
+        return { kind:'post_day', target:next.kickoff, top:'UNTIL NEXT MATCH', badge:false };
+      }
+      return { kind:'fallback', target:new Date(fallbackISO), top:'UNTIL KICKOFF', badge:false };
+    }
+
+    // No games today: count down to the next match kickoff
+    const next = ms.find(x => x.kickoff > now);
+    if(next){
+      return { kind:'between_days', target:next.kickoff, top:'UNTIL NEXT MATCH', badge:false };
+    }
+    return { kind:'fallback', target:new Date(fallbackISO), top:'UNTIL KICKOFF', badge:false };
+  }
+
+  function tick(){
+    const now = new Date();
+    const st = computeState(now, matches);
+    window.__wcCountdownStateKind = st.kind;
+    updateAdminCountdownState(st.kind);
+    maybeTriggerGameDayMessage(st.kind);
+    setTop(st.top, st.badge);
+    if(st.kind === 'complete'){
+      // Freeze at 00:00:00:00
+      dEl.textContent = '00'; hEl.textContent = '00'; mEl.textContent = '00'; sEl.textContent = '00';
+      return;
+    }
+    renderDiff(st.target);
+  }
+
+  async function boot(){
+    // 1) Try network quickly (timeout)  2) Fallback to last-known-good cache (24h)
+    let data = null;
+    try{
+      data = await fetchJSONWithTimeout('/schedule.json', 4500);
+      if(data) writeFixtureCache(data);
+    }catch(e){
+      data = readFixtureCache();
+    }
+
+    try{
+      const raw = Array.isArray(data?.matches) ? data.matches : [];
+      const ms = [];
+      for(const m of raw){
+        const kickoff = parseKickoff(m);
+        if(!kickoff) continue;
+
+        // Prefer provided date field; otherwise derive from UTC kickoff.
+        const dateKey = (m.date && /^\d{4}-\d{2}-\d{2}$/.test(m.date)) ? m.date : isoDayUTC(kickoff);
+
+        const end = new Date(kickoff.getTime() + MATCH_DURATION_MIN*60*1000);
+        ms.push({ kickoff, end, dateKey });
+      }
+      ms.sort((a,b)=>a.kickoff-b.kickoff);
+      matches = ms.length ? ms : null;
+    }catch(e){
+      matches = null;
+    }finally{
+      if(timerId) clearInterval(timerId);
+      tick();
+      timerId = setInterval(tick, 1000);
+    }
+  }
+
+  boot();
+}
+
+let scheduleView = 'fixtures';
+let fixturesCache = null;
+let currentPage = 1;
+
+// ---------- schedule ----------
+function initScheduleHandlers(){
+  const tabs = $('scheduleTabs');
+  if(!tabs) return;
+
+  // Bind to the actual buttons in the Schedule tabs (Fixtures / Live / Groups)
+  const btns = $$('button[data-view]', tabs);
+
+  function select(view){
+    scheduleView = view || 'fixtures';
+    btns.forEach(b=>{
+      const on = (b.dataset.view === scheduleView);
+      b.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+  }
+
+  btns.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      // micro-feedback (iOS-like)
+      btn.classList.add('tap');
+      setTimeout(()=>btn.classList.remove('tap'), 180);
+      try{ if(navigator.vibrate) navigator.vibrate(8); }catch(e){}
+      select(btn.dataset.view);
+      currentPage = 1;           // reset paging when switching views
+      loadSchedule(true);
+    });
+  });
+
+  // Ensure initial selection matches scheduleView
+  select(scheduleView);
+
+  $('prevPage')?.addEventListener('click', (e)=>{
+    const b = e.currentTarget;
+    if(b){ b.classList.add('tap'); setTimeout(()=>b.classList.remove('tap'), 180); }
+    try{ if(navigator.vibrate) navigator.vibrate(8); }catch(_){}
+    currentPage = Math.max(1, currentPage-1);
+    loadSchedule();
+  });
+  $('nextPage')?.addEventListener('click', (e)=>{
+    const b = e.currentTarget;
+    if(b){ b.classList.add('tap'); setTimeout(()=>b.classList.remove('tap'), 180); }
+    try{ if(navigator.vibrate) navigator.vibrate(8); }catch(_){}
+    currentPage = currentPage+1;
+    loadSchedule();
+  });
+}
+
+function renderFixtures(matches){
+  const list = $('schedule');
+  const meta = $('scheduleMetaLine');
+  if(!list) return;
+
+  // basic paging
+  const perPage = 12;
+  const total = matches.length;
+  const pages = Math.max(1, Math.ceil(total / perPage));
+  currentPage = clamp(currentPage, 1, pages);
+
+  const start = (currentPage-1)*perPage;
+  const slice = matches.slice(start, start+perPage);
+
+  // Date grouping + sticky headers
+  const dateKeyOf = (raw)=>{
+    const s = (raw || '').trim();
+    if(!s) return '';
+    const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+    if(m) return m[1];
+    const d = new Date(s);
+    if(!isNaN(d)) return d.toISOString().slice(0,10);
+    return s;
+  };
+  const dateLabel = (key)=>{
+    if (/^\d{4}-\d{2}-\d{2}$/.test(key)){
+      const d = new Date(key + 'T00:00:00Z');
+      return new Intl.DateTimeFormat('en-US',{month:'short', day:'numeric'}).format(d);
+    }
+    return key;
+  };
+
+  let lastKey = null;
+  let html = '';
+  slice.forEach(m=>{
+    const rawDt = (m.date || m.datetime_local || m.datetime_utc || '');
+    const key = dateKeyOf(rawDt);
+    if(key && key !== lastKey){
+      html += `<div class="dateHeader" role="heading" aria-level="3">${escapeHtml(dateLabel(key))}</div>`;
+      lastKey = key;
+    }
+    const dt = escapeHtml(rawDt);
+    const home = escapeHtml(m.home || '');
+    const away = escapeHtml(m.away || '');
+    const venue = escapeHtml(m.venue || '');
+    const stage = escapeHtml(m.stage || '');
+    html += `<div class="matchRow">
+      <div class="mTop">
+        <div class="mStage">${stage}</div>
+        <div class="mDate">${dt}</div>
+      </div>
+      <div class="mTeams">${home} <span class="vs">vs</span> ${away}</div>
+      <div class="mVenue">${venue}</div>
+    </div>`;
+  });
+
+  list.innerHTML = html || `<div class="hint">No fixtures found.</div>`;
+
+  const pager = $('pager');
+  const pi = $('pageIndicator');
+  if(pager && pi){
+    pager.style.display = pages > 1 ? '' : 'none';
+    pi.textContent = `Page ${currentPage} / ${pages}`;
+  }
+
+  if(meta){
+    meta.textContent = `${total} fixtures`;
+  }
+}
+
+function renderLive(data){
+  const list = $('schedule');
+  const meta = $('scheduleMetaLine');
+  if(!list) return;
+
+  const matches = (data && (data.matches || data.live)) || [];
+  const quality = (data && data.quality) || {};
+  const hasScores = !!quality.has_any_scores || matches.some(m => (m.score || m.result || m.score_home != null || m.score_away != null));
+
+  if(!matches.length){
+    list.innerHTML = `<div class="infoBanner">
+      <div class="infoTitle">No live matches right now</div>
+      <div class="infoSub">Live scores will appear here once games are in progress.</div>
+    </div>`;
+    if(meta){ meta.textContent = `Live`; }
+    return;
+  }
+
+  if(!hasScores){
+    list.innerHTML = `<div class="infoBanner">
+      <div class="infoTitle">Live scores available once connected</div>
+      <div class="infoSub">This tab will show real-time matchups and scores when a live data provider is enabled.</div>
+    </div>` + matches.map(m=>{
+      const dt = escapeHtml(m.date || m.datetime_local || m.datetime_utc || '');
+      const home = escapeHtml(m.home || '');
+      const away = escapeHtml(m.away || '');
+      const status = escapeHtml(m.status || 'Live window');
+      return `<div class="matchRow">
+        <div class="mTop">
+          <div class="mStage">${status}</div>
+          ${dt ? `<div class="mDate">${dt}</div>` : ``}
+        </div>
+        <div class="mTeams">${home} <span class="vs">vs</span> ${away}</div>
+        <div class="mVenue">Awaiting live scores</div>
+      </div>`;
+    }).join('');
+    if(meta){ meta.textContent = `Live · awaiting scores`; }
+    return;
+  }
+
+  list.innerHTML = matches.map(m=>{
+    const dt = escapeHtml(m.date || m.datetime_local || m.datetime_utc || '');
+    const home = escapeHtml(m.home || '');
+    const away = escapeHtml(m.away || '');
+    const score = escapeHtml(m.score || m.result || (m.score_home!=null && m.score_away!=null ? `${m.score_home}–${m.score_away}` : ''));
+    const status = escapeHtml(m.status || 'Live');
+
+    const isLive = /live|in\s*progress/i.test(status) || (m.is_live === true);
+    return `<div class="matchRow ${isLive ? 'isLive' : ''}">
+      <div class="mTop">
+        <div class="mStage">${isLive ? `<span class="liveDot" aria-hidden="true"></span>` : ``}${status}</div>
+        ${dt ? `<div class="mDate">${dt}</div>` : ``}
+      </div>
+      <div class="mTeams">${home} <span class="vs">vs</span> ${away}</div>
+      <div class="mVenue mScore">${score || ''}</div>
+    </div>`;
+  }).join('');
+
+  if(meta){ meta.textContent = `Live`; }
+}
+
+
+function renderStandings(data){
+  const list = $('schedule');
+  const meta = $('scheduleMetaLine');
+  if(!list) return;
+
+  const groups = data.groups || [];
+  list.innerHTML = groups.map(g=>{
+    const name = escapeHtml(g.group || g.name || '');
+    const rowsArr = (g.table || g.teams || []);
+    const rows = rowsArr.map((t, idx)=>{
+      const rank = (typeof t.rank !== 'undefined') ? t.rank : (idx+1);
+      const pts = (t.pts ?? t.points ?? 0);
+      const gd = (t.gd ?? ((t.gf??0)-(t.ga??0)) ?? 0);
+      const badge = (rank <= 2) ? `<span class="qualBadge">${rank<=1?'Leader':'Top 2'}</span>` : ``;
+      return `<tr class="${rank<=2?'topRow':''}">
+        <td class="teamCell"><span class="rank">${rank}</span>${escapeHtml(t.team || t.name || '')}${badge}</td>
+        <td>${escapeHtml(t.p || t.played || 0)}</td>
+        <td>${escapeHtml(gd)}</td>
+        <td class="pts">${escapeHtml(pts)}</td>
+      </tr>`;
+    }).join('');
+
+    return `<div class="standBlock">
+      <div class="standTitle">${name}</div>
+      <table class="standTable">
+        <thead><tr><th>Team</th><th>P</th><th>GD</th><th>Pts</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${rowsArr.length ? `` : `<div class="hint" style="margin-top:8px;">Group teams will appear once fixtures load.</div>`}
+    </div>`;
+  }).join('') || `<div class="infoBanner">
+    <div class="infoTitle">Groups will appear here</div>
+    <div class="infoSub">If this is empty, your standings feed is unavailable. Fixtures will still show under Fixtures.</div>
+  </div>`;
+
+  if(meta){ meta.textContent = `Groups · ${data.count_groups || groups.length} groups`; }
+}
+
+async function loadSchedule(force=false){
+  const list = $('schedule');
+  const meta = $('scheduleMetaLine');
+  if(list) list.innerHTML = `<div class="hint">Loading…</div>`;
+  if(meta) meta.textContent = '';
+
+  try{
+    if(scheduleView === 'fixtures'){
+      if(!fixturesCache || force){
+        const data = await fetchJSON('/schedule.json');
+        fixturesCache = data.matches || [];
+      }
+      renderFixtures(fixturesCache);
+    }else if(scheduleView === 'live'){
+      const data = await fetchJSON('/worldcup/live.json');
+      renderLive(data);
+    }else if(scheduleView === 'groups'){
+      const scope = (state.scope === 'featured') ? 'featured' : 'all';
+      const data = await fetchJSON(`/worldcup/standings.json?scope=${encodeURIComponent(scope)}`);
+      renderStandings(data);
+    }
+  }catch(e){
+    if(list) list.innerHTML = `<div class="hint">Schedule unavailable.</div>`;
+  }
+}
+
+// ---------- menu ----------
+let menuCache = null;
+let menuCountry = 'ALL';
+
+async function getQualifiedTeams(){
+  // Best-effort: schedule.json contains teams participating. If unavailable, return null.
+  try{
+    const d = await fetchJSON('/schedule.json');
+    const matches = d.matches || [];
+    const set = new Set();
+    matches.forEach(m=>{
+      const h = (m.home||m.home_team||'').trim();
+      const a = (m.away||m.away_team||'').trim();
+      if(h) set.add(h);
+      if(a) set.add(a);
+    });
+    return set.size ? set : null;
+  }catch(e){
+    return null;
+  }
+}
+
+function buildCountryFilters(countries, qualifiedSet){
+  const wrap = $('menuFilters');
+  if(!wrap) return;
+  // If qualifiedSet exists, intersect.
+  let list = Array.from(new Set((countries||[]).filter(Boolean)));
+  if(qualifiedSet){
+    list = list.filter(c=>qualifiedSet.has(c));
+  }
+  list.sort((a,b)=>a.localeCompare(b));
+
+  const chips = ['ALL', ...list];
+  wrap.innerHTML = chips.map(c=>{
+    const label = (c === 'ALL') ? 'All countries' : c;
+    const active = (menuCountry === c);
+    return `<button type="button" class="menuChip ${active ? 'active':''}" data-country="${escapeHtml(c)}" aria-pressed="${active ? 'true':'false'}">${escapeHtml(label)}</button>`;
+  }).join('');
+
+  // If no countries at all, hide filters
+  if(chips.length <= 1){
+    wrap.innerHTML = '';
+    return;
+  }
+
+  wrap.querySelectorAll('.menuChip').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      menuCountry = (btn.dataset?.country || 'ALL');
+      try{ renderMenu(menuCache); }catch(_e){}
+    }, {passive:false});
+  });
+}
+
+function pickUpsell(sections){
+  // Pick first item tagged match/chef special; otherwise first item.
+  for(const sec of (sections||[])){
+    for(const it of (sec.items||[])){
+      const tags = (it.tags || it.tag || it.badges || []);
+      const tlist = Array.isArray(tags) ? tags : String(tags||'').split(',').map(x=>x.trim()).filter(Boolean);
+      const tnorm = tlist.map(x=>String(x).toLowerCase());
+      if(tnorm.some(x=>x.includes('match') || x.includes('chef') || x.includes('special') || x.includes('signature'))){
+        return {sec, it, tags:tlist};
+      }
+    }
+  }
+  for(const sec of (sections||[])){
+    const it = (sec.items||[])[0];
+    if(it) return {sec, it, tags: Array.isArray(it.tags) ? it.tags : (it.tag ? [it.tag] : [])};
+  }
+  return null;
+}
+
+function itemMatchesCountry(it){
+  if(menuCountry === 'ALL') return true;
+  const c = menuCountry;
+  const raw = it.countries || it.country || it.teams || it.team || it.filters || [];
+  const arr = Array.isArray(raw) ? raw : String(raw||'').split(',').map(x=>x.trim()).filter(Boolean);
+  return arr.includes(c);
+}
+
+function renderUpsell(sections){
+  const box = $('menuUpsell');
+  if(!box) return;
+  const pick = pickUpsell(sections);
+  if(!pick || !pick.it){ box.classList.add('hidden'); box.innerHTML=''; return; }
+  const it = pick.it || {};
+  const name = escapeHtml(it.name || '');
+  const desc = escapeHtml(it.desc || it.description || '');
+  const price = escapeHtml(it.price || '');
+  box.classList.remove('hidden');
+  box.innerHTML = `
+    <div class="menuUpsellTop">
+      <div class="menuUpsellTitle">Recommended for tonight’s match</div>
+      <div class="menuUpsellBadge">Chef’s pick</div>
+    </div>
+    <div class="menuUpsellItem">
+      <div style="min-width:0">
+        <div class="menuUpsellName">${name}</div>
+        <div class="menuUpsellDesc">${desc}</div>
+      </div>
+      <div class="menuUpsellPrice">${price}</div>
+    </div>
+  `;
+}
+
+function renderMenu(data){
+  const body = $('menuBody');
+  if(!body) return;
+  const sections = data?.sections || data?.menu || [];
+  if(!sections.length){
+    body.innerHTML = `<div class="hint">Menu unavailable.</div>`;
+    return;
+  }
+
+  // Build list of countries appearing in menu items
+  const countries = [];
+  sections.forEach(sec=>{
+    (sec.items||[]).forEach(it=>{
+      const raw = it.countries || it.country || it.teams || it.team || it.filters || [];
+      const arr = Array.isArray(raw) ? raw : String(raw||'').split(',').map(x=>x.trim()).filter(Boolean);
+      arr.forEach(c=>{ if(c) countries.push(c); });
+    });
+  });
+
+  // Render upsell (doesn't depend on filter)
+  renderUpsell(sections);
+
+  // Render sections + filtered items
+  const html = sections.map(sec=>{
+    const title = escapeHtml(sec.title || sec.name || '');
+    const items = (sec.items || [])
+      .filter(it=>itemMatchesCountry(it))
+      .map(it=>{
+        const nm = escapeHtml(it.name || '');
+        const ds = escapeHtml(it.desc || it.description || '');
+        const pr = escapeHtml(it.price || '');
+        const tags = (it.tags || it.tag || it.badges || []);
+        const tlist = Array.isArray(tags) ? tags : String(tags||'').split(',').map(x=>x.trim()).filter(Boolean);
+        const tagHtml = tlist.length ? `<div class="miMetaRow">${tlist.slice(0,3).map(t=>`<span class="miTag">${escapeHtml(t)}</span>`).join('')}</div>` : '';
+        return `<div class="menuItem">
+          <div class="miTop">
+            <div class="miName">${nm}</div>
+            <div class="miPrice">${pr}</div>
+          </div>
+          ${tagHtml}
+          <div class="miDesc">${ds}</div>
+        </div>`;
+      }).join('');
+    // Hide empty sections when filtered
+    if(!items) return '';
+    return `<div class="menuSection"><div class="menuTitle">${title}</div>${items}</div>`;
+  }).join('');
+
+  body.innerHTML = html || `<div class="hint">No items for this filter.</div>`;
+
+  // Save countries for filters; filters rendered elsewhere (async)
+  try{ state._menuCountries = countries; }catch(_e){}
+}
+
+async function loadMenu(){
+  const body = $('menuBody');
+  const hint = $('menuHint');
+  const filters = $('menuFilters');
+  const upsell = $('menuUpsell');
+  if(body) body.innerHTML = `<div class="hint">Loading…</div>`;
+  if(hint) hint.textContent = '';
+  if(filters) filters.innerHTML = '';
+  if(upsell) { upsell.classList.add('hidden'); upsell.innerHTML = ''; }
+
+  try{
+    const data = await fetchJSON(`/menu.json?lang=${encodeURIComponent(state.lang||'en')}`);
+    menuCache = data;
+
+    // Show last-updated stamp (from admin upload) if available
+    try{
+      const meta = data.meta || {};
+      const ts = meta.updated_at || '';
+      if(hint){
+        if(ts){
+          const d = new Date(ts);
+          hint.textContent = `Updated ${isNaN(d.getTime()) ? ts : d.toLocaleString()}`;
+        }else{
+          hint.textContent = '';
+        }
+      }
+    }catch(_e){ /* ignore */ }
+
+    // Render menu immediately
+    renderMenu(data);
+
+    // Build filters from menu + schedule-qualified teams (best-effort)
+    const qualified = await getQualifiedTeams();
+    const countries = (state._menuCountries || []);
+    buildCountryFilters(countries, qualified);
+  }catch(e){
+    if(body) body.innerHTML = `<div class="hint">Menu unavailable.</div>`;
+    if(hint) hint.textContent = 'Menu unavailable.';
+  }
+}
+
+// ---------- fanzone / vip (placeholders if routes return data) ----------
+async function loadFanzone(){
+  const box = $('fanzoneBody');
+  if(!box) return;
+  box.innerHTML = `<div class="hint">Loading…</div>`;
+  try{
+    const data = await fetchJSON('/fanzone.json');
+    const items = data.items || data.events || [];
+    box.innerHTML = items.map(it=>`<div class="fzItem">
+      <div class="fzTitle">${escapeHtml(it.title||it.name||'')}</div>
+      <div class="fzMeta">${escapeHtml(it.when||it.date||'')}</div>
+      <div class="fzDesc">${escapeHtml(it.desc||it.description||'')}</div>
+    </div>`).join('') || `<div class="hint">No events right now.</div>`;
+  }catch(e){
+    box.innerHTML = `<div class="hint">Fan Zone unavailable.</div>`;
+  }
+}
+
+async function loadVIP(){
+  const box = $('vipBody');
+  if(!box) return;
+  box.innerHTML = `<div class="hint">Loading…</div>`;
+  try{
+    const data = await fetchJSON('/worldcup/qualified.json').catch(()=>null);
+    box.innerHTML = `<div class="hint">Tell us the vibe (VIP, private table, hosted moment) and your time window — we’ll handle the rest.</div>`;
+  }catch(e){
+    box.innerHTML = `<div class="hint">VIP unavailable.</div>`;
+  }
+}
+
+// ---------- intake modal ----------
+let currentEntryPoint = 'reserve_now';
+function openModal(entryPoint){
+  currentEntryPoint = (entryPoint || currentEntryPoint || 'reserve_now');
+  const m = $('intakeModal');
+  if(!m) return;
+  m.classList.remove('hidden');
+  document.body.classList.add('modalOpen');
+  try{ $('iName')?.focus(); }catch(e){}
+}
+function closeModal(){
+  const m = $('intakeModal');
+  if(!m) return;
+  m.classList.add('hidden');
+  document.body.classList.remove('modalOpen');
+}
+async function submitIntake(){
+  const msg = $('intakeMsg');
+  const iName = $('iName')?.value || '';
+  const iCity = $('iCity')?.value || '';
+  const iDate = $('iDate')?.value || '';
+  const iGroup = $('iGroup')?.value || '';
+  const iTime = $('iTime')?.value || '';
+  const iVibe = $('iVibe')?.value || '';
+  const iBudget = $('iBudget')?.value || '';
+  const iNotes = $('iNotes')?.value || '';
+  const iContact = $('iContact')?.value || '';
+
+  if(!iName || !iDate || !iGroup || !iTime || !iContact){
+    if(msg) msg.textContent = 'Please fill Name, Date, Party size, Time window, and Contact.';
+    return;
+  }
+  if(msg) msg.textContent = 'Sending…';
+
+  const payload = {
+    entry_point: currentEntryPoint || 'reserve_now',
+    name: iName,
+    business_context: iCity,
+    date: iDate,
+    party_size: iGroup,
+    time: iTime,
+    vibe: iVibe,
+    budget: iBudget,
+    notes: iNotes,
+    contact: iContact,
+    lang: state?.lang || 'en'
+  };
+
+  try{
+    const res = await fetch('/api/intake', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(()=>({}));
+    if(!res.ok || !data.ok){
+      throw new Error(data.error || 'Request failed');
+    }
+    closeModal();
+    toast(`Request saved as ${data.tier || ''} — view it in Admin → Leads.`, 2400);
+    if(msg) msg.textContent = '';
+    // reset fields lightly (keep contact for convenience)
+    try{
+      $('iDate').value=''; $('iGroup').value=''; $('iTime').value='';
+      $('iVibe').value=''; $('iBudget').value=''; $('iNotes').value='';
+    }catch(e){}
+  }catch(e){
+    if(msg) msg.textContent = 'Could not submit. Please try again.';
+  }
+}
+
+
+// ---------- home bindings ----------
+function bindHome(){
+  // Primary CTAs
+  $('ctaChat')?.addEventListener('click', ()=>{
+    // Chat concierge shows the welcome message (primary or game-day variant)
+    openChatPrefill('');
+  });
+
+  $('ctaReserve')?.addEventListener('click', ()=>{
+    // Reserve now opens the intake modal (concierge form style)
+    openModal('reserve_now');
+  });
+
+  function applyQuickPrefill(q){
+    const s = String(q||'').toLowerCase();
+    if(s.includes('table for 4')){
+      const g = $('iGroup');
+      if(g) g.value = '4';
+    }
+    if(s.includes('vip')){
+      const v = $('iVibe');
+      if(v && !v.value) v.value = 'VIP';
+      const n = $('iNotes');
+      if(n){
+        const cur = (n.value||'').trim();
+        n.value = cur ? (cur + ' | VIP reservation') : 'VIP reservation';
+      }
+    }
+  }
+
+  // Quick chips -> prefill intake modal
+  $$('.quickChips .chip').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      openModal(((btn.dataset?.q||'').toLowerCase().includes('vip')) ? 'vip_vibe' : (((btn.dataset?.q||'').toLowerCase().includes('table for 4')) ? 'table_for_4' : 'reserve_now'));
+      applyQuickPrefill(btn.dataset?.q || '');
+    });
+  });
+
+// Explore tiles
+  $('tileVIP')?.addEventListener('click', ()=>setSection('vip'));
+  $('tileFanzone')?.addEventListener('click', ()=>setSection('fanzone'));
+  $('tileSchedule')?.addEventListener('click', ()=>setSection('schedule'));
+  $('tileMenu')?.addEventListener('click', ()=>setSection('menu'));
+  $('tilePlan')?.addEventListener('click', ()=>openModal('match_day'));
+
+  // Pills
+  $('pillLang')?.addEventListener('click', ()=>cycleLang());
+  $('pillScope')?.addEventListener('click', ()=>toggleScope());
+}
+
+// ---------- chat bindings ----------
+function bindChat(){
+  $('sendBtn')?.addEventListener('click', ()=>sendChatMessage());
+  $('msg')?.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      sendChatMessage();
+    }
+  });
+
+  // clear button (remove reliance on inline onclick)
+  $('btnClear')?.addEventListener('click', (e)=>{
+    e.preventDefault();
+    clearChatPreserveWelcome();
+  });
+
+  // language selector
+  $$('#chatLangRow [data-lang]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      setLang((btn.dataset?.lang||'en'));
+      try{ normalizeChatWelcome(); }catch(e){}
+    });
+});
+}
+
+// ---------- modal bindings ----------
+function bindModal(){
+  $('closeModal')?.addEventListener('click', ()=>closeModal());
+  $('submitIntake')?.addEventListener('click', ()=>submitIntake());
+  $('intakeModal')?.addEventListener('click', (e)=>{
+    if(e.target && e.target.id === 'intakeModal') closeModal();
+  });
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape') closeModal();
+  });
+}
+
+// ---------- boot ----------
+
+async function loadVenueIdentityLine(){
+  const el = $('venueIdentityLine');
+  if(!el) return;
+  try{
+    const r = await fetch('/api/venue_identity' + (location.search || ''), {cache:'no-store'});
+    const d = await r.json().catch(()=>null);
+    const ok = d && d.ok && d.show_location_line && d.location_line;
+    if(ok){
+      el.textContent = String(d.location_line || '').trim();
+      el.hidden = !el.textContent;
+      return;
+    }
+  }catch(e){}
+  try{ el.textContent=''; el.hidden = true; }catch(e){}
+}
+
+function init(){
+  // state-derived UI
+  setLang(state.lang);
+  setScope(state.scope);
+
+  bindNav();
+  bindHome();
+  bindChat();
+  bindModal();
+  initScheduleHandlers();
+  startHeroCountdown();
+  loadVenueIdentityLine();
+  relocateMatchDayOpsToggles();
+  setSection('home');
+  ensureChatWelcome();
+}
+
+// run init reliably even if DOMContentLoaded already fired
+(async ()=>{
+  await cleanupServiceWorker();
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init, {once:true});
+  }else{
+    init();
+  }
+})();
+
+  // UI-only: keep segmented capsule aligned on rotation/resize
+  try{
+    if(!window.__chatSegResizeBound){
+      window.__chatSegResizeBound = true;
+      window.addEventListener('resize', ()=>{ try{ updateUI(); }catch(e){} }, {passive:true});
+    }
+  }catch(e){}
+
+/* === FANZONE_VIP_HANDLERS_PATCH_v1 (surgical; Fan Zone + VIP only) === */
+(function(){
+  function $(id){ return document.getElementById(id); }
+
+  function ensureToastHost(){
+    // reuse existing .toast styling in CSS
+    let t = document.querySelector('.toast');
+    if(!t){
+      t = document.createElement('div');
+      t.className = 'toast';
+      t.setAttribute('role','status');
+      t.setAttribute('aria-live','polite');
+      t.style.display = 'none';
+      document.body.appendChild(t);
+    }
+    return t;
+  }
+
+  let toastTimer = null;
+  function luxToast(msg, ms){
+    const t = ensureToastHost();
+    t.textContent = msg;
+    t.style.display = 'block';
+    t.classList.add('show');
+    if(toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=>{
+      t.classList.remove('show');
+      t.style.display = 'none';
+    }, Math.max(1200, ms || 3200));
+  }
+
+  const SUPPORT_KEY = 'wc_support_country_v1';
+  const POLL_KEY    = 'wc_match_poll_v1';
+
+  const COUNTRIES = [
+    ["🇺🇸","United States"],["🇲🇽","Mexico"],["🇨🇦","Canada"],
+    ["🇦🇷","Argentina"],["🇧🇷","Brazil"],["🇺🇾","Uruguay"],["🇨🇴","Colombia"],["🇨🇱","Chile"],
+    ["🇪🇸","Spain"],["🇫🇷","France"],["🇩🇪","Germany"],["🇮🇹","Italy"],["🇵🇹","Portugal"],["🇳🇱","Netherlands"],
+    ["🇬🇧","England"],["🇧🇪","Belgium"],["🇭🇷","Croatia"],["🇨🇭","Switzerland"],["🇸🇪","Sweden"],["🇳🇴","Norway"],["🇩🇰","Denmark"],
+    ["🇯🇵","Japan"],["🇰🇷","South Korea"],["🇦🇺","Australia"],["🇳🇿","New Zealand"],
+    ["🇳🇬","Nigeria"],["🇬🇭","Ghana"],["🇨🇲","Cameroon"],["🇸🇳","Senegal"],["🇲🇦","Morocco"],["🇪🇬","Egypt"],["🇿🇦","South Africa"],
+    ["🇸🇦","Saudi Arabia"],["🇶🇦","Qatar"],["🇦🇪","United Arab Emirates"],["🇮🇷","Iran"],
+    ["🇹🇷","Turkey"],["🇵🇱","Poland"],["🇷🇸","Serbia"],["🇷🇴","Romania"],["🇺🇦","Ukraine"]
+  ];
+
+  const DEFAULT_POLL = [
+    { id:"m1", label:"🇺🇸 United States vs 🇲🇽 Mexico" },
+    { id:"m2", label:"🇫🇷 France vs 🇦🇷 Argentina" },
+    { id:"m3", label:"🇧🇷 Brazil vs 🇩🇪 Germany" },
+    { id:"m4", label:"🇪🇸 Spain vs 🏴 England" }
+  ];
+
+  function getAppUrl(){
+    // Keep it robust across render/local; do not include hash
+    return (location.origin || '') + (location.pathname || '/');
+  }
+
+  function ensureCountryCard(){
+    let card = $('countryCard');
+    if(card) return card;
+
+    const left = $('fanZoneLeft');
+    if(!left) return null;
+
+    card = document.createElement('div');
+    card.className = 'fz-card lux-reveal';
+    card.id = 'countryCard';
+    card.style.cssText = 'display:none; margin-top:10px; max-height:52vh; overflow:auto;';
+    card.innerHTML = `
+      <div class="fz-minirow" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
+        <h3 style="margin:0;">🏁 Choose your country</h3>
+        <button class="fz-iconbtn" id="closeCountryCard" type="button" aria-label="Close country picker">✕</button>
+      </div>
+      <div class="fz-muted">This personalizes Fan Zone highlights on this device.</div>
+      <div id="countryList" style="margin-top:10px; display:grid; gap:8px;"></div>
+    `;
+    // Insert after actions block for predictable layout
+    const actions = left.querySelector('.fz-actions');
+    if(actions && actions.nextSibling){
+      actions.parentNode.insertBefore(card, actions.nextSibling);
+    }else{
+      left.appendChild(card);
+    }
+    // Wire close button inside the country picker card
+    const cClose = card.querySelector('#closeCountryCard');
+    if(cClose){
+      bindOnce(cClose, 'click', (e)=>{ e.preventDefault(); hide(card); });
+    }
+    return card;
+  }
+
+  function hide(el){ if(el){ el.style.display = 'none'; el.setAttribute('aria-hidden','true'); } }
+  function show(el){ if(el){ el.style.display = 'block'; el.removeAttribute('aria-hidden'); } }
+  function isShown(el){ return !!(el && el.style.display !== 'none' && el.offsetParent !== null); }
+
+  
+  function getWorldCupTeams(){
+    try{
+      // Prefer cached schedule.json (same data schedule tab uses)
+      const cached = readFixtureCache && readFixtureCache();
+      const raw = Array.isArray(cached?.matches) ? cached.matches : [];
+      const s = new Set();
+      for(const m of raw){
+        const h = (m?.home||'').trim();
+        const a = (m?.away||'').trim();
+        if(h) s.add(h);
+        if(a) s.add(a);
+      }
+      const arr = Array.from(s).filter(Boolean).sort((x,y)=>x.localeCompare(y));
+      return arr.length ? arr : null;
+    }catch(e){
+      return null;
+    }
+  }
+
+  const QUAL_TEAMS_KEY = 'wc_qualified_teams_v1';
+
+  function readQualifiedCache(){
+    try{ return JSON.parse(localStorage.getItem(QUAL_TEAMS_KEY) || 'null'); }catch(e){ return null; }
+  }
+  function writeQualifiedCache(teams){
+    try{ localStorage.setItem(QUAL_TEAMS_KEY, JSON.stringify({ts: Date.now(), teams: teams || []})); }catch(e){}
+  }
+
+  async function fetchQualifiedTeams(){
+    // Prefer server-qualified teams (keeps picker accurate as qualification evolves).
+    // Endpoint exists in app.py: /worldcup/qualified.json (alias /countries/qualified.json).
+    try{
+      const cached = readQualifiedCache();
+      const age = cached && cached.ts ? (Date.now() - cached.ts) : Infinity;
+      if(cached && Array.isArray(cached.teams) && cached.teams.length && age < 12*60*60*1000){
+        return cached.teams.slice();
+      }
+
+      const controller = ('AbortController' in window) ? new AbortController() : null;
+      const to = setTimeout(()=>{ try{ controller && controller.abort(); }catch(_e){} }, 4500);
+      try{
+        const resp = await fetch('/worldcup/qualified.json', { cache:'no-store', signal: controller ? controller.signal : undefined });
+        if(!resp.ok) return null;
+        const data = await resp.json();
+        const teams = Array.isArray(data?.teams) ? data.teams
+                   : Array.isArray(data?.qualified) ? data.qualified
+                   : [];
+        const out = teams.map(t=>String(t||'').trim()).filter(Boolean);
+        if(out.length) writeQualifiedCache(out);
+        return out.length ? out : null;
+      }finally{
+        clearTimeout(to);
+      }
+    }catch(e){
+      return null;
+    }
+  }
+
+  async function fetchScheduleTeams(){
+    // Pull teams ONLY from the same schedule feed the Schedule tab uses.
+    // Safe fallbacks: fixture cache (if present) → network fetch with timeout.
+    try{
+      const extractTeams = (d)=>{
+        const raw = Array.isArray(d?.matches) ? d.matches
+                  : Array.isArray(d?.fixtures) ? d.fixtures
+                  : [];
+        const s = new Set();
+        for(const m of raw){
+          const h = (m && (m.home ?? m.home_team ?? m.team1)) ? String(m.home ?? m.home_team ?? m.team1).trim() : '';
+          const a = (m && (m.away ?? m.away_team ?? m.team2)) ? String(m.away ?? m.away_team ?? m.team2).trim() : '';
+          if(h) s.add(h);
+          if(a) s.add(a);
+        }
+        const arr = Array.from(s).filter(Boolean).sort((x,y)=>x.localeCompare(y));
+        return arr.length ? arr : null;
+      };
+
+      // 1) Try any already-cached schedule data (no network).
+      let cachedData = null;
+      try{
+        if(typeof readFixtureCache === 'function') cachedData = readFixtureCache();
+      }catch(_e){}
+      if(!cachedData && window.__FIXTURE_CACHE) cachedData = window.__FIXTURE_CACHE;
+
+      const cachedTeams = extractTeams(cachedData);
+      if(cachedTeams) return cachedTeams;
+
+      // 2) Network fetch with timeout.
+      const controller = ('AbortController' in window) ? new AbortController() : null;
+      const to = setTimeout(()=>{ try{ controller && controller.abort(); }catch(_e){} }, 4500);
+      try{
+        const resp = await fetch('/schedule.json', { cache:'no-store', signal: controller ? controller.signal : undefined });
+        if(!resp.ok) return null;
+        const data = await resp.json();
+        const teams = extractTeams(data);
+        return teams;
+      }finally{
+        clearTimeout(to);
+      }
+    }catch(e){
+      return null;
+    }
+  }
+
+  function setCountryListLoading(listEl){
+    if(!listEl) return;
+    listEl.innerHTML = `<div class="fz-muted" style="padding:8px 2px;">Loading teams…</div>`;
+  }
+
+  async function ensureScheduleTeams(){
+    const q = await fetchQualifiedTeams();
+    if(q && q.length) return q;
+    const t = getWorldCupTeams();
+    if(t && t.length) return t;
+    return await fetchScheduleTeams();
+  }
+
+  async function renderCountries(){
+    const card = ensureCountryCard();
+    if(!card) return;
+    const list = card.querySelector('#countryList');
+    if(!list || list.dataset.built === '1') return;
+
+    setCountryListLoading(list);
+
+    const teams = await ensureScheduleTeams();
+
+    // Map known flags from the built-in list, but only show teams that actually exist in Schedule.
+    const flagMap = new Map();
+    try{ COUNTRIES.forEach(([flag,name])=> flagMap.set(String(name).toLowerCase(), flag)); }catch(e){}
+
+    const items = teams && teams.length ? teams : [];
+    if(!items.length){
+      list.innerHTML = `<div class="fz-muted" style="padding:8px 2px;">No World Cup teams found yet. Open the Schedule tab once (to load fixtures) or refresh.</div>`;
+      list.dataset.built = '1';
+      return;
+    }
+
+    list.innerHTML = '';
+
+    items.forEach((name)=>{
+      const flag = flagMap.get(String(name).toLowerCase()) || '🏳️';
+
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'fz-btn';
+      b.style.cssText = 'text-align:left; display:flex; align-items:center; gap:10px; padding:10px 12px;';
+      b.innerHTML = `<span aria-hidden="true" style="font-size:18px; width:22px;">${flag}</span><span style="font-weight:800;">${name}</span>`;
+      b.addEventListener('click', ()=>{
+        const lbl = $('supporterLabel');
+        const flg = $('supporterFlag');
+        if(lbl) lbl.textContent = name;
+        if(flg) flg.textContent = flag;
+        try{ localStorage.setItem(SUPPORT_KEY, JSON.stringify({flag,name,ts:Date.now()})); }catch(e){}
+        luxToast(`Supporting: ${name}`, 2200);
+        hide(card);
+      }, { passive:true });
+      list.appendChild(b);
+    });
+
+    list.dataset.built = '1';
+  }
+
+  function loadSupporter(){
+    try{
+      const v = JSON.parse(localStorage.getItem(SUPPORT_KEY) || 'null');
+      if(v && v.name){
+        const lbl = $('supporterLabel');
+        const flg = $('supporterFlag');
+        if(lbl) lbl.textContent = v.name;
+        if(flg) flg.textContent = v.flag || '🏁';
+      }
+    }catch(e){}
+  }
+
+  function getPollState(){
+    try{
+      const v = JSON.parse(localStorage.getItem(POLL_KEY) || 'null');
+      if(v && v.votes && v.options) return v;
+    }catch(e){}
+    return { options: DEFAULT_POLL, votes: {}, ts: Date.now() };
+  }
+
+  function savePollState(st){
+    try{ localStorage.setItem(POLL_KEY, JSON.stringify(st)); }catch(e){}
+  }
+
+  function renderPoll(){
+    const card = $('pollCard');
+    const list = $('pollList');
+    if(!card || !list) return;
+
+    const st = getPollState();
+    const total = Object.values(st.votes || {}).reduce((a,b)=>a+(+b||0),0) || 0;
+
+    list.innerHTML = '';
+    st.options.forEach(opt=>{
+      const v = (+st.votes[opt.id] || 0);
+      const pct = total ? Math.round((v/total)*100) : 0;
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'fz-btn fz-pollrow';
+      btn.style.cssText = '';
+      btn.innerHTML = `
+        <div class="fz-polltop">
+          <div class="fz-pollname">${opt.label}</div>
+          <div class="fz-muted fz-pollpct">${pct}%</div>
+        </div>
+        <div style="height:8px; border-radius:999px; background: rgba(255,255,255,.10); overflow:hidden;">
+          <div style="height:100%; width:${pct}%; border-radius:999px; background: rgba(255,255,255,.26);"></div>
+        </div>
+      `;
+      btn.addEventListener('click', ()=>{
+        const st2 = getPollState();
+        st2.votes[opt.id] = (+st2.votes[opt.id] || 0) + 1;
+        st2.ts = Date.now();
+        savePollState(st2);
+        renderPoll();
+        luxToast('Vote received — thanks!', 2200);
+        // Auto-close after voting
+        hidePoll();
+      }, { passive:true });
+
+      list.appendChild(btn);
+    });
+  }
+  // ===== Admin-controlled Match Poll wiring (safe) =====
+  const WC_POLL_CLIENT_ID_KEY = 'WC_POLL_CLIENT_ID';
+
+  function getOrCreateClientId(){
+    try{
+      let v = localStorage.getItem(WC_POLL_CLIENT_ID_KEY);
+      if(v) return v;
+      v = (crypto && crypto.randomUUID) ? crypto.randomUUID() : ('cid_' + Math.random().toString(16).slice(2) + Date.now());
+      localStorage.setItem(WC_POLL_CLIENT_ID_KEY, v);
+      return v;
+    }catch(e){
+      return 'cid_' + Math.random().toString(16).slice(2) + Date.now();
+    }
+  }
+
+  async function fetchPollStateApi(){
+    try{
+      const r = await fetch('/api/poll/state', { cache:'no-store' });
+      if(!r.ok) return null;
+      const j = await r.json();
+      return (j && j.ok) ? j : null;
+    }catch(e){
+      return null;
+    }
+  }
+
+  async function sendPollVoteApi(team){
+    const client_id = getOrCreateClientId();
+    try{
+      const r = await fetch('/api/poll/vote', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ client_id, team })
+      });
+      if(!r.ok) return null;
+      const j = await r.json();
+      return (j && j.ok) ? j : null;
+    }catch(e){
+      return null;
+    }
+  }
+
+  function renderPollFromApi(st){
+    const list = $('pollList');
+    const pc = $('pollCard');
+    if(!pc || !list) return;
+    if(!st || !st.match){
+      // fall back to local poll UI
+      renderPoll();
+      return;
+    }
+
+    const home = st.match.home || 'Team A';
+    const away = st.match.away || 'Team B';
+
+    // minimal iOS/premium buttons using existing fz-btn style
+    const mkBtn = (teamLabel)=> {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'fz-btn';
+      btn.style.textAlign = 'left';
+      btn.style.display = 'flex';
+      btn.style.justifyContent = 'space-between';
+      btn.style.alignItems = 'center';
+      btn.innerHTML = `<span style="font-weight:900;">${teamLabel}</span><span class="fz-muted" style="font-weight:800;">Vote</span>`;
+      btn.addEventListener('click', async (e)=>{
+        e.preventDefault();
+        // optimistic UI
+        btn.disabled = true;
+        const res = await sendPollVoteApi(teamLabel);
+        if(res){
+          luxToast('Vote submitted ✅', 2200);
+          // Close after vote (requested behavior)
+          hide(pc);
+        }else{
+          btn.disabled = false;
+          luxToast('Could not submit vote. Try again.', 2600);
+        }
+      });
+      return btn;
+    };
+
+    list.innerHTML = '';
+    // Optional counts if provided
+    const counts = st.counts || {};
+    const percent = st.percent || st.percentages || {};
+    const row = (label)=> {
+      const c = counts[label] ?? 0;
+      const p = percent[label] ?? 0;
+      const wrap = document.createElement('div');
+      wrap.style.display = 'grid';
+      wrap.style.gap = '6px';
+      const b = mkBtn(label);
+      // add micro stats line
+      const meta = document.createElement('div');
+      meta.className = 'fz-muted';
+      meta.style.fontSize = '12px';
+      meta.style.display = 'flex';
+      meta.style.justifyContent = 'space-between';
+      meta.innerHTML = `<span>${c} votes</span><span>${(Math.round(p*10)/10)}%</span>`;
+      wrap.appendChild(b);
+      wrap.appendChild(meta);
+      return wrap;
+    };
+
+    list.appendChild(row(home));
+    list.appendChild(row(away));
+  }
+
+  async function refreshPollFromApi(){
+    const pc = $('pollCard');
+    const list = $('pollList');
+    if(!pc || !list) return;
+    // show skeleton
+    list.innerHTML = `<div class="fz-muted">Loading poll…</div>`;
+    const st = await fetchPollStateApi();
+    if(!st){
+      // fall back gracefully (keeps Fan Zone usable even if admin endpoints unavailable)
+      list.innerHTML = `<div class="fz-muted">Admin poll not connected. Showing sample poll.</div>`;
+      // brief delay so user sees why
+      setTimeout(()=>{ try{ renderPoll(); }catch(e){} }, 150);
+      return;
+    }
+    renderPollFromApi(st);
+  }
+
+
+  function openCountry(){
+    const c = ensureCountryCard();
+    if(!c) return;
+    renderCountries();
+    show(c);
+    hide($('pollCard'));
+  }
+
+    function hidePoll(){ const pc=$('pollCard'); if(pc) hide(pc); }
+
+    function openPoll(){
+      hide(ensureCountryCard());
+      const pc = $('pollCard');
+      if(!pc) return;
+  
+      // Toggle behavior (tap again to close)
+      if(isShown(pc)){
+        hide(pc);
+        return;
+      }
+  
+      show(pc);
+      // Try admin-controlled poll first; fall back to local sample poll if unavailable.
+      refreshPollFromApi();
+    }
+
+    function openQR(){
+      const qc = $('qrCard');
+      const img = $('qrImg');
+      const link = $('qrLink');
+      if(!qc || !img || !link) return;
+  
+      // Toggle behavior (tap again to close)
+      if(isShown(qc)){
+        hide(qc);
+        return;
+      }
+  
+      // Keep the card centered and within viewport on iOS
+      try{
+        qc.style.width = "min(520px, 100%)";
+        qc.style.maxWidth = "520px";
+        qc.style.margin = "12px auto 0";
+        qc.style.boxSizing = "border-box";
+      }catch(e){}
+  
+      const url = getAppUrl();
+      link.href = url;
+      link.textContent = url.replace(/^https?:\/\//,'');
+  
+      img.style.maxWidth = "100%";
+      img.style.height = "auto";
+      img.style.display = "block";
+      img.style.margin = "10px auto 0";
+  
+      // Simple hosted QR generator (no extra libs)
+      const encoded = encodeURIComponent(url);
+      img.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encoded}`;
+  
+      show(qc);
+      try{ qc.scrollIntoView({behavior:'smooth', block:'nearest'}); }catch(e){}
+    }
+
+  function bindOnce(el, evt, fn){
+    if(!el) return;
+    const key = `bound_${evt}`;
+    if(el.dataset && el.dataset[key] === '1') return;
+    el.addEventListener(evt, fn);
+    if(el.dataset) el.dataset[key] = '1';
+  }
+
+  function bindFanZoneVipHandlers(){
+    // Fan Zone buttons + icon buttons
+    bindOnce($('btnPickCountry'), 'click', (e)=>{ e.preventDefault(); openCountry(); });
+    bindOnce($('btnOpenPoll'), 'click', (e)=>{ e.preventDefault(); openPoll(); });
+    bindOnce($('btnSharePoster'), 'click', (e)=>{ e.preventDefault(); openQR(); });
+
+    bindOnce($('fzIconCountry'), 'click', (e)=>{ e.preventDefault(); openCountry(); });
+    bindOnce($('fzIconPoll'), 'click', (e)=>{ e.preventDefault(); openPoll(); });
+    bindOnce($('fzIconQR'), 'click', (e)=>{ e.preventDefault(); openQR(); });
+
+    // Close buttons for Fan Zone cards
+    bindOnce($('closePollCard'), 'click', (e)=>{ e.preventDefault(); e.stopPropagation(); hidePoll(); });
+    bindOnce($('closeQRCard'), 'click', (e)=>{ e.preventDefault(); hide($('qrCard')); });
+
+    // VIP placeholder behavior
+    bindOnce($('vipHoldBtn'), 'click', (e)=>{
+      e.preventDefault();
+      luxToast('VIP Table Hold is coming soon — reserved for partner venues.', 3600);
+    });
+    bindOnce($('vipHoldInfoBtn'), 'click', (e)=>{
+      e.preventDefault();
+      luxToast('How VIP Hold works: 1) Choose match  2) Set party size  3) Venue confirms  4) You get a priority hold window.', 5200);
+    });
+
+    // Restore saved supporter immediately (nice touch)
+    loadSupporter();
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', bindFanZoneVipHandlers, { once:true });
+  }else{
+    bindFanZoneVipHandlers();
+  }
+})();
+
+</script>
+
+</body>
+</html>
