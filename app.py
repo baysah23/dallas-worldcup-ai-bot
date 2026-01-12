@@ -3750,15 +3750,21 @@ def fan_venue(venue_id):
 
 @app.route("/<path:path>")
 def catch_all(path):
-    # Serve static files if they exist; otherwise serve the SPA shell.
+    # Serve static files if they exist
     try:
         if os.path.exists(path) and os.path.isfile(path):
             return send_from_directory(".", path)
-        # allow /static/...
         if path.startswith("static/") and os.path.exists(path):
             return send_from_directory(".", path)
     except Exception:
         pass
+
+    # HARD BLOCK: never serve fan UI for inactive / nonexistent venues
+    # Only the explicit /v/<venue_id> route is allowed to render the fan page
+    if path.startswith("v/"):
+        return ("Not found", 404)
+
+    # Otherwise serve the SPA shell (home)
     return home()
 
 @app.route("/health")
