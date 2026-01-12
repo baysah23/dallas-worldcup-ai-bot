@@ -1871,14 +1871,15 @@ def admin_api_venues_set_active():
 
     return jsonify({"ok": True, "venue_id": venue_id, "active": bool(active), "persisted": wrote, "path": write_path, "error": err})
 
-
 @app.post("/admin/api/venues/create")
 def admin_api_venues_create():
     """Owner-only: generate a Venue Pack (does NOT write files)."""
     ok, resp = _require_admin(min_role="owner")
     if not ok:
         return resp
+
     body = request.get_json(silent=True) or {}
+
     venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
     venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
     plan = str(body.get("plan") or "standard").strip().lower() or "standard"
@@ -1886,17 +1887,31 @@ def admin_api_venues_create():
     admin_key = secrets.token_hex(16)
     manager_key = secrets.token_hex(16)
 
+    base = (request.host_url or "").rstrip("/")
+
     pack = {
         "venue_name": venue_name,
         "venue_id": venue_id,
         "status": "active",
         "plan": plan,
-        "qr_url": f"https://worldcupconcierge.app/v/{venue_id}",
-        "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={admin_key}",
-        "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={manager_key}",
-        "keys": {"admin_key": admin_key, "manager_key": manager_key},
-        "data": {"google_sheet_id": "", "redis_namespace": f"{_REDIS_NS}:{venue_id}"},
-        "features": body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True},
+
+        # ✅ Correct URLs (no hardcoding)
+        "qr_url": f"{base}/v/{venue_id}",
+        "admin_url": f"{base}/admin?key={admin_key}&venue={venue_id}",
+        "manager_url": f"{base}/admin?key={manager_key}&venue={venue_id}",
+
+        "keys": {
+            "admin_key": admin_key,
+            "manager_key": manager_key,
+        },
+        "data": {
+            "google_sheet_id": "",
+            "redis_namespace": f"{_REDIS_NS}:{venue_id}",
+        },
+        "features": body.get("features")
+        if isinstance(body.get("features"), dict)
+        else {"vip": True, "waitlist": False, "ai_queue": True},
+
         "yaml_template": (
             "venue_id: " + venue_id + "\n"
             "venue_name: \"" + venue_name.replace('\"','') + "\"\n"
@@ -1916,6 +1931,7 @@ def admin_api_venues_create():
             "  ai_queue: true\n"
         ),
     }
+
     return jsonify({"ok": True, "pack": pack})
 
 @app.post("/admin/api/venues/create_and_save")
@@ -1934,11 +1950,19 @@ def admin_api_venues_create_and_save():
     admin_key = secrets.token_hex(16)
     manager_key = secrets.token_hex(16)
 
+    base = (request.host_url or "").rstrip("/")
+
     pack = {
         "venue_name": venue_name,
         "venue_id": venue_id,
         "status": "active",
         "plan": plan,
+
+        # ✅ Correct, environment-safe URLs
+        "admin_url": f"{base}/admin?key={admin_key}&venue={venue_id}",
+        "manager_url": f"{base}/admin?key={manager_key}&venue={venue_id}",
+        "qr_url": f"{base}/v/{venue_id}",
+
         "access": {
             "admin_keys": [admin_key],
             "manager_keys": [manager_key],
@@ -1969,8 +1993,8 @@ def admin_api_venues_create_and_save():
         "path": write_path,
         "admin_key": admin_key,
         "manager_key": manager_key,
+        "pack": pack,
     })
-
 
 @app.post("/super/admin/api/venue/create")
 def super_admin_api_venue_create():
