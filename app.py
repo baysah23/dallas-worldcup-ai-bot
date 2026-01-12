@@ -1878,6 +1878,54 @@ def super_api_venues_set_active():
         "error": err,
     })
 
+@app.post("/super/api/venues/set_identity")
+def super_api_venues_set_identity():
+    # Super Admin auth
+    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
+    if key != SUPER_ADMIN_KEY:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    if not venue_id:
+        return jsonify({"ok": False, "error": "Missing venue_id"}), 400
+
+    location_line = str(body.get("location_line") or "").strip()
+    if not location_line:
+        return jsonify({"ok": False, "error": "location_line is required"}), 400
+
+    show_in = body.get("show_location_line")
+    show = True if show_in is None else bool(show_in)
+
+    venues = _load_venues_from_disk() or {}
+    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
+    if not isinstance(cfg, dict):
+        return jsonify({"ok": False, "error": "Venue not found"}), 404
+
+    # Set new schema (top-level)
+    cfg["show_location_line"] = bool(show)
+    cfg["location_line"] = location_line
+    cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    wrote, write_path, err = _write_venue_config(venue_id, cfg)
+    if not wrote:
+        return jsonify({"ok": False, "error": err or "Failed to write venue config"}), 500
+
+    try:
+        _invalidate_venues_cache()
+    except Exception:
+        pass
+
+    return jsonify({
+        "ok": True,
+        "venue_id": venue_id,
+        "show_location_line": bool(cfg.get("show_location_line")),
+        "location_line": str(cfg.get("location_line") or ""),
+        "persisted": wrote,
+        "path": write_path,
+        "error": err,
+    })
+
 @app.post("/admin/api/venues/set_active")
 def admin_api_venues_set_active():
     """Owner-only: set a venue active/inactive flag (data preserved, fan intake blocked)."""

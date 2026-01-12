@@ -1824,15 +1824,14 @@ def admin_api_venues_set_active():
 
     return jsonify({"ok": True, "venue_id": venue_id, "active": bool(active), "persisted": wrote, "path": write_path, "error": err})
 
+
 @app.post("/admin/api/venues/create")
 def admin_api_venues_create():
     """Owner-only: generate a Venue Pack (does NOT write files)."""
     ok, resp = _require_admin(min_role="owner")
     if not ok:
         return resp
-
     body = request.get_json(silent=True) or {}
-
     venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
     venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
     plan = str(body.get("plan") or "standard").strip().lower() or "standard"
@@ -1840,32 +1839,17 @@ def admin_api_venues_create():
     admin_key = secrets.token_hex(16)
     manager_key = secrets.token_hex(16)
 
-    # ✅ environment-safe base (local / render / azure / prod)
-    base = (request.host_url or "").rstrip("/")
-
     pack = {
         "venue_name": venue_name,
         "venue_id": venue_id,
         "status": "active",
         "plan": plan,
-
-        # ✅ FIXED URLs (no hardcoding)
-        "qr_url": f"{base}/v/{venue_id}",
-        "admin_url": f"{base}/admin?key={admin_key}&venue={venue_id}",
-        "manager_url": f"{base}/admin?key={manager_key}&venue={venue_id}",
-
-        "keys": {
-            "admin_key": admin_key,
-            "manager_key": manager_key,
-        },
-        "data": {
-            "google_sheet_id": "",
-            "redis_namespace": f"{_REDIS_NS}:{venue_id}",
-        },
-        "features": body.get("features")
-        if isinstance(body.get("features"), dict)
-        else {"vip": True, "waitlist": False, "ai_queue": True},
-
+        "qr_url": f"https://worldcupconcierge.app/v/{venue_id}",
+        "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={admin_key}",
+        "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={manager_key}",
+        "keys": {"admin_key": admin_key, "manager_key": manager_key},
+        "data": {"google_sheet_id": "", "redis_namespace": f"{_REDIS_NS}:{venue_id}"},
+        "features": body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True},
         "yaml_template": (
             "venue_id: " + venue_id + "\n"
             "venue_name: \"" + venue_name.replace('\"','') + "\"\n"
@@ -1885,8 +1869,8 @@ def admin_api_venues_create():
             "  ai_queue: true\n"
         ),
     }
-
     return jsonify({"ok": True, "pack": pack})
+
 
 @app.post("/admin/api/venues/create_and_save")
 def admin_api_venues_create_and_save():
@@ -9503,43 +9487,6 @@ LEGACY_SUPER_CONSOLE_HTML = r"""<!doctype html>
       </table>
     </div>
 
-    <div class="card" id="cmdPanel" style="margin-top:12px">
-      <div class="k">Command Panel (Right Panel Only)</div>
-      <div class="muted" id="cmdHint" style="margin-top:8px">Select a venue (click <b>Manage</b>) to activate/deactivate, toggle demo mode, or re-check its sheet.</div>
-
-      <div id="cmdBody" style="display:none;margin-top:10px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap">
-          <div>
-            <div style="font-weight:700" id="cmdVenueName">—</div>
-            <div class="muted" style="margin-top:4px">
-              <span style="font-family:ui-monospace,monospace" id="cmdVenueId">—</span>
-              <span id="cmdBadges" style="margin-left:8px"></span>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <button class="btn" id="cmdToggleActive">Deactivate</button>
-            <button class="btn ghost" id="cmdRecheck">Check Sheet</button>
-            <button class="btn ghost" id="cmdRotateKeys">Rotate Keys</button>
-          </div>
-        </div>
-
-        <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
-          <input id="cmdSheetId" placeholder="Google Sheet ID" style="flex:1;min-width:240px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
-          <button class="btn" id="cmdSaveSheet">Save Sheet + Check</button>
-        </div>
-
-        <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
-          <label style="display:inline-flex;align-items:center;gap:8px;padding:8px 10px;border-radius:999px;background:rgba(255,255,255,.03);border:1px solid var(--line);cursor:pointer">
-            <input type="checkbox" id="cmdDemoMode" style="transform:scale(1.15)">
-            <span>Demo Mode</span>
-          </label>
-          <span class="muted" id="cmdDemoNote">Writes disabled when Demo Mode is ON.</span>
-        </div>
-
-        <div class="note" id="cmdMsg" style="margin-top:10px"></div>
-      </div>
-    </div>
-
 
         </div>
     <div class="tabpane" data-tab="leads">
@@ -9559,7 +9506,7 @@ LEGACY_SUPER_CONSOLE_HTML = r"""<!doctype html>
                 <option value="__inactive__">Inactive venues</option>
                 <option value="__divider__" disabled>────────</option>
               </select>
-              <button id="exportCsv" class="btn" style="margin-left:8px;">Export CSV</button>
+              <label style="display:inline-flex;align-items:center;gap:8px;margin-left:10px;font-size:12px;color:rgba(255,255,255,0.82)"><input type="checkbox" id="demoToggle" style="transform:scale(1.1)"><span>Demo Mode</span><span id="demoBadge" style="display:none;padding:2px 8px;border-radius:999px;background:rgba(240,180,60,0.18);border:1px solid rgba(240,180,60,0.45);color:rgba(240,180,60,0.95)">ON</span></label><button id="exportCsv" class="btn" style="margin-left:8px;">Export CSV</button>
       </div>
       <table>
         <thead>
@@ -9608,15 +9555,11 @@ LEGACY_SUPER_CONSOLE_HTML = r"""<!doctype html>
 
 <script>
 // --- Demo Mode helpers (safe defaults) ---
-let demoEnabled = false;
-const _demoHeaders = () => (demoEnabled ? {"X-Demo-Mode":"1"} : {});
+const _demoHeaders = (enabled) => (enabled ? {"X-Demo-Mode":"1"} : {});
 
 (async function(){
   const q = new URLSearchParams(window.location.search);
-  let selectedVenueId = "";
-  let selectedVenueObj = null;
   const key = q.get("key") || "";
-  try{ demoEnabled = (document.cookie||"").split(";").some(p=>p.trim().startsWith("demo_mode=1")); }catch(e){}
   const venueErr = document.getElementById("venueErr");
   const venueOutWrap = document.getElementById("venueOutWrap");
   const venueOut = document.getElementById("venueOut");
@@ -9684,27 +9627,10 @@ function renderVenues(){
       <td>${esc(v.plan||"")}</td>
       <td title="${esc(sheet)}" style="white-space:nowrap">${sheetDisp} ${sheetBadge}</td>
       <td style="white-space:nowrap">${act} ${stBadge}</td>
-      <td class="right"><button class="btn ghost" data-manage="${esc(vid)}">Manage</button> <a class="btn ghost" href="${dash}">Open</a></td>
+      <td class="right"><a class="btn ghost" href="${dash}">Open</a></td>
     `;
     rows.appendChild(tr);
   });
-
-
-  // bind Manage buttons (command panel selection)
-  try{
-    document.querySelectorAll("[data-manage]").forEach(btn=>{
-      btn.addEventListener("click", (ev)=>{
-        ev.preventDefault();
-        ev.stopPropagation();
-        const vid = btn.getAttribute("data-manage") || "";
-        if(!vid) return;
-        selectedVenueId = vid;
-        selectedVenueObj = (_venuesCache||[]).find(x=>String(x.venue_id||"")===String(vid)) || null;
-        if(typeof renderCommandPanel === "function") renderCommandPanel();
-      });
-    });
-  }catch(e){}
-
 
   // update chip labels w/ counts
   try{
@@ -9868,187 +9794,7 @@ async function loadVenues(){
     }
   }
 
-  function renderCommandPanel(){
-  const hint = document.getElementById("cmdHint");
-  const body = document.getElementById("cmdBody");
-  const nameEl = document.getElementById("cmdVenueName");
-  const idEl = document.getElementById("cmdVenueId");
-  const badges = document.getElementById("cmdBadges");
-  const sheetInput = document.getElementById("cmdSheetId");
-  const btnToggle = document.getElementById("cmdToggleActive");
-  const btnRecheck = document.getElementById("cmdRecheck");
-  const btnSaveSheet = document.getElementById("cmdSaveSheet");
-  const btnRotateKeys = document.getElementById("cmdRotateKeys");
-  const demoCb = document.getElementById("cmdDemoMode");
-  const msg = document.getElementById("cmdMsg");
-
-  if(!selectedVenueObj){
-    if(hint) hint.style.display="block";
-    if(body) body.style.display="none";
-    return;
-  }
-  if(hint) hint.style.display="none";
-  if(body) body.style.display="block";
-
-  const v = selectedVenueObj || {};
-  const vid = String(v.venue_id||"");
-  const vname = String(v.venue_name||vid||"");
-  if(nameEl) nameEl.textContent = vname;
-  if(idEl) idEl.textContent = vid;
-
-  // badges
-  try{
-    const parts = [];
-    parts.push(v.active ? '<span class="pill" style="border-color:rgba(34,197,94,.35);color:#86efac;background:rgba(34,197,94,.10)">ACTIVE</span>'
-                        : '<span class="pill" style="border-color:rgba(239,68,68,.35);color:#fecaca;background:rgba(239,68,68,.10)">INACTIVE</span>');
-    parts.push(v.ready ? '<span class="pill" style="border-color:rgba(34,197,94,.35);color:#86efac;background:rgba(34,197,94,.10)">READY</span>'
-                       : '<span class="pill" style="border-color:rgba(245,158,11,.35);color:#fcd34d;background:rgba(245,158,11,.10)">NOT READY</span>');
-    if(v.sheet_ok===false){
-      parts.push('<span class="pill" style="border-color:rgba(239,68,68,.35);color:#fecaca;background:rgba(239,68,68,.10)">SHEET FAIL</span>');
-    }
-    if(demoEnabled){
-      parts.push('<span class="pill" style="border-color:rgba(240,180,60,.35);color:#fcd34d;background:rgba(240,180,60,.12)">DEMO MODE</span>');
-    }
-    if(badges) badges.innerHTML = parts.join(" ");
-  }catch(e){
-    if(badges) badges.textContent="";
-  }
-
-  if(sheetInput) sheetInput.value = String(v.google_sheet_id||"");
-
-  if(btnToggle){
-    btnToggle.textContent = v.active ? "Deactivate" : "Activate";
-    btnToggle.classList.toggle("danger", !!v.active);
-  }
-
-  // wire handlers once
-  if(!window.__cmdBound){
-    window.__cmdBound = true;
-
-    btnToggle && btnToggle.addEventListener("click", async ()=>{
-      if(!selectedVenueObj) return;
-      const v = selectedVenueObj;
-      const vid = String(v.venue_id||"");
-      const nextActive = !v.active;
-      if(!nextActive){
-        if(!confirm("Deactivate '"+vid+"'? This will hide the venue from the fan app.")) return;
-      }
-      try{
-        const r = await fetch("/super/api/venues/set_active?super_key="+encodeURIComponent(super_key), {
-          method:"POST",
-          headers:Object.assign({"Content-Type":"application/json"}, headers, _demoHeaders()),
-          body: JSON.stringify({venue_id: vid, active: nextActive})
-        });
-        const j = await r.json();
-        if(!j.ok) throw new Error(j.error||"failed");
-        await loadVenues();
-        selectedVenueObj = (_venuesCache||[]).find(x=>String(x.venue_id||"")===String(vid)) || null;
-        renderCommandPanel();
-        if(msg) msg.textContent = nextActive ? "Venue activated." : "Venue deactivated.";
-      }catch(e){
-        if(msg) msg.textContent = "Error: " + (e.message||e);
-      }
-    });
-
-    btnRecheck && btnRecheck.addEventListener("click", async ()=>{
-      if(!selectedVenueObj) return;
-      const vid = String(selectedVenueObj.venue_id||"");
-      try{
-        const r = await fetch("/super/api/venues/check_sheet?super_key="+encodeURIComponent(super_key), {
-          method:"POST",
-          headers:Object.assign({"Content-Type":"application/json"}, headers, _demoHeaders()),
-          body: JSON.stringify({venue_id: vid})
-        });
-        const j = await r.json();
-        if(!j.ok) throw new Error(j.error||"check failed");
-        await loadVenues();
-        selectedVenueObj = (_venuesCache||[]).find(x=>String(x.venue_id||"")===String(vid)) || null;
-        renderCommandPanel();
-        if(msg) msg.textContent = (j.check && j.check.ok) ? ("Sheet PASS: " + (j.check.title||"OK")) : ("Sheet FAIL: " + ((j.check && j.check.error)||"error"));
-      }catch(e){
-        if(msg) msg.textContent = "Error: " + (e.message||e);
-      }
-    });
-
-    btnSaveSheet && btnSaveSheet.addEventListener("click", async ()=>{
-      if(!selectedVenueObj) return;
-      const vid = String(selectedVenueObj.venue_id||"");
-      const sid = (document.getElementById("cmdSheetId").value||"").trim();
-      if(!sid){
-        if(msg) msg.textContent = "Enter a Google Sheet ID first.";
-        return;
-      }
-      try{
-        const rs = await fetch("/super/api/venues/set_sheet?super_key="+encodeURIComponent(super_key), {
-          method:"POST",
-          headers:Object.assign({"Content-Type":"application/json"}, headers, _demoHeaders()),
-          body: JSON.stringify({venue_id: vid, google_sheet_id: sid})
-        });
-        const js = await rs.json();
-        if(!js.ok) throw new Error(js.error||"save failed");
-        // recheck
-        const rc = await fetch("/super/api/venues/check_sheet?super_key="+encodeURIComponent(super_key), {
-          method:"POST",
-          headers:Object.assign({"Content-Type":"application/json"}, headers, _demoHeaders()),
-          body: JSON.stringify({venue_id: vid})
-        });
-        const jc = await rc.json();
-        if(!jc.ok) throw new Error(jc.error||"check failed");
-        await loadVenues();
-        selectedVenueObj = (_venuesCache||[]).find(x=>String(x.venue_id||"")===String(vid)) || null;
-        renderCommandPanel();
-        if(msg) msg.textContent = (jc.check && jc.check.ok) ? ("Sheet PASS: " + (jc.check.title||"OK")) : ("Sheet FAIL: " + ((jc.check && jc.check.error)||"error"));
-      }catch(e){
-        if(msg) msg.textContent = "Error: " + (e.message||e);
-      }
-    });
-
-    btnRotateKeys && btnRotateKeys.addEventListener("click", async ()=>{
-      if(!selectedVenueObj) return;
-      const vid = String(selectedVenueObj.venue_id||"");
-      if(!confirm("Rotate keys for '"+vid+"'? This will invalidate existing venue keys.")) return;
-      try{
-        const r = await fetch("/super/api/venues/rotate_keys?super_key="+encodeURIComponent(super_key), {
-          method:"POST",
-          headers:Object.assign({"Content-Type":"application/json"}, headers, _demoHeaders()),
-          body: JSON.stringify({venue_id: vid})
-        });
-        const j = await r.json();
-        if(!j.ok) throw new Error(j.error||"rotate failed");
-        if(msg) msg.textContent = "Keys rotated.";
-        await loadVenues();
-        selectedVenueObj = (_venuesCache||[]).find(x=>String(x.venue_id||"")===String(vid)) || null;
-        renderCommandPanel();
-      }catch(e){
-        if(msg) msg.textContent = "Error: " + (e.message||e);
-      }
-    });
-
-    demoCb && demoCb.addEventListener("change", async ()=>{
-      const next = !!demoCb.checked;
-      try{
-        const r = await fetch("/super/api/demo_mode?super_key="+encodeURIComponent(super_key), {
-          method:"POST",
-          headers:Object.assign({"Content-Type":"application/json"}, headers),
-          body: JSON.stringify({enabled: next})
-        });
-        const j = await r.json();
-        if(!j.ok) throw new Error(j.error||"demo toggle failed");
-        demoEnabled = !!j.enabled;
-        renderCommandPanel();
-        if(msg) msg.textContent = demoEnabled ? "Demo Mode enabled (writes disabled)." : "Demo Mode disabled.";
-      }catch(e){
-        demoCb.checked = demoEnabled;
-        if(msg) msg.textContent = "Error: " + (e.message||e);
-      }
-    });
-  }
-
-  // keep demo checkbox synced
-  if(demoCb) demoCb.checked = !!demoEnabled;
-}
-
-async function createVenue(){
+  async function createVenue(){
     venueErr.style.display="none";
     venueOutWrap.style.display="none";
     const venue_name = (document.getElementById("v_name").value||"").trim();
@@ -10512,6 +10258,11 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
         <div id="venueDetails" class="muted">Select a venue from the left rail.</div>
       </div>
 
+      <div class="card" style="margin-top:12px">
+        <h2>Diagnostics</h2>
+        <pre id="diagBox" style="white-space:pre-wrap;word-break:break-word;min-height:44px;margin:0" class="muted">—</pre>
+      </div>
+
       <div class="panel section active" id="sectionVenues">
         <div class="panelhead">
           <div class="left"><strong style="font-size:13px">Venues status</strong><span class="muted" style="font-size:12px">Issues first • bounded table</span></div>
@@ -10567,9 +10318,24 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
   const qs = new URLSearchParams(location.search);
   const super_key = (qs.get('super_key') || qs.get('key') || '').trim() || (document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)?.[1] ? decodeURIComponent(document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)[1]) : '');
   const state = {venues:[], filter:'all', selected:'', leadsPage:1, leadsTotal:0};
+  let demoEnabled = (document.cookie||'').includes('demo_mode=1');
+  function setDiag(s){const el=document.getElementById('diagBox')||document.getElementById('leadsDiag'); if(el) el.textContent=String(s||'');}
+  async function toggleDemoMode(){
+    try{
+      const next = !demoEnabled;
+      const r = await fetch('/super/api/demo_mode?super_key='+encodeURIComponent(super_key), {method:'POST', headers: hdrs(), body: JSON.stringify({enabled: next})});
+      const j = await r.json().catch(()=>({}));
+      if(!j.ok) throw new Error(j.error||('HTTP '+r.status));
+      demoEnabled = !!j.enabled;
+      setDiag('demo_mode='+(demoEnabled?'ON':'OFF'));
+      await loadVenues();
+      renderVenueDetails();
+    }catch(e){ alert('Demo mode failed: '+(e.message||e)); }
+  }
+
 
   function hesc(s){s=(s===null||s===undefined)?'':String(s);return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
-  function hdrs(extra){const h={'Content-Type':'application/json'}; if(super_key) h['X-Super-Key']=super_key; if(extra) Object.assign(h,extra); return h;}
+  function hdrs(extra){const h={'Content-Type':'application/json'}; if(super_key) h['X-Super-Key']=super_key; if(demoEnabled) h['X-Demo-Mode']='1'; if(extra) Object.assign(h,extra); return h;}
 
   function setActiveTab(which){
     document.getElementById('tabVenues').classList.toggle('active', which==='venues');
@@ -10694,6 +10460,8 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
       '</div>'+
       '<div class="muted" style="margin-top:8px; font-size:12px">'+hesc(sheet.title||sheet.error||'')+'</div>'+
       '<div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">'+
+        '<button class="btn" id="vdActive">'+(f.active?'Deactivate':'Activate')+'</button>'+
+        '<button class="btn" id="vdDemo">Demo Mode: '+(demoEnabled?'ON':'OFF')+'</button>'+
         '<button class="btn" id="vdCheck">Re-check Sheet</button>'+
         '<button class="btn" id="vdRotate">Rotate Keys</button>'+
         '<button class="btn" id="vdSetSheet">Set Sheet…</button>'+
@@ -10701,10 +10469,15 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
       '</div>';
     document.getElementById('vdCheck').onclick=()=>doVenueAction('check', v.venue_id);
     document.getElementById('vdRotate').onclick=()=>doVenueAction('rotate', v.venue_id);
+    const _vdA=document.getElementById('vdActive'); if(_vdA) _vdA.onclick=()=>doVenueAction('set_active', v.venue_id, {active: !f.active});
+    const _vdD=document.getElementById('vdDemo'); if(_vdD) _vdD.onclick=()=>toggleDemoMode();
     document.getElementById('vdSetSheet').onclick=async ()=>{
       const sid=prompt('Paste Google Sheet ID for '+(v.venue_id||''), (sheet.sheet_id||''));
       if(sid===null) return;
-      await doVenueAction('set_sheet', v.venue_id, {sheet_id: sid.trim()});
+      let s=sid.trim();
+      // accept full Google Sheets URL
+      const m=(s.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)||[]); if(m[1]) s=m[1];
+      await doVenueAction('set_sheet', v.venue_id, {sheet_id: s});
     };
   }
 
@@ -10714,11 +10487,13 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
     if(act==='check') url='/super/api/venues/check_sheet';
     if(act==='rotate') url='/super/api/venues/rotate_keys';
     if(act==='set_sheet') url='/super/api/venues/set_sheet';
+    if(act==='set_active') url='/super/api/venues/set_active';
     if(!url) return;
     try{
       const r=await fetch(url+'?super_key='+encodeURIComponent(super_key), {method:'POST', headers: hdrs(), body: JSON.stringify(payload)});
       const j=await r.json().catch(()=>({}));
-      if(!j.ok) alert('Action failed: '+(j.error||r.status));
+      if(!j.ok){ setDiag(JSON.stringify(j||{}, null, 2)); alert('Action failed: '+(j.error||r.status)); }
+      else { setDiag(JSON.stringify(j||{}, null, 2)); }
       await loadVenues();
     }catch(e){
       alert('Action failed: '+(e.message||e));
@@ -11387,6 +11162,73 @@ def super_api_venues_rotate_keys():
     return jsonify({"ok": True, "venue_id": venue_id, "keys": keys, "qr_url": f"https://worldcupconcierge.app/v/{venue_id}", "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={keys.get('admin_key')}", "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={keys.get('manager_key')}", "persisted": wrote, "path": write_path, "error": err})
 
 
+
+
+@app.get("/super/api/leads")
+def super_api_leads():
+    """Cross-venue leads for Super Admin (read-only)."""
+    ok, resp = _require_super_admin()
+    if not ok:
+        return resp
+    try:
+        q = (request.args.get("q") or "").strip().lower()
+        venue_id = _slugify_venue_id((request.args.get("venue_id") or "").strip()) if (request.args.get("venue_id") or "").strip() else ""
+        page = int(request.args.get("page") or 1)
+        per_page = int(request.args.get("per_page") or 10)
+        page = max(1, page)
+        per_page = max(1, min(100, per_page))
+
+        venues = _load_venues_from_disk() or {}
+        vids = [venue_id] if venue_id else list(venues.keys())
+        all_items = []
+        for vid in vids:
+            try:
+                rows = read_leads(limit=2000, venue_id=vid) or []
+            except Exception:
+                rows = []
+            if not rows or len(rows) < 2:
+                continue
+            header = rows[0]
+            hm = header_map(header)
+            for r in rows[1:]:
+                if not isinstance(r, list):
+                    continue
+                def gcol(name):
+                    idx = hm.get(name)
+                    if not idx:
+                        return ""
+                    j = idx - 1
+                    return str(r[j] if j < len(r) else "")
+                item = {
+                    "venue_id": vid,
+                    "name": gcol("name"),
+                    "phone": gcol("phone"),
+                    "datetime": gcol("datetime"),
+                    "party_size": gcol("party_size"),
+                    "status": gcol("status"),
+                    "vip": gcol("vip"),
+                    "queue": gcol("queue"),
+                }
+                if q:
+                    blob = " ".join([item.get("venue_id",""), item.get("name",""), item.get("phone",""), item.get("datetime",""), item.get("status",""), item.get("vip",""), item.get("queue","")]).lower()
+                    if q not in blob:
+                        continue
+                all_items.append(item)
+
+        # newest-ish first by datetime string
+        try:
+            all_items.sort(key=lambda x: x.get("datetime",""), reverse=True)
+        except Exception:
+            pass
+
+        total = len(all_items)
+        start_i = (page-1)*per_page
+        end_i = start_i + per_page
+        page_items = all_items[start_i:end_i]
+
+        return jsonify({"ok": True, "items": page_items, "total": total, "page": page, "per_page": per_page})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.post("/super/api/venues/check_sheet")
 def super_api_venues_check_sheet():
