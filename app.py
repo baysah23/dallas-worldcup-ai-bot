@@ -10496,7 +10496,21 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
     <div class="main">
       <div class="card">
         <h2>Venue details + quick actions</h2>
-        <div id="venueDetails" class="muted">Select a venue from the left rail.</div>
+
+        <!-- REPLACED: static, always-present identity editor (JS will also render richer details) -->
+        <div id="venueDetails">
+          <div class="muted" style="font-size:12px;margin-bottom:8px">
+            Select a venue from the left rail to edit identity.
+          </div>
+
+          <div class="muted" style="font-size:12px;margin-top:8px">Fan subtitle (location line)</div>
+          <input id="saLocationLine" placeholder="Dallas, TX" style="width:100%;margin-top:6px" />
+
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn primary" id="btnSaveIdentity" type="button">Save</button>
+            <span class="muted" style="font-size:12px">Saves to venue config via set_identity.</span>
+          </div>
+        </div>
       </div>
 
       <div class="card" style="margin-top:12px">
@@ -10557,23 +10571,91 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
 <script>
 (function(){
   const qs = new URLSearchParams(location.search);
-  const super_key = (qs.get('super_key') || qs.get('key') || '').trim() || (document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)?.[1] ? decodeURIComponent(document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)[1]) : '');
+  const super_key =
+    (qs.get('super_key') || qs.get('key') || '').trim() ||
+    (document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)?.[1]
+      ? decodeURIComponent(document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)[1])
+      : '');
+
   const state = {venues:[], filter:'all', selected:'', leadsPage:1, leadsTotal:0};
+
   let demoEnabled = (document.cookie||'').includes('demo_mode=1');
-  function setDiag(s){const el=document.getElementById('diagBox')||document.getElementById('leadsDiag'); if(el) el.textContent=String(s||'');}
+
+  function setDiag(s){
+    const el = document.getElementById('diagBox') || document.getElementById('leadsDiag');
+    if(el) el.textContent = String(s||'');
+  }
+
+  // ---- NEW: Save Identity (location_line) ----
+  // Uses event delegation so it works even if #venueDetails is re-rendered dynamically.
+  async function saveIdentityFromUI(){
+    try{
+      // Resolve currently selected venue id (state.selected is used elsewhere in this console)
+      const venue_id = (state.selected || '').trim();
+      if(!venue_id){
+        setDiag('Select a venue first');
+        return;
+      }
+
+      const inp = document.getElementById('saLocationLine');
+      const location_line = (inp && inp.value ? String(inp.value) : '').trim();
+      if(!location_line){
+        setDiag('Enter a location line');
+        return;
+      }
+
+      const payload = { venue_id, location_line, show_location_line: true };
+
+      const r = await fetch('/super/api/venues/set_identity?super_key='+encodeURIComponent(super_key), {
+        method: 'POST',
+        headers: hdrs(),
+        body: JSON.stringify(payload)
+      });
+
+      const j = await r.json().catch(()=>({}));
+      if(!j || !j.ok){
+        const msg = (j && j.error) ? j.error : ('HTTP ' + r.status);
+        setDiag('Save failed: ' + msg);
+        return;
+      }
+
+      setDiag('Saved identity ✔');
+
+      // Refresh UI (these functions exist later in this script)
+      try{ await loadVenues(); }catch(e){}
+      try{ if(typeof renderVenueDetails === 'function') renderVenueDetails(); }catch(e){}
+    }catch(e){
+      setDiag('Save failed: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  // Delegated click binding (works even if button is injected later)
+  document.addEventListener('click', (ev)=>{
+    const t = ev && ev.target;
+    if(t && t.id === 'btnSaveIdentity'){
+      ev.preventDefault();
+      saveIdentityFromUI();
+    }
+  });
+
   async function toggleDemoMode(){
     try{
       const next = !demoEnabled;
-      const r = await fetch('/super/api/demo_mode?super_key='+encodeURIComponent(super_key), {method:'POST', headers: hdrs(), body: JSON.stringify({enabled: next})});
+      const r = await fetch('/super/api/demo_mode?super_key='+encodeURIComponent(super_key), {
+        method:'POST',
+        headers: hdrs(),
+        body: JSON.stringify({enabled: next})
+      });
       const j = await r.json().catch(()=>({}));
       if(!j.ok) throw new Error(j.error||('HTTP '+r.status));
       demoEnabled = !!j.enabled;
       setDiag('demo_mode='+(demoEnabled?'ON':'OFF'));
       await loadVenues();
       renderVenueDetails();
-    }catch(e){ alert('Demo mode failed: '+(e.message||e)); }
+    }catch(e){
+      alert('Demo mode failed: '+(e.message||e));
+    }
   }
-
 
   function hesc(s){s=(s===null||s===undefined)?'':String(s);return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
   function hdrs(extra){const h={'Content-Type':'application/json'}; if(super_key) h['X-Super-Key']=super_key; if(demoEnabled) h['X-Demo-Mode']='1'; if(extra) Object.assign(h,extra); return h;}
@@ -10688,39 +10770,63 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
   }
 
   function renderVenueDetails(){
-    const box=document.getElementById('venueDetails');
-    const v=(state.venues||[]).find(x=>x.venue_id===state.selected);
-    if(!v){ box.textContent='Select a venue from the left rail.'; return; }
-    const f=venueFlags(v); const sheet=v.sheet||{};
-    box.innerHTML=
-      '<div><strong>'+hesc(v.name||v.venue_id)+'</strong> <span class="muted">('+hesc(v.venue_id||'')+')</span></div>'+
-      '<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap">'+
-        '<span class="badge '+(f.active?'good':'warn')+'">'+(f.active?'ACTIVE':'INACTIVE')+'</span>'+
-        '<span class="badge '+(f.sheet_ok?'good':'bad')+'">'+(f.sheet_ok?'SHEET OK':'SHEET FAIL')+'</span>'+
-        '<span class="badge '+(f.ready?'good':'warn')+'">'+(f.ready?'READY':'NOT READY')+'</span>'+
-      '</div>'+
-      '<div class="muted" style="margin-top:8px; font-size:12px">'+hesc(sheet.title||sheet.error||'')+'</div>'+
-      '<div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">'+
-        '<button class="btn" id="vdActive">'+(f.active?'Deactivate':'Activate')+'</button>'+
-        '<button class="btn" id="vdDemo">Demo Mode: '+(demoEnabled?'ON':'OFF')+'</button>'+
-        '<button class="btn" id="vdCheck">Re-check Sheet</button>'+
-        '<button class="btn" id="vdRotate">Rotate Keys</button>'+
-        '<button class="btn" id="vdSetSheet">Set Sheet…</button>'+
-        '<a class="btn" style="text-decoration:none" href="/admin?venue='+encodeURIComponent(v.venue_id||'')+'" target="_blank">Open Admin</a>'+
-      '</div>';
-    document.getElementById('vdCheck').onclick=()=>doVenueAction('check', v.venue_id);
-    document.getElementById('vdRotate').onclick=()=>doVenueAction('rotate', v.venue_id);
-    const _vdA=document.getElementById('vdActive'); if(_vdA) _vdA.onclick=()=>doVenueAction('set_active', v.venue_id, {active: !f.active});
-    const _vdD=document.getElementById('vdDemo'); if(_vdD) _vdD.onclick=()=>toggleDemoMode();
-    document.getElementById('vdSetSheet').onclick=async ()=>{
-      const sid=prompt('Paste Google Sheet ID for '+(v.venue_id||''), (sheet.sheet_id||''));
-      if(sid===null) return;
-      let s=sid.trim();
-      // accept full Google Sheets URL
-      const m=(s.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)||[]); if(m[1]) s=m[1];
-      await doVenueAction('set_sheet', v.venue_id, {sheet_id: s});
-    };
+  const box = document.getElementById('venueDetails');
+  const v = (state.venues || []).find(x => x.venue_id === state.selected);
+
+  if(!v){
+    box.textContent = 'Select a venue from the left rail.';
+    return;
   }
+
+  const f = venueFlags(v);
+  const sheet = v.sheet || {};
+
+  box.innerHTML =
+    '<div><strong>'+hesc(v.name||v.venue_id)+'</strong> <span class="muted">('+hesc(v.venue_id||'')+')</span></div>'+
+
+    '<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap">'+
+      '<span class="badge '+(f.active?'good':'warn')+'">'+(f.active?'ACTIVE':'INACTIVE')+'</span>'+
+      '<span class="badge '+(f.sheet_ok?'good':'bad')+'">'+(f.sheet_ok?'SHEET OK':'SHEET FAIL')+'</span>'+
+      '<span class="badge '+(f.ready?'good':'warn')+'">'+(f.ready?'READY':'NOT READY')+'</span>'+
+    '</div>'+
+
+    '<div class="muted" style="margin-top:8px; font-size:12px">'+
+      hesc(sheet.title || sheet.error || '')+
+    '</div>'+
+
+    // 🔹 NEW: Fan-facing subtitle editor (location_line)
+    '<div class="muted" style="margin-top:12px; font-size:12px">Fan subtitle (location line)</div>'+
+    '<input id="saLocationLine" style="width:100%; margin-top:6px" placeholder="Dallas, TX" value="'+hesc(v.location_line||'')+'"/>'+
+
+    '<div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">'+
+      '<button class="btn primary" id="btnSaveIdentity">Save</button>'+
+      '<button class="btn" id="vdActive">'+(f.active?'Deactivate':'Activate')+'</button>'+
+      '<button class="btn" id="vdDemo">Demo Mode: '+(demoEnabled?'ON':'OFF')+'</button>'+
+      '<button class="btn" id="vdCheck">Re-check Sheet</button>'+
+      '<button class="btn" id="vdRotate">Rotate Keys</button>'+
+      '<button class="btn" id="vdSetSheet">Set Sheet…</button>'+
+      '<a class="btn" style="text-decoration:none" href="/admin?venue='+encodeURIComponent(v.venue_id||'')+'" target="_blank">Open Admin</a>'+
+    '</div>';
+
+  // existing actions
+  document.getElementById('vdCheck').onclick = () => doVenueAction('check', v.venue_id);
+  document.getElementById('vdRotate').onclick = () => doVenueAction('rotate', v.venue_id);
+
+  const _vdA = document.getElementById('vdActive');
+  if(_vdA) _vdA.onclick = () => doVenueAction('set_active', v.venue_id, {active: !f.active});
+
+  const _vdD = document.getElementById('vdDemo');
+  if(_vdD) _vdD.onclick = () => toggleDemoMode();
+
+  document.getElementById('vdSetSheet').onclick = async () => {
+    const sid = prompt('Paste Google Sheet ID for '+(v.venue_id||''), (sheet.sheet_id||''));
+    if(sid === null) return;
+    let s = sid.trim();
+    const m = (s.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/) || []);
+    if(m[1]) s = m[1];
+    await doVenueAction('set_sheet', v.venue_id, {sheet_id: s});
+  };
+}
 
   async function doVenueAction(act, venue_id, extra){
     const vid=(venue_id||'').trim(); if(!vid) return;
