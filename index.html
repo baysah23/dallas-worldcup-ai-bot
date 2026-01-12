@@ -3825,9 +3825,6 @@ body[data-sec="schedule"] #sec-schedule #pager .pill{
     <div id="venueIdentityLine" class="venueIdentityLine" hidden></div>
 
 
-
-    <div id=\"venueIdentityLine\" class=\"venueIdentityLine\" hidden></div>
-
     <!-- COUNTDOWN (ultra-thin Apple-glass, embedded under hero) -->
     <main>
       <!-- HOME -->
@@ -5309,17 +5306,31 @@ function bindModal(){
 async function loadVenueIdentityLine(){
   const el = $('venueIdentityLine');
   if(!el) return;
+
+  // extract venue_id from /v/<venue_id>
+  const m = location.pathname.match(/^\/v\/([^/]+)/);
+  const venueId = m ? m[1] : '';
+
   try{
-    const r = await fetch('/api/venue_identity' + (location.search || ''), {cache:'no-store'});
+    const params = new URLSearchParams(location.search || '');
+    if(venueId && !params.get('venue')) {
+      params.set('venue', venueId);
+    }
+
+    const url = '/api/venue_identity' + (params.toString() ? ('?' + params.toString()) : '');
+    const r = await fetch(url, { cache: 'no-store' });
     const d = await r.json().catch(()=>null);
+
     const ok = d && d.ok && d.show_location_line && d.location_line;
     if(ok){
-      el.textContent = String(d.location_line || '').trim();
-      el.hidden = !el.textContent;
+      el.textContent = String(d.location_line).trim();
+      el.hidden = false;
       return;
     }
   }catch(e){}
-  try{ el.textContent=''; el.hidden = true; }catch(e){}
+
+  el.textContent = '';
+  el.hidden = true;
 }
 
 function init(){
