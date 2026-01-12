@@ -11233,6 +11233,14 @@ def super_api_venues_list():
                 "status": status,
                 "active": active,
                 "sheet_ok": sheet_ok,
+
+                # ✅ ADDED: UI expects v.sheet.ok
+                "sheet": {
+                    "ok": sheet_ok,
+                    "last_checked": cfg.get("last_checked"),
+                    "sheet_id": sid,
+                },
+
                 "ready": ready,
                 "last_checked": cfg.get("last_checked"),
             })
