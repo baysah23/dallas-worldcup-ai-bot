@@ -9286,7 +9286,7 @@ def _append_lead_google_sheet(row: dict) -> tuple[bool, int]:
         else:
             sh = _open_default_spreadsheet(gc)
         try:
-            ws = sh.worksheet("Leads")
+            ws = sh.get_worksheet(0)
         except Exception:
             ws = sh.sheet1
         resp = ws.append_row([
@@ -13974,7 +13974,7 @@ def _append_lead_google_sheet(row: dict) -> tuple[bool, int]:
         else:
             sh = _open_default_spreadsheet(gc)
         try:
-            ws = sh.worksheet("Leads")
+            ws = sh.get_worksheet(0)
         except Exception:
             ws = sh.sheet1
         resp = ws.append_row([
