@@ -1958,7 +1958,7 @@ def admin_api_venues_create_and_save():
         "status": "active",
         "plan": plan,
 
-        # ✅ Correct, environment-safe URLs
+        # ✅ environment-safe links
         "admin_url": f"{base}/admin?key={admin_key}&venue={venue_id}",
         "manager_url": f"{base}/admin?key={manager_key}&venue={venue_id}",
         "qr_url": f"{base}/v/{venue_id}",
@@ -1976,6 +1976,24 @@ def admin_api_venues_create_and_save():
         else {"vip": True, "waitlist": False, "ai_queue": True},
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
+
+    wrote, write_path, err = _write_venue_config(venue_id, pack)
+    if not wrote:
+        return jsonify({
+            "ok": False,
+            "error": err or "Failed to write venue config",
+        }), 500
+
+    _invalidate_venues_cache()
+
+    return jsonify({
+        "ok": True,
+        "venue_id": venue_id,
+        "path": write_path,
+        "admin_key": admin_key,
+        "manager_key": manager_key,
+        "pack": pack,   # ✅ THIS is required
+    })
 
     wrote, write_path, err = _write_venue_config(venue_id, pack)
 
