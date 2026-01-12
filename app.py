@@ -344,9 +344,25 @@ VENUES_DIR = os.environ.get("VENUES_DIR", os.path.join(os.path.dirname(__file__)
 _MULTI_VENUE_CACHE: Dict[str, Any] = {"ts": 0.0, "venues": {}}
 
 def _invalidate_venues_cache():
-    _MULTI_VENUE_CACHE["ts"] = 0
-    _MULTI_VENUE_CACHE["venues"] = {}
+    # Multi-venue list cache
+    try:
+        _MULTI_VENUE_CACHE["ts"] = 0.0
+        _MULTI_VENUE_CACHE["venues"] = {}
+    except Exception:
+        pass
 
+    # Any optional per-venue config caches (only if they exist in this file)
+    try:
+        if isinstance(globals().get("_VENUE_CFG_CACHE"), dict):
+            globals()["_VENUE_CFG_CACHE"].clear()
+    except Exception:
+        pass
+
+    try:
+        if isinstance(globals().get("_VENUE_CFG_BY_ID"), dict):
+            globals()["_VENUE_CFG_BY_ID"].clear()
+    except Exception:
+        pass
 
 def _slugify_venue_id(s: str) -> str:
     s = (s or "").strip().lower()
@@ -1829,7 +1845,7 @@ def _write_venue_config(venue_id: str, pack: Dict[str, Any]) -> Tuple[bool, str,
             json.dump(pack, f, indent=2, sort_keys=True)
         wrote = True
         # refresh cache immediately
-        _MULTI_VENUE_CACHE["ts"] = 0.0
+        _invalidate_venues_cache()
     except Exception as e:
         err = str(e)
     return wrote, write_path, err
