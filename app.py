@@ -10822,6 +10822,75 @@ def super_api_diag():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+@app.route("/super/api/venues/set_sheet", methods=["POST", "OPTIONS"])
+def super_api_venues_set_sheet():
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    if not _is_super_admin_request():
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    sheet_id = str(body.get("sheet_id") or body.get("google_sheet_id") or "").strip()
+
+    if not venue_id:
+        return jsonify({"ok": False, "error": "missing venue_id"}), 400
+    if not sheet_id:
+        return jsonify({"ok": False, "error": "missing sheet_id"}), 400
+
+    cfg = _venue_cfg(venue_id)
+    path = str(cfg.get("_path") or "")
+    if not path:
+        return jsonify({"ok": False, "error": "venue config not found"}), 404
+
+    # persist sheet id in the canonical place
+    cfg["data"] = cfg.get("data", {}) if isinstance(cfg.get("data"), dict) else {}
+    cfg["data"]["google_sheet_id"] = sheet_id
+
+    # validate + persist status flags
+    chk = _check_sheet_id(sheet_id)
+    cfg["sheet_ok"] = bool(chk.get("ok"))
+    cfg["ready"] = bool(cfg["sheet_ok"] and cfg.get("active", True))
+    cfg["last_checked"] = chk.get("checked_at")
+
+    _safe_write_json_file(path, cfg)
+    _invalidate_venues_cache()
+
+    return jsonify({"ok": True, "venue_id": venue_id, "sheet_id": sheet_id, "check": chk})
+
+@app.route("/super/api/venues/check_sheet", methods=["POST", "OPTIONS"])
+def super_api_venues_check_sheet():
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    if not _is_super_admin_request():
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    if not venue_id:
+        return jsonify({"ok": False, "error": "missing venue_id"}), 400
+
+    cfg = _venue_cfg(venue_id)
+    path = str(cfg.get("_path") or "")
+    if not path:
+        return jsonify({"ok": False, "error": "venue config not found"}), 404
+
+    sheet_id = _venue_sheet_id(venue_id)  # reads data.google_sheet_id OR cfg.google_sheet_id :contentReference[oaicite:2]{index=2}
+    if not sheet_id:
+        return jsonify({"ok": False, "error": "No google_sheet_id configured"}), 400
+
+    chk = _check_sheet_id(sheet_id)
+    cfg["sheet_ok"] = bool(chk.get("ok"))
+    cfg["ready"] = bool(cfg["sheet_ok"] and cfg.get("active", True))
+    cfg["last_checked"] = chk.get("checked_at")
+
+    _safe_write_json_file(path, cfg)
+    _invalidate_venues_cache()
+
+    return jsonify({"ok": True, "venue_id": venue_id, "sheet_id": sheet_id, "check": chk})
+
 @app.route("/super/api/venues/create", methods=["POST", "OPTIONS"])
 def super_api_venues_create():
     if request.method == "OPTIONS":
