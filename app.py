@@ -11208,7 +11208,7 @@ def super_api_venues_list():
             plan = str(cfg.get("plan") or "")
 
             # Read sheet id directly from config
-            sid = str(cfg.get("google_sheet_id") or "").strip()
+            sid = _venue_sheet_id(vid)
 
             # Use the NEW persisted fields (not legacy _sheet_check)
             sheet_ok = cfg.get("sheet_ok", None)
