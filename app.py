@@ -11048,7 +11048,12 @@ def super_api_venues_create():
         "active": True,
         "plan": plan,
 
-        # ✅ env-safe, consistent links (same format as create_and_save)
+        # ✅ AUTO DEFAULTS (fully automated, one-click)
+        # If no location_line is provided, it safely falls back to venue_name
+        "show_location_line": True,
+        "location_line": str(body.get("location_line") or venue_name).strip(),
+
+        # ✅ env-safe, consistent links
         "admin_url": f"{base}/admin?key={admin_key}&venue={venue_id}",
         "manager_url": f"{base}/admin?key={manager_key}&venue={venue_id}",
         "qr_url": f"{base}/v/{venue_id}",
@@ -11063,8 +11068,14 @@ def super_api_venues_create():
         },
         "features": body.get("features")
         if isinstance(body.get("features"), dict)
-        else {"vip": True, "waitlist": False, "ai_queue": True},
-        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        else {
+            "vip": True,
+            "waitlist": False,
+            "ai_queue": True,
+        },
+        "created_at": datetime.now(timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z"),
     }
 
     wrote, write_path, err = _write_venue_config(venue_id, pack)
@@ -11073,7 +11084,6 @@ def super_api_venues_create():
 
     _invalidate_venues_cache()
 
-    # ✅ THIS fixes your issue: Create now returns the pack immediately
     return jsonify({
         "ok": True,
         "venue_id": venue_id,
