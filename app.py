@@ -3727,6 +3727,27 @@ def home():
 
 
 
+@app.get("/v/<venue_id>")
+def fan_venue(venue_id):
+    vid = _slugify_venue_id(venue_id)
+    cfg = _venue_cfg(vid) or {}
+
+    # Venue does not exist
+    if not isinstance(cfg, dict) or not cfg:
+        return ("Not found", 404)
+
+    # Venue exists but is inactive
+    if cfg.get("active") is False or str(cfg.get("status") or "").lower() == "inactive":
+        return ("Not found", 404)
+
+    # Valid active venue → serve fan SPA shell
+    resp = make_response(send_from_directory(".", "index.html"))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
+
+
 @app.route("/<path:path>")
 def catch_all(path):
     # Serve static files if they exist; otherwise serve the SPA shell.
@@ -11022,6 +11043,36 @@ def super_api_venues_set_sheet():
     path = str(cfg.get("_path") or "")
     if not path:
         return jsonify({"ok": False, "error": "venue config not found"}), 404
+
+@app.route("/super/api/venues/set_location", methods=["POST","OPTIONS"])
+def super_api_venues_set_location():
+    if request.method == "OPTIONS":
+        return ("", 204)
+    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
+    if key != SUPER_ADMIN_KEY:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    location_line = str(body.get("location_line") or "").strip()
+
+    if not venue_id:
+        return jsonify({"ok": False, "error": "missing venue_id"}), 400
+    if not location_line:
+        return jsonify({"ok": False, "error": "missing location_line"}), 400
+
+    cfg = _venue_cfg(venue_id)
+    path = str(cfg.get("_path") or "")
+    if not path:
+        return jsonify({"ok": False, "error": "venue config not found"}), 404
+
+    cfg["show_location_line"] = True
+    cfg["location_line"] = location_line
+    cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
+
+    _safe_write_json_file(path, cfg)
+    _invalidate_venues_cache()
+    return jsonify({"ok": True, "venue_id": venue_id, "location_line": location_line})
 
     # persist sheet id in the canonical place
     cfg["data"] = cfg.get("data", {}) if isinstance(cfg.get("data"), dict) else {}

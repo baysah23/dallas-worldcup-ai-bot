@@ -5308,26 +5308,32 @@ async function loadVenueIdentityLine(){
   if(!el) return;
 
   // extract venue_id from /v/<venue_id>
-  const m = location.pathname.match(/^\/v\/([^/]+)/);
-  const venueId = m ? m[1] : '';
+const m = location.pathname.match(/^\/v\/([^/]+)/);
+const venueId = m ? m[1] : '';
 
-  try{
-    const params = new URLSearchParams(location.search || '');
-    if(venueId && !params.get('venue')) {
-      params.set('venue', venueId);
-    }
+try {
+  const params = new URLSearchParams(location.search || '');
+  if (venueId && !params.get('venue')) {
+    params.set('venue', venueId);
+  }
 
-    const url = '/api/venue_identity' + (params.toString() ? ('?' + params.toString()) : '');
-    const r = await fetch(url, { cache: 'no-store' });
-    const d = await r.json().catch(()=>null);
+  const url = '/api/venue_identity' + (params.toString() ? ('?' + params.toString()) : '');
+  const r = await fetch(url, { cache: 'no-store' });
+  const d = await r.json().catch(() => null);
 
-    const ok = d && d.ok && d.show_location_line && d.location_line;
-    if(ok){
-      el.textContent = String(d.location_line).trim();
+  if (d && d.ok) {
+    // Prefer automated location_line, fallback to venue_name
+    const line = String(
+      (d.show_location_line && d.location_line) ? d.location_line : (d.venue_name || '')
+    ).trim();
+
+    if (line) {
+      el.textContent = line;
       el.hidden = false;
       return;
     }
-  }catch(e){}
+  }
+} catch (e) {}
 
   el.textContent = '';
   el.hidden = true;
