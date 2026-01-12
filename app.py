@@ -9402,11 +9402,15 @@ def api_venue_identity():
     except Exception:
         vid = DEFAULT_VENUE_ID
 
+    # ✅ NEW: if venue is inactive, hide identity (prevents lingering fan views)
+    if not _venue_is_active(vid):
+        return jsonify({"ok": False, "error": "Venue is inactive"}), 404
+
     cfg = _venue_cfg(vid) or {}
     feat = cfg.get("features") if isinstance(cfg.get("features"), dict) else {}
     ident = cfg.get("identity") if isinstance(cfg.get("identity"), dict) else {}
 
-    # ✅ Prefer top-level (new schema), fallback to legacy nested keys
+    # Prefer top-level (new schema), fallback to legacy nested keys
     show = bool(cfg.get("show_location_line", (feat or {}).get("show_location_line", False)))
     loc = str(cfg.get("location_line") or (ident or {}).get("location_line") or "").strip()
 
