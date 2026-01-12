@@ -10750,18 +10750,47 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
   });
 
   document.getElementById('btnCreate').onclick=async ()=>{
-    const name=prompt('Venue name (display)',''); if(name===null) return;
-    const vid=prompt('Venue id (optional)',''); if(vid===null) return;
-    const sheet=prompt('Google Sheet ID (optional)',''); if(sheet===null) return;
-    const plan=prompt('Plan (standard/premium)','standard'); if(plan===null) return;
-    const payload={venue_name:name.trim(), venue_id:(vid||'').trim(), sheet_id:(sheet||'').trim(), plan:(plan||'standard').trim()};
-    try{
-      const r=await fetch('/super/api/venues/create?super_key='+encodeURIComponent(super_key), {method:'POST', headers: hdrs(), body: JSON.stringify(payload)});
-      const j=await r.json().catch(()=>({}));
-      if(!j.ok) alert('Create failed: '+(j.error||r.status));
-      await loadVenues();
-    }catch(e){ alert('Create failed: '+(e.message||e)); }
+  const name=prompt('Venue name (display)',''); if(name===null) return;
+  const vid=prompt('Venue id (optional)',''); if(vid===null) return;
+  const sheet=prompt('Google Sheet ID (optional)',''); if(sheet===null) return;
+  const plan=prompt('Plan (standard/premium)','standard'); if(plan===null) return;
+
+  // ✅ FIX: use google_sheet_id (not sheet_id)
+  const payload={
+    venue_name:name.trim(),
+    venue_id:(vid||'').trim(),
+    google_sheet_id:(sheet||'').trim(),
+    plan:(plan||'standard').trim()
   };
+
+  try{
+    const r=await fetch('/super/api/venues/create?super_key='+encodeURIComponent(super_key), {
+      method:'POST',
+      headers: hdrs(),
+      body: JSON.stringify(payload)
+    });
+
+    const j=await r.json().catch(()=>({}));
+
+    if(!j.ok){
+      alert('Create failed: '+(j.error||('HTTP '+r.status)));
+      return;
+    }
+
+    // ✅ SHOW PACK immediately
+    const p = j.pack || {};
+    alert(
+      "✅ Venue created\n\n" +
+      "Admin: " + (p.admin_url||"") + "\n" +
+      "Manager: " + (p.manager_url||"") + "\n" +
+      "Fan / QR: " + (p.qr_url||"")
+    );
+
+    await loadVenues();
+  }catch(e){
+    alert('Create failed: '+(e.message||e));
+  }
+};
 
   document.getElementById('ts').textContent=new Date().toLocaleString();
   loadVenues();
@@ -10958,10 +10987,14 @@ def super_api_venues_create():
     venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
     venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
     plan = str(body.get("plan") or "standard").strip().lower() or "standard"
+
+    # accept either key (back-compat), but normalize to google_sheet_id
     sheet_id = str(body.get("google_sheet_id") or body.get("sheet_id") or "").strip()
 
     admin_key = secrets.token_hex(16)
     manager_key = secrets.token_hex(16)
+
+    base = (request.host_url or "").rstrip("/")
 
     pack = {
         "venue_name": venue_name,
@@ -10969,6 +11002,12 @@ def super_api_venues_create():
         "status": "active",
         "active": True,
         "plan": plan,
+
+        # ✅ env-safe, consistent links (same format as create_and_save)
+        "admin_url": f"{base}/admin?key={admin_key}&venue={venue_id}",
+        "manager_url": f"{base}/admin?key={manager_key}&venue={venue_id}",
+        "qr_url": f"{base}/v/{venue_id}",
+
         "access": {
             "admin_keys": [admin_key],
             "manager_keys": [manager_key],
@@ -10977,6 +11016,9 @@ def super_api_venues_create():
             "google_sheet_id": sheet_id,
             "redis_namespace": f"{_REDIS_NS}:{venue_id}",
         },
+        "features": body.get("features")
+        if isinstance(body.get("features"), dict)
+        else {"vip": True, "waitlist": False, "ai_queue": True},
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
 
@@ -10986,12 +11028,14 @@ def super_api_venues_create():
 
     _invalidate_venues_cache()
 
+    # ✅ THIS fixes your issue: Create now returns the pack immediately
     return jsonify({
         "ok": True,
         "venue_id": venue_id,
         "path": write_path,
         "admin_key": admin_key,
         "manager_key": manager_key,
+        "pack": pack,
     })
 
 @app.get("/super/api/overview")
