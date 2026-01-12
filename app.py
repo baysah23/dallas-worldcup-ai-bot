@@ -10822,6 +10822,55 @@ def super_api_diag():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+@app.route("/super/api/venues/create", methods=["POST", "OPTIONS"])
+def super_api_venues_create():
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
+    if key != SUPER_ADMIN_KEY:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
+    body = request.get_json(silent=True) or {}
+
+    venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
+    plan = str(body.get("plan") or "standard").strip().lower() or "standard"
+    sheet_id = str(body.get("google_sheet_id") or body.get("sheet_id") or "").strip()
+
+    admin_key = secrets.token_hex(16)
+    manager_key = secrets.token_hex(16)
+
+    pack = {
+        "venue_name": venue_name,
+        "venue_id": venue_id,
+        "status": "active",
+        "active": True,
+        "plan": plan,
+        "access": {
+            "admin_keys": [admin_key],
+            "manager_keys": [manager_key],
+        },
+        "data": {
+            "google_sheet_id": sheet_id,
+            "redis_namespace": f"{_REDIS_NS}:{venue_id}",
+        },
+        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+
+    wrote, write_path, err = _write_venue_config(venue_id, pack)
+    if not wrote:
+        return jsonify({"ok": False, "error": err or "Failed to write venue config"}), 500
+
+    _invalidate_venues_cache()
+
+    return jsonify({
+        "ok": True,
+        "venue_id": venue_id,
+        "path": write_path,
+        "admin_key": admin_key,
+        "manager_key": manager_key,
+    })
 
 @app.get("/super/api/overview")
 def super_api_overview():
