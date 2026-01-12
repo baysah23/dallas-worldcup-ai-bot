@@ -503,17 +503,20 @@ def _venue_id() -> str:
     except Exception:
         return DEFAULT_VENUE_ID
 
+
 def _venue_cfg(venue_id: Optional[str] = None) -> Dict[str, Any]:
     venues = _load_venues_from_disk()
     vid = _slugify_venue_id(venue_id or _venue_id())
     cfg = venues.get(vid) if isinstance(venues, dict) else None
     return cfg if isinstance(cfg, dict) else {"venue_id": vid, "status": "implicit"}
 
+
 def _venue_sheet_id(venue_id: Optional[str] = None) -> str:
     cfg = _venue_cfg(venue_id)
     data = cfg.get("data") if isinstance(cfg.get("data"), dict) else {}
     sid = str((data or {}).get("google_sheet_id") or (cfg.get("google_sheet_id") or "")).strip()
     return sid
+
 
 def _venue_sheet_tab(venue_id: Optional[str] = None) -> str:
     cfg = _venue_cfg(venue_id)
@@ -527,14 +530,26 @@ def _venue_features(venue_id: Optional[str] = None) -> Dict[str, Any]:
     feat = cfg.get("features") if isinstance(cfg.get("features"), dict) else {}
     return dict(feat or {})
 
-def _venue_is_active(venue_id: Optional[str] = None) -> bool:
-    """Return whether a venue is active (fan-facing intake allowed).
 
-    Back-compat rules:
-      - If cfg has boolean `active`, that is the source of truth.
-      - Otherwise fall back to `status` string (active|inactive|disabled|off).
-      - Default: active.
-    """
+def _venue_is_active(venue_id: Optional[str] = None) -> bool:
+    """Return whether a venue is active (fan-facing intake allowed)."""
+    try:
+        cfg = _venue_cfg(venue_id)
+        return bool(cfg.get("active", True))
+    except Exception:
+        return True
+
+def _public_base_url() -> str:
+    """Return the correct public base URL when behind proxies (Azure / Render / Cloudflare)."""
+    proto = (request.headers.get("X-Forwarded-Proto") or request.scheme or "https").split(",")[0].strip()
+    host = (request.headers.get("X-Forwarded-Host") or request.host or "").split(",")[0].strip()
+    return f"{proto}://{host}".rstrip("/")
+
+# Back-compat rules:
+# - If cfg has boolean `active`, that is the source of truth.
+# - Otherwise fall back to `status` string (active|inactive|disabled|off).
+# - Default: active.
+    
     try:
         cfg = _venue_cfg(venue_id)
         if not isinstance(cfg, dict):
@@ -1727,13 +1742,14 @@ except Exception:
 
 
 def _admin_auth() -> Dict[str, str]:
-    """Return admin auth context: {ok, role, actor, venue_id}.
+    # Return admin auth context: {ok, role, actor, venue_id}.
 
-    Auth mechanism: ?key=...
-    - Owner key (global) => role=owner (all venues)
-    - Venue-scoped keys in config/venues/<venue_id>.yaml => role=owner|manager for that venue
-    - Legacy ADMIN_MANAGER_KEYS still works (manager, current venue context)
-    """
+    # Auth mechanism: ?key=...
+    # - Owner key (global) => role=owner (all venues)
+    # - Venue-scoped keys in config/venues/<venue_id>.yaml => role=owner|manager for that venue
+    # - Legacy ADMIN_MANAGER_KEYS still works (manager, current venue context)
+
+    
     key = (request.args.get("key", "") or "").strip()
     if not key:
         return {"ok": False, "role": "", "actor": "", "venue_id": ""}
@@ -1772,7 +1788,6 @@ def admin_api_whoami():
     """Return the server-truth role for the current key (owner/manager) so UI locks can't drift."""
     ctx = _admin_ctx()
     return jsonify(ok=bool(ctx.get("ok")), role=ctx.get("role", ""), actor=ctx.get("actor", ""), venue_id=ctx.get("venue_id",""))
-
 
 
 def _write_venue_config(venue_id: str, pack: Dict[str, Any]) -> Tuple[bool, str, str]:
@@ -1887,7 +1902,7 @@ def admin_api_venues_create():
     admin_key = secrets.token_hex(16)
     manager_key = secrets.token_hex(16)
 
-    base = (request.host_url or "").rstrip("/")
+    base = _public_base_url()
 
     pack = {
         "venue_name": venue_name,
@@ -1961,7 +1976,7 @@ def admin_api_venues_create_and_save():
     admin_key = secrets.token_hex(16)
     manager_key = secrets.token_hex(16)
 
-    base = (request.host_url or "").rstrip("/")
+    base = _public_base_url()
 
     pack = {
         "venue_name": venue_name,
@@ -10777,14 +10792,17 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
       return;
     }
 
-    // ✅ SHOW PACK immediately
-    const p = j.pack || {};
-    alert(
-      "✅ Venue created\n\n" +
-      "Admin: " + (p.admin_url||"") + "\n" +
-      "Manager: " + (p.manager_url||"") + "\n" +
-      "Fan / QR: " + (p.qr_url||"")
-    );
+    // ✅ SHOW PACK + make it easy to copy/send
+const p = j.pack || {};
+const text =
+  "✅ Venue created\n\n" +
+  "Admin: " + (p.admin_url||"") + "\n" +
+  "Manager: " + (p.manager_url||"") + "\n" +
+  "Fan / QR: " + (p.qr_url||"") + "\n";
+
+try { await navigator.clipboard.writeText(text); } catch(e) {}
+prompt("Copy & send this to the customer:", text);
+
 
     await loadVenues();
   }catch(e){
@@ -10994,7 +11012,7 @@ def super_api_venues_create():
     admin_key = secrets.token_hex(16)
     manager_key = secrets.token_hex(16)
 
-    base = (request.host_url or "").rstrip("/")
+    base = _public_base_url()
 
     pack = {
         "venue_name": venue_name,
