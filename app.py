@@ -4650,6 +4650,14 @@ def chat():
                 "rate_limit_remaining": 0,
             }), 429
 
+        # ✅ NEW: block chat for inactive venues (prevents lingering fan access)
+        vid = _venue_id()
+        if not _venue_is_active(vid):
+            return jsonify({
+                "reply": "This venue is currently inactive.",
+                "rate_limit_remaining": remaining,
+            }), 403
+
         data = request.get_json(force=True) or {}
         msg = (data.get("message") or "").strip()
         lang = norm_lang(data.get("language") or data.get("lang"))
@@ -4687,6 +4695,7 @@ def chat():
             # Mark VIP if user clicked a VIP button or mentions VIP
             if re.search(r"\bvip\b", msg.lower()):
                 sess["lead"]["vip"] = "Yes"
+
             # IMPORTANT: do NOT treat the word "reservation" as the name.
             if msg.lower().strip() in ["reservation", "reserva", "réservation"]:
                 sess["lead"]["name"] = ""
@@ -4699,6 +4708,7 @@ def chat():
             # Allow VIP to be set at any time during reservation flow
             if re.search(r"\bvip\b", msg.lower()):
                 sess["lead"]["vip"] = "Yes"
+
             d_iso = extract_date(msg)
             if d_iso:
                 if validate_date_iso(d_iso):
@@ -4737,6 +4747,7 @@ def chat():
             lead = sess["lead"]
             if lead.get("date") and lead.get("time") and lead.get("party_size") and lead.get("name") and lead.get("phone"):
                 ops2 = get_ops()
+
                 # If waitlist is enabled, tag the reservation as Waitlist (still saved to the same sheet).
                 if ops2.get("waitlist_mode"):
                     lead["status"] = (lead.get("status") or "Waitlist").strip() or "Waitlist"
@@ -4746,13 +4757,15 @@ def chat():
                 if ops2.get("pause_reservations") and not ops2.get("waitlist_mode"):
                     sess["mode"] = "idle"
                     return jsonify({"reply": "⏸️ Reservations were just paused. Please check back soon.", "rate_limit_remaining": remaining})
-                if ops2.get("vip_only") and str(lead.get("vip","No")).strip().lower() != "yes":
+
+                if ops2.get("vip_only") and str(lead.get("vip", "No")).strip().lower() != "yes":
                     sess["mode"] = "idle"
                     return jsonify({"reply": "🔒 VIP-only is active right now. Type VIP and start again to continue.", "rate_limit_remaining": remaining})
+
                 try:
                     append_lead_to_sheet(lead)
                     sess["mode"] = "idle"
-                    saved_msg = ("✅ Added to waitlist!" if str(lead.get("status","")).strip().lower() == "waitlist" else LANG[lang]["saved"])
+                    saved_msg = ("✅ Added to waitlist!" if str(lead.get("status", "")).strip().lower() == "waitlist" else LANG[lang]["saved"])
                     confirm = (
                         f"{saved_msg}\n"
                         f"Name: {lead['name']}\n"
@@ -4820,7 +4833,6 @@ def chat():
         # Never break the UI: always return JSON.
         fallback = "⚠️ Chat is temporarily unavailable. Please try again, or type 'reservation' to book a table."
         return jsonify({"reply": f"{fallback}\n\nDebug: {type(e).__name__}", "rate_limit_remaining": 0}), 200
-
 
 # ============================================================
 # Admin dashboard

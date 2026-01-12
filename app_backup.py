@@ -4561,26 +4561,54 @@ def chat():
             q = next_question(sess)
             return jsonify({"reply": q, "rate_limit_remaining": remaining})
 
-        # Otherwise: normal Q&A using OpenAI (with language + business profile + menu)
+                # Otherwise: normal Q&A using OpenAI (with language + business profile + menu)
+
+        # --- Fast intent routing (no dead-ends) ---
+        txt = (msg or "").strip().lower()
+
+        def _is_menu_question(t: str) -> bool:
+            return bool(re.search(r"\b(menu|drink|drinks|food|appetizer|entree|dessert|cocktail|beer|wine|price|prices|cost|vegan|vegetarian|gluten|allerg)\b", t))
+
+        def _is_schedule_question(t: str) -> bool:
+            return bool(re.search(r"\b(schedule|fixture|match|game time|kickoff|kick off|world cup)\b", t))
+
+        # Menu → direct them to Menu panel + keep reservation flow alive
+        if _is_menu_question(txt):
+            reply = (
+                "📋 For the most accurate items + prices, please open the **Menu** panel on this page.\n\n"
+                "If you want, I can still book you now — **how many guests** and **what time**?"
+            )
+            return jsonify({"reply": reply, "rate_limit_remaining": remaining})
+
+        # Schedule → direct them to Schedule panel + keep reservation flow alive
+        if _is_schedule_question(txt):
+            reply = (
+                "⚽ For World Cup match times, please use the **Schedule** panel on this page.\n\n"
+                "Want me to reserve a table too — **how many guests** and **what time**?"
+            )
+            return jsonify({"reply": reply, "rate_limit_remaining": remaining})
+
         system_msg = f"""
-    You are a World Cup 2026 Dallas business concierge.
+You are a World Cup 2026 Dallas business concierge.
 
-    Business profile (source of truth):
-    {BUSINESS_PROFILE}
+Business profile (source of truth):
+{BUSINESS_PROFILE}
 
-    Menu (source of truth, language={lang}):
-    {json.dumps(MENU.get(lang, MENU['en']), ensure_ascii=False)}
+Menu (source of truth, language={lang}):
+{json.dumps(MENU.get(lang, MENU['en']), ensure_ascii=False)}
 
-    Rules:
-    - Be friendly, fast, and concise.
-    - Always respond in the user's chosen language: {lang}.
-    - If user asks about the World Cup match schedule, tell them to use the schedule panel on the page.
-    - If user asks to make a reservation, instruct them to type "reservation" (or equivalent) to start.
-    """
+Rules:
+- Be friendly, fast, and concise.
+- Always respond in the user's chosen language: {lang}.
+- For menu/food/drink/prices/diet questions, DO NOT guess: direct them to the Menu panel on the page, then continue booking.
+- For match schedule questions, direct them to the Schedule panel on the page, then continue booking.
+- If you are unsure or missing info, do NOT dead-end. Redirect to the relevant panel (Menu/Schedule) and continue booking.
+- Always keep the reservation flow alive by asking for missing details: party size and preferred time.
+"""
 
         try:
             if not _OPENAI_AVAILABLE or client is None:
-                raise RuntimeError('OpenAI SDK not installed / not configured')
+                raise RuntimeError("OpenAI SDK not installed / not configured")
             resp = client.responses.create(
                 model=os.environ.get("CHAT_MODEL", "gpt-4o-mini"),
                 input=[
@@ -4589,17 +4617,23 @@ def chat():
                 ],
             )
             reply = (resp.output_text or "").strip() or "(No response)"
+
+            # If model reply looks like a dead-end, force redirect + continue booking
+            if re.search(r"\b(i (can't|cannot)|not sure|i don't know|unable to|no information)\b", reply.lower()):
+                reply = (
+                    "For the most accurate details, please check the **Menu** or **Info** panels on this page.\n\n"
+                    "I can still reserve a table — **how many guests** and **what time**?"
+                )
+
             return jsonify({"reply": reply, "rate_limit_remaining": remaining})
         except Exception as e:
-            # If OPENAI_API_KEY isn't set (or any API issue), fail gracefully.
-            fallback = "⚠️ Chat is temporarily unavailable. Please try again, or type 'reservation' to book a table."
+            # Graceful fallback that still routes + continues reservations
+            fallback = (
+                "⚠️ Chat is temporarily unavailable.\n"
+                "Please use the **Menu** / **Info** panels on this page for details.\n\n"
+                "I can still help you book — **how many guests** and **what time**?"
+            )
             return jsonify({"reply": f"{fallback}\n\nDebug: {type(e).__name__}", "rate_limit_remaining": remaining}), 200
-
-    except Exception as e:
-        # Never break the UI: always return JSON.
-        fallback = "⚠️ Chat is temporarily unavailable. Please try again, or type 'reservation' to book a table."
-        return jsonify({"reply": f"{fallback}\n\nDebug: {type(e).__name__}", "rate_limit_remaining": 0}), 200
-
 
 # ============================================================
 # Admin dashboard
