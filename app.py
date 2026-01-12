@@ -11239,58 +11239,6 @@ def super_api_venues_list():
 
         return jsonify({"ok": True, "venues": out})
 
-@app.post("/super/api/venues/set_sheet")
-def super_api_venues_set_sheet():
-    """Super-admin: update a venue's google_sheet_id in its config file (best effort)."""
-    # STEP 4: normalized Super Admin auth
-    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
-    if key != SUPER_ADMIN_KEY:
-        return jsonify({"ok": False, "error": "unauthorized"}), 403
-
-    body = request.get_json(silent=True) or {}
-    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
-    if not venue_id:
-        return jsonify({"ok": False, "error": "Missing venue_id"}), 400
-
-    sheet_id = str(body.get("sheet_id") or "").strip()
-    if not sheet_id:
-        return jsonify({"ok": False, "error": "Missing sheet_id"}), 400
-
-    venues = _load_venues_from_disk() or {}
-    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
-    if not isinstance(cfg, dict):
-        return jsonify({"ok": False, "error": "Venue not found"}), 404
-
-    # Persist sheet id
-    cfg["google_sheet_id"] = sheet_id
-    cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-    # Immediately validate sheet and persist results
-    chk = _check_sheet_id(sheet_id)
-    cfg["sheet_ok"] = chk.get("ok", False)
-    cfg["ready"] = bool(cfg.get("sheet_ok") and cfg.get("active", True))
-    cfg["last_checked"] = chk.get("checked_at")
-
-    wrote, write_path, err = _write_venue_config(venue_id, cfg)
-
-    # CRITICAL: cache bust so UI updates immediately
-    try:
-        _invalidate_venues_cache()
-    except Exception:
-        pass
-
-    return jsonify({
-        "ok": True,
-        "venue_id": venue_id,
-        "sheet_id": sheet_id,
-        "sheet_ok": cfg.get("sheet_ok"),
-        "ready": cfg.get("ready"),
-        "checked_at": cfg.get("last_checked"),
-        "persisted": wrote,
-        "path": write_path,
-        "error": err,
-    })
-
     body = request.get_json(silent=True) or {}
     venue_id = _slugify_venue_id(str(body.get("venue_id") or ""))
     sheet_id = str(body.get("google_sheet_id") or "").strip()
@@ -11444,73 +11392,6 @@ def super_api_leads():
         return jsonify({"ok": True, "items": page_items, "total": total, "page": page, "per_page": per_page})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
-
-@app.post("/super/api/venues/check_sheet")
-def super_api_venues_check_sheet():
-    """Super-admin: validate a venue's configured sheet and persist PASS/FAIL to venue config."""
-    # Normalized Super Admin auth
-    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
-    if key != SUPER_ADMIN_KEY:
-        return jsonify({"ok": False, "error": "unauthorized"}), 403
-
-    body = request.get_json(silent=True) or {}
-    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
-    if not venue_id:
-        return jsonify({"ok": False, "error": "Missing venue_id"}), 400
-
-    venues = _load_venues_from_disk() or {}
-    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
-    if not isinstance(cfg, dict):
-        return jsonify({"ok": False, "error": "Venue not found"}), 404
-
-    sheet_id = str(cfg.get("google_sheet_id") or "").strip()
-    if not sheet_id:
-        return jsonify({"ok": False, "error": "No google_sheet_id configured"}), 400
-
-    # Run sheet validation
-    chk = _check_sheet_id(sheet_id)
-
-    if chk.get("ok"):
-        cfg["sheet_ok"] = True
-        cfg["ready"] = True
-        cfg["active"] = True
-
-        cfg["data"] = cfg.get("data", {})
-        cfg["data"]["google_sheet_id"] = sheet_id
-    else:
-        cfg["sheet_ok"] = False
-        cfg["ready"] = False
-
-    cfg["last_checked"] = chk.get("checked_at")
-
-    _safe_write_json_file(cfg["_path"], cfg)
-    _invalidate_venues_cache()
-    
-    # Persist results so UI does NOT revert
-    cfg["sheet_ok"] = chk.get("ok", False)
-    cfg["ready"] = bool(cfg.get("sheet_ok") and cfg.get("active", True))
-    cfg["last_checked"] = chk.get("checked_at")
-    cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-
-    wrote, write_path, err = _write_venue_config(venue_id, cfg)
-
-    # CRITICAL: bust venue cache so UI updates immediately
-    try:
-        _invalidate_venues_cache()
-    except Exception:
-        pass
-
-    return jsonify({
-        "ok": True,
-        "venue_id": venue_id,
-        "sheet_id": sheet_id,
-        "sheet_ok": cfg.get("sheet_ok"),
-        "ready": cfg.get("ready"),
-        "checked_at": cfg.get("last_checked"),
-        "persisted": wrote,
-        "path": write_path,
-        "error": err,
-    })
 
     body = request.get_json(silent=True) or {}
     venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
