@@ -1895,23 +1895,27 @@ def admin_api_venues_create():
         "status": "active",
         "plan": plan,
 
-        # ✅ Correct URLs (no hardcoding)
-        "qr_url": f"{base}/v/{venue_id}",
+        # ✅ Consistent, env-safe links (matches create_and_save)
         "admin_url": f"{base}/admin?key={admin_key}&venue={venue_id}",
         "manager_url": f"{base}/admin?key={manager_key}&venue={venue_id}",
+        "qr_url": f"{base}/v/{venue_id}",
 
-        "keys": {
-            "admin_key": admin_key,
-            "manager_key": manager_key,
+        # ✅ Consistent schema (no more "keys" vs "access" mismatch)
+        "access": {
+            "admin_keys": [admin_key],
+            "manager_keys": [manager_key],
         },
         "data": {
-            "google_sheet_id": "",
+            # allow passing a sheet id at creation time (optional)
+            "google_sheet_id": str(body.get("google_sheet_id") or "").strip(),
             "redis_namespace": f"{_REDIS_NS}:{venue_id}",
         },
         "features": body.get("features")
         if isinstance(body.get("features"), dict)
         else {"vip": True, "waitlist": False, "ai_queue": True},
+        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
 
+        # keep your yaml template (optional convenience)
         "yaml_template": (
             "venue_id: " + venue_id + "\n"
             "venue_name: \"" + venue_name.replace('\"','') + "\"\n"
@@ -1931,6 +1935,13 @@ def admin_api_venues_create():
             "  ai_queue: true\n"
         ),
     }
+
+    return jsonify({
+        "ok": True,
+        "admin_key": admin_key,
+        "manager_key": manager_key,
+        "pack": pack,
+    })
 
     return jsonify({"ok": True, "pack": pack})
 
