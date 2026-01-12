@@ -9320,7 +9320,7 @@ def api_intake():
 
 
 
-@app.get("/api/venue_identity")
+@app.route("/api/venue_identity")
 def api_venue_identity():
     """Fan-safe: minimal venue identity (branding-safe).
 
@@ -9332,11 +9332,15 @@ def api_venue_identity():
         vid = _venue_id()
     except Exception:
         vid = DEFAULT_VENUE_ID
-    cfg = _venue_cfg(vid)
+
+    cfg = _venue_cfg(vid) or {}
     feat = cfg.get("features") if isinstance(cfg.get("features"), dict) else {}
     ident = cfg.get("identity") if isinstance(cfg.get("identity"), dict) else {}
-    show = bool((feat or {}).get("show_location_line", False))
-    loc = str((ident or {}).get("location_line") or "").strip()
+
+    # ✅ Prefer top-level (new schema), fallback to legacy nested keys
+    show = bool(cfg.get("show_location_line", (feat or {}).get("show_location_line", False)))
+    loc = str(cfg.get("location_line") or (ident or {}).get("location_line") or "").strip()
+
     return jsonify({
         "ok": True,
         "venue_id": vid,
