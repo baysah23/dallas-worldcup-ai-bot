@@ -7030,10 +7030,12 @@ th{
     </div>
 
     <div id="ops-msg" class="note" style="margin-top:10px"></div>
-    <div class="small" style="margin-top:10px;opacity:.72">Tip: toggles auto-save (“Saving…” → “Saved”).</div>
+    <div class="small" style="margin-top:10px;opacity:.72">
+      Tip: toggles auto-save (“Saving…” → “Saved”).
+    </div>
   </div>
 
-<div class="card" id="matchdayCard">
+  <div class="card" id="matchdayCard">
     <div class="h2">Match Day Ops</div>
     <div class="small">One-click presets that set multiple Ops toggles + key Rules. Audited.</div>
     <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
@@ -7042,13 +7044,24 @@ th{
       <button type="button" class="btn2" onclick="applyPreset('Post-game')">Post-game</button>
     </div>
     <div id="preset-msg" class="note" style="margin-top:10px"></div>
-    <div class="small" style="margin-top:10px;opacity:.72">Tip: presets update Ops + Rules instantly so staff can shift modes fast.</div>
+    <div class="small" style="margin-top:10px;opacity:.72">
+      Tip: presets update Ops + Rules instantly so staff can shift modes fast.
+    </div>
   </div>
 
-<div class="card" id="notifCard">
+  <div class="card" id="notifCard">
     <div class="h2">Notifications</div>
     <div id="notifBody" class="small" style="margin-top:8px"></div>
     <div id="notif-msg" class="note" style="margin-top:8px"></div>
+  </div>
+</div>
+
+<!-- FAN ZONE TAB -->
+<div id="tab-fanzone" class="tabpane hidden">
+  <div class="card">
+    <div class="h2">Fan Zone</div>
+    <div class="small">Fan Zone admin controls.</div>
+    <div id="fanzoneAdminRoot" class="small" style="margin-top:10px"></div>
   </div>
 </div>
 
