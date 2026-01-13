@@ -3762,6 +3762,199 @@ def fan_venue(venue_id):
     resp.headers["Expires"] = "0"
     return resp
 
+@app.get("/admin/fanzone")
+def admin_fanzone_page():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    # Keep venue context via ?venue=... (your before_request already reads it)
+    # This page is the Poll Controls UI (same content you removed from /admin tabs).
+    html_out = """
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin • Fan Zone</title>
+  <style>
+    :root{--line: rgba(255,255,255,.14);}
+    body{margin:0; font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; background:#070a12; color:#eef2ff;}
+    .wrap{max-width:1240px;margin:0 auto;padding:18px 16px 36px;}
+    .panelcard{margin:14px 0;border:1px solid var(--line);border-radius:16px;padding:12px;background:rgba(255,255,255,.03);box-shadow:0 10px 35px rgba(0,0,0,.25)}
+    .sub{opacity:.75;font-size:13px}
+    .small{opacity:.8;font-size:12px}
+    .controls{display:flex;gap:12px;flex-wrap:wrap}
+    .inp{width:100%;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#eef2ff}
+    .btn{padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.12);color:#eef2ff;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="panelcard">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-weight:800;letter-spacing:.02em">Fan Zone • Poll Controls</div>
+          <div class="sub">Edit sponsor text + set Match of the Day (no redeploy). Also shows live poll status.</div>
+        </div>
+        <button type="button" class="btn" id="btnSaveConfig">Save settings</button>
+      </div>
+
+      <div class="controls" style="margin:12px 0 0 0">
+        <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
+          <div class="sub">Sponsor label (“Presented by …”)</div>
+          <input class="inp" id="pollSponsorText" placeholder="Fan Pick presented by …" />
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
+          <div class="sub">Match of the Day</div>
+          <select id="motdSelect" class="inp"></select>
+          <div class="sub" style="margin-top:8px">Manual override:</div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+            <div><div class="sub">Home team</div><input class="inp" id="motdHome" placeholder="Home team"/></div>
+            <div><div class="sub">Away team</div><input class="inp" id="motdAway" placeholder="Away team"/></div>
+          </div>
+
+          <div style="margin-top:10px">
+            <div class="sub">Kickoff (UTC ISO 8601)</div>
+            <input class="inp" id="motdKickoff" placeholder="2026-06-11T19:00:00Z"/>
+          </div>
+
+          <div style="margin-top:10px">
+            <div class="sub">Poll lock</div>
+            <select id="pollLockMode" class="inp">
+              <option value="auto">Auto (lock at kickoff)</option>
+              <option value="unlocked">Force Unlocked</option>
+              <option value="locked">Force Locked</option>
+            </select>
+            <div class="small">To reopen voting after kickoff, set <b>Force Unlocked</b>.</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="pollStatus" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
+        <div class="sub">Loading poll status…</div>
+      </div>
+    </div>
+
+    <script>
+      (function(){
+        const qs = new URLSearchParams(location.search);
+        const ADMIN_KEY = qs.get("key") || "";
+
+        const $ = (id)=>document.getElementById(id);
+
+        function esc(s){
+          return String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+        }
+
+        function setPollStatus(html){
+          const box = $("pollStatus");
+          if(!box) return;
+          box.innerHTML = html;
+        }
+
+        async function loadPollStatus(){
+          try{
+            setPollStatus('<div class="sub">Loading poll status…</div>');
+            const res = await fetch("/api/poll/state", {cache:"no-store"});
+            const data = await res.json().catch(()=>null);
+            if(!data || data.ok === false){
+              setPollStatus('<div class="sub">Poll status unavailable</div>');
+              return;
+            }
+            const locked = !!data.locked;
+            const title = (data.title || "Match of the Day Poll");
+            const top = (data.top && data.top.length) ? data.top : [];
+            let rows = "";
+            for(const r of top){
+              rows += `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.10)">
+                         <div>${esc(r.name||"")}</div><div>${esc(r.votes||0)}</div>
+                       </div>`;
+            }
+            if(!rows) rows = '<div class="sub">No votes yet</div>';
+            setPollStatus(`<div style="font-weight:800">${esc(title)}</div>` +
+                          `<div class="small">${locked ? "🔒 Locked" : "🟢 Open"}</div>` +
+                          `<div style="margin-top:10px">${rows}</div>`);
+          }catch(e){
+            setPollStatus('<div class="sub">Poll status unavailable</div>');
+          }
+        }
+
+        async function loadMatchesForDropdown(){
+          const sel = $("motdSelect");
+          if(!sel) return;
+          try{
+            sel.disabled = true;
+            const res = await fetch("/schedule.json?scope=all&q=", {cache:"no-store"});
+            const data = await res.json().catch(()=>null);
+            const matches = (data && Array.isArray(data.matches)) ? data.matches : [];
+            sel.innerHTML = '<option value="">Select a match…</option>';
+            let added = 0;
+            for(const m of matches){
+              if(added >= 250) break;
+              const dt = String(m.datetime_utc||"");
+              const home = String(m.home||"");
+              const away = String(m.away||"");
+              if(!dt || !home || !away) continue;
+              const id = (dt + "|" + home + "|" + away).replace(/[^A-Za-z0-9|:_-]+/g,"_").slice(0,180);
+              const label = `${m.date||""} ${m.time||""} • ${home} vs ${away}`.trim();
+              const opt = document.createElement("option");
+              opt.value = id;
+              opt.textContent = label || (home + " vs " + away);
+              opt.setAttribute("data-home", home);
+              opt.setAttribute("data-away", away);
+              opt.setAttribute("data-dt", dt);
+              sel.appendChild(opt);
+              added++;
+            }
+            sel.disabled = false;
+            sel.addEventListener("change", ()=>{
+              const opt = sel.selectedOptions[0];
+              if(!opt) return;
+              $("motdHome").value = opt.getAttribute("data-home")||"";
+              $("motdAway").value = opt.getAttribute("data-away")||"";
+              $("motdKickoff").value = opt.getAttribute("data-dt")||"";
+            });
+          }catch(e){
+            sel.disabled = false;
+          }
+        }
+
+        async function saveFanZoneConfig(){
+          const payload = {
+            section: "fanzone",
+            sponsor_text: ($("pollSponsorText")?.value || "").trim(),
+            motd: {
+              home: ($("motdHome")?.value || "").trim(),
+              away: ($("motdAway")?.value || "").trim(),
+              kickoff_utc: ($("motdKickoff")?.value || "").trim(),
+              match_id: ($("motdSelect")?.value || "").trim(),
+            },
+            poll: { lock_mode: ($("pollLockMode")?.value || "").trim() }
+          };
+          const res = await fetch(`/admin/update-config?key=${encodeURIComponent(ADMIN_KEY)}`, {
+            method:"POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify(payload)
+          });
+          await res.json().catch(()=>null);
+          loadPollStatus();
+        }
+
+        $("btnSaveConfig")?.addEventListener("click", (e)=>{ e.preventDefault(); saveFanZoneConfig(); });
+
+        loadMatchesForDropdown();
+        loadPollStatus();
+      })();
+    </script>
+  </div>
+</body>
+</html>
+"""
+    return make_response(html_out)
+
 @app.route("/<path:path>")
 def catch_all(path):
     # Serve static files if they exist
