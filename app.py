@@ -8691,6 +8691,75 @@ async function loadNotifs(){
   }
 }
 
+/* =========================
+   Fan Zone Admin UI
+   ========================= */
+
+async function initFanZoneAdmin(){
+  const root = document.querySelector('#fanzoneAdminRoot');
+  if(!root) return;
+
+  if(!root.dataset.built){
+    root.dataset.built = "1";
+    root.innerHTML = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+        <button class="btn2" type="button" id="fzLoadBtn">Load</button>
+        <button class="btn" type="button" id="fzSaveBtn">Save</button>
+        <span class="note" id="fzMsg"></span>
+      </div>
+      <textarea id="fzJson" class="inp"
+        style="width:100%;min-height:220px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+      </textarea>
+      <div class="small" style="opacity:.7;margin-top:8px">Edit JSON then Save.</div>
+    `;
+
+    document.querySelector('#fzLoadBtn')?.addEventListener('click', loadFanZoneState);
+    document.querySelector('#fzSaveBtn')?.addEventListener('click', saveFanZoneState);
+  }
+
+  await loadFanZoneState();
+}
+
+async function loadFanZoneState(){
+  const msg = document.querySelector('#fzMsg');
+  const ta  = document.querySelector('#fzJson');
+  if(msg) msg.textContent = 'Loading…';
+  try{
+    const r = await fetch(`/admin/api/fanzone/state?key=${encodeURIComponent(KEY||'')}`, {cache:'no-store'});
+    const j = await r.json().catch(()=>null);
+    if(!j || !j.ok) throw new Error('Load failed');
+    if(ta) ta.value = JSON.stringify(j.state || {}, null, 2);
+    if(msg) msg.textContent = 'Loaded ✓';
+  }catch(e){
+    if(msg) msg.textContent = 'Load failed';
+  }
+}
+
+async function saveFanZoneState(){
+  const msg = document.querySelector('#fzMsg');
+  const ta  = document.querySelector('#fzJson');
+  if(msg) msg.textContent = 'Saving…';
+  try{
+    const payload = JSON.parse((ta && ta.value) ? ta.value : '{}');
+    const r = await fetch(`/admin/api/fanzone/save?key=${encodeURIComponent(KEY||'')}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json().catch(()=>null);
+    if(!j || !j.ok) throw new Error('Save failed');
+    if(msg) msg.textContent = 'Saved ✓';
+  }catch(e){
+    if(msg) msg.textContent = 'Save failed (bad JSON?)';
+  }
+}
+
+    if(msg) msg.textContent = '';
+  }catch(e){
+    if(msg) msg.textContent = 'Load failed';
+  }
+}
+
 async function clearNotifs(){
   const msg = qs('#notif-msg'); if(msg) msg.textContent='Clearing…';
   try{
@@ -8715,7 +8784,9 @@ window.showTab = function(tab){
     if(pane) pane.classList.remove('hidden');
     if(tab==='rules'){ try{ loadPartnerList(); loadPartnerPolicy(); }catch(e){} try{ loadRules(); }catch(e){} }
 
-    try{ initFanZoneAdmin(); }catch(e){}
+    if(tab === 'fanzone'){
+  try{ initFanZoneAdmin(); }catch(e){}
+}
     try{ history.replaceState(null,'','#'+tab); }catch(e){}
   }catch(e){}
 };
@@ -8907,7 +8978,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
   
   try{ installClickUnblocker(); }catch(e){}
 try{ setupTabs(); }catch(e){}
+  if(tab === 'fanzone'){
   try{ initFanZoneAdmin(); }catch(e){}
+}
   try{ markLockedControls(); }catch(e){}
   try{ setupLeadFilters(); }catch(e){}
   try{ loadNotifs(); }catch(e){}
