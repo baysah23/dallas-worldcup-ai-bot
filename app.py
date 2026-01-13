@@ -8628,40 +8628,55 @@ async function loadAudit(){
 
 
 async function loadNotifs(){
-  const msg = qs('#notif-msg'); if(msg) msg.textContent='Loading…';
+  const msg = qs('#notif-msg'); 
+  if(msg) msg.textContent = 'Loading…';
+
   try{
-    const r = await fetch(`/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}`, {cache:'no-store'});
+    const r = await fetch(`/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}`, { cache:'no-store' });
     const j = await r.json().catch(()=>null);
-    const items = (j && j.items) ? (j.items||[]) : [];
+    const items = (j && j.items) ? (j.items || []) : [];
+
     // update badge
     const c = document.querySelector('#notifCount');
-    if(c) c.textContent = String(items.length||0);
+    if(c) c.textContent = String(items.length || 0);
 
     const body = document.querySelector('#notifBody');
     if(body){
       body.innerHTML = '';
+
       if(!items.length){
         body.innerHTML = '<div class="note">No notifications.</div>';
       } else {
         items.forEach(it=>{
           const d = it.details || {};
           const row = document.createElement('div');
-          row.style.cssText = 'padding:10px;border:1px solid rgba(255,255,255,16);border-radius:14px;margin-bottom:10px;background:rgba(255,255,255,06)';
+
+          row.style.cssText =
+            'padding:10px;border:1px solid rgba(255,255,255,16);border-radius:14px;margin-bottom:10px;background:rgba(255,255,255,06)';
+
+          const text =
+            d.message ||
+            d.title ||
+            d.details ||
+            (typeof d === 'string' ? d : JSON.stringify(d));
+
           row.innerHTML =
             '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">' +
-              '<div class="note">'+esc(it.ts||'')+'</div>' +
-              '<div><span class="code">'+esc(it.event||'')+'</span></div>' +
+              '<div class="note">'+esc(it.ts || '')+'</div>' +
+              '<div><span class="code">'+esc(it.event || '')+'</span></div>' +
             '</div>' +
             '<div class="small" style="margin-top:6px;opacity:.90;word-break:break-word">' +
-              esc(JSON.stringify(d)) +
+              esc(text) +
             '</div>';
+
           body.appendChild(row);
         });
       }
     }
-    if(msg) msg.textContent='';
+
+    if(msg) msg.textContent = '';
   }catch(e){
-    if(msg) msg.textContent = 'Load failed: ' + (e && e.message ? e.message : e);
+    if(msg) msg.textContent = 'Load failed';
   }
 }
 
