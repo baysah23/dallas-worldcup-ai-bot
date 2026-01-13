@@ -7057,18 +7057,6 @@ th{
 </div>
 
 <!-- FAN ZONE TAB -->
-<div id="tab-fanzone" class="tabpane hidden">
-
-  <div class="panelcard" style="margin:14px 0;border:1px solid var(--line);border-radius:16px;padding:12px;background:rgba(255,255,255,.03);box-shadow:0 10px 35px rgba(0,0,0,.25)">
-    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
-      <div>
-        <div style="font-weight:800;letter-spacing:.02em">Fan Zone • Poll Controls</div>
-        <div class="sub">
-          Edit sponsor text + set Match of the Day (no redeploy). Also shows live poll status.
-        </div>
-      </div>
-      <button type="button" class="btn" id="btnSaveConfig">Save settings</button>
-    </div>
 
     <div class="controls" style="margin:12px 0 0 0">
       <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
@@ -8750,6 +8738,12 @@ async function loadNotifs(){
    Fan Zone Admin UI
    ========================= */
 
+/* NOTE:
+   These functions are INTENTIONALLY kept.
+   They are used ONLY on /admin/fanzone.
+   They must NOT be called from /admin tabs.
+*/
+
 async function initFanZoneAdmin(){
   const root = document.querySelector('#fanzoneAdminRoot');
   if(!root) return;
@@ -8825,11 +8819,18 @@ async function clearNotifs(){
   }
 }
 
+/* =========================
+   Admin Tabs (Fan Zone REMOVED)
+   ========================= */
+
 window.showTab = function(tab){
   try{
-    document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
-    document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
-    const pane = document.querySelector('#tab-'+tab);
+    document.querySelectorAll('.tabbtn').forEach(b =>
+      b.classList.toggle('active', b.getAttribute('data-tab') === tab)
+    );
+    document.querySelectorAll('.tabpane').forEach(p => p.classList.add('hidden'));
+
+    const pane = document.querySelector('#tab-' + tab);
     if(pane) pane.classList.remove('hidden');
 
     if(tab === 'rules'){
@@ -8837,36 +8838,35 @@ window.showTab = function(tab){
       try{ loadRules(); }catch(e){}
     }
 
-    if(tab === 'fanzone'){
-      try{ initFanZoneAdmin(); }catch(e){}
-    }
+    // ❌ Fan Zone intentionally NOT handled here
 
     try{ history.replaceState(null,'','#'+tab); }catch(e){}
   }catch(e){}
 };
+
 function setupTabs(){
   const btns = Array.from(document.querySelectorAll('.tabbtn'));
   const panes = Array.from(document.querySelectorAll('.tabpane'));
   if(!btns.length || !panes.length) return;
 
   function show(tab){
-  btns.forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
-  panes.forEach(p=>p.classList.add('hidden'));
-  const pane = document.querySelector('#tab-'+tab);
-  if(pane) pane.classList.remove('hidden');
+    btns.forEach(b =>
+      b.classList.toggle('active', b.getAttribute('data-tab') === tab)
+    );
+    panes.forEach(p => p.classList.add('hidden'));
 
-  // keep URL hash for deep-linking
-  try{ history.replaceState(null, '', '#'+(tab||'ops')); }catch(e){}
+    const pane = document.querySelector('#tab-' + tab);
+    if(pane) pane.classList.remove('hidden');
 
-  // ✅ tab-specific loaders
-  if(tab === 'fanzone'){
-    try{ initFanZoneAdmin(); }catch(e){}
+    try{ history.replaceState(null, '', '#'+(tab||'ops')); }catch(e){}
+
+    if(tab === 'rules'){
+      try{ loadPartnerList(); loadPartnerPolicy(); }catch(e){}
+      try{ loadRules(); }catch(e){}
+    }
+
+    // ❌ Fan Zone intentionally NOT handled here
   }
-  if(tab === 'rules'){
-    try{ loadPartnerList(); loadPartnerPolicy(); }catch(e){}
-    try{ loadRules(); }catch(e){}
-  }
-}
 
   btns.forEach(b=>{
     b.addEventListener('click', (e)=>{
@@ -8875,6 +8875,7 @@ function setupTabs(){
       if(tab) show(tab);
     });
   });
+}
 
   // Make inline onclick handlers use the same implementation
   window.showTab = show;
