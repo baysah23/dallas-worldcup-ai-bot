@@ -8763,12 +8763,6 @@ async function saveFanZoneState(){
   }
 }
 
-    if(msg) msg.textContent = '';
-  }catch(e){
-    if(msg) msg.textContent = 'Load failed';
-  }
-}
-
 async function clearNotifs(){
   const msg = qs('#notif-msg'); if(msg) msg.textContent='Clearing…';
   try{
