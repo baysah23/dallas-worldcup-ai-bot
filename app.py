@@ -8972,7 +8972,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
   
   try{ installClickUnblocker(); }catch(e){}
 try{ setupTabs(); }catch(e){}
-  if(tab === 'fanzone'){
+  if(((location.hash||'').replace('#','').trim()) === 'fanzone'){
   try{ initFanZoneAdmin(); }catch(e){}
 }
   try{ markLockedControls(); }catch(e){}
