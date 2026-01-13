@@ -7517,7 +7517,10 @@ th{
 <script>
 /* Admin tabs bootstrap (runs even if later script has a parse error) */
 (function(){
+  var tab = (location.hash || '#ops').slice(1) || 'ops';
+
   function qsa(sel){ return document.querySelectorAll(sel); }
+
   function setActive(tab){
     try{
       var btn = document.querySelector('.tabbtn[data-tab="'+tab+'"]');
@@ -7542,39 +7545,47 @@ th{
           if(dt === tab) b.classList.add('active'); else b.classList.remove('active');
         }
       }
+
       var panes = qsa('.tabpane');
       for(var j=0;j<panes.length;j++){
         var p = panes[j];
         if(p && p.classList) p.classList.add('hidden');
       }
+
       var pane = document.getElementById('tab-'+tab);
       if(pane && pane.classList) pane.classList.remove('hidden');
+
       try{ history.replaceState(null,'','#'+tab); }catch(e){}
     }catch(e){}
   }
+
   window.showTab = function(tab){
-  try{
-    var b = document.querySelector('.tabbtn[data-tab="'+tab+'"]');
-    var minr = (b && b.getAttribute) ? (b.getAttribute('data-minrole') || 'manager') : 'manager';
-    if(ROLE_RANK && ROLE_RANK[ROLE] !== undefined && ROLE_RANK[minr] !== undefined){
-      if(ROLE_RANK[ROLE] < ROLE_RANK[minr]){
-        try{ toast('Owner only — redirected to Ops', 'warn'); }catch(e){}
-        try{ setActive('ops'); }catch(e){}
-        return false;
+    try{
+      var b = document.querySelector('.tabbtn[data-tab="'+tab+'"]');
+      var minr = (b && b.getAttribute) ? (b.getAttribute('data-minrole') || 'manager') : 'manager';
+      if(ROLE_RANK && ROLE_RANK[ROLE] !== undefined && ROLE_RANK[minr] !== undefined){
+        if(ROLE_RANK[ROLE] < ROLE_RANK[minr]){
+          try{ toast('Owner only — redirected to Ops', 'warn'); }catch(e){}
+          try{ setActive('ops'); }catch(e){}
+          return false;
+        }
       }
+    }catch(e){}
+
+    // switch tab panes
+    try{ setActive(tab); }catch(e){}
+
+    // Fan Zone: only init when the Fan Zone tab is selected
+    if(tab === 'fanzone'){
+      try{ initFanZoneAdmin(); }catch(e){}
     }
-  }catch(e){}
 
-  // switch tab panes
+    return false;
+  };
+
+  // apply initial tab on load
   try{ setActive(tab); }catch(e){}
-
-  // Fan Zone: only init when the Fan Zone tab is selected
-  if(tab === 'fanzone'){
-    try{ initFanZoneAdmin(); }catch(e){}
-  }
-
-  return false;
-};
+})();
 
   function bind(){
     var btns = qsa('.tabbtn');
