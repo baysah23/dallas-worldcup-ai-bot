@@ -7515,6 +7515,7 @@ th{
     # Scripts
     html.append("""
 <script>
+
 /* Admin tabs bootstrap (runs even if later script has a parse error) */
 (function(){
   var tab = (location.hash || '#ops').slice(1) || 'ops';
@@ -7580,16 +7581,18 @@ th{
       try{ initFanZoneAdmin(); }catch(e){}
     }
 
+    // If your rules tab needs loads, keep this behavior
+    if(tab === 'rules'){
+      try{ loadPartnerList(); loadPartnerPolicy(); }catch(e){}
+      try{ loadRules(); }catch(e){}
+    }
+
     return false;
   };
 
-  // apply initial tab on load
-  try{ setActive(tab); }catch(e){}
-})();
-
   function bind(){
     var btns = qsa('.tabbtn');
-    
+
     // mark owner-only tabs for managers
     try{
       for(var j=0;j<btns.length;j++){
@@ -7602,33 +7605,34 @@ th{
         }
       }
     }catch(e){}
-for(var i=0;i<btns.length;i++){
+
+    // click handlers
+    for(var i=0;i<btns.length;i++){
       (function(b){
         try{
           b.addEventListener('click', function(ev){
             try{ ev.preventDefault(); }catch(e){}
             var t = b.getAttribute('data-tab');
             if(t){
-              try{
-                var minr = (b && b.getAttribute) ? (b.getAttribute('data-minrole') || 'manager') : 'manager';
-                if(ROLE_RANK && ROLE_RANK[ROLE] !== undefined && ROLE_RANK[minr] !== undefined){
-                  if(ROLE_RANK[ROLE] < ROLE_RANK[minr]){ try{ toast('Owner only — redirected to Ops', 'warn'); }catch(e){} setActive('ops'); return; }
-                }
-              }catch(e){}
-              setActive(t);
+              try{ window.showTab(t); }catch(e){}
             }
           });
         }catch(e){}
       })(btns[i]);
     }
+
     // initial hash or default ops
     var h = (location.hash || '').replace('#','').trim();
-    if(h && document.querySelector('.tabbtn[data-tab="'+h+'"]')) showTab(h);
-    else showTab('ops');
+    if(h && document.querySelector('.tabbtn[data-tab="'+h+'"]')) window.showTab(h);
+    else window.showTab('ops');
+
     window.addEventListener('hashchange', function(){
       var t = (location.hash || '').replace('#','').trim();
-      if(t && document.querySelector('.tabbtn[data-tab="'+t+'"]')) showTab(t);
+      if(t && document.querySelector('.tabbtn[data-tab="'+t+'"]')) window.showTab(t);
     });
+
+    // apply initial tab on load (also keeps your earlier behavior)
+    try{ setActive(tab); }catch(e){}
   }
 
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
@@ -7639,35 +7643,6 @@ for(var i=0;i<btns.length;i++){
 <script>
 const KEY = (new URLSearchParams(window.location.search).get('key') || '');
 let ROLE = (__ADMIN_ROLE__ || 'manager');
-
-// Auto-append ?key=... to same-origin admin/api calls so buttons always work
-(function(){
-  const _origFetch = window.fetch;
-  window.fetch = function(input, init){
-    try{
-      let url = (typeof input === 'string') ? input : (input && input.url) ? input.url : '';
-      if(url && url.startsWith('/')){
-        if(url.startsWith('/admin') || url.startsWith('/api') || url.startsWith('/health')){
-          if(url.indexOf('key=') === -1){
-            url += (url.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(KEY || '');
-            if(typeof input === 'string') input = url;
-            else input = new Request(url, input);
-          }
-        }
-      }
-    }catch(e){}
-    return _origFetch(input, init);
-  };
-})();
-
-// Refresh role from server so manager/owner locks are always correct
-async function _refreshRole(){
-  try{
-    const r = await fetch(`/admin/api/whoami?key=${encodeURIComponent(KEY||'')}`, {cache:'no-store'});
-    const j = await r.json();
-    if(j && j.ok && j.role){ ROLE = j.role; }
-  }catch(e){}
-}
 
 // Enforce owner-only locks (tabs + buttons)
 document.addEventListener('click', function(ev){
