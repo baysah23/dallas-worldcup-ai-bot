@@ -8658,22 +8658,29 @@ async function loadNotifs(){
           const row = document.createElement('div');
 
           row.style.cssText =
-            'padding:10px;border:1px solid rgba(255,255,255,16);border-radius:14px;margin-bottom:10px;background:rgba(255,255,255,06)';
+            'padding:12px;border:1px solid rgba(255,255,255,.16);border-radius:14px;margin-bottom:10px;background:rgba(255,255,255,.06)';
 
-          const text =
-            d.message ||
-            d.title ||
-            d.details ||
-            (typeof d === 'string' ? d : JSON.stringify(d));
+          // ✅ SAFE pretty-print (strings or objects)
+          let text;
+          if (typeof d === 'string') {
+            text = d;
+          } else {
+            try {
+              text = JSON.stringify(d, null, 2);
+            } catch (e) {
+              text = String(d);
+            }
+          }
 
           row.innerHTML =
             '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">' +
               '<div class="note">'+esc(it.ts || '')+'</div>' +
               '<div><span class="code">'+esc(it.event || '')+'</span></div>' +
             '</div>' +
-            '<div class="small" style="margin-top:6px;opacity:.90;word-break:break-word">' +
+            '<div class="note" style="margin-top:6px">Details</div>' +
+            '<pre style="margin-top:6px;padding:10px;border-radius:10px;background:rgba(255,255,255,.08);color:#eef2ff;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.45">' +
               esc(text) +
-            '</div>';
+            '</pre>';
 
           body.appendChild(row);
         });
