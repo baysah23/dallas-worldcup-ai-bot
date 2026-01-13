@@ -8795,7 +8795,7 @@ function setupTabs(){
     const pane = document.querySelector('#tab-'+tab);
     if(pane) pane.classList.remove('hidden');
     // keep URL hash for deep-linking
-    try{ history.replaceState(null, '', '#'+tab); }catch(e){}
+    try{ history.replaceState(null, '', '#'+(tab||'ops')); }catch(e){}
   }
 
   btns.forEach(b=>{
