@@ -7553,19 +7553,28 @@ th{
     }catch(e){}
   }
   window.showTab = function(tab){
-    try{
-      var b = document.querySelector('.tabbtn[data-tab="'+tab+'"]');
-      var minr = (b && b.getAttribute) ? (b.getAttribute('data-minrole') || 'manager') : 'manager';
-      if(ROLE_RANK && ROLE_RANK[ROLE] !== undefined && ROLE_RANK[minr] !== undefined){
-        if(ROLE_RANK[ROLE] < ROLE_RANK[minr]){
-          try{ toast('Owner only — redirected to Ops', 'warn'); }catch(e){}
-          try{ setActive('ops'); }catch(e){}
-          return false;
-        }
+  try{
+    var b = document.querySelector('.tabbtn[data-tab="'+tab+'"]');
+    var minr = (b && b.getAttribute) ? (b.getAttribute('data-minrole') || 'manager') : 'manager';
+    if(ROLE_RANK && ROLE_RANK[ROLE] !== undefined && ROLE_RANK[minr] !== undefined){
+      if(ROLE_RANK[ROLE] < ROLE_RANK[minr]){
+        try{ toast('Owner only — redirected to Ops', 'warn'); }catch(e){}
+        try{ setActive('ops'); }catch(e){}
+        return false;
       }
-    }catch(e){}
-    setActive(tab); return false;
-  };
+    }
+  }catch(e){}
+
+  // switch tab panes
+  try{ setActive(tab); }catch(e){}
+
+  // Fan Zone: only init when the Fan Zone tab is selected
+  if(tab === 'fanzone'){
+    try{ initFanZoneAdmin(); }catch(e){}
+  }
+
+  return false;
+};
 
   function bind(){
     var btns = qsa('.tabbtn');
@@ -8782,11 +8791,16 @@ window.showTab = function(tab){
     document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
     const pane = document.querySelector('#tab-'+tab);
     if(pane) pane.classList.remove('hidden');
-    if(tab==='rules'){ try{ loadPartnerList(); loadPartnerPolicy(); }catch(e){} try{ loadRules(); }catch(e){} }
+
+    if(tab === 'rules'){
+      try{ loadPartnerList(); loadPartnerPolicy(); }catch(e){}
+      try{ loadRules(); }catch(e){}
+    }
 
     if(tab === 'fanzone'){
-  try{ initFanZoneAdmin(); }catch(e){}
-}
+      try{ initFanZoneAdmin(); }catch(e){}
+    }
+
     try{ history.replaceState(null,'','#'+tab); }catch(e){}
   }catch(e){}
 };
