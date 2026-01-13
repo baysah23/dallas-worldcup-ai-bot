@@ -3745,11 +3745,17 @@ def home():
 def fan_venue(venue_id):
     vid = _slugify_venue_id(venue_id)
 
-    # HARD STOP: venue must exist AND be active
+    # REQUIRE a real venue config to exist on disk
+    venues = _load_venues_from_disk() or {}
+    cfg = venues.get(vid) if isinstance(venues, dict) else None
+    if not isinstance(cfg, dict) or not cfg:
+        return ("Not found", 404)
+
+    # REQUIRE venue to be active
     if not _venue_is_active(vid):
         return ("Not found", 404)
 
-    # Serve fan SPA shell for active venues only
+    # Serve fan SPA shell for valid active venues only
     resp = make_response(send_from_directory(".", "index.html"))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
