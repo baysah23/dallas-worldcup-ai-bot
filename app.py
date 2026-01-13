@@ -8797,13 +8797,23 @@ function setupTabs(){
   if(!btns.length || !panes.length) return;
 
   function show(tab){
-    btns.forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
-    panes.forEach(p=>p.classList.add('hidden'));
-    const pane = document.querySelector('#tab-'+tab);
-    if(pane) pane.classList.remove('hidden');
-    // keep URL hash for deep-linking
-    try{ history.replaceState(null, '', '#'+(tab||'ops')); }catch(e){}
+  btns.forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
+  panes.forEach(p=>p.classList.add('hidden'));
+  const pane = document.querySelector('#tab-'+tab);
+  if(pane) pane.classList.remove('hidden');
+
+  // keep URL hash for deep-linking
+  try{ history.replaceState(null, '', '#'+(tab||'ops')); }catch(e){}
+
+  // ✅ tab-specific loaders
+  if(tab === 'fanzone'){
+    try{ initFanZoneAdmin(); }catch(e){}
   }
+  if(tab === 'rules'){
+    try{ loadPartnerList(); loadPartnerPolicy(); }catch(e){}
+    try{ loadRules(); }catch(e){}
+  }
+}
 
   btns.forEach(b=>{
     b.addEventListener('click', (e)=>{
