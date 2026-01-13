@@ -6973,10 +6973,13 @@ th{
     html.append("</div>")
     html.append("<div style='text-align:right'>")
     html.append(f"<div class='small'>Admin key: <span class='code'>••••••</span></div>")
-    html.append(f"<div style='margin-top:8px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap'>"
-                f"<a class='btn2' style='text-decoration:none' href='/admin/export.csv{admin_key_q}'>Export CSV</a>"
-                f"<a class='btn2' style='text-decoration:none' href='/admin/fanzone{admin_key_q}'>Fan Zone</a>"
-                f"</div>")
+    html.append(
+    "<div style='margin-top:8px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap'>"
+    f"<a class='btn2' style='text-decoration:none' href='/admin/export.csv{admin_key_q}'>Export CSV</a>"
+    "<a class='btn2' style='text-decoration:none' href='#fanzone' "
+    "onclick=\"showTab('fanzone');return false;\">Fan Zone</a>"
+    "</div>"
+)
     html.append("</div>")
     html.append("</div>")  # topbar
 
@@ -7030,10 +7033,6 @@ th{
     <div class="small" style="margin-top:10px;opacity:.72">Tip: toggles auto-save (“Saving…” → “Saved”).</div>
   </div>
 
-  
-  
-  
-
 <div class="card" id="matchdayCard">
     <div class="h2">Match Day Ops</div>
     <div class="small">One-click presets that set multiple Ops toggles + key Rules. Audited.</div>
@@ -7052,7 +7051,6 @@ th{
     <div id="notif-msg" class="note" style="margin-top:8px"></div>
   </div>
 </div>
-
 
 <!-- LEADS TAB -->
 
