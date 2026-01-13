@@ -3741,28 +3741,20 @@ def home():
     resp.headers["Expires"] = "0"
     return resp
 
-
-
 @app.get("/v/<venue_id>")
 def fan_venue(venue_id):
     vid = _slugify_venue_id(venue_id)
-    cfg = _venue_cfg(vid) or {}
 
-    # Venue does not exist
-    if not isinstance(cfg, dict) or not cfg:
+    # HARD STOP: venue must exist AND be active
+    if not _venue_is_active(vid):
         return ("Not found", 404)
 
-    # Venue exists but is inactive
-    if cfg.get("active") is False or str(cfg.get("status") or "").lower() == "inactive":
-        return ("Not found", 404)
-
-    # Valid active venue → serve fan SPA shell
+    # Serve fan SPA shell for active venues only
     resp = make_response(send_from_directory(".", "index.html"))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
     return resp
-
 
 @app.route("/<path:path>")
 def catch_all(path):
