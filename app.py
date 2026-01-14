@@ -9319,13 +9319,12 @@ select option{
     html.append(f"<div><div class='h1'>Fan Zone Admin — {_hesc(SHEET_NAME or 'World Cup')}</div><div class='sub'>Poll controls (Sponsor text + Match of the Day) • Key required</div></div>")
     html.append("<div style='display:flex;gap:10px;align-items:center;flex-wrap:wrap'>")
     html.append(f"<a class='btn' href='/admin?key={key}' style='text-decoration:none;display:inline-block'>Ops</a>")
-    html.append("<a class='btn' href='#fanzone' style='text-decoration:none;display:inline-block' onclick=\"showTab('fanzone');return false;\">Poll Controls</a>")
+    html.append(f"<a class='btn' href='/admin/fanzone?key={key}&venue={venue_id}' "f"style='text-decoration:none;display:inline-block'>Poll Controls</a>")
     html.append("</div></div>")
-
     html.append(f"<div style='display:flex;gap:8px;margin:10px 0 14px 0;flex-wrap:wrap;'>"
-                f"<a href='/admin?key={key}' style='text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);font-weight:800'>Ops</a>"
-                "<a href='#fanzone' onclick=\"showTab('fanzone');return false;\" style='text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid rgba(212,175,55,.35);border-radius:999px;background:rgba(212,175,55,.10);font-weight:900'>Fan Zone</a>"
-                f"</div>")
+    f"<a href='/admin?key={key}' style='text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);font-weight:800'>Ops</a>"
+    f"<a href='/admin/fanzone?key={key}&venue={venue_id}' style='text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid rgba(212,175,55,.35);border-radius:999px;background:rgba(212,175,55,.10);font-weight:900'>Fan Zone</a>"
+    f"</div>")
 
     html.append(r"""
 <div class="panelcard" style="margin:14px 0;border:1px solid var(--line);border-radius:16px;padding:12px;background:rgba(255,255,255,.03);box-shadow:0 10px 35px rgba(0,0,0,.25)">
