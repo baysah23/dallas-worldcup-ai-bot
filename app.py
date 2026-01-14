@@ -3980,6 +3980,12 @@ FANZONE_ADMIN_HTML = r"""
   const lockEl = $("pollLockMode");
   if(!btn) return;
 
+  // 🔒 venue guard (critical)
+  if(!window.VENUE || String(window.VENUE).trim()===""){
+    toast("Missing venue", "error");
+    return;
+  }
+
   const payload = {
     poll_sponsor_text: ($("pollSponsorText")?.value || "").trim(),
     match_of_day_id: (sel?.value || "").trim(),
@@ -3994,21 +4000,27 @@ FANZONE_ADMIN_HTML = r"""
   btn.textContent = "Saving…";
 
   try{
-    const res = await fetch(`/admin/update-config?key=${encodeURIComponent(ADMIN_KEY)}&venue=${encodeURIComponent(VENUE)}`, {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify(payload)
-    });
+    const res = await fetch(
+      `/admin/update-config?key=${encodeURIComponent(ADMIN_KEY)}&venue=${encodeURIComponent(VENUE)}`,
+      {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify(payload)
+      }
+    );
+
     const data = await res.json().catch(()=>null);
     if(!res.ok || !data || data.ok === false){
       toast((data && data.error) ? data.error : "Save failed", "error");
       btn.textContent = prev; btn.disabled = false;
       return;
     }
+
     btn.textContent = "Saved ✓";
     toast("Saved", "ok");
     setTimeout(()=>{ btn.textContent = prev; btn.disabled = false; }, 900);
-    loadPollStatus();
+
+    loadPollStatus(); // re-read from backend
   }catch(e){
     toast("Save failed", "error");
     btn.textContent = prev; btn.disabled = false;
@@ -5823,12 +5835,15 @@ def admin_update_config():
 
     data = request.get_json(silent=True) or {}
 
+    # ✅ venue isolation
+    venue = (request.args.get("venue") or data.get("venue") or "").strip()
+    if not venue:
+        return jsonify({"ok": False, "error": "Missing venue"}), 400
+
     try:
-        # Allow clearing values by sending empty strings.
         sponsor = (data.get("poll_sponsor_text") if data.get("poll_sponsor_text") is not None else "")
         match_id = (data.get("match_of_day_id") if data.get("match_of_day_id") is not None else "")
 
-        # Normalize to the same safe/stable format used by fixtures + _match_id()
         match_id_norm = str(match_id).strip()
         if match_id_norm:
             match_id_norm = re.sub(r"[^A-Za-z0-9|:_-]+", "_", match_id_norm)[:180]
@@ -5839,7 +5854,6 @@ def admin_update_config():
 
         poll_lock_mode = (data.get("poll_lock_mode") if data.get("poll_lock_mode") is not None else "auto")
 
-        # Ops toggles (match-day controls)
         ops_pause = data.get("ops_pause_reservations")
         ops_vip = data.get("ops_vip_only")
         ops_wait = data.get("ops_waitlist_mode")
@@ -5866,9 +5880,30 @@ def admin_update_config():
             "ops_waitlist_mode": _norm_bool(ops_wait),
         }
 
-        cfg = set_config(pairs)
-        _audit("config.update", {"keys": list(pairs.keys())})
-        return jsonify({"ok": True, "config": {
+        # ✅ load + write ONLY this venue file
+        path = os.path.join(VENUES_DIR, f"{venue}.json")
+        if not os.path.exists(path):
+            return jsonify({"ok": False, "error": f"Unknown venue: {venue}"}), 404
+
+        with open(path, "r", encoding="utf-8") as f:
+            vcfg = json.load(f) or {}
+
+        vcfg.setdefault("fan_zone", {})
+        vcfg["fan_zone"].update(pairs)
+
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(vcfg, f, indent=2, ensure_ascii=False)
+
+        # ✅ invalidate caches (if present)
+        try:
+            _invalidate_venues_cache()
+        except Exception:
+            pass
+
+        _audit("config.update", {"venue": venue, "keys": list(pairs.keys())})
+
+        cfg = vcfg.get("fan_zone", {}) or {}
+        return jsonify({"ok": True, "venue": venue, "config": {
             "poll_sponsor_text": cfg.get("poll_sponsor_text",""),
             "match_of_day_id": cfg.get("match_of_day_id",""),
             "motd_home": cfg.get("motd_home",""),
@@ -9767,52 +9802,7 @@ select option{
     if($("motdKickoff")) $("motdKickoff").value = dt;
   }
 
- async function saveFanZoneConfig(){
-  const btn = $("btnSaveConfig");
-  const sel = $("motdSelect");
-  const lockEl = $("pollLockMode");
-  if(!btn) return;
-
-  const payload = {
-    poll_sponsor_text: ($("pollSponsorText")?.value || "").trim(),
-    match_of_day_id: (sel?.value || "").trim(),
-    motd_home: ($("motdHome")?.value || "").trim(),
-    motd_away: ($("motdAway")?.value || "").trim(),
-    motd_datetime_utc: ($("motdKickoff")?.value || "").trim(),
-    poll_lock_mode: (lockEl?.value || "auto").trim(),
-  };
-
-  const prev = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = "Saving…";
-
-  try{
-    const res = await fetch(
-      `/admin/update-config?key=${encodeURIComponent(ADMIN_KEY)}&venue=${encodeURIComponent(VENUE)}`,
-      {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify(payload)
-      }
-    );
-    const data = await res.json().catch(()=>null);
-    if(!res.ok || !data || data.ok === false){
-      toast((data && data.error) ? data.error : "Save failed", "error");
-      btn.textContent = prev;
-      btn.disabled = false;
-      return;
-    }
-    btn.textContent = "Saved ✓";
-    toast("Saved", "ok");
-    setTimeout(()=>{ btn.textContent = prev; btn.disabled = false; }, 900);
-    loadPollStatus();
-  }catch(e){
-    toast("Save failed", "error");
-    btn.textContent = prev;
-    btn.disabled = false;
-  }
-}
-                
+               
   function safeBoot(){
     try{
       // Match dropdown
