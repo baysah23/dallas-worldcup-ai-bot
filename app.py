@@ -6117,12 +6117,19 @@ def admin_api_ai_settings():
     if not ok:
         return resp
 
-    ctx = _admin_ctx()
+    try:
+        ctx = _admin_ctx() or {}
+    except Exception:
+        ctx = {}
     role = ctx.get("role", "")
     actor = ctx.get("actor", "")
 
+
     if request.method == "GET":
-        return jsonify({"ok": True, "role": role, "settings": AI_SETTINGS})
+        try:
+            return jsonify({"ok": True, "role": role, "settings": AI_SETTINGS})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e), "role": role, "settings": {}})
 
     data = request.get_json(silent=True) or {}
 
