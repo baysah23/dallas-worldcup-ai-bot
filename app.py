@@ -7066,23 +7066,17 @@ def admin():
     - Rules config persists to BUSINESS_RULES_FILE
     - Menu upload persists to MENU_FILE and updates /menu.json (fan UI unchanged)
     """
-    try:
-        ok, resp = _require_admin(min_role="manager")
-        if not ok:
-            return resp
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
 
-        key = (request.args.get("key", "") or "").strip()
+    key = (request.args.get("key", "") or "").strip()
 
-        ctx = _admin_ctx()
-        role = ctx.get("role", "manager")
+    ctx = _admin_ctx()
+    role = ctx.get("role", "manager")
 
-        # ⬇️ KEEP ALL YOUR EXISTING ADMIN HTML / LOGIC HERE ⬇️
-        # html = ...
-        # return html or render_template(...)
-
-    except Exception:
-        tb = traceback.format_exc()
-        return ("<h1>Admin</h1><pre>%s</pre>" % html.escape(tb), 200)
+    # ✅ KEEP THE REST OF YOUR ORIGINAL /admin CODE BELOW THIS LINE
+    # (everything that builds `html = []` and ends with `return ...`)
 
     # Role-based branding (visual only)
     is_owner = (role == "owner")
