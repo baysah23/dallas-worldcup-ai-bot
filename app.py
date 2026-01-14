@@ -3783,7 +3783,7 @@ FANZONE_ADMIN_HTML = r"""
     .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace}
     .h2{font-weight:800;font-size:18px}
     .controls{display:grid;grid-template-columns:1fr;gap:14px;align-items:start}
-    @media(min-width:980px){.controls{grid-template-columns:1fr 1fr}}
+    @media(min-width:980px){.controls{grid-template-columns:1.2fr 1fr}}
     #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.18);color:#eef2ff;padding:10px 12px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .18s}
     #toast.show{opacity:1}
   </style>
@@ -3960,51 +3960,45 @@ FANZONE_ADMIN_HTML = r"""
   }
 
   async function saveFanZoneConfig(){
-    const btn = $("btnSaveConfig");
-    const sel = $("motdSelect");
-    const lockEl = $("pollLockMode");
-    if(!btn) return;
+  const btn = $("btnSaveConfig");
+  const sel = $("motdSelect");
+  const lockEl = $("pollLockMode");
+  if(!btn) return;
 
-    const payload = {
-      section: "fanzone",
-      poll_sponsor_text: ($("pollSponsorText")?.value || "").trim(),
-      motd: {
-        home: ($("motdHome")?.value || "").trim(),
-        away: ($("motdAway")?.value || "").trim(),
-        kickoff_utc: ($("motdKickoff")?.value || "").trim(),
-        match_id: (sel?.value || "").trim(),
-      },
-      poll: {
-        lock_mode: (lockEl?.value || "").trim(), // auto|unlocked|locked
-      }
-    };
+  const payload = {
+    poll_sponsor_text: ($("pollSponsorText")?.value || "").trim(),
+    match_of_day_id: (sel?.value || "").trim(),
+    motd_home: ($("motdHome")?.value || "").trim(),
+    motd_away: ($("motdAway")?.value || "").trim(),
+    motd_datetime_utc: ($("motdKickoff")?.value || "").trim(),
+    poll_lock_mode: (lockEl?.value || "auto").trim(),
+  };
 
-    const prev = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = "Saving…";
-    try{
-      const res = await fetch(`/admin/update-config?key=${encodeURIComponent(ADMIN_KEY)}&venue=${encodeURIComponent(VENUE)}`, {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json().catch(()=>null);
-      if(!res.ok || !data || data.ok === false){
-        toast((data && data.error) ? data.error : "Save failed");
-        btn.textContent = prev;
-        btn.disabled = false;
-        return;
-      }
-      btn.textContent = "Saved ✓";
-      toast("Saved");
-      setTimeout(()=>{ btn.textContent = prev; btn.disabled = false; }, 900);
-      loadPollStatus();
-    }catch(e){
-      toast("Save failed");
-      btn.textContent = prev;
-      btn.disabled = false;
+  const prev = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+
+  try{
+    const res = await fetch(`/admin/update-config?key=${encodeURIComponent(ADMIN_KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(()=>null);
+    if(!res.ok || !data || data.ok === false){
+      toast((data && data.error) ? data.error : "Save failed", "error");
+      btn.textContent = prev; btn.disabled = false;
+      return;
     }
+    btn.textContent = "Saved ✓";
+    toast("Saved", "ok");
+    setTimeout(()=>{ btn.textContent = prev; btn.disabled = false; }, 900);
+    loadPollStatus();
+  }catch(e){
+    toast("Save failed", "error");
+    btn.textContent = prev; btn.disabled = false;
   }
+}
 
   function boot(){
     const sel = $("motdSelect");
