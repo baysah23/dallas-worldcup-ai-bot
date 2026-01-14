@@ -3762,7 +3762,108 @@ def fan_venue(venue_id):
     resp.headers["Expires"] = "0"
     return resp
 
-from flask import abort, make_response
+from flask import abort, make_response, render_template_string
+
+FANZONE_ADMIN_HTML = r"""
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Fan Zone Admin</title>
+  <style>
+    :root{--bg:#0b1220;--card:rgba(255,255,255,.06);--stroke:rgba(255,255,255,.14);--text:#eef2ff;}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto;}
+    .wrap{max-width:980px;margin:0 auto;padding:16px}
+    .card{background:var(--card);border:1px solid var(--stroke);border-radius:16px;padding:14px}
+    .btn{padding:10px 14px;border-radius:12px;border:1px solid var(--stroke);background:rgba(255,255,255,.10);color:var(--text);cursor:pointer}
+    .btn2{padding:10px 14px;border-radius:12px;border:1px solid var(--stroke);background:rgba(255,255,255,.05);color:var(--text);cursor:pointer}
+    .inp{width:100%;border-radius:12px;border:1px solid var(--stroke);background:rgba(0,0,0,.25);color:var(--text);padding:10px}
+    .note{opacity:.75;font-size:12px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+        <div>
+          <div style="font-weight:800;font-size:18px">Fan Zone Admin</div>
+          <div class="note">Venue: <span id="vid"></span></div>
+        </div>
+        <a class="btn2" style="text-decoration:none" id="back">Back to Admin</a>
+      </div>
+
+      <div id="fanzoneAdminRoot" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+<script>
+(function(){
+  const qs = new URLSearchParams(location.search);
+  const KEY = qs.get("key") || "";
+  const VENUE = qs.get("venue") || "";
+  document.getElementById("vid").textContent = VENUE || "default";
+  document.getElementById("back").href = "/admin?key="+encodeURIComponent(KEY)+"&venue="+encodeURIComponent(VENUE);
+
+  async function loadFanZoneState(){
+    const msg = document.querySelector('#fzMsg');
+    const ta  = document.querySelector('#fzJson');
+    if(msg) msg.textContent = 'Loading…';
+    try{
+      const r = await fetch(`/admin/api/fanzone/state?key=${encodeURIComponent(KEY)}`, {cache:'no-store'});
+      const j = await r.json().catch(()=>null);
+      if(!j || !j.ok) throw new Error('Load failed');
+      if(ta) ta.value = JSON.stringify(j.state || {}, null, 2);
+      if(msg) msg.textContent = 'Loaded ✓';
+    }catch(e){
+      if(msg) msg.textContent = 'Load failed';
+      console.error(e);
+    }
+  }
+
+  async function saveFanZoneState(){
+    const msg = document.querySelector('#fzMsg');
+    const ta  = document.querySelector('#fzJson');
+    if(msg) msg.textContent = 'Saving…';
+    try{
+      const payload = JSON.parse((ta && ta.value) ? ta.value : '{}');
+      const r = await fetch(`/admin/api/fanzone/save?key=${encodeURIComponent(KEY)}`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
+      const j = await r.json().catch(()=>null);
+      if(!j || !j.ok) throw new Error('Save failed');
+      if(msg) msg.textContent = 'Saved ✓';
+    }catch(e){
+      if(msg) msg.textContent = 'Save failed (bad JSON?)';
+      console.error(e);
+    }
+  }
+
+  function boot(){
+    const root = document.querySelector('#fanzoneAdminRoot');
+    root.innerHTML = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+        <button class="btn2" type="button" id="fzLoadBtn">Load</button>
+        <button class="btn" type="button" id="fzSaveBtn">Save</button>
+        <span class="note" id="fzMsg"></span>
+      </div>
+      <textarea id="fzJson" class="inp" style="min-height:260px;font-family:ui-monospace,Menlo,Consolas,monospace"></textarea>
+      <div class="note" style="margin-top:8px">Edit JSON then Save.</div>
+    `;
+    document.getElementById("fzLoadBtn").onclick = loadFanZoneState;
+    document.getElementById("fzSaveBtn").onclick = saveFanZoneState;
+    loadFanZoneState();
+  }
+
+  if(!KEY){ document.querySelector('#fanzoneAdminRoot').innerHTML = '<div class="note">Missing key</div>'; return; }
+  boot();
+})();
+</script>
+</body>
+</html>
+"""
 
 @app.get("/admin/fanzone")
 def admin_fanzone_page():
@@ -3770,30 +3871,20 @@ def admin_fanzone_page():
     if not ok:
         return resp
 
-    # If venue param missing (CI/back-compat), fall back to resolved venue context.
     raw = (request.args.get("venue") or "").strip()
     vid = _slugify_venue_id(raw) if raw else _venue_id()
 
-    cfg = _venue_cfg(vid)  # may be {"status":"implicit"} for default
-
-    # Only hard-fail when caller explicitly provided a venue that doesn't exist
-    if raw and (not isinstance(cfg, dict) or cfg.get("venue_id") != vid or cfg.get("status") == "implicit"):
+    # If caller explicitly passed a venue, it must exist
+    cfg = _venue_cfg(vid)
+    if raw and (cfg.get("status") == "implicit" or cfg.get("venue_id") != vid):
         abort(403)
 
-    resp = make_response(render_template(
-        "admin_fanzone.html",
-        venue_id=vid,
-        venue_cfg=cfg,
-        role=getattr(g, "admin_role", "manager"),
-    ))
-
-    # Ensure subsequent /api/poll/* calls are venue-scoped
+    out = make_response(render_template_string(FANZONE_ADMIN_HTML))
     try:
-        resp.set_cookie("venue_id", vid, httponly=False, samesite="Lax")
+        out.set_cookie("venue_id", vid, httponly=False, samesite="Lax")
     except Exception:
         pass
-
-    return resp
+    return out
 
 @app.route("/<path:path>")
 def catch_all(path):
