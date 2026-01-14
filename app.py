@@ -7070,61 +7070,6 @@ th{
   </div>
 </div>
 
-<!-- FAN ZONE TAB -->
-
-    <div class="controls" style="margin:12px 0 0 0">
-      <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
-        <div class="sub">Sponsor label (“Presented by …”)</div>
-        <input class="inp" id="pollSponsorText" placeholder="Fan Pick presented by …" />
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
-        <div class="sub">Match of the Day</div>
-        <select id="motdSelect"></select>
-
-        <div class="sub" style="margin-top:8px">
-          If schedule options don’t load (or you want to override), set Match of the Day manually:
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
-          <div>
-            <div class="sub">Home team</div>
-            <input id="motdHome" placeholder="Home team"/>
-          </div>
-          <div>
-            <div class="sub">Away team</div>
-            <input id="motdAway" placeholder="Away team"/>
-          </div>
-        </div>
-
-        <div style="margin-top:10px">
-          <div class="sub">
-            Kickoff (UTC, ISO 8601 — used to lock poll at kickoff)
-          </div>
-          <input id="motdKickoff" placeholder="2026-06-11T19:00:00Z"/>
-        </div>
-
-        <div style="margin-top:10px">
-          <div class="sub">Poll lock</div>
-          <select id="pollLockMode" class="inp">
-            <option value="auto">Auto (lock at kickoff)</option>
-            <option value="unlocked">Force Unlocked (admin override)</option>
-            <option value="locked">Force Locked</option>
-          </select>
-          <div class="small">
-            If you need to reopen voting after kickoff, set <b>Force Unlocked</b>.
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div id="pollStatus" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
-      <div class="sub">Loading poll status…</div>
-    </div>
-  </div>
-
-</div>
-
 <!-- LEADS TAB -->
 
 <div id="tab-monitor" class="tabpane hidden">
