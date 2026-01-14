@@ -3787,7 +3787,23 @@ def admin_fanzone_page():
     .controls{display:flex;gap:12px;flex-wrap:wrap}
     .inp{width:100%;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.06);color:#eef2ff}
     .btn{padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.12);color:#eef2ff;cursor:pointer}
-  </style>
+html { color-scheme: dark; }
+select, option {
+  background: #0b1220 !important;
+  color: #eef2ff !important;
+}
+.controls{
+  display:grid !important;
+  grid-template-columns: 1fr;
+  gap:14px;
+  align-items:start;
+}
+
+@media (min-width: 980px){
+  .controls{ grid-template-columns: 1fr 1fr; }
+}
+
+</style>
 </head>
 <body>
   <div class="wrap">
