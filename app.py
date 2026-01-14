@@ -3782,9 +3782,23 @@ FANZONE_ADMIN_HTML = r"""
     .row{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.05)}
     .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace}
     .h2{font-weight:800;font-size:18px}
-    .controls{display:grid;grid-template-columns:1fr;gap:14px;align-items:start}
-    .controls > div { min-width: 0; }
-    @media(min-width:980px){.controls{grid-template-columns: 2fr 3fr}}
+   .controls{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:14px;
+  align-items:start;
+}
+
+.controls > div{
+  min-width:0;
+}
+
+@media(min-width:980px){
+  .controls{
+    grid-template-columns: minmax(360px, 420px) 1fr;
+  }
+}
+
     #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.18);color:#eef2ff;padding:10px 12px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .18s}
     #toast.show{opacity:1}
   </style>
