@@ -9699,6 +9699,11 @@ select option{
 <script>
 (function(){
   const qs = new URLSearchParams(location.search);
+
+  // ✅ Venue bootstrap (scoped, no redeclare issues)
+  window.VENUE = (window.VENUE || qs.get("venue") || "").trim();
+  const VENUE = window.VENUE;
+
   const ADMIN_KEY = qs.get("key") || "";
   const ROLE = __ADMIN_ROLE__; // replaced server-side with JSON string
 
@@ -9714,6 +9719,11 @@ select option{
     toast._t = setTimeout(()=>el.classList.remove("show"), 2200);
   }
 
+  // Optional but helpful: surface missing venue immediately
+  if(!VENUE){
+    toast("Missing venue", "error");
+  }
+
   function setPollStatus(html){
     const box = $("pollStatus");
     if(!box) return;
@@ -9723,15 +9733,23 @@ select option{
   async function loadPollStatus(){
     try{
       setPollStatus('<div class="sub">Loading poll status…</div>');
-      const res = await fetch("/api/poll/state", {cache:"no-store"});
+
+      // ✅ Venue-scoped poll state
+      const res = await fetch(
+        `/api/poll/state?venue=${encodeURIComponent(VENUE||"")}&_=${Date.now()}`,
+        { cache: "no-store" }
+      );
+
       const data = await res.json().catch(()=>null);
       if(!data || data.ok === false){
         setPollStatus('<div class="sub">Poll status unavailable</div>');
         return;
       }
+
       const locked = !!data.locked;
       const title = (data.title || "Match of the Day Poll");
       const top = (data.top && data.top.length) ? data.top : [];
+
       let rows = "";
       for(const r of top){
         const name = String(r.name||"");
