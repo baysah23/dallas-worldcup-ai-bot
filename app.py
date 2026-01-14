@@ -7072,8 +7072,12 @@ def admin():
 
     key = (request.args.get("key", "") or "").strip()
 
-    ctx = _admin_ctx() or {}
+    try:
+       ctx = _admin_ctx() or {}
+    except Exception:
+        ctx = {}
     role = ctx.get("role", "manager")
+
 
     # CI-safe guard: never allow admin GET to throw before HTML render
     try:
