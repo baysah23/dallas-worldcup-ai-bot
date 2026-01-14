@@ -7073,14 +7073,16 @@ def admin():
 
         key = (request.args.get("key", "") or "").strip()
 
-        # (keep the rest of your existing /admin code below this line unchanged)
+        ctx = _admin_ctx()
+        role = ctx.get("role", "manager")
+
+        # ⬇️ KEEP ALL YOUR EXISTING ADMIN HTML / LOGIC HERE ⬇️
+        # html = ...
+        # return html or render_template(...)
 
     except Exception:
         tb = traceback.format_exc()
         return ("<h1>Admin</h1><pre>%s</pre>" % html.escape(tb), 200)
-
-    ctx = _admin_ctx()
-    role = ctx.get("role", "manager")
 
     # Role-based branding (visual only)
     is_owner = (role == "owner")
