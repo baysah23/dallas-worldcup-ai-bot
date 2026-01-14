@@ -2326,37 +2326,49 @@ def _is_super_admin_request() -> bool:
     return False
 
 def _require_admin(min_role: str = "manager"):
-    """Enforce admin access.
+    # key can come from query (?key=), header, or cookie
+    key = (request.args.get("key") or request.headers.get("X-Admin-Key") or request.cookies.get("admin_key") or "").strip()
+    if not key:
+        return False, (jsonify({"ok": False, "error": "unauthorized"}), 401)
 
-    min_role:
-      - "manager": owner or manager
-      - "owner": owner only
-    """
-    ctx = _admin_auth()
-    if not ctx.get("ok"):
-        return False, (jsonify({"ok": False, "error": "Unauthorized"}), 401)
-
-    if (min_role or "manager") == "owner" and ctx.get("role") != "owner":
-        return False, (jsonify({"ok": False, "error": "Forbidden"}), 403)
-
+    # ---- 1) VENUE-SCOPED KEYS (preferred) ----
     try:
-        request._admin_ctx = ctx  # type: ignore[attr-defined]
+        cfg = _venue_cfg()
+        access = cfg.get("access") if isinstance(cfg.get("access"), dict) else {}
+        v_admin = access.get("admin_keys") or []
+        v_mgr = access.get("manager_keys") or []
+
+        if key in v_admin:
+            g.admin_role = "owner"
+            g.admin_actor = "owner:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+        elif key in v_mgr:
+            g.admin_role = "manager"
+            g.admin_actor = "manager:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+        else:
+            # no match in venue keys; continue to env fallback
+            pass
+
+        if getattr(g, "admin_role", None):
+            if _ROLE_RANK.get(g.admin_role, 0) >= _ROLE_RANK.get(min_role, 0):
+                return True, None
+            return False, (jsonify({"ok": False, "error": "forbidden"}), 403)
     except Exception:
         pass
+
+    # ---- 2) ENV FALLBACK KEYS (back-compat) ----
+    if key == (ADMIN_OWNER_KEY or ""):
+        g.admin_role = "owner"
+        g.admin_actor = "owner:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+    elif key in (ADMIN_MANAGER_KEYS or []):
+        g.admin_role = "manager"
+        g.admin_actor = "manager:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+    else:
+        return False, (jsonify({"ok": False, "error": "unauthorized"}), 401)
+
+    if _ROLE_RANK.get(g.admin_role, 0) < _ROLE_RANK.get(min_role, 0):
+        return False, (jsonify({"ok": False, "error": "forbidden"}), 403)
+
     return True, None
-
-def _admin_ctx() -> Dict[str, str]:
-    try:
-        ctx = getattr(request, "_admin_ctx", None)
-        if isinstance(ctx, dict):
-            return ctx
-    except Exception:
-        pass
-    ctx = _admin_auth()
-    if isinstance(ctx, dict) and ctx.get("ok"):
-        return ctx
-    return {"ok": False, "role": "", "actor": ""}
-
 
 def _redis_runtime_status() -> Dict[str, Any]:
     """Runtime Redis truth (Gunicorn-safe): re-init + ping where possible."""
