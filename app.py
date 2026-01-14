@@ -4053,7 +4053,7 @@ def admin_fanzone_page():
 
     out = make_response(render_template_string(FANZONE_ADMIN_HTML))
     try:
-        out.set_cookie("venue_id", vid, httponly=False, samesite="Lax")
+        out.set_cookie("venue_id", vid, httponly=False, samesite="Lax", path="/admin")
     except Exception:
         pass
     return out
