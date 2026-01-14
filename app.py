@@ -1797,7 +1797,12 @@ def _admin_auth() -> Dict[str, str]:
     if not key:
         return {"ok": False, "role": "", "actor": "", "venue_id": ""}
 
-    vid = _venue_id()
+    vid = (
+    request.args.get("venue")
+    or (request.json.get("venue") if request and request.json else None)
+    or _venue_id()
+    or "default"
+)
 
     # Global owner key (all venues)
     if ADMIN_OWNER_KEY and key == ADMIN_OWNER_KEY:
