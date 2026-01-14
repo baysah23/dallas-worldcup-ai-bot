@@ -6790,12 +6790,36 @@ def admin_api_audit():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
+
     try:
         limit = int(request.args.get("limit", "200") or 200)
         limit = max(1, min(limit, 1000))
     except Exception:
         limit = 200
+
     entries: List[Dict[str, Any]] = []
+
+    # ------------------------------------------------------------
+    # 1) Redis-first (shared across instances, works while testing)
+    # ------------------------------------------------------------
+    try:
+        _redis_init_if_needed()
+        if globals().get("_REDIS_ENABLED") and globals().get("_REDIS"):
+            vid = _venue_id()
+            rkey = f"{_REDIS_NS}:{vid}:audit_log"
+            raw = _REDIS.lrange(rkey, 0, limit - 1)  # newest first
+            for item in raw or []:
+                try:
+                    entries.append(json.loads(item))
+                except Exception:
+                    continue
+            return jsonify({"ok": True, "entries": entries})
+    except Exception:
+        pass
+
+    # ------------------------------------------------------------
+    # 2) File fallback (dev / legacy behavior)
+    # ------------------------------------------------------------
     try:
         if os.path.exists(AUDIT_LOG_FILE):
             with open(AUDIT_LOG_FILE, "r", encoding="utf-8") as f:
@@ -6810,13 +6834,14 @@ def admin_api_audit():
                     continue
     except Exception:
         pass
+
     # Newest first
     try:
         entries = list(reversed(entries))
     except Exception:
         pass
-    return jsonify({"ok": True, "entries": entries})
 
+    return jsonify({"ok": True, "entries": entries})
 
 
 # ============================================================
