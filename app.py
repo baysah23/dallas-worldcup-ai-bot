@@ -3888,7 +3888,7 @@ FANZONE_ADMIN_HTML = r"""
   async function loadPollStatus(){
     try{
       setPollStatus('<div class="sub">Loading poll status…</div>');
-      const res = await fetch("/api/poll/state", {cache:"no-store"});
+      const res = await fetch(`/api/poll/state?venue=${encodeURIComponent(VENUE)}`, {cache:"no-store"});
       const data = await res.json().catch(()=>null);
       if(!data || data.ok === false){
         setPollStatus('<div class="sub">Poll status unavailable</div>');
