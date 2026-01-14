@@ -7582,7 +7582,7 @@ window.showTab = function(tab){
     }
 
     try{
-      var b = document.querySelector('.tabbtn[data-tab="'+tab+'"]');
+      var b = document.querySelector('.tabbtn[data-tabbtn="'+tab+'"]') || document.querySelector('.tabbtn[data-tab="'+tab+'"]');
       var minr = (b && b.getAttribute) ? (b.getAttribute('data-minrole') || 'manager') : 'manager';
       if(ROLE_RANK && ROLE_RANK[ROLE] !== undefined && ROLE_RANK[minr] !== undefined){
         if(ROLE_RANK[ROLE] < ROLE_RANK[minr]){
