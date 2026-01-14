@@ -3794,13 +3794,15 @@ select, option {
 }
 .controls{
   display:grid !important;
-  grid-template-columns: 1fr;
-  gap:14px;
+  grid-template-columns: 1.05fr 1.55fr;
+  gap:16px;
   align-items:start;
 }
 
-@media (min-width: 980px){
-  .controls{ grid-template-columns: 1fr 1fr; }
+.controls > *{ min-width:0; }
+
+@media (max-width: 979px){
+  .controls{ grid-template-columns: 1fr; }
 }
 
 </style>
