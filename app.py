@@ -3761,20 +3761,34 @@ def fan_venue(venue_id):
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
     return resp
+from flask import abort
 
 @app.get("/admin/fanzone")
 def admin_fanzone_page():
+    # Require admin/manager auth
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
 
-    # Fan Zone is intentionally separated. Keep old links working by redirecting
-    # to /admin and preserving query params.
-    q = request.query_string.decode("utf-8") if request.query_string else ""
-    url = "/admin"
-    if q:
-        url += "?" + q
-    return redirect(url, code=302)
+    # Fan Zone MUST be venue-scoped
+    venue = (request.args.get("venue") or "").strip()
+    if not venue:
+        abort(403)
+
+    venue = _slugify_venue_id(venue)
+    cfg = _venue_cfg(venue)
+
+    # Hard fail if venue does not exist
+    if not cfg or cfg.get("venue_id") != venue:
+        abort(403)
+
+    # Render Fan Zone admin (DO NOT redirect to /admin)
+    return render_template(
+        "admin_fanzone.html",
+        venue_id=venue,
+        venue_cfg=cfg,
+        role=g.get("admin_role", "manager"),
+    )
 
 @app.route("/<path:path>")
 def catch_all(path):
