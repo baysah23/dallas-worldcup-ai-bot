@@ -1810,6 +1810,20 @@ def _admin_auth() -> Dict[str, str]:
     akeys = access.get("admin_keys") if isinstance(access.get("admin_keys"), list) else []
     mkeys = access.get("manager_keys") if isinstance(access.get("manager_keys"), list) else []
 
+    # Accept per-venue generated keys stored under cfg["keys"]
+    k = vc.get("keys") if isinstance(vc.get("keys"), dict) else {}
+    k_admin = str((k or {}).get("admin_key") or "").strip()
+    k_mgr = str((k or {}).get("manager_key") or "").strip()
+
+    if k_admin and key == k_admin:
+        actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+        return {"ok": True, "role": "owner", "actor": actor, "venue_id": vid}
+
+    if k_mgr and key == k_mgr:
+        actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+        return {"ok": True, "role": "manager", "actor": actor, "venue_id": vid}
+
+
     if key in [str(k).strip() for k in akeys if str(k).strip()]:
         actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
         return {"ok": True, "role": "owner", "actor": actor, "venue_id": vid}
