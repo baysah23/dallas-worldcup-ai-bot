@@ -3974,6 +3974,10 @@ FANZONE_ADMIN_HTML = r"""
     if($("motdKickoff")) $("motdKickoff").value = dt;
   }
 
+  // Fan Zone venue bootstrap (MUST be above saveFanZoneConfig)
+const qs = new URLSearchParams(location.search);
+window.VENUE = (window.VENUE || qs.get("venue") || "").trim();
+
   async function saveFanZoneConfig(){
   const btn = $("btnSaveConfig");
   const sel = $("motdSelect");
