@@ -7838,18 +7838,30 @@ function setupLeadFilters(){
 
 function qs(sel){return document.querySelector(sel);}
 function qsa(sel){return Array.from(document.querySelectorAll(sel));}
-
+                
 qsa('.tabbtn').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
+  btn.addEventListener('click', (e)=>{
+    try{ e.preventDefault(); }catch(_){}
+
+    const t = btn.dataset.tab || btn.getAttribute('data-tab') || btn.getAttribute('data-tabbtn') || '';
+
+    // Always route through showTab so special tabs (like fanzone) can redirect
+    if(typeof window.showTab === 'function'){
+      window.showTab(t);
+      return;
+    }
+
+    // Fallback (should rarely be needed)
     qsa('.tabbtn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
-    const t = btn.dataset.tab;
-    ['leads','ai','aiq','rules','menu','audit'].forEach(x=>{
+
+    ['ops','leads','ai','aiq','rules','menu','audit'].forEach(x=>{
       const pane = document.getElementById('tab-'+x);
       if(!pane) return;
       pane.classList.toggle('hidden', x!==t);
     });
-if(t==='ai') loadAI();
+
+    if(t==='ai') loadAI();
     if(t==='aiq') loadAIQueue();
     if(t==='rules') loadRules();
     if(t==='menu') loadMenu();
