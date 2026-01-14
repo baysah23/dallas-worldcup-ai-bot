@@ -3768,19 +3768,13 @@ def admin_fanzone_page():
     if not ok:
         return resp
 
-    # Fan Zone is intentionally separated; this route is disabled to prevent any
-    # Fan Zone UI from appearing inside /admin in any form.
-    # Keep old links working by redirecting to /admin and preserving query params.
-    try:
-        q = request.query_string.decode("utf-8") if request.query_string else ""
-        url = "/admin"
-        if q:
-            url = url + "?" + q
-        return redirect(url, code=302)
-    except Exception:
-        return redirect("/admin", code=302)
-
-    return make_response(html_out)
+    # Fan Zone is intentionally separated. Keep old links working by redirecting
+    # to /admin and preserving query params.
+    q = request.query_string.decode("utf-8") if request.query_string else ""
+    url = "/admin"
+    if q:
+        url += "?" + q
+    return redirect(url, code=302)
 
 @app.route("/<path:path>")
 def catch_all(path):
