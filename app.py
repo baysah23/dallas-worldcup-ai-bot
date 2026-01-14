@@ -1802,7 +1802,7 @@ def _admin_auth() -> Dict[str, str]:
     or (request.json.get("venue") if request and request.json else None)
     or _venue_id()
     or "default"
-)
+    )
 
     # Global owner key (all venues)
     if ADMIN_OWNER_KEY and key == ADMIN_OWNER_KEY:
