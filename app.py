@@ -5174,7 +5174,7 @@ Rules:
                 "For accurate details, please check the **Menu** or **Info** panels on this page.\n\n"
                 "I can still help with a reservation — **how many guests** and **what time**?"
             )
-            return jsonify({"reply": f"{fallback}\n\nDebug: {type(e).__name__}", "rate_limit_remaining": remaining}), 200
+            return jsonify({"reply": fallback, "rate_limit_remaining": remaining}), 200
 
     except Exception as e:
         # Never break the UI: always return JSON.
@@ -5182,7 +5182,7 @@ Rules:
             "For accurate details, please check the **Menu** or **Info** panels on this page.\n\n"
             "I can still help with a reservation — **how many guests** and **what time**?"
         )
-        return jsonify({"reply": f"{fallback}\n\nDebug: {type(e).__name__}", "rate_limit_remaining": 0}), 200
+        return jsonify({"reply": fallback, "rate_limit_remaining": 0}), 200
 
 # ============================================================
 # Admin dashboard
