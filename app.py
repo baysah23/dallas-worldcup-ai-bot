@@ -5692,23 +5692,44 @@ def _poll_client_id(provided: str) -> str:
 
 @app.route("/api/poll/state")
 def api_poll_state():
-    """Return match poll state.
-
-    This endpoint must *always* return JSON so the Fan Zone UI never breaks.
-    If anything goes wrong (fixtures/config/poll store), we fall back to a safe placeholder.
+    """
+    Return match poll state (VENUE-AWARE).
+    Always returns JSON so the Fan Zone UI never breaks.
     """
     try:
+        # ✅ venue from query
+        venue = (request.args.get("venue") or "").strip()
+
+        def _venue_fanzone_cfg():
+            if not venue:
+                return {}
+            try:
+                path = os.path.join(VENUES_DIR, f"{venue}.json")
+                if not os.path.exists(path):
+                    return {}
+                with open(path, "r", encoding="utf-8") as f:
+                    vcfg = json.load(f) or {}
+                return vcfg.get("fan_zone") or {}
+            except Exception:
+                return {}
+
+        fz_cfg = _venue_fanzone_cfg()
+
         motd = _get_match_of_day()
         if not motd:
-            # Keep the UI responsive even if matches failed to load.
-            cfg = get_config()
+            # Safe placeholder when fixtures are unavailable
             return jsonify({
                 "ok": True,
                 "locked": True,
                 "post_match": False,
                 "winner": None,
-                "sponsor_text": cfg.get("poll_sponsor_text", ""),
-                "match": {"id": "placeholder", "home": "Team A", "away": "Team B", "kickoff": ""},
+                "sponsor_text": fz_cfg.get("poll_sponsor_text", ""),
+                "match": {
+                    "id": "placeholder",
+                    "home": "Team A",
+                    "away": "Team B",
+                    "kickoff": ""
+                },
                 "counts": {"Team A": 0, "Team B": 0},
                 "percent": {"Team A": 0.0, "Team B": 0.0},
                 "percentages": {"Team A": 0.0, "Team B": 0.0},
@@ -5721,22 +5742,27 @@ def api_poll_state():
         locked = _poll_is_locked(motd)
         post_match = _poll_is_post_match(motd)
 
-        teams = [motd.get("home") or "Team A", motd.get("away") or "Team B"]
+        teams = [
+            motd.get("home") or "Team A",
+            motd.get("away") or "Team B"
+        ]
+
         client_id_raw = (request.args.get("client_id") or "").strip()
         client_id = _poll_client_id(client_id_raw) if client_id_raw else ""
         voted_for = _poll_has_voted(mid, client_id) if client_id else None
         can_vote = (not locked) and (not voted_for)
+
         counts = _poll_counts(mid)
         total = sum(counts.get(t, 0) for t in teams)
+
         pct = {}
         for t in teams:
             pct[t] = (counts.get(t, 0) / total * 100.0) if total > 0 else 0.0
 
-        # Winner is purely UI-only: leader when locked, or after match.
         winner = None
         if total > 0:
             winner = max(teams, key=lambda t: counts.get(t, 0))
-        cfg = get_config()
+
         return jsonify({
             "ok": True,
             "can_vote": can_vote,
@@ -5759,22 +5785,23 @@ def api_poll_state():
             "percent": {t: round(pct[t], 1) for t in teams},
             "total_votes": int(total),
             "total": int(total),
-            "sponsor_text": cfg.get("poll_sponsor_text", ""),
+            # ✅ venue-scoped sponsor text
+            "sponsor_text": fz_cfg.get("poll_sponsor_text", ""),
         })
     except Exception:
-        # Absolute last resort: return a safe placeholder instead of 500/HTML.
-        cfg = {}
-        try:
-            cfg = get_config()
-        except Exception:
-            cfg = {}
+        # Absolute fallback — never break UI
         return jsonify({
             "ok": True,
             "locked": True,
             "post_match": False,
             "winner": None,
-            "sponsor_text": cfg.get("poll_sponsor_text", "") if isinstance(cfg, dict) else "",
-            "match": {"id": "placeholder", "home": "Team A", "away": "Team B", "kickoff": ""},
+            "sponsor_text": "",
+            "match": {
+                "id": "placeholder",
+                "home": "Team A",
+                "away": "Team B",
+                "kickoff": ""
+            },
             "counts": {"Team A": 0, "Team B": 0},
             "percent": {"Team A": 0.0, "Team B": 0.0},
             "percentages": {"Team A": 0.0, "Team B": 0.0},
