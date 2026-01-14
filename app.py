@@ -3761,34 +3761,39 @@ def fan_venue(venue_id):
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
     return resp
-from flask import abort
+
+from flask import abort, make_response
 
 @app.get("/admin/fanzone")
 def admin_fanzone_page():
-    # Require admin/manager auth
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
 
-    # Fan Zone MUST be venue-scoped
-    venue = (request.args.get("venue") or "").strip()
-    if not venue:
+    # If venue param missing (CI/back-compat), fall back to resolved venue context.
+    raw = (request.args.get("venue") or "").strip()
+    vid = _slugify_venue_id(raw) if raw else _venue_id()
+
+    cfg = _venue_cfg(vid)  # may be {"status":"implicit"} for default
+
+    # Only hard-fail when caller explicitly provided a venue that doesn't exist
+    if raw and (not isinstance(cfg, dict) or cfg.get("venue_id") != vid or cfg.get("status") == "implicit"):
         abort(403)
 
-    venue = _slugify_venue_id(venue)
-    cfg = _venue_cfg(venue)
-
-    # Hard fail if venue does not exist
-    if not cfg or cfg.get("venue_id") != venue:
-        abort(403)
-
-    # Render Fan Zone admin (DO NOT redirect to /admin)
-    return render_template(
+    resp = make_response(render_template(
         "admin_fanzone.html",
-        venue_id=venue,
+        venue_id=vid,
         venue_cfg=cfg,
-        role=g.get("admin_role", "manager"),
-    )
+        role=getattr(g, "admin_role", "manager"),
+    ))
+
+    # Ensure subsequent /api/poll/* calls are venue-scoped
+    try:
+        resp.set_cookie("venue_id", vid, httponly=False, samesite="Lax")
+    except Exception:
+        pass
+
+    return resp
 
 @app.route("/<path:path>")
 def catch_all(path):
