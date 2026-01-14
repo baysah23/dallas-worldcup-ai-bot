@@ -6366,7 +6366,10 @@ def admin_api_ai_queue_list():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
-    ctx = _admin_ctx()
+    try:
+        ctx = _admin_ctx() or {}
+    except Exception:
+        ctx = {}
     role = ctx.get("role", "")
     queue = _load_ai_queue()
     # optional status filter
