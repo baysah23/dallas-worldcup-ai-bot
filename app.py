@@ -7565,7 +7565,22 @@ th{
     }catch(e){}
   }
 
-  window.showTab = function(tab){
+window.showTab = function(tab){
+
+    // Fan Zone tab = redirect to isolated Fan Zone page (preserve key + venue)
+    if(tab === 'fanzone'){
+      try{
+        var qs = new URLSearchParams(window.location.search || '');
+        var url = '/admin/fanzone';
+        var q = qs.toString();
+        if(q) url += '?' + q;
+        window.location.href = url;
+      }catch(e){
+        window.location.href = '/admin/fanzone' + (window.location.search || '');
+      }
+      return false;
+    }
+
     try{
       var b = document.querySelector('.tabbtn[data-tab="'+tab+'"]');
       var minr = (b && b.getAttribute) ? (b.getAttribute('data-minrole') || 'manager') : 'manager';
