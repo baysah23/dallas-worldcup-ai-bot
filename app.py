@@ -5302,11 +5302,14 @@ def _read_notifications(limit: int = 50, role: str = "manager") -> List[Dict[str
         return out
     except Exception:
         return []
-
+    
 def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
-    """Append a single-line JSON audit entry (best-effort, non-blocking)."""
+    """Append a single-line JSON audit entry (best-effort, non-blocking).
+    Writes to Redis (per-venue) and falls back to local file.
+    """
     try:
-        ctx = _admin_ctx()
+        ctx = _admin_ctx() if "_admin_ctx" in globals() else {}
+
         entry = {
             "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
             "event": str(event),
@@ -5316,12 +5319,36 @@ def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
             "path": getattr(request, "path", ""),
             "details": details or {},
         }
-        os.makedirs(os.path.dirname(AUDIT_LOG_FILE), exist_ok=True)
-        with open(AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+        # --- Resolve venue consistently ---
+        vid = (
+            (request.args.get("venue") if request else None)
+            or ((request.get_json(silent=True) or {}).get("venue") if request else None)
+            or (_venue_id() if "_venue_id" in globals() else None)
+            or "default"
+        )
+
+        # --- 1) Redis write (shared across instances) ---
+        try:
+            if "_redis_init_if_needed" in globals():
+                _redis_init_if_needed()
+            if globals().get("_REDIS_ENABLED") and globals().get("_REDIS"):
+                rkey = f"{_REDIS_NS}:{vid}:audit_log"
+                _REDIS.lpush(rkey, json.dumps(entry, ensure_ascii=False))
+                _REDIS.ltrim(rkey, 0, 2000)  # keep last ~2000 entries
+        except Exception:
+            pass
+
+        # --- 2) File fallback (legacy / dev) ---
+        try:
+            os.makedirs(os.path.dirname(AUDIT_LOG_FILE), exist_ok=True)
+            with open(AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+
     except Exception:
         pass
-
 
 # -----------------------------
 # Lightweight in-process caches
@@ -14850,9 +14877,12 @@ def _read_notifications(limit: int = 50, role: str = "manager") -> List[Dict[str
         return []
 
 def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
-    """Append a single-line JSON audit entry (best-effort, non-blocking)."""
+    """Append a single-line JSON audit entry (best-effort, non-blocking).
+    Writes to Redis (per-venue) and falls back to local file.
+    """
     try:
-        ctx = _admin_ctx()
+        ctx = _admin_ctx() if "_admin_ctx" in globals() else {}
+
         entry = {
             "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
             "event": str(event),
@@ -14862,12 +14892,36 @@ def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
             "path": getattr(request, "path", ""),
             "details": details or {},
         }
-        os.makedirs(os.path.dirname(AUDIT_LOG_FILE), exist_ok=True)
-        with open(AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+        # --- Resolve venue consistently ---
+        vid = (
+            (request.args.get("venue") if request else None)
+            or ((request.get_json(silent=True) or {}).get("venue") if request else None)
+            or (_venue_id() if "_venue_id" in globals() else None)
+            or "default"
+        )
+
+        # --- 1) Redis write (shared across instances) ---
+        try:
+            if "_redis_init_if_needed" in globals():
+                _redis_init_if_needed()
+            if globals().get("_REDIS_ENABLED") and globals().get("_REDIS"):
+                rkey = f"{_REDIS_NS}:{vid}:audit_log"
+                _REDIS.lpush(rkey, json.dumps(entry, ensure_ascii=False))
+                _REDIS.ltrim(rkey, 0, 2000)  # keep last ~2000 entries
+        except Exception:
+            pass
+
+        # --- 2) File fallback (legacy / dev) ---
+        try:
+            os.makedirs(os.path.dirname(AUDIT_LOG_FILE), exist_ok=True)
+            with open(AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+
     except Exception:
         pass
-
 
 # -----------------------------
 # Lightweight in-process caches
