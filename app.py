@@ -6745,8 +6745,12 @@ def admin_api_notifications():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
-    ctx = _admin_ctx()
+    try:
+       ctx = _admin_ctx() or {}
+    except Exception:
+       ctx = {}
     role = ctx.get("role", "manager")
+
 
     # Role-based branding (visual only)
     is_owner = (role == "owner")
