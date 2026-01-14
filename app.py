@@ -3824,12 +3824,12 @@ select, option {
           <input class="inp" id="pollSponsorText" placeholder="Fan Pick presented by …" />
         </div>
 
-        <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
+        <div style="display:flex;flex-direction:column;gap:12px;min-width:320px;flex:1">
           <div class="sub">Match of the Day</div>
           <select id="motdSelect" class="inp"></select>
           <div class="sub" style="margin-top:8px">Manual override:</div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+          <div class="motdGrid" style="margin-top:8px">
             <div><div class="sub">Home team</div><input class="inp" id="motdHome" placeholder="Home team"/></div>
             <div><div class="sub">Away team</div><input class="inp" id="motdAway" placeholder="Away team"/></div>
           </div>
