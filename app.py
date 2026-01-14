@@ -2360,6 +2360,15 @@ def _require_admin(min_role: str = "manager"):
         v_admin = access.get("admin_keys") or []
         v_mgr = access.get("manager_keys") or []
 
+        # Accept per-venue generated keys stored under cfg["keys"]
+        k = cfg.get("keys") if isinstance(cfg.get("keys"), dict) else {}
+        k_admin = str((k or {}).get("admin_key") or "").strip()
+        k_mgr = str((k or {}).get("manager_key") or "").strip()
+        if k_admin and k_admin not in v_admin:
+            v_admin = list(v_admin) + [k_admin]
+        if k_mgr and k_mgr not in v_mgr:
+            v_mgr = list(v_mgr) + [k_mgr]
+
         if key in v_admin:
             g.admin_role = "owner"
             g.admin_actor = "owner:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
