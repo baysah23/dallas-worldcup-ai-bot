@@ -2330,6 +2330,14 @@ def _require_admin(min_role: str = "manager"):
     key = (request.args.get("key") or request.headers.get("X-Admin-Key") or request.cookies.get("admin_key") or "").strip()
     if not key:
         return False, (jsonify({"ok": False, "error": "unauthorized"}), 401)
+    
+    # 🔐 GLOBAL OWNER KEY — MUST SHORT-CIRCUIT (even if venue cfg fails)
+    if key and (ADMIN_OWNER_KEY or "") and key == (ADMIN_OWNER_KEY or ""):
+        g.admin_role = "owner"
+        g.admin_actor = "owner:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+        if _ROLE_RANK.get(g.admin_role, 0) >= _ROLE_RANK.get(min_role, 0):
+            return True, None
+        return False, (jsonify({"ok": False, "error": "forbidden"}), 403)
 
     # ---- 1) VENUE-SCOPED KEYS (preferred) ----
     try:
