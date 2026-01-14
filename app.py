@@ -3819,27 +3819,37 @@ select, option {
       </div>
 
       <div class="controls" style="margin:12px 0 0 0">
-        <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
+
+        <!-- LEFT COLUMN -->
+        <div style="display:flex;flex-direction:column;gap:12px;min-width:320px;flex:1">
           <div class="sub">Sponsor label (“Presented by …”)</div>
           <input class="inp" id="pollSponsorText" placeholder="Fan Pick presented by …" />
         </div>
 
+        <!-- RIGHT COLUMN -->
         <div style="display:flex;flex-direction:column;gap:12px;min-width:320px;flex:1">
           <div class="sub">Match of the Day</div>
           <select id="motdSelect" class="inp"></select>
-          <div class="sub" style="margin-top:8px">Manual override:</div>
 
-          <div class="motdGrid" style="margin-top:8px">
-            <div><div class="sub">Home team</div><input class="inp" id="motdHome" placeholder="Home team"/></div>
-            <div><div class="sub">Away team</div><input class="inp" id="motdAway" placeholder="Away team"/></div>
+          <div class="sub">Manual override:</div>
+
+          <div class="motdGrid">
+            <div>
+              <div class="sub">Home team</div>
+              <input class="inp" id="motdHome" placeholder="Home team"/>
+            </div>
+            <div>
+              <div class="sub">Away team</div>
+              <input class="inp" id="motdAway" placeholder="Away team"/>
+            </div>
           </div>
 
-          <div style="margin-top:10px">
+          <div>
             <div class="sub">Kickoff (UTC ISO 8601)</div>
             <input class="inp" id="motdKickoff" placeholder="2026-06-11T19:00:00Z"/>
           </div>
 
-          <div style="margin-top:10px">
+          <div>
             <div class="sub">Poll lock</div>
             <select id="pollLockMode" class="inp">
               <option value="auto">Auto (lock at kickoff)</option>
