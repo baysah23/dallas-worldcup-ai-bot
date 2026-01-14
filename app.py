@@ -3762,8 +3762,6 @@ def fan_venue(venue_id):
     resp.headers["Expires"] = "0"
     return resp
 
-from flask import abort, make_response, render_template_string
-
 FANZONE_ADMIN_HTML = r"""
 <!doctype html>
 <html>
@@ -3772,14 +3770,22 @@ FANZONE_ADMIN_HTML = r"""
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Fan Zone Admin</title>
   <style>
-    :root{--bg:#0b1220;--card:rgba(255,255,255,.06);--stroke:rgba(255,255,255,.14);--text:#eef2ff;}
+    :root{--bg:#0b1220;--card:rgba(255,255,255,.06);--stroke:rgba(255,255,255,.14);--text:#eef2ff;--muted:rgba(238,242,255,.68);--line:rgba(255,255,255,.14);}
     html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto;}
-    .wrap{max-width:980px;margin:0 auto;padding:16px}
+    .wrap{max-width:1100px;margin:0 auto;padding:16px}
     .card{background:var(--card);border:1px solid var(--stroke);border-radius:16px;padding:14px}
-    .btn{padding:10px 14px;border-radius:12px;border:1px solid var(--stroke);background:rgba(255,255,255,.10);color:var(--text);cursor:pointer}
-    .btn2{padding:10px 14px;border-radius:12px;border:1px solid var(--stroke);background:rgba(255,255,255,.05);color:var(--text);cursor:pointer}
-    .inp{width:100%;border-radius:12px;border:1px solid var(--stroke);background:rgba(0,0,0,.25);color:var(--text);padding:10px}
-    .note{opacity:.75;font-size:12px}
+    .btn{padding:10px 14px;border-radius:12px;border:1px solid var(--stroke);background:rgba(255,255,255,.12);color:var(--text);cursor:pointer}
+    .btn2{padding:10px 14px;border-radius:12px;border:1px solid var(--stroke);background:rgba(255,255,255,.06);color:var(--text);cursor:pointer}
+    .inp,select{width:100%;border-radius:12px;border:1px solid var(--stroke);background:rgba(0,0,0,.25);color:var(--text);padding:10px}
+    .sub{color:var(--muted);font-size:12px}
+    .small{color:var(--muted);font-size:12px}
+    .row{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.05)}
+    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace}
+    .h2{font-weight:800;font-size:18px}
+    .controls{display:grid;grid-template-columns:1fr;gap:14px;align-items:start}
+    @media(min-width:980px){.controls{grid-template-columns:1fr 1fr}}
+    #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.18);color:#eef2ff;padding:10px 12px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .18s}
+    #toast.show{opacity:1}
   </style>
 </head>
 <body>
@@ -3787,77 +3793,234 @@ FANZONE_ADMIN_HTML = r"""
     <div class="card">
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
         <div>
-          <div style="font-weight:800;font-size:18px">Fan Zone Admin</div>
-          <div class="note">Venue: <span id="vid"></span></div>
+          <div style="font-weight:800;font-size:18px">Fan Zone • Poll Controls</div>
+          <div class="sub">Edit sponsor text + set Match of the Day (no redeploy). Also shows live poll status.</div>
+          <div class="sub">Venue: <span id="vid"></span></div>
         </div>
-        <a class="btn2" style="text-decoration:none" id="back">Back to Admin</a>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button type="button" class="btn" id="btnSaveConfig">Save settings</button>
+          <a class="btn2" style="text-decoration:none" id="back">Back to Admin</a>
+        </div>
       </div>
 
-      <div id="fanzoneAdminRoot" style="margin-top:12px"></div>
+      <div class="controls" style="margin:12px 0 0 0">
+        <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
+          <div class="sub">Sponsor label (“Presented by …”)</div>
+          <input class="inp" id="pollSponsorText" placeholder="Fan Pick presented by …" />
+          <div class="small">Saved into config and shown in Fan Zone.</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
+          <div class="sub">Match of the Day</div>
+          <select id="motdSelect"></select>
+
+          <div class="sub" style="margin-top:8px">Manual override (optional):</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+            <div><div class="sub">Home team</div><input class="inp" id="motdHome" placeholder="Home team"/></div>
+            <div><div class="sub">Away team</div><input class="inp" id="motdAway" placeholder="Away team"/></div>
+          </div>
+
+          <div style="margin-top:10px">
+            <div class="sub">Kickoff (UTC ISO, e.g. 2026-06-11T19:00:00Z)</div>
+            <input class="inp" id="motdKickoff" placeholder="2026-06-11T19:00:00Z"/>
+          </div>
+
+          <div style="margin-top:10px">
+            <div class="sub">Poll lock</div>
+            <select id="pollLockMode" class="inp">
+              <option value="auto">Auto (lock at kickoff)</option>
+              <option value="unlocked">Force Unlocked</option>
+              <option value="locked">Force Locked</option>
+            </select>
+            <div class="small">If you need to reopen voting after kickoff, choose Force Unlocked.</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="pollStatus" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
+        <div class="sub">Loading poll status…</div>
+      </div>
     </div>
   </div>
+
+  <div id="toast"></div>
 
 <script>
 (function(){
   const qs = new URLSearchParams(location.search);
-  const KEY = qs.get("key") || "";
+  const ADMIN_KEY = qs.get("key") || "";
   const VENUE = qs.get("venue") || "";
-  document.getElementById("vid").textContent = VENUE || "default";
-  document.getElementById("back").href = "/admin?key="+encodeURIComponent(KEY)+"&venue="+encodeURIComponent(VENUE);
+  const $ = (id)=>document.getElementById(id);
 
-  async function loadFanZoneState(){
-    const msg = document.querySelector('#fzMsg');
-    const ta  = document.querySelector('#fzJson');
-    if(msg) msg.textContent = 'Loading…';
+  $("vid").textContent = VENUE || "default";
+  $("back").href = "/admin?key="+encodeURIComponent(ADMIN_KEY)+"&venue="+encodeURIComponent(VENUE);
+
+  function toast(msg){
+    const el = $("toast"); if(!el) return;
+    el.textContent = String(msg||"");
+    el.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(()=>el.classList.remove("show"), 1800);
+  }
+  function escapeHtml(s){
+    return String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function setPollStatus(html){
+    const box = $("pollStatus"); if(!box) return;
+    box.innerHTML = html;
+  }
+
+  async function loadPollStatus(){
     try{
-      const r = await fetch(`/admin/api/fanzone/state?key=${encodeURIComponent(KEY)}`, {cache:'no-store'});
-      const j = await r.json().catch(()=>null);
-      if(!j || !j.ok) throw new Error('Load failed');
-      if(ta) ta.value = JSON.stringify(j.state || {}, null, 2);
-      if(msg) msg.textContent = 'Loaded ✓';
+      setPollStatus('<div class="sub">Loading poll status…</div>');
+      const res = await fetch("/api/poll/state", {cache:"no-store"});
+      const data = await res.json().catch(()=>null);
+      if(!data || data.ok === false){
+        setPollStatus('<div class="sub">Poll status unavailable</div>');
+        return;
+      }
+
+      // Prefill fields from live poll state (best-effort)
+      try{
+        if($("pollSponsorText") && typeof data.sponsor_text === "string") $("pollSponsorText").value = data.sponsor_text;
+        const m = data.match || {};
+        if($("motdHome") && m.home) $("motdHome").value = m.home;
+        if($("motdAway") && m.away) $("motdAway").value = m.away;
+        if($("motdKickoff") && (m.datetime_utc || m.kickoff)) $("motdKickoff").value = (m.datetime_utc || m.kickoff);
+      }catch(e){}
+
+      const locked = !!data.locked;
+      const title = (data.title || "Match of the Day Poll");
+      const top = (data.top && data.top.length) ? data.top : [];
+      let rows = "";
+      for(const r of top){
+        const name = String(r.name||"");
+        const votes = String(r.votes||0);
+        rows += `<div class="row"><div>${escapeHtml(name)}</div><div class="mono">${escapeHtml(votes)}</div></div>`;
+      }
+      if(!rows) rows = '<div class="sub">No votes yet</div>';
+
+      setPollStatus(
+        `<div class="h2">${escapeHtml(title)}</div>` +
+        `<div class="small">${locked ? "🔒 Locked" : "🟢 Open"}</div>` +
+        `<div style="margin-top:10px;display:grid;gap:8px">${rows}</div>`
+      );
     }catch(e){
-      if(msg) msg.textContent = 'Load failed';
-      console.error(e);
+      setPollStatus('<div class="sub">Poll status unavailable</div>');
     }
   }
 
-  async function saveFanZoneState(){
-    const msg = document.querySelector('#fzMsg');
-    const ta  = document.querySelector('#fzJson');
-    if(msg) msg.textContent = 'Saving…';
+  async function loadMatchesForDropdown(){
+    const sel = $("motdSelect");
+    if(!sel) return;
     try{
-      const payload = JSON.parse((ta && ta.value) ? ta.value : '{}');
-      const r = await fetch(`/admin/api/fanzone/save?key=${encodeURIComponent(KEY)}`, {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
+      sel.disabled = true;
+      const res = await fetch("/schedule.json?scope=all&q=", {cache:"no-store"});
+      const data = await res.json().catch(()=>null);
+      const matches = (data && Array.isArray(data.matches)) ? data.matches : [];
+      const current = sel.value || "";
+      sel.innerHTML = '<option value="">Select a match…</option>';
+      let added = 0;
+      for(const m of matches){
+        if(added >= 250) break;
+        const dt = String(m.datetime_utc||"");
+        const home = String(m.home||"");
+        const away = String(m.away||"");
+        if(!dt || !home || !away) continue;
+        const id = (dt + "|" + home + "|" + away).replace(/[^A-Za-z0-9|:_-]+/g,"_").slice(0,180);
+        const label = `${m.date||""} ${m.time||""} • ${home} vs ${away} • ${m.venue||""}`.trim();
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = label || (home + " vs " + away);
+        opt.setAttribute("data-home", home);
+        opt.setAttribute("data-away", away);
+        opt.setAttribute("data-dt", dt);
+        if(current && current === id) opt.selected = true;
+        sel.appendChild(opt);
+        added++;
+      }
+      sel.disabled = false;
+      if(sel.value){
+        fillMatchFieldsFromOption(sel.selectedOptions[0]);
+      }
+    }catch(e){
+      sel.disabled = false;
+      toast("Couldn’t load matches");
+    }
+  }
+
+  function fillMatchFieldsFromOption(opt){
+    if(!opt) return;
+    const home = opt.getAttribute("data-home") || "";
+    const away = opt.getAttribute("data-away") || "";
+    const dt = opt.getAttribute("data-dt") || "";
+    if($("motdHome")) $("motdHome").value = home;
+    if($("motdAway")) $("motdAway").value = away;
+    if($("motdKickoff")) $("motdKickoff").value = dt;
+  }
+
+  async function saveFanZoneConfig(){
+    const btn = $("btnSaveConfig");
+    const sel = $("motdSelect");
+    const lockEl = $("pollLockMode");
+    if(!btn) return;
+
+    const payload = {
+      section: "fanzone",
+      poll_sponsor_text: ($("pollSponsorText")?.value || "").trim(),
+      motd: {
+        home: ($("motdHome")?.value || "").trim(),
+        away: ($("motdAway")?.value || "").trim(),
+        kickoff_utc: ($("motdKickoff")?.value || "").trim(),
+        match_id: (sel?.value || "").trim(),
+      },
+      poll: {
+        lock_mode: (lockEl?.value || "").trim(), // auto|unlocked|locked
+      }
+    };
+
+    const prev = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Saving…";
+    try{
+      const res = await fetch(`/admin/update-config?key=${encodeURIComponent(ADMIN_KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
         body: JSON.stringify(payload)
       });
-      const j = await r.json().catch(()=>null);
-      if(!j || !j.ok) throw new Error('Save failed');
-      if(msg) msg.textContent = 'Saved ✓';
+      const data = await res.json().catch(()=>null);
+      if(!res.ok || !data || data.ok === false){
+        toast((data && data.error) ? data.error : "Save failed");
+        btn.textContent = prev;
+        btn.disabled = false;
+        return;
+      }
+      btn.textContent = "Saved ✓";
+      toast("Saved");
+      setTimeout(()=>{ btn.textContent = prev; btn.disabled = false; }, 900);
+      loadPollStatus();
     }catch(e){
-      if(msg) msg.textContent = 'Save failed (bad JSON?)';
-      console.error(e);
+      toast("Save failed");
+      btn.textContent = prev;
+      btn.disabled = false;
     }
   }
 
   function boot(){
-    const root = document.querySelector('#fanzoneAdminRoot');
-    root.innerHTML = `
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
-        <button class="btn2" type="button" id="fzLoadBtn">Load</button>
-        <button class="btn" type="button" id="fzSaveBtn">Save</button>
-        <span class="note" id="fzMsg"></span>
-      </div>
-      <textarea id="fzJson" class="inp" style="min-height:260px;font-family:ui-monospace,Menlo,Consolas,monospace"></textarea>
-      <div class="note" style="margin-top:8px">Edit JSON then Save.</div>
-    `;
-    document.getElementById("fzLoadBtn").onclick = loadFanZoneState;
-    document.getElementById("fzSaveBtn").onclick = saveFanZoneState;
-    loadFanZoneState();
+    const sel = $("motdSelect");
+    if(sel){
+      sel.addEventListener("change", ()=>fillMatchFieldsFromOption(sel.selectedOptions[0]));
+      loadMatchesForDropdown();
+    }
+    const btn = $("btnSaveConfig");
+    if(btn) btn.addEventListener("click", (e)=>{ e.preventDefault(); saveFanZoneConfig(); });
+    loadPollStatus();
   }
 
-  if(!KEY){ document.querySelector('#fanzoneAdminRoot').innerHTML = '<div class="note">Missing key</div>'; return; }
+  if(!ADMIN_KEY){
+    setPollStatus('<div class="sub">Missing key</div>');
+    return;
+  }
   boot();
 })();
 </script>
