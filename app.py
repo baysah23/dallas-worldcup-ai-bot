@@ -7627,7 +7627,7 @@ window.showTab = function(tab){
         try{
           b.addEventListener('click', function(ev){
             try{ ev.preventDefault(); }catch(e){}
-            var t = b.getAttribute('data-tab');
+            var t = b.getAttribute('data-tab') || b.getAttribute('data-tabbtn');
             if(t){
               try{ window.showTab(t); }catch(e){}
             }
