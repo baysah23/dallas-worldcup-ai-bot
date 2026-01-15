@@ -99,6 +99,7 @@
 
 <script>
 const KEY = (new URLSearchParams(window.location.search).get('key') || '');
+const VENUE = (new URLSearchParams(window.location.search).get('venue') || '');
 let ROLE = (__ADMIN_ROLE__ || 'manager');
 const ROLE_RANK = { "manager": 1, "owner": 2 };
 
@@ -132,16 +133,28 @@ window.showTab = function(tab){
 };
 
 (function(){
-  const _origFetch = window.fetch;
-  window.fetch = function(input, init){
+  const _origFetch = window.fetch.bind(window);
+
+  window.fetch = function(input, init = {}){
     try{
-      let url = (typeof input === 'string') ? input : (input && input.url) ? input.url : '';
-      if(url && url.startsWith('/')){
-        if((url.startsWith('/admin') || url.startsWith('/api') || url.startsWith('/health')) && url.indexOf('key=')===-1){
-          url += (url.indexOf('?')===-1 ? '?' : '&') + 'key=' + encodeURIComponent(KEY||'');
-          if(typeof input === 'string') input = url;
-          else input = new Request(url, input);
-        }
+      const url = (typeof input === "string")
+        ? input
+        : (input && input.url) ? input.url : "";
+
+      if (url && url.startsWith("/admin/api/")) {
+        const u = new URL(url, window.location.origin);
+
+        // Always include key + venue
+        if (!u.searchParams.get("key")) u.searchParams.set("key", KEY || "");
+        if (!u.searchParams.get("venue")) u.searchParams.set("venue", VENUE || "");
+
+        // Always include headers too (some endpoints read headers)
+        const headers = new Headers(init.headers || {});
+        if (!headers.get("X-Admin-Key")) headers.set("X-Admin-Key", KEY || "");
+        if (!headers.get("X-Venue-Id")) headers.set("X-Venue-Id", VENUE || "");
+        init.headers = headers;
+
+        return _origFetch(u.pathname + u.search, init);
       }
     }catch(e){}
     return _origFetch(input, init);
