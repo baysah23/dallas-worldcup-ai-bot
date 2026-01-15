@@ -1787,12 +1787,6 @@ except Exception:
 def _admin_auth() -> Dict[str, str]:
     # Return admin auth context: {ok, role, actor, venue_id}.
 
-    # Auth mechanism: ?key=...
-    # - Owner key (global) => role=owner (all venues)
-    # - Venue-scoped keys in config/venues/<venue_id>.yaml => role=owner|manager for that venue
-    # - Legacy ADMIN_MANAGER_KEYS still works (manager, current venue context)
-
-    
     key = (request.args.get("key", "") or "").strip()
     if not key:
         return {"ok": False, "role": "", "actor": "", "venue_id": ""}
@@ -1810,7 +1804,7 @@ def _admin_auth() -> Dict[str, str]:
     akeys = access.get("admin_keys") if isinstance(access.get("admin_keys"), list) else []
     mkeys = access.get("manager_keys") if isinstance(access.get("manager_keys"), list) else []
 
-    # Accept per-venue generated keys stored under cfg["keys"]
+    # ✅ Accept per-venue generated keys stored under cfg["keys"]
     k = vc.get("keys") if isinstance(vc.get("keys"), dict) else {}
     k_admin = str((k or {}).get("admin_key") or "").strip()
     k_mgr = str((k or {}).get("manager_key") or "").strip()
@@ -1823,12 +1817,11 @@ def _admin_auth() -> Dict[str, str]:
         actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
         return {"ok": True, "role": "manager", "actor": actor, "venue_id": vid}
 
-
-    if key in [str(k).strip() for k in akeys if str(k).strip()]:
+    if key in [str(x).strip() for x in akeys if str(x).strip()]:
         actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
         return {"ok": True, "role": "owner", "actor": actor, "venue_id": vid}
 
-    if key in [str(k).strip() for k in mkeys if str(k).strip()]:
+    if key in [str(x).strip() for x in mkeys if str(x).strip()]:
         actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
         return {"ok": True, "role": "manager", "actor": actor, "venue_id": vid}
 
@@ -1838,7 +1831,6 @@ def _admin_auth() -> Dict[str, str]:
         return {"ok": True, "role": "manager", "actor": actor, "venue_id": vid}
 
     return {"ok": False, "role": "", "actor": "", "venue_id": ""}
-
 
 @app.get("/admin/api/whoami")
 def admin_api_whoami():
