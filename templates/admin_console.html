@@ -150,9 +150,12 @@ window.showTab = function(tab){
 
 async function refreshRole(){
   try{
-    const r = await fetch(`/admin/api/whoami?key=${encodeURIComponent(KEY||'')}`, {cache:'no-store'});
+    const r = await fetch(
+      `/admin/api/whoami?key=${encodeURIComponent(KEY||'')}&venue=${encodeURIComponent(VENUE||'')}`,
+      { cache: 'no-store' }
+    );
     const j = await r.json();
-    if(j && j.ok && j.role) ROLE = j.role;
+    if (j && j.ok && j.role) ROLE = j.role;
   }catch(e){}
 }
 
@@ -165,17 +168,22 @@ async function loadLeads(){
   const out = document.getElementById('leads-out');
   st.textContent = 'Loading...';
   try{
-    const r = await fetch('/admin/api/leads', {cache:'no-store'});
-    const j = await r.json();
-    if(!j || !j.ok){ st.textContent = 'Failed'; out.textContent = JSON.stringify(j||{}); return; }
-    const items = j.items || j.leads || [];
-    st.textContent = `OK (${items.length})`;
-    out.innerHTML = items.slice(0,50).map(x => `<div>• ${escapeHtml(x.name||x.contact||'')} — ${escapeHtml(x.status||'')}</div>`).join('') || '<div class="muted">No leads.</div>';
-  }catch(e){
+  const r = await fetch(
+    `/admin/api/leads?key=${encodeURIComponent(KEY||'')}&venue=${encodeURIComponent(VENUE||'')}`,
+    { cache: 'no-store' }
+  );
+  const j = await r.json();
+  if(!j || !j.ok){
     st.textContent = 'Failed';
-    out.textContent = String(e);
+    out.textContent = JSON.stringify(j||{});
+    return;
   }
-}
+  const items = j.items || j.leads || [];
+  st.textContent = `OK (${items.length})`;
+  out.innerHTML = items.slice(0,50)
+    .map(x => `<div>• ${escapeHtml(x.name||x.contact||'')} — ${escapeHtml(x.status||'')}</div>`)
+    .join('') || '<div class="muted">No leads.</div>';
+}catch(e){}
 
 function renderAllLeads(items){
   const body = document.getElementById('allleads-body');
@@ -212,13 +220,18 @@ async function loadAllLeads(){
   const perv = parseInt(document.getElementById('allleads-pervenue').value || '300', 10);
 
   try{
-    const r = await fetch(`/admin/api/leads_all?limit=${encodeURIComponent(limit)}&per_venue=${encodeURIComponent(perv)}`, {cache:'no-store'});
-    const j = await r.json();
-    if(!j || !j.ok){
-      st.textContent = 'Failed';
-      errBox.textContent = JSON.stringify(j||{});
-      return;
-    }
+  const r = await fetch(
+    `/admin/api/leads_all?limit=${encodeURIComponent(limit)}&per_venue=${encodeURIComponent(perv)}&key=${encodeURIComponent(KEY||'')}&venue=${encodeURIComponent(VENUE||'')}`,
+    { cache: 'no-store' }
+  );
+  const j = await r.json();
+  if(!j || !j.ok){
+    st.textContent = 'Failed';
+    errBox.textContent = JSON.stringify(j||{});
+    return;
+  }
+}catch(e){}
+
     const items = j.items || [];
     const errors = j.errors || [];
     st.textContent = `OK (${items.length})`;
