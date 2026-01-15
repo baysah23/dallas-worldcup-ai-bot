@@ -1832,6 +1832,24 @@ def _admin_auth() -> Dict[str, str]:
 
     return {"ok": False, "role": "", "actor": "", "venue_id": ""}
 
+
+def _admin_ctx() -> Dict[str, str]:
+    """Small wrapper used by UI + audit: never throws."""
+    try:
+        ctx = _admin_auth() or {}
+    except Exception:
+        ctx = {}
+    if not isinstance(ctx, dict):
+        ctx = {}
+    return {
+        "ok": bool(ctx.get("ok")),
+        "role": str(ctx.get("role") or ""),
+        "actor": str(ctx.get("actor") or ""),
+        "venue_id": str(ctx.get("venue_id") or ""),
+    }
+
+
+
 @app.get("/admin/api/whoami")
 def admin_api_whoami():
     """Return the server-truth role for the current key (owner/manager) so UI locks can't drift."""
