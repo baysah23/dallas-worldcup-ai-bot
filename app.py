@@ -5487,23 +5487,20 @@ def _safe_write_json(path: str, data: dict) -> None:
     except Exception:
         pass
 
-def _ensure_ws(gc, title: str):
-    sh = _open_default_spreadsheet(gc)
+def _ensure_ws(gc, title: str, venue_id: Optional[str] = None):
+    sh = _open_default_spreadsheet(gc, venue_id=venue_id)
     try:
         return sh.worksheet(title)
     except Exception:
         return sh.add_worksheet(title=title, rows=2000, cols=20)
 
 def get_config() -> Dict[str, str]:
-    """Config is authoritative in local CONFIG_FILE.
+    vid = _venue_id()
+    cache = _CONFIG_CACHE.setdefault(vid, {"ts": 0.0, "cfg": None})
 
-    We still *attempt* to read the Google Sheet (Config tab) for compatibility,
-    but local values always win. This prevents 'saved but not reflected' when
-    Sheets write fails (quota) and later reads return older data.
-    """
     now = time.time()
-    cached = _CONFIG_CACHE.get("cfg")
-    if isinstance(cached, dict) and (now - float(_CONFIG_CACHE.get("ts", 0.0)) < 5.0):
+    cached = cache.get("cfg")
+    if isinstance(cached, dict) and (now - float(cache.get("ts", 0.0)) < 5.0):
         return dict(cached)
 
     cfg: Dict[str, str] = {
@@ -5518,7 +5515,8 @@ def get_config() -> Dict[str, str]:
         "ops_waitlist_mode": "false",
     }
 
-    local = _safe_read_json(CONFIG_FILE)
+    path = str(CONFIG_FILE).replace("{venue}", vid)
+    local = _safe_read_json(path)
     if isinstance(local, dict):
         for k, v in local.items():
             if str(k).startswith("_"):
@@ -5527,7 +5525,7 @@ def get_config() -> Dict[str, str]:
 
     try:
         gc = get_gspread_client()
-        ws = _ensure_ws(gc, "Config")
+        ws = _ensure_ws(gc, "Config", venue_id=vid)
         rows = ws.get_all_values()
         for r in rows[1:]:
             if len(r) >= 2 and r[0]:
@@ -5538,10 +5536,9 @@ def get_config() -> Dict[str, str]:
     except Exception:
         pass
 
-    _CONFIG_CACHE["ts"] = now
-    _CONFIG_CACHE["cfg"] = dict(cfg)
+    cache["ts"] = now
+    cache["cfg"] = dict(cfg)
     return cfg
-
 
 
 def _cfg_bool(cfg: Dict[str, Any], key: str, default: bool = False) -> bool:
@@ -5565,28 +5562,28 @@ def get_ops(cfg: Optional[Dict[str, Any]] = None) -> Dict[str, bool]:
         "vip_only": _cfg_bool(cfg, "ops_vip_only", False),
         "waitlist_mode": _cfg_bool(cfg, "ops_waitlist_mode", False),
     }
-def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
-    """Persist config.
 
-    1) Write to local CONFIG_FILE (authoritative + works on Render).
-    2) Best-effort sync to Google Sheet (Config tab) for visibility/back-compat.
-    """
+def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
+    vid = _venue_id()
+    cache = _CONFIG_CACHE.setdefault(vid, {"ts": 0.0, "cfg": None})
+
     clean: Dict[str, str] = {}
     for k, v in (pairs or {}).items():
         if not k:
             continue
         clean[str(k)] = "" if v is None else str(v)
 
-    local = _safe_read_json(CONFIG_FILE)
+    path = str(CONFIG_FILE).replace("{venue}", vid)
+    local = _safe_read_json(path)
     if not isinstance(local, dict):
         local = {}
     local.update(clean)
     local["_updated_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
-    _safe_write_json(CONFIG_FILE, local)
+    _safe_write_json(path, local)
 
     try:
         gc = get_gspread_client()
-        ws = _ensure_ws(gc, "Config")
+        ws = _ensure_ws(gc, "Config", venue_id=vid)
 
         rows = ws.get_all_values()
         if not rows:
@@ -5602,15 +5599,10 @@ def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
     except Exception:
         pass
 
-
-    # Invalidate cache so changes are visible immediately after saving (even within the cache window).
-    _CONFIG_CACHE["ts"] = 0.0
-    _CONFIG_CACHE["cfg"] = None
-    merged = get_config()
-    _CONFIG_CACHE["ts"] = time.time()
-    _CONFIG_CACHE["cfg"] = dict(merged)
-    return merged
-
+    cache["ts"] = 0.0
+    cache["cfg"] = None
+    return get_config()
+  
 def _match_id(m: Dict[str, Any]) -> str:
     # Stable-ish id: datetime_utc + home + away (safe for URL/storage)
     dt = (m.get("datetime_utc") or "").strip()
@@ -15150,23 +15142,20 @@ def _safe_write_json(path: str, data: dict) -> None:
     except Exception:
         pass
 
-def _ensure_ws(gc, title: str):
-    sh = _open_default_spreadsheet(gc)
+def _ensure_ws(gc, title: str, venue_id: Optional[str] = None):
+    sh = _open_default_spreadsheet(gc, venue_id=venue_id)
     try:
         return sh.worksheet(title)
     except Exception:
         return sh.add_worksheet(title=title, rows=2000, cols=20)
 
 def get_config() -> Dict[str, str]:
-    """Config is authoritative in local CONFIG_FILE.
+    vid = _venue_id()
+    cache = _CONFIG_CACHE.setdefault(vid, {"ts": 0.0, "cfg": None})
 
-    We still *attempt* to read the Google Sheet (Config tab) for compatibility,
-    but local values always win. This prevents 'saved but not reflected' when
-    Sheets write fails (quota) and later reads return older data.
-    """
     now = time.time()
-    cached = _CONFIG_CACHE.get("cfg")
-    if isinstance(cached, dict) and (now - float(_CONFIG_CACHE.get("ts", 0.0)) < 5.0):
+    cached = cache.get("cfg")
+    if isinstance(cached, dict) and (now - float(cache.get("ts", 0.0)) < 5.0):
         return dict(cached)
 
     cfg: Dict[str, str] = {
@@ -15181,7 +15170,8 @@ def get_config() -> Dict[str, str]:
         "ops_waitlist_mode": "false",
     }
 
-    local = _safe_read_json(CONFIG_FILE)
+    path = str(CONFIG_FILE).replace("{venue}", vid)
+    local = _safe_read_json(path)
     if isinstance(local, dict):
         for k, v in local.items():
             if str(k).startswith("_"):
@@ -15190,7 +15180,7 @@ def get_config() -> Dict[str, str]:
 
     try:
         gc = get_gspread_client()
-        ws = _ensure_ws(gc, "Config")
+        ws = _ensure_ws(gc, "Config", venue_id=vid)
         rows = ws.get_all_values()
         for r in rows[1:]:
             if len(r) >= 2 and r[0]:
@@ -15201,11 +15191,9 @@ def get_config() -> Dict[str, str]:
     except Exception:
         pass
 
-    _CONFIG_CACHE["ts"] = now
-    _CONFIG_CACHE["cfg"] = dict(cfg)
+    cache["ts"] = now
+    cache["cfg"] = dict(cfg)
     return cfg
-
-
 
 def _cfg_bool(cfg: Dict[str, Any], key: str, default: bool = False) -> bool:
     try:
@@ -15228,28 +15216,28 @@ def get_ops(cfg: Optional[Dict[str, Any]] = None) -> Dict[str, bool]:
         "vip_only": _cfg_bool(cfg, "ops_vip_only", False),
         "waitlist_mode": _cfg_bool(cfg, "ops_waitlist_mode", False),
     }
-def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
-    """Persist config.
 
-    1) Write to local CONFIG_FILE (authoritative + works on Render).
-    2) Best-effort sync to Google Sheet (Config tab) for visibility/back-compat.
-    """
+def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
+    vid = _venue_id()
+    cache = _CONFIG_CACHE.setdefault(vid, {"ts": 0.0, "cfg": None})
+
     clean: Dict[str, str] = {}
     for k, v in (pairs or {}).items():
         if not k:
             continue
         clean[str(k)] = "" if v is None else str(v)
 
-    local = _safe_read_json(CONFIG_FILE)
+    path = str(CONFIG_FILE).replace("{venue}", vid)
+    local = _safe_read_json(path)
     if not isinstance(local, dict):
         local = {}
     local.update(clean)
     local["_updated_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
-    _safe_write_json(CONFIG_FILE, local)
+    _safe_write_json(path, local)
 
     try:
         gc = get_gspread_client()
-        ws = _ensure_ws(gc, "Config")
+        ws = _ensure_ws(gc, "Config", venue_id=vid)
 
         rows = ws.get_all_values()
         if not rows:
@@ -15265,14 +15253,9 @@ def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
     except Exception:
         pass
 
-
-    # Invalidate cache so changes are visible immediately after saving (even within the cache window).
-    _CONFIG_CACHE["ts"] = 0.0
-    _CONFIG_CACHE["cfg"] = None
-    merged = get_config()
-    _CONFIG_CACHE["ts"] = time.time()
-    _CONFIG_CACHE["cfg"] = dict(merged)
-    return merged
+    cache["ts"] = 0.0
+    cache["cfg"] = None
+    return get_config()
 
 def _match_id(m: Dict[str, Any]) -> str:
     # Stable-ish id: datetime_utc + home + away (safe for URL/storage)
