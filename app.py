@@ -9377,6 +9377,13 @@ function refreshAll(source){
   try{ loadRules(); }catch(e){}
   try{ loadMenu(); }catch(e){}
   try{ loadHealth(); }catch(e){}
+
+  // ✅ Refresh audit automatically if user is currently on the Audit tab
+  try{
+    const ap = document.getElementById('tab-audit');
+    if(ap && !ap.classList.contains('hidden')) loadAudit();
+  }catch(e){}
+
   updateLastRef();
 }
 
