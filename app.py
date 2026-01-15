@@ -7203,7 +7203,7 @@ def admin():
     numbered = [(i + 2, r) for i, r in enumerate(body)]
     numbered = list(reversed(numbered))
 
-    admin_key_q = f"?key={key}"
+    admin_key_q = f"?key={key}&venue={_venue_id()}"
     days_q = ""
     try:
         d0 = int(request.args.get("days") or 0)
@@ -9452,7 +9452,19 @@ try{ setupTabs(); }catch(e){}
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
 
     html.append("</div></body></html>")
-    return "".join(html)
+    out = make_response("".join(html))
+    try:
+        out.set_cookie(
+            "venue_id",
+            _venue_id(),
+            httponly=False,
+            samesite="Lax",
+            path="/admin"
+        )
+    except Exception:
+        pass
+    return out
+
 
 
 
@@ -10067,8 +10079,18 @@ async function replayAI(){
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
 
     html.append("</div></body></html>")
-    return "".join(html)
-
+    out = make_response("".join(html))
+    try:
+        out.set_cookie(
+            "venue_id",
+            _venue_id(),
+            httponly=False,
+            samesite="Lax",
+            path="/admin"
+        )
+    except Exception:
+        pass
+    return out
 
 
 
