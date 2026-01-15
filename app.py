@@ -519,25 +519,38 @@ def _set_venue_ctx():
 
 @app.before_request
 def _tenant_guard_admin_writes():
-    # Fail-closed: never allow admin writes to fall back to DEFAULT_VENUE_ID
+    # Fail-closed: admin writes MUST include an explicit venue (query or header).
     try:
         if not (request.path or "").startswith("/admin"):
             return None  # do not affect /super/*
         if (request.method or "GET").upper() not in ("POST", "PUT", "PATCH", "DELETE"):
             return None  # reads allowed
 
-        vid = _venue_id() 
-        if (not vid) or (vid == DEFAULT_VENUE_ID) or (vid == "default"):
+        raw_q = (request.args.get("venue") or "").strip()
+        raw_h = (request.headers.get("X-Venue-Id") or "").strip()
+
+        # IMPORTANT: do NOT allow cookie-only venue on writes (prevents cross-tab bleed)
+        raw = raw_q or raw_h
+        if not raw:
             try:
-                _audit("tenant.guard.block", {"path": request.path, "method": request.method, "venue_id": vid})
-                _notify("tenant.guard.block", {"path": request.path, "method": request.method, "venue_id": vid}, targets=["owner"])
+                _audit("tenant.guard.block", {"reason": "missing_explicit_venue", "path": request.path, "method": request.method})
+                _notify("tenant.guard.block", {"reason": "missing_explicit_venue", "path": request.path, "method": request.method}, targets=["owner"])
             except Exception:
                 pass
             return jsonify({"ok": False, "error": "venue_required"}), 403
 
+        expected = _slugify_venue_id(raw)
+        if (not expected) or (expected == DEFAULT_VENUE_ID) or (expected == "default"):
+            return jsonify({"ok": False, "error": "venue_required"}), 403
+
+        # Force request context to the explicit venue (overrides any cookie bleed)
+        try:
+            g.venue_id = expected
+        except Exception:
+            pass
+
         return None
     except Exception:
-        # safest default: block
         return jsonify({"ok": False, "error": "venue_required"}), 403
 
 
