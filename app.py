@@ -8162,6 +8162,33 @@ window.showTab = function(tab){
 
 <script>
 const KEY = (new URLSearchParams(window.location.search).get('key') || '');
+
+const m = document.cookie.match(/(?:^|;\s*)venue_id=([^;]+)/);
+const VENUE =
+  (new URLSearchParams(window.location.search).get('venue') || '').trim() ||
+  (m ? decodeURIComponent(m[1]) : '');
+
+(function () {
+  const _origFetch = window.fetch;
+  window.fetch = function (input, init = {}) {
+    try {
+      const url = (typeof input === 'string')
+        ? input
+        : (input && input.url) ? input.url : '';
+
+      if (url && url.startsWith('/admin/api/')) {
+        init.headers = init.headers || {};
+        if (VENUE) init.headers['X-Venue-Id'] = VENUE;
+
+        if (KEY && typeof input === 'string' && !url.includes('key=')) {
+          input = url + (url.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(KEY);
+        }
+      }
+    } catch (e) {}
+    return _origFetch(input, init);
+  };
+})();
+
 let ROLE = (__ADMIN_ROLE__ || 'manager');
 
 // Enforce owner-only locks (tabs + buttons)
