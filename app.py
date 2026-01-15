@@ -9108,12 +9108,22 @@ async function loadAudit(){
   const filterEl = qs('#audit-filter');
   const selected = (filterEl && filterEl.value) ? filterEl.value : 'all';
 
-  const url = '/admin/api/audit?key='+encodeURIComponent(KEY)+'&limit='+encodeURIComponent(lim);
-  const res = await fetch(url, {cache:'no-store'});
+  // ✅ Always pass venue explicitly (never rely on cookie)
+  const venueVal =
+    (typeof VENUE !== 'undefined' && VENUE) ? VENUE :
+    (window.VENUE ? window.VENUE : '');
+
+  const url =
+    '/admin/api/audit?key=' + encodeURIComponent(KEY) +
+    '&venue=' + encodeURIComponent(venueVal) +
+    '&limit=' + encodeURIComponent(lim);
+
+  const res = await fetch(url, { cache: 'no-store' });
   const j = await res.json().catch(()=>null);
   if(!j || !j.ok){ if(msg) msg.textContent='Failed to load audit'; return; }
 
   let entries = (j.entries || j.items || []);
+
   // Normalize older shapes if any
   entries = entries.map(e=>{
     if(e && (e.event || e.ts)) return e;
@@ -9132,39 +9142,49 @@ async function loadAudit(){
   // Populate filter options (event types)
   if(filterEl){
     const keep = filterEl.value || 'all';
-    const events = Array.from(new Set(entries.map(e=>String(e.event||'').trim()).filter(Boolean))).sort();
+    const events = Array.from(
+      new Set(entries.map(e=>String(e.event||'').trim()).filter(Boolean))
+    ).sort();
+
     let html = '<option value="all">All events</option>';
-    events.forEach(ev=>{ html += '<option value="'+esc(ev)+'">'+esc(ev)+'</option>'; });
+    events.forEach(ev=>{
+      html += '<option value="'+esc(ev)+'">'+esc(ev)+'</option>';
+    });
     filterEl.innerHTML = html;
     filterEl.value = (events.includes(keep) ? keep : 'all');
     filterEl.onchange = ()=>loadAudit();
   }
 
   const activeFilter = (filterEl && filterEl.value) ? filterEl.value : selected;
-
   const body = qs('#audit-body');
+
   if(body){
     body.innerHTML = '';
-    const shown = entries.filter(e=> activeFilter==='all' ? true : String(e.event||'')===String(activeFilter));
+    const shown = entries.filter(e =>
+      activeFilter === 'all' ? true : String(e.event||'') === String(activeFilter)
+    );
+
     if(!shown.length){
-      body.innerHTML = '<tr><td colspan="6"><span class="note">No audit entries.</span></td></tr>';
+      body.innerHTML =
+        '<tr><td colspan="6"><span class="note">No audit entries.</span></td></tr>';
     } else {
       shown.forEach(e=>{
         const details = (e.details || {});
         const copyPayload = JSON.stringify(e, null, 2);
         const tr = document.createElement('tr');
         tr.innerHTML =
-          '<td>'+esc(e.ts||'')+'</td>'
-          +'<td><span class="code">'+esc(e.actor||'')+'</span></td>'
-          +'<td>'+esc(e.role||'')+'</td>'
-          +'<td>'+esc(e.event||'')+'</td>'
-          +'<td><span class="code">'+esc(JSON.stringify(details))+'</span></td>'
-          +'<td><button class="btn2" type="button">Copy</button></td>';
+          '<td>'+esc(e.ts||'')+'</td>' +
+          '<td><span class="code">'+esc(e.actor||'')+'</span></td>' +
+          '<td>'+esc(e.role||'')+'</td>' +
+          '<td>'+esc(e.event||'')+'</td>' +
+          '<td><span class="code">'+esc(JSON.stringify(details))+'</span></td>' +
+          '<td><button class="btn2" type="button">Copy</button></td>';
+
         const btn = tr.querySelector('button');
         if(btn){
           btn.addEventListener('click', async ()=>{
             try{
-              if(navigator && navigator.clipboard && navigator.clipboard.writeText){
+              if(navigator?.clipboard?.writeText){
                 await navigator.clipboard.writeText(copyPayload);
               } else {
                 const ta = document.createElement('textarea');
@@ -9174,9 +9194,15 @@ async function loadAudit(){
                 document.execCommand('copy');
                 ta.remove();
               }
-              if(msg){ msg.textContent = 'Copied'; setTimeout(()=>{ if(msg) msg.textContent=''; }, 800); }
+              if(msg){
+                msg.textContent = 'Copied';
+                setTimeout(()=>{ if(msg) msg.textContent=''; }, 800);
+              }
             }catch(_){
-              if(msg){ msg.textContent = 'Copy failed'; setTimeout(()=>{ if(msg) msg.textContent=''; }, 1200); }
+              if(msg){
+                msg.textContent = 'Copy failed';
+                setTimeout(()=>{ if(msg) msg.textContent=''; }, 1200);
+              }
             }
           });
         }
@@ -9184,9 +9210,9 @@ async function loadAudit(){
       });
     }
   }
+
   if(msg) msg.textContent='';
 }
-
 
 
 async function loadNotifs(){
