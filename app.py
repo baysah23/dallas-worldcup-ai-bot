@@ -12597,8 +12597,16 @@ def _require_super_admin():
 # ============================================================
 # Enterprise shared state in Redis (Ops / FanZone / Polls)
 # ============================================================
-_OPS_KEY = "ops_state"
-_FANZONE_KEY = "fanzone_state"
+# ============================================================
+# Enterprise shared state in Redis (Ops / FanZone / Polls)
+# NOTE: Must be venue-scoped to prevent cross-venue bleed.
+# ============================================================
+
+def _ops_redis_key() -> str:
+    return f"{_REDIS_NS}:{_venue_id()}:ops_state"
+
+def _fanzone_redis_key() -> str:
+    return f"{_REDIS_NS}:{_venue_id()}:fanzone_state"
 
 def _ops_state_default():
     return {"pause": False, "viponly": False, "waitlist": False, "notify": False,
@@ -12606,7 +12614,7 @@ def _ops_state_default():
 
 def _load_ops_state() -> Dict[str, Any]:
     if _REDIS_ENABLED:
-        st = _redis_get_json(_OPS_KEY, default=None)
+        st = _redis_get_json(_ops_redis_key(), default=None)
         if isinstance(st, dict):
             return _deep_merge(_ops_state_default(), st)
     return _ops_state_default()
@@ -12617,12 +12625,12 @@ def _save_ops_state(patch: Dict[str, Any], actor: str, role: str) -> Dict[str, A
     st["updated_by"] = actor
     st["updated_role"] = role
     if _REDIS_ENABLED:
-        _redis_set_json(_OPS_KEY, st)
+        _redis_set_json(_ops_redis_key(), st)
     return st
 
 def _load_fanzone_state() -> Dict[str, Any]:
     if _REDIS_ENABLED:
-        st = _redis_get_json(_FANZONE_KEY, default=None)
+        st = _redis_get_json(_fanzone_redis_key(), default=None)
         if isinstance(st, dict):
             return st
     st = _safe_read_json_file(POLL_STORE_FILE, default={})
@@ -12636,7 +12644,7 @@ def _save_fanzone_state(st: Dict[str, Any], actor: str, role: str) -> Dict[str, 
         "updated_role": role,
     }
     if _REDIS_ENABLED:
-        _redis_set_json(_FANZONE_KEY, st2)
+        _redis_set_json(_fanzone_redis_key(), st2)
     else:
         _safe_write_json_file(POLL_STORE_FILE, st2)
     return st2
@@ -15623,8 +15631,16 @@ if __name__ == "__main__":
 # ============================================================
 # Enterprise shared state in Redis (Ops / FanZone / Polls)
 # ============================================================
-_OPS_KEY = "ops_state"
-_FANZONE_KEY = "fanzone_state"
+# ============================================================
+# Enterprise shared state in Redis (Ops / FanZone / Polls)
+# NOTE: Must be venue-scoped to prevent cross-venue bleed.
+# ============================================================
+
+def _ops_redis_key() -> str:
+    return f"{_REDIS_NS}:{_venue_id()}:ops_state"
+
+def _fanzone_redis_key() -> str:
+    return f"{_REDIS_NS}:{_venue_id()}:fanzone_state"
 
 def _ops_state_default():
     return {"pause": False, "viponly": False, "waitlist": False, "notify": False,
@@ -15632,7 +15648,7 @@ def _ops_state_default():
 
 def _load_ops_state() -> Dict[str, Any]:
     if _REDIS_ENABLED:
-        st = _redis_get_json(_OPS_KEY, default=None)
+        st = _redis_get_json(_ops_redis_key(), default=None)
         if isinstance(st, dict):
             return _deep_merge(_ops_state_default(), st)
     return _ops_state_default()
@@ -15643,12 +15659,12 @@ def _save_ops_state(patch: Dict[str, Any], actor: str, role: str) -> Dict[str, A
     st["updated_by"] = actor
     st["updated_role"] = role
     if _REDIS_ENABLED:
-        _redis_set_json(_OPS_KEY, st)
+        _redis_set_json(_ops_redis_key(), st)
     return st
 
 def _load_fanzone_state() -> Dict[str, Any]:
     if _REDIS_ENABLED:
-        st = _redis_get_json(_FANZONE_KEY, default=None)
+        st = _redis_get_json(_fanzone_redis_key(), default=None)
         if isinstance(st, dict):
             return st
     st = _safe_read_json_file(POLL_STORE_FILE, default={})
@@ -15662,7 +15678,7 @@ def _save_fanzone_state(st: Dict[str, Any], actor: str, role: str) -> Dict[str, 
         "updated_role": role,
     }
     if _REDIS_ENABLED:
-        _redis_set_json(_FANZONE_KEY, st2)
+        _redis_set_json(_fanzone_redis_key(), st2)
     else:
         _safe_write_json_file(POLL_STORE_FILE, st2)
     return st2
