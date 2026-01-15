@@ -77,16 +77,15 @@ _REDIS_FALLBACK_LAST_PATH = ""
 # Map our on-disk JSON files to Redis keys when enabled (single source of truth)
 # NOTE: These files still exist for local/dev fallback.
 _REDIS_PATH_KEY_MAP = {  # values are suffixes; full key includes namespace + venue
-
-    os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_ai_queue.json"): "ai_queue",
-    os.environ.get("AI_SETTINGS_FILE", "/tmp/wc26_ai_settings.json"): "ai_settings",
-    os.environ.get("PARTNER_POLICIES_FILE", "/tmp/wc26_partner_policies.json"): "partner_policies",
-    os.environ.get("BUSINESS_RULES_FILE", "/tmp/wc26_business_rules.json"): "business_rules",
-    os.environ.get("MENU_FILE", "/tmp/wc26_menu_override.json"): "menu_override",
-    os.environ.get("ALERT_SETTINGS_FILE", "/tmp/wc26_alert_settings.json"): "alert_settings",
-    os.environ.get("ALERT_STATE_FILE", "/tmp/wc26_alert_state.json"): "alert_state",
-    os.environ.get("POLL_STORE_FILE", "/tmp/wc26_poll_votes.json"): "poll_store",
-    os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_fixtures.json"): "fixtures_cache",
+    os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_{venue}_ai_queue.json"): "ai_queue",
+    os.environ.get("AI_SETTINGS_FILE", "/tmp/wc26_{venue}_ai_settings.json"): "ai_settings",
+    os.environ.get("PARTNER_POLICIES_FILE", "/tmp/wc26_{venue}_partner_policies.json"): "partner_policies",
+    os.environ.get("BUSINESS_RULES_FILE", "/tmp/wc26_{venue}_business_rules.json"): "business_rules",
+    os.environ.get("MENU_FILE", "/tmp/wc26_{venue}_menu_override.json"): "menu_override",
+    os.environ.get("ALERT_SETTINGS_FILE", "/tmp/wc26_{venue}_alert_settings.json"): "alert_settings",
+    os.environ.get("ALERT_STATE_FILE", "/tmp/wc26_{venue}_alert_state.json"): "alert_state",
+    os.environ.get("POLL_STORE_FILE", "/tmp/wc26_{venue}_poll_votes.json"): "poll_store",
+    os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_{venue}_fixtures.json"): "fixtures_cache",
 }
 
 def _redis_init_if_needed() -> None:
