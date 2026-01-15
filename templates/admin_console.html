@@ -141,7 +141,7 @@ window.showTab = function(tab){
         ? input
         : (input && input.url) ? input.url : "";
 
-      if (url && url.startsWith("/admin/api/")) {
+      if (url && (url.startsWith("/admin") || url.startsWith("/api") || url.startsWith("/health"))) {
         const u = new URL(url, window.location.origin);
 
         // Always include key + venue
