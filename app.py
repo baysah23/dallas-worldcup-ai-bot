@@ -5407,15 +5407,10 @@ def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
             "details": details or {},
         }
 
-        # --- Resolve venue consistently ---
-        vid = (
-            (request.args.get("venue") if request else None)
-            or ((request.get_json(silent=True) or {}).get("venue") if request else None)
-            or (_venue_id() if "_venue_id" in globals() else None)
-            or "default"
-        )
+        # --- Resolve venue consistently (NO request/body fallback) ---
+        vid = _venue_id() if "_venue_id" in globals() else "default"
 
-        # --- 1) Redis write (shared across instances) ---
+        # --- 1) Redis write (per-venue) ---
         try:
             if "_redis_init_if_needed" in globals():
                 _redis_init_if_needed()
@@ -5437,14 +5432,14 @@ def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
     except Exception:
         pass
 
+
 # -----------------------------
 # Lightweight in-process caches
-# (reduces Google Sheets quota hits)
+# (per-venue only)
 # -----------------------------
-_CONFIG_CACHE: Dict[str, Any] = {"ts": 0.0, "cfg": None}   # ttl ~5s
-_LEADS_CACHE: Dict[str, Any] = {"ts": 0.0, "rows": None}  # ttl ~30s
+_CONFIG_CACHE: Dict[str, Any] = {}   # keyed by venue_id -> {"ts":..., "cfg":...}
+_LEADS_CACHE: Dict[str, Any] = {}    # keyed by venue_id -> {"ts":..., "rows":...}
 _sessions: Dict[str, Dict[str, Any]] = {}  # in-memory chat/reservation sessions
-
 
 def _last_audit_event(event_name: str, scan_limit: int = 800) -> Optional[Dict[str, Any]]:
     """Return the most recent audit entry for a given event (best-effort)."""
@@ -15062,15 +15057,10 @@ def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
             "details": details or {},
         }
 
-        # --- Resolve venue consistently ---
-        vid = (
-            (request.args.get("venue") if request else None)
-            or ((request.get_json(silent=True) or {}).get("venue") if request else None)
-            or (_venue_id() if "_venue_id" in globals() else None)
-            or "default"
-        )
+        # --- Resolve venue consistently (NO request/body fallback) ---
+        vid = _venue_id() if "_venue_id" in globals() else "default"
 
-        # --- 1) Redis write (shared across instances) ---
+        # --- 1) Redis write (per-venue) ---
         try:
             if "_redis_init_if_needed" in globals():
                 _redis_init_if_needed()
@@ -15092,12 +15082,13 @@ def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
     except Exception:
         pass
 
+
 # -----------------------------
 # Lightweight in-process caches
-# (reduces Google Sheets quota hits)
+# (per-venue only)
 # -----------------------------
-_CONFIG_CACHE: Dict[str, Any] = {"ts": 0.0, "cfg": None}   # ttl ~5s
-_LEADS_CACHE: Dict[str, Any] = {"ts": 0.0, "rows": None}  # ttl ~30s
+_CONFIG_CACHE: Dict[str, Any] = {}   # keyed by venue_id -> {"ts":..., "cfg":...}
+_LEADS_CACHE: Dict[str, Any] = {}    # keyed by venue_id -> {"ts":..., "rows":...}
 _sessions: Dict[str, Dict[str, Any]] = {}  # in-memory chat/reservation sessions
 
 
