@@ -6915,7 +6915,7 @@ def admin_api_audit():
     entries: List[Dict[str, Any]] = []
 
     # ------------------------------------------------------------
-    # 1) Redis-first (shared across instances, works while testing)
+    # 1) Redis-first (ONLY return if Redis actually has entries)
     # ------------------------------------------------------------
     try:
         _redis_init_if_needed()
@@ -6928,7 +6928,8 @@ def admin_api_audit():
                     entries.append(json.loads(item))
                 except Exception:
                     continue
-            return jsonify({"ok": True, "entries": entries})
+            if entries:  # 🔑 do NOT short-circuit on empty Redis
+                return jsonify({"ok": True, "entries": entries, "source": "redis"})
     except Exception:
         pass
 
@@ -6956,8 +6957,7 @@ def admin_api_audit():
     except Exception:
         pass
 
-    return jsonify({"ok": True, "entries": entries})
-
+    return jsonify({"ok": True, "entries": entries, "source": "file"})
 
 # ============================================================
 # Partner / Venue Policies API (Hard rules)
