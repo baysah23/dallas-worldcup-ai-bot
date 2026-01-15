@@ -9146,7 +9146,13 @@ async function loadNotifs(){
   if(msg) msg.textContent = 'Loading…';
 
   try{
-    const r = await fetch(`/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}`, { cache:'no-store' });
+    const m = document.cookie.match(/(?:^|;\s*)venue_id=([^;]+)/);
+    const VENUE = ((new URLSearchParams(location.search).get('venue') || '').trim()) || (m ? decodeURIComponent(m[1]) : '');
+
+    const r = await fetch(`/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}`, {
+    cache: 'no-store',
+    headers: { 'X-Venue-Id': VENUE }
+    });
     const j = await r.json().catch(()=>null);
     const items = (j && j.items) ? (j.items || []) : [];
 
