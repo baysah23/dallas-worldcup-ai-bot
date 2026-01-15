@@ -491,15 +491,7 @@ def _resolve_venue_id() -> str:
     except Exception:
         pass
 
-    # 3) venue_id cookie
-    try:
-        c = (request.cookies.get("venue_id") or "").strip()
-        if c:
-            return _slugify_venue_id(c)
-    except Exception:
-        pass
-
-    # 4) X-Venue-Id header
+    # 3) X-Venue-Id header  (must beat cookie for per-tab isolation)
     try:
         h = (request.headers.get("X-Venue-Id") or "").strip()
         if h:
@@ -507,8 +499,15 @@ def _resolve_venue_id() -> str:
     except Exception:
         pass
 
-    return DEFAULT_VENUE_ID
+    # 4) venue_id cookie  (fallback only)
+    try:
+        c = (request.cookies.get("venue_id") or "").strip()
+        if c:
+            return _slugify_venue_id(c)
+    except Exception:
+        pass
 
+    return DEFAULT_VENUE_ID
 
 @app.before_request
 def _set_venue_ctx():
