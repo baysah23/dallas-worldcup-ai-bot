@@ -516,7 +516,6 @@ def _set_venue_ctx():
     except Exception:
         g.venue_id = DEFAULT_VENUE_ID
 
-
 @app.before_request
 def _tenant_guard_admin_writes():
     # Fail-closed: admin writes MUST include an explicit venue (query or header).
