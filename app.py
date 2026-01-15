@@ -518,6 +518,30 @@ def _set_venue_ctx():
         g.venue_id = DEFAULT_VENUE_ID
 
 
+@app.before_request
+def _tenant_guard_admin_writes():
+    # Fail-closed: never allow admin writes to fall back to DEFAULT_VENUE_ID
+    try:
+        if not (request.path or "").startswith("/admin"):
+            return None  # do not affect /super/*
+        if (request.method or "GET").upper() not in ("POST", "PUT", "PATCH", "DELETE"):
+            return None  # reads allowed
+
+        vid = _venue_id() 
+        if (not vid) or (vid == DEFAULT_VENUE_ID) or (vid == "default"):
+            try:
+                _audit("tenant.guard.block", {"path": request.path, "method": request.method, "venue_id": vid})
+                _notify("tenant.guard.block", {"path": request.path, "method": request.method, "venue_id": vid}, targets=["owner"])
+            except Exception:
+                pass
+            return jsonify({"ok": False, "error": "venue_required"}), 403
+
+        return None
+    except Exception:
+        # safest default: block
+        return jsonify({"ok": False, "error": "venue_required"}), 403
+
+
 def _venue_id() -> str:
     try:
         return _slugify_venue_id(getattr(g, "venue_id", "") or DEFAULT_VENUE_ID)
