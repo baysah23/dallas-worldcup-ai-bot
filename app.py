@@ -10364,6 +10364,30 @@ def lead():
         "ip": request.headers.get("X-Forwarded-For", request.remote_addr),
         "ua": request.headers.get("User-Agent",""),
     }
+
+    # ------------------------------------------------------------
+    # Idempotency / dedupe (prevents double submits & retries)
+    # ------------------------------------------------------------
+    try:
+        _redis_init_if_needed()
+        if globals().get("_REDIS_ENABLED") and globals().get("_REDIS"):
+            vid = _venue_id() if "_venue_id" in globals() else "default"
+            fp_raw = "|".join([
+                vid,
+                (row.get("contact") or "").lower().strip(),
+                (row.get("datetime") or "").lower().strip(),
+                (row.get("intent") or "").lower().strip(),
+            ])[:500]
+            fp = hashlib.sha256(fp_raw.encode("utf-8")).hexdigest()
+            dk = f"{_REDIS_NS}:{vid}:lead_dedupe:{fp}"
+            if not _REDIS.set(dk, "1", nx=True, ex=600):  # 10-minute window
+                return jsonify({"ok": True, "deduped": True})
+    except Exception:
+        pass
+
+    # ------------------------------------------------------------
+    # Persist lead
+    # ------------------------------------------------------------
     _append_lead_local(row)
 
     sheet_ok = False
@@ -10371,13 +10395,13 @@ def lead():
     if GOOGLE_SHEET_ID or os.environ.get("GOOGLE_CREDS_JSON") or os.path.exists("google_creds.json"):
         sheet_ok, sheet_row = _append_lead_google_sheet(row)
 
-    # Step 7: AI triage on intake → queue suggestions (approval by manager/admin)
-    # Best-effort; never blocks lead capture if AI fails.
+    # ------------------------------------------------------------
+    # AI triage (best-effort, non-blocking)
+    # ------------------------------------------------------------
     if sheet_ok or AI_SETTINGS.get("enabled"):
         _ai_enqueue_or_apply_for_new_lead(row, int(sheet_row or 0))
 
     return jsonify({"ok": True, "sheet_ok": bool(sheet_ok), "sheet_row": int(sheet_row or 0)})
-
 
 # ============================================================
 # E2E Test Hooks (CI-safe, opt-in)
