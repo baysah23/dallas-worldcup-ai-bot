@@ -41,7 +41,33 @@
       if(sEl) sEl.textContent = pad(s);
     }
     tick(); setInterval(tick, 1000);
-  })();
+  
+  // ---------- A/B hero headline (safe) ----------
+  const h1 = qs(".heroH1");
+  const AB_KEY = "ab_hero_v1";
+  const ab = localStorage.getItem(AB_KEY) || (Math.random()<0.5?"A":"B");
+  localStorage.setItem(AB_KEY, ab);
+  if(h1){
+    h1.textContent = ab==="A"
+      ? "Match-night chaos → calm control."
+      : "Turn packed nights into profit—automatically.";
+  }
+  if(window.gtag){ gtag("event","ab_view",{variant:ab}); }
+
+  // Funnel events
+  const demoBtn = qs("#demoBtnTop");
+  demoBtn && demoBtn.addEventListener("click", ()=>{
+    window.gtag && gtag("event","demo_click",{variant:ab});
+  });
+
+  let formStarted=false;
+  form && form.addEventListener("focusin", ()=>{
+    if(formStarted) return;
+    formStarted=true;
+    window.gtag && gtag("event","form_start",{variant:ab});
+  });
+
+})();
 
   // ---------- Hero video + sound toggle ----------
   const v = qs("#heroVideo");
@@ -121,4 +147,30 @@
       }
     });
   }
+
+  // ---------- A/B hero headline (safe) ----------
+  const h1 = qs(".heroH1");
+  const AB_KEY = "ab_hero_v1";
+  const ab = localStorage.getItem(AB_KEY) || (Math.random()<0.5?"A":"B");
+  localStorage.setItem(AB_KEY, ab);
+  if(h1){
+    h1.textContent = ab==="A"
+      ? "Match-night chaos → calm control."
+      : "Turn packed nights into profit—automatically.";
+  }
+  if(window.gtag){ gtag("event","ab_view",{variant:ab}); }
+
+  // Funnel events
+  const demoBtn = qs("#demoBtnTop");
+  demoBtn && demoBtn.addEventListener("click", ()=>{
+    window.gtag && gtag("event","demo_click",{variant:ab});
+  });
+
+  let formStarted=false;
+  form && form.addEventListener("focusin", ()=>{
+    if(formStarted) return;
+    formStarted=true;
+    window.gtag && gtag("event","form_start",{variant:ab});
+  });
+
 })();
