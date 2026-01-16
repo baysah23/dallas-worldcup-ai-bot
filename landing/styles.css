@@ -416,3 +416,14 @@ input{
   .chaosStrip{ grid-template-columns:1fr; }
   .steps{ grid-template-columns:1fr; }
 }
+
+
+/* Micro-motion polish */
+[data-reveal]{
+  transition: opacity .45s cubic-bezier(.2,.8,.2,1),
+              transform .45s cubic-bezier(.2,.8,.2,1);
+}
+.btn{ transition: transform .12s ease, box-shadow .12s ease; }
+.btn:active{ transform: scale(.98); }
+.cdNum{ animation: cdPulse 1s ease-in-out infinite; }
+@keyframes cdPulse{0%,100%{opacity:.9}50%{opacity:1}}
