@@ -18,7 +18,7 @@
 
     <!-- ROLEX-STYLE COUNTDOWN -->
     <div class="countdownOverlay countdownOverlay--hero" aria-label="Kickoff countdown">
-      <div class="countdownLabel">Kickoff</div>
+      <div class="countdownLabel">Until Kickoff</div>
       <div class="countdownRow">
         <span class="cdNum" id="d">--</span><span class="cdLbl">D</span>
         <span class="cdNum" id="h">--</span><span class="cdLbl">H</span>
@@ -32,48 +32,76 @@
   <div class="heroVideoWrap">
 
     <!-- Background blurred video -->
-<video
-  class="heroVideo heroVideo--blur"
-  autoplay
-  muted
-  loop
-  playsinline
-  preload="auto"
-  aria-hidden="true">
-  <source src="https://media.worldcupconcierge.app/highlight.mp4" type="video/mp4" />
-</video>
+    <video
+      class="heroVideo heroVideo--blur"
+      autoplay
+      muted
+      loop
+      playsinline
+      preload="auto"
+      aria-hidden="true">
+      <source src="https://media.worldcupconcierge.app/highlight.mp4" type="video/mp4" />
+    </video>
 
-<!-- Foreground video -->
-<video
-  id="heroVideo"
-  class="heroVideo heroVideo--contain"
-  autoplay
-  muted
-  loop
-  playsinline
-  preload="auto">
-  <source src="https://media.worldcupconcierge.app/highlight.mp4" type="video/mp4" />
-</video>
+    <!-- Foreground video -->
+    <video
+      id="heroVideo"
+      class="heroVideo heroVideo--contain"
+      autoplay
+      muted
+      loop
+      playsinline
+      preload="auto">
+      <source src="https://media.worldcupconcierge.app/highlight.mp4" type="video/mp4" />
+    </video>
 
-<!-- Apple-style sound pill -->
-<button id="soundToggle" class="soundPill" aria-label="Toggle sound">
-  🔊 Sound
-</button>
+    <!-- Apple-style sound pill -->
+    <button id="soundToggle" class="soundPill" aria-label="Toggle sound">
+      🔊 Sound
+    </button>
 
-<!-- HERO COPY -->
-<div class="heroOverlay container">
-  <h1 class="heroH1">A calmer way to run match nights.</h1>
-  <p class="heroSub">Reservations and VIP requests, handled automatically.</p>
+    <!-- HERO COPY -->
+    <div class="heroOverlay container">
+      <h1 class="heroH1">A calmer way to run match nights.</h1>
+      <p class="heroSub">Reservations and VIP requests, handled automatically.</p>
 
-  <div class="heroCta">
-    <a class="btn btnPrimary" href="#demo" id="demoBtnTop">See it in action</a>
+      <div class="heroCta">
+        <a class="btn btnPrimary" href="#demo" id="demoBtnTop">See it in action</a>
+      </div>
+    </div>
+
   </div>
-</div>
-
-</div>
 </header>
 
 <style>
+.heroHeader{
+  position:relative;
+  z-index:3;
+  padding:18px 16px 6px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  text-align:center;
+}
+
+.heroBrand--title{
+  font-size:24px;        /* matches countdown numbers */
+  font-weight:600;       /* same as CTA */
+  letter-spacing:.6px;
+  text-transform:uppercase;
+  margin-bottom:10px;    /* spacing from countdown */
+}
+
+.countdownOverlay--hero{
+  margin-top:6px;
+}
+
+.countdownLabel{
+  font-weight:600;       /* same as CTA */
+  letter-spacing:.6px;
+  opacity:1;
+}
+
 .soundPill{
   position:absolute;
   right:18px;
@@ -101,11 +129,17 @@
 const heroVideo = document.getElementById('heroVideo');
 const soundBtn = document.getElementById('soundToggle');
 
-soundBtn.onclick = () => {
-  heroVideo.muted = !heroVideo.muted;
-  soundBtn.textContent = heroVideo.muted ? '🔊 Sound' : '🔇 Mute';
-};
+soundBtn.addEventListener('click', async () => {
+  try{
+    heroVideo.muted = false;
+    await heroVideo.play();   // required for mobile sound unlock
+    soundBtn.textContent = '🔇 Mute';
+  }catch(e){
+    console.log('Sound unlock blocked', e);
+  }
+});
 </script>
+
 
 <!-- CHAOS (VISUAL STORY) -->
 <section class="section sectionTight">
