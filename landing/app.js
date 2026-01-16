@@ -41,33 +41,7 @@
       if(sEl) sEl.textContent = pad(s);
     }
     tick(); setInterval(tick, 1000);
-  
-  // ---------- A/B hero headline (safe) ----------
-  const h1 = qs(".heroH1");
-  const AB_KEY = "ab_hero_v1";
-  const ab = localStorage.getItem(AB_KEY) || (Math.random()<0.5?"A":"B");
-  localStorage.setItem(AB_KEY, ab);
-  if(h1){
-    h1.textContent = ab==="A"
-      ? "Match-night chaos → calm control."
-      : "Turn packed nights into profit—automatically.";
-  }
-  if(window.gtag){ gtag("event","ab_view",{variant:ab}); }
-
-  // Funnel events
-  const demoBtn = qs("#demoBtnTop");
-  demoBtn && demoBtn.addEventListener("click", ()=>{
-    window.gtag && gtag("event","demo_click",{variant:ab});
-  });
-
-  let formStarted=false;
-  form && form.addEventListener("focusin", ()=>{
-    if(formStarted) return;
-    formStarted=true;
-    window.gtag && gtag("event","form_start",{variant:ab});
-  });
-
-})();
+  })();
 
   // ---------- Hero video + sound toggle ----------
   const v = qs("#heroVideo");
@@ -78,6 +52,20 @@
   }
   if(v){
     v.play().catch(()=>{});
+    const TRIM_SECONDS = 2.5; // cut before last frames (credits)
+    let duration = 0;
+    v.addEventListener("loadedmetadata", ()=>{ duration = Number(v.duration||0); });
+    v.addEventListener("timeupdate", ()=>{
+      if(!duration || !isFinite(duration)) return;
+      if((duration - v.currentTime) <= TRIM_SECONDS){
+        try{ v.currentTime = 0.0; }catch(e){}
+        v.play().catch(()=>{});
+      }
+    });
+    v.addEventListener("ended", ()=>{
+      try{ v.currentTime = 0.0; }catch(e){}
+      v.play().catch(()=>{});
+    });
   }
   if(toggle && v){
     setIcon();
@@ -89,9 +77,43 @@
   }
 
   // ---------- Carousel controls ----------
+
   const track = qs("#carouselTrack");
   const prev = qs("#prevSlide");
   const next = qs("#nextSlide");
+
+  // Carousel v1.0 auto-rotate (transform slider)
+  const slides = track ? qsa(".slide", track) : [];
+  let idx = 0;
+  let paused = false;
+  let resumeT = null;
+
+  function applySlide(){
+    if(!track || !slides.length) return;
+    track.style.transform = "translateX(" + (-idx * 100) + "%)";
+  }
+  function nextSlideAuto(){
+    if(paused || !slides.length) return;
+    idx = (idx + 1) % slides.length;
+    applySlide();
+  }
+  function pause(ms=2200){
+    paused = true;
+    if(resumeT) clearTimeout(resumeT);
+    resumeT = setTimeout(()=>{ paused = false; }, ms);
+  }
+
+  if(track && slides.length){
+    applySlide();
+    ["touchstart","pointerdown","mousedown"].forEach(ev=>{
+      track.addEventListener(ev, ()=>pause(2200), {passive:true});
+    });
+    ["touchmove","pointermove","wheel"].forEach(ev=>{
+      track.addEventListener(ev, ()=>pause(2600), {passive:true});
+    });
+    track.addEventListener("keydown", ()=>pause(2600));
+    setInterval(nextSlideAuto, 4200);
+  }
   function scrollBySlide(dir){
     if(!track) return;
     const slide = track.querySelector(".slide");
@@ -127,7 +149,7 @@
       setStatus("Submitting…", true);
 
       const data = Object.fromEntries(new FormData(form).entries());
-      const payload = { ...data, ts: nowIso(), source: "landing" };
+      const payload = { ...data, ts: nowIso(), source: "landing", ab_variant: (localStorage.getItem("ab_hero_v1")||"") };
 
       try{
         const res = await fetch("/api/lead", {
@@ -147,30 +169,4 @@
       }
     });
   }
-
-  // ---------- A/B hero headline (safe) ----------
-  const h1 = qs(".heroH1");
-  const AB_KEY = "ab_hero_v1";
-  const ab = localStorage.getItem(AB_KEY) || (Math.random()<0.5?"A":"B");
-  localStorage.setItem(AB_KEY, ab);
-  if(h1){
-    h1.textContent = ab==="A"
-      ? "Match-night chaos → calm control."
-      : "Turn packed nights into profit—automatically.";
-  }
-  if(window.gtag){ gtag("event","ab_view",{variant:ab}); }
-
-  // Funnel events
-  const demoBtn = qs("#demoBtnTop");
-  demoBtn && demoBtn.addEventListener("click", ()=>{
-    window.gtag && gtag("event","demo_click",{variant:ab});
-  });
-
-  let formStarted=false;
-  form && form.addEventListener("focusin", ()=>{
-    if(formStarted) return;
-    formStarted=true;
-    window.gtag && gtag("event","form_start",{variant:ab});
-  });
-
 })();
