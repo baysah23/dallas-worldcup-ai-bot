@@ -49,7 +49,7 @@
     const bg = qs(".heroVideo--blur");           // background
 
     const START_AT = 0.0;
-    const TRIM_SECONDS = 5.5;  // locked per request
+    const TRIM_SECONDS = 3.0;  // skip last 3 seconds
     const MIN_DUR = 6;
 
     function forceLoop(v, {forceMuted}){
@@ -92,19 +92,29 @@
   // ---------- Hero sound toggle (foreground only) ----------
   const v = qs("#heroVideo");
   const toggle = qs("#soundToggle");
-  function setIcon(){
+  function setLabel(){
     if(!toggle || !v) return;
-    toggle.textContent = v.muted ? "🔇" : "🔊";
+    toggle.textContent = v.muted ? "🔊 Sound" : "🔇 Mute";
   }
   if(v){
     v.play().catch(()=>{});
   }
   if(toggle && v){
-    setIcon();
-    toggle.addEventListener("click", ()=>{
-      v.muted = !v.muted;
-      setIcon();
-      if(v.paused) v.play().catch(()=>{});
+    setLabel();
+    toggle.addEventListener("click", async ()=>{
+      try{
+        if(v.muted){
+          v.muted = false;
+          v.volume = 1;
+          await v.play();
+        }else{
+          v.muted = true;
+        }
+      }catch(e){
+        // If the browser blocks audio for any reason, fall back to muted
+        v.muted = true;
+      }
+      setLabel();
     });
   }
 
