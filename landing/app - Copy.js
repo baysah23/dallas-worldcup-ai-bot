@@ -1,4 +1,4 @@
-// World Cup Concierge Landing — v4
+// World Cup Concierge Landing — Premium (locked)
 (function(){
   const qs = (sel, el=document) => el.querySelector(sel);
   const qsa = (sel, el=document) => Array.from(el.querySelectorAll(sel));
@@ -43,7 +43,53 @@
     tick(); setInterval(tick, 1000);
   })();
 
-  // ---------- Hero video + sound toggle ----------
+  // ---------- Force loop BOTH hero videos + cut before credits ----------
+  (function(){
+    const fg = qs("#heroVideo");                 // foreground
+    const bg = qs(".heroVideo--blur");           // background
+
+    const START_AT = 0.0;
+    const TRIM_SECONDS = 5.5;  // locked per request
+    const MIN_DUR = 6;
+
+    function forceLoop(v, {forceMuted}){
+      if(!v) return;
+
+      if(forceMuted) v.muted = true; // DO NOT force mute foreground (sound toggle controls it)
+      v.playsInline = true;
+
+      let dur = 0;
+      const safePlay = () => v.play().catch(()=>{});
+
+      v.addEventListener("loadedmetadata", ()=>{
+        dur = Number(v.duration || 0);
+        safePlay();
+      });
+
+      v.addEventListener("timeupdate", ()=>{
+        if(!dur || !isFinite(dur) || dur < MIN_DUR) return;
+        if(v.currentTime >= (dur - TRIM_SECONDS)){
+          try{ v.currentTime = START_AT; }catch(e){}
+          safePlay();
+        }
+      });
+
+      v.addEventListener("ended", ()=>{
+        try{ v.currentTime = START_AT; }catch(e){}
+        safePlay();
+      });
+
+      safePlay();
+    }
+
+    // Foreground: start muted to allow autoplay; user can unmute via toggle
+    if(fg) fg.muted = true;
+
+    forceLoop(fg, {forceMuted:false});
+    forceLoop(bg, {forceMuted:true});
+  })();
+
+  // ---------- Hero sound toggle (foreground only) ----------
   const v = qs("#heroVideo");
   const toggle = qs("#soundToggle");
   function setIcon(){
@@ -62,7 +108,33 @@
     });
   }
 
-  // ---------- Carousel controls ----------
+  // ---------- Rolex tick + gold micro-glint on number update ----------
+  (function(){
+    const ids = ["d","h","m","s"];
+    const last = { d:null, h:null, m:null, s:null };
+
+    function pulse(el){
+      if(!el) return;
+      el.classList.remove("rolexTick","goldGlint");
+      void el.offsetWidth; // reflow
+      el.classList.add("rolexTick","goldGlint");
+    }
+
+    setInterval(()=>{
+      ids.forEach(id=>{
+        const el = document.getElementById(id);
+        if(!el) return;
+        const val = el.textContent;
+        if(last[id] === null){ last[id] = val; return; }
+        if(val !== last[id]){
+          last[id] = val;
+          pulse(el);
+        }
+      });
+    }, 250);
+  })();
+
+  // ---------- Carousel controls (current behavior; we’ll fix rotation after you paste carousel snippet) ----------
   const track = qs("#carouselTrack");
   const prev = qs("#prevSlide");
   const next = qs("#nextSlide");
@@ -121,35 +193,22 @@
       }
     });
   }
-})();
-// ===== V2 AUTO ROTATE FIX =====
-(function(){
- const t=document.querySelector('#carouselTrack');if(!t)return;
- const s=[...t.children],n=s.length;let i=0,p=false;
- t.style.width=(n*100)+'%';s.forEach(x=>x.style.width=(100/n)+'%');
- function go(){if(p)return;i=(i+1)%n;t.style.transform='translateX(-'+(i*(100/n))+'%)';}
- ['touchstart','pointerdown','wheel'].forEach(e=>t.addEventListener(e,()=>p=true,{passive:true}));
- ['touchend','pointerup','touchcancel','pointercancel'].forEach(e=>t.addEventListener(e,()=>setTimeout(()=>p=false,1800),{passive:true}));
-  t.addEventListener('keydown',()=>p=true);
- setInterval(go,4200);
-})();
 
-// ===== V2 SCROLL CUE =====
-(function(){
-  const cue = document.getElementById('scrollCue');
-  if(!cue) return;
-  const hide = ()=> cue.classList.add('is-hidden');
-  const show = ()=> cue.classList.remove('is-hidden');
-  let didScroll = false;
+  // ---------- Scroll cue hide on first scroll ----------
+  (function(){
+    const cue = document.getElementById("scrollCue");
+    if(!cue) return;
+    const hide = ()=> cue.classList.add("is-hidden");
+    const show = ()=> cue.classList.remove("is-hidden");
 
-  function onScroll(){
-    if(!didScroll && window.scrollY > 20){
-      didScroll = true;
-      hide();
-      window.removeEventListener('scroll', onScroll, {passive:true});
+    function onScroll(){
+      if(window.scrollY > 20){
+        hide();
+        window.removeEventListener("scroll", onScroll, {passive:true});
+      }
     }
-  }
-  window.addEventListener('scroll', onScroll, {passive:true});
-  // If already scrolled on load
-  if(window.scrollY > 20) hide(); else show();
+    window.addEventListener("scroll", onScroll, {passive:true});
+    if(window.scrollY > 20) hide(); else show();
+  })();
+
 })();
