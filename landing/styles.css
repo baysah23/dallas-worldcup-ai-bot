@@ -1,12 +1,8 @@
 /* World Cup Concierge Landing — Premium v4 */
 
 :root{
-  --gold1: rgba(255,215,140,.95);
-  --gold2: rgba(255,186,73,.92);
-  --warmWhite: rgba(255,255,255,.92);
-
-  --bg0:#070b14;
-  --bg1:#0c1730;
+  --bg0:#05070c;
+  --bg1:#0a1020;
   --text:#eef2ff;
   --muted:rgba(238,242,255,.72);
   --line:rgba(255,255,255,.14);
@@ -80,24 +76,23 @@ a{color:inherit; text-decoration:none}
   width:100%;
   height:100%;
 }
-.heroVideo--blur{
+.heroVideo--blur{filter:blur(14px) brightness(1.25) saturate(1.05);
   object-fit:cover;
-  filter: blur(18px) saturate(1.18) contrast(1.04) brightness(1.12);
+  filter: blur(18px) saturate(1.25) contrast(1.08);
   transform: scale(1.08);
   opacity:.70;
 }
-.heroVideo--contain{
-  filter: brightness(1.10) contrast(1.03);
+.heroVideo--contain{filter:brightness(1.22) saturate(1.04);
   object-fit:contain; /* FULL FRAME */
   background:transparent;
 }
-.heroScrim{
+.heroScrim{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
   position:absolute;
   inset:0;
   background:
     radial-gradient(900px 520px at 18% 25%, rgba(0,0,0,.18), transparent 62%),
-    linear-gradient(90deg, rgba(0,0,0,.52), rgba(0,0,0,.10) 62%, rgba(0,0,0,.42)),
-    linear-gradient(180deg, rgba(0,0,0,.06), rgba(0,0,0,.62));
+    linear-gradient(90deg, rgba(0,0,0,.68), rgba(0,0,0,.12) 62%, rgba(0,0,0,.54)),
+    linear-gradient(180deg, rgba(0,0,0,.10), rgba(0,0,0,.78));
 }
 .heroOverlay{
   position:relative;
@@ -126,7 +121,7 @@ a{color:inherit; text-decoration:none}
 }
 .heroH1{
   margin:14px 0 10px;
-  font-size:clamp(30px, 3.8vw, 50px);
+  font-size:clamp(34px, 4.4vw, 56px);
   line-height:1.04;
   letter-spacing:-.03em;
 }
@@ -139,19 +134,19 @@ a{color:inherit; text-decoration:none}
 }
 .heroCta{ margin-top:18px; }
 
-/* Countdown overlay (gold + glass, sits under hero brand) */
+/* Countdown overlay (Rolex-style) */
 .countdownOverlay{
-  position:relative;
+  position:absolute;
   z-index:4;
-  margin-top:18px;
+  right:18px;
+  top:18px;
   border-radius:18px;
   border:1px solid rgba(255,255,255,.14);
-  background: rgba(255,255,255,.10);
+  background: rgba(0,0,0,.28);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   box-shadow: var(--shadow);
   padding:10px 12px;
-  width: fit-content;
 }
 .countdownLabel{
   font-size:10px;
@@ -169,10 +164,6 @@ a{color:inherit; text-decoration:none}
 }
 .cdNum{
   font-weight:950;
-  background: linear-gradient(180deg, var(--gold1), var(--gold2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
   font-size:18px;
   letter-spacing:-.01em;
 }
@@ -226,7 +217,7 @@ a{color:inherit; text-decoration:none}
   display:block;
   width:100%;
   height: clamp(190px, 22vw, 260px);
-  object-fit: cover;
+  object-fit:contain;height:auto;max-height:420px;
 }
 .tileVisual figcaption{
   padding:12px 14px;
@@ -244,14 +235,11 @@ a{color:inherit; text-decoration:none}
   overflow:hidden;
   box-shadow: var(--shadow2);
 }
-.calmVisual{ padding:12px; background: rgba(255,255,255,.05); }
 .calmVisual img{
   display:block;
   width:100%;
-  height: clamp(240px, 28vw, 380px);
-  object-fit: contain;
-  background: rgba(0,0,0,.20);
-  border-radius: 22px;
+  height: clamp(220px, 26vw, 340px);
+  object-fit:contain;height:auto;max-height:420px;
 }
 .calmLine{
   margin:12px 0 0;
@@ -429,55 +417,10 @@ input{
   .steps{ grid-template-columns:1fr; }
 }
 
-/* Clean separation after hero */
-.sectionFirst{padding-top:54px;border-top:1px solid rgba(255,255,255,.08);}
+/* ===== V2 PREMIUM TYPOGRAPHY ===== */
+.heroH1{font-size:clamp(26px,3.4vw,42px);font-weight:820;line-height:1.12;max-width:30ch}
+.h2{font-size:clamp(18px,2.3vw,28px);font-weight:780;line-height:1.18}
+.heroSub{font-size:16px;line-height:1.6;max-width:52ch}
 
-/* Carousel v1.0 (transform slider, auto-rotate) */
-.carousel{ overflow:hidden; }
-.carouselTrack{
-  overflow:hidden;
-  scroll-snap-type:none;
-  will-change: transform;
-  transform: translateX(0);
-  transition: transform .65s cubic-bezier(.2,.8,.2,1);
-  padding-bottom: 0;
-}
-.carouselTrack::-webkit-scrollbar{ display:none; }
-.slide{
-  width:100%;
-  max-width:none;
-  flex: 0 0 100%;
-  scroll-snap-align: unset;
-}
-.carouselControls{ display:none; } /* de-emphasize manual controls */
-
-/* Ambient premium life (subtle) */
-body:before{
-  content:"";
-  position:fixed;
-  inset:0;
-  pointer-events:none;
-  background:
-    radial-gradient(900px 520px at 20% 20%, rgba(255,255,255,.06), transparent 60%),
-    radial-gradient(900px 520px at 80% 18%, rgba(255,215,140,.06), transparent 60%);
-  opacity:.9;
-  mix-blend-mode: soft-light;
-}
-body:after{
-  content:"";
-  position:fixed;
-  inset:-20%;
-  pointer-events:none;
-  background:
-    radial-gradient(1200px 700px at 15% 10%, rgba(16,40,110,.14) 0%, transparent 58%),
-    radial-gradient(900px 520px at 88% 18%, rgba(255,215,140,.06) 0%, transparent 55%);
-  opacity:.8;
-  animation: ambientDrift 22s ease-in-out infinite alternate;
-}
-@keyframes ambientDrift{
-  from{ transform: translate3d(-1%, -0.5%, 0); }
-  to{ transform: translate3d(1.2%, 0.8%, 0); }
-}
-@media (prefers-reduced-motion: reduce){
-  body:after{ animation:none !important; }
-}
+.countdownOverlay{margin-top:16px;background:rgba(255,255,255,.12);backdrop-filter:blur(14px)}
+.cdNum{background:linear-gradient(180deg,#FFD88A,#FFB547);-webkit-background-clip:text;color:transparent}
