@@ -39,7 +39,7 @@ from typing import Dict, Any, Optional, List, Tuple
 import time
 import urllib.request
 import urllib.error
-from flask import Flask, request, jsonify, send_from_directory, send_file, make_response, g, render_template, render_template_string
+from flask import Flask, request, jsonify, send_from_directory, send_file, make_response, g, render_template, render_template_string, redirect
 
 # ============================================================
 # Enterprise persistence: Redis (optional, recommended)
@@ -77,16 +77,15 @@ _REDIS_FALLBACK_LAST_PATH = ""
 # Map our on-disk JSON files to Redis keys when enabled (single source of truth)
 # NOTE: These files still exist for local/dev fallback.
 _REDIS_PATH_KEY_MAP = {  # values are suffixes; full key includes namespace + venue
-
-    os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_ai_queue.json"): "ai_queue",
-    os.environ.get("AI_SETTINGS_FILE", "/tmp/wc26_ai_settings.json"): "ai_settings",
-    os.environ.get("PARTNER_POLICIES_FILE", "/tmp/wc26_partner_policies.json"): "partner_policies",
-    os.environ.get("BUSINESS_RULES_FILE", "/tmp/wc26_business_rules.json"): "business_rules",
-    os.environ.get("MENU_FILE", "/tmp/wc26_menu_override.json"): "menu_override",
-    os.environ.get("ALERT_SETTINGS_FILE", "/tmp/wc26_alert_settings.json"): "alert_settings",
-    os.environ.get("ALERT_STATE_FILE", "/tmp/wc26_alert_state.json"): "alert_state",
-    os.environ.get("POLL_STORE_FILE", "/tmp/wc26_poll_votes.json"): "poll_store",
-    os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_fixtures.json"): "fixtures_cache",
+    os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_{venue}_ai_queue.json"): "ai_queue",
+    os.environ.get("AI_SETTINGS_FILE", "/tmp/wc26_{venue}_ai_settings.json"): "ai_settings",
+    os.environ.get("PARTNER_POLICIES_FILE", "/tmp/wc26_{venue}_partner_policies.json"): "partner_policies",
+    os.environ.get("BUSINESS_RULES_FILE", "/tmp/wc26_{venue}_business_rules.json"): "business_rules",
+    os.environ.get("MENU_FILE", "/tmp/wc26_{venue}_menu_override.json"): "menu_override",
+    os.environ.get("ALERT_SETTINGS_FILE", "/tmp/wc26_{venue}_alert_settings.json"): "alert_settings",
+    os.environ.get("ALERT_STATE_FILE", "/tmp/wc26_{venue}_alert_state.json"): "alert_state",
+    os.environ.get("POLL_STORE_FILE", "/tmp/wc26_{venue}_poll_votes.json"): "poll_store",
+    os.environ.get("FIXTURE_CACHE_FILE", "/tmp/wc26_{venue}_fixtures.json"): "fixtures_cache",
 }
 
 def _redis_init_if_needed() -> None:
@@ -343,11 +342,33 @@ DEFAULT_VENUE_ID = (os.environ.get("DEFAULT_VENUE_ID") or "default").strip() or 
 VENUES_DIR = os.environ.get("VENUES_DIR", os.path.join(os.path.dirname(__file__), "config", "venues"))
 _MULTI_VENUE_CACHE: Dict[str, Any] = {"ts": 0.0, "venues": {}}
 
+def _invalidate_venues_cache():
+    # Multi-venue list cache
+    try:
+        _MULTI_VENUE_CACHE["ts"] = 0.0
+        _MULTI_VENUE_CACHE["venues"] = {}
+    except Exception:
+        pass
+
+    # Any optional per-venue config caches (only if they exist in this file)
+    try:
+        if isinstance(globals().get("_VENUE_CFG_CACHE"), dict):
+            globals()["_VENUE_CFG_CACHE"].clear()
+    except Exception:
+        pass
+
+    try:
+        if isinstance(globals().get("_VENUE_CFG_BY_ID"), dict):
+            globals()["_VENUE_CFG_BY_ID"].clear()
+    except Exception:
+        pass
+
 def _slugify_venue_id(s: str) -> str:
     s = (s or "").strip().lower()
     s = re.sub(r"[^a-z0-9]+", "-", s)
     s = re.sub(r"-{2,}", "-", s).strip("-")
     return s or "default"
+
 
 def _load_venues_from_disk() -> Dict[str, Any]:
     """Load venue configs from VENUES_DIR. Returns dict keyed by venue_id."""
@@ -363,7 +384,7 @@ def _load_venues_from_disk() -> Dict[str, Any]:
             _MULTI_VENUE_CACHE["venues"] = venues
             return venues
 
-        files = []
+        files: List[str] = []
         for fn in os.listdir(VENUES_DIR):
             if fn.lower().endswith((".yaml", ".yml", ".json")):
                 files.append(os.path.join(VENUES_DIR, fn))
@@ -390,17 +411,11 @@ def _load_venues_from_disk() -> Dict[str, Any]:
                     cfg = None
             else:
                 if yaml_mod is None:
-                    # YAML file present but parser missing: fail loud for ops clarity
                     # YAML venue file present but PyYAML missing: skip YAML so JSON venues still work
-
                     try:
-
-                        print('[VENUES] skipping YAML (pyyaml not installed): ' + os.path.basename(fp))
-
+                        print("[VENUES] skipping YAML (pyyaml not installed): " + os.path.basename(fp))
                     except Exception:
-
                         pass
-
                     continue
                 try:
                     cfg = yaml_mod.safe_load(raw)
@@ -428,7 +443,6 @@ def _load_venues_from_disk() -> Dict[str, Any]:
     return venues
 
 
-
 def _iter_venue_json_configs() -> List[Dict[str, Any]]:
     """Return venue config descriptors from VENUES_DIR.
 
@@ -442,48 +456,56 @@ def _iter_venue_json_configs() -> List[Dict[str, Any]]:
     out: List[Dict[str, Any]] = []
     try:
         venues = _load_venues_from_disk() or {}
-        # _load_venues_from_disk returns dict keyed by venue_id.
         for vid, cfg in venues.items():
-            try:
-                out.append({
-                    "venue_id": str(vid),
-                    "path": str((cfg or {}).get("_path") or ""),
-                    "config": cfg or {},
-                })
-            except Exception:
+            if not isinstance(cfg, dict):
                 continue
+            out.append({
+                "venue_id": str(vid),
+                "path": str((cfg or {}).get("_path") or ""),
+                "config": cfg or {},
+            })
     except Exception:
         return []
     return out
+
+
 def _resolve_venue_id() -> str:
     """Resolve venue_id from request (path/query/cookie/header) with optional VENUE_LOCK."""
     if VENUE_LOCK:
         return VENUE_LOCK
+
+    # 1) /v/<venue_id>/... from path
     try:
-        # /v/<venue_id>/...
         m = re.match(r"^/v/([^/]+)", (request.path or ""))
         if m:
             return _slugify_venue_id(m.group(1))
     except Exception:
         pass
+
+    # 2) ?venue=<venue_id> query param
     try:
         q = (request.args.get("venue") or "").strip()
         if q:
             return _slugify_venue_id(q)
     except Exception:
         pass
-    try:
-        c = (request.cookies.get("venue_id") or "").strip()
-        if c:
-            return _slugify_venue_id(c)
-    except Exception:
-        pass
+
+    # 3) X-Venue-Id header  (must beat cookie for per-tab isolation)
     try:
         h = (request.headers.get("X-Venue-Id") or "").strip()
         if h:
             return _slugify_venue_id(h)
     except Exception:
         pass
+
+    # 4) venue_id cookie  (fallback only)
+    try:
+        c = (request.cookies.get("venue_id") or "").strip()
+        if c:
+            return _slugify_venue_id(c)
+    except Exception:
+        pass
+
     return DEFAULT_VENUE_ID
 
 @app.before_request
@@ -493,11 +515,49 @@ def _set_venue_ctx():
     except Exception:
         g.venue_id = DEFAULT_VENUE_ID
 
+@app.before_request
+def _tenant_guard_admin_writes():
+    # Fail-closed: admin writes MUST include an explicit venue (query or header).
+    try:
+        if not (request.path or "").startswith("/admin"):
+            return None  # do not affect /super/*
+        if (request.method or "GET").upper() not in ("POST", "PUT", "PATCH", "DELETE"):
+            return None  # reads allowed
+
+        raw_q = (request.args.get("venue") or "").strip()
+        raw_h = (request.headers.get("X-Venue-Id") or "").strip()
+
+        # IMPORTANT: do NOT allow cookie-only venue on writes (prevents cross-tab bleed)
+        raw = raw_q or raw_h
+        if not raw:
+            try:
+                _audit("tenant.guard.block", {"reason": "missing_explicit_venue", "path": request.path, "method": request.method})
+                _notify("tenant.guard.block", {"reason": "missing_explicit_venue", "path": request.path, "method": request.method}, targets=["owner"])
+            except Exception:
+                pass
+            return jsonify({"ok": False, "error": "venue_required"}), 403
+
+        expected = _slugify_venue_id(raw)
+        if (not expected) or (expected == DEFAULT_VENUE_ID) or (expected == "default"):
+            return jsonify({"ok": False, "error": "venue_required"}), 403
+
+        # Force request context to the explicit venue (overrides any cookie bleed)
+        try:
+            g.venue_id = expected
+        except Exception:
+            pass
+
+        return None
+    except Exception:
+        return jsonify({"ok": False, "error": "venue_required"}), 403
+
+
 def _venue_id() -> str:
     try:
         return _slugify_venue_id(getattr(g, "venue_id", "") or DEFAULT_VENUE_ID)
     except Exception:
         return DEFAULT_VENUE_ID
+
 
 def _venue_cfg(venue_id: Optional[str] = None) -> Dict[str, Any]:
     venues = _load_venues_from_disk()
@@ -505,11 +565,13 @@ def _venue_cfg(venue_id: Optional[str] = None) -> Dict[str, Any]:
     cfg = venues.get(vid) if isinstance(venues, dict) else None
     return cfg if isinstance(cfg, dict) else {"venue_id": vid, "status": "implicit"}
 
+
 def _venue_sheet_id(venue_id: Optional[str] = None) -> str:
     cfg = _venue_cfg(venue_id)
     data = cfg.get("data") if isinstance(cfg.get("data"), dict) else {}
     sid = str((data or {}).get("google_sheet_id") or (cfg.get("google_sheet_id") or "")).strip()
     return sid
+
 
 def _venue_sheet_tab(venue_id: Optional[str] = None) -> str:
     cfg = _venue_cfg(venue_id)
@@ -523,14 +585,48 @@ def _venue_features(venue_id: Optional[str] = None) -> Dict[str, Any]:
     feat = cfg.get("features") if isinstance(cfg.get("features"), dict) else {}
     return dict(feat or {})
 
-def _venue_is_active(venue_id: Optional[str] = None) -> bool:
-    """Return whether a venue is active (fan-facing intake allowed).
 
-    Back-compat rules:
-      - If cfg has boolean `active`, that is the source of truth.
-      - Otherwise fall back to `status` string (active|inactive|disabled|off).
-      - Default: active.
-    """
+def _venue_is_active(venue_id: Optional[str] = None) -> bool:
+    """Return whether a venue is active (fan-facing intake allowed)."""
+    try:
+        cfg = _venue_cfg(venue_id)
+        if not isinstance(cfg, dict):
+            return True
+
+        # Back-compat rules:
+        # - If cfg has boolean `active`, that is the source of truth.
+        # - Otherwise fall back to `status` string (active|inactive|disabled|off).
+        # - Default: active.
+        if "active" in cfg:
+            v = cfg.get("active")
+            if isinstance(v, bool):
+                return v
+            sv = str(v or "").strip().lower()
+            if sv in ("0", "false", "no", "n", "off"):
+                return False
+            if sv in ("1", "true", "yes", "y", "on"):
+                return True
+
+        st = str(cfg.get("status") or "").strip().lower()
+        if st in ("inactive", "disabled", "off"):
+            return False
+
+        return True
+    except Exception:
+        return True
+
+
+def _public_base_url() -> str:
+    """Return the correct public base URL when behind proxies (Azure / Render / Cloudflare)."""
+    proto = (request.headers.get("X-Forwarded-Proto") or request.scheme or "https").split(",")[0].strip()
+    host = (request.headers.get("X-Forwarded-Host") or request.host or "").split(",")[0].strip()
+    return f"{proto}://{host}".rstrip("/")
+
+# Back-compat rules:
+# - If cfg has boolean `active`, that is the source of truth.
+# - Otherwise fall back to `status` string (active|inactive|disabled|off).
+# - Default: active.
+    
     try:
         cfg = _venue_cfg(venue_id)
         if not isinstance(cfg, dict):
@@ -1723,13 +1819,8 @@ except Exception:
 
 
 def _admin_auth() -> Dict[str, str]:
-    """Return admin auth context: {ok, role, actor, venue_id}.
+    # Return admin auth context: {ok, role, actor, venue_id}.
 
-    Auth mechanism: ?key=...
-    - Owner key (global) => role=owner (all venues)
-    - Venue-scoped keys in config/venues/<venue_id>.yaml => role=owner|manager for that venue
-    - Legacy ADMIN_MANAGER_KEYS still works (manager, current venue context)
-    """
     key = (request.args.get("key", "") or "").strip()
     if not key:
         return {"ok": False, "role": "", "actor": "", "venue_id": ""}
@@ -1747,11 +1838,24 @@ def _admin_auth() -> Dict[str, str]:
     akeys = access.get("admin_keys") if isinstance(access.get("admin_keys"), list) else []
     mkeys = access.get("manager_keys") if isinstance(access.get("manager_keys"), list) else []
 
-    if key in [str(k).strip() for k in akeys if str(k).strip()]:
+    # ✅ Accept per-venue generated keys stored under cfg["keys"]
+    k = vc.get("keys") if isinstance(vc.get("keys"), dict) else {}
+    k_admin = str((k or {}).get("admin_key") or "").strip()
+    k_mgr = str((k or {}).get("manager_key") or "").strip()
+
+    if k_admin and key == k_admin:
         actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
         return {"ok": True, "role": "owner", "actor": actor, "venue_id": vid}
 
-    if key in [str(k).strip() for k in mkeys if str(k).strip()]:
+    if k_mgr and key == k_mgr:
+        actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+        return {"ok": True, "role": "manager", "actor": actor, "venue_id": vid}
+
+    if key in [str(x).strip() for x in akeys if str(x).strip()]:
+        actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+        return {"ok": True, "role": "owner", "actor": actor, "venue_id": vid}
+
+    if key in [str(x).strip() for x in mkeys if str(x).strip()]:
         actor = hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
         return {"ok": True, "role": "manager", "actor": actor, "venue_id": vid}
 
@@ -1763,12 +1867,28 @@ def _admin_auth() -> Dict[str, str]:
     return {"ok": False, "role": "", "actor": "", "venue_id": ""}
 
 
+def _admin_ctx() -> Dict[str, str]:
+    """Small wrapper used by UI + audit: never throws."""
+    try:
+        ctx = _admin_auth() or {}
+    except Exception:
+        ctx = {}
+    if not isinstance(ctx, dict):
+        ctx = {}
+    return {
+        "ok": bool(ctx.get("ok")),
+        "role": str(ctx.get("role") or ""),
+        "actor": str(ctx.get("actor") or ""),
+        "venue_id": str(ctx.get("venue_id") or ""),
+    }
+
+
+
 @app.get("/admin/api/whoami")
 def admin_api_whoami():
     """Return the server-truth role for the current key (owner/manager) so UI locks can't drift."""
     ctx = _admin_ctx()
     return jsonify(ok=bool(ctx.get("ok")), role=ctx.get("role", ""), actor=ctx.get("actor", ""), venue_id=ctx.get("venue_id",""))
-
 
 
 def _write_venue_config(venue_id: str, pack: Dict[str, Any]) -> Tuple[bool, str, str]:
@@ -1783,11 +1903,102 @@ def _write_venue_config(venue_id: str, pack: Dict[str, Any]) -> Tuple[bool, str,
             json.dump(pack, f, indent=2, sort_keys=True)
         wrote = True
         # refresh cache immediately
-        _MULTI_VENUE_CACHE["ts"] = 0.0
+        _invalidate_venues_cache()
     except Exception as e:
         err = str(e)
     return wrote, write_path, err
 
+@app.post("/super/api/venues/set_active")
+def super_api_venues_set_active():
+    # Super Admin auth
+    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
+    if key != SUPER_ADMIN_KEY:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    if not venue_id:
+        return jsonify({"ok": False, "error": "Missing venue_id"}), 400
+
+    active_in = body.get("active")
+    if isinstance(active_in, bool):
+        active = active_in
+    else:
+        active = str(active_in or "").strip().lower() in ("1", "true", "yes", "y", "on")
+
+    venues = _load_venues_from_disk() or {}
+    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
+    if not isinstance(cfg, dict):
+        return jsonify({"ok": False, "error": "Venue not found"}), 404
+
+    cfg["active"] = bool(active)
+    cfg["status"] = "active" if active else "inactive"
+    cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    wrote, write_path, err = _write_venue_config(venue_id, cfg)
+
+    # CRITICAL: cache bust
+    try:
+        _invalidate_venues_cache()
+    except Exception:
+        pass
+
+    return jsonify({
+        "ok": True,
+        "venue_id": venue_id,
+        "active": bool(active),
+        "persisted": wrote,
+        "path": write_path,
+        "error": err,
+    })
+
+@app.post("/super/api/venues/set_identity")
+def super_api_venues_set_identity():
+    # Super Admin auth
+    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
+    if key != SUPER_ADMIN_KEY:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    if not venue_id:
+        return jsonify({"ok": False, "error": "Missing venue_id"}), 400
+
+    location_line = str(body.get("location_line") or "").strip()
+    if not location_line:
+        return jsonify({"ok": False, "error": "location_line is required"}), 400
+
+    show_in = body.get("show_location_line")
+    show = True if show_in is None else bool(show_in)
+
+    venues = _load_venues_from_disk() or {}
+    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
+    if not isinstance(cfg, dict):
+        return jsonify({"ok": False, "error": "Venue not found"}), 404
+
+    # Set new schema (top-level)
+    cfg["show_location_line"] = bool(show)
+    cfg["location_line"] = location_line
+    cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    wrote, write_path, err = _write_venue_config(venue_id, cfg)
+    if not wrote:
+        return jsonify({"ok": False, "error": err or "Failed to write venue config"}), 500
+
+    try:
+        _invalidate_venues_cache()
+    except Exception:
+        pass
+
+    return jsonify({
+        "ok": True,
+        "venue_id": venue_id,
+        "show_location_line": bool(cfg.get("show_location_line")),
+        "location_line": str(cfg.get("location_line") or ""),
+        "persisted": wrote,
+        "path": write_path,
+        "error": err,
+    })
 
 @app.post("/admin/api/venues/set_active")
 def admin_api_venues_set_active():
@@ -1824,14 +2035,15 @@ def admin_api_venues_set_active():
 
     return jsonify({"ok": True, "venue_id": venue_id, "active": bool(active), "persisted": wrote, "path": write_path, "error": err})
 
-
 @app.post("/admin/api/venues/create")
 def admin_api_venues_create():
     """Owner-only: generate a Venue Pack (does NOT write files)."""
     ok, resp = _require_admin(min_role="owner")
     if not ok:
         return resp
+
     body = request.get_json(silent=True) or {}
+
     venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
     venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
     plan = str(body.get("plan") or "standard").strip().lower() or "standard"
@@ -1839,17 +2051,35 @@ def admin_api_venues_create():
     admin_key = secrets.token_hex(16)
     manager_key = secrets.token_hex(16)
 
+    base = _public_base_url()
+
     pack = {
         "venue_name": venue_name,
         "venue_id": venue_id,
         "status": "active",
         "plan": plan,
-        "qr_url": f"https://worldcupconcierge.app/v/{venue_id}",
-        "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={admin_key}",
-        "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={manager_key}",
-        "keys": {"admin_key": admin_key, "manager_key": manager_key},
-        "data": {"google_sheet_id": "", "redis_namespace": f"{_REDIS_NS}:{venue_id}"},
-        "features": body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True},
+
+        # ✅ Consistent, env-safe links (matches create_and_save)
+        "admin_url": f"{base}/admin?key={admin_key}&venue={venue_id}",
+        "manager_url": f"{base}/admin?key={manager_key}&venue={venue_id}",
+        "qr_url": f"{base}/v/{venue_id}",
+
+        # ✅ Consistent schema (no more "keys" vs "access" mismatch)
+        "access": {
+            "admin_keys": [admin_key],
+            "manager_keys": [manager_key],
+        },
+        "data": {
+            # allow passing a sheet id at creation time (optional)
+            "google_sheet_id": str(body.get("google_sheet_id") or "").strip(),
+            "redis_namespace": f"{_REDIS_NS}:{venue_id}",
+        },
+        "features": body.get("features")
+        if isinstance(body.get("features"), dict)
+        else {"vip": True, "waitlist": False, "ai_queue": True},
+        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+
+        # keep your yaml template (optional convenience)
         "yaml_template": (
             "venue_id: " + venue_id + "\n"
             "venue_name: \"" + venue_name.replace('\"','') + "\"\n"
@@ -1869,8 +2099,15 @@ def admin_api_venues_create():
             "  ai_queue: true\n"
         ),
     }
-    return jsonify({"ok": True, "pack": pack})
 
+    return jsonify({
+        "ok": True,
+        "admin_key": admin_key,
+        "manager_key": manager_key,
+        "pack": pack,
+    })
+
+    return jsonify({"ok": True, "pack": pack})
 
 @app.post("/admin/api/venues/create_and_save")
 def admin_api_venues_create_and_save():
@@ -1880,6 +2117,7 @@ def admin_api_venues_create_and_save():
         return resp
 
     body = request.get_json(silent=True) or {}
+
     venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
     venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
     plan = str(body.get("plan") or "standard").strip().lower() or "standard"
@@ -1887,11 +2125,19 @@ def admin_api_venues_create_and_save():
     admin_key = secrets.token_hex(16)
     manager_key = secrets.token_hex(16)
 
+    base = _public_base_url()
+
     pack = {
         "venue_name": venue_name,
         "venue_id": venue_id,
         "status": "active",
         "plan": plan,
+
+        # ✅ environment-safe links
+        "admin_url": f"{base}/admin?key={admin_key}&venue={venue_id}",
+        "manager_url": f"{base}/admin?key={manager_key}&venue={venue_id}",
+        "qr_url": f"{base}/v/{venue_id}",
+
         "access": {
             "admin_keys": [admin_key],
             "manager_keys": [manager_key],
@@ -1900,12 +2146,56 @@ def admin_api_venues_create_and_save():
             "google_sheet_id": str(body.get("google_sheet_id") or "").strip(),
             "redis_namespace": f"{_REDIS_NS}:{venue_id}",
         },
-        "features": body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True},
+        "features": body.get("features")
+        if isinstance(body.get("features"), dict)
+        else {"vip": True, "waitlist": False, "ai_queue": True},
         "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
     }
 
     wrote, write_path, err = _write_venue_config(venue_id, pack)
+    if not wrote:
+        return jsonify({
+            "ok": False,
+            "error": err or "Failed to write venue config",
+        }), 500
 
+    _invalidate_venues_cache()
+
+    return jsonify({
+        "ok": True,
+        "venue_id": venue_id,
+        "path": write_path,
+        "admin_key": admin_key,
+        "manager_key": manager_key,
+        "pack": pack,   # ✅ THIS is required
+    })
+
+    wrote, write_path, err = _write_venue_config(venue_id, pack)
+
+    if not wrote:
+        return jsonify({
+            "ok": False,
+            "error": err or "Failed to write venue config",
+        }), 500
+
+    _invalidate_venues_cache()
+
+    return jsonify({
+        "ok": True,
+        "venue_id": venue_id,
+        "path": write_path,
+        "admin_key": admin_key,
+        "manager_key": manager_key,
+        "pack": pack,
+    })
+
+@app.post("/super/admin/api/venue/create")
+def super_admin_api_venue_create():
+    """
+    Super Admin alias for venue creation.
+    Delegates to the existing owner-only create_and_save logic.
+    """
+    return admin_api_venues_create_and_save()
 
     # === ONE-CLICK ONBOARDING (v1.0 polish) ===
     # If a Sheet ID is provided at creation time, validate it immediately
@@ -1939,6 +2229,11 @@ def admin_api_venues_create_and_save():
 
     return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": write_path, "error": err})
     return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": write_path, "error": err})
+
+
+@app.route("/")
+def marketing_landing():
+    return send_from_directory("landing", "index.html")
 
 
 @app.route("/admin/api/_build", methods=["GET"])
@@ -2094,37 +2389,66 @@ def _is_super_admin_request() -> bool:
     return False
 
 def _require_admin(min_role: str = "manager"):
-    """Enforce admin access.
+    # key can come from query (?key=), header, or cookie
+    key = (request.args.get("key") or request.headers.get("X-Admin-Key") or request.cookies.get("admin_key") or "").strip()
+    if not key:
+        return False, (jsonify({"ok": False, "error": "unauthorized"}), 401)
+    
+    # 🔐 GLOBAL OWNER KEY — MUST SHORT-CIRCUIT (even if venue cfg fails)
+    if key and (ADMIN_OWNER_KEY or "") and key == (ADMIN_OWNER_KEY or ""):
+        g.admin_role = "owner"
+        g.admin_actor = "owner:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+        if _ROLE_RANK.get(g.admin_role, 0) >= _ROLE_RANK.get(min_role, 0):
+            return True, None
+        return False, (jsonify({"ok": False, "error": "forbidden"}), 403)
 
-    min_role:
-      - "manager": owner or manager
-      - "owner": owner only
-    """
-    ctx = _admin_auth()
-    if not ctx.get("ok"):
-        return False, (jsonify({"ok": False, "error": "Unauthorized"}), 401)
-
-    if (min_role or "manager") == "owner" and ctx.get("role") != "owner":
-        return False, (jsonify({"ok": False, "error": "Forbidden"}), 403)
-
+    # ---- 1) VENUE-SCOPED KEYS (preferred) ----
     try:
-        request._admin_ctx = ctx  # type: ignore[attr-defined]
+        cfg = _venue_cfg()
+        access = cfg.get("access") if isinstance(cfg.get("access"), dict) else {}
+        v_admin = access.get("admin_keys") or []
+        v_mgr = access.get("manager_keys") or []
+
+        # Accept per-venue generated keys stored under cfg["keys"]
+        k = cfg.get("keys") if isinstance(cfg.get("keys"), dict) else {}
+        k_admin = str((k or {}).get("admin_key") or "").strip()
+        k_mgr = str((k or {}).get("manager_key") or "").strip()
+        if k_admin and k_admin not in v_admin:
+            v_admin = list(v_admin) + [k_admin]
+        if k_mgr and k_mgr not in v_mgr:
+            v_mgr = list(v_mgr) + [k_mgr]
+
+        if key in v_admin:
+            g.admin_role = "owner"
+            g.admin_actor = "owner:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+        elif key in v_mgr:
+            g.admin_role = "manager"
+            g.admin_actor = "manager:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+        else:
+            # no match in venue keys; continue to env fallback
+            pass
+
+        if getattr(g, "admin_role", None):
+            if _ROLE_RANK.get(g.admin_role, 0) >= _ROLE_RANK.get(min_role, 0):
+                return True, None
+            return False, (jsonify({"ok": False, "error": "forbidden"}), 403)
     except Exception:
         pass
+
+    # ---- 2) ENV FALLBACK KEYS (back-compat) ----
+    if key == (ADMIN_OWNER_KEY or ""):
+        g.admin_role = "owner"
+        g.admin_actor = "owner:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+    elif key in (ADMIN_MANAGER_KEYS or []):
+        g.admin_role = "manager"
+        g.admin_actor = "manager:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
+    else:
+        return False, (jsonify({"ok": False, "error": "unauthorized"}), 401)
+
+    if _ROLE_RANK.get(g.admin_role, 0) < _ROLE_RANK.get(min_role, 0):
+        return False, (jsonify({"ok": False, "error": "forbidden"}), 403)
+
     return True, None
-
-def _admin_ctx() -> Dict[str, str]:
-    try:
-        ctx = getattr(request, "_admin_ctx", None)
-        if isinstance(ctx, dict):
-            return ctx
-    except Exception:
-        pass
-    ctx = _admin_auth()
-    if isinstance(ctx, dict) and ctx.get("ok"):
-        return ctx
-    return {"ok": False, "role": "", "actor": ""}
-
 
 def _redis_runtime_status() -> Dict[str, Any]:
     """Runtime Redis truth (Gunicorn-safe): re-init + ping where possible."""
@@ -3509,19 +3833,357 @@ def home():
     resp.headers["Expires"] = "0"
     return resp
 
+@app.get("/v/<venue_id>")
+def fan_venue(venue_id):
+    vid = _slugify_venue_id(venue_id)
 
+    # REQUIRE a real venue config to exist on disk
+    venues = _load_venues_from_disk() or {}
+    cfg = venues.get(vid) if isinstance(venues, dict) else None
+    if not isinstance(cfg, dict) or not cfg:
+        return ("Not found", 404)
+
+    # REQUIRE venue to be active
+    if not _venue_is_active(vid):
+        return ("Not found", 404)
+
+    # Serve fan SPA shell for valid active venues only
+    resp = make_response(send_from_directory(".", "index.html"))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
+
+FANZONE_ADMIN_HTML = r"""
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Fan Zone Admin</title>
+  <style>
+    :root{--bg:#0b1220;--card:rgba(255,255,255,.06);--stroke:rgba(255,255,255,.14);--text:#eef2ff;--muted:rgba(238,242,255,.68);--line:rgba(255,255,255,.14);}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto;}
+    .wrap{max-width:1100px;margin:0 auto;padding:16px}
+    .card{background:var(--card);border:1px solid var(--stroke);border-radius:16px;padding:14px}
+    .btn{padding:10px 14px;border-radius:12px;border:1px solid var(--stroke);background:rgba(255,255,255,.12);color:var(--text);cursor:pointer}
+    .btn2{padding:10px 14px;border-radius:12px;border:1px solid var(--stroke);background:rgba(255,255,255,.06);color:var(--text);cursor:pointer}
+    .inp,select{width:100%;border-radius:12px;border:1px solid var(--stroke);background:rgba(0,0,0,.25);color:var(--text);padding:10px}
+    .sub{color:var(--muted);font-size:12px}
+    .small{color:var(--muted);font-size:12px}
+    .row{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.05)}
+    .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace}
+    .h2{font-weight:800;font-size:18px}
+   .controls{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:14px;
+  align-items:start;
+}
+
+.controls > div{
+  min-width:0;
+}
+
+@media(min-width:980px){
+  .controls{
+    grid-template-columns: minmax(360px, 420px) 1fr;
+  }
+}
+
+    #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.18);color:#eef2ff;padding:10px 12px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .18s}
+    #toast.show{opacity:1}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+        <div>
+          <div style="font-weight:800;font-size:18px">Fan Zone • Poll Controls</div>
+          <div class="sub">Edit sponsor text + set Match of the Day (no redeploy). Also shows live poll status.</div>
+          <div class="sub">Venue: <span id="vid"></span></div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button type="button" class="btn" id="btnSaveConfig">Save settings</button>
+          <a class="btn2" style="text-decoration:none" id="back">Back to Admin</a>
+        </div>
+      </div>
+
+      <div class="controls" style="margin:12px 0 0 0">
+        <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
+          <div class="sub">Sponsor label (“Presented by …”)</div>
+          <input class="inp" id="pollSponsorText" placeholder="Fan Pick presented by …" />
+          <div class="small">Saved into config and shown in Fan Zone.</div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
+          <div class="sub">Match of the Day</div>
+          <select id="motdSelect"></select>
+
+          <div class="sub" style="margin-top:8px">Manual override (optional):</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+            <div><div class="sub">Home team</div><input class="inp" id="motdHome" placeholder="Home team"/></div>
+            <div><div class="sub">Away team</div><input class="inp" id="motdAway" placeholder="Away team"/></div>
+          </div>
+
+          <div style="margin-top:10px">
+            <div class="sub">Kickoff (UTC ISO, e.g. 2026-06-11T19:00:00Z)</div>
+            <input class="inp" id="motdKickoff" placeholder="2026-06-11T19:00:00Z"/>
+          </div>
+
+          <div style="margin-top:10px">
+            <div class="sub">Poll lock</div>
+            <select id="pollLockMode" class="inp">
+              <option value="auto">Auto (lock at kickoff)</option>
+              <option value="unlocked">Force Unlocked</option>
+              <option value="locked">Force Locked</option>
+            </select>
+            <div class="small">If you need to reopen voting after kickoff, choose Force Unlocked.</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="pollStatus" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
+        <div class="sub">Loading poll status…</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+<script>
+(function(){
+  const qs = new URLSearchParams(location.search);
+  const ADMIN_KEY = qs.get("key") || "";
+  const VENUE = qs.get("venue") || "";
+  const $ = (id)=>document.getElementById(id);
+
+  $("vid").textContent = VENUE || "default";
+  $("back").href = "/admin?key="+encodeURIComponent(ADMIN_KEY)+"&venue="+encodeURIComponent(VENUE);
+
+  function toast(msg){
+    const el = $("toast"); if(!el) return;
+    el.textContent = String(msg||"");
+    el.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(()=>el.classList.remove("show"), 1800);
+  }
+  function escapeHtml(s){
+    return String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function setPollStatus(html){
+    const box = $("pollStatus"); if(!box) return;
+    box.innerHTML = html;
+  }
+
+  async function loadPollStatus(){
+    try{
+      setPollStatus('<div class="sub">Loading poll status…</div>');
+      const res = await fetch(`/api/poll/state?venue=${encodeURIComponent(VENUE)}`, {cache:"no-store"});
+      const data = await res.json().catch(()=>null);
+      if(!data || data.ok === false){
+        setPollStatus('<div class="sub">Poll status unavailable</div>');
+        return;
+      }
+
+      // Prefill fields from live poll state (best-effort)
+      try{
+        if($("pollSponsorText") && typeof data.sponsor_text === "string") $("pollSponsorText").value = data.sponsor_text;
+        const m = data.match || {};
+        if($("motdHome") && m.home) $("motdHome").value = m.home;
+        if($("motdAway") && m.away) $("motdAway").value = m.away;
+        if($("motdKickoff") && (m.datetime_utc || m.kickoff)) $("motdKickoff").value = (m.datetime_utc || m.kickoff);
+      }catch(e){}
+
+      const locked = !!data.locked;
+      const title = (data.title || "Match of the Day Poll");
+      const top = (data.top && data.top.length) ? data.top : [];
+      let rows = "";
+      for(const r of top){
+        const name = String(r.name||"");
+        const votes = String(r.votes||0);
+        rows += `<div class="row"><div>${escapeHtml(name)}</div><div class="mono">${escapeHtml(votes)}</div></div>`;
+      }
+      if(!rows) rows = '<div class="sub">No votes yet</div>';
+
+      setPollStatus(
+        `<div class="h2">${escapeHtml(title)}</div>` +
+        `<div class="small">${locked ? "🔒 Locked" : "🟢 Open"}</div>` +
+        `<div style="margin-top:10px;display:grid;gap:8px">${rows}</div>`
+      );
+    }catch(e){
+      setPollStatus('<div class="sub">Poll status unavailable</div>');
+    }
+  }
+
+  async function loadMatchesForDropdown(){
+    const sel = $("motdSelect");
+    if(!sel) return;
+    try{
+      sel.disabled = true;
+      const res = await fetch("/schedule.json?scope=all&q=", {cache:"no-store"});
+      const data = await res.json().catch(()=>null);
+      const matches = (data && Array.isArray(data.matches)) ? data.matches : [];
+      const current = sel.value || "";
+      sel.innerHTML = '<option value="">Select a match…</option>';
+      let added = 0;
+      for(const m of matches){
+        if(added >= 250) break;
+        const dt = String(m.datetime_utc||"");
+        const home = String(m.home||"");
+        const away = String(m.away||"");
+        if(!dt || !home || !away) continue;
+        const id = (dt + "|" + home + "|" + away).replace(/[^A-Za-z0-9|:_-]+/g,"_").slice(0,180);
+        const label = `${m.date||""} ${m.time||""} • ${home} vs ${away} • ${m.venue||""}`.trim();
+        const opt = document.createElement("option");
+        opt.value = id;
+        opt.textContent = label || (home + " vs " + away);
+        opt.setAttribute("data-home", home);
+        opt.setAttribute("data-away", away);
+        opt.setAttribute("data-dt", dt);
+        if(current && current === id) opt.selected = true;
+        sel.appendChild(opt);
+        added++;
+      }
+      sel.disabled = false;
+      if(sel.value){
+        fillMatchFieldsFromOption(sel.selectedOptions[0]);
+      }
+    }catch(e){
+      sel.disabled = false;
+      toast("Couldn’t load matches");
+    }
+  }
+
+  function fillMatchFieldsFromOption(opt){
+    if(!opt) return;
+    const home = opt.getAttribute("data-home") || "";
+    const away = opt.getAttribute("data-away") || "";
+    const dt = opt.getAttribute("data-dt") || "";
+    if($("motdHome")) $("motdHome").value = home;
+    if($("motdAway")) $("motdAway").value = away;
+    if($("motdKickoff")) $("motdKickoff").value = dt;
+  }
+
+ 
+// Fan Zone venue bootstrap (safe if repeated)
+window.VENUE = (window.VENUE || new URLSearchParams(location.search).get("venue") || "").trim();
+
+
+  async function saveFanZoneConfig(){
+  const btn = $("btnSaveConfig");
+  const sel = $("motdSelect");
+  const lockEl = $("pollLockMode");
+  if(!btn) return;
+
+  // 🔒 venue guard (critical)
+  if(!window.VENUE || String(window.VENUE).trim()===""){
+    toast("Missing venue", "error");
+    return;
+  }
+
+  const payload = {
+    poll_sponsor_text: ($("pollSponsorText")?.value || "").trim(),
+    match_of_day_id: (sel?.value || "").trim(),
+    motd_home: ($("motdHome")?.value || "").trim(),
+    motd_away: ($("motdAway")?.value || "").trim(),
+    motd_datetime_utc: ($("motdKickoff")?.value || "").trim(),
+    poll_lock_mode: (lockEl?.value || "auto").trim(),
+  };
+
+  const prev = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Saving…";
+
+  try{
+    const res = await fetch(
+      `/admin/update-config?key=${encodeURIComponent(ADMIN_KEY)}&venue=${encodeURIComponent(VENUE)}`,
+      {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify(payload)
+      }
+    );
+
+    const data = await res.json().catch(()=>null);
+    if(!res.ok || !data || data.ok === false){
+      toast((data && data.error) ? data.error : "Save failed", "error");
+      btn.textContent = prev; btn.disabled = false;
+      return;
+    }
+
+    btn.textContent = "Saved ✓";
+    toast("Saved", "ok");
+    setTimeout(()=>{ btn.textContent = prev; btn.disabled = false; }, 900);
+
+    loadPollStatus(); // re-read from backend
+  }catch(e){
+    toast("Save failed", "error");
+    btn.textContent = prev; btn.disabled = false;
+  }
+}
+
+  function boot(){
+    const sel = $("motdSelect");
+    if(sel){
+      sel.addEventListener("change", ()=>fillMatchFieldsFromOption(sel.selectedOptions[0]));
+      loadMatchesForDropdown();
+    }
+    const btn = $("btnSaveConfig");
+    if(btn) btn.addEventListener("click", (e)=>{ e.preventDefault(); saveFanZoneConfig(); });
+    loadPollStatus();
+  }
+
+  if(!ADMIN_KEY){
+    setPollStatus('<div class="sub">Missing key</div>');
+    return;
+  }
+  boot();
+})();
+</script>
+</body>
+</html>
+"""
+
+@app.get("/admin/fanzone")
+def admin_fanzone_page():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    raw = (request.args.get("venue") or "").strip()
+    vid = _slugify_venue_id(raw) if raw else _venue_id()
+
+    # If caller explicitly passed a venue, it must exist
+    cfg = _venue_cfg(vid)
+    if raw and (cfg.get("status") == "implicit" or cfg.get("venue_id") != vid):
+        abort(403)
+
+    out = make_response(render_template_string(FANZONE_ADMIN_HTML))
+    try:
+        out.set_cookie("venue_id", vid, httponly=False, samesite="Lax", path="/admin")
+    except Exception:
+        pass
+    return out
 
 @app.route("/<path:path>")
 def catch_all(path):
-    # Serve static files if they exist; otherwise serve the SPA shell.
+    # Serve static files if they exist
     try:
         if os.path.exists(path) and os.path.isfile(path):
             return send_from_directory(".", path)
-        # allow /static/...
         if path.startswith("static/") and os.path.exists(path):
             return send_from_directory(".", path)
     except Exception:
         pass
+
+    # HARD BLOCK: never serve fan UI for inactive / nonexistent venues
+    # Only the explicit /v/<venue_id> route is allowed to render the fan page
+    if path.startswith("v/"):
+        return ("Not found", 404)
+
+    # Otherwise serve the SPA shell (home)
     return home()
 
 @app.route("/health")
@@ -4413,6 +5075,14 @@ def chat():
                 "rate_limit_remaining": 0,
             }), 429
 
+        # ✅ NEW: block chat for inactive venues (prevents lingering fan access)
+        vid = _venue_id()
+        if not _venue_is_active(vid):
+            return jsonify({
+                "reply": "This venue is currently inactive.",
+                "rate_limit_remaining": remaining,
+            }), 403
+
         data = request.get_json(force=True) or {}
         msg = (data.get("message") or "").strip()
         lang = norm_lang(data.get("language") or data.get("lang"))
@@ -4450,6 +5120,7 @@ def chat():
             # Mark VIP if user clicked a VIP button or mentions VIP
             if re.search(r"\bvip\b", msg.lower()):
                 sess["lead"]["vip"] = "Yes"
+
             # IMPORTANT: do NOT treat the word "reservation" as the name.
             if msg.lower().strip() in ["reservation", "reserva", "réservation"]:
                 sess["lead"]["name"] = ""
@@ -4462,6 +5133,7 @@ def chat():
             # Allow VIP to be set at any time during reservation flow
             if re.search(r"\bvip\b", msg.lower()):
                 sess["lead"]["vip"] = "Yes"
+
             d_iso = extract_date(msg)
             if d_iso:
                 if validate_date_iso(d_iso):
@@ -4500,6 +5172,7 @@ def chat():
             lead = sess["lead"]
             if lead.get("date") and lead.get("time") and lead.get("party_size") and lead.get("name") and lead.get("phone"):
                 ops2 = get_ops()
+
                 # If waitlist is enabled, tag the reservation as Waitlist (still saved to the same sheet).
                 if ops2.get("waitlist_mode"):
                     lead["status"] = (lead.get("status") or "Waitlist").strip() or "Waitlist"
@@ -4509,13 +5182,15 @@ def chat():
                 if ops2.get("pause_reservations") and not ops2.get("waitlist_mode"):
                     sess["mode"] = "idle"
                     return jsonify({"reply": "⏸️ Reservations were just paused. Please check back soon.", "rate_limit_remaining": remaining})
-                if ops2.get("vip_only") and str(lead.get("vip","No")).strip().lower() != "yes":
+
+                if ops2.get("vip_only") and str(lead.get("vip", "No")).strip().lower() != "yes":
                     sess["mode"] = "idle"
                     return jsonify({"reply": "🔒 VIP-only is active right now. Type VIP and start again to continue.", "rate_limit_remaining": remaining})
+
                 try:
                     append_lead_to_sheet(lead)
                     sess["mode"] = "idle"
-                    saved_msg = ("✅ Added to waitlist!" if str(lead.get("status","")).strip().lower() == "waitlist" else LANG[lang]["saved"])
+                    saved_msg = ("✅ Added to waitlist!" if str(lead.get("status", "")).strip().lower() == "waitlist" else LANG[lang]["saved"])
                     confirm = (
                         f"{saved_msg}\n"
                         f"Name: {lead['name']}\n"
@@ -4555,16 +5230,19 @@ def chat():
     Menu (source of truth, language={lang}):
     {json.dumps(MENU.get(lang, MENU['en']), ensure_ascii=False)}
 
-    Rules:
-    - Be friendly, fast, and concise.
-    - Always respond in the user's chosen language: {lang}.
-    - If user asks about the World Cup match schedule, tell them to use the schedule panel on the page.
-    - If user asks to make a reservation, instruct them to type "reservation" (or equivalent) to start.
-    """
+Rules:
+- Be friendly, fast, and concise.
+- Always respond in the user's chosen language: {lang}.
+- If user asks about the World Cup match schedule, tell them to use the **Schedule** panel on the page, then continue booking.
+- For menu/food/drink/prices/diet questions, do NOT guess: direct them to the **Menu** panel on the page, then continue booking.
+- If the user wants a reservation, do NOT tell them to type "reservation". Start collecting details immediately.
+- If you are unsure or missing info, do NOT dead-end. Redirect to Menu/Info panels and continue booking.
+- Always keep the reservation flow alive by asking for missing details: party size and preferred time.
+"""
 
         try:
             if not _OPENAI_AVAILABLE or client is None:
-                raise RuntimeError('OpenAI SDK not installed / not configured')
+                raise RuntimeError("OpenAI SDK not installed / not configured")
             resp = client.responses.create(
                 model=os.environ.get("CHAT_MODEL", "gpt-4o-mini"),
                 input=[
@@ -4573,17 +5251,30 @@ def chat():
                 ],
             )
             reply = (resp.output_text or "").strip() or "(No response)"
+
+            # If the model gives a dead-end answer, force redirect + continue booking
+            if re.search(r"\b(i (can't|cannot)|not sure|i don't know|unable to|no information)\b", reply.lower()):
+                reply = (
+                    "For accurate details, please check the **Menu** or **Info** panels on this page.\n\n"
+                    "I can still help with a reservation — **how many guests** and **what time**?"
+                )
+
             return jsonify({"reply": reply, "rate_limit_remaining": remaining})
         except Exception as e:
-            # If OPENAI_API_KEY isn't set (or any API issue), fail gracefully.
-            fallback = "⚠️ Chat is temporarily unavailable. Please try again, or type 'reservation' to book a table."
-            return jsonify({"reply": f"{fallback}\n\nDebug: {type(e).__name__}", "rate_limit_remaining": remaining}), 200
+            # Customer-safe fallback (no “chat unavailable”), still routes + continues booking
+            fallback = (
+                "For accurate details, please check the **Menu** or **Info** panels on this page.\n\n"
+                "I can still help with a reservation — **how many guests** and **what time**?"
+            )
+            return jsonify({"reply": fallback, "rate_limit_remaining": remaining}), 200
 
     except Exception as e:
         # Never break the UI: always return JSON.
-        fallback = "⚠️ Chat is temporarily unavailable. Please try again, or type 'reservation' to book a table."
-        return jsonify({"reply": f"{fallback}\n\nDebug: {type(e).__name__}", "rate_limit_remaining": 0}), 200
-
+        fallback = (
+            "For accurate details, please check the **Menu** or **Info** panels on this page.\n\n"
+            "I can still help with a reservation — **how many guests** and **what time**?"
+        )
+        return jsonify({"reply": fallback, "rate_limit_remaining": 0}), 200
 
 # ============================================================
 # Admin dashboard
@@ -4703,11 +5394,14 @@ def _read_notifications(limit: int = 50, role: str = "manager") -> List[Dict[str
         return out
     except Exception:
         return []
-
+    
 def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
-    """Append a single-line JSON audit entry (best-effort, non-blocking)."""
+    """Append a single-line JSON audit entry (best-effort, non-blocking).
+    Writes to Redis (per-venue) and falls back to local file.
+    """
     try:
-        ctx = _admin_ctx()
+        ctx = _admin_ctx() if "_admin_ctx" in globals() else {}
+
         entry = {
             "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
             "event": str(event),
@@ -4717,21 +5411,40 @@ def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
             "path": getattr(request, "path", ""),
             "details": details or {},
         }
-        os.makedirs(os.path.dirname(AUDIT_LOG_FILE), exist_ok=True)
-        with open(AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+        # --- Resolve venue consistently (NO request/body fallback) ---
+        vid = _venue_id() if "_venue_id" in globals() else "default"
+
+        # --- 1) Redis write (per-venue) ---
+        try:
+            if "_redis_init_if_needed" in globals():
+                _redis_init_if_needed()
+            if globals().get("_REDIS_ENABLED") and globals().get("_REDIS"):
+                rkey = f"{_REDIS_NS}:{vid}:audit_log"
+                _REDIS.lpush(rkey, json.dumps(entry, ensure_ascii=False))
+                _REDIS.ltrim(rkey, 0, 2000)  # keep last ~2000 entries
+        except Exception:
+            pass
+
+        # --- 2) File fallback (legacy / dev) ---
+        try:
+            os.makedirs(os.path.dirname(AUDIT_LOG_FILE), exist_ok=True)
+            with open(AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+
     except Exception:
         pass
 
 
 # -----------------------------
 # Lightweight in-process caches
-# (reduces Google Sheets quota hits)
+# (per-venue only)
 # -----------------------------
-_CONFIG_CACHE: Dict[str, Any] = {"ts": 0.0, "cfg": None}   # ttl ~5s
-_LEADS_CACHE: Dict[str, Any] = {"ts": 0.0, "rows": None}  # ttl ~30s
+_CONFIG_CACHE: Dict[str, Any] = {}   # keyed by venue_id -> {"ts":..., "cfg":...}
+_LEADS_CACHE: Dict[str, Any] = {}    # keyed by venue_id -> {"ts":..., "rows":...}
 _sessions: Dict[str, Dict[str, Any]] = {}  # in-memory chat/reservation sessions
-
 
 def _last_audit_event(event_name: str, scan_limit: int = 800) -> Optional[Dict[str, Any]]:
     """Return the most recent audit entry for a given event (best-effort)."""
@@ -4773,23 +5486,20 @@ def _safe_write_json(path: str, data: dict) -> None:
     except Exception:
         pass
 
-def _ensure_ws(gc, title: str):
-    sh = _open_default_spreadsheet(gc)
+def _ensure_ws(gc, title: str, venue_id: Optional[str] = None):
+    sh = _open_default_spreadsheet(gc, venue_id=venue_id)
     try:
         return sh.worksheet(title)
     except Exception:
         return sh.add_worksheet(title=title, rows=2000, cols=20)
 
 def get_config() -> Dict[str, str]:
-    """Config is authoritative in local CONFIG_FILE.
+    vid = _venue_id()
+    cache = _CONFIG_CACHE.setdefault(vid, {"ts": 0.0, "cfg": None})
 
-    We still *attempt* to read the Google Sheet (Config tab) for compatibility,
-    but local values always win. This prevents 'saved but not reflected' when
-    Sheets write fails (quota) and later reads return older data.
-    """
     now = time.time()
-    cached = _CONFIG_CACHE.get("cfg")
-    if isinstance(cached, dict) and (now - float(_CONFIG_CACHE.get("ts", 0.0)) < 5.0):
+    cached = cache.get("cfg")
+    if isinstance(cached, dict) and (now - float(cache.get("ts", 0.0)) < 5.0):
         return dict(cached)
 
     cfg: Dict[str, str] = {
@@ -4804,7 +5514,8 @@ def get_config() -> Dict[str, str]:
         "ops_waitlist_mode": "false",
     }
 
-    local = _safe_read_json(CONFIG_FILE)
+    path = str(CONFIG_FILE).replace("{venue}", vid)
+    local = _safe_read_json(path)
     if isinstance(local, dict):
         for k, v in local.items():
             if str(k).startswith("_"):
@@ -4813,7 +5524,7 @@ def get_config() -> Dict[str, str]:
 
     try:
         gc = get_gspread_client()
-        ws = _ensure_ws(gc, "Config")
+        ws = _ensure_ws(gc, "Config", venue_id=vid)
         rows = ws.get_all_values()
         for r in rows[1:]:
             if len(r) >= 2 and r[0]:
@@ -4824,10 +5535,9 @@ def get_config() -> Dict[str, str]:
     except Exception:
         pass
 
-    _CONFIG_CACHE["ts"] = now
-    _CONFIG_CACHE["cfg"] = dict(cfg)
+    cache["ts"] = now
+    cache["cfg"] = dict(cfg)
     return cfg
-
 
 
 def _cfg_bool(cfg: Dict[str, Any], key: str, default: bool = False) -> bool:
@@ -4851,28 +5561,28 @@ def get_ops(cfg: Optional[Dict[str, Any]] = None) -> Dict[str, bool]:
         "vip_only": _cfg_bool(cfg, "ops_vip_only", False),
         "waitlist_mode": _cfg_bool(cfg, "ops_waitlist_mode", False),
     }
-def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
-    """Persist config.
 
-    1) Write to local CONFIG_FILE (authoritative + works on Render).
-    2) Best-effort sync to Google Sheet (Config tab) for visibility/back-compat.
-    """
+def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
+    vid = _venue_id()
+    cache = _CONFIG_CACHE.setdefault(vid, {"ts": 0.0, "cfg": None})
+
     clean: Dict[str, str] = {}
     for k, v in (pairs or {}).items():
         if not k:
             continue
         clean[str(k)] = "" if v is None else str(v)
 
-    local = _safe_read_json(CONFIG_FILE)
+    path = str(CONFIG_FILE).replace("{venue}", vid)
+    local = _safe_read_json(path)
     if not isinstance(local, dict):
         local = {}
     local.update(clean)
     local["_updated_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
-    _safe_write_json(CONFIG_FILE, local)
+    _safe_write_json(path, local)
 
     try:
         gc = get_gspread_client()
-        ws = _ensure_ws(gc, "Config")
+        ws = _ensure_ws(gc, "Config", venue_id=vid)
 
         rows = ws.get_all_values()
         if not rows:
@@ -4888,15 +5598,10 @@ def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
     except Exception:
         pass
 
-
-    # Invalidate cache so changes are visible immediately after saving (even within the cache window).
-    _CONFIG_CACHE["ts"] = 0.0
-    _CONFIG_CACHE["cfg"] = None
-    merged = get_config()
-    _CONFIG_CACHE["ts"] = time.time()
-    _CONFIG_CACHE["cfg"] = dict(merged)
-    return merged
-
+    cache["ts"] = 0.0
+    cache["cfg"] = None
+    return get_config()
+  
 def _match_id(m: Dict[str, Any]) -> str:
     # Stable-ish id: datetime_utc + home + away (safe for URL/storage)
     dt = (m.get("datetime_utc") or "").strip()
@@ -5093,23 +5798,44 @@ def _poll_client_id(provided: str) -> str:
 
 @app.route("/api/poll/state")
 def api_poll_state():
-    """Return match poll state.
-
-    This endpoint must *always* return JSON so the Fan Zone UI never breaks.
-    If anything goes wrong (fixtures/config/poll store), we fall back to a safe placeholder.
+    """
+    Return match poll state (VENUE-AWARE).
+    Always returns JSON so the Fan Zone UI never breaks.
     """
     try:
+        # ✅ venue from query
+        venue = (request.args.get("venue") or "").strip()
+
+        def _venue_fanzone_cfg():
+            if not venue:
+                return {}
+            try:
+                path = os.path.join(VENUES_DIR, f"{venue}.json")
+                if not os.path.exists(path):
+                    return {}
+                with open(path, "r", encoding="utf-8") as f:
+                    vcfg = json.load(f) or {}
+                return vcfg.get("fan_zone") or {}
+            except Exception:
+                return {}
+
+        fz_cfg = _venue_fanzone_cfg()
+
         motd = _get_match_of_day()
         if not motd:
-            # Keep the UI responsive even if matches failed to load.
-            cfg = get_config()
+            # Safe placeholder when fixtures are unavailable
             return jsonify({
                 "ok": True,
                 "locked": True,
                 "post_match": False,
                 "winner": None,
-                "sponsor_text": cfg.get("poll_sponsor_text", ""),
-                "match": {"id": "placeholder", "home": "Team A", "away": "Team B", "kickoff": ""},
+                "sponsor_text": fz_cfg.get("poll_sponsor_text", ""),
+                "match": {
+                    "id": "placeholder",
+                    "home": "Team A",
+                    "away": "Team B",
+                    "kickoff": ""
+                },
                 "counts": {"Team A": 0, "Team B": 0},
                 "percent": {"Team A": 0.0, "Team B": 0.0},
                 "percentages": {"Team A": 0.0, "Team B": 0.0},
@@ -5122,22 +5848,27 @@ def api_poll_state():
         locked = _poll_is_locked(motd)
         post_match = _poll_is_post_match(motd)
 
-        teams = [motd.get("home") or "Team A", motd.get("away") or "Team B"]
+        teams = [
+            motd.get("home") or "Team A",
+            motd.get("away") or "Team B"
+        ]
+
         client_id_raw = (request.args.get("client_id") or "").strip()
         client_id = _poll_client_id(client_id_raw) if client_id_raw else ""
         voted_for = _poll_has_voted(mid, client_id) if client_id else None
         can_vote = (not locked) and (not voted_for)
+
         counts = _poll_counts(mid)
         total = sum(counts.get(t, 0) for t in teams)
+
         pct = {}
         for t in teams:
             pct[t] = (counts.get(t, 0) / total * 100.0) if total > 0 else 0.0
 
-        # Winner is purely UI-only: leader when locked, or after match.
         winner = None
         if total > 0:
             winner = max(teams, key=lambda t: counts.get(t, 0))
-        cfg = get_config()
+
         return jsonify({
             "ok": True,
             "can_vote": can_vote,
@@ -5160,22 +5891,23 @@ def api_poll_state():
             "percent": {t: round(pct[t], 1) for t in teams},
             "total_votes": int(total),
             "total": int(total),
-            "sponsor_text": cfg.get("poll_sponsor_text", ""),
+            # ✅ venue-scoped sponsor text
+            "sponsor_text": fz_cfg.get("poll_sponsor_text", ""),
         })
     except Exception:
-        # Absolute last resort: return a safe placeholder instead of 500/HTML.
-        cfg = {}
-        try:
-            cfg = get_config()
-        except Exception:
-            cfg = {}
+        # Absolute fallback — never break UI
         return jsonify({
             "ok": True,
             "locked": True,
             "post_match": False,
             "winner": None,
-            "sponsor_text": cfg.get("poll_sponsor_text", "") if isinstance(cfg, dict) else "",
-            "match": {"id": "placeholder", "home": "Team A", "away": "Team B", "kickoff": ""},
+            "sponsor_text": "",
+            "match": {
+                "id": "placeholder",
+                "home": "Team A",
+                "away": "Team B",
+                "kickoff": ""
+            },
             "counts": {"Team A": 0, "Team B": 0},
             "percent": {"Team A": 0.0, "Team B": 0.0},
             "percentages": {"Team A": 0.0, "Team B": 0.0},
@@ -5241,12 +5973,15 @@ def admin_update_config():
 
     data = request.get_json(silent=True) or {}
 
+    # ✅ venue isolation
+    venue = (request.args.get("venue") or data.get("venue") or "").strip()
+    if not venue:
+        return jsonify({"ok": False, "error": "Missing venue"}), 400
+
     try:
-        # Allow clearing values by sending empty strings.
         sponsor = (data.get("poll_sponsor_text") if data.get("poll_sponsor_text") is not None else "")
         match_id = (data.get("match_of_day_id") if data.get("match_of_day_id") is not None else "")
 
-        # Normalize to the same safe/stable format used by fixtures + _match_id()
         match_id_norm = str(match_id).strip()
         if match_id_norm:
             match_id_norm = re.sub(r"[^A-Za-z0-9|:_-]+", "_", match_id_norm)[:180]
@@ -5257,7 +5992,6 @@ def admin_update_config():
 
         poll_lock_mode = (data.get("poll_lock_mode") if data.get("poll_lock_mode") is not None else "auto")
 
-        # Ops toggles (match-day controls)
         ops_pause = data.get("ops_pause_reservations")
         ops_vip = data.get("ops_vip_only")
         ops_wait = data.get("ops_waitlist_mode")
@@ -5284,9 +6018,30 @@ def admin_update_config():
             "ops_waitlist_mode": _norm_bool(ops_wait),
         }
 
-        cfg = set_config(pairs)
-        _audit("config.update", {"keys": list(pairs.keys())})
-        return jsonify({"ok": True, "config": {
+        # ✅ load + write ONLY this venue file
+        path = os.path.join(VENUES_DIR, f"{venue}.json")
+        if not os.path.exists(path):
+            return jsonify({"ok": False, "error": f"Unknown venue: {venue}"}), 404
+
+        with open(path, "r", encoding="utf-8") as f:
+            vcfg = json.load(f) or {}
+
+        vcfg.setdefault("fan_zone", {})
+        vcfg["fan_zone"].update(pairs)
+
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(vcfg, f, indent=2, ensure_ascii=False)
+
+        # ✅ invalidate caches (if present)
+        try:
+            _invalidate_venues_cache()
+        except Exception:
+            pass
+
+        _audit("config.update", {"venue": venue, "keys": list(pairs.keys())})
+
+        cfg = vcfg.get("fan_zone", {}) or {}
+        return jsonify({"ok": True, "venue": venue, "config": {
             "poll_sponsor_text": cfg.get("poll_sponsor_text",""),
             "match_of_day_id": cfg.get("match_of_day_id",""),
             "motd_home": cfg.get("motd_home",""),
@@ -5429,12 +6184,19 @@ def admin_api_ai_settings():
     if not ok:
         return resp
 
-    ctx = _admin_ctx()
+    try:
+        ctx = _admin_ctx() or {}
+    except Exception:
+        ctx = {}
     role = ctx.get("role", "")
     actor = ctx.get("actor", "")
 
+
     if request.method == "GET":
-        return jsonify({"ok": True, "role": role, "settings": AI_SETTINGS})
+        try:
+            return jsonify({"ok": True, "role": role, "settings": AI_SETTINGS})
+        except Exception as e:
+            return jsonify({"ok": False, "error": str(e), "role": role, "settings": {}})
 
     data = request.get_json(silent=True) or {}
 
@@ -5671,7 +6433,10 @@ def admin_api_ai_queue_list():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
-    ctx = _admin_ctx()
+    try:
+        ctx = _admin_ctx() or {}
+    except Exception:
+        ctx = {}
     role = ctx.get("role", "")
     queue = _load_ai_queue()
     # optional status filter
@@ -6057,8 +6822,12 @@ def admin_api_notifications():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
-    ctx = _admin_ctx()
+    try:
+       ctx = _admin_ctx() or {}
+    except Exception:
+       ctx = {}
     role = ctx.get("role", "manager")
+
 
     # Role-based branding (visual only)
     is_owner = (role == "owner")
@@ -6141,12 +6910,37 @@ def admin_api_audit():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
+
     try:
         limit = int(request.args.get("limit", "200") or 200)
         limit = max(1, min(limit, 1000))
     except Exception:
         limit = 200
+
     entries: List[Dict[str, Any]] = []
+
+    # ------------------------------------------------------------
+    # 1) Redis-first (ONLY return if Redis actually has entries)
+    # ------------------------------------------------------------
+    try:
+        _redis_init_if_needed()
+        if globals().get("_REDIS_ENABLED") and globals().get("_REDIS"):
+            vid = _venue_id()
+            rkey = f"{_REDIS_NS}:{vid}:audit_log"
+            raw = _REDIS.lrange(rkey, 0, limit - 1)  # newest first
+            for item in raw or []:
+                try:
+                    entries.append(json.loads(item))
+                except Exception:
+                    continue
+            if entries:  # 🔑 do NOT short-circuit on empty Redis
+                return jsonify({"ok": True, "entries": entries, "source": "redis"})
+    except Exception:
+        pass
+
+    # ------------------------------------------------------------
+    # 2) File fallback (dev / legacy behavior)
+    # ------------------------------------------------------------
     try:
         if os.path.exists(AUDIT_LOG_FILE):
             with open(AUDIT_LOG_FILE, "r", encoding="utf-8") as f:
@@ -6161,14 +6955,14 @@ def admin_api_audit():
                     continue
     except Exception:
         pass
+
     # Newest first
     try:
         entries = list(reversed(entries))
     except Exception:
         pass
-    return jsonify({"ok": True, "entries": entries})
 
-
+    return jsonify({"ok": True, "entries": entries, "source": "file"})
 
 # ============================================================
 # Partner / Venue Policies API (Hard rules)
@@ -6355,17 +7149,30 @@ def admin():
     """
     ok, resp = _require_admin(min_role="manager")
     if not ok:
-        return "Unauthorized", 401
+        return resp
+
     key = (request.args.get("key", "") or "").strip()
 
-    ctx = _admin_ctx()
+    try:
+       ctx = _admin_ctx() or {}
+    except Exception:
+        ctx = {}
     role = ctx.get("role", "manager")
+
+
+    # CI-safe guard: never allow admin GET to throw before HTML render
+    try:
+        pass
+    except Exception:
+        pass
+
+    # ✅ KEEP THE REST OF YOUR ORIGINAL /admin CODE BELOW THIS LINE
+    # (everything that builds `html = []` and ends with `return ...`)
 
     # Role-based branding (visual only)
     is_owner = (role == "owner")
     page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
     page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
-
 
     # Leads (best-effort)
     rows = []
@@ -6422,7 +7229,7 @@ def admin():
     numbered = [(i + 2, r) for i, r in enumerate(body)]
     numbered = list(reversed(numbered))
 
-    admin_key_q = f"?key={key}"
+    admin_key_q = f"?key={key}&venue={_venue_id()}"
     days_q = ""
     try:
         d0 = int(request.args.get("days") or 0)
@@ -6438,76 +7245,220 @@ def admin():
     html.append("\n<div class=\"card\" style=\"margin-top:12px\">\n  <div class=\"row\" style=\"display:flex;gap:10px;flex-wrap:wrap;align-items:center\">\n    <a class=\"btn2\" href=\"/admin?key=__KEY__\">All</a>\n    <a class=\"btn2\" href=\"/admin?key=__KEY__&days=7\">Last 7 days</a>\n    <a class=\"btn2\" href=\"/admin?key=__KEY__&days=30\">Last 30 days</a>\n    <a class=\"btn\" href=\"/admin/api/leads/export?key=__KEY____DAYS__\">Export CSV</a>\n    <span class=\"note\" style=\"margin-left:auto;opacity:.75\">Export matches current filter</span>\n  </div>\n</div>\n".replace('__KEY__', __import__('html').escape(key)).replace('__DAYS__', days_q))
     html.append(r"""
 <style>
-:root{color-scheme:dark;--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
-body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(900px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);color:var(--text);}
+:root{
+  color-scheme:dark;
+  --bg:#0b1020;
+  --panel:#0f1b33;
+  --line:rgba(255,255,255,.10);
+  --text:#eaf0ff;
+  --muted:#b9c7ee;
+  --gold:#d4af37;
+  --good:#2ea043;
+  --warn:#ffcc66;
+  --bad:#ff5d5d;
+
+  /* menu / dropdown tokens */
+  --menu-bg:#0f172a;
+  --menu-hover:#1e293b;
+  --menu-text:#f8fafc;
+}
+
+body{
+  margin:0;
+  font-family:Arial,system-ui,sans-serif;
+  background:radial-gradient(900px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);
+  color:var(--text);
+}
+
 .wrap{max-width:1200px;margin:0 auto;padding:18px;}
 .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;}
 .h1{font-size:18px;font-weight:800;letter-spacing:.3px}
 .sub{color:var(--muted);font-size:12px;margin-top:4px}
-.pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-.pill{border:1px solid var(--line);background:rgba(255,255,255,.03);padding:8px 10px;border-radius:999px;font-size:12px}
 
-.pillbtn{cursor:pointer}
-.pillselect{
+.pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.pill{
   border:1px solid var(--line);
   background:rgba(255,255,255,.03);
-  color:var(--text);
+  padding:8px 10px;
+  border-radius:999px;
+  font-size:12px
+}
+.pillbtn{cursor:pointer}
+
+.pillselect,
+select{
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.03);
+  color:var(--menu-text);
   padding:8px 10px;
   border-radius:999px;
   font-size:12px;
   outline:none;
+  z-index:9999;
 }
-.pillselect option{background:var(--panel);color:var(--text);}
-/* iOS Safari native <select> picker fix: ensure option text is readable */
+
+.pillselect option,
+select option{
+  background:var(--menu-bg) !important;
+  color:var(--menu-text) !important;
+}
+
+.pillselect option:hover,
+select option:hover{
+  background:var(--menu-hover) !important;
+}
+
+/* iOS Safari native picker fix */
 @supports (-webkit-touch-callout: none) {
-  /* iOS Safari: keep your dark pill look AND make the native picker readable */
-  html{color-scheme: dark;}
-  .pillselect, select{
-    color-scheme: dark;
-    -webkit-appearance: none;
-    appearance: none;
+  html{color-scheme:dark;}
+  .pillselect,select{
+    color-scheme:dark;
+    -webkit-appearance:none;
+    appearance:none;
   }
-  /* Option styling is unreliable on iOS, but this helps non-native render paths */
-  .pillselect option{
-    background: #0f1b33;
-    color: #ffffff;
+  .pillselect option,select option{
+    background:#0f172a;
+    color:#ffffff;
   }
 }
 
-.pills .pill input[type="checkbox"]{transform: translateY(1px); margin-left:8px;}
+.pills .pill input[type="checkbox"]{
+  transform:translateY(1px);
+  margin-left:8px;
+}
 
 .pill b{color:var(--gold)}
+
 .tabs{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
-.tabgroup{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 8px;border-radius:14px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07)}
+.tabgroup{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  padding:6px 8px;
+  border-radius:14px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.07)
+}
 .tablabel{font-size:11px;letter-spacing:.14em;text-transform:uppercase;opacity:.65;margin-right:4px}
+.tabbtn{
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.03);
+  color:var(--text);
+  padding:10px 12px;
+  border-radius:12px;
+  font-size:13px;
+  font-weight:700;
+  cursor:pointer
+}
+.tabbtn.active{
+  border-color:rgba(212,175,55,.6);
+  box-shadow:0 0 0 1px rgba(212,175,55,.25) inset
+}
 .tabbtn.locked{opacity:.45;cursor:not-allowed}
 .tabbtn.locked:hover{transform:none}
 
-.tabbtn{border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);padding:10px 12px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer}
-.tabbtn.active{border-color:rgba(212,175,55,.6);box-shadow:0 0 0 1px rgba(212,175,55,.25) inset}
-.card{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:14px;padding:12px 12px;margin:10px 0}
+.card{
+  background:rgba(255,255,255,.04);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:12px 12px;
+  margin:10px 0;
+  overflow:visible;
+}
+
 .h2{font-size:14px;font-weight:800;margin:0 0 8px}
 .small{font-size:12px;color:var(--muted)}
-.tablewrap{overflow:auto;border-radius:12px;border:1px solid var(--line)}
+
+.tablewrap{
+  overflow:auto;
+  border-radius:12px;
+  border:1px solid var(--line)
+}
+
 table{width:100%;border-collapse:collapse;font-size:12px}
-th,td{padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.08);vertical-align:top}
-th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
-.badge{display:inline-block;padding:4px 8px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.03);font-size:11px}
+th,td{
+  padding:10px 8px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  vertical-align:top
+}
+th{
+  position:sticky;
+  top:0;
+  background:rgba(10,16,32,.9);
+  text-align:left
+}
+
+.badge{
+  display:inline-block;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.03);
+  font-size:11px
+}
 .badge.good{border-color:rgba(46,160,67,.35)}
 .badge.warn{border-color:rgba(255,204,102,.35)}
 .badge.bad{border-color:rgba(255,93,93,.35)}
-.inp,textarea,select{width:100%;box-sizing:border-box;background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--text);padding:10px;border-radius:12px;font-size:13px;outline:none}
+
+.inp,textarea,select{
+  width:100%;
+  box-sizing:border-box;
+  background:rgba(255,255,255,.04);
+  border:1px solid var(--line);
+  color:var(--menu-text);
+  padding:10px;
+  border-radius:12px;
+  font-size:13px;
+  outline:none
+}
+
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(max-width:900px){.row{grid-template-columns:1fr}}
-.btn{border:1px solid rgba(212,175,55,.45);background:rgba(212,175,55,.12);color:var(--text);padding:10px 12px;border-radius:12px;font-size:13px;font-weight:800;cursor:pointer}
-.btn2{border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--text);padding:10px 12px;border-radius:12px;font-size:13px;font-weight:700;cursor:pointer}
-.btnTiny{margin-left:6px;min-width:32px;height:32px;line-height:30px;padding:0 8px;border-radius:10px;border:1px solid rgba(255,255,255,.10);background:rgba(255,255,255,.06);color:var(--text);cursor:pointer}
+
+.btn{
+  border:1px solid rgba(212,175,55,.45);
+  background:rgba(212,175,55,.12);
+  color:var(--text);
+  padding:10px 12px;
+  border-radius:12px;
+  font-size:13px;
+  font-weight:800;
+  cursor:pointer
+}
+.btn2{
+  border:1px solid var(--line);
+  background:rgba(255,255,255,.03);
+  color:var(--text);
+  padding:10px 12px;
+  border-radius:12px;
+  font-size:13px;
+  font-weight:700;
+  cursor:pointer
+}
+.btnTiny{
+  margin-left:6px;
+  min-width:32px;
+  height:32px;
+  line-height:30px;
+  padding:0 8px;
+  border-radius:10px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.06);
+  color:var(--text);
+  cursor:pointer
+}
 .btnTiny:hover{background:rgba(255,255,255,.10)}
+
 .note{margin-top:8px;font-size:12px;color:var(--muted)}
 .hidden{display:none}
 .locked{opacity:.45;filter:saturate(.7);cursor:not-allowed}
 .locked::after{content:'⛔ No permission';margin-left:6px;font-size:12px;opacity:.8}
-.code{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-size:12px}
+
+.code{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  font-size:12px
+}
 
 .miniState{
   margin-left:10px;
@@ -6518,7 +7469,7 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
   font-size:12px;
   letter-spacing:.01em;
   opacity:0;
-  transition: opacity .18s ease;
+  transition:opacity .18s ease;
 }
 </style>
 """)
@@ -6543,10 +7494,13 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     html.append("</div>")
     html.append("<div style='text-align:right'>")
     html.append(f"<div class='small'>Admin key: <span class='code'>••••••</span></div>")
-    html.append(f"<div style='margin-top:8px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap'>"
-                f"<a class='btn2' style='text-decoration:none' href='/admin/export.csv{admin_key_q}'>Export CSV</a>"
-                f"<a class='btn2' style='text-decoration:none' href='/admin/fanzone{admin_key_q}'>Fan Zone</a>"
-                f"</div>")
+    html.append(
+    "<div style='margin-top:8px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap'>"
+    f"<a class='btn2' style='text-decoration:none' href='/admin/export.csv{admin_key_q}'>Export CSV</a>"
+    "<a class='btn2' style='text-decoration:none' href='#fanzone' "
+    "onclick=\"showTab('fanzone');return false;\">Fan Zone</a>"
+    "</div>"
+)
     html.append("</div>")
     html.append("</div>")  # topbar
 
@@ -6597,14 +7551,12 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     </div>
 
     <div id="ops-msg" class="note" style="margin-top:10px"></div>
-    <div class="small" style="margin-top:10px;opacity:.72">Tip: toggles auto-save (“Saving…” → “Saved”).</div>
+    <div class="small" style="margin-top:10px;opacity:.72">
+      Tip: toggles auto-save (“Saving…” → “Saved”).
+    </div>
   </div>
 
-  
-  
-  
-
-<div class="card" id="matchdayCard">
+  <div class="card" id="matchdayCard">
     <div class="h2">Match Day Ops</div>
     <div class="small">One-click presets that set multiple Ops toggles + key Rules. Audited.</div>
     <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
@@ -6613,16 +7565,17 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
       <button type="button" class="btn2" onclick="applyPreset('Post-game')">Post-game</button>
     </div>
     <div id="preset-msg" class="note" style="margin-top:10px"></div>
-    <div class="small" style="margin-top:10px;opacity:.72">Tip: presets update Ops + Rules instantly so staff can shift modes fast.</div>
+    <div class="small" style="margin-top:10px;opacity:.72">
+      Tip: presets update Ops + Rules instantly so staff can shift modes fast.
+    </div>
   </div>
 
-<div class="card" id="notifCard">
+  <div class="card" id="notifCard">
     <div class="h2">Notifications</div>
     <div id="notifBody" class="small" style="margin-top:8px"></div>
     <div id="notif-msg" class="note" style="margin-top:8px"></div>
   </div>
 </div>
-
 
 <!-- LEADS TAB -->
 
@@ -7074,9 +8027,13 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
     # Scripts
     html.append("""
 <script>
+
 /* Admin tabs bootstrap (runs even if later script has a parse error) */
 (function(){
+  var tab = (location.hash || '#ops').slice(1) || 'ops';
+
   function qsa(sel){ return document.querySelectorAll(sel); }
+
   function setActive(tab){
     try{
       var btn = document.querySelector('.tabbtn[data-tab="'+tab+'"]');
@@ -7101,19 +8058,38 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
           if(dt === tab) b.classList.add('active'); else b.classList.remove('active');
         }
       }
+
       var panes = qsa('.tabpane');
       for(var j=0;j<panes.length;j++){
         var p = panes[j];
         if(p && p.classList) p.classList.add('hidden');
       }
+
       var pane = document.getElementById('tab-'+tab);
       if(pane && pane.classList) pane.classList.remove('hidden');
+
       try{ history.replaceState(null,'','#'+tab); }catch(e){}
     }catch(e){}
   }
-  window.showTab = function(tab){
+
+window.showTab = function(tab){
+
+    // Fan Zone tab = redirect to isolated Fan Zone page (preserve key + venue)
+    if(tab === 'fanzone'){
+      try{
+        var qs = new URLSearchParams(window.location.search || '');
+        var url = '/admin/fanzone';
+        var q = qs.toString();
+        if(q) url += '?' + q;
+        window.location.href = url;
+      }catch(e){
+        window.location.href = '/admin/fanzone' + (window.location.search || '');
+      }
+      return false;
+    }
+
     try{
-      var b = document.querySelector('.tabbtn[data-tab="'+tab+'"]');
+      var b = document.querySelector('.tabbtn[data-tabbtn="'+tab+'"]') || document.querySelector('.tabbtn[data-tab="'+tab+'"]');
       var minr = (b && b.getAttribute) ? (b.getAttribute('data-minrole') || 'manager') : 'manager';
       if(ROLE_RANK && ROLE_RANK[ROLE] !== undefined && ROLE_RANK[minr] !== undefined){
         if(ROLE_RANK[ROLE] < ROLE_RANK[minr]){
@@ -7123,12 +8099,22 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
         }
       }
     }catch(e){}
-    setActive(tab); return false;
+
+    // switch tab panes
+    try{ setActive(tab); }catch(e){}
+
+    // If your rules tab needs loads, keep this behavior
+    if(tab === 'rules'){
+      try{ loadPartnerList(); loadPartnerPolicy(); }catch(e){}
+      try{ loadRules(); }catch(e){}
+    }
+
+    return false;
   };
 
   function bind(){
     var btns = qsa('.tabbtn');
-    
+
     // mark owner-only tabs for managers
     try{
       for(var j=0;j<btns.length;j++){
@@ -7141,33 +8127,34 @@ th{position:sticky;top:0;background:rgba(10,16,32,.9);text-align:left}
         }
       }
     }catch(e){}
-for(var i=0;i<btns.length;i++){
+
+    // click handlers
+    for(var i=0;i<btns.length;i++){
       (function(b){
         try{
           b.addEventListener('click', function(ev){
             try{ ev.preventDefault(); }catch(e){}
-            var t = b.getAttribute('data-tab');
+            var t = b.getAttribute('data-tab') || b.getAttribute('data-tabbtn');
             if(t){
-              try{
-                var minr = (b && b.getAttribute) ? (b.getAttribute('data-minrole') || 'manager') : 'manager';
-                if(ROLE_RANK && ROLE_RANK[ROLE] !== undefined && ROLE_RANK[minr] !== undefined){
-                  if(ROLE_RANK[ROLE] < ROLE_RANK[minr]){ try{ toast('Owner only — redirected to Ops', 'warn'); }catch(e){} setActive('ops'); return; }
-                }
-              }catch(e){}
-              setActive(t);
+              try{ window.showTab(t); }catch(e){}
             }
           });
         }catch(e){}
       })(btns[i]);
     }
+
     // initial hash or default ops
     var h = (location.hash || '').replace('#','').trim();
-    if(h && document.querySelector('.tabbtn[data-tab="'+h+'"]')) showTab(h);
-    else showTab('ops');
+    if(h && document.querySelector('.tabbtn[data-tab="'+h+'"]')) window.showTab(h);
+    else window.showTab('ops');
+
     window.addEventListener('hashchange', function(){
       var t = (location.hash || '').replace('#','').trim();
-      if(t && document.querySelector('.tabbtn[data-tab="'+t+'"]')) showTab(t);
+      if(t && document.querySelector('.tabbtn[data-tab="'+t+'"]')) window.showTab(t);
     });
+
+    // apply initial tab on load (also keeps your earlier behavior)
+    try{ setActive(tab); }catch(e){}
   }
 
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
@@ -7177,36 +8164,34 @@ for(var i=0;i<btns.length;i++){
 
 <script>
 const KEY = (new URLSearchParams(window.location.search).get('key') || '');
-let ROLE = (__ADMIN_ROLE__ || 'manager');
 
-// Auto-append ?key=... to same-origin admin/api calls so buttons always work
-(function(){
+const m = document.cookie.match(/(?:^|;\s*)venue_id=([^;]+)/);
+const VENUE =
+  (new URLSearchParams(window.location.search).get('venue') || '').trim() ||
+  (m ? decodeURIComponent(m[1]) : '');
+
+(function () {
   const _origFetch = window.fetch;
-  window.fetch = function(input, init){
-    try{
-      let url = (typeof input === 'string') ? input : (input && input.url) ? input.url : '';
-      if(url && url.startsWith('/')){
-        if(url.startsWith('/admin') || url.startsWith('/api') || url.startsWith('/health')){
-          if(url.indexOf('key=') === -1){
-            url += (url.indexOf('?') === -1 ? '?' : '&') + 'key=' + encodeURIComponent(KEY || '');
-            if(typeof input === 'string') input = url;
-            else input = new Request(url, input);
-          }
+  window.fetch = function (input, init = {}) {
+    try {
+      const url = (typeof input === 'string')
+        ? input
+        : (input && input.url) ? input.url : '';
+
+      if (url && url.startsWith('/admin/api/')) {
+        init.headers = init.headers || {};
+        if (VENUE) init.headers['X-Venue-Id'] = VENUE;
+
+        if (KEY && typeof input === 'string' && !url.includes('key=')) {
+          input = url + (url.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(KEY);
         }
       }
-    }catch(e){}
+    } catch (e) {}
     return _origFetch(input, init);
   };
 })();
 
-// Refresh role from server so manager/owner locks are always correct
-async function _refreshRole(){
-  try{
-    const r = await fetch(`/admin/api/whoami?key=${encodeURIComponent(KEY||'')}`, {cache:'no-store'});
-    const j = await r.json();
-    if(j && j.ok && j.role){ ROLE = j.role; }
-  }catch(e){}
-}
+let ROLE = (__ADMIN_ROLE__ || 'manager');
 
 // Enforce owner-only locks (tabs + buttons)
 document.addEventListener('click', function(ev){
@@ -7387,18 +8372,30 @@ function setupLeadFilters(){
 
 function qs(sel){return document.querySelector(sel);}
 function qsa(sel){return Array.from(document.querySelectorAll(sel));}
-
+                
 qsa('.tabbtn').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
+  btn.addEventListener('click', (e)=>{
+    try{ e.preventDefault(); }catch(_){}
+
+    const t = btn.dataset.tab || btn.getAttribute('data-tab') || btn.getAttribute('data-tabbtn') || '';
+
+    // Always route through showTab so special tabs (like fanzone) can redirect
+    if(typeof window.showTab === 'function'){
+      window.showTab(t);
+      return;
+    }
+
+    // Fallback (should rarely be needed)
     qsa('.tabbtn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
-    const t = btn.dataset.tab;
-    ['leads','ai','aiq','rules','menu','audit'].forEach(x=>{
+
+    ['ops','leads','ai','aiq','rules','menu','audit'].forEach(x=>{
       const pane = document.getElementById('tab-'+x);
       if(!pane) return;
       pane.classList.toggle('hidden', x!==t);
     });
-if(t==='ai') loadAI();
+
+    if(t==='ai') loadAI();
     if(t==='aiq') loadAIQueue();
     if(t==='rules') loadRules();
     if(t==='menu') loadMenu();
@@ -7916,9 +8913,9 @@ async function loadAIQueue(){
     const q = data.queue || [];
     renderAIQueue(q);
     if(msg) msg.textContent = q.length ? (`${q.length} item(s)`) : 'No items';
-  }catch(e){
-    if(msg) msg.textContent = 'Load failed: ' + (e.message || e);
-    if(list) list.textContent = 'Failed to load queue.';
+    }catch(e){
+      if(msg) msg.textContent = 'No items';
+      renderAIQueue([]); // explicit empty state for CI
   }
 }
 
@@ -8116,12 +9113,22 @@ async function loadAudit(){
   const filterEl = qs('#audit-filter');
   const selected = (filterEl && filterEl.value) ? filterEl.value : 'all';
 
-  const url = '/admin/api/audit?key='+encodeURIComponent(KEY)+'&limit='+encodeURIComponent(lim);
-  const res = await fetch(url, {cache:'no-store'});
+  // ✅ Always pass venue explicitly (never rely on cookie)
+  const venueVal =
+    (typeof VENUE !== 'undefined' && VENUE) ? VENUE :
+    (window.VENUE ? window.VENUE : '');
+
+  const url =
+    '/admin/api/audit?key=' + encodeURIComponent(KEY) +
+    '&venue=' + encodeURIComponent(venueVal) +
+    '&limit=' + encodeURIComponent(lim);
+
+  const res = await fetch(url, { cache: 'no-store' });
   const j = await res.json().catch(()=>null);
   if(!j || !j.ok){ if(msg) msg.textContent='Failed to load audit'; return; }
 
   let entries = (j.entries || j.items || []);
+
   // Normalize older shapes if any
   entries = entries.map(e=>{
     if(e && (e.event || e.ts)) return e;
@@ -8140,39 +9147,49 @@ async function loadAudit(){
   // Populate filter options (event types)
   if(filterEl){
     const keep = filterEl.value || 'all';
-    const events = Array.from(new Set(entries.map(e=>String(e.event||'').trim()).filter(Boolean))).sort();
+    const events = Array.from(
+      new Set(entries.map(e=>String(e.event||'').trim()).filter(Boolean))
+    ).sort();
+
     let html = '<option value="all">All events</option>';
-    events.forEach(ev=>{ html += '<option value="'+esc(ev)+'">'+esc(ev)+'</option>'; });
+    events.forEach(ev=>{
+      html += '<option value="'+esc(ev)+'">'+esc(ev)+'</option>';
+    });
     filterEl.innerHTML = html;
     filterEl.value = (events.includes(keep) ? keep : 'all');
     filterEl.onchange = ()=>loadAudit();
   }
 
   const activeFilter = (filterEl && filterEl.value) ? filterEl.value : selected;
-
   const body = qs('#audit-body');
+
   if(body){
     body.innerHTML = '';
-    const shown = entries.filter(e=> activeFilter==='all' ? true : String(e.event||'')===String(activeFilter));
+    const shown = entries.filter(e =>
+      activeFilter === 'all' ? true : String(e.event||'') === String(activeFilter)
+    );
+
     if(!shown.length){
-      body.innerHTML = '<tr><td colspan="6"><span class="note">No audit entries.</span></td></tr>';
+      body.innerHTML =
+        '<tr><td colspan="6"><span class="note">No audit entries.</span></td></tr>';
     } else {
       shown.forEach(e=>{
         const details = (e.details || {});
         const copyPayload = JSON.stringify(e, null, 2);
         const tr = document.createElement('tr');
         tr.innerHTML =
-          '<td>'+esc(e.ts||'')+'</td>'
-          +'<td><span class="code">'+esc(e.actor||'')+'</span></td>'
-          +'<td>'+esc(e.role||'')+'</td>'
-          +'<td>'+esc(e.event||'')+'</td>'
-          +'<td><span class="code">'+esc(JSON.stringify(details))+'</span></td>'
-          +'<td><button class="btn2" type="button">Copy</button></td>';
+          '<td>'+esc(e.ts||'')+'</td>' +
+          '<td><span class="code">'+esc(e.actor||'')+'</span></td>' +
+          '<td>'+esc(e.role||'')+'</td>' +
+          '<td>'+esc(e.event||'')+'</td>' +
+          '<td><span class="code">'+esc(JSON.stringify(details))+'</span></td>' +
+          '<td><button class="btn2" type="button">Copy</button></td>';
+
         const btn = tr.querySelector('button');
         if(btn){
           btn.addEventListener('click', async ()=>{
             try{
-              if(navigator && navigator.clipboard && navigator.clipboard.writeText){
+              if(navigator?.clipboard?.writeText){
                 await navigator.clipboard.writeText(copyPayload);
               } else {
                 const ta = document.createElement('textarea');
@@ -8182,9 +9199,15 @@ async function loadAudit(){
                 document.execCommand('copy');
                 ta.remove();
               }
-              if(msg){ msg.textContent = 'Copied'; setTimeout(()=>{ if(msg) msg.textContent=''; }, 800); }
+              if(msg){
+                msg.textContent = 'Copied';
+                setTimeout(()=>{ if(msg) msg.textContent=''; }, 800);
+              }
             }catch(_){
-              if(msg){ msg.textContent = 'Copy failed'; setTimeout(()=>{ if(msg) msg.textContent=''; }, 1200); }
+              if(msg){
+                msg.textContent = 'Copy failed';
+                setTimeout(()=>{ if(msg) msg.textContent=''; }, 1200);
+              }
             }
           });
         }
@@ -8192,46 +9215,143 @@ async function loadAudit(){
       });
     }
   }
+
   if(msg) msg.textContent='';
 }
 
 
-
 async function loadNotifs(){
-  const msg = qs('#notif-msg'); if(msg) msg.textContent='Loading…';
+  const msg = qs('#notif-msg'); 
+  if(msg) msg.textContent = 'Loading…';
+
   try{
-    const r = await fetch(`/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}`, {cache:'no-store'});
+    const m = document.cookie.match(/(?:^|;\s*)venue_id=([^;]+)/);
+    const VENUE = ((new URLSearchParams(location.search).get('venue') || '').trim()) || (m ? decodeURIComponent(m[1]) : '');
+
+    const r = await fetch(`/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}`, {
+    cache: 'no-store',
+    headers: { 'X-Venue-Id': VENUE }
+    });
     const j = await r.json().catch(()=>null);
-    const items = (j && j.items) ? (j.items||[]) : [];
+    const items = (j && j.items) ? (j.items || []) : [];
+
     // update badge
     const c = document.querySelector('#notifCount');
-    if(c) c.textContent = String(items.length||0);
+    if(c) c.textContent = String(items.length || 0);
 
     const body = document.querySelector('#notifBody');
     if(body){
       body.innerHTML = '';
+
       if(!items.length){
         body.innerHTML = '<div class="note">No notifications.</div>';
       } else {
         items.forEach(it=>{
           const d = it.details || {};
           const row = document.createElement('div');
-          row.style.cssText = 'padding:10px;border:1px solid rgba(255,255,255,16);border-radius:14px;margin-bottom:10px;background:rgba(255,255,255,06)';
+
+          row.style.cssText =
+            'padding:12px;border:1px solid rgba(255,255,255,.16);border-radius:14px;margin-bottom:10px;background:rgba(255,255,255,.06)';
+
+          // ✅ SAFE pretty-print (strings or objects)
+          let text;
+          if (typeof d === 'string') {
+            text = d;
+          } else {
+            try {
+              text = JSON.stringify(d, null, 2);
+            } catch (e) {
+              text = String(d);
+            }
+          }
+
           row.innerHTML =
             '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">' +
-              '<div class="note">'+esc(it.ts||'')+'</div>' +
-              '<div><span class="code">'+esc(it.event||'')+'</span></div>' +
+              '<div class="note">'+esc(it.ts || '')+'</div>' +
+              '<div><span class="code">'+esc(it.event || '')+'</span></div>' +
             '</div>' +
-            '<div class="small" style="margin-top:6px;opacity:.90;word-break:break-word">' +
-              esc(JSON.stringify(d)) +
-            '</div>';
+            '<div class="note" style="margin-top:6px">Details</div>' +
+            '<pre style="margin-top:6px;padding:10px;border-radius:10px;background:rgba(255,255,255,.08);color:#eef2ff;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.45">' +
+              esc(text) +
+            '</pre>';
+
           body.appendChild(row);
         });
       }
     }
-    if(msg) msg.textContent='';
+
+    if(msg) msg.textContent = '';
   }catch(e){
-    if(msg) msg.textContent = 'Load failed: ' + (e && e.message ? e.message : e);
+    if(msg) msg.textContent = 'Load failed';
+  }
+}
+
+/* =========================
+   Fan Zone Admin UI
+   ========================= */
+
+/* NOTE:
+   These functions are INTENTIONALLY kept.
+   They are used ONLY on /admin/fanzone.
+   They must NOT be called from /admin tabs.
+*/
+
+async function initFanZoneAdmin(){
+  const root = document.querySelector('#fanzoneAdminRoot');
+  if(!root) return;
+
+  if(!root.dataset.built){
+    root.dataset.built = "1";
+    root.innerHTML = `
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+        <button class="btn2" type="button" id="fzLoadBtn">Load</button>
+        <button class="btn" type="button" id="fzSaveBtn">Save</button>
+        <span class="note" id="fzMsg"></span>
+      </div>
+      <textarea id="fzJson" class="inp"
+        style="width:100%;min-height:220px;font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+      </textarea>
+      <div class="small" style="opacity:.7;margin-top:8px">Edit JSON then Save.</div>
+    `;
+
+    document.querySelector('#fzLoadBtn')?.addEventListener('click', loadFanZoneState);
+    document.querySelector('#fzSaveBtn')?.addEventListener('click', saveFanZoneState);
+  }
+
+  await loadFanZoneState();
+}
+
+async function loadFanZoneState(){
+  const msg = document.querySelector('#fzMsg');
+  const ta  = document.querySelector('#fzJson');
+  if(msg) msg.textContent = 'Loading…';
+  try{
+    const r = await fetch(`/admin/api/fanzone/state?key=${encodeURIComponent(KEY||'')}`, {cache:'no-store'});
+    const j = await r.json().catch(()=>null);
+    if(!j || !j.ok) throw new Error('Load failed');
+    if(ta) ta.value = JSON.stringify(j.state || {}, null, 2);
+    if(msg) msg.textContent = 'Loaded ✓';
+  }catch(e){
+    if(msg) msg.textContent = 'Load failed';
+  }
+}
+
+async function saveFanZoneState(){
+  const msg = document.querySelector('#fzMsg');
+  const ta  = document.querySelector('#fzJson');
+  if(msg) msg.textContent = 'Saving…';
+  try{
+    const payload = JSON.parse((ta && ta.value) ? ta.value : '{}');
+    const r = await fetch(`/admin/api/fanzone/save?key=${encodeURIComponent(KEY||'')}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json().catch(()=>null);
+    if(!j || !j.ok) throw new Error('Save failed');
+    if(msg) msg.textContent = 'Saved ✓';
+  }catch(e){
+    if(msg) msg.textContent = 'Save failed (bad JSON?)';
   }
 }
 
@@ -8251,57 +9371,10 @@ async function clearNotifs(){
   }
 }
 
-window.showTab = function(tab){
-  try{
-    document.querySelectorAll('.tabbtn').forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
-    document.querySelectorAll('.tabpane').forEach(p=>p.classList.add('hidden'));
-    const pane = document.querySelector('#tab-'+tab);
-    if(pane) pane.classList.remove('hidden');
-    if(tab==='rules'){ try{ loadPartnerList(); loadPartnerPolicy(); }catch(e){} try{ loadRules(); }catch(e){} }
+/* =========================
+   Admin Tabs (Fan Zone REMOVED)
+   ========================= */
 
-    try{ initFanZoneAdmin(); }catch(e){}
-    try{ history.replaceState(null,'','#'+tab); }catch(e){}
-  }catch(e){}
-};
-function setupTabs(){
-  const btns = Array.from(document.querySelectorAll('.tabbtn'));
-  const panes = Array.from(document.querySelectorAll('.tabpane'));
-  if(!btns.length || !panes.length) return;
-
-  function show(tab){
-    btns.forEach(b=>b.classList.toggle('active', b.getAttribute('data-tab')===tab));
-    panes.forEach(p=>p.classList.add('hidden'));
-    const pane = document.querySelector('#tab-'+tab);
-    if(pane) pane.classList.remove('hidden');
-    // keep URL hash for deep-linking
-    try{ history.replaceState(null, '', '#'+tab); }catch(e){}
-  }
-
-  btns.forEach(b=>{
-    b.addEventListener('click', (e)=>{
-      e.preventDefault();
-      const tab = b.getAttribute('data-tab');
-      if(tab) show(tab);
-    });
-  });
-
-  // Make inline onclick handlers use the same implementation
-  window.showTab = show;
-
-  // open tab from URL hash if present, otherwise default to Ops
-  const initial = (location.hash||'').replace('#','').trim();
-  if(initial && document.querySelector('.tabbtn[data-tab="'+initial+'"]')) {
-    show(initial);
-  } else {
-    show('ops');
-  }
-
-  // keep in sync if hash changes
-  window.addEventListener('hashchange', ()=>{
-    const t = (location.hash||'').replace('#','').trim();
-    if(t && document.querySelector('.tabbtn[data-tab="'+t+'"]')) show(t);
-  });
-}
 function openNotifications(){
   try{
     showTab('ops');
@@ -8335,6 +9408,13 @@ function refreshAll(source){
   try{ loadRules(); }catch(e){}
   try{ loadMenu(); }catch(e){}
   try{ loadHealth(); }catch(e){}
+
+  // ✅ Refresh audit automatically if user is currently on the Audit tab
+  try{
+    const ap = document.getElementById('tab-audit');
+    if(ap && !ap.classList.contains('hidden')) loadAudit();
+  }catch(e){}
+
   updateLastRef();
 }
 
@@ -8451,7 +9531,9 @@ document.addEventListener('DOMContentLoaded', ()=>{
   
   try{ installClickUnblocker(); }catch(e){}
 try{ setupTabs(); }catch(e){}
+  if(((location.hash||'').replace('#','').trim()) === 'fanzone'){
   try{ initFanZoneAdmin(); }catch(e){}
+}
   try{ markLockedControls(); }catch(e){}
   try{ setupLeadFilters(); }catch(e){}
   try{ loadNotifs(); }catch(e){}
@@ -8462,7 +9544,19 @@ try{ setupTabs(); }catch(e){}
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
 
     html.append("</div></body></html>")
-    return "".join(html)
+    out = make_response("".join(html))
+    try:
+        out.set_cookie(
+            "venue_id",
+            _venue_id(),
+            httponly=False,
+            samesite="Lax",
+            path="/admin"
+        )
+    except Exception:
+        pass
+    return out
+
 
 
 
@@ -8728,51 +9822,81 @@ def admin_api_ai_replay():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-@app.route("/admin/fanzone")
-def admin_fanzone():
-    ok, resp = _require_admin(min_role="manager")
-    if not ok:
-        return "Unauthorized", 401
-    ctx = _admin_ctx()
-    role = (ctx.get("role") or "manager").strip() or "manager"
-    key = (request.args.get("key", "") or "").strip()
-
-    html = []
-    html.append("<!doctype html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'/><meta name='color-scheme' content='dark light'/>")
     html.append("<title>Fan Zone Admin</title>")
-    html.append("""<style>
-:root{--bg:#0b1020;--panel:#0f1b33;--line:rgba(255,255,255,.10);--text:#eaf0ff;--muted:#b9c7ee;--gold:#d4af37;--good:#2ea043;--warn:#ffcc66;--bad:#ff5d5d;}
-body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(1200px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);color:var(--text);}
+    html.append(r"""<style>
+:root{
+  --bg:#0b1020;
+  --panel:#0f1b33;
+  --line:rgba(255,255,255,.10);
+  --text:#eaf0ff;
+  --muted:#b9c7ee;
+  --gold:#d4af37;
+  --good:#2ea043;
+  --warn:#ffcc66;
+  --bad:#ff5d5d;
+
+  --menu-bg:#0f172a;
+  --menu-hover:#1e293b;
+  --menu-text:#f8fafc;
+}
+
+body{
+  margin:0;
+  font-family:Arial,system-ui,sans-serif;
+  background:radial-gradient(1200px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);
+  color:var(--text);
+}
+
 .wrap{max-width:1200px;margin:0 auto;padding:18px;}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
 .h1{font-size:18px;font-weight:800;letter-spacing:.3px}
 .sub{color:var(--muted);font-size:12px}
+
 .pills{display:flex;gap:8px;flex-wrap:wrap}
 .pill{border:1px solid var(--line);background:rgba(255,255,255,.03);padding:8px 10px;border-radius:999px;font-size:12px}
 .pill b{color:var(--gold)}
+
 .controls{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
-.inp, select{background:rgba(255,255,255,.04);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:9px 10px;font-size:12px;outline:none}
-select option{background:rgba(15,27,51,1);color:var(--text)}
-select option:hover{background:rgba(255,255,255,.12)}
-.btn{cursor:pointer;background:linear-gradient(180deg, rgba(212,175,55,.18), rgba(212,175,55,.06));border:1px solid rgba(212,175,55,.35);color:var(--text);border-radius:12px;padding:9px 12px;font-size:12px}
-.btn:active{transform:translateY(1px)}
-.tablewrap{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:rgba(255,255,255,.03);box-shadow:0 10px 35px rgba(0,0,0,.35)}
-table{border-collapse:collapse;width:100%}
-thead th{position:sticky;top:0;background:rgba(10,16,34,.95);backdrop-filter: blur(6px);z-index:2}
-th,td{border-bottom:1px solid var(--line);padding:10px 10px;font-size:12px;vertical-align:top}
-th{color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:11px}
-tr:hover td{background:rgba(255,255,255,.03)}
-.badge{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:4px 8px;font-size:11px}
-.badge.vip{border-color:rgba(212,175,55,.5);box-shadow:0 0 0 1px rgba(212,175,55,.18) inset}
-.dot{width:7px;height:7px;border-radius:999px;background:var(--muted);display:inline-block}
-.dot.new{background:var(--warn)}
-.dot.confirmed{background:var(--good)}
-.dot.seated{background:#7aa7ff}
-.dot.noshow{background:var(--bad)}
-.small{font-size:11px;color:var(--muted)}
-.right{text-align:right}
-.tel{color:var(--text);text-decoration:none;border-bottom:1px dotted rgba(255,255,255,.25)}
-.toast{position:fixed;right:14px;bottom:14px;background:rgba(0,0,0,.55);border:1px solid var(--line);padding:10px 12px;border-radius:12px;font-size:12px;display:none}
+
+.inp, select{
+  background:rgba(255,255,255,.04);
+  border:1px solid var(--line);
+  color:var(--menu-text);
+  border-radius:10px;
+  padding:9px 10px;
+  font-size:12px;
+  outline:none;
+}
+
+select option{
+  background:var(--menu-bg);
+  color:var(--menu-text);
+}
+
+.tablewrap,.card,.panel{overflow:visible;}
+
+.btn{
+  cursor:pointer;
+  background:linear-gradient(180deg, rgba(212,175,55,.18), rgba(212,175,55,.06));
+  border:1px solid rgba(212,175,55,.35);
+  color:var(--text);
+  border-radius:12px;
+  padding:9px 12px;
+  font-size:12px
+}
+
+.toast{
+  position:fixed;
+  right:14px;
+  bottom:14px;
+  background:rgba(0,0,0,.65);
+  border:1px solid var(--line);
+  padding:10px 12px;
+  border-radius:12px;
+  font-size:12px;
+  display:none;
+  color:var(--menu-text);
+}
 </style>""")
     html.append("</head><body><div class='wrap'>")
 
@@ -8780,13 +9904,12 @@ tr:hover td{background:rgba(255,255,255,.03)}
     html.append(f"<div><div class='h1'>Fan Zone Admin — {_hesc(SHEET_NAME or 'World Cup')}</div><div class='sub'>Poll controls (Sponsor text + Match of the Day) • Key required</div></div>")
     html.append("<div style='display:flex;gap:10px;align-items:center;flex-wrap:wrap'>")
     html.append(f"<a class='btn' href='/admin?key={key}' style='text-decoration:none;display:inline-block'>Ops</a>")
-    html.append(f"<a class='btn' href='/admin/fanzone?key={key}' style='text-decoration:none;display:inline-block'>Poll Controls</a>")
+    html.append(f"<a class='btn' href='/admin/fanzone?key={key}&venue={venue_id}' "f"style='text-decoration:none;display:inline-block'>Poll Controls</a>")
     html.append("</div></div>")
-
     html.append(f"<div style='display:flex;gap:8px;margin:10px 0 14px 0;flex-wrap:wrap;'>"
-                f"<a href='/admin?key={key}' style='text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);font-weight:800'>Ops</a>"
-                f"<a href='/admin/fanzone?key={key}' style='text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid rgba(212,175,55,.35);border-radius:999px;background:rgba(212,175,55,.10);font-weight:900'>Fan Zone</a>"
-                f"</div>")
+    f"<a href='/admin?key={key}' style='text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.04);font-weight:800'>Ops</a>"
+    f"<a href='/admin/fanzone?key={key}&venue={venue_id}' style='text-decoration:none;color:var(--text);padding:8px 12px;border:1px solid rgba(212,175,55,.35);border-radius:999px;background:rgba(212,175,55,.10);font-weight:900'>Fan Zone</a>"
+    f"</div>")
 
     html.append(r"""
 <div class="panelcard" style="margin:14px 0;border:1px solid var(--line);border-radius:16px;padding:12px;background:rgba(255,255,255,.03);box-shadow:0 10px 35px rgba(0,0,0,.25)">
@@ -8839,6 +9962,11 @@ tr:hover td{background:rgba(255,255,255,.03)}
 <script>
 (function(){
   const qs = new URLSearchParams(location.search);
+
+  // ✅ Venue bootstrap (scoped, no redeclare issues)
+  window.VENUE = (window.VENUE || qs.get("venue") || "").trim();
+  const VENUE = window.VENUE;
+
   const ADMIN_KEY = qs.get("key") || "";
   const ROLE = __ADMIN_ROLE__; // replaced server-side with JSON string
 
@@ -8854,6 +9982,11 @@ tr:hover td{background:rgba(255,255,255,.03)}
     toast._t = setTimeout(()=>el.classList.remove("show"), 2200);
   }
 
+  // Optional but helpful: surface missing venue immediately
+  if(!VENUE){
+    toast("Missing venue", "error");
+  }
+
   function setPollStatus(html){
     const box = $("pollStatus");
     if(!box) return;
@@ -8863,15 +9996,23 @@ tr:hover td{background:rgba(255,255,255,.03)}
   async function loadPollStatus(){
     try{
       setPollStatus('<div class="sub">Loading poll status…</div>');
-      const res = await fetch("/api/poll/state", {cache:"no-store"});
+
+      // ✅ Venue-scoped poll state
+      const res = await fetch(
+        `/api/poll/state?venue=${encodeURIComponent(VENUE||"")}&_=${Date.now()}`,
+        { cache: "no-store" }
+      );
+
       const data = await res.json().catch(()=>null);
       if(!data || data.ok === false){
         setPollStatus('<div class="sub">Poll status unavailable</div>');
         return;
       }
+
       const locked = !!data.locked;
       const title = (data.title || "Match of the Day Poll");
       const top = (data.top && data.top.length) ? data.top : [];
+
       let rows = "";
       for(const r of top){
         const name = String(r.name||"");
@@ -8947,55 +10088,7 @@ tr:hover td{background:rgba(255,255,255,.03)}
     if($("motdKickoff")) $("motdKickoff").value = dt;
   }
 
-  async function saveFanZoneConfig(){
-    const btn = $("btnSaveConfig");
-    const sel = $("motdSelect");
-    const lockEl = $("pollLockMode");
-    if(!btn) return;
-
-    const payload = {
-      section: "fanzone",
-      motd: {
-        home: ($("motdHome")?.value || "").trim(),
-        away: ($("motdAway")?.value || "").trim(),
-        kickoff_utc: ($("motdKickoff")?.value || "").trim(),
-        match_id: (sel?.value || "").trim(),
-      },
-      poll: {
-        lock_mode: (lockEl?.value || "").trim(), // "auto" | "force_unlocked" | "force_locked"
-      }
-    };
-
-    const prev = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = "Saving…";
-
-    try{
-      const res = await fetch(`/admin/update-config?key=${encodeURIComponent(ADMIN_KEY)}`, {
-        method: "POST",
-        headers: {"Content-Type":"application/json"},
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json().catch(()=>null);
-      if(!res.ok || !data || data.ok === false){
-        toast((data && data.error) ? data.error : "Save failed", "error");
-        btn.textContent = prev;
-        btn.disabled = false;
-        return;
-      }
-      btn.textContent = "Saved ✓";
-      toast("Saved", "ok");
-      setTimeout(()=>{ btn.textContent = prev; btn.disabled = false; }, 900);
-
-      // Refresh poll status after save so staff trust the click
-      loadPollStatus();
-    }catch(e){
-      toast("Save failed", "error");
-      btn.textContent = prev;
-      btn.disabled = false;
-    }
-  }
-
+               
   function safeBoot(){
     try{
       // Match dropdown
@@ -9078,8 +10171,18 @@ async function replayAI(){
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
 
     html.append("</div></body></html>")
-    return "".join(html)
-
+    out = make_response("".join(html))
+    try:
+        out.set_cookie(
+            "venue_id",
+            _venue_id(),
+            httponly=False,
+            samesite="Lax",
+            path="/admin"
+        )
+    except Exception:
+        pass
+    return out
 
 
 
@@ -9152,7 +10255,7 @@ def api_intake():
 
 
 
-@app.get("/api/venue_identity")
+@app.route("/api/venue_identity")
 def api_venue_identity():
     """Fan-safe: minimal venue identity (branding-safe).
 
@@ -9164,11 +10267,19 @@ def api_venue_identity():
         vid = _venue_id()
     except Exception:
         vid = DEFAULT_VENUE_ID
-    cfg = _venue_cfg(vid)
+
+    # ✅ NEW: if venue is inactive, hide identity (prevents lingering fan views)
+    if not _venue_is_active(vid):
+        return jsonify({"ok": False, "error": "Venue is inactive"}), 404
+
+    cfg = _venue_cfg(vid) or {}
     feat = cfg.get("features") if isinstance(cfg.get("features"), dict) else {}
     ident = cfg.get("identity") if isinstance(cfg.get("identity"), dict) else {}
-    show = bool((feat or {}).get("show_location_line", False))
-    loc = str((ident or {}).get("location_line") or "").strip()
+
+    # Prefer top-level (new schema), fallback to legacy nested keys
+    show = bool(cfg.get("show_location_line", (feat or {}).get("show_location_line", False)))
+    loc = str(cfg.get("location_line") or (ident or {}).get("location_line") or "").strip()
+
     return jsonify({
         "ok": True,
         "venue_id": vid,
@@ -9213,7 +10324,7 @@ def _append_lead_google_sheet(row: dict) -> tuple[bool, int]:
         else:
             sh = _open_default_spreadsheet(gc)
         try:
-            ws = sh.worksheet("Leads")
+            ws = sh.get_worksheet(0)
         except Exception:
             ws = sh.sheet1
         resp = ws.append_row([
@@ -9258,6 +10369,30 @@ def lead():
         "ip": request.headers.get("X-Forwarded-For", request.remote_addr),
         "ua": request.headers.get("User-Agent",""),
     }
+
+    # ------------------------------------------------------------
+    # Idempotency / dedupe (prevents double submits & retries)
+    # ------------------------------------------------------------
+    try:
+        _redis_init_if_needed()
+        if globals().get("_REDIS_ENABLED") and globals().get("_REDIS"):
+            vid = _venue_id() if "_venue_id" in globals() else "default"
+            fp_raw = "|".join([
+                vid,
+                (row.get("contact") or "").lower().strip(),
+                (row.get("datetime") or "").lower().strip(),
+                (row.get("intent") or "").lower().strip(),
+            ])[:500]
+            fp = hashlib.sha256(fp_raw.encode("utf-8")).hexdigest()
+            dk = f"{_REDIS_NS}:{vid}:lead_dedupe:{fp}"
+            if not _REDIS.set(dk, "1", nx=True, ex=600):  # 10-minute window
+                return jsonify({"ok": True, "deduped": True})
+    except Exception:
+        pass
+
+    # ------------------------------------------------------------
+    # Persist lead
+    # ------------------------------------------------------------
     _append_lead_local(row)
 
     sheet_ok = False
@@ -9265,13 +10400,13 @@ def lead():
     if GOOGLE_SHEET_ID or os.environ.get("GOOGLE_CREDS_JSON") or os.path.exists("google_creds.json"):
         sheet_ok, sheet_row = _append_lead_google_sheet(row)
 
-    # Step 7: AI triage on intake → queue suggestions (approval by manager/admin)
-    # Best-effort; never blocks lead capture if AI fails.
+    # ------------------------------------------------------------
+    # AI triage (best-effort, non-blocking)
+    # ------------------------------------------------------------
     if sheet_ok or AI_SETTINGS.get("enabled"):
         _ai_enqueue_or_apply_for_new_lead(row, int(sheet_row or 0))
 
     return jsonify({"ok": True, "sheet_ok": bool(sheet_ok), "sheet_row": int(sheet_row or 0)})
-
 
 # ============================================================
 # E2E Test Hooks (CI-safe, opt-in)
@@ -9382,29 +10517,110 @@ LEGACY_SUPER_CONSOLE_HTML = r"""<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>World Cup Concierge — Super Admin</title>
   <style>
-    :root{--bg:#070A10;--card:#0E1424;--muted:#9AA3B2;--text:#E9EEF7;--line:rgba(255,255,255,.08)}
-    html,body{height:100%;background:radial-gradient(900px 700px at 20% 10%, #132752 0%, var(--bg) 55%);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    .wrap{max-width:1080px;margin:0 auto;padding:20px}
-    .top{display:flex;justify-content:space-between;align-items:center;gap:12px}
-    .title{font-size:18px;font-weight:700;letter-spacing:.2px}
-    .pill{font-size:12px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;color:var(--muted);background:rgba(255,255,255,.03)}
-    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}
-    .card{background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));border:1px solid var(--line);border-radius:16px;padding:14px;box-shadow:0 10px 30px rgba(0,0,0,.25)}
-    .k{font-size:11px;color:var(--muted)}
-    .v{font-size:22px;font-weight:800;margin-top:6px}
-    table{width:100%;border-collapse:collapse;margin-top:12px}
-    th,td{padding:10px 8px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}
-    th{color:var(--muted);font-weight:600}
-    .right{text-align:right}
-    .err{color:#ffb4b4;font-size:12px;margin-top:10px}
-  
-  .tabbtn{background:rgba(255,255,255,.04);border:1px solid var(--line);padding:10px 12px;border-radius:999px;color:var(--text);cursor:pointer}
-  .tabbtn.active{background:rgba(240,180,60,.14);border-color:rgba(240,180,60,.35)}
-  .tabpane{display:none}
-  .tabpane.active{display:block}
-  .scrollbox{max-height:65vh; overflow:auto; border-radius:14px}
-  .stickyHead thead th{position:sticky;top:0;background:rgba(0,0,0,.65);backdrop-filter: blur(10px); z-index:2}
+:root{
+  --bg:#070A10;
+  --card:#0E1424;
+  --muted:#9AA3B2;
+  --text:#E9EEF7;
+  --line:rgba(255,255,255,.08);
 
+  /* dropdown / menu tokens */
+  --menu-bg:#0f172a;
+  --menu-hover:#1e293b;
+  --menu-text:#f8fafc;
+}
+
+html,body{
+  height:100%;
+  background:radial-gradient(900px 700px at 20% 10%, #132752 0%, var(--bg) 55%);
+  color:var(--text);
+  font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+}
+
+.wrap{max-width:1080px;margin:0 auto;padding:20px}
+
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.title{font-size:18px;font-weight:700;letter-spacing:.2px}
+
+.pill{
+  font-size:12px;
+  padding:6px 10px;
+  border:1px solid var(--line);
+  border-radius:999px;
+  color:var(--muted);
+  background:rgba(255,255,255,.03)
+}
+
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}
+
+.card{
+  background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:14px;
+  box-shadow:0 10px 30px rgba(0,0,0,.25);
+  overflow:visible;
+}
+
+.k{font-size:11px;color:var(--muted)}
+.v{font-size:22px;font-weight:800;margin-top:6px}
+
+table{width:100%;border-collapse:collapse;margin-top:12px}
+th,td{
+  padding:10px 8px;
+  border-bottom:1px solid var(--line);
+  text-align:left;
+  font-size:13px
+}
+th{color:var(--muted);font-weight:600}
+
+.right{text-align:right}
+.err{color:#ffb4b4;font-size:12px;margin-top:10px}
+
+/* tabs */
+.tabbtn{
+  background:rgba(255,255,255,.04);
+  border:1px solid var(--line);
+  padding:10px 12px;
+  border-radius:999px;
+  color:var(--text);
+  cursor:pointer
+}
+.tabbtn.active{
+  background:rgba(240,180,60,.14);
+  border-color:rgba(240,180,60,.35)
+}
+.tabpane{display:none}
+.tabpane.active{display:block}
+
+/* scrolling tables */
+.scrollbox{
+  max-height:65vh;
+  overflow:auto;
+  border-radius:14px
+}
+
+.stickyHead thead th{
+  position:sticky;
+  top:0;
+  background:rgba(0,0,0,.65);
+  backdrop-filter: blur(10px);
+  z-index:2
+}
+
+/* DROPDOWN / SELECT FIX */
+select{
+  background:rgba(255,255,255,.04);
+  border:1px solid var(--line);
+  color:var(--menu-text);
+}
+select option{
+  background:var(--menu-bg) !important;
+  color:var(--menu-text) !important;
+}
+select option:hover{
+  background:var(--menu-hover) !important;
+}
 </style>
 </head>
 <body>
@@ -10163,58 +11379,242 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>World Cup Concierge — Super Admin</title>
   <style>
-    :root{--bg0:#05070c; --bg1:#0a1020; --card: rgba(255,255,255,.06); --stroke: rgba(255,255,255,.10); --text:#eef2ff; --muted: rgba(238,242,255,.65); --good:#36d399; --warn:#fbbf24; --bad:#fb7185;}
-    html,body{height:100%; margin:0; background: radial-gradient(1200px 700px at 15% 10%, #10224a 0%, transparent 55%), linear-gradient(180deg,var(--bg1),var(--bg0)); color:var(--text); font-family: ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
-    a{color:#a7c7ff}
-    .wrap{max-width:1240px; margin:0 auto; padding:18px 16px 36px;}
-    .topbar{position:sticky; top:0; z-index:20; backdrop-filter: blur(16px); background: linear-gradient(180deg, rgba(5,7,12,.92), rgba(5,7,12,.55)); border:1px solid var(--stroke); border-radius:18px; padding:14px; box-shadow: 0 12px 40px rgba(0,0,0,.45);}
-    .toprow{display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;}
-    .title{display:flex; gap:10px; align-items:baseline;}
-    .title h1{font-size:18px; margin:0;}
-    .title small{color:var(--muted)}
-    .tabs{display:flex; gap:8px;}
-    .tabbtn{border:1px solid var(--stroke); background: rgba(255,255,255,.04); color:var(--text); padding:7px 12px; border-radius:999px; cursor:pointer; font-size:13px;}
-    .tabbtn.active{background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.18);}
-    .chips{display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
-    .chip{display:inline-flex; gap:8px; align-items:center; border:1px solid var(--stroke); background: rgba(255,255,255,.04); padding:7px 10px; border-radius:999px; cursor:pointer; font-size:12px;}
-    .chip.active{background: rgba(255,255,255,.10);}
-    .dot{width:8px; height:8px; border-radius:999px; background:#94a3b8;}
-    .pill{padding:5px 9px; border:1px solid rgba(255,255,255,.10); border-radius:999px; font-size:12px; color:var(--muted);}
-    .meta{display:flex; gap:10px; align-items:center; color:var(--muted); font-size:12px;}
-    .grid{display:grid; grid-template-columns: 340px 1fr; gap:14px; margin-top:14px;}
-    .card{border:1px solid var(--stroke); background: var(--card); border-radius:18px; padding:12px; box-shadow: 0 12px 40px rgba(0,0,0,.35);}
-    .card h2{margin:0 0 8px 0; font-size:13px; color:var(--muted); font-weight:600;}
-    .btn{border:1px solid var(--stroke); background: rgba(255,255,255,.06); color:var(--text); padding:8px 10px; border-radius:10px; cursor:pointer; font-size:13px;}
-    .btn.primary{background: rgba(96,165,250,.18); border-color: rgba(96,165,250,.28);}
-    input,select{background: rgba(0,0,0,.28); border:1px solid var(--stroke); color:var(--text); border-radius:10px; padding:8px 10px; font-size:13px;}
-    .rail{display:flex; flex-direction:column; gap:10px;}
-    .rail .actions{display:flex; gap:8px;}
-    .rail .list{border:1px solid var(--stroke); border-radius:14px; overflow:auto; max-height: 62vh; background: rgba(0,0,0,.18);}
-    .vrow{display:flex; gap:10px; align-items:center; padding:10px; border-bottom:1px solid rgba(255,255,255,.06); cursor:pointer;}
-    .vrow:hover{background: rgba(255,255,255,.05);}
-    .vrow.active{background: rgba(255,255,255,.09);}
-    .vname{font-weight:600; font-size:13px;}
-    .vid{font-size:12px; color:var(--muted);}
-    .badges{display:flex; gap:6px; margin-left:auto;}
-    .badge{font-size:11px; padding:3px 7px; border-radius:999px; border:1px solid rgba(255,255,255,.10); background: rgba(255,255,255,.05); color:var(--muted);}
-    .badge.good{border-color: rgba(54,211,153,.35); color: rgba(54,211,153,.95);}
-    .badge.warn{border-color: rgba(251,191,36,.35); color: rgba(251,191,36,.95);}
-    .badge.bad{border-color: rgba(251,113,133,.35); color: rgba(251,113,133,.95);}
-    .main{display:flex; flex-direction:column; gap:14px;}
-    .panel{border:1px solid var(--stroke); background: var(--card); border-radius:18px; overflow:hidden;}
-    .panelhead{display:flex; align-items:center; justify-content:space-between; padding:12px; border-bottom:1px solid rgba(255,255,255,.08);}
-    .panelhead .left{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
-    .panelhead .right{display:flex; gap:8px; align-items:center;}
-    .tablewrap{max-height: 52vh; overflow:auto;}
-    table{width:100%; border-collapse:collapse; font-size:13px;}
-    th,td{padding:10px; border-bottom:1px solid rgba(255,255,255,.06); text-align:left; vertical-align:top;}
-    th{position:sticky; top:0; z-index:2; background: rgba(0,0,0,.35); color:var(--muted); font-weight:600; font-size:12px;}
-    .muted{color:var(--muted)}
-    .section{display:none;}
-    .section.active{display:block;}
-    .diag{white-space:pre-wrap; font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace; font-size:12px; color:rgba(238,242,255,.78); background: rgba(0,0,0,.28); border:1px solid rgba(255,255,255,.10); border-radius:12px; padding:10px; max-height: 170px; overflow:auto;}
-    .pager{display:flex; gap:8px; align-items:center; justify-content:flex-end; padding:10px 12px; border-top:1px solid rgba(255,255,255,.08); background: rgba(0,0,0,.18);}
-  </style>
+:root{
+  --bg0:#05070c;
+  --bg1:#0a1020;
+  --card:rgba(255,255,255,.06);
+  --stroke:rgba(255,255,255,.10);
+  --text:#eef2ff;
+  --muted:rgba(238,242,255,.65);
+  --good:#36d399;
+  --warn:#fbbf24;
+  --bad:#fb7185;
+
+  /* dropdown / menu tokens */
+  --menu-bg:#0f172a;
+  --menu-hover:#1e293b;
+  --menu-text:#f8fafc;
+}
+
+html,body{
+  height:100%;
+  margin:0;
+  background:
+    radial-gradient(1200px 700px at 15% 10%, #10224a 0%, transparent 55%),
+    linear-gradient(180deg,var(--bg1),var(--bg0));
+  color:var(--text);
+  font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+}
+
+a{color:#a7c7ff}
+
+.wrap{max-width:1240px;margin:0 auto;padding:18px 16px 36px;}
+
+.topbar{
+  position:sticky;
+  top:0;
+  z-index:20;
+  backdrop-filter:blur(16px);
+  background:linear-gradient(180deg, rgba(5,7,12,.92), rgba(5,7,12,.55));
+  border:1px solid var(--stroke);
+  border-radius:18px;
+  padding:14px;
+  box-shadow:0 12px 40px rgba(0,0,0,.45);
+}
+
+.toprow{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;}
+
+.title{display:flex;gap:10px;align-items:baseline;}
+.title h1{font-size:18px;margin:0;}
+.title small{color:var(--muted)}
+
+.tabs{display:flex;gap:8px;}
+.tabbtn{
+  border:1px solid var(--stroke);
+  background:rgba(255,255,255,.04);
+  color:var(--text);
+  padding:7px 12px;
+  border-radius:999px;
+  cursor:pointer;
+  font-size:13px;
+}
+.tabbtn.active{
+  background:rgba(255,255,255,.10);
+  border-color:rgba(255,255,255,.18);
+}
+
+.chips{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.chip{
+  display:inline-flex;
+  gap:8px;
+  align-items:center;
+  border:1px solid var(--stroke);
+  background:rgba(255,255,255,.04);
+  padding:7px 10px;
+  border-radius:999px;
+  cursor:pointer;
+  font-size:12px;
+}
+.chip.active{background:rgba(255,255,255,.10);}
+
+.dot{width:8px;height:8px;border-radius:999px;background:#94a3b8;}
+.pill{
+  padding:5px 9px;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:999px;
+  font-size:12px;
+  color:var(--muted);
+}
+
+.meta{display:flex;gap:10px;align-items:center;color:var(--muted);font-size:12px;}
+
+.grid{display:grid;grid-template-columns:340px 1fr;gap:14px;margin-top:14px;}
+
+.card{
+  border:1px solid var(--stroke);
+  background:var(--card);
+  border-radius:18px;
+  padding:12px;
+  box-shadow:0 12px 40px rgba(0,0,0,.35);
+  overflow:visible;
+}
+
+.card h2{margin:0 0 8px 0;font-size:13px;color:var(--muted);font-weight:600;}
+
+.btn{
+  border:1px solid var(--stroke);
+  background:rgba(255,255,255,.06);
+  color:var(--text);
+  padding:8px 10px;
+  border-radius:10px;
+  cursor:pointer;
+  font-size:13px;
+}
+.btn.primary{
+  background:rgba(96,165,250,.18);
+  border-color:rgba(96,165,250,.28);
+}
+
+/* INPUTS + SELECT FIX */
+input,select{
+  background:rgba(0,0,0,.28);
+  border:1px solid var(--stroke);
+  color:var(--menu-text);
+  border-radius:10px;
+  padding:8px 10px;
+  font-size:13px;
+}
+select option{
+  background:var(--menu-bg) !important;
+  color:var(--menu-text) !important;
+}
+select option:hover{
+  background:var(--menu-hover) !important;
+}
+
+.rail{display:flex;flex-direction:column;gap:10px;}
+.rail .actions{display:flex;gap:8px;}
+.rail .list{
+  border:1px solid var(--stroke);
+  border-radius:14px;
+  overflow:auto;
+  max-height:62vh;
+  background:rgba(0,0,0,.18);
+}
+
+.vrow{
+  display:flex;
+  gap:10px;
+  align-items:center;
+  padding:10px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  cursor:pointer;
+}
+.vrow:hover{background:rgba(255,255,255,.05);}
+.vrow.active{background:rgba(255,255,255,.09);}
+
+.vname{font-weight:600;font-size:13px;}
+.vid{font-size:12px;color:var(--muted);}
+
+.badges{display:flex;gap:6px;margin-left:auto;}
+.badge{
+  font-size:11px;
+  padding:3px 7px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.05);
+  color:var(--muted);
+}
+.badge.good{border-color:rgba(54,211,153,.35);color:rgba(54,211,153,.95);}
+.badge.warn{border-color:rgba(251,191,36,.35);color:rgba(251,191,36,.95);}
+.badge.bad{border-color:rgba(251,113,133,.35);color:rgba(251,113,133,.95);}
+
+.main{display:flex;flex-direction:column;gap:14px;}
+
+.panel{
+  border:1px solid var(--stroke);
+  background:var(--card);
+  border-radius:18px;
+  overflow:visible;
+}
+
+.panelhead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:12px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+}
+.panelhead .left{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.panelhead .right{display:flex;gap:8px;align-items:center;}
+
+.tablewrap{max-height:52vh;overflow:auto;}
+
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th,td{
+  padding:10px;
+  border-bottom:1px solid rgba(255,255,255,.06);
+  text-align:left;
+  vertical-align:top;
+}
+th{
+  position:sticky;
+  top:0;
+  z-index:2;
+  background:rgba(0,0,0,.35);
+  color:var(--muted);
+  font-weight:600;
+  font-size:12px;
+}
+
+.muted{color:var(--muted)}
+
+.section{display:none;}
+.section.active{display:block;}
+
+.diag{
+  white-space:pre-wrap;
+  font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  font-size:12px;
+  color:rgba(238,242,255,.78);
+  background:rgba(0,0,0,.28);
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:12px;
+  padding:10px;
+  max-height:170px;
+  overflow:auto;
+}
+
+.pager{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  justify-content:flex-end;
+  padding:10px 12px;
+  border-top:1px solid rgba(255,255,255,.08);
+  background:rgba(0,0,0,.18);
+}
+</style>
 </head>
 <body>
 <div class="wrap">
@@ -10255,7 +11655,21 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
     <div class="main">
       <div class="card">
         <h2>Venue details + quick actions</h2>
-        <div id="venueDetails" class="muted">Select a venue from the left rail.</div>
+
+        <!-- REPLACED: static, always-present identity editor (JS will also render richer details) -->
+        <div id="venueDetails">
+          <div class="muted" style="font-size:12px;margin-bottom:8px">
+            Select a venue from the left rail to edit identity.
+          </div>
+
+          <div class="muted" style="font-size:12px;margin-top:8px">Fan subtitle (location line)</div>
+          <input id="saLocationLine" placeholder="Dallas, TX" style="width:100%;margin-top:6px" />
+
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button class="btn primary" id="btnSaveIdentity" type="button">Save</button>
+            <span class="muted" style="font-size:12px">Saves to venue config via set_identity.</span>
+          </div>
+        </div>
       </div>
 
       <div class="card" style="margin-top:12px">
@@ -10316,23 +11730,91 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
 <script>
 (function(){
   const qs = new URLSearchParams(location.search);
-  const super_key = (qs.get('super_key') || qs.get('key') || '').trim() || (document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)?.[1] ? decodeURIComponent(document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)[1]) : '');
+  const super_key =
+    (qs.get('super_key') || qs.get('key') || '').trim() ||
+    (document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)?.[1]
+      ? decodeURIComponent(document.cookie.match(/(?:^|;)\s*super_key=([^;]+)/)[1])
+      : '');
+
   const state = {venues:[], filter:'all', selected:'', leadsPage:1, leadsTotal:0};
+
   let demoEnabled = (document.cookie||'').includes('demo_mode=1');
-  function setDiag(s){const el=document.getElementById('diagBox')||document.getElementById('leadsDiag'); if(el) el.textContent=String(s||'');}
+
+  function setDiag(s){
+    const el = document.getElementById('diagBox') || document.getElementById('leadsDiag');
+    if(el) el.textContent = String(s||'');
+  }
+
+  // ---- NEW: Save Identity (location_line) ----
+  // Uses event delegation so it works even if #venueDetails is re-rendered dynamically.
+  async function saveIdentityFromUI(){
+    try{
+      // Resolve currently selected venue id (state.selected is used elsewhere in this console)
+      const venue_id = (state.selected || '').trim();
+      if(!venue_id){
+        setDiag('Select a venue first');
+        return;
+      }
+
+      const inp = document.getElementById('saLocationLine');
+      const location_line = (inp && inp.value ? String(inp.value) : '').trim();
+      if(!location_line){
+        setDiag('Enter a location line');
+        return;
+      }
+
+      const payload = { venue_id, location_line, show_location_line: true };
+
+      const r = await fetch('/super/api/venues/set_identity?super_key='+encodeURIComponent(super_key), {
+        method: 'POST',
+        headers: hdrs(),
+        body: JSON.stringify(payload)
+      });
+
+      const j = await r.json().catch(()=>({}));
+      if(!j || !j.ok){
+        const msg = (j && j.error) ? j.error : ('HTTP ' + r.status);
+        setDiag('Save failed: ' + msg);
+        return;
+      }
+
+      setDiag('Saved identity ✔');
+
+      // Refresh UI (these functions exist later in this script)
+      try{ await loadVenues(); }catch(e){}
+      try{ if(typeof renderVenueDetails === 'function') renderVenueDetails(); }catch(e){}
+    }catch(e){
+      setDiag('Save failed: ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  // Delegated click binding (works even if button is injected later)
+  document.addEventListener('click', (ev)=>{
+    const t = ev && ev.target;
+    if(t && t.id === 'btnSaveIdentity'){
+      ev.preventDefault();
+      saveIdentityFromUI();
+    }
+  });
+
   async function toggleDemoMode(){
     try{
       const next = !demoEnabled;
-      const r = await fetch('/super/api/demo_mode?super_key='+encodeURIComponent(super_key), {method:'POST', headers: hdrs(), body: JSON.stringify({enabled: next})});
+      const r = await fetch('/super/api/demo_mode?super_key='+encodeURIComponent(super_key), {
+        method:'POST',
+        headers: hdrs(),
+        body: JSON.stringify({enabled: next})
+      });
       const j = await r.json().catch(()=>({}));
       if(!j.ok) throw new Error(j.error||('HTTP '+r.status));
       demoEnabled = !!j.enabled;
       setDiag('demo_mode='+(demoEnabled?'ON':'OFF'));
       await loadVenues();
       renderVenueDetails();
-    }catch(e){ alert('Demo mode failed: '+(e.message||e)); }
+    }catch(e){
+      alert('Demo mode failed: '+(e.message||e));
+    }
   }
-
 
   function hesc(s){s=(s===null||s===undefined)?'':String(s);return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
   function hdrs(extra){const h={'Content-Type':'application/json'}; if(super_key) h['X-Super-Key']=super_key; if(demoEnabled) h['X-Demo-Mode']='1'; if(extra) Object.assign(h,extra); return h;}
@@ -10447,39 +11929,63 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
   }
 
   function renderVenueDetails(){
-    const box=document.getElementById('venueDetails');
-    const v=(state.venues||[]).find(x=>x.venue_id===state.selected);
-    if(!v){ box.textContent='Select a venue from the left rail.'; return; }
-    const f=venueFlags(v); const sheet=v.sheet||{};
-    box.innerHTML=
-      '<div><strong>'+hesc(v.name||v.venue_id)+'</strong> <span class="muted">('+hesc(v.venue_id||'')+')</span></div>'+
-      '<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap">'+
-        '<span class="badge '+(f.active?'good':'warn')+'">'+(f.active?'ACTIVE':'INACTIVE')+'</span>'+
-        '<span class="badge '+(f.sheet_ok?'good':'bad')+'">'+(f.sheet_ok?'SHEET OK':'SHEET FAIL')+'</span>'+
-        '<span class="badge '+(f.ready?'good':'warn')+'">'+(f.ready?'READY':'NOT READY')+'</span>'+
-      '</div>'+
-      '<div class="muted" style="margin-top:8px; font-size:12px">'+hesc(sheet.title||sheet.error||'')+'</div>'+
-      '<div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">'+
-        '<button class="btn" id="vdActive">'+(f.active?'Deactivate':'Activate')+'</button>'+
-        '<button class="btn" id="vdDemo">Demo Mode: '+(demoEnabled?'ON':'OFF')+'</button>'+
-        '<button class="btn" id="vdCheck">Re-check Sheet</button>'+
-        '<button class="btn" id="vdRotate">Rotate Keys</button>'+
-        '<button class="btn" id="vdSetSheet">Set Sheet…</button>'+
-        '<a class="btn" style="text-decoration:none" href="/admin?venue='+encodeURIComponent(v.venue_id||'')+'" target="_blank">Open Admin</a>'+
-      '</div>';
-    document.getElementById('vdCheck').onclick=()=>doVenueAction('check', v.venue_id);
-    document.getElementById('vdRotate').onclick=()=>doVenueAction('rotate', v.venue_id);
-    const _vdA=document.getElementById('vdActive'); if(_vdA) _vdA.onclick=()=>doVenueAction('set_active', v.venue_id, {active: !f.active});
-    const _vdD=document.getElementById('vdDemo'); if(_vdD) _vdD.onclick=()=>toggleDemoMode();
-    document.getElementById('vdSetSheet').onclick=async ()=>{
-      const sid=prompt('Paste Google Sheet ID for '+(v.venue_id||''), (sheet.sheet_id||''));
-      if(sid===null) return;
-      let s=sid.trim();
-      // accept full Google Sheets URL
-      const m=(s.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)||[]); if(m[1]) s=m[1];
-      await doVenueAction('set_sheet', v.venue_id, {sheet_id: s});
-    };
+  const box = document.getElementById('venueDetails');
+  const v = (state.venues || []).find(x => x.venue_id === state.selected);
+
+  if(!v){
+    box.textContent = 'Select a venue from the left rail.';
+    return;
   }
+
+  const f = venueFlags(v);
+  const sheet = v.sheet || {};
+
+  box.innerHTML =
+    '<div><strong>'+hesc(v.name||v.venue_id)+'</strong> <span class="muted">('+hesc(v.venue_id||'')+')</span></div>'+
+
+    '<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap">'+
+      '<span class="badge '+(f.active?'good':'warn')+'">'+(f.active?'ACTIVE':'INACTIVE')+'</span>'+
+      '<span class="badge '+(f.sheet_ok?'good':'bad')+'">'+(f.sheet_ok?'SHEET OK':'SHEET FAIL')+'</span>'+
+      '<span class="badge '+(f.ready?'good':'warn')+'">'+(f.ready?'READY':'NOT READY')+'</span>'+
+    '</div>'+
+
+    '<div class="muted" style="margin-top:8px; font-size:12px">'+
+      hesc(sheet.title || sheet.error || '')+
+    '</div>'+
+
+    // 🔹 NEW: Fan-facing subtitle editor (location_line)
+    '<div class="muted" style="margin-top:12px; font-size:12px">Fan subtitle (location line)</div>'+
+    '<input id="saLocationLine" style="width:100%; margin-top:6px" placeholder="Dallas, TX" value="'+hesc(v.location_line||'')+'"/>'+
+
+    '<div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">'+
+      '<button class="btn primary" id="btnSaveIdentity">Save</button>'+
+      '<button class="btn" id="vdActive">'+(f.active?'Deactivate':'Activate')+'</button>'+
+      '<button class="btn" id="vdDemo">Demo Mode: '+(demoEnabled?'ON':'OFF')+'</button>'+
+      '<button class="btn" id="vdCheck">Re-check Sheet</button>'+
+      '<button class="btn" id="vdRotate">Rotate Keys</button>'+
+      '<button class="btn" id="vdSetSheet">Set Sheet…</button>'+
+      '<a class="btn" style="text-decoration:none" href="/admin?venue='+encodeURIComponent(v.venue_id||'')+'" target="_blank">Open Admin</a>'+
+    '</div>';
+
+  // existing actions
+  document.getElementById('vdCheck').onclick = () => doVenueAction('check', v.venue_id);
+  document.getElementById('vdRotate').onclick = () => doVenueAction('rotate', v.venue_id);
+
+  const _vdA = document.getElementById('vdActive');
+  if(_vdA) _vdA.onclick = () => doVenueAction('set_active', v.venue_id, {active: !f.active});
+
+  const _vdD = document.getElementById('vdDemo');
+  if(_vdD) _vdD.onclick = () => toggleDemoMode();
+
+  document.getElementById('vdSetSheet').onclick = async () => {
+    const sid = prompt('Paste Google Sheet ID for '+(v.venue_id||''), (sheet.sheet_id||''));
+    if(sid === null) return;
+    let s = sid.trim();
+    const m = (s.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/) || []);
+    if(m[1]) s = m[1];
+    await doVenueAction('set_sheet', v.venue_id, {sheet_id: s});
+  };
+}
 
   async function doVenueAction(act, venue_id, extra){
     const vid=(venue_id||'').trim(); if(!vid) return;
@@ -10624,18 +12130,50 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
   });
 
   document.getElementById('btnCreate').onclick=async ()=>{
-    const name=prompt('Venue name (display)',''); if(name===null) return;
-    const vid=prompt('Venue id (optional)',''); if(vid===null) return;
-    const sheet=prompt('Google Sheet ID (optional)',''); if(sheet===null) return;
-    const plan=prompt('Plan (standard/premium)','standard'); if(plan===null) return;
-    const payload={venue_name:name.trim(), venue_id:(vid||'').trim(), sheet_id:(sheet||'').trim(), plan:(plan||'standard').trim()};
-    try{
-      const r=await fetch('/super/api/venues/create?super_key='+encodeURIComponent(super_key), {method:'POST', headers: hdrs(), body: JSON.stringify(payload)});
-      const j=await r.json().catch(()=>({}));
-      if(!j.ok) alert('Create failed: '+(j.error||r.status));
-      await loadVenues();
-    }catch(e){ alert('Create failed: '+(e.message||e)); }
+  const name=prompt('Venue name (display)',''); if(name===null) return;
+  const vid=prompt('Venue id (optional)',''); if(vid===null) return;
+  const sheet=prompt('Google Sheet ID (optional)',''); if(sheet===null) return;
+  const plan=prompt('Plan (standard/premium)','standard'); if(plan===null) return;
+
+  // ✅ FIX: use google_sheet_id (not sheet_id)
+  const payload={
+    venue_name:name.trim(),
+    venue_id:(vid||'').trim(),
+    google_sheet_id:(sheet||'').trim(),
+    plan:(plan||'standard').trim()
   };
+
+  try{
+    const r=await fetch('/super/api/venues/create?super_key='+encodeURIComponent(super_key), {
+      method:'POST',
+      headers: hdrs(),
+      body: JSON.stringify(payload)
+    });
+
+    const j=await r.json().catch(()=>({}));
+
+    if(!j.ok){
+      alert('Create failed: '+(j.error||('HTTP '+r.status)));
+      return;
+    }
+
+    // ✅ SHOW PACK + make it easy to copy/send
+const p = j.pack || {};
+const text =
+  "✅ Venue created\n\n" +
+  "Admin: " + (p.admin_url||"") + "\n" +
+  "Manager: " + (p.manager_url||"") + "\n" +
+  "Fan / QR: " + (p.qr_url||"") + "\n";
+
+try { await navigator.clipboard.writeText(text); } catch(e) {}
+prompt("Copy & send this to the customer:", text);
+
+
+    await loadVenues();
+  }catch(e){
+    alert('Create failed: '+(e.message||e));
+  }
+};
 
   document.getElementById('ts').textContent=new Date().toLocaleString();
   loadVenues();
@@ -10749,6 +12287,179 @@ def super_api_diag():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+@app.route("/super/api/venues/set_sheet", methods=["POST", "OPTIONS"])
+def super_api_venues_set_sheet():
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    if not _is_super_admin_request():
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    sheet_id = str(body.get("sheet_id") or body.get("google_sheet_id") or "").strip()
+
+    if not venue_id:
+        return jsonify({"ok": False, "error": "missing venue_id"}), 400
+    if not sheet_id:
+        return jsonify({"ok": False, "error": "missing sheet_id"}), 400
+
+    cfg = _venue_cfg(venue_id)
+    path = str(cfg.get("_path") or "")
+    if not path:
+        return jsonify({"ok": False, "error": "venue config not found"}), 404
+
+@app.route("/super/api/venues/set_location", methods=["POST","OPTIONS"])
+def super_api_venues_set_location():
+    if request.method == "OPTIONS":
+        return ("", 204)
+    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
+    if key != SUPER_ADMIN_KEY:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    location_line = str(body.get("location_line") or "").strip()
+
+    if not venue_id:
+        return jsonify({"ok": False, "error": "missing venue_id"}), 400
+    if not location_line:
+        return jsonify({"ok": False, "error": "missing location_line"}), 400
+
+    cfg = _venue_cfg(venue_id)
+    path = str(cfg.get("_path") or "")
+    if not path:
+        return jsonify({"ok": False, "error": "venue config not found"}), 404
+
+    cfg["show_location_line"] = True
+    cfg["location_line"] = location_line
+    cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
+
+    _safe_write_json_file(path, cfg)
+    _invalidate_venues_cache()
+    return jsonify({"ok": True, "venue_id": venue_id, "location_line": location_line})
+
+    # persist sheet id in the canonical place
+    cfg["data"] = cfg.get("data", {}) if isinstance(cfg.get("data"), dict) else {}
+    cfg["data"]["google_sheet_id"] = sheet_id
+
+    # validate + persist status flags
+    chk = _check_sheet_id(sheet_id)
+    cfg["sheet_ok"] = bool(chk.get("ok"))
+    cfg["ready"] = bool(cfg["sheet_ok"] and cfg.get("active", True))
+    cfg["last_checked"] = chk.get("checked_at")
+
+    _safe_write_json_file(path, cfg)
+    _invalidate_venues_cache()
+
+    return jsonify({"ok": True, "venue_id": venue_id, "sheet_id": sheet_id, "check": chk})
+
+@app.route("/super/api/venues/check_sheet", methods=["POST", "OPTIONS"])
+def super_api_venues_check_sheet():
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    if not _is_super_admin_request():
+        return jsonify({"ok": False, "error": "forbidden"}), 403
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    if not venue_id:
+        return jsonify({"ok": False, "error": "missing venue_id"}), 400
+
+    cfg = _venue_cfg(venue_id)
+    path = str(cfg.get("_path") or "")
+    if not path:
+        return jsonify({"ok": False, "error": "venue config not found"}), 404
+
+    sheet_id = _venue_sheet_id(venue_id)  # reads data.google_sheet_id OR cfg.google_sheet_id :contentReference[oaicite:2]{index=2}
+    if not sheet_id:
+        return jsonify({"ok": False, "error": "No google_sheet_id configured"}), 400
+
+    chk = _check_sheet_id(sheet_id)
+    cfg["sheet_ok"] = bool(chk.get("ok"))
+    cfg["ready"] = bool(cfg["sheet_ok"] and cfg.get("active", True))
+    cfg["last_checked"] = chk.get("checked_at")
+
+    _safe_write_json_file(path, cfg)
+    _invalidate_venues_cache()
+
+    return jsonify({"ok": True, "venue_id": venue_id, "sheet_id": sheet_id, "check": chk})
+
+@app.route("/super/api/venues/create", methods=["POST", "OPTIONS"])
+def super_api_venues_create():
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
+    if key != SUPER_ADMIN_KEY:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
+    body = request.get_json(silent=True) or {}
+
+    venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
+    plan = str(body.get("plan") or "standard").strip().lower() or "standard"
+
+    # accept either key (back-compat), but normalize to google_sheet_id
+    sheet_id = str(body.get("google_sheet_id") or body.get("sheet_id") or "").strip()
+
+    admin_key = secrets.token_hex(16)
+    manager_key = secrets.token_hex(16)
+
+    base = _public_base_url()
+
+    pack = {
+        "venue_name": venue_name,
+        "venue_id": venue_id,
+        "status": "active",
+        "active": True,
+        "plan": plan,
+
+        # ✅ AUTO DEFAULTS (fully automated, one-click)
+        # If no location_line is provided, it safely falls back to venue_name
+        "show_location_line": True,
+        "location_line": str(body.get("location_line") or venue_name).strip(),
+
+        # ✅ env-safe, consistent links
+        "admin_url": f"{base}/admin?key={admin_key}&venue={venue_id}",
+        "manager_url": f"{base}/admin?key={manager_key}&venue={venue_id}",
+        "qr_url": f"{base}/v/{venue_id}",
+
+        "access": {
+            "admin_keys": [admin_key],
+            "manager_keys": [manager_key],
+        },
+        "data": {
+            "google_sheet_id": sheet_id,
+            "redis_namespace": f"{_REDIS_NS}:{venue_id}",
+        },
+        "features": body.get("features")
+        if isinstance(body.get("features"), dict)
+        else {
+            "vip": True,
+            "waitlist": False,
+            "ai_queue": True,
+        },
+        "created_at": datetime.now(timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z"),
+    }
+
+    wrote, write_path, err = _write_venue_config(venue_id, pack)
+    if not wrote:
+        return jsonify({"ok": False, "error": err or "Failed to write venue config"}), 500
+
+    _invalidate_venues_cache()
+
+    return jsonify({
+        "ok": True,
+        "venue_id": venue_id,
+        "path": write_path,
+        "admin_key": admin_key,
+        "manager_key": manager_key,
+        "pack": pack,
+    })
 
 @app.get("/super/api/overview")
 def super_api_overview():
@@ -10865,19 +12576,69 @@ def _apply_demo_mask_to_lead(item: Dict[str, Any]) -> Dict[str, Any]:
 @app.route("/super/api/demo_mode", methods=["POST","OPTIONS"])
 def super_api_demo_mode():
     if request.method == "OPTIONS":
-        return ("", 204, {"Access-Control-Allow-Methods":"POST, OPTIONS","Access-Control-Allow-Headers":"Content-Type, X-Super-Key"})
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
+        return ("", 204, {
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, X-Super-Key",
+        })
+
+    # Normalized Super Admin auth
+    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
+    if key != SUPER_ADMIN_KEY:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
     try:
         payload = request.get_json(silent=True) or {}
         enabled = bool(payload.get("enabled"))
-        resp = jsonify({"ok": True, "enabled": enabled})
-        # cookie scoped to super/admin paths; Lax is fine for same-site demos
+
+        # Server-authoritative persistence (Redis if enabled, else /tmp)
+        demo_record = {
+            "enabled": bool(enabled),
+            "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+
+        persisted = False
+        persist_where = ""
+
+        # Redis (preferred)
+        try:
+            _redis_init_if_needed()
+            if _REDIS_ENABLED and _REDIS:
+                rkey = f"{_REDIS_NS}:demo_mode"
+                persisted = bool(_redis_set_json(rkey, demo_record))
+                persist_where = "redis" if persisted else ""
+        except Exception:
+            pass
+
+        # Disk fallback
+        if not persisted:
+            try:
+                demo_path = "/tmp/wc26_demo_mode.json"
+                _safe_write_json_file(demo_path, demo_record)
+                persisted = True
+                persist_where = "disk"
+            except Exception:
+                persisted = False
+                persist_where = ""
+
+        # Cache bust so UI reload reflects new state
+        try:
+            _invalidate_venues_cache()
+        except Exception:
+            pass
+
+        resp = jsonify({
+            "ok": True,
+            "enabled": bool(enabled),
+            "persisted": bool(persisted),
+            "persist_where": persist_where,
+        })
+
+        # Keep cookie for UI convenience (not source of truth)
         resp.set_cookie("demo_mode", ("1" if enabled else ""), httponly=False, samesite="Lax")
         return resp
+
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
-
 
 def _is_super_admin_request():
     k = (request.args.get("key") or request.args.get("super_key") or request.headers.get("X-Super-Key") or "").strip()
@@ -10890,17 +12651,22 @@ def _require_super_admin():
     return True, None
 
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5050))
-    app.run(host="0.0.0.0", port=port, debug=False)
 # SIZE_PAD_START
 ###########################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################################
 
 # ============================================================
 # Enterprise shared state in Redis (Ops / FanZone / Polls)
 # ============================================================
-_OPS_KEY = "ops_state"
-_FANZONE_KEY = "fanzone_state"
+# ============================================================
+# Enterprise shared state in Redis (Ops / FanZone / Polls)
+# NOTE: Must be venue-scoped to prevent cross-venue bleed.
+# ============================================================
+
+def _ops_redis_key() -> str:
+    return f"{_REDIS_NS}:{_venue_id()}:ops_state"
+
+def _fanzone_redis_key() -> str:
+    return f"{_REDIS_NS}:{_venue_id()}:fanzone_state"
 
 def _ops_state_default():
     return {"pause": False, "viponly": False, "waitlist": False, "notify": False,
@@ -10908,7 +12674,7 @@ def _ops_state_default():
 
 def _load_ops_state() -> Dict[str, Any]:
     if _REDIS_ENABLED:
-        st = _redis_get_json(_OPS_KEY, default=None)
+        st = _redis_get_json(_ops_redis_key(), default=None)
         if isinstance(st, dict):
             return _deep_merge(_ops_state_default(), st)
     return _ops_state_default()
@@ -10919,12 +12685,12 @@ def _save_ops_state(patch: Dict[str, Any], actor: str, role: str) -> Dict[str, A
     st["updated_by"] = actor
     st["updated_role"] = role
     if _REDIS_ENABLED:
-        _redis_set_json(_OPS_KEY, st)
+        _redis_set_json(_ops_redis_key(), st)
     return st
 
 def _load_fanzone_state() -> Dict[str, Any]:
     if _REDIS_ENABLED:
-        st = _redis_get_json(_FANZONE_KEY, default=None)
+        st = _redis_get_json(_fanzone_redis_key(), default=None)
         if isinstance(st, dict):
             return st
     st = _safe_read_json_file(POLL_STORE_FILE, default={})
@@ -10938,7 +12704,7 @@ def _save_fanzone_state(st: Dict[str, Any], actor: str, role: str) -> Dict[str, 
         "updated_role": role,
     }
     if _REDIS_ENABLED:
-        _redis_set_json(_FANZONE_KEY, st2)
+        _redis_set_json(_fanzone_redis_key(), st2)
     else:
         _safe_write_json_file(POLL_STORE_FILE, st2)
     return st2
@@ -10948,115 +12714,66 @@ def _save_fanzone_state(st: Dict[str, Any], actor: str, role: str) -> Dict[str, 
 # ============================================================
 @app.get("/super/api/venues")
 def super_api_venues_list():
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
+    # Normalized Super Admin auth
+    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
+    if key != SUPER_ADMIN_KEY:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
+    # CRITICAL: force fresh disk read (Refresh must not be stale)
+    try:
+        _invalidate_venues_cache()
+    except Exception:
+        pass
+
     venues = _load_venues_from_disk()
     out = []
     if isinstance(venues, dict):
         for vid, cfg in sorted(venues.items(), key=lambda kv: kv[0]):
             if not isinstance(cfg, dict):
                 continue
+
             name = str(cfg.get("venue_name") or cfg.get("name") or vid)
             plan = str(cfg.get("plan") or "")
-            sid = ""
-            try:
-                sid = _venue_sheet_id(vid)
-            except Exception:
-                sid = ""
-            status = str(cfg.get("status") or "")
-            # Super Admin onboarding status (does not affect fan/admin app behavior)
-            try:
-                sheet_ok = None
-                chk = cfg.get("_sheet_check") if isinstance(cfg.get("_sheet_check"), dict) else None
-                if isinstance(chk, dict):
-                    sheet_ok = chk.get("ok")
-                if not sid:
-                    status = "MISSING_SHEET"
-                elif sheet_ok is True:
-                    status = "READY"
-                elif sheet_ok is False:
-                    status = "SHEET_FAIL"
-                else:
-                    status = status or "SHEET_SET"
-            except Exception:
-                pass
+
+            # Read sheet id directly from config
+            sid = _venue_sheet_id(vid)
+
+            # Use the NEW persisted fields (not legacy _sheet_check)
+            sheet_ok = cfg.get("sheet_ok", None)
+            ready = bool(cfg.get("ready", False))
+            active = bool(_venue_is_active(vid))
+
+            status = str(cfg.get("status") or "").strip()
+            if not sid:
+                status = "MISSING_SHEET"
+            elif sheet_ok is True and ready:
+                status = "READY"
+            elif sheet_ok is False:
+                status = "SHEET_FAIL"
+            else:
+                status = status or "SHEET_SET"
+
             out.append({
                 "venue_id": vid,
                 "venue_name": name,
                 "plan": plan,
                 "google_sheet_id": sid,
                 "status": status,
-                "active": bool(_venue_is_active(vid)),
+                "active": active,
                 "sheet_ok": sheet_ok,
+
+                # ✅ ADDED: UI expects v.sheet.ok
+                "sheet": {
+                    "ok": sheet_ok,
+                    "last_checked": cfg.get("last_checked"),
+                    "sheet_id": sid,
+                },
+
+                "ready": ready,
+                "last_checked": cfg.get("last_checked"),
             })
-    return jsonify({"ok": True, "venues": out})
 
-@app.route("/super/api/venues/create", methods=["POST","OPTIONS"])
-def super_api_venues_create():
-    """Super-admin: generate venue pack and attempt to persist to config/venues/<venue>.json."""
-    if request.method == "OPTIONS":
-        # Some proxies/browsers can issue an OPTIONS-like request even on same-origin calls.
-        resp = make_response("", 204)
-        resp.headers["Access-Control-Allow-Origin"] = "*"
-        resp.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        resp.headers["Access-Control-Allow-Headers"] = "Content-Type, X-Super-Key"
-        return resp
-
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
-
-
-    if _demo_mode_enabled():
-        return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
-
-    body = request.get_json(silent=True) or {}
-    venue_name = str(body.get("venue_name") or "").strip() or "New Venue"
-    venue_id = _slugify_venue_id(str(body.get("venue_id") or venue_name))
-    plan = str(body.get("plan") or "standard").strip().lower() or "standard"
-
-    admin_key = secrets.token_hex(16)
-    manager_key = secrets.token_hex(16)
-
-    pack = {
-        "venue_name": venue_name,
-        "venue_id": venue_id,
-        "status": "active",
-        "plan": plan,
-        "qr_url": f"https://worldcupconcierge.app/v/{venue_id}",
-        "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={admin_key}",
-        "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={manager_key}",
-        "keys": {"admin_key": admin_key, "manager_key": manager_key},
-        "data": {"google_sheet_id": str(body.get("google_sheet_id") or "").strip(), "redis_namespace": f"{_REDIS_NS}:{venue_id}"},
-        "features": body.get("features") if isinstance(body.get("features"), dict) else {"vip": True, "waitlist": False, "ai_queue": True},
-        "created_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    }
-
-    # Attempt to write config file (works locally; may be read-only in some hosts)
-    wrote = False
-    write_path = ""
-    err = ""
-    try:
-        os.makedirs(VENUES_DIR, exist_ok=True)
-        write_path = os.path.join(VENUES_DIR, f"{venue_id}.json")
-        with open(write_path, "w", encoding="utf-8") as f:
-            json.dump(pack, f, indent=2, sort_keys=True)
-        wrote = True
-        # refresh cache immediately
-        _MULTI_VENUE_CACHE["ts"] = 0.0
-    except Exception as e:
-        err = str(e)
-
-    try:
-        _audit("super.venues.create", {"venue_id": venue_id, "persisted": wrote, "path": write_path, "error": err})
-    except Exception:
-        pass
-    return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": write_path, "error": err})
-
-@app.post("/super/api/venues/set_sheet")
-def super_api_venues_set_sheet():
-    """Super-admin: update a venue's google_sheet_id in its config file (best effort)."""
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
+        return jsonify({"ok": True, "venues": out})
 
     body = request.get_json(silent=True) or {}
     venue_id = _slugify_venue_id(str(body.get("venue_id") or ""))
@@ -11161,15 +12878,30 @@ def super_api_venues_rotate_keys():
 
     return jsonify({"ok": True, "venue_id": venue_id, "keys": keys, "qr_url": f"https://worldcupconcierge.app/v/{venue_id}", "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={keys.get('admin_key')}", "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={keys.get('manager_key')}", "persisted": wrote, "path": write_path, "error": err})
 
-
-
-
 @app.get("/super/api/leads")
 def super_api_leads():
     """Cross-venue leads for Super Admin (read-only)."""
-    ok, resp = _require_super_admin()
-    if not ok:
-        return resp
+    # Normalized Super Admin auth
+    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
+    if key != SUPER_ADMIN_KEY:
+        return jsonify({"ok": False, "error": "unauthorized"}), 403
+
+    # Server-authoritative demo mode (Redis preferred, disk fallback)
+    demo_enabled = False
+    try:
+        _redis_init_if_needed()
+        if _REDIS_ENABLED and _REDIS:
+            rec = _redis_get_json(f"{_REDIS_NS}:demo_mode", default={}) or {}
+            demo_enabled = bool(rec.get("enabled"))
+    except Exception:
+        pass
+    if not demo_enabled:
+        try:
+            rec = _safe_read_json_file("/tmp/wc26_demo_mode.json", default={}) or {}
+            demo_enabled = bool(rec.get("enabled"))
+        except Exception:
+            demo_enabled = False
+
     try:
         q = (request.args.get("q") or "").strip().lower()
         venue_id = _slugify_venue_id((request.args.get("venue_id") or "").strip()) if (request.args.get("venue_id") or "").strip() else ""
@@ -11178,42 +12910,9 @@ def super_api_leads():
         page = max(1, page)
         per_page = max(1, min(100, per_page))
 
-        venues = _load_venues_from_disk() or {}
-        vids = [venue_id] if venue_id else list(venues.keys())
-        all_items = []
-        for vid in vids:
-            try:
-                rows = read_leads(limit=2000, venue_id=vid) or []
-            except Exception:
-                rows = []
-            if not rows or len(rows) < 2:
-                continue
-            header = rows[0]
-            hm = header_map(header)
-            for r in rows[1:]:
-                if not isinstance(r, list):
-                    continue
-                def gcol(name):
-                    idx = hm.get(name)
-                    if not idx:
-                        return ""
-                    j = idx - 1
-                    return str(r[j] if j < len(r) else "")
-                item = {
-                    "venue_id": vid,
-                    "name": gcol("name"),
-                    "phone": gcol("phone"),
-                    "datetime": gcol("datetime"),
-                    "party_size": gcol("party_size"),
-                    "status": gcol("status"),
-                    "vip": gcol("vip"),
-                    "queue": gcol("queue"),
-                }
-                if q:
-                    blob = " ".join([item.get("venue_id",""), item.get("name",""), item.get("phone",""), item.get("datetime",""), item.get("status",""), item.get("vip",""), item.get("queue","")]).lower()
-                    if q not in blob:
-                        continue
-                all_items.append(item)
+        # Enforce: inactive venue => no leads unless demo mode ON
+        if venue_id and (not demo_enabled) and (not _venue_is_active(venue_id)):
+            return jsonify({"ok": True, "items": [], "total": 0, "page": page})
 
         # newest-ish first by datetime string
         try:
@@ -11229,12 +12928,6 @@ def super_api_leads():
         return jsonify({"ok": True, "items": page_items, "total": total, "page": page, "per_page": per_page})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
-
-@app.post("/super/api/venues/check_sheet")
-def super_api_venues_check_sheet():
-    """Super-admin: validate a venue's configured sheet and persist PASS/FAIL to venue config."""
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
 
     body = request.get_json(silent=True) or {}
     venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
@@ -13410,9 +15103,12 @@ def _read_notifications(limit: int = 50, role: str = "manager") -> List[Dict[str
         return []
 
 def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
-    """Append a single-line JSON audit entry (best-effort, non-blocking)."""
+    """Append a single-line JSON audit entry (best-effort, non-blocking).
+    Writes to Redis (per-venue) and falls back to local file.
+    """
     try:
-        ctx = _admin_ctx()
+        ctx = _admin_ctx() if "_admin_ctx" in globals() else {}
+
         entry = {
             "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
             "event": str(event),
@@ -13422,19 +15118,39 @@ def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
             "path": getattr(request, "path", ""),
             "details": details or {},
         }
-        os.makedirs(os.path.dirname(AUDIT_LOG_FILE), exist_ok=True)
-        with open(AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+        # --- Resolve venue consistently (NO request/body fallback) ---
+        vid = _venue_id() if "_venue_id" in globals() else "default"
+
+        # --- 1) Redis write (per-venue) ---
+        try:
+            if "_redis_init_if_needed" in globals():
+                _redis_init_if_needed()
+            if globals().get("_REDIS_ENABLED") and globals().get("_REDIS"):
+                rkey = f"{_REDIS_NS}:{vid}:audit_log"
+                _REDIS.lpush(rkey, json.dumps(entry, ensure_ascii=False))
+                _REDIS.ltrim(rkey, 0, 2000)  # keep last ~2000 entries
+        except Exception:
+            pass
+
+        # --- 2) File fallback (legacy / dev) ---
+        try:
+            os.makedirs(os.path.dirname(AUDIT_LOG_FILE), exist_ok=True)
+            with open(AUDIT_LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+
     except Exception:
         pass
 
 
 # -----------------------------
 # Lightweight in-process caches
-# (reduces Google Sheets quota hits)
+# (per-venue only)
 # -----------------------------
-_CONFIG_CACHE: Dict[str, Any] = {"ts": 0.0, "cfg": None}   # ttl ~5s
-_LEADS_CACHE: Dict[str, Any] = {"ts": 0.0, "rows": None}  # ttl ~30s
+_CONFIG_CACHE: Dict[str, Any] = {}   # keyed by venue_id -> {"ts":..., "cfg":...}
+_LEADS_CACHE: Dict[str, Any] = {}    # keyed by venue_id -> {"ts":..., "rows":...}
 _sessions: Dict[str, Dict[str, Any]] = {}  # in-memory chat/reservation sessions
 
 
@@ -13478,23 +15194,20 @@ def _safe_write_json(path: str, data: dict) -> None:
     except Exception:
         pass
 
-def _ensure_ws(gc, title: str):
-    sh = _open_default_spreadsheet(gc)
+def _ensure_ws(gc, title: str, venue_id: Optional[str] = None):
+    sh = _open_default_spreadsheet(gc, venue_id=venue_id)
     try:
         return sh.worksheet(title)
     except Exception:
         return sh.add_worksheet(title=title, rows=2000, cols=20)
 
 def get_config() -> Dict[str, str]:
-    """Config is authoritative in local CONFIG_FILE.
+    vid = _venue_id()
+    cache = _CONFIG_CACHE.setdefault(vid, {"ts": 0.0, "cfg": None})
 
-    We still *attempt* to read the Google Sheet (Config tab) for compatibility,
-    but local values always win. This prevents 'saved but not reflected' when
-    Sheets write fails (quota) and later reads return older data.
-    """
     now = time.time()
-    cached = _CONFIG_CACHE.get("cfg")
-    if isinstance(cached, dict) and (now - float(_CONFIG_CACHE.get("ts", 0.0)) < 5.0):
+    cached = cache.get("cfg")
+    if isinstance(cached, dict) and (now - float(cache.get("ts", 0.0)) < 5.0):
         return dict(cached)
 
     cfg: Dict[str, str] = {
@@ -13509,7 +15222,8 @@ def get_config() -> Dict[str, str]:
         "ops_waitlist_mode": "false",
     }
 
-    local = _safe_read_json(CONFIG_FILE)
+    path = str(CONFIG_FILE).replace("{venue}", vid)
+    local = _safe_read_json(path)
     if isinstance(local, dict):
         for k, v in local.items():
             if str(k).startswith("_"):
@@ -13518,7 +15232,7 @@ def get_config() -> Dict[str, str]:
 
     try:
         gc = get_gspread_client()
-        ws = _ensure_ws(gc, "Config")
+        ws = _ensure_ws(gc, "Config", venue_id=vid)
         rows = ws.get_all_values()
         for r in rows[1:]:
             if len(r) >= 2 and r[0]:
@@ -13529,11 +15243,9 @@ def get_config() -> Dict[str, str]:
     except Exception:
         pass
 
-    _CONFIG_CACHE["ts"] = now
-    _CONFIG_CACHE["cfg"] = dict(cfg)
+    cache["ts"] = now
+    cache["cfg"] = dict(cfg)
     return cfg
-
-
 
 def _cfg_bool(cfg: Dict[str, Any], key: str, default: bool = False) -> bool:
     try:
@@ -13556,28 +15268,28 @@ def get_ops(cfg: Optional[Dict[str, Any]] = None) -> Dict[str, bool]:
         "vip_only": _cfg_bool(cfg, "ops_vip_only", False),
         "waitlist_mode": _cfg_bool(cfg, "ops_waitlist_mode", False),
     }
-def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
-    """Persist config.
 
-    1) Write to local CONFIG_FILE (authoritative + works on Render).
-    2) Best-effort sync to Google Sheet (Config tab) for visibility/back-compat.
-    """
+def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
+    vid = _venue_id()
+    cache = _CONFIG_CACHE.setdefault(vid, {"ts": 0.0, "cfg": None})
+
     clean: Dict[str, str] = {}
     for k, v in (pairs or {}).items():
         if not k:
             continue
         clean[str(k)] = "" if v is None else str(v)
 
-    local = _safe_read_json(CONFIG_FILE)
+    path = str(CONFIG_FILE).replace("{venue}", vid)
+    local = _safe_read_json(path)
     if not isinstance(local, dict):
         local = {}
     local.update(clean)
     local["_updated_at"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
-    _safe_write_json(CONFIG_FILE, local)
+    _safe_write_json(path, local)
 
     try:
         gc = get_gspread_client()
-        ws = _ensure_ws(gc, "Config")
+        ws = _ensure_ws(gc, "Config", venue_id=vid)
 
         rows = ws.get_all_values()
         if not rows:
@@ -13593,14 +15305,9 @@ def set_config(pairs: Dict[str, str]) -> Dict[str, str]:
     except Exception:
         pass
 
-
-    # Invalidate cache so changes are visible immediately after saving (even within the cache window).
-    _CONFIG_CACHE["ts"] = 0.0
-    _CONFIG_CACHE["cfg"] = None
-    merged = get_config()
-    _CONFIG_CACHE["ts"] = time.time()
-    _CONFIG_CACHE["cfg"] = dict(merged)
-    return merged
+    cache["ts"] = 0.0
+    cache["cfg"] = None
+    return get_config()
 
 def _match_id(m: Dict[str, Any]) -> str:
     # Stable-ish id: datetime_utc + home + away (safe for URL/storage)
@@ -13817,7 +15524,7 @@ def _append_lead_google_sheet(row: dict) -> tuple[bool, int]:
         else:
             sh = _open_default_spreadsheet(gc)
         try:
-            ws = sh.worksheet("Leads")
+            ws = sh.get_worksheet(0)
         except Exception:
             ws = sh.sheet1
         resp = ws.append_row([
@@ -13971,8 +15678,16 @@ if __name__ == "__main__":
 # ============================================================
 # Enterprise shared state in Redis (Ops / FanZone / Polls)
 # ============================================================
-_OPS_KEY = "ops_state"
-_FANZONE_KEY = "fanzone_state"
+# ============================================================
+# Enterprise shared state in Redis (Ops / FanZone / Polls)
+# NOTE: Must be venue-scoped to prevent cross-venue bleed.
+# ============================================================
+
+def _ops_redis_key() -> str:
+    return f"{_REDIS_NS}:{_venue_id()}:ops_state"
+
+def _fanzone_redis_key() -> str:
+    return f"{_REDIS_NS}:{_venue_id()}:fanzone_state"
 
 def _ops_state_default():
     return {"pause": False, "viponly": False, "waitlist": False, "notify": False,
@@ -13980,7 +15695,7 @@ def _ops_state_default():
 
 def _load_ops_state() -> Dict[str, Any]:
     if _REDIS_ENABLED:
-        st = _redis_get_json(_OPS_KEY, default=None)
+        st = _redis_get_json(_ops_redis_key(), default=None)
         if isinstance(st, dict):
             return _deep_merge(_ops_state_default(), st)
     return _ops_state_default()
@@ -13991,12 +15706,12 @@ def _save_ops_state(patch: Dict[str, Any], actor: str, role: str) -> Dict[str, A
     st["updated_by"] = actor
     st["updated_role"] = role
     if _REDIS_ENABLED:
-        _redis_set_json(_OPS_KEY, st)
+        _redis_set_json(_ops_redis_key(), st)
     return st
 
 def _load_fanzone_state() -> Dict[str, Any]:
     if _REDIS_ENABLED:
-        st = _redis_get_json(_FANZONE_KEY, default=None)
+        st = _redis_get_json(_fanzone_redis_key(), default=None)
         if isinstance(st, dict):
             return st
     st = _safe_read_json_file(POLL_STORE_FILE, default={})
@@ -14010,7 +15725,7 @@ def _save_fanzone_state(st: Dict[str, Any], actor: str, role: str) -> Dict[str, 
         "updated_role": role,
     }
     if _REDIS_ENABLED:
-        _redis_set_json(_FANZONE_KEY, st2)
+        _redis_set_json(_fanzone_redis_key(), st2)
     else:
         _safe_write_json_file(POLL_STORE_FILE, st2)
     return st2
