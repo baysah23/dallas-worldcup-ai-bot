@@ -129,6 +129,27 @@
  t.style.width=(n*100)+'%';s.forEach(x=>x.style.width=(100/n)+'%');
  function go(){if(p)return;i=(i+1)%n;t.style.transform='translateX(-'+(i*(100/n))+'%)';}
  ['touchstart','pointerdown','wheel'].forEach(e=>t.addEventListener(e,()=>p=true,{passive:true}));
- ['touchend','pointerup'].forEach(e=>t.addEventListener(e,()=>setTimeout(()=>p=false,1800),{passive:true}));
+ ['touchend','pointerup','touchcancel','pointercancel'].forEach(e=>t.addEventListener(e,()=>setTimeout(()=>p=false,1800),{passive:true}));
+  t.addEventListener('keydown',()=>p=true);
  setInterval(go,4200);
+})();
+
+// ===== V2 SCROLL CUE =====
+(function(){
+  const cue = document.getElementById('scrollCue');
+  if(!cue) return;
+  const hide = ()=> cue.classList.add('is-hidden');
+  const show = ()=> cue.classList.remove('is-hidden');
+  let didScroll = false;
+
+  function onScroll(){
+    if(!didScroll && window.scrollY > 20){
+      didScroll = true;
+      hide();
+      window.removeEventListener('scroll', onScroll, {passive:true});
+    }
+  }
+  window.addEventListener('scroll', onScroll, {passive:true});
+  // If already scrolled on load
+  if(window.scrollY > 20) hide(); else show();
 })();
