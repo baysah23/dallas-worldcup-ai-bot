@@ -52,20 +52,6 @@
   }
   if(v){
     v.play().catch(()=>{});
-    const TRIM_SECONDS = 2.5; // cut before last frames (credits)
-    let duration = 0;
-    v.addEventListener("loadedmetadata", ()=>{ duration = Number(v.duration||0); });
-    v.addEventListener("timeupdate", ()=>{
-      if(!duration || !isFinite(duration)) return;
-      if((duration - v.currentTime) <= TRIM_SECONDS){
-        try{ v.currentTime = 0.0; }catch(e){}
-        v.play().catch(()=>{});
-      }
-    });
-    v.addEventListener("ended", ()=>{
-      try{ v.currentTime = 0.0; }catch(e){}
-      v.play().catch(()=>{});
-    });
   }
   if(toggle && v){
     setIcon();
@@ -77,43 +63,9 @@
   }
 
   // ---------- Carousel controls ----------
-
   const track = qs("#carouselTrack");
   const prev = qs("#prevSlide");
   const next = qs("#nextSlide");
-
-  // Carousel v1.0 auto-rotate (transform slider)
-  const slides = track ? qsa(".slide", track) : [];
-  let idx = 0;
-  let paused = false;
-  let resumeT = null;
-
-  function applySlide(){
-    if(!track || !slides.length) return;
-    track.style.transform = "translateX(" + (-idx * 100) + "%)";
-  }
-  function nextSlideAuto(){
-    if(paused || !slides.length) return;
-    idx = (idx + 1) % slides.length;
-    applySlide();
-  }
-  function pause(ms=2200){
-    paused = true;
-    if(resumeT) clearTimeout(resumeT);
-    resumeT = setTimeout(()=>{ paused = false; }, ms);
-  }
-
-  if(track && slides.length){
-    applySlide();
-    ["touchstart","pointerdown","mousedown"].forEach(ev=>{
-      track.addEventListener(ev, ()=>pause(2200), {passive:true});
-    });
-    ["touchmove","pointermove","wheel"].forEach(ev=>{
-      track.addEventListener(ev, ()=>pause(2600), {passive:true});
-    });
-    track.addEventListener("keydown", ()=>pause(2600));
-    setInterval(nextSlideAuto, 4200);
-  }
   function scrollBySlide(dir){
     if(!track) return;
     const slide = track.querySelector(".slide");
@@ -149,7 +101,7 @@
       setStatus("Submitting…", true);
 
       const data = Object.fromEntries(new FormData(form).entries());
-      const payload = { ...data, ts: nowIso(), source: "landing", ab_variant: (localStorage.getItem("ab_hero_v1")||"") };
+      const payload = { ...data, ts: nowIso(), source: "landing" };
 
       try{
         const res = await fetch("/api/lead", {
@@ -169,4 +121,14 @@
       }
     });
   }
+})();
+// ===== V2 AUTO ROTATE FIX =====
+(function(){
+ const t=document.querySelector('#carouselTrack');if(!t)return;
+ const s=[...t.children],n=s.length;let i=0,p=false;
+ t.style.width=(n*100)+'%';s.forEach(x=>x.style.width=(100/n)+'%');
+ function go(){if(p)return;i=(i+1)%n;t.style.transform='translateX(-'+(i*(100/n))+'%)';}
+ ['touchstart','pointerdown','wheel'].forEach(e=>t.addEventListener(e,()=>p=true,{passive:true}));
+ ['touchend','pointerup'].forEach(e=>t.addEventListener(e,()=>setTimeout(()=>p=false,1800),{passive:true}));
+ setInterval(go,4200);
 })();
