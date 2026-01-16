@@ -6,23 +6,6 @@
   <title>World Cup Concierge — Match-night chaos → calm control</title>
   <meta name="description" content="Turn match-night chaos into calm control. Capture reservations + VIP leads automatically, reduce phone/DM overload, and drive revenue with fewer staff." />
   <link rel="stylesheet" href="styles.css?v=4" />
-
-<!-- Analytics (GA4 + Meta) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXX"></script>
-<script>
-window.dataLayer=window.dataLayer||[];
-function gtag(){dataLayer.push(arguments);}
-gtag('js',new Date()); gtag('config','G-XXXX');
-</script>
-<script>
-!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){
-n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-n.queue=[];t=b.createElement(e);t.async=1;t.src=v;
-s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
-(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
-fbq('init','XXXX'); fbq('track','PageView');
-</script>
-
 </head>
 <body>
 
@@ -43,19 +26,22 @@ fbq('init','XXXX'); fbq('track','PageView');
   <div class="heroOverlay container" data-reveal>
     <div class="heroBrand">World Cup Concierge</div>
 
-    <h1 class="heroH1">Match-night chaos → calm control.</h1>
+    <h1 class="heroH1">Run match nights with calm control.</h1>
 
     <p class="heroSub">Reservations, VIP leads, and guest questions handled automatically.</p>
 
-    <div class="heroCta">
-      <a class="btn btnPrimary" href="#demo" id="demoBtnTop">Book a demo</a>
+    
+<!-- Rolex-style countdown overlay -->
+  <div class="countdownOverlay" aria-label="Kickoff countdown">
+    <div class="countdownLabel">Kickoff</div>
+    
+<div class="heroCta">
+      <a class="btn btnPrimary" href="#demo" id="demoBtnTop">See it in action</a>
     </div>
   </div>
 
-  <!-- Rolex-style countdown overlay -->
-  <div class="countdownOverlay" aria-label="Kickoff countdown">
-    <div class="countdownLabel">Kickoff</div>
-    <div class="countdownRow">
+  
+<div class="countdownRow">
       <span class="cdNum" id="d">--</span><span class="cdLbl">D</span>
       <span class="cdNum" id="h">--</span><span class="cdLbl">H</span>
       <span class="cdNum" id="m">--</span><span class="cdLbl">M</span>
@@ -68,7 +54,7 @@ fbq('init','XXXX'); fbq('track','PageView');
 </header>
 
 <!-- CHAOS (VISUAL STORY) -->
-<section class="section sectionTight">
+<section class="section sectionTight sectionFirst">
   <div class="container" data-reveal>
     <div class="kicker">The problem</div>
     <h2 class="h2">Packed venue. Stress everywhere.</h2>
@@ -96,8 +82,7 @@ fbq('init','XXXX'); fbq('track','PageView');
     <figure class="calmVisual">
       <img src="/static/calm_control_qr.png" alt="Staff smiling while scanning a QR code" />
     </figure>
-    <p class="calmLine">From chaos to control.</p>
-  </div>
+</div>
 </section>
 
 <!-- PRODUCT PROOF (CAROUSEL) -->
@@ -110,42 +95,42 @@ fbq('init','XXXX'); fbq('track','PageView');
       <div class="carouselTrack" id="carouselTrack">
         <article class="slide">
           <div class="deviceFrame deviceDark">
-            <img src="assets/screen_home.png" alt="App home screen" loading="lazy" />
+            <img src="/static/screenshot1.png" alt="App home screen" loading="lazy" />
           </div>
           <p class="slideCap">Guests reserve in seconds</p>
         </article>
 
         <article class="slide">
           <div class="deviceFrame deviceLight">
-            <img src="assets/screen_explore.png" alt="App explore screen" loading="lazy" />
+            <img src="/static/screenshot2.png" alt="App explore screen" loading="lazy" />
           </div>
           <p class="slideCap">Everything in one tap</p>
         </article>
 
         <article class="slide">
           <div class="deviceFrame deviceDark">
-            <img src="assets/screen_chat.png" alt="AI concierge chat screen" loading="lazy" />
+            <img src="/static/screenshot3.png" alt="AI concierge chat screen" loading="lazy" />
           </div>
           <p class="slideCap">AI handles questions instantly</p>
         </article>
 
         <article class="slide">
           <div class="deviceFrame deviceLight">
-            <img src="assets/screen_schedule.png" alt="Match schedule screen" loading="lazy" />
+            <img src="/static/screenshot4.png" alt="Match schedule screen" loading="lazy" />
           </div>
           <p class="slideCap">Match schedules always clear</p>
         </article>
 
         <article class="slide">
           <div class="deviceFrame deviceDark">
-            <img src="assets/screen_fanzone.png" alt="Fan Zone screen" loading="lazy" />
+            <img src="/static/screenshot5.png" alt="Fan Zone screen" loading="lazy" />
           </div>
           <p class="slideCap">Engagement drives repeat visits</p>
         </article>
 
         <article class="slide">
           <div class="deviceFrame deviceLight">
-            <img src="assets/screen_vip.png" alt="VIP upsell screen" loading="lazy" />
+            <img src="/static/screenshot6.png" alt="VIP upsell screen" loading="lazy" />
           </div>
           <p class="slideCap">VIP tables captured automatically</p>
         </article>
@@ -185,7 +170,7 @@ fbq('init','XXXX'); fbq('track','PageView');
 <!-- DEMO CTA (FINAL) -->
 <section class="section" id="demo">
   <div class="container" data-reveal>
-    <div class="kicker">Book a demo</div>
+    <div class="kicker">See it in action</div>
     <h2 class="h2">Get your venue match-ready.</h2>
 
     <form class="demoForm" id="leadForm">
