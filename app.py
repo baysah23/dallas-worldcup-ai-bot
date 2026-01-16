@@ -2235,6 +2235,19 @@ def super_admin_api_venue_create():
 def marketing_landing():
     return send_from_directory("landing", "index.html")
 
+# Serve landing CSS/JS at root paths (because index.html references /styles.css and /app.js)
+@app.route("/styles.css")
+def landing_styles():
+    return send_from_directory("landing", "styles.css", mimetype="text/css")
+
+@app.route("/app.js")
+def landing_js():
+    return send_from_directory("landing", "app.js", mimetype="application/javascript")
+
+@app.route("/assets/<path:filename>")
+def landing_assets(filename):
+    return send_from_directory("landing/assets", filename)
+
 
 @app.route("/admin/api/_build", methods=["GET"])
 def admin_api_build():
