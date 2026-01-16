@@ -11,32 +11,57 @@
 
 <!-- HERO (VIDEO ONLY) -->
 <header class="hero" id="top">
-  <!-- Blurred backdrop (fills screen, hides any letterbox) -->
-  <video class="heroVideo heroVideo--blur" autoplay muted loop playsinline preload="metadata" aria-hidden="true">
-    <source src="https://media.worldcupconcierge.app/highlight.mp4" type="video/mp4" />
-  </video>
 
-  <!-- Foreground video (FULL FRAME, uncropped) -->
-  <video id="heroVideo" class="heroVideo heroVideo--contain" autoplay muted loop playsinline preload="metadata">
-    <source src="https://media.worldcupconcierge.app/highlight.mp4" type="video/mp4" />
-  </video>
+  <!-- TOP HEADER (ABOVE VIDEO, LOCKED) -->
+  <div class="heroHeader">
+    <div class="heroBrand heroBrand--title">World Cup Concierge</div>
 
-  <div class="heroScrim" aria-hidden="true"></div>
-
-  
-<div class="heroOverlay container">
-  <div class="heroBrand">World Cup Concierge</div>
-
-  <div class="countdownOverlay" aria-label="Kickoff countdown">
-    <div class="countdownLabel">Kickoff</div>
-    <div class="countdownRow">
-      <span class="cdNum" id="d">--</span><span class="cdLbl">D</span>
-      <span class="cdNum" id="h">--</span><span class="cdLbl">H</span>
-      <span class="cdNum" id="m">--</span><span class="cdLbl">M</span>
-      <span class="cdNum" id="s">--</span><span class="cdLbl">S</span>
+    <!-- ROLEX-STYLE COUNTDOWN -->
+    <div class="countdownOverlay countdownOverlay--hero" aria-label="Kickoff countdown">
+      <div class="countdownLabel">Kickoff</div>
+      <div class="countdownRow">
+        <span class="cdNum" id="d">--</span><span class="cdLbl">D</span>
+        <span class="cdNum" id="h">--</span><span class="cdLbl">H</span>
+        <span class="cdNum" id="m">--</span><span class="cdLbl">M</span>
+        <span class="cdNum" id="s">--</span><span class="cdLbl">S</span>
+      </div>
     </div>
   </div>
 
+  <!-- VIDEO AREA (BELOW HEADER) -->
+  <div class="heroVideoWrap">
+
+    <!-- Background blurred video -->
+<video
+  class="heroVideo heroVideo--blur"
+  autoplay
+  muted
+  loop
+  playsinline
+  preload="auto"
+  aria-hidden="true">
+  <source src="https://media.worldcupconcierge.app/highlight.mp4" type="video/mp4" />
+</video>
+
+<!-- Foreground video -->
+<video
+  id="heroVideo"
+  class="heroVideo heroVideo--contain"
+  autoplay
+  muted
+  loop
+  playsinline
+  preload="auto">
+  <source src="https://media.worldcupconcierge.app/highlight.mp4" type="video/mp4" />
+</video>
+
+<!-- Apple-style sound pill -->
+<button id="soundToggle" class="soundPill" aria-label="Toggle sound">
+  🔊 Sound
+</button>
+
+<!-- HERO COPY -->
+<div class="heroOverlay container">
   <h1 class="heroH1">A calmer way to run match nights.</h1>
   <p class="heroSub">Reservations and VIP requests, handled automatically.</p>
 
@@ -44,8 +69,43 @@
     <a class="btn btnPrimary" href="#demo" id="demoBtnTop">See it in action</a>
   </div>
 </div>
+
+</div>
 </header>
 
+<style>
+.soundPill{
+  position:absolute;
+  right:18px;
+  bottom:18px;
+  padding:8px 14px;
+  border-radius:999px;
+  background:rgba(0,0,0,.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border:1px solid rgba(255,255,255,.25);
+  color:#fff;
+  font-size:13px;
+  font-weight:500;
+  cursor:pointer;
+  opacity:0;
+  animation: pillFadeIn .8s ease-out .6s forwards;
+}
+
+@keyframes pillFadeIn{
+  to{ opacity:1 }
+}
+</style>
+
+<script>
+const heroVideo = document.getElementById('heroVideo');
+const soundBtn = document.getElementById('soundToggle');
+
+soundBtn.onclick = () => {
+  heroVideo.muted = !heroVideo.muted;
+  soundBtn.textContent = heroVideo.muted ? '🔊 Sound' : '🔇 Mute';
+};
+</script>
 
 <!-- CHAOS (VISUAL STORY) -->
 <section class="section sectionTight">
@@ -87,57 +147,83 @@
     <h2 class="h2">See the system running your venue.</h2>
 
     <div class="carousel" aria-label="Product screenshots carousel">
-      <div class="carouselTrack" id="carouselTrack">
-        <article class="slide">
-          <div class="deviceFrame deviceDark">
-            <img src="/static/screenshot1" alt="App home screen" loading="lazy" />
-          </div>
-          <p class="slideCap">Guests reserve in seconds</p>
-        </article>
-
-        <article class="slide">
-          <div class="deviceFrame deviceLight">
-            <img src="/static/screenshot2" alt="App explore screen" loading="lazy" />
-          </div>
-          <p class="slideCap">Everything in one tap</p>
-        </article>
-
-        <article class="slide">
-          <div class="deviceFrame deviceDark">
-            <img src="/static/screenshot3" alt="AI concierge chat screen" loading="lazy" />
-          </div>
-          <p class="slideCap">AI handles questions instantly</p>
-        </article>
-
-        <article class="slide">
-          <div class="deviceFrame deviceLight">
-            <img src="/static/screenshot4" alt="Match schedule screen" loading="lazy" />
-          </div>
-          <p class="slideCap">Match schedules always clear</p>
-        </article>
-
-        <article class="slide">
-          <div class="deviceFrame deviceDark">
-            <img src="/static/screenshot5" alt="Fan Zone screen" loading="lazy" />
-          </div>
-          <p class="slideCap">Engagement drives repeat visits</p>
-        </article>
-
-        <article class="slide">
-          <div class="deviceFrame deviceLight">
-            <img src="/static/screenshot6" alt="VIP upsell screen" loading="lazy" />
-          </div>
-          <p class="slideCap">VIP tables captured automatically</p>
-        </article>
+  <div class="carouselTrack" id="carouselTrack">
+    <article class="slide">
+      <div class="deviceFrame deviceDark">
+        <img src="/static/screenshot1.png" alt="App home screen" loading="lazy" />
       </div>
+      <p class="slideCap">Guests reserve in seconds</p>
+    </article>
 
-      <div class="carouselControls">
-        <button class="iconBtn" type="button" id="prevSlide" aria-label="Previous">‹</button>
-        <button class="iconBtn" type="button" id="nextSlide" aria-label="Next">›</button>
+    <article class="slide">
+      <div class="deviceFrame deviceLight">
+        <img src="/static/screenshot2.png" alt="App explore screen" loading="lazy" />
       </div>
-    </div>
+      <p class="slideCap">Everything in one tap</p>
+    </article>
+
+    <article class="slide">
+      <div class="deviceFrame deviceDark">
+        <img src="/static/screenshot3.png" alt="AI concierge chat screen" loading="lazy" />
+      </div>
+      <p class="slideCap">AI handles questions instantly</p>
+    </article>
+
+    <article class="slide">
+      <div class="deviceFrame deviceLight">
+        <img src="/static/screenshot4.png" alt="Match schedule screen" loading="lazy" />
+      </div>
+      <p class="slideCap">Match schedules always clear</p>
+    </article>
+
+    <article class="slide">
+      <div class="deviceFrame deviceDark">
+        <img src="/static/screenshot5.png" alt="Fan Zone screen" loading="lazy" />
+      </div>
+      <p class="slideCap">Engagement drives repeat visits</p>
+    </article>
+
+    <article class="slide">
+      <div class="deviceFrame deviceLight">
+        <img src="/static/screenshot6.png" alt="VIP upsell screen" loading="lazy" />
+      </div>
+      <p class="slideCap">VIP tables captured automatically</p>
+    </article>
   </div>
-</section>
+
+  <div class="carouselControls">
+    <button class="iconBtn" type="button" id="prevSlide" aria-label="Previous">‹</button>
+    <button class="iconBtn" type="button" id="nextSlide" aria-label="Next">›</button>
+  </div>
+</div>
+
+<script>
+const track = document.getElementById('carouselTrack');
+const slides = track.children;
+const prev = document.getElementById('prevSlide');
+const next = document.getElementById('nextSlide');
+
+let index = 0;
+
+function showSlide(i){
+  track.style.transform = `translateX(-${i * 100}%)`;
+}
+
+next.onclick = () => {
+  index = (index + 1) % slides.length;
+  showSlide(index);
+};
+
+prev.onclick = () => {
+  index = (index - 1 + slides.length) % slides.length;
+  showSlide(index);
+};
+
+setInterval(() => {
+  index = (index + 1) % slides.length;
+  showSlide(index);
+}, 4000);
+</script>
 
 <!-- HOW IT WORKS (3 STEPS) -->
 <section class="section">
