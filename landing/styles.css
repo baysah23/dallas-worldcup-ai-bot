@@ -187,3 +187,60 @@ footer{padding:28px 0 36px;border-top:1px solid rgba(255,255,255,.10);color:rgba
   .pricing{grid-template-columns:1fr}
   .formGrid{grid-template-columns:1fr}
 }
+
+/* ===== Premium Mobile Overrides (paste at end) ===== */
+
+/* Reduce “big text” feel & tighten rhythm */
+.heroGrid { padding: 34px 0 22px !important; gap: 14px !important; }
+h1 { letter-spacing: -0.03em !important; line-height: 1.02 !important; }
+.sub { color: rgba(238,242,255,.78) !important; line-height: 1.55 !important; }
+section { padding: 34px 0 !important; }
+
+/* More “iOS glass” depth */
+.heroCard, .thumbs, .stage, .chaosBoard, .chaosRight, .priceCard, .card {
+  background: rgba(255,255,255,.06) !important;
+  border-color: rgba(255,255,255,.12) !important;
+  box-shadow: 0 22px 75px rgba(0,0,0,.45) !important;
+}
+.scrim{
+  background:
+    radial-gradient(900px 520px at 18% 25%, rgba(0,0,0,.10), transparent 62%),
+    linear-gradient(90deg, rgba(0,0,0,.74), rgba(0,0,0,.14) 60%, rgba(0,0,0,.58)),
+    linear-gradient(180deg, rgba(0,0,0,.10), rgba(0,0,0,.86)) !important;
+}
+
+/* Buttons feel more premium */
+.btn{
+  border-color: rgba(255,255,255,.16) !important;
+  background: rgba(255,255,255,.08) !important;
+}
+.btn.primary{
+  background: rgba(255,255,255,.20) !important;
+}
+.btn.ghost{
+  background: rgba(0,0,0,.22) !important;
+}
+
+/* Screenshot section: make it “hero” */
+.device{
+  width: min(420px, 92vw) !important;   /* bigger */
+  border-radius: 44px !important;
+  padding: 14px !important;
+  background: rgba(0,0,0,.34) !important;
+  box-shadow: 0 28px 95px rgba(0,0,0,.62) !important;
+}
+.device:before{ opacity:.55 !important; }
+.deviceImg{ border-radius: 32px !important; }
+
+/* Thumbs look like a premium menu */
+.thumb{
+  padding: 12px !important;
+  background: rgba(0,0,0,.16) !important;
+}
+.thumb small{ opacity: .85 !important; }
+
+/* Make the sticky topnav less “blocky” */
+.topnav{
+  background: rgba(5,7,12,.40) !important;
+  border-bottom-color: rgba(255,255,255,.06) !important;
+}
