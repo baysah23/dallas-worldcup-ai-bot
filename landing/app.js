@@ -49,7 +49,7 @@
     const bg = qs(".heroVideo--blur");           // background
 
     const START_AT = 0.0;
-    const TRIM_SECONDS = 20.0;  // skip last 20 seconds
+    const TRIM_SECONDS = 22.0;  // skip last 22 seconds
     const MIN_DUR = 6;
 
     function forceLoop(v, {forceMuted}){
