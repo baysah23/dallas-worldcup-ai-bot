@@ -216,7 +216,7 @@ a{color:inherit; text-decoration:none}
 .heroOverlay{
   position:relative;
   z-index:3;
-  min-height:78vh;
+  min-height: auto;
   display:flex;
   flex-direction:column;
   justify-content: flex-start;
