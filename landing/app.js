@@ -49,7 +49,7 @@
     const bg = qs(".heroVideo--blur");           // background
 
     const START_AT = 0.0;
-    const TRIM_SECONDS = 3.0;  // skip last 3 seconds
+    const TRIM_SECONDS = 20.0;  // skip last 20 seconds
     const MIN_DUR = 6;
 
     function forceLoop(v, {forceMuted}){
@@ -94,7 +94,7 @@
   const toggle = qs("#soundToggle");
   function setLabel(){
     if(!toggle || !v) return;
-    toggle.textContent = v.muted ? "🔊 Sound" : "🔇 Mute";
+    toggle.textContent = v.muted ? "🔇 Muted" : "🔊 Sound On";
   }
   if(v){
     v.play().catch(()=>{});
