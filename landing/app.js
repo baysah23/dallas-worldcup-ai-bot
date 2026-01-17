@@ -101,21 +101,25 @@
   }
   if(toggle && v){
     setLabel();
-    toggle.addEventListener("click", async ()=>{
-      try{
-        if(v.muted){
-          v.muted = false;
-          v.volume = 1;
-          await v.play();
-        }else{
-          v.muted = true;
-        }
-      }catch(e){
-        // If the browser blocks audio for any reason, fall back to muted
-        v.muted = true;
-      }
-      setLabel();
-    });
+    toggle.addEventListener("click", async (e)=>{
+  e.preventDefault();
+  e.stopPropagation();
+  try{
+    if(v.muted){
+      v.muted = false;
+      v.removeAttribute("muted");   // 🔑 critical
+      v.volume = 1;
+      await v.play();
+    }else{
+      v.muted = true;
+      v.setAttribute("muted","");   // keep autoplay safe
+    }
+  }catch(e2){
+    v.muted = true;
+    v.setAttribute("muted","");
+  }
+  setLabel();
+});
   }
 
   // ---------- Rolex tick + gold micro-glint on number update ----------
