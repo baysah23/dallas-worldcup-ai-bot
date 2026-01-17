@@ -84,9 +84,9 @@ a{color:inherit; text-decoration:none}
 .heroHeader{
   position:absolute;
   z-index:10;
-  top:50%;
+  top:18px;        /* or 22px if you want more space */
   left:50%;
-  transform:translate(-50%,-50%);
+  transform:translateX(-50%);
   width:100%;
   padding:0 18px;
   display:flex;
