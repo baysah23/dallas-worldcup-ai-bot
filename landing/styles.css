@@ -535,7 +535,7 @@ input{
   .countdownOverlay--hero{ padding:9px 12px; border-radius:16px; }
   .cdNum{ font-size:17px; }
   .heroVideoWrap{ min-height:82vh; }
-  .heroOverlay{ min-height:82vh; padding:18px 0 16px; max-width:92vw; }
+  .heroOverlay{ min-height:auto; padding:18px 0 16px; max-width:92vw; }
   .heroCta{ margin-top:14px; }
   .soundPill{ right:12px; bottom:12px; }
   .chaosStrip{ grid-template-columns:1fr; }
