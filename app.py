@@ -2206,8 +2206,7 @@ def super_admin_api_venue_create():
     return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": write_path, "error": err})
     return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": write_path, "error": err})
 
-
-@app.route("/landing")
+@app.route("/")
 def marketing_landing():
     return send_from_directory("landing", "index.html")
 
@@ -3813,14 +3812,14 @@ def next_question(sess: Dict[str, Any]) -> str:
 # ============================================================
 # Public endpoints
 # ============================================================
-@app.route("/")
+@app.route("/app")
 def home():
-    # Prevent stale caching so deploys always serve the latest index.html
     resp = make_response(send_from_directory(".", "index.html"))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
     return resp
+
 
 @app.get("/v/<venue_id>")
 def fan_venue(venue_id):
