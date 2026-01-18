@@ -1,4 +1,4 @@
-name: Deploy STAGING (QA slot)
+name: Deploy to Azure App Service (STAGING)
 
 on:
   push:
@@ -13,14 +13,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Deploy to Azure App Service (staging slot)
+      - name: Deploy to Azure App Service (qaconcierge slot)
         uses: azure/webapps-deploy@v3
         with:
           app-name: wc-concierge-app
           slot-name: qaconcierge
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_8A2A21DD8C1746F8B82DD8ADDA565F8F }}
           package: .
