@@ -554,9 +554,24 @@ def _tenant_guard_admin_writes():
 
 def _venue_id() -> str:
     try:
-        return _slugify_venue_id(getattr(g, "venue_id", "") or DEFAULT_VENUE_ID)
+        va = getattr(request, "view_args", None) or {}
+        vid = va.get("venue_id")
+        if vid:
+            return _slugify_venue_id(vid)
+
+        vid = request.args.get("venue") or request.args.get("venue_id")
+        if vid:
+            return _slugify_venue_id(vid)
+
+        body = request.get_json(silent=True) or {}
+        vid = body.get("venue") or body.get("venue_id")
+        if vid:
+            return _slugify_venue_id(vid)
+
     except Exception:
-        return DEFAULT_VENUE_ID
+        pass
+
+    return ""
 
 
 def _venue_cfg(venue_id: Optional[str] = None) -> Dict[str, Any]:
