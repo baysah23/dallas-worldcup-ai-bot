@@ -1,0 +1,9 @@
+{
+  "id": "qa-sandbox",
+  "name": "QA Sandbox Venue",
+  "active": true,
+  "keys": {
+    "admin_key": "TEMP_ADMIN",
+    "manager_key": "TEMP_MANAGER"
+  }
+}
