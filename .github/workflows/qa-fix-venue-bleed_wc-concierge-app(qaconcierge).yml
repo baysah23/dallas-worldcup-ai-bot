@@ -30,13 +30,15 @@ jobs:
           source antenv/bin/activate
           pip install -r requirements.txt
 
+      - name: Zip deploy package (exclude venv)
+        run: |
+          zip -r app.zip . -x "antenv/*"
+
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
         with:
           name: python-app
-          path: |
-            .
-            !antenv/
+          path: app.zip
 
   deploy:
     runs-on: ubuntu-latest
@@ -54,4 +56,4 @@ jobs:
           app-name: wc-concierge-app
           slot-name: qaconcierge
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_8A2A21DD8C1746F8B82DD8ADDA565F8F }}
-          package: .
+          package: app.zip
