@@ -673,6 +673,8 @@ def _open_default_spreadsheet(gc, venue_id: Optional[str] = None):
 
 def get_sheet(tab: Optional[str] = None, venue_id: Optional[str] = None):
     """Return a worksheet for the specified venue (or current venue)."""
+    venue_id = venue_id or _venue_id()   # <-- ADD THIS LINE
+    
     gc = get_gspread_client()
     sh = _open_default_spreadsheet(gc, venue_id=venue_id)
 
