@@ -3838,6 +3838,7 @@ def fan_venue(venue_id):
 
     # Serve fan SPA shell for valid active venues only
     resp = make_response(send_from_directory(".", "index.html"))
+    resp.set_cookie("venue_id", vid, samesite="Lax", domain=".worldcupconcierge.app")
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
