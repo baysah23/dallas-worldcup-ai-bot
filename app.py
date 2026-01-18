@@ -273,9 +273,6 @@ def public_prod_gate():
         "service": "wc-concierge-app",
     }), (200 if ok_all else 500)
 
-@app.get("/")
-def home():
-    return render_template("index.html")
 
 @app.after_request
 def add_no_cache_headers(response):
