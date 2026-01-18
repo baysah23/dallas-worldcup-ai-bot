@@ -3837,7 +3837,12 @@ def fan_venue(venue_id):
 
     # Serve fan SPA shell for valid active venues only
     resp = make_response(send_from_directory(".", "index.html"))
-    resp.set_cookie("venue_id", vid, samesite="Lax", domain=".worldcupconcierge.app")
+    resp.set_cookie(
+        "venue_id",
+        vid,
+        samesite="Lax",
+        domain=None  # let browser scope to current host
+    )
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     resp.headers["Pragma"] = "no-cache"
     resp.headers["Expires"] = "0"
@@ -12865,7 +12870,20 @@ def super_api_venues_rotate_keys():
     except Exception:
         pass
 
-    return jsonify({"ok": True, "venue_id": venue_id, "keys": keys, "qr_url": f"https://worldcupconcierge.app/v/{venue_id}", "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={keys.get('admin_key')}", "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={keys.get('manager_key')}", "persisted": wrote, "path": write_path, "error": err})
+    host = request.host  # staging.worldcupconcierge.app or admin.worldcupconcierge.app
+
+    return jsonify({
+        "ok": True,
+        "venue_id": venue_id,
+        "keys": keys,
+        "qr_url": f"https://{host}/v/{venue_id}",
+        "admin_url": f"https://{host}/v/{venue_id}/admin?key={keys.get('admin_key')}",
+        "manager_url": f"https://{host}/v/{venue_id}/manager?key={keys.get('manager_key')}",
+        "persisted": wrote,
+        "path": write_path,
+        "error": err,
+    })
+
 
 @app.get("/super/api/leads")
 def super_api_leads():
