@@ -367,8 +367,7 @@ def _slugify_venue_id(s: str) -> str:
     s = (s or "").strip().lower()
     s = re.sub(r"[^a-z0-9]+", "-", s)
     s = re.sub(r"-{2,}", "-", s).strip("-")
-    return s
-
+    return s or "default"
 
 def _load_venues_from_disk() -> Dict[str, Any]:
     """Load venue configs from VENUES_DIR. Returns dict keyed by venue_id."""
@@ -634,8 +633,8 @@ def _open_default_spreadsheet(gc, venue_id: Optional[str] = None):
 
 def get_sheet(tab: Optional[str] = None, venue_id: Optional[str] = None):
     """Return a worksheet for the specified venue (or current venue)."""
-    venue_id = venue_id or _venue_id()   # <-- ADD THIS LINE
-    
+    venue_id = venue_id or getattr(g, "venue_id", "") or _venue_id()
+
     gc = get_gspread_client()
     sh = _open_default_spreadsheet(gc, venue_id=venue_id)
 
@@ -646,7 +645,6 @@ def get_sheet(tab: Optional[str] = None, venue_id: Optional[str] = None):
     if tab:
         return sh.worksheet(tab)
     return sh.sheet1
-
 
 def _check_sheet_id(sheet_id: str) -> Dict[str, Any]:
     """Best-effort Google Sheet validation for onboarding.
