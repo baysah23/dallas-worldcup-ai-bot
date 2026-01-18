@@ -367,7 +367,7 @@ def _slugify_venue_id(s: str) -> str:
     s = (s or "").strip().lower()
     s = re.sub(r"[^a-z0-9]+", "-", s)
     s = re.sub(r"-{2,}", "-", s).strip("-")
-    return s or "default"
+    return s
 
 
 def _load_venues_from_disk() -> Dict[str, Any]:
@@ -554,24 +554,9 @@ def _tenant_guard_admin_writes():
 
 def _venue_id() -> str:
     try:
-        va = getattr(request, "view_args", None) or {}
-        vid = va.get("venue_id")
-        if vid:
-            return _slugify_venue_id(vid)
-
-        vid = request.args.get("venue") or request.args.get("venue_id")
-        if vid:
-            return _slugify_venue_id(vid)
-
-        body = request.get_json(silent=True) or {}
-        vid = body.get("venue") or body.get("venue_id")
-        if vid:
-            return _slugify_venue_id(vid)
-
+        return _slugify_venue_id(getattr(g, "venue_id", "") or "")
     except Exception:
-        pass
-
-    return ""
+        return ""
 
 
 def _venue_cfg(venue_id: Optional[str] = None) -> Dict[str, Any]:
@@ -637,34 +622,10 @@ def _public_base_url() -> str:
     host = (request.headers.get("X-Forwarded-Host") or request.host or "").split(",")[0].strip()
     return f"{proto}://{host}".rstrip("/")
 
-# Back-compat rules:
-# - If cfg has boolean `active`, that is the source of truth.
-# - Otherwise fall back to `status` string (active|inactive|disabled|off).
-# - Default: active.
-    
-    try:
-        cfg = _venue_cfg(venue_id)
-        if not isinstance(cfg, dict):
-            return True
-        if "active" in cfg:
-            v = cfg.get("active")
-            if isinstance(v, bool):
-                return v
-            sv = str(v or "").strip().lower()
-            if sv in ("0","false","no","n","off"):
-                return False
-            if sv in ("1","true","yes","y","on"):
-                return True
-        st = str(cfg.get("status") or "").strip().lower()
-        if st in ("inactive","disabled","off"):
-            return False
-        return True
-    except Exception:
-        return True
-
-
 
 def _open_default_spreadsheet(gc, venue_id: Optional[str] = None):
+    # Always resolve venue, even if callers pass None
+    venue_id = _slugify_venue_id(venue_id or getattr(g, "venue_id", "") or _venue_id())
     sid = _venue_sheet_id(venue_id)
     if not sid:
         raise RuntimeError(f"Missing google_sheet_id for venue: {venue_id}")
