@@ -1,0 +1,21 @@
+name: Deploy STAGING (qaconcierge)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Azure App Service (staging slot)
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: wc-concierge-app
+          slot-name: qaconcierge
+          package: .
