@@ -650,11 +650,11 @@ def _public_base_url() -> str:
 
 
 def _open_default_spreadsheet(gc, venue_id: Optional[str] = None):
-    """Open the venue-scoped spreadsheet (by sheet_id if present) else fall back to SHEET_NAME."""
     sid = _venue_sheet_id(venue_id)
-    if sid:
-        return gc.open_by_key(sid)
-    return gc.open(SHEET_NAME)
+    if not sid:
+        raise RuntimeError(f"Missing google_sheet_id for venue: {venue_id}")
+    return gc.open_by_key(sid)
+
 
 def get_sheet(tab: Optional[str] = None, venue_id: Optional[str] = None):
     """Return a worksheet for the specified venue (or current venue)."""
