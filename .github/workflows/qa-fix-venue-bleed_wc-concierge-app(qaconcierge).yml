@@ -51,7 +51,7 @@ jobs:
           name: python-app
 
       - name: Deploy to Azure Web App (qaconcierge slot)
-        uses: azure/webapps-deploy@v3
+        uses: azure/webapps-deploy@v2.2.9
         with:
           app-name: wc-concierge-app
           slot-name: qaconcierge
