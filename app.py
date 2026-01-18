@@ -2207,7 +2207,7 @@ def super_admin_api_venue_create():
     return jsonify({"ok": True, "pack": pack, "persisted": wrote, "path": write_path, "error": err})
 
 
-@app.route("/")
+@app.route("/landing")
 def marketing_landing():
     return send_from_directory("landing", "index.html")
 
