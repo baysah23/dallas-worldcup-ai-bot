@@ -50,10 +50,14 @@ jobs:
         with:
           name: python-app
 
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
       - name: Deploy to Azure Web App (qaconcierge slot)
-        uses: azure/webapps-deploy@v2.2.9
+        uses: azure/webapps-deploy@v3
         with:
           app-name: wc-concierge-app
           slot-name: qaconcierge
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_8A2A21DD8C1746F8B82DD8ADDA565F8F }}
           package: app.zip
