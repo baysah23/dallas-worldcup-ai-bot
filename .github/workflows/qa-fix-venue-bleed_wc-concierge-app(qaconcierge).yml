@@ -34,6 +34,11 @@ jobs:
         run: |
           zip -r app.zip . -x "antenv/*"
 
+      - name: Assert venue configs are in package
+        run: |
+          unzip -l app.zip | grep -E "config/venues/.*\.json" || (echo "❌ Missing venue configs in zip" && exit 1)
+
+
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
         with:
