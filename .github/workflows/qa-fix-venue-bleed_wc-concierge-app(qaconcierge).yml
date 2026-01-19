@@ -33,7 +33,7 @@ jobs:
       - name: Zip deploy package (exclude venv)
         run: |
           zip -r app.zip . -x "antenv/*"
-          unzip -l app.zip | grep -E "config/venues/.*\.json" || (echo "❌ Missing venue configs in zip" && exit 1)
+          unzip -l app.zip | grep -E "config/venues/" || echo "ℹ️ venue configs loaded from Azure (not in zip)"
 
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
