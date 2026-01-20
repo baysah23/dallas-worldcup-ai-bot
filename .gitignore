@@ -4,3 +4,5 @@ __pycache__/
 *.pyc
 leads.csv
 google_creds.json
+*.zip
+app.zip

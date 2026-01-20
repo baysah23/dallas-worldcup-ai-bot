@@ -225,4 +225,41 @@
     if(window.scrollY > 20) hide(); else show();
   })();
 
+  // ---------- "What you're getting" modal ----------
+  (function(){
+    const btn = document.getElementById("whatBtn");
+    const overlay = document.getElementById("whatModal");
+    const closeBtn = document.getElementById("whatClose");
+    if(!btn || !overlay || !closeBtn) return;
+
+    const card = overlay.querySelector(".modalCard");
+
+    function open(){
+     overlay.classList.add("is-open");
+     overlay.setAttribute("aria-hidden","false");
+     document.documentElement.style.overflow = "hidden";
+     closeBtn.focus();
+  }
+
+  function close(){
+    overlay.classList.remove("is-open");
+    overlay.setAttribute("aria-hidden","true");
+    document.documentElement.style.overflow = "";
+    btn.focus();
+  }
+
+  btn.addEventListener("click", open);
+  closeBtn.addEventListener("click", close);
+
+  // click outside closes
+  overlay.addEventListener("click", (e)=>{
+    if(card && !card.contains(e.target)) close();
+  });
+
+  // ESC closes
+  window.addEventListener("keydown", (e)=>{
+    if(overlay.classList.contains("is-open") && e.key === "Escape") close();
+  });
+})();
+
 })();

@@ -72,9 +72,11 @@
       <h1 class="heroH1">A calmer way to run match nights.</h1>
       <p class="heroSub">Reservations and VIP requests, handled automatically.</p>
 
-      <div class="heroCta">
+      <div class="heroCta heroCtaRow">
         <a class="btn btnPrimary" href="#demo" id="demoBtnTop">See it in action</a>
+        <button class="btn btnGhost" type="button" id="whatBtn">What you’re getting</button>
       </div>
+
     </div>
   </section>
 
@@ -179,18 +181,22 @@
     <div class="kicker">How it works</div>
     <h2 class="h2">Three steps. Zero chaos.</h2>
 
-    <div class="steps">
-      <div class="stepCard">
-        <h3>1. Scan or tap</h3>
-        <p>Guests open your concierge instantly.</p>
-      </div>
-      <div class="stepCard">
-        <h3>2. Concierge handles it</h3>
-        <p>Questions, bookings, and VIP interest handled automatically.</p>
-      </div>
-      <div class="stepCard">
-        <h3>3. Staff stays focused</h3>
-        <p>VIPs captured. Follow-ups automated.</p>
+    <div class="stepsWrap">
+      <div class="steps">
+        <div class="stepCard">
+          <h3>1. Scan or tap</h3>
+          <p>Guests open your concierge instantly.</p>
+        </div>
+
+        <div class="stepCard">
+          <h3>2. Concierge handles it</h3>
+          <p>Questions, bookings, and VIP interest handled automatically.</p>
+        </div>
+
+        <div class="stepCard">
+          <h3>3. Staff stays focused</h3>
+          <p>VIPs captured. Follow-ups automated.</p>
+        </div>
       </div>
     </div>
   </div>
@@ -212,6 +218,32 @@
         <input id="venue" name="venue" required placeholder="Your bar / lounge / restaurant" />
       </div>
       <div class="field">
+  <label for="phone">Phone</label>
+  <input id="phone" name="phone" type="tel" placeholder="(555) 555-5555" />
+</div>
+
+<div class="field">
+  <label for="contact_method">Best way to contact</label>
+  <select id="contact_method" name="contact_method" required>
+    <option value="" selected disabled>Select one</option>
+    <option value="phone">Phone call</option>
+    <option value="text">Text</option>
+    <option value="email">Email</option>
+  </select>
+</div>
+
+<div class="field">
+  <label for="contact_time">Best time to contact</label>
+  <select id="contact_time" name="contact_time" required>
+    <option value="" selected disabled>Select one</option>
+    <option value="morning">Morning</option>
+    <option value="midday">Midday</option>
+    <option value="afternoon">Afternoon</option>
+    <option value="evening">Evening</option>
+    <option value="anytime">Anytime</option>
+  </select>
+</div>
+      <div class="field">
         <label for="email">Email</label>
         <input id="email" name="email" type="email" required placeholder="you@venue.com" />
       </div>
@@ -229,6 +261,24 @@
 </footer>
 
 <div class="scrollCue" id="scrollCue" aria-hidden="true"></div>
+
+<!-- WHAT YOU’RE GETTING (GLASS MODAL) -->
+<div class="modalOverlay" id="whatModal" aria-hidden="true">
+  <div class="modalCard" role="dialog" aria-modal="true" aria-labelledby="whatTitle">
+    <div class="modalHeader">
+      <div class="modalTitle" id="whatTitle">What you’re getting</div>
+      <button class="iconBtn modalClose" type="button" id="whatClose" aria-label="Close">×</button>
+    </div>
+
+    <div class="modalBody">
+      <p>It’s a premium World Cup concierge app designed for fans and venues.</p>
+      <p>Fans can chat with an AI concierge to reserve tables, request VIP experiences, check match schedules, and join live fan zones.</p>
+      <p>Everything works across multiple venues, so each bar or lounge runs its own branded experience.</p>
+      <p>On the back end, owners and managers control reservations, rules, alerts, and AI automation from a secure admin dashboard.</p>
+      <p>The goal is to turn World Cup chaos into a smooth, high-end, managed experience for both fans and venues.</p>
+    </div>
+  </div>
+</div>
 
 <script defer src="app.js?v=4"></script>
 </body>

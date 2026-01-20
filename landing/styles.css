@@ -263,6 +263,91 @@ a{color:inherit; text-decoration:none}
   animation: pillFadeIn .8s ease-out .6s forwards;
 }
 
+/* Hero CTA row (keeps layout intact) */
+.heroCtaRow{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+
+/* Secondary pill (same size feel as primary) */
+.btnGhost{
+  background: rgba(255,255,255,.08);
+  font-weight:700;      /* match primary */
+  font-size:14px;       /* match primary */
+}
+
+/* ===== Glass modal ===== */
+.modalOverlay{
+  position:fixed;
+  inset:0;
+  z-index:999;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:18px;
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.modalOverlay.is-open{ display:flex; }
+
+.modalCard{
+  width:min(720px, 92vw);
+  max-height:min(78vh, 720px);
+  border-radius: var(--r28);
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.06);
+  box-shadow: var(--shadow2);
+  overflow:hidden;
+}
+
+.modalHeader{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:14px;
+  border-bottom:1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.18);
+}
+
+.modalTitle{
+  font-weight:900;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  font-size:12px;
+  color: rgba(238,242,255,.92);
+}
+
+.modalClose{
+  width:40px;
+  height:40px;
+  line-height:40px;
+  font-size:20px;
+}
+
+.modalBody{
+  padding:16px 16px 18px;
+  overflow:auto;                 /* enables scrolling if needed */
+  max-height:calc(min(78vh, 720px) - 58px);
+  color: rgba(238,242,255,.84);
+}
+
+.modalBody p{
+  margin:0 0 12px 0;
+  line-height:1.65;
+  font-size:14.5px;
+}
+
+/* Mobile safety */
+@media (max-width: 980px){
+  .modalCard{ width:min(760px, 94vw); max-height:82vh; }
+  .modalBody{ font-size:14px; }
+}
+
 @keyframes pillFadeIn{ to{ opacity:1 } }
 
 /* Sections */
@@ -321,6 +406,17 @@ a{color:inherit; text-decoration:none}
   object-fit:contain;
   background: rgba(0,0,0,.18);
   border-radius:22px;
+}
+
+
+/* Steps wrapper — match Carousel / Demo glass container */
+.stepsWrap{
+  margin-top:16px;
+  border-radius: var(--r28);
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.04);
+  box-shadow: var(--shadow2);
+  padding:16px 14px 18px;
 }
 
 /* Carousel (kept as your existing structure; we’ll fix rotation after you paste carousel snippet) */
@@ -463,6 +559,30 @@ input{
   font-weight:650;
   outline:none;
 }
+
+select{
+  border-radius:14px;
+  border:1px solid rgba(255,255,255,.14);
+  background: rgba(0,0,0,.22);
+  color:#eef2ff;
+  padding:12px 12px;
+  font-weight:650;
+  outline:none;
+  appearance:none;
+}
+
+/* subtle caret */
+select{
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(255,255,255,.6) 50%),
+    linear-gradient(135deg, rgba(255,255,255,.6) 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 50%,
+    calc(100% - 12px) 50%;
+  background-size:6px 6px, 6px 6px;
+  background-repeat:no-repeat;
+}
+
 #leadStatus{
   opacity:0;
   transition: opacity .25s ease;
