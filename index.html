@@ -629,13 +629,18 @@
       font-size: 13px;
     }
     .toast.hidden{ display:none; }
-    .modal{
-      position:fixed; inset:0;
-      display:flex; align-items:center; justify-content:center;
-      background: rgba(0,0,0,.55);
-      z-index: 70;
-      padding: 18px;
-    }
+   .modal{
+  position:fixed; inset:0;
+  display:flex;
+  align-items:flex-start;   /* CHANGED */
+  justify-content:center;
+  background: rgba(0,0,0,.55);
+  z-index: 70;
+  padding: 18px;
+
+  overflow-y: auto;         /* ADDED */
+}
+
     .modal.hidden{ display:none; }
 
 /* =========================
@@ -652,13 +657,12 @@ body.modalOpen{ overflow:hidden; }
   -webkit-backdrop-filter: blur(10px) saturate(0.9) !important;
 }
 
-/* Modal surface (the card) */
 .modalCard{
-  background: rgba(12, 18, 34, 0.82) !important; /* target 0.8-ish */
-  backdrop-filter: blur(18px) saturate(1.2) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(1.2) !important;
-  border: 1px solid rgba(255,255,255,0.22) !important;
-  box-shadow: 0 26px 90px rgba(0,0,0,0.62) !important;
+  width: 100%;
+  max-width: 440px;
+  border-radius: 18px;
+  padding: 14px;
+  ...
 }
 
 /* Inputs: slightly darker so text contrast stays crisp */
@@ -707,7 +711,7 @@ body.modalOpen{ overflow:hidden; }
     .iconBtn:active{ transform: translateY(1px); }
     .modalBody label{ display:block; font-size:12px; opacity:.85; margin-top:10px; }
     .modalBody label.required::after{ content:' *'; color: rgba(255,204,102,.95); font-weight: 900; }
-    .modalBody input,.modalBody select{
+    .modalBody input,.modalBody select,.modalBody textarea{
       width:100%;
       padding:10px;
       border-radius:12px;
@@ -5179,7 +5183,10 @@ function openModal(entryPoint){
   if(!m) return;
   m.classList.remove('hidden');
   document.body.classList.add('modalOpen');
-  try{ $('iName')?.focus(); }catch(e){}
+  setTimeout(()=>{
+  try{ $('iName')?.focus({preventScroll:true}); }
+  catch(e){ try{ $('iName')?.focus(); }catch(e){} }
+}, 60);
 }
 function closeModal(){
   const m = $('intakeModal');
@@ -5188,6 +5195,10 @@ function closeModal(){
   document.body.classList.remove('modalOpen');
 }
 async function submitIntake(){
+  if (window.__intakeSubmitting) return;
+  window.__intakeSubmitting = true;
+  $('submitIntake')?.setAttribute('disabled','disabled');
+
   const msg = $('intakeMsg');
   const iName = $('iName')?.value || '';
   const iCity = $('iCity')?.value || '';
@@ -5201,44 +5212,42 @@ async function submitIntake(){
 
   if(!iName || !iDate || !iGroup || !iTime || !iContact){
     if(msg) msg.textContent = 'Please fill Name, Date, Party size, Time window, and Contact.';
+    window.__intakeSubmitting = false;
+    $('submitIntake')?.removeAttribute('disabled');
     return;
   }
-  if(msg) msg.textContent = 'Sending…';
 
-  const payload = {
-    entry_point: currentEntryPoint || 'reserve_now',
-    name: iName,
-    business_context: iCity,
-    date: iDate,
-    party_size: iGroup,
-    time: iTime,
-    vibe: iVibe,
-    budget: iBudget,
-    notes: iNotes,
-    contact: iContact,
-    lang: state?.lang || 'en'
-  };
+  if(msg) msg.textContent = 'Sending…';
 
   try{
     const res = await fetch('/api/intake', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        entry_point: currentEntryPoint || 'reserve_now',
+        name: iName,
+        business_context: iCity,
+        date: iDate,
+        party_size: iGroup,
+        time: iTime,
+        vibe: iVibe,
+        budget: iBudget,
+        notes: iNotes,
+        contact: iContact,
+        lang: state?.lang || 'en'
+      })
     });
+
     const data = await res.json().catch(()=>({}));
-    if(!res.ok || !data.ok){
-      throw new Error(data.error || 'Request failed');
-    }
+    if(!res.ok || !data.ok) throw new Error();
+
     closeModal();
     toast(`Request saved as ${data.tier || ''} — view it in Admin → Leads.`, 2400);
-    if(msg) msg.textContent = '';
-    // reset fields lightly (keep contact for convenience)
-    try{
-      $('iDate').value=''; $('iGroup').value=''; $('iTime').value='';
-      $('iVibe').value=''; $('iBudget').value=''; $('iNotes').value='';
-    }catch(e){}
   }catch(e){
     if(msg) msg.textContent = 'Could not submit. Please try again.';
+  }finally{
+    window.__intakeSubmitting = false;
+    $('submitIntake')?.removeAttribute('disabled');
   }
 }
 
