@@ -62,3 +62,4 @@ jobs:
           app-name: wc-concierge-app
           slot-name: qaconcierge
           package: app.zip
+          clean: true
