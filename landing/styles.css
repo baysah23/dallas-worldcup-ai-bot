@@ -323,6 +323,17 @@ a{color:inherit; text-decoration:none}
   border-radius:22px;
 }
 
+
+/* Steps wrapper — match Carousel / Demo glass container */
+.stepsWrap{
+  margin-top:16px;
+  border-radius: var(--r28);
+  border:1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.04);
+  box-shadow: var(--shadow2);
+  padding:16px 14px 18px;
+}
+
 /* Carousel (kept as your existing structure; we’ll fix rotation after you paste carousel snippet) */
 .carousel{
   margin-top:16px;
