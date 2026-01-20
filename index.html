@@ -5294,7 +5294,7 @@ function bindHome(){
 }
 
 // ---------- chat bindings ----------
-function bindChat(){ 
+function bindChat(){
   $('sendBtn')?.addEventListener('click', ()=>sendChatMessage());
   $('msg')?.addEventListener('keydown', (e)=>{
     if(e.key === 'Enter'){
@@ -5302,12 +5302,6 @@ function bindChat(){
       sendChatMessage();
     }
   });
-
-  document.querySelector('.chatInputRow')?.addEventListener('click', ()=>{
-    focusChatInput();
-  });
-}
-
 
   // clear button (remove reliance on inline onclick)
   $('btnClear')?.addEventListener('click', (e)=>{
@@ -5321,7 +5315,7 @@ function bindChat(){
       setLang((btn.dataset?.lang||'en'));
       try{ normalizeChatWelcome(); }catch(e){}
     });
-});
+  });
 }
 
 // ---------- modal bindings ----------
