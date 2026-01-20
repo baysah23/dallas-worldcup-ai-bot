@@ -1096,6 +1096,61 @@ try:
 except Exception:
     requests = None  # type: ignore
 
+# ============================================================
+# Landing lead capture (public)
+# - Sheet ID + alert email are configurable via env vars
+# ============================================================
+LANDING_LEADS_SHEET_ID = os.environ.get(
+    "LANDING_LEADS_SHEET_ID",
+    "1PH0pqj6qKLmtXc0G46hO63-39CdmFSin6RqfYIJ5uSM"
+).strip()
+
+LANDING_LEAD_ALERT_TO = os.environ.get(
+    "LANDING_LEAD_ALERT_TO",
+    "bayz23@gmail.com"
+).strip()
+
+def _append_landing_lead_to_sheet(lead: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Append a landing lead to the configured Google Sheet.
+    Expects your existing Google creds env + gspread helpers to already work in this app.
+    Returns (ok, message).
+    """
+    try:
+        # Reuse your existing spreadsheet open + worksheet patterns if available.
+        # We try to open by key and write to a tab named "Landing Leads" (auto-create if missing).
+        gc = get_gspread_client()
+        sh = gc.open_by_key(LANDING_LEADS_SHEET_ID)
+
+        tab_name = os.environ.get("LANDING_LEADS_TAB", "Landing Leads").strip() or "Landing Leads"
+        try:
+            ws = sh.worksheet(tab_name)
+        except Exception:
+            ws = sh.add_worksheet(title=tab_name, rows=2000, cols=20)
+
+        # Ensure header row exists
+        header = ["ts", "name", "venue", "email", "source", "notes"]
+        try:
+            existing = ws.row_values(1)
+        except Exception:
+            existing = []
+        if not existing:
+            ws.append_row(header, value_input_option="RAW")
+
+        row = [
+            str(lead.get("ts") or ""),
+            str(lead.get("name") or ""),
+            str(lead.get("venue") or ""),
+            str(lead.get("email") or ""),
+            str(lead.get("source") or "landing"),
+            str(lead.get("notes") or ""),
+        ]
+        ws.append_row(row, value_input_option="RAW")
+        return True, "saved"
+    except Exception as e:
+        return False, f"sheet_error: {e}"
+
+
 def _outbound_send_email(to_email: str, subject: str, body_text: str) -> Tuple[bool, str]:
     """Send email via SendGrid (recommended). Returns (ok, message)."""
     api_key = os.environ.get("SENDGRID_API_KEY", "").strip()
@@ -1883,6 +1938,42 @@ def _write_venue_config(venue_id: str, pack: Dict[str, Any]) -> Tuple[bool, str,
     except Exception as e:
         err = str(e)
     return wrote, write_path, err
+
+from flask import request, jsonify
+
+@app.post("/api/lead")
+def api_lead():
+    # Read JSON body from landing page
+    lead = request.get_json(silent=True) or {}
+
+    # Minimal validation (don’t block too hard)
+    name = str(lead.get("name") or "").strip()
+    venue = str(lead.get("venue") or "").strip()
+    email = str(lead.get("email") or "").strip()
+
+    if not email:
+        return jsonify(ok=False, error="missing_email"), 400
+
+    # Save to Google Sheet
+    ok_sheet, msg_sheet = _append_landing_lead_to_sheet(lead)
+
+    # Email alert (best-effort; don’t fail the lead if email isn’t configured)
+    subj = "New demo request — World Cup Concierge"
+    body = (
+        f"New landing lead:\n\n"
+        f"Name: {name}\n"
+        f"Venue: {venue}\n"
+        f"Email: {email}\n"
+        f"TS: {lead.get('ts','')}\n"
+        f"Source: {lead.get('source','landing')}\n"
+    )
+    _outbound_send_email(LANDING_LEAD_ALERT_TO, subj, body)
+
+    # Respond to frontend
+    if ok_sheet:
+        return jsonify(ok=True, saved=True), 200
+    return jsonify(ok=False, saved=False, error=msg_sheet), 500
+
 
 @app.post("/super/api/venues/set_active")
 def super_api_venues_set_active():
