@@ -1129,7 +1129,7 @@ def _append_landing_lead_to_sheet(lead: Dict[str, Any]) -> Tuple[bool, str]:
             ws = sh.add_worksheet(title=tab_name, rows=2000, cols=20)
 
         # Ensure header row exists
-        header = ["ts", "name", "venue", "email", "source", "notes"]
+        header = ["ts", "name", "venue", "email", "phone", "contact_method", "contact_time", "source", "notes"]
         try:
             existing = ws.row_values(1)
         except Exception:
@@ -1142,9 +1142,13 @@ def _append_landing_lead_to_sheet(lead: Dict[str, Any]) -> Tuple[bool, str]:
             str(lead.get("name") or ""),
             str(lead.get("venue") or ""),
             str(lead.get("email") or ""),
+            str(lead.get("phone") or ""),
+            str(lead.get("contact_method") or ""),
+            str(lead.get("contact_time") or ""),
             str(lead.get("source") or "landing"),
             str(lead.get("notes") or ""),
         ]
+
         ws.append_row(row, value_input_option="RAW")
         return True, "saved"
     except Exception as e:
@@ -1960,13 +1964,15 @@ def api_lead():
     # Email alert (best-effort; don’t fail the lead if email isn’t configured)
     subj = "New demo request — World Cup Concierge"
     body = (
-        f"New landing lead:\n\n"
-        f"Name: {name}\n"
-        f"Venue: {venue}\n"
-        f"Email: {email}\n"
-        f"TS: {lead.get('ts','')}\n"
-        f"Source: {lead.get('source','landing')}\n"
-    )
+    f"New landing lead:\n\n"
+    f"Name: {name}\n"
+    f"Venue: {venue}\n"
+    f"Email: {email}\n"
+    f"Phone: {lead.get('phone','')}\n"
+    f"Best contact: {lead.get('contact_method','')} ({lead.get('contact_time','')})\n"
+    f"TS: {lead.get('ts','')}\n"
+    f"Source: {lead.get('source','landing')}\n"
+)
     _outbound_send_email(LANDING_LEAD_ALERT_TO, subj, body)
 
     # Respond to frontend
