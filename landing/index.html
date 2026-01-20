@@ -72,9 +72,11 @@
       <h1 class="heroH1">A calmer way to run match nights.</h1>
       <p class="heroSub">Reservations and VIP requests, handled automatically.</p>
 
-      <div class="heroCta">
+      <div class="heroCta heroCtaRow">
         <a class="btn btnPrimary" href="#demo" id="demoBtnTop">See it in action</a>
+        <button class="btn btnGhost" type="button" id="whatBtn">What you’re getting</button>
       </div>
+
     </div>
   </section>
 
@@ -233,6 +235,24 @@
 </footer>
 
 <div class="scrollCue" id="scrollCue" aria-hidden="true"></div>
+
+<!-- WHAT YOU’RE GETTING (GLASS MODAL) -->
+<div class="modalOverlay" id="whatModal" aria-hidden="true">
+  <div class="modalCard" role="dialog" aria-modal="true" aria-labelledby="whatTitle">
+    <div class="modalHeader">
+      <div class="modalTitle" id="whatTitle">What you’re getting</div>
+      <button class="iconBtn modalClose" type="button" id="whatClose" aria-label="Close">×</button>
+    </div>
+
+    <div class="modalBody">
+      <p>It’s a premium World Cup concierge app designed for fans and venues.</p>
+      <p>Fans can chat with an AI concierge to reserve tables, request VIP experiences, check match schedules, and join live fan zones.</p>
+      <p>Everything works across multiple venues, so each bar or lounge runs its own branded experience.</p>
+      <p>On the back end, owners and managers control reservations, rules, alerts, and AI automation from a secure admin dashboard.</p>
+      <p>The goal is to turn World Cup chaos into a smooth, high-end, managed experience for both fans and venues.</p>
+    </div>
+  </div>
+</div>
 
 <script defer src="app.js?v=4"></script>
 </body>
