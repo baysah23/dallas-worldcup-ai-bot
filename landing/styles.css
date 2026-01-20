@@ -274,6 +274,8 @@ a{color:inherit; text-decoration:none}
 /* Secondary pill (same size feel as primary) */
 .btnGhost{
   background: rgba(255,255,255,.08);
+  font-weight:700;      /* match primary */
+  font-size:14px;       /* match primary */
 }
 
 /* ===== Glass modal ===== */
