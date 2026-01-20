@@ -218,6 +218,32 @@
         <input id="venue" name="venue" required placeholder="Your bar / lounge / restaurant" />
       </div>
       <div class="field">
+  <label for="phone">Phone</label>
+  <input id="phone" name="phone" type="tel" placeholder="(555) 555-5555" />
+</div>
+
+<div class="field">
+  <label for="contact_method">Best way to contact</label>
+  <select id="contact_method" name="contact_method" required>
+    <option value="" selected disabled>Select one</option>
+    <option value="phone">Phone call</option>
+    <option value="text">Text</option>
+    <option value="email">Email</option>
+  </select>
+</div>
+
+<div class="field">
+  <label for="contact_time">Best time to contact</label>
+  <select id="contact_time" name="contact_time" required>
+    <option value="" selected disabled>Select one</option>
+    <option value="morning">Morning</option>
+    <option value="midday">Midday</option>
+    <option value="afternoon">Afternoon</option>
+    <option value="evening">Evening</option>
+    <option value="anytime">Anytime</option>
+  </select>
+</div>
+      <div class="field">
         <label for="email">Email</label>
         <input id="email" name="email" type="email" required placeholder="you@venue.com" />
       </div>
