@@ -3883,11 +3883,14 @@ body[data-sec="schedule"] #sec-schedule #pager .pill{
 
         <div class="card" aria-label="Language support">
           <div class="cardHead">
-            <h2 class="cardTitle">4 languages, same concierge</h2>
+            <h2 class="cardTitle" data-i18n="lang_card_title">4 languages, same concierge</h2>
           </div>
           <div class="cardBody">
             <p class="hint" style="margin-top:0">
-              Chat naturally in <b>English</b>, <b>Spanish</b>, <b>Portuguese</b>, or <b>French</b> — we keep the reservation details consistent.
+              <span data-i18n="lang_card_hint_prefix">Chat naturally in</span>
+              <b data-i18n="lang_name_en">English</b>, <b data-i18n="lang_name_es">Spanish</b>,
+              <b data-i18n="lang_name_pt">Portuguese</b>, <b data-i18n="lang_name_fr">French</b>
+              <span data-i18n="lang_card_hint_suffix">— we keep the reservation details consistent.</span>
             </p>
             <div class="heroActions" style="margin-top:12px">
               <button class="cta small" id="pillLang" type="button" aria-label="Change language">EN · 4</button>
@@ -4326,6 +4329,79 @@ function bindNav(){
 }
 
 // ---------- language ----------
+const I18N = {
+  en: {
+    lang_card_title: "4 languages, same concierge",
+    lang_card_hint_prefix: "Chat naturally in",
+    lang_name_en: "English",
+    lang_name_es: "Spanish",
+    lang_name_pt: "Portuguese",
+    lang_name_fr: "French",
+    lang_card_hint_suffix: "— we keep the reservation details consistent.",
+    scope_global: "Scope: Global",
+    scope_venue: "Scope: Venue",
+  },
+  fr: {
+    lang_card_title: "4 langues, même concierge",
+    lang_card_hint_prefix: "Discutez naturellement en",
+    lang_name_en: "anglais",
+    lang_name_es: "espagnol",
+    lang_name_pt: "portugais",
+    lang_name_fr: "français",
+    lang_card_hint_suffix: "— nous gardons les détails de réservation cohérents.",
+    scope_global: "Portée : Globale",
+    scope_venue: "Portée : Site",
+  },
+  pt: {
+    lang_card_title: "4 idiomas, o mesmo concierge",
+    lang_card_hint_prefix: "Converse naturalmente em",
+    lang_name_en: "inglês",
+    lang_name_es: "espanhol",
+    lang_name_pt: "português",
+    lang_name_fr: "francês",
+    lang_card_hint_suffix: "— mantemos os detalhes da reserva consistentes.",
+    scope_global: "Escopo: Global",
+    scope_venue: "Escopo: Local",
+  },
+  es: {
+    lang_card_title: "4 idiomas, el mismo conserje",
+    lang_card_hint_prefix: "Chatea naturalmente en",
+    lang_name_en: "inglés",
+    lang_name_es: "español",
+    lang_name_pt: "portugués",
+    lang_name_fr: "francés",
+    lang_card_hint_suffix: "— mantenemos los detalles de la reserva consistentes.",
+    scope_global: "Alcance: Global",
+    scope_venue: "Alcance: Sede",
+  }
+};
+
+function applyI18n(lang){
+  const dict = I18N[lang] || I18N.en;
+
+  // Set html lang attribute
+  document.documentElement.setAttribute("lang", lang);
+
+  // Replace text content
+  document.querySelectorAll("[data-i18n]").forEach(el=>{
+    const key = el.getAttribute("data-i18n");
+    if(dict[key]) el.textContent = dict[key];
+  });
+
+  // Replace placeholders (if you use them)
+  document.querySelectorAll("[data-i18n-placeholder]").forEach(el=>{
+    const key = el.getAttribute("data-i18n-placeholder");
+    if(dict[key]) el.setAttribute("placeholder", dict[key]);
+  });
+
+  // Example: keep button labels translated if needed
+  const scopeBtn = $('pillScope');
+  if(scopeBtn){
+    const isGlobal = (state.scope || 'global') === 'global';
+    scopeBtn.textContent = isGlobal ? dict.scope_global : dict.scope_venue;
+  }
+}
+
 function setLang(lang){
   lang = (lang || 'en').toLowerCase().trim();
   if(!LANGS.includes(lang)) lang = 'en';
@@ -4347,6 +4423,7 @@ function setLang(lang){
     // aria-selected drives the visual highlight (CSS targets [aria-selected="true"])
     btn.setAttribute('aria-selected', isOn ? 'true' : 'false');
   });
+  applyI18n(lang);
   
   // UI-only: iOS segmented capsule positioning
   try{
@@ -5242,9 +5319,12 @@ async function submitIntake(){
     if(!res.ok || !data.ok) throw new Error();
 
     closeModal();
-    toast(`Request saved as ${data.tier || ''} — view it in Admin → Leads.`, 2400);
+  toast(
+    `Request saved${data.tier ? ` as ${data.tier}` : ''} (${(data.stored || 'saved')}) — view it in Admin → Leads.`,
+    2400
+  );
   }catch(e){
-    if(msg) msg.textContent = 'Could not submit. Please try again.';
+    if(msg) msg.textContent = (data && (data.error || data.msg)) ? String(data.error || data.msg) : 'Could not submit. Please try again.';
   }finally{
     window.__intakeSubmitting = false;
     $('submitIntake')?.removeAttribute('disabled');

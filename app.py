@@ -1975,10 +1975,19 @@ def api_lead():
 )
     _outbound_send_email(LANDING_LEAD_ALERT_TO, subj, body)
 
-    # Respond to frontend
-    if ok_sheet:
-        return jsonify(ok=True, saved=True), 200
-    return jsonify(ok=False, saved=False, error=msg_sheet), 500
+    # If sheet fails, still store locally so Admin can show it
+    stored = "sheet"
+    ok_store = ok_sheet
+    msg_store = msg_sheet
+
+    if not ok_sheet:
+        ok_fb, msg_fb = _save_lead_fallback(lead)
+        stored = "fallback"
+        ok_store = ok_fb
+        msg_store = msg_fb
+
+    # Respond to frontend (do NOT hard fail if sheet fails)
+    return jsonify(ok=ok_store, saved=True if ok_store else False, stored=stored, msg=msg_store), (200 if ok_store else 500)
 
 
 @app.post("/super/api/venues/set_active")
@@ -3522,7 +3531,25 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
 
 
 # Small per-venue read cache to avoid Sheets 429s
-_LEADS_CACHE_BY_VENUE: Dict[str, Dict[str, Any]] = {}
+_LEADS_CACHE_BY_VENUE: Dict[str, Dict[str, Any]] = {}\
+
+import json, os
+from datetime import datetime
+
+def _save_lead_fallback(lead: dict) -> tuple[bool, str]:
+    try:
+        venue = (lead.get("venue") or "unknown").strip() or "unknown"
+        os.makedirs("data", exist_ok=True)
+        path = os.path.join("data", f"landing_leads_{venue}.jsonl")
+
+        # Ensure ts exists
+        lead.setdefault("ts", datetime.utcnow().isoformat())
+
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(lead, ensure_ascii=False) + "\n")
+        return True, "saved_fallback"
+    except Exception as e:
+        return False, f"fallback_error: {e}"
 
 def read_leads(limit: int = 200, venue_id: Optional[str] = None) -> List[List[str]]:
     """Read leads from the venue's Google Sheet tab (best-effort, cached).
@@ -5911,8 +5938,21 @@ def api_poll_state():
                 return {}
 
         fz_cfg = _venue_fanzone_cfg()
+        manual_home = (fz_cfg.get("motd_home") or "").strip()
+        manual_away = (fz_cfg.get("motd_away") or "").strip()
+        manual_dt = (fz_cfg.get("motd_datetime_utc") or "").strip()
+        manual_id = (fz_cfg.get("match_of_day_id") or "").strip()
 
-        motd = _get_match_of_day()
+        if manual_home and manual_away:
+            motd = {
+                "id": manual_id or "manual",
+                "home": manual_home,
+                "away": manual_away,
+                "datetime_utc": manual_dt,
+                "venue": venue,
+            }
+        else:
+            motd = _get_match_of_day()
         if not motd:
             # Safe placeholder when fixtures are unavailable
             return jsonify({
@@ -5960,10 +6000,20 @@ def api_poll_state():
         if total > 0:
             winner = max(teams, key=lambda t: counts.get(t, 0))
 
+        # Build admin-friendly poll summary
+        top = [{"name": t, "votes": int(counts.get(t, 0))} for t in teams]
+        top.sort(key=lambda x: x["votes"], reverse=True)
+
+        title = f"{teams[0]} vs {teams[1]}" if len(teams) >= 2 else ""
+
+
         return jsonify({
             "ok": True,
             "can_vote": can_vote,
             "voted_for": voted_for,
+            "top": top,
+            "title": title,
+
             "match": {
                 "id": mid,
                 "date": motd.get("date"),
@@ -10280,6 +10330,20 @@ async function replayAI(){
 # ============================================================
 # Concierge intake API (writes into Admin Leads sheet)
 # ============================================================
+def _save_intake_fallback(lead: dict, venue_id: str) -> Tuple[bool, str]:
+    """
+    Fallback storage for intake leads when Google Sheets is unavailable.
+    Stores to local JSON file.
+    """
+    try:
+        os.makedirs(DATA_DIR, exist_ok=True)
+        fallback_path = os.path.join(DATA_DIR, f"intake_fallback_{venue_id}.jsonl")
+        with open(fallback_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(lead, ensure_ascii=False) + "\n")
+        return True, "saved_fallback"
+    except Exception as e:
+        return False, f"fallback_error: {str(e)}"
+
 @app.route("/api/intake", methods=["POST"])
 def api_intake():
     payload = request.get_json(silent=True) or {}
@@ -10329,12 +10393,30 @@ def api_intake():
         "vibe": vibe,
     }
 
+    
+    ok_sheet = True
+    msg = "saved_sheet"
+
     try:
         append_lead_to_sheet(lead)
-        _audit("intake.new", {"entry_point": entry_point, "tier": tier})
-        return jsonify({"ok": True, "tier": tier})
     except Exception as e:
-        return jsonify({"ok": False, "error": "Failed to store intake"}), 500
+        ok_sheet = False
+        msg = f"sheet_error: {e}"
+
+    # Always audit (even if fallback used)
+    _audit("intake.new", {"entry_point": entry_point, "tier": tier, "stored": "sheet" if ok_sheet else "fallback"})
+
+    if ok_sheet:
+        return jsonify({"ok": True, "tier": tier, "stored": "sheet"}), 200
+
+    # Sheet failed → fallback save
+    ok_fb, msg_fb = _save_intake_fallback(lead, vid)
+    if ok_fb:
+        return jsonify({"ok": True, "tier": tier, "stored": "fallback", "msg": msg}), 200
+
+    # Both failed
+    return jsonify({"ok": False, "error": "Failed to store intake", "msg": msg_fb}), 500
+
 
     # ============================================================
     # Leads intake (used by the new UI)
@@ -14728,6 +14810,8 @@ def next_question(sess: Dict[str, Any]) -> str:
     if not lead.get("phone"):
         return L["ask_phone"]
     return ""
+
+
 
 
 # ============================================================
