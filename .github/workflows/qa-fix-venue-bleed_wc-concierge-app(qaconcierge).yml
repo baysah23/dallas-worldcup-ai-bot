@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: wc-concierge-staging
+  group: wc-concierge-deploy
   cancel-in-progress: true
 
 jobs:
@@ -24,16 +24,38 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Create and Start virtual environment and Install dependencies
+      # Install deps into a folder Azure App Service expects when using zip deploy.
+      # This ensures runtime imports work (google.oauth2, gspread, etc.)
+      - name: Install dependencies into .python_packages
         run: |
-          python -m venv antenv
-          source antenv/bin/activate
-          pip install -r requirements.txt
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt --target ".python_packages/lib/site-packages"
+          PYTHONPATH="$PWD/.python_packages/lib/site-packages" python -c "from google.oauth2.service_account import Credentials; import gspread; print('✅ deps ok')"
 
-      - name: Zip deploy package (exclude venv)
+
+      # Create deploy zip. Exclude local venv and (optionally) venue configs.
+      # Keep the venues exclusion if you store venues outside wwwroot via VENUES_DIR=/home/site/venues.
+      - name: Zip deploy package (exclude venv + venues)
         run: |
-          zip -r app.zip . -x "antenv/*"
-          unzip -l app.zip | grep -E "config/venues/" || echo "ℹ️ venue configs loaded from Azure (not in zip)"
+          set -euo pipefail
+          rm -f app.zip
+          zip -r app.zip . \
+            -x "antenv/*" \
+            -x ".venv/*" \
+            -x "**/__pycache__/*" \
+            -x "**/*.pyc" \
+            -x ".git/*" \
+            -x ".github/*" \
+            -x "playwright-report/*" \
+            -x "test-results/*" \
+            -x "tests/*" \
+            -x "node_modules/*" \
+            -x "config/venues/*"
+
+          echo "✅ Zip contents sanity checks"
+          unzip -l app.zip | grep -E "\.python_packages/lib/site-packages" >/dev/null || (echo "❌ .python_packages missing from zip" && exit 1)
+          unzip -l app.zip | grep -E "config/venues/" && (echo "❌ venues were packaged (expected excluded)" && exit 1) || echo "ℹ️ venues NOT packaged (expected)"
 
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
@@ -56,7 +78,10 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Deploy to Azure Web App (qaconcierge slot)
+      # Deploy to the Azure Web App. For prod, either:
+      # - change slot-name to "production" (or remove slot-name), OR
+      # - duplicate this workflow with a different trigger/slot.
+      - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
         with:
           app-name: wc-concierge-app
