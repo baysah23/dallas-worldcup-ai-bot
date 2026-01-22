@@ -32,7 +32,7 @@ jobs:
 
       - name: Zip deploy package (exclude venv )
         run: |
-          zip -r app.zip . -x "antenv/*"
+          zip -r app.zip . -x "antenv/*" -x "config/venues/*"
           unzip -l app.zip | grep -E "config/venues/" || echo "ℹ️ venue configs NOT packaged (safe for prod)"
 
 
