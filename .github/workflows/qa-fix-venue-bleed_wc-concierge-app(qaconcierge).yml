@@ -31,7 +31,8 @@ jobs:
           set -euo pipefail
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt --target ".python_packages/lib/site-packages"
-          python -c "from google.oauth2.service_account import Credentials; import gspread; print('✅ deps ok')"
+          PYTHONPATH="$PWD/.python_packages/lib/site-packages" python -c "from google.oauth2.service_account import Credentials; import gspread; print('✅ deps ok')"
+
 
       # Create deploy zip. Exclude local venv and (optionally) venue configs.
       # Keep the venues exclusion if you store venues outside wwwroot via VENUES_DIR=/home/site/venues.
