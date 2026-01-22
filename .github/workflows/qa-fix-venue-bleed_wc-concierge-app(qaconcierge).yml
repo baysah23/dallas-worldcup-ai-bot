@@ -30,9 +30,9 @@ jobs:
           source antenv/bin/activate
           pip install -r requirements.txt
 
-      - name: Zip deploy package (exclude venv + venues)
+      - name: Zip deploy package (exclude venv )
         run: |
-          zip -r app.zip . -x "antenv/*" -x "config/venues/*"
+          zip -r app.zip . -x "antenv/*"
           unzip -l app.zip | grep -E "config/venues/" || echo "ℹ️ venue configs NOT packaged (safe for prod)"
 
 
