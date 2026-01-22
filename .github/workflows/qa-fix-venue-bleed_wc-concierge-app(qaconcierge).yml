@@ -30,10 +30,11 @@ jobs:
           source antenv/bin/activate
           pip install -r requirements.txt
 
-      - name: Zip deploy package (exclude venv)
+      - name: Zip deploy package (exclude venv + venues)
         run: |
-          zip -r app.zip . -x "antenv/*"
-          unzip -l app.zip | grep -E "config/venues/" || echo "ℹ️ venue configs loaded from Azure (not in zip)"
+          zip -r app.zip . -x "antenv/*" -x "config/venues/*"
+          unzip -l app.zip | grep -E "config/venues/" || echo "ℹ️ venue configs NOT packaged (safe for prod)"
+
 
       - name: Upload artifact for deployment jobs
         uses: actions/upload-artifact@v4
