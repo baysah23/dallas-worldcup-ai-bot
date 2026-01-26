@@ -7712,6 +7712,7 @@ th{
     <button type="button" class="tabbtn" data-tab="rules" data-minrole="owner" onclick="showTab('rules');return false;">Rules</button>
     <button type="button" class="tabbtn" data-tab="menu" data-minrole="owner" onclick="showTab('menu');return false;">Menu</button>
     <button type="button" class="tabbtn" data-tab="policies" data-minrole="owner" onclick="showTab('policies');return false;">Policies</button>
+    <button type="button" class="tabbtn" data-tab="drafts" data-minrole="owner" onclick="showTab('drafts');return false;">Drafts</button>
   </div>
 </div>
 
@@ -8126,6 +8127,23 @@ th{
     </div>
   </div>
 </div>
+<div id="tab-drafts" class="tabpane hidden">
+  <h3>Draft Templates</h3>
+
+  <div class="row">
+    <button type="button" class="btn" onclick="draftsLoad();">Reload</button>
+    <button type="button" class="btn primary" onclick="draftsSave();">Save</button>
+    <span class="muted" id="drafts-status"></span>
+  </div>
+
+  <p class="muted">Owner-only. Edit JSON and save.</p>
+
+  <textarea
+    id="drafts-json"
+    style="width:100%;min-height:320px;margin-top:10px;">
+  </textarea>
+</div>
+                
 """)
 
 
@@ -8259,7 +8277,8 @@ th{
 
       var pane = document.getElementById('tab-'+tab);
       if(pane && pane.classList) pane.classList.remove('hidden');
-
+      if(tab === 'drafts') draftsLoad();
+      
       try{ history.replaceState(null,'','#'+tab); }catch(e){}
     }catch(e){}
   }
@@ -8896,7 +8915,65 @@ async function uploadMenu(){
   else { if(msg) msg.textContent='Upload failed'; alert('Upload failed: '+(j && j.error ? j.error : res.status)); }
 }
 
+// ---------------- Drafts (owner-editable) ----------------
+function draftsLoad(){
+  const box = document.getElementById('drafts-json');
+  const st  = document.getElementById('drafts-status');
+  if(!box || !st) return;
 
+  st.textContent = 'Loading…';
+  fetch(`/admin/api/drafts?key=${encodeURIComponent(KEY)}`, { cache: 'no-store' })
+    .then(r => r.json())
+    .then(j => {
+      if(!j.ok) throw new Error(j.error || 'Failed');
+      box.value = JSON.stringify(j.drafts || {}, null, 2);
+      st.textContent = j.meta && j.meta.updated_at ? `Loaded • ${j.meta.updated_at}` : 'Loaded';
+    })
+    .catch(e => {
+      st.textContent = `Error: ${e.message || e}`;
+    });
+}
+
+function draftsSave(){
+  const box = document.getElementById('drafts-json');
+  const st  = document.getElementById('drafts-status');
+  if(!box || !st) return;
+
+  // owner-only (UI guard; backend also enforces)
+  if(typeof ROLE_RANK !== 'undefined' && ROLE_RANK[ROLE] < 2){
+    st.textContent = 'Owner only.';
+    return;
+  }
+
+  if(!VENUE){
+    st.textContent = 'Missing venue (?venue=...)';
+    return;
+  }
+
+  let draftsObj = null;
+  try{
+    draftsObj = JSON.parse(box.value || '{}');
+  }catch(e){
+    st.textContent = 'Invalid JSON.';
+    return;
+  }
+
+  st.textContent = 'Saving…';
+  fetch(`/admin/api/drafts?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ drafts: draftsObj })
+  })
+    .then(r => r.json())
+    .then(j => {
+      if(!j.ok) throw new Error(j.error || 'Failed');
+      st.textContent = j.meta && j.meta.updated_at ? `Saved • ${j.meta.updated_at}` : 'Saved';
+    })
+    .catch(e => {
+      st.textContent = `Error: ${e.message || e}`;
+    });
+}
+                
 function _ensureMiniState(el, idSuffix){
   try{
     if(!el) return null;
