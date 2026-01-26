@@ -82,6 +82,7 @@ _REDIS_FALLBACK_LAST_PATH = ""
 # NOTE: These files still exist for local/dev fallback.
 _REDIS_PATH_KEY_MAP = {  # values are suffixes; full key includes namespace + venue
     os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_{venue}_ai_queue.json"): "ai_queue",
+    os.environ.get("DRAFTS_FILE", "/tmp/wc26_{venue}_drafts.json"): "drafts",
     os.environ.get("AI_SETTINGS_FILE", "/tmp/wc26_{venue}_ai_settings.json"): "ai_settings",
     os.environ.get("PARTNER_POLICIES_FILE", "/tmp/wc26_{venue}_partner_policies.json"): "partner_policies",
     os.environ.get("BUSINESS_RULES_FILE", "/tmp/wc26_{venue}_business_rules.json"): "business_rules",
@@ -948,6 +949,42 @@ def _save_ai_settings_to_disk(patch: Dict[str, Any], actor: str, role: str) -> D
     _safe_write_json_file(AI_SETTINGS_FILE, AI_SETTINGS)
     return AI_SETTINGS
 
+# ============================================================
+# Draft Templates (Admin editable)
+# ============================================================
+DRAFTS_FILE = os.environ.get("DRAFTS_FILE", "/tmp/wc26_{venue}_drafts.json")
+
+def _default_drafts() -> Dict[str, Any]:
+    return {
+        "updated_at": None,
+        "updated_by": None,
+        "updated_role": None,
+        "drafts": {
+            "sms_confirm": {
+                "channel": "sms",
+                "title": "SMS — Confirmation",
+                "body": "Hi {name}, you’re confirmed for {date} at {time} for {party_size}.",
+            }
+        }
+    }
+
+DRAFTS: Dict[str, Any] = _default_drafts()
+
+def _load_drafts_from_disk() -> None:
+    global DRAFTS
+    payload = _safe_read_json_file(DRAFTS_FILE)
+    if isinstance(payload, dict) and payload:
+        DRAFTS = _deep_merge(_default_drafts(), payload)
+
+def _save_drafts_to_disk(patch: Dict[str, Any], actor: str, role: str) -> Dict[str, Any]:
+    global DRAFTS
+    merged = _deep_merge(DRAFTS, patch or {})
+    merged["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    merged["updated_by"] = actor
+    merged["updated_role"] = role
+    DRAFTS = merged
+    _safe_write_json_file(DRAFTS_FILE, DRAFTS)
+    return DRAFTS
 
 def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
     """Shallow+deep merge for dicts (override wins)."""
@@ -1840,6 +1877,11 @@ except Exception:
 
 try:
     _load_ai_settings_from_disk()
+except Exception:
+    pass
+
+try:
+    _load_drafts_from_disk()
 except Exception:
     pass
 
@@ -6999,6 +7041,61 @@ def admin_api_presets_apply():
     _audit("preset.apply", {"name": name, "ops": get_ops(cfg), "rules_patch": rules_patch})
     return jsonify({"ok": True, "name": name, "ops": get_ops(cfg), "rules": BUSINESS_RULES})
 
+@app.get("/admin/api/drafts")
+def admin_api_drafts_get():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    try:
+        _load_drafts_from_disk()
+    except Exception:
+        pass
+    return jsonify({
+        "ok": True,
+        "drafts": (DRAFTS or {}).get("drafts", {}),
+        "meta": {
+            "updated_at": (DRAFTS or {}).get("updated_at"),
+            "updated_by": (DRAFTS or {}).get("updated_by"),
+            "updated_role": (DRAFTS or {}).get("updated_role"),
+        }
+    })
+
+@app.post("/admin/api/drafts")
+def admin_api_drafts_save():
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+
+    ctx = _admin_ctx() or {}
+    actor = ctx.get("actor", "")
+    role = ctx.get("role", "")
+
+    data = request.get_json(silent=True) or {}
+    drafts = data.get("drafts")
+
+    if not isinstance(drafts, dict):
+        return jsonify({"ok": False, "error": "drafts must be an object"}), 400
+
+    clean = {}
+    for k, v in drafts.items():
+        if not isinstance(k, str) or not k.strip():
+            continue
+        if not isinstance(v, dict):
+            continue
+        body = str(v.get("body") or "").strip()
+        if not body:
+            continue
+        clean[k.strip()] = {
+            "channel": str(v.get("channel") or "").strip(),
+            "title": str(v.get("title") or "").strip(),
+            "subject": str(v.get("subject") or "").strip(),
+            "body": body[:5000],
+        }
+
+    saved = _save_drafts_to_disk({"drafts": clean}, actor=actor, role=role)
+    _audit("drafts.save", {"count": len(clean)})
+    return jsonify({"ok": True, "count": len(clean), "meta": {"updated_at": saved.get("updated_at")}})
+
 
 @app.route("/admin/api/audit", methods=["GET"])
 def admin_api_audit():
@@ -9711,8 +9808,18 @@ def admin_api_ai_draft_reply():
             return jsonify({"ok": False, "error": "reply_draft disabled by feature flag"}), 409
 
         system_msg = (AI_SETTINGS.get("system_prompt") or "").strip()
+
+        # Use admin-saved drafts as the starting template (per-venue)
+        d_all = (DRAFTS or {}).get("drafts") or {}
+        needs_more = (not (lead.get("party_size") or "").strip()) or (not (lead.get("time") or "").strip())
+        draft_key = "sms_more_info" if needs_more else "sms_confirm"
+        base_tpl = ((d_all.get(draft_key) or {}).get("body") or "").strip()
+
         user_msg = (
+            "Use the following approved reply template as the base. Preserve its structure and tone, only fill missing details.\n\n"
+            f"APPROVED TEMPLATE:\n{base_tpl}\n\n"
             "Draft a short, premium, action-oriented reply to this lead. "
+
             "Do NOT mention internal systems. Ask for any missing required details.\n\n"
             f"Name: {lead.get('name')}\nPhone: {lead.get('phone')}\nDate: {lead.get('date')}\nTime: {lead.get('time')}\n"
             f"Party: {lead.get('party_size')}\nBudget: {lead.get('budget')}\nNotes: {lead.get('notes')}\nLanguage: {lead.get('language')}\n"
@@ -13607,8 +13714,8 @@ def _safe_read_json_file(path: str, default: Any = None) -> Any:
     return default
 
 def _safe_write_json_file(path: str, payload: Any) -> None:
-    global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
     """Write JSON to Redis (if enabled) or disk safely."""
+    global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
     # Multi-venue: expand {venue} placeholder
     try:
         vid = _venue_id()
