@@ -9796,6 +9796,26 @@ function _initRefreshControls(){
   else _setAutoLabel(false);
 }
 
+async function replayAI(){
+  const msg = qs('#replay-msg'); if(msg) msg.textContent = 'Replaying…';
+  const out = qs('#replayOut'); if(out) out.textContent = '';
+  const row = parseInt(qs('#replay-row')?.value || '0', 10);
+  if(!row){ if(msg) msg.textContent = 'Enter a sheet row #'; return; }
+  try{
+    const r = await fetch(`/admin/api/ai/replay?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({row})
+    });
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.error || 'Failed');
+    if(out) out.textContent = JSON.stringify(d, null, 2);
+    if(msg) msg.textContent = 'Done ✔';
+  }catch(e){
+    if(msg) msg.textContent = 'Failed: ' + (e.message || e);
+  }
+}
+                
 document.addEventListener('DOMContentLoaded', ()=>{
   
   try{ installClickUnblocker(); }catch(e){}
@@ -10421,26 +10441,6 @@ async function loadForecast(){
     }
     if(body) body.textContent = lines.join('\\n');
     if(msg) msg.textContent = 'Updated ✔';
-  }catch(e){
-    if(msg) msg.textContent = 'Failed: ' + (e.message || e);
-  }
-}
-
-async function replayAI(){
-  const msg = qs('#replay-msg'); if(msg) msg.textContent = 'Replaying…';
-  const out = qs('#replayOut'); if(out) out.textContent = '';
-  const row = parseInt(qs('#replay-row')?.value || '0', 10);
-  if(!row){ if(msg) msg.textContent = 'Enter a sheet row #'; return; }
-  try{
-    const r = await fetch(`/admin/api/ai/replay?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({row})
-    });
-    const d = await r.json();
-    if(!d.ok) throw new Error(d.error || 'Failed');
-    if(out) out.textContent = JSON.stringify(d, null, 2);
-    if(msg) msg.textContent = 'Done ✔';
   }catch(e){
     if(msg) msg.textContent = 'Failed: ' + (e.message || e);
   }
