@@ -10432,7 +10432,7 @@ async function replayAI(){
   const row = parseInt(qs('#replay-row')?.value || '0', 10);
   if(!row){ if(msg) msg.textContent = 'Enter a sheet row #'; return; }
   try{
-    const r = await fetch(`/admin/api/ai/replay?key=${encodeURIComponent(KEY)}`, {
+    const r = await fetch(`/admin/api/ai/replay?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({row})
