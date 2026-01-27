@@ -46,6 +46,7 @@
     <button class="tabbtn" data-tab="ops">Ops</button>
     <button class="tabbtn" data-tab="leads">Leads</button>
     <button class="tabbtn" data-tab="allleads" data-minrole="owner">All Leads</button>
+    <button class="tabbtn" data-tab="drafts" data-minrole="owner">Drafts</button>
   </div>
 
   <div class="pane" id="pane-ops">
@@ -93,6 +94,27 @@
   </div>
 </div>
 
+<div class="pane" id="pane-drafts">
+  <div class="row">
+    <button class="btn" id="drafts-reload">Reload</button>
+    <button class="btn primary" id="drafts-save">Save</button>
+    <span class="muted" id="drafts-status"></span>
+  </div>
+
+  <div class="muted" style="margin-top:10px;">
+    Edit JSON then Save (owner-only).
+  </div>
+
+  <textarea
+    id="drafts-json"
+    style="width:100%;min-height:320px;margin-top:10px;
+           background:rgba(255,255,255,.06);
+           border:1px solid rgba(255,255,255,.10);
+           color:var(--text);
+           padding:10px;border-radius:12px;">
+  </textarea>
+</div>
+
 <script>
   const __ADMIN_ROLE__ = "{{ role }}";
 </script>
@@ -102,6 +124,69 @@ const KEY = (new URLSearchParams(window.location.search).get('key') || '');
 const VENUE = (new URLSearchParams(window.location.search).get('venue') || '');
 let ROLE = (__ADMIN_ROLE__ || 'manager');
 const ROLE_RANK = { "manager": 1, "owner": 2 };
+
+// ---------------- Drafts (owner-editable) ----------------
+async function draftsLoad(){
+  const box = document.getElementById('drafts-json');
+  const st  = document.getElementById('drafts-status');
+  if(!box || !st) return;
+
+  st.textContent = 'Loading…';
+  try{
+    const r = await fetch(`/admin/api/drafts?key=${encodeURIComponent(KEY)}`, { cache: 'no-store' });
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error || 'Failed');
+
+    // show only the drafts object for editing
+    box.value = JSON.stringify(j.drafts || {}, null, 2);
+    st.textContent = j.meta?.updated_at ? `Loaded • ${j.meta.updated_at}` : 'Loaded';
+  }catch(e){
+    st.textContent = `Error: ${e.message || e}`;
+  }
+}
+
+async function draftsSave(){
+  const box = document.getElementById('drafts-json');
+  const st  = document.getElementById('drafts-status');
+  if(!box || !st) return;
+
+  if((ROLE_RANK[ROLE] || 0) < 2){
+    st.textContent = 'Owner only.';
+    return;
+  }
+
+  // IMPORTANT: include venue on POST to satisfy your multi-venue write guard
+  if(!VENUE){
+    st.textContent = 'Missing venue in URL (?venue=...).';
+    return;
+  }
+
+  st.textContent = 'Saving…';
+  let draftsObj = null;
+  try{
+    draftsObj = JSON.parse(box.value || '{}');
+  }catch(e){
+    st.textContent = 'Invalid JSON.';
+    return;
+  }
+
+  try{
+    const r = await fetch(`/admin/api/drafts?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ drafts: draftsObj })
+    });
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error || 'Failed');
+    st.textContent = j.meta?.updated_at ? `Saved • ${j.meta.updated_at}` : 'Saved';
+  }catch(e){
+    st.textContent = `Error: ${e.message || e}`;
+  }
+}
+
+// wire buttons (safe if pane exists)
+document.getElementById('drafts-reload')?.addEventListener('click', draftsLoad);
+document.getElementById('drafts-save')?.addEventListener('click', draftsSave);
 
 function toast(msg){
   try{
@@ -118,6 +203,7 @@ function setActive(tab){
   document.querySelectorAll('.pane').forEach(p=>p.classList.remove('active'));
   const pane = document.getElementById('pane-'+tab);
   if(pane) pane.classList.add('active');
+  if(tab === 'drafts') draftsLoad();
   try{ history.replaceState(null,'','#'+tab); }catch(e){}
 }
 

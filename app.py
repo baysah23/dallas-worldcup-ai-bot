@@ -82,6 +82,7 @@ _REDIS_FALLBACK_LAST_PATH = ""
 # NOTE: These files still exist for local/dev fallback.
 _REDIS_PATH_KEY_MAP = {  # values are suffixes; full key includes namespace + venue
     os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_{venue}_ai_queue.json"): "ai_queue",
+    os.environ.get("DRAFTS_FILE", "/tmp/wc26_{venue}_drafts.json"): "drafts",
     os.environ.get("AI_SETTINGS_FILE", "/tmp/wc26_{venue}_ai_settings.json"): "ai_settings",
     os.environ.get("PARTNER_POLICIES_FILE", "/tmp/wc26_{venue}_partner_policies.json"): "partner_policies",
     os.environ.get("BUSINESS_RULES_FILE", "/tmp/wc26_{venue}_business_rules.json"): "business_rules",
@@ -262,6 +263,52 @@ def public_wsgi_probe():
         "server_software": server_sw,
         "python": (os.environ.get("PYTHON_VERSION") or ""),
     })
+
+@app.get("/privacy")
+def privacy_policy():
+    html = """
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Privacy Policy — World Cup Concierge</title>
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0b1220;color:#e8eefc;}
+    .wrap{max-width:900px;margin:0 auto;padding:40px 18px;}
+    h1{font-size:28px;margin:0 0 10px;}
+    p,li{line-height:1.6;color:rgba(232,238,252,.9);}
+    .card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:18px;}
+    a{color:#b9c7ee;}
+    .muted{color:rgba(232,238,252,.75);font-size:13px;margin-top:18px;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Privacy Policy</h1>
+    <div class="card">
+      <p><strong>World Cup Concierge</strong> collects personal information such as name, phone number, and email address when users voluntarily submit information through our website or applications.</p>
+
+      <p>Phone numbers are collected solely for transactional and operational purposes, including reservation confirmations, VIP status updates, system alerts, and customer support communications.</p>
+
+      <p>We do not send marketing or promotional SMS messages. SMS messages are sent only to users who explicitly opt in by providing their phone number.</p>
+
+      <p>Users may opt out of SMS communications at any time by replying <strong>STOP</strong>.</p>
+
+      <p>We do not sell or share personal information with third parties for marketing purposes.</p>
+
+      <p>For questions about this policy, contact: <a href="mailto:admin@worldcupconcierge.app">admin@worldcupconcierge.app</a></p>
+
+      <div class="muted">Last updated: January 2026</div>
+    </div>
+  </div>
+</body>
+</html>
+"""
+    resp = make_response(html, 200)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 @app.get("/_prod_gate")
 def public_prod_gate():
@@ -828,44 +875,51 @@ def _send_slack(text: str) -> bool:
         return False
 
 def _send_email(subject: str, body: str) -> bool:
-    # SendGrid (best-effort). If not configured, just return False.
+    """
+    Send alert email using the SAME SendGrid path as the landing page,
+    so behavior is consistent and proven to work.
+    """
     try:
         ch = (ALERT_SETTINGS.get("channels") or {}).get("email") or {}
-        api_key = os.environ.get("SENDGRID_API_KEY", "")
-        to_addr = str(ch.get("to") or "").strip()
-        from_addr = str(ch.get("from") or "").strip()
-        if not (ch.get("enabled") and api_key and to_addr and from_addr):
+        if not ch.get("enabled"):
             return False
-        payload = {
-            "personalizations": [{"to": [{"email": to_addr}]}],
-            "from": {"email": from_addr},
-            "subject": subject,
-            "content": [{"type":"text/plain","value": body}],
-        }
-        req = urllib.request.Request(
-            "https://api.sendgrid.com/v3/mail/send",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type":"application/json"},
-            method="POST",
+
+        to_addr = str(ch.get("to") or "").strip()
+        if not to_addr:
+            return False
+
+        ok, msg = _outbound_send_email(
+            to_email=to_addr,
+            subject=subject,
+            body_text=body
         )
-        with urllib.request.urlopen(req, timeout=10) as r:
-            r.read()
-        return True
-    except Exception:
+        if not ok:
+            print("[ALERT EMAIL FAILED]", msg)
+        return bool(ok)
+    except Exception as e:
+        print("[ALERT EMAIL ERROR]", repr(e))
         return False
 
 def _send_sms(text: str) -> bool:
-    # Twilio (best-effort). If not configured, return False.
+    """
+    Send alert SMS via the same Twilio implementation used elsewhere.
+    """
     try:
         ch = (ALERT_SETTINGS.get("channels") or {}).get("sms") or {}
-        to_num = str(ch.get("to") or "").strip()
-        if not (ch.get("enabled") and to_num):
+        if not ch.get("enabled"):
             return False
-        # reuse existing Twilio helpers if present
-        if "_twilio_send_sms" in globals():
-            return bool(_twilio_send_sms(to_num, text))
-        return False
-    except Exception:
+
+        to_num = str(ch.get("to") or "").strip()
+        if not to_num:
+            return False
+
+        # Twilio expects E.164 for SMS, e.g. +1347...
+        ok, msg = _outbound_send_twilio("sms", to_num, text)
+        if not ok:
+            print("[ALERT SMS FAILED]", msg)
+        return bool(ok)
+    except Exception as e:
+        print("[ALERT SMS ERROR]", repr(e))
         return False
 
 def _dispatch_alert(title: str, details: str, key: str, severity: str = "error") -> Dict[str, Any]:
@@ -948,6 +1002,42 @@ def _save_ai_settings_to_disk(patch: Dict[str, Any], actor: str, role: str) -> D
     _safe_write_json_file(AI_SETTINGS_FILE, AI_SETTINGS)
     return AI_SETTINGS
 
+# ============================================================
+# Draft Templates (Admin editable)
+# ============================================================
+DRAFTS_FILE = os.environ.get("DRAFTS_FILE", "/tmp/wc26_{venue}_drafts.json")
+
+def _default_drafts() -> Dict[str, Any]:
+    return {
+        "updated_at": None,
+        "updated_by": None,
+        "updated_role": None,
+        "drafts": {
+            "sms_confirm": {
+                "channel": "sms",
+                "title": "SMS — Confirmation",
+                "body": "Hi {name}, you’re confirmed for {date} at {time} for {party_size}.",
+            }
+        }
+    }
+
+DRAFTS: Dict[str, Any] = _default_drafts()
+
+def _load_drafts_from_disk() -> None:
+    global DRAFTS
+    payload = _safe_read_json_file(DRAFTS_FILE)
+    if isinstance(payload, dict) and payload:
+        DRAFTS = _deep_merge(_default_drafts(), payload)
+
+def _save_drafts_to_disk(patch: Dict[str, Any], actor: str, role: str) -> Dict[str, Any]:
+    global DRAFTS
+    merged = _deep_merge(DRAFTS, patch or {})
+    merged["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    merged["updated_by"] = actor
+    merged["updated_role"] = role
+    DRAFTS = merged
+    _safe_write_json_file(DRAFTS_FILE, DRAFTS)
+    return DRAFTS
 
 def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
     """Shallow+deep merge for dicts (override wins)."""
@@ -1840,6 +1930,11 @@ except Exception:
 
 try:
     _load_ai_settings_from_disk()
+except Exception:
+    pass
+
+try:
+    _load_drafts_from_disk()
 except Exception:
     pass
 
@@ -6999,6 +7094,61 @@ def admin_api_presets_apply():
     _audit("preset.apply", {"name": name, "ops": get_ops(cfg), "rules_patch": rules_patch})
     return jsonify({"ok": True, "name": name, "ops": get_ops(cfg), "rules": BUSINESS_RULES})
 
+@app.get("/admin/api/drafts")
+def admin_api_drafts_get():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    try:
+        _load_drafts_from_disk()
+    except Exception:
+        pass
+    return jsonify({
+        "ok": True,
+        "drafts": (DRAFTS or {}).get("drafts", {}),
+        "meta": {
+            "updated_at": (DRAFTS or {}).get("updated_at"),
+            "updated_by": (DRAFTS or {}).get("updated_by"),
+            "updated_role": (DRAFTS or {}).get("updated_role"),
+        }
+    })
+
+@app.post("/admin/api/drafts")
+def admin_api_drafts_save():
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+
+    ctx = _admin_ctx() or {}
+    actor = ctx.get("actor", "")
+    role = ctx.get("role", "")
+
+    data = request.get_json(silent=True) or {}
+    drafts = data.get("drafts")
+
+    if not isinstance(drafts, dict):
+        return jsonify({"ok": False, "error": "drafts must be an object"}), 400
+
+    clean = {}
+    for k, v in drafts.items():
+        if not isinstance(k, str) or not k.strip():
+            continue
+        if not isinstance(v, dict):
+            continue
+        body = str(v.get("body") or "").strip()
+        if not body:
+            continue
+        clean[k.strip()] = {
+            "channel": str(v.get("channel") or "").strip(),
+            "title": str(v.get("title") or "").strip(),
+            "subject": str(v.get("subject") or "").strip(),
+            "body": body[:5000],
+        }
+
+    saved = _save_drafts_to_disk({"drafts": clean}, actor=actor, role=role)
+    _audit("drafts.save", {"count": len(clean)})
+    return jsonify({"ok": True, "count": len(clean), "meta": {"updated_at": saved.get("updated_at")}})
+
 
 @app.route("/admin/api/audit", methods=["GET"])
 def admin_api_audit():
@@ -7615,6 +7765,7 @@ th{
     <button type="button" class="tabbtn" data-tab="rules" data-minrole="owner" onclick="showTab('rules');return false;">Rules</button>
     <button type="button" class="tabbtn" data-tab="menu" data-minrole="owner" onclick="showTab('menu');return false;">Menu</button>
     <button type="button" class="tabbtn" data-tab="policies" data-minrole="owner" onclick="showTab('policies');return false;">Policies</button>
+    <button type="button" class="tabbtn" data-tab="drafts" data-minrole="owner" onclick="showTab('drafts');return false;">Drafts</button>
   </div>
 </div>
 
@@ -8029,6 +8180,23 @@ th{
     </div>
   </div>
 </div>
+<div id="tab-drafts" class="tabpane hidden">
+  <h3>Draft Templates</h3>
+
+  <div class="row">
+    <button type="button" class="btn" onclick="draftsLoad();">Reload</button>
+    <button type="button" class="btn primary" onclick="draftsSave();">Save</button>
+    <span class="muted" id="drafts-status"></span>
+  </div>
+
+  <p class="muted">Owner-only. Edit JSON and save.</p>
+
+  <textarea
+    id="drafts-json"
+    style="width:100%;min-height:320px;margin-top:10px;">
+  </textarea>
+</div>
+                
 """)
 
 
@@ -8162,7 +8330,8 @@ th{
 
       var pane = document.getElementById('tab-'+tab);
       if(pane && pane.classList) pane.classList.remove('hidden');
-
+      if(tab === 'drafts') draftsLoad();
+      
       try{ history.replaceState(null,'','#'+tab); }catch(e){}
     }catch(e){}
   }
@@ -8731,7 +8900,7 @@ async function saveAlerts(){
         sms: { enabled: qs('#al-sms-en').checked, to: (qs('#al-sms-to').value||'').trim() }
       }
     };
-    const res = await fetch('/admin/api/alerts/settings?key='+encodeURIComponent(KEY), {
+    const res = await fetch('/admin/api/alerts/settings?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE), {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(payload)
     });
@@ -8747,7 +8916,7 @@ async function testAlert(){
   if(!hasRole('owner')){ qs('#al-msg').textContent = 'Owner only'; return; }
   try{
     qs('#al-msg').textContent = 'Sending test…';
-    const res = await fetch('/admin/api/alerts/test?key='+encodeURIComponent(KEY), { method:'POST' });
+    const res = await fetch('/admin/api/alerts/test?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE), { method:'POST' });
     const j = await res.json().catch(()=>null);
     if(!j || !j.ok){ qs('#al-msg').textContent = 'Test failed: ' + ((j&&j.error)||res.status); return; }
     qs('#al-msg').textContent = 'Test sent';
@@ -8799,7 +8968,65 @@ async function uploadMenu(){
   else { if(msg) msg.textContent='Upload failed'; alert('Upload failed: '+(j && j.error ? j.error : res.status)); }
 }
 
+// ---------------- Drafts (owner-editable) ----------------
+function draftsLoad(){
+  const box = document.getElementById('drafts-json');
+  const st  = document.getElementById('drafts-status');
+  if(!box || !st) return;
 
+  st.textContent = 'Loading…';
+  fetch(`/admin/api/drafts?key=${encodeURIComponent(KEY)}`, { cache: 'no-store' })
+    .then(r => r.json())
+    .then(j => {
+      if(!j.ok) throw new Error(j.error || 'Failed');
+      box.value = JSON.stringify(j.drafts || {}, null, 2);
+      st.textContent = j.meta && j.meta.updated_at ? `Loaded • ${j.meta.updated_at}` : 'Loaded';
+    })
+    .catch(e => {
+      st.textContent = `Error: ${e.message || e}`;
+    });
+}
+
+function draftsSave(){
+  const box = document.getElementById('drafts-json');
+  const st  = document.getElementById('drafts-status');
+  if(!box || !st) return;
+
+  // owner-only (UI guard; backend also enforces)
+  if(typeof ROLE_RANK !== 'undefined' && ROLE_RANK[ROLE] < 2){
+    st.textContent = 'Owner only.';
+    return;
+  }
+
+  if(!VENUE){
+    st.textContent = 'Missing venue (?venue=...)';
+    return;
+  }
+
+  let draftsObj = null;
+  try{
+    draftsObj = JSON.parse(box.value || '{}');
+  }catch(e){
+    st.textContent = 'Invalid JSON.';
+    return;
+  }
+
+  st.textContent = 'Saving…';
+  fetch(`/admin/api/drafts?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ drafts: draftsObj })
+  })
+    .then(r => r.json())
+    .then(j => {
+      if(!j.ok) throw new Error(j.error || 'Failed');
+      st.textContent = j.meta && j.meta.updated_at ? `Saved • ${j.meta.updated_at}` : 'Saved';
+    })
+    .catch(e => {
+      st.textContent = `Error: ${e.message || e}`;
+    });
+}
+                
 function _ensureMiniState(el, idSuffix){
   try{
     if(!el) return null;
@@ -9622,6 +9849,26 @@ function _initRefreshControls(){
   else _setAutoLabel(false);
 }
 
+async function replayAI(){
+  const msg = qs('#replay-msg'); if(msg) msg.textContent = 'Replaying…';
+  const out = qs('#replayOut'); if(out) out.textContent = '';
+  const row = parseInt(qs('#replay-row')?.value || '0', 10);
+  if(!row){ if(msg) msg.textContent = 'Enter a sheet row #'; return; }
+  try{
+    const r = await fetch(`/admin/api/ai/replay?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({row})
+    });
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.error || 'Failed');
+    if(out) out.textContent = JSON.stringify(d, null, 2);
+    if(msg) msg.textContent = 'Done ✔';
+  }catch(e){
+    if(msg) msg.textContent = 'Failed: ' + (e.message || e);
+  }
+}
+                
 document.addEventListener('DOMContentLoaded', ()=>{
   
   try{ installClickUnblocker(); }catch(e){}
@@ -9711,8 +9958,18 @@ def admin_api_ai_draft_reply():
             return jsonify({"ok": False, "error": "reply_draft disabled by feature flag"}), 409
 
         system_msg = (AI_SETTINGS.get("system_prompt") or "").strip()
+
+        # Use admin-saved drafts as the starting template (per-venue)
+        d_all = (DRAFTS or {}).get("drafts") or {}
+        needs_more = (not (lead.get("party_size") or "").strip()) or (not (lead.get("time") or "").strip())
+        draft_key = "sms_more_info" if needs_more else "sms_confirm"
+        base_tpl = ((d_all.get(draft_key) or {}).get("body") or "").strip()
+
         user_msg = (
+            "Use the following approved reply template as the base. Preserve its structure and tone, only fill missing details.\n\n"
+            f"APPROVED TEMPLATE:\n{base_tpl}\n\n"
             "Draft a short, premium, action-oriented reply to this lead. "
+
             "Do NOT mention internal systems. Ask for any missing required details.\n\n"
             f"Name: {lead.get('name')}\nPhone: {lead.get('phone')}\nDate: {lead.get('date')}\nTime: {lead.get('time')}\n"
             f"Party: {lead.get('party_size')}\nBudget: {lead.get('budget')}\nNotes: {lead.get('notes')}\nLanguage: {lead.get('language')}\n"
@@ -10237,26 +10494,6 @@ async function loadForecast(){
     }
     if(body) body.textContent = lines.join('\\n');
     if(msg) msg.textContent = 'Updated ✔';
-  }catch(e){
-    if(msg) msg.textContent = 'Failed: ' + (e.message || e);
-  }
-}
-
-async function replayAI(){
-  const msg = qs('#replay-msg'); if(msg) msg.textContent = 'Replaying…';
-  const out = qs('#replayOut'); if(out) out.textContent = '';
-  const row = parseInt(qs('#replay-row')?.value || '0', 10);
-  if(!row){ if(msg) msg.textContent = 'Enter a sheet row #'; return; }
-  try{
-    const r = await fetch(`/admin/api/ai/replay?key=${encodeURIComponent(KEY)}`, {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({row})
-    });
-    const d = await r.json();
-    if(!d.ok) throw new Error(d.error || 'Failed');
-    if(out) out.textContent = JSON.stringify(d, null, 2);
-    if(msg) msg.textContent = 'Done ✔';
   }catch(e){
     if(msg) msg.textContent = 'Failed: ' + (e.message || e);
   }
@@ -13607,8 +13844,8 @@ def _safe_read_json_file(path: str, default: Any = None) -> Any:
     return default
 
 def _safe_write_json_file(path: str, payload: Any) -> None:
-    global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
     """Write JSON to Redis (if enabled) or disk safely."""
+    global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
     # Multi-venue: expand {venue} placeholder
     try:
         vid = _venue_id()
