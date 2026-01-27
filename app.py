@@ -855,17 +855,25 @@ def _send_email(subject: str, body: str) -> bool:
         return False
 
 def _send_sms(text: str) -> bool:
-    # Twilio (best-effort). If not configured, return False.
+    """
+    Send alert SMS via the same Twilio implementation used elsewhere.
+    """
     try:
         ch = (ALERT_SETTINGS.get("channels") or {}).get("sms") or {}
-        to_num = str(ch.get("to") or "").strip()
-        if not (ch.get("enabled") and to_num):
+        if not ch.get("enabled"):
             return False
-        # reuse existing Twilio helpers if present
-        if "_twilio_send_sms" in globals():
-            return bool(_twilio_send_sms(to_num, text))
-        return False
-    except Exception:
+
+        to_num = str(ch.get("to") or "").strip()
+        if not to_num:
+            return False
+
+        # Twilio expects E.164 for SMS, e.g. +1347...
+        ok, msg = _outbound_send_twilio("sms", to_num, text)
+        if not ok:
+            print("[ALERT SMS FAILED]", msg)
+        return bool(ok)
+    except Exception as e:
+        print("[ALERT SMS ERROR]", repr(e))
         return False
 
 def _dispatch_alert(title: str, details: str, key: str, severity: str = "error") -> Dict[str, Any]:
