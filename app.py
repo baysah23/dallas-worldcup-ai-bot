@@ -8847,7 +8847,7 @@ async function saveAlerts(){
         sms: { enabled: qs('#al-sms-en').checked, to: (qs('#al-sms-to').value||'').trim() }
       }
     };
-    const res = await fetch('/admin/api/alerts/settings?key='+encodeURIComponent(KEY), {
+    const res = await fetch('/admin/api/alerts/settings?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE), {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify(payload)
     });
@@ -8863,7 +8863,7 @@ async function testAlert(){
   if(!hasRole('owner')){ qs('#al-msg').textContent = 'Owner only'; return; }
   try{
     qs('#al-msg').textContent = 'Sending test…';
-    const res = await fetch('/admin/api/alerts/test?key='+encodeURIComponent(KEY), { method:'POST' });
+    const res = await fetch('/admin/api/alerts/test?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE), { method:'POST' });
     const j = await res.json().catch(()=>null);
     if(!j || !j.ok){ qs('#al-msg').textContent = 'Test failed: ' + ((j&&j.error)||res.status); return; }
     qs('#al-msg').textContent = 'Test sent';
