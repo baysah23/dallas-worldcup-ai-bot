@@ -264,6 +264,52 @@ def public_wsgi_probe():
         "python": (os.environ.get("PYTHON_VERSION") or ""),
     })
 
+@app.get("/privacy")
+def privacy_policy():
+    html = """
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Privacy Policy — World Cup Concierge</title>
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0b1220;color:#e8eefc;}
+    .wrap{max-width:900px;margin:0 auto;padding:40px 18px;}
+    h1{font-size:28px;margin:0 0 10px;}
+    p,li{line-height:1.6;color:rgba(232,238,252,.9);}
+    .card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:18px;}
+    a{color:#b9c7ee;}
+    .muted{color:rgba(232,238,252,.75);font-size:13px;margin-top:18px;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Privacy Policy</h1>
+    <div class="card">
+      <p><strong>World Cup Concierge</strong> collects personal information such as name, phone number, and email address when users voluntarily submit information through our website or applications.</p>
+
+      <p>Phone numbers are collected solely for transactional and operational purposes, including reservation confirmations, VIP status updates, system alerts, and customer support communications.</p>
+
+      <p>We do not send marketing or promotional SMS messages. SMS messages are sent only to users who explicitly opt in by providing their phone number.</p>
+
+      <p>Users may opt out of SMS communications at any time by replying <strong>STOP</strong>.</p>
+
+      <p>We do not sell or share personal information with third parties for marketing purposes.</p>
+
+      <p>For questions about this policy, contact: <a href="mailto:admin@worldcupconcierge.app">admin@worldcupconcierge.app</a></p>
+
+      <div class="muted">Last updated: January 2026</div>
+    </div>
+  </div>
+</body>
+</html>
+"""
+    resp = make_response(html, 200)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
 @app.get("/_prod_gate")
 def public_prod_gate():
     # Keep this endpoint *very* cheap: only runtime/process proof.
