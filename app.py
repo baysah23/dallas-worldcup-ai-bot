@@ -829,30 +829,29 @@ def _send_slack(text: str) -> bool:
         return False
 
 def _send_email(subject: str, body: str) -> bool:
-    # SendGrid (best-effort). If not configured, just return False.
+    """
+    Send alert email using the SAME SendGrid path as the landing page,
+    so behavior is consistent and proven to work.
+    """
     try:
         ch = (ALERT_SETTINGS.get("channels") or {}).get("email") or {}
-        api_key = os.environ.get("SENDGRID_API_KEY", "")
-        to_addr = str(ch.get("to") or "").strip()
-        from_addr = str(ch.get("from") or "").strip()
-        if not (ch.get("enabled") and api_key and to_addr and from_addr):
+        if not ch.get("enabled"):
             return False
-        payload = {
-            "personalizations": [{"to": [{"email": to_addr}]}],
-            "from": {"email": from_addr},
-            "subject": subject,
-            "content": [{"type":"text/plain","value": body}],
-        }
-        req = urllib.request.Request(
-            "https://api.sendgrid.com/v3/mail/send",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type":"application/json"},
-            method="POST",
+
+        to_addr = str(ch.get("to") or "").strip()
+        if not to_addr:
+            return False
+
+        ok, msg = _outbound_send_email(
+            to_email=to_addr,
+            subject=subject,
+            body_text=body
         )
-        with urllib.request.urlopen(req, timeout=10) as r:
-            r.read()
-        return True
-    except Exception:
+        if not ok:
+            print("[ALERT EMAIL FAILED]", msg)
+        return bool(ok)
+    except Exception as e:
+        print("[ALERT EMAIL ERROR]", repr(e))
         return False
 
 def _send_sms(text: str) -> bool:
