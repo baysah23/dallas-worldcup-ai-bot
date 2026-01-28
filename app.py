@@ -954,6 +954,9 @@ def _default_ai_settings() -> Dict[str, Any]:
             "vip_tag": True,
             "status_update": False,
             "reply_draft": True,
+            "send_email": True,
+            "send_sms": True,
+            "send_whatsapp": True,
         },
         # Feature gates (safe rollout). These further restrict what AI can do, even if allow_actions is true.
         "features": {
@@ -1607,15 +1610,23 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[s
     system_msg = (settings.get("system_prompt") or "").strip()
     # Tight JSON contract
     contract = {
-        "confidence": "number 0..1",
-        "actions": [
-            {
-                "type": f"one of: {allowed_types}",
-                "payload": "object (include row)",
-                "reason": "short string"
-            }
-        ],
-        "notes": "short string"
+      "confidence": "number 0..1",
+      "actions": [
+        {
+          "type": f"one of: {allowed_types}",
+          "reason": "short string",
+          "payload": {
+            "row": "int (required)",
+            "vip": "VIP|Regular (vip_tag only)",
+            "status": "New|Confirmed|Seated|No-Show|Handled (status_update only)",
+            "draft": "string (reply_draft only)",
+            "to": "email or phone (send_email/send_sms/send_whatsapp)",
+            "subject": "string (send_email only)",
+            "body": "string message (send_email/send_sms/send_whatsapp)"
+          }
+        }
+      ],
+      "notes": "short string"
     }
     user_msg = _ai_build_lead_prompt(lead) + "\n\nJSON schema:\n" + json.dumps(contract)
 
@@ -6449,7 +6460,7 @@ def admin_api_ai_settings():
         if "allow_actions" in data and isinstance(data.get("allow_actions"), dict):
             # Only allow known keys
             allow = {}
-            for k in ("vip_tag", "status_update", "reply_draft"):
+            for k in ("vip_tag","status_update","reply_draft","send_email","send_sms","send_whatsapp"):
                 if k in data["allow_actions"]:
                     allow[k] = bool(as_bool(data["allow_actions"].get(k)))
             patch["allow_actions"] = _deep_merge(AI_SETTINGS.get("allow_actions") or {}, allow)
@@ -6710,7 +6721,7 @@ def admin_api_ai_queue_propose():
 
     data = request.get_json(silent=True) or {}
     typ = str(data.get("type") or "").strip()
-    if typ not in ("vip_tag", "status_update", "reply_draft"):
+    if typ not in ("vip_tag", "status_update", "reply_draft", "send_email", "send_sms", "send_whatsapp"):
         return jsonify({"ok": False, "error": "Invalid type"}), 400
 
     confidence = float(data.get("confidence") or 0.0)
@@ -6874,7 +6885,7 @@ def admin_api_ai_queue_override(qid: str):
     # override payload/type (owner-only)
     if "type" in data:
         typ = str(data.get("type") or "").strip()
-        if typ not in ("vip_tag", "status_update", "reply_draft"):
+        if typ not in ("vip_tag", "status_update", "reply_draft", "send_email", "send_sms", "send_whatsapp"):
             return jsonify({"ok": False, "error": "Invalid type"}), 400
         it["type"] = typ
     if "payload" in data and isinstance(data.get("payload"), dict):
@@ -9180,11 +9191,14 @@ async function saveAI(){
   if(ROLE === 'owner'){
     payload.model = (qs('#ai-model')?.value || '').trim();
     payload.system_prompt = (qs('#ai-prompt')?.value || '').trim();
-    payload.allow_actions = {
-      vip_tag: qs('#ai-act-vip')?.checked ? true : false,
-      status_update: qs('#ai-act-status')?.checked ? true : false,
-      reply_draft: qs('#ai-act-draft')?.checked ? true : false,
-    };
+   payload.allow_actions = {
+     vip_tag: qs('#ai-act-vip')?.checked ? true : false,
+     status_update: qs('#ai-act-status')?.checked ? true : false,
+     reply_draft: qs('#ai-act-draft')?.checked ? true : false,
+     send_email: true,
+     send_sms: true,
+     send_whatsapp: true,
+   };
   }
 
   try{
