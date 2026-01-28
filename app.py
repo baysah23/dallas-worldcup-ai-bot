@@ -9351,7 +9351,7 @@ async function runAINew(){
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running AI…';
   const lim = parseInt(qs('#ai-run-limit')?.value || '5', 10);
   try{
-    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}`, {
+    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({mode:'new', limit: isNaN(lim)?5:lim})
@@ -9373,10 +9373,10 @@ async function runAIRow(){
     return;
   }
   try{
-    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}`, {
+    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({row})
+      body: JSON.stringify({mode:'row', row})
     });
     const data = await r.json();
     if(!data.ok) throw new Error(data.error || 'Failed');
