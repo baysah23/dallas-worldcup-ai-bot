@@ -8109,6 +8109,25 @@ th{
       <span id="aiq-msg" class="note"></span>
     </div>
   </div>
+<div class="card" style="margin:10px 0;padding:10px">
+  <b>Compose outbound</b>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+    <select id="ob-type" class="in">
+      <option value="send_sms">SMS</option>
+      <option value="send_whatsapp">WhatsApp</option>
+      <option value="send_email">Email</option>
+    </select>
+    <input id="ob-to" class="in" placeholder="To (phone or email)" style="min-width:220px"/>
+    <input id="ob-subject" class="in" placeholder="Subject (email only)" style="min-width:220px"/>
+  </div>
+  <div style="margin-top:8px">
+    <textarea id="ob-body" class="in" placeholder="Message" style="width:100%;min-height:90px"></textarea>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+    <button type="button" class="btn" onclick="composeOutbound(this)">Queue</button>
+    <span id="ob-msg" class="note"></span>
+  </div>
+</div>
 
   <div class="card">
     <div id="aiq-list" class="small">Loading…</div>
@@ -9242,7 +9261,7 @@ async function loadAIQueue(){
   const list = qs('#aiq-list'); if(list) list.innerHTML = 'Loading…';
   try{
     const filt = (qs('#aiq-filter')?.value || '').trim();
-    const url = `/admin/api/ai/queue?key=${encodeURIComponent(KEY)}` + (filt ? `&status=${encodeURIComponent(filt)}` : '');
+    const url = `/admin/api/ai/queue?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}` + (filt ? `&status=${encodeURIComponent(filt)}` : '');
     const r = await fetch(url, {cache:'no-store'});
     const data = await r.json();
     if(!data.ok) throw new Error(data.error || 'Failed');
@@ -9253,6 +9272,41 @@ async function loadAIQueue(){
       if(msg) msg.textContent = 'No items';
       renderAIQueue([]); // explicit empty state for CI
   }
+}
+                
+async function composeOutbound(btn){
+  const msg = qs('#ob-msg'); if(msg) msg.textContent='Queuing…';
+  if(btn) btn.disabled = true;
+
+  const typ = qs('#ob-type')?.value || 'send_sms';
+  const to = (qs('#ob-to')?.value || '').trim();
+  const subject = (qs('#ob-subject')?.value || '').trim();
+  const body = (qs('#ob-body')?.value || '').trim();
+
+  if(!to || !body){
+    if(msg) msg.textContent='Missing To or Message';
+    if(btn) btn.disabled=false;
+    return;
+  }
+
+  const payload = { to, body };
+  if(typ === 'send_email') payload.subject = subject || 'World Cup Concierge';
+
+  const r = await fetch(`/admin/api/outbound/propose?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ type: typ, payload })
+  });
+
+  const j = await r.json().catch(()=>null);
+  if(j && j.ok){
+    if(msg) msg.textContent='Queued ✔';
+    await loadAIQueue();
+  } else {
+    if(msg) msg.textContent='Queue failed';
+    alert('Queue failed: ' + (j && j.error ? j.error : r.status));
+  }
+  if(btn) btn.disabled=false;
 }
 
 async function runAINew(){
