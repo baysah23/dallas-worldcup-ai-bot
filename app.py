@@ -9556,7 +9556,7 @@ async function aiqOverride(id, btn){
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Overriding…'; }
 
   // Owner-only: allow quick edit of payload/type before applying
-  const typ = prompt('Override action type (vip_tag, status_update, reply_draft):', 'vip_tag');
+  const typ = prompt('Override action type (vip_tag, status_update, reply_draft, send_email, send_sms, send_whatsapp):', 'vip_tag');
   if(!typ){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } return; }
   let payloadTxt = prompt('Override payload JSON (must be valid JSON object):', '{"row":2,"vip":"VIP"}');
   if(payloadTxt === null){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } return; }
@@ -10971,8 +10971,20 @@ def __test_ai_queue_seed():
 
     body = request.get_json(silent=True) or {}
     action_type = str(body.get("type") or body.get("action_type") or "reply_draft").strip().lower()
-    if action_type not in ("vip_tag", "status_update", "reply_draft"):
-        return jsonify({"ok": False, "error": "Invalid type. Use vip_tag | status_update | reply_draft"}), 400
+
+    if action_type not in (
+        "vip_tag",
+        "status_update",
+        "reply_draft",
+        "send_email",
+        "send_sms",
+        "send_whatsapp",
+    ):
+        return jsonify({
+            "ok": False,
+            "error": "Invalid type. Use vip_tag | status_update | reply_draft | send_email | send_sms | send_whatsapp"
+        }), 400
+
 
     entry = {
         "id": _queue_new_id(),
