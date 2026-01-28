@@ -9400,10 +9400,28 @@ function renderAIQueue(items){
           <div class="note">${when}</div>
         </div>
         ${why ? `<div class="small" style="margin-top:8px;opacity:.9">${why}</div>` : ``}
-        <details style="margin-top:8px">
-          <summary class="small">Payload</summary>
-          <pre class="small" style="white-space:pre-wrap;opacity:.9">${payload}</pre>
-        </details>
+        ${isOutbound ? `
+  <div style="margin-top:8px">
+    ${typ === 'send_email' ? `
+      <input class="in" data-qid="${id}" data-field="subject"
+             value="${esc(it.payload?.subject || '')}"
+             placeholder="Email subject"
+             style="width:100%;margin-bottom:6px" />
+    ` : ``}
+    <textarea class="in"
+      data-qid="${id}"
+      data-field="body"
+      style="width:100%;min-height:90px"
+      placeholder="Message body">${esc(it.payload?.body || '')}</textarea>
+    <div class="note" style="margin-top:4px">Edits apply before sending</div>
+  </div>
+` : `
+  <details style="margin-top:8px">
+    <summary class="small">Payload</summary>
+    <pre class="small" style="white-space:pre-wrap;opacity:.9">${payload}</pre>
+  </details>
+`}
+
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           ${approveBtn}
           ${denyBtn}
@@ -9436,24 +9454,59 @@ async function aiqApprove(id, btn){
 
 
 async function aiqSend(id, btn){
+
+  // save inline edits before sending
+  const bodyEl = document.querySelector(`textarea[data-qid="${id}"][data-field="body"]`);
+  const subjEl = document.querySelector(`input[data-qid="${id}"][data-field="subject"]`);
+
+  const body = bodyEl ? bodyEl.value.trim() : null;
+  const subject = subjEl ? subjEl.value.trim() : null;
+
+  if(body !== null){
+    await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`,{
+      method:'PATCH',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ payload: { body, subject } })
+    });
+  }
+
   if(!confirm('Send this outbound message now?')) return;
+
   const _btn = btn;
-  if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Sending…'; }
-  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Sending…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/send?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({})
-  });
+  if(_btn){
+    _btn.disabled = true;
+    _btn.dataset.prevText = _btn.textContent || '';
+    _btn.textContent = 'Sending…';
+  }
+
+  const msg = qs('#aiq-msg');
+  if(msg) msg.textContent = 'Sending…';
+
+  const r = await fetch(
+    `/admin/api/ai/queue/${encodeURIComponent(id)}/send?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`,
+    {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({})
+    }
+  );
+
   const j = await r.json().catch(()=>null);
+
   if(j && j.ok){
-    if(msg) msg.textContent='Sent ✔';
-    if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Send'); }
+    if(msg) msg.textContent = 'Sent ✔';
+    if(_btn){
+      _btn.disabled = false;
+      _btn.textContent = (_btn.dataset.prevText || 'Send');
+    }
     await loadAIQueue();
   }else{
-    if(msg) msg.textContent='Send failed';
-    if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Send'); }
-    alert('Send failed: '+(j && j.error ? j.error : r.status));
+    if(msg) msg.textContent = 'Send failed';
+    if(_btn){
+      _btn.disabled = false;
+      _btn.textContent = (_btn.dataset.prevText || 'Send');
+    }
+    alert('Send failed: ' + (j && j.error ? j.error : r.status));
   }
 }
 
