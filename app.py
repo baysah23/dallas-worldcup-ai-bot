@@ -9196,9 +9196,9 @@ async function loadAI(){
     qs('#ai-act-vip').checked = !!allow.vip_tag;
     qs('#ai-act-status').checked = !!allow.status_update;
     qs('#ai-act-draft').checked = !!allow.reply_draft;
-    qs('#ai-act-email').checked = !!a.send_email;
-    qs('#ai-act-sms').checked = !!a.send_sms;
-    qs('#ai-act-whatsapp').checked = !!a.send_whatsapp;
+    qs('#ai-act-email').checked = !!allow.send_email;
+    qs('#ai-act-sms').checked = !!allow.send_sms;
+    qs('#ai-act-whatsapp').checked = !!allow.send_whatsapp;
 
 
     const feat = s.features || {};
@@ -9207,7 +9207,7 @@ async function loadAI(){
     if(qs('#ai-feat-draft')) qs('#ai-feat-draft').checked = (feat.auto_reply_draft !== false);
 
     // lock owner-only fields for managers
-    ['ai-model','ai-prompt','ai-act-vip','ai-act-status','ai-act-draft'].forEach(id=>{
+    ['ai-model','ai-prompt','ai-act-vip','ai-act-status','ai-act-draft','ai-act-email','ai-act-sms','ai-act-whatsapp'].forEach(id=>{
       const el = qs('#'+id); if(!el) return;
       el.disabled = !isOwner;
       el.style.opacity = isOwner ? '1' : '.55';
