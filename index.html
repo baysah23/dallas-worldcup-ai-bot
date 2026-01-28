@@ -2467,11 +2467,6 @@ body, .wrap, .fanzone-left, .fanzone-right, .card, .grid{ overflow-x: clip; }
   outline: 1px solid rgba(255,204,102,.30);
 }
 
-.vip-hold .fz-btn#vipHoldBtn{
-  background: linear-gradient(135deg, rgba(255,204,102,.22), rgba(46,160,67,.10));
-  border-color: rgba(255,204,102,.30);
-}
-
 
 
 /* =======================
@@ -4089,17 +4084,15 @@ body[data-sec="schedule"] #sec-schedule #pager .pill{
 </section>
 
       <!-- VIP -->
-      <section class="section" id="sec-vip" aria-label="VIP">
-<div class="sidepad" style="padding-top:10px;">
-  <div class="fz-card vip-hold vip-card lux-reveal" id="vipHoldCard">
-<h3>⭐ VIP Table Hold</h3>
-<div class="fz-muted" style="margin-top:6px;">Fast-track your best tables for big matches.</div>
-<div class="vip-actions" style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
-  <button class="fz-btn" id="vipHoldBtn">Hold VIP table</button>
-  <button class="fz-btn" id="vipHoldInfoBtn">How it works</button></div>
-</div>
-</div>
+<section class="section" id="sec-vip" aria-label="VIP">
+  <div class="sidepad" style="padding-top:10px;">
+    <div class="fz-card vip-card lux-reveal">
+      <h3>⭐ VIP</h3>
+      <div id="vipBody"></div>
+    </div>
+  </div>
 </section>
+
     </main>
   </div>
 
@@ -5948,18 +5941,12 @@ function init(){
     bindOnce($('closePollCard'), 'click', (e)=>{ e.preventDefault(); e.stopPropagation(); hidePoll(); });
     bindOnce($('closeQRCard'), 'click', (e)=>{ e.preventDefault(); hide($('qrCard')); });
 
-    // VIP placeholder behavior
-    bindOnce($('vipHoldBtn'), 'click', (e)=>{
-      e.preventDefault();
-      luxToast('VIP Table Hold is coming soon — reserved for partner venues.', 3600);
-    });
-    bindOnce($('vipHoldInfoBtn'), 'click', (e)=>{
-      e.preventDefault();
-      luxToast('How VIP Hold works: 1) Choose match  2) Set party size  3) Venue confirms  4) You get a priority hold window.', 5200);
-    });
-
-    // Restore saved supporter immediately (nice touch)
+           // Restore saved supporter immediately (nice touch)
     loadSupporter();
+
+    // VIP message
+    try{ loadVIP(); }catch(e){}
+
   }
 
   if(document.readyState === 'loading'){
