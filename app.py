@@ -9316,7 +9316,13 @@ async function composeOutbound(btn){
   const r = await fetch(`/admin/api/outbound/propose?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`,{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ type: typ, payload })
+    body: JSON.stringify({
+      channel: (typ || 'send_sms').replace('send_',''),
+      to: to,
+      subject: (typ === 'send_email' ? (subject || `${VENUE} — World Cup Concierge`) : ''),
+      message: body
+    })
+
   });
 
   const j = await r.json().catch(()=>null);
