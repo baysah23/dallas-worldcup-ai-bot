@@ -8081,6 +8081,11 @@ th{
         <label class="small"><input type="checkbox" id="ai-act-vip"> VIP tagging</label><br/>
         <label class="small"><input type="checkbox" id="ai-act-status"> Status updates</label><br/>
         <label class="small"><input type="checkbox" id="ai-act-draft"> Reply drafts</label>
+        <br/>
+        <label class="small"><input type="checkbox" id="ai-act-email"> Send email (proposal only)</label><br/>
+        <label class="small"><input type="checkbox" id="ai-act-sms"> Send SMS (proposal only)</label><br/>
+        <label class="small"><input type="checkbox" id="ai-act-whatsapp"> Send WhatsApp (proposal only)</label>
+
       </div>
 
       <div class="note">Tip: keep actions limited until you trust the workflow.</div>
@@ -9191,6 +9196,10 @@ async function loadAI(){
     qs('#ai-act-vip').checked = !!allow.vip_tag;
     qs('#ai-act-status').checked = !!allow.status_update;
     qs('#ai-act-draft').checked = !!allow.reply_draft;
+    qs('#ai-act-email').checked = !!a.send_email;
+    qs('#ai-act-sms').checked = !!a.send_sms;
+    qs('#ai-act-whatsapp').checked = !!a.send_whatsapp;
+
 
     const feat = s.features || {};
     if(qs('#ai-feat-vip')) qs('#ai-feat-vip').checked = (feat.auto_vip_tag !== false);
@@ -9225,9 +9234,10 @@ async function saveAI(){
      vip_tag: qs('#ai-act-vip')?.checked ? true : false,
      status_update: qs('#ai-act-status')?.checked ? true : false,
      reply_draft: qs('#ai-act-draft')?.checked ? true : false,
-     send_email: true,
-     send_sms: true,
-     send_whatsapp: true,
+     send_email: qs('#ai-act-email')?.checked ? true : false,
+     send_sms: qs('#ai-act-sms')?.checked ? true : false,
+     send_whatsapp: qs('#ai-act-whatsapp')?.checked ? true : false,
+
    };
   }
 
