@@ -5166,13 +5166,14 @@ async function loadFanzone(){
 async function loadVIP(){
   const box = $('vipBody');
   if(!box) return;
-  box.innerHTML = `<div class="hint">Loading…</div>`;
-  try{
-    const data = await fetchJSON('/worldcup/qualified.json').catch(()=>null);
-    box.innerHTML = `<div class="hint">Tell us the vibe (VIP, private table, hosted moment) and your time window — we’ll handle the rest.</div>`;
-  }catch(e){
-    box.innerHTML = `<div class="hint">VIP unavailable.</div>`;
-  }
+
+  box.innerHTML = `
+    <div class="hint">
+      <b>VIP reservations are currently handled manually.</b><br/>
+      Please submit your request using the form or chat and include <b>“VIP”</b> in your message.<br/>
+      Our team will review and respond shortly.
+    </div>
+  `;
 }
 
 // ---------- intake modal ----------
