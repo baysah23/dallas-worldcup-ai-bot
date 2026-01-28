@@ -9315,7 +9315,10 @@ function renderAIQueue(items){
                    : (typ === 'send_email') ? 'Send Email'
                    : 'Send';
 
-    const sendBtn = `<button type="button" class="btn" ${canSend ? '' : 'disabled'} onclick="aiqSend('${id}', this)">${sendLabel}</button>`;
+    const sendBtn = isOutbound
+      ? `<button type="button" class="btn" ${canSend ? '' : 'disabled'} onclick="aiqSend('${id}', this)">${sendLabel}</button>`
+      : '';
+
 
                 
     return `
