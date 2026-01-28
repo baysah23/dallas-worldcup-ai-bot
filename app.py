@@ -9308,7 +9308,16 @@ function renderAIQueue(items){
     const approveBtn = `<button type="button" class="btn" ${canAct ? '' : 'disabled'} onclick="aiqApprove('${id}', this)">Approve</button>`;
     const denyBtn    = `<button type="button" class="btn2" ${canAct ? '' : 'disabled'} onclick="aiqDeny('${id}', this)">Deny</button>`;
     const overrideBtn = `<button type="button" class="btn" onclick="aiqOverride('${id}', this)">Owner Override</button>`;
+    const isOutbound = (typ === 'send_email' || typ === 'send_sms' || typ === 'send_whatsapp');
+    const canSend = (st === 'approved' && isOutbound && !it.sent_at);
+    const sendLabel = (typ === 'send_sms') ? 'Send SMS'
+                   : (typ === 'send_whatsapp') ? 'Send WhatsApp'
+                   : (typ === 'send_email') ? 'Send Email'
+                   : 'Send';
 
+    const sendBtn = `<button type="button" class="btn" ${canSend ? '' : 'disabled'} onclick="aiqSend('${id}', this)">${sendLabel}</button>`;
+
+                
     return `
       <div class="card" style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
@@ -9327,6 +9336,7 @@ function renderAIQueue(items){
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           ${approveBtn}
           ${denyBtn}
+          ${sendBtn}
           ${overrideBtn}
         </div>
       </div>
@@ -9343,7 +9353,7 @@ async function aiqApprove(id, btn){
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Approving…'; }
 
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Approving…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/approve?key=${encodeURIComponent(KEY)}`, {
+  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/approve?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({})
@@ -9359,7 +9369,7 @@ async function aiqSend(id, btn){
   const _btn = btn;
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Sending…'; }
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Sending…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/send?key=${encodeURIComponent(KEY)}`, {
+  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/send?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({})
