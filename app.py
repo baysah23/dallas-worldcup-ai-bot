@@ -9439,26 +9439,25 @@ function renderAIQueue(items){
         </div>
         ${why ? `<div class="small" style="margin-top:8px;opacity:.9">${why}</div>` : ``}
         ${isOutbound ? `
-  <div style="margin-top:8px">
-    ${it.payload?.row ? `<div class="note" style="margin-bottom:6px">Row #${esc(it.payload.row)}</div>` : ``}
-    ${typ === 'send_email' ? `
-      <input class="in" data-qid="${id}" data-field="subject"
-             value="${esc(it.payload?.subject || '')}"
-             placeholder="Email subject"
-             style="width:100%;margin-bottom:6px" />
-    ` : ``}
-    <textarea class="in"
-      data-qid="${id}"
-      data-field="body"
-      style="width:100%;min-height:90px"
-      placeholder="Message body">${esc(it.payload?.body || '')}</textarea>
-    <div class="note" style="margin-top:4px">Edits apply before sending</div>
-  </div>
-` : `
   <details style="margin-top:8px">
-    <summary class="small">Payload</summary>
-    <pre class="small" style="white-space:pre-wrap;opacity:.9">${payload}</pre>
+    <summary class="small">Outbound draft (click to edit)</summary>
+    <div style="margin-top:8px">
+      ${it.payload?.row ? `<div class="note" style="margin-bottom:6px">Row #${esc(it.payload.row)}</div>` : ``}
+      ${typ === 'send_email' ? `
+        <input class="in" data-qid="${id}" data-field="subject"
+               value="${esc(it.payload?.subject || '')}"
+               placeholder="Email subject"
+               style="width:100%;margin-bottom:6px" />
+      ` : ``}
+      <textarea class="in"
+        data-qid="${id}"
+        data-field="body"
+        style="width:100%;min-height:90px"
+        placeholder="Message body">${esc(it.payload?.body || '')}</textarea>
+      <div class="note" style="margin-top:4px">Edits apply before sending</div>
+    </div>
   </details>
+` : `
 `}
 
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
