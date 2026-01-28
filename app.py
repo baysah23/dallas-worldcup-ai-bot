@@ -1322,22 +1322,33 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     """Execute outbound send (human-triggered). Never called automatically."""
     at = (action_type or "").strip().lower()
     pl = payload or {}
+
+    venue_name = str(pl.get("venue_name") or pl.get("venue") or "").strip()
+    if not venue_name:
+        venue_name = "Your Venue"
+
     if at == "send_email":
         to_email = str(pl.get("to") or pl.get("email") or "").strip()
         subject = str(pl.get("subject") or "World Cup Concierge").strip()
         body = str(pl.get("message") or pl.get("body") or "").strip()
+        if body and venue_name and (venue_name not in body):
+            body = body.rstrip() + f"\n\n— {venue_name}"
         if not to_email:
             return {"ok": False, "error": "Missing recipient email"}
         ok, msg = _outbound_send_email(to_email, subject, body)
         return {"ok": ok, "message": msg}
+
     if at in ("send_sms", "send_whatsapp"):
         ch = at.replace("send_", "")
         to_num = str(pl.get("to") or pl.get("phone") or "").strip()
         body = str(pl.get("message") or pl.get("body") or "").strip()
+        if body and venue_name and (venue_name not in body):
+            body = body.rstrip() + f"\n— {venue_name}"
         if not to_num:
             return {"ok": False, "error": "Missing recipient number"}
         ok, msg = _outbound_send_twilio(ch, to_num, body)
         return {"ok": ok, "message": msg}
+
     return {"ok": False, "error": "Unsupported outbound action"}
 # ============================================================
 # AI Action Queue (Approval / Deny / Override)
@@ -9290,7 +9301,7 @@ async function composeOutbound(btn){
   }
 
   const payload = { to, body };
-  if(typ === 'send_email') payload.subject = subject || 'World Cup Concierge';
+  if(typ === 'send_email') payload.subject = subject || `${VENUE} — World Cup Concierge`;
 
   const r = await fetch(`/admin/api/outbound/propose?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`,{
     method:'POST',
