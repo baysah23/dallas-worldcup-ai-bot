@@ -6686,11 +6686,17 @@ def admin_api_outbound_propose():
         return jsonify({"ok": False, "error": "Invalid channel"}), 400
     action_type = f"send_{channel}"
     payload = {
-        "partner": data.get("partner"),
-        "row": data.get("row"),
-        "to": data.get("to"),
-        "subject": data.get("subject"),
-        "message": data.get("message"),
+    "partner": data.get("partner"),
+    "row": data.get("row"),
+    "to": data.get("to"),
+    "subject": data.get("subject"),
+    "message": data.get("message"),
+    "body": data.get("message"),  # UI + editor use `body`
+    "venue_name": (
+        _venue_cfg().get("name")
+        or _venue_cfg().get("venue_name")
+        or _venue_id()
+        ),
     }
     # Best-effort partner id for policy gating
     partner = _derive_partner_id(payload=payload)
@@ -8135,6 +8141,9 @@ th{
     </select>
     <input id="ob-to" class="in" placeholder="To (phone or email)" style="min-width:220px"/>
     <input id="ob-subject" class="in" placeholder="Subject (email only)" style="min-width:220px"/>
+    <div class="sub" style="margin-top:8px">Row # (optional)</div>
+    <input id="ob-row" class="in" placeholder="e.g. 12" style="min-width:220px"/>
+
   </div>
   <div style="margin-top:8px">
     <textarea id="ob-body" class="in" placeholder="Message" style="width:100%;min-height:90px"></textarea>
@@ -9303,6 +9312,7 @@ async function composeOutbound(btn){
   const to = (qs('#ob-to')?.value || '').trim();
   const subject = (qs('#ob-subject')?.value || '').trim();
   const body = (qs('#ob-body')?.value || '').trim();
+  const row = parseInt((qs('#ob-row')?.value || '').trim(), 10) || 0;
 
   if(!to || !body){
     if(msg) msg.textContent='Missing To or Message';
@@ -9320,7 +9330,8 @@ async function composeOutbound(btn){
       channel: (typ || 'send_sms').replace('send_',''),
       to: to,
       subject: (typ === 'send_email' ? (subject || `${VENUE} — World Cup Concierge`) : ''),
-      message: body
+      message: body,
+      row: (row >= 2 ? row : null),
     })
 
   });
@@ -9429,6 +9440,7 @@ function renderAIQueue(items){
         ${why ? `<div class="small" style="margin-top:8px;opacity:.9">${why}</div>` : ``}
         ${isOutbound ? `
   <div style="margin-top:8px">
+    ${it.payload?.row ? `<div class="note" style="margin-bottom:6px">Row #${esc(it.payload.row)}</div>` : ``}
     ${typ === 'send_email' ? `
       <input class="in" data-qid="${id}" data-field="subject"
              value="${esc(it.payload?.subject || '')}"
