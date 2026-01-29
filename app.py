@@ -9430,6 +9430,9 @@ function renderAIQueue(items){
     const when = esc(it.created_at || '');
     const why  = esc(it.why || it.reason || '');
     const payload = esc(JSON.stringify(it.payload || {}));
+                
+    const rowRef = it?.payload?.row ?? it?.payload?.sheet_row ?? it?.payload?.sheetRow ?? '';
+    const payloadPretty = esc(JSON.stringify(it.payload || {}, null, 2));
 
     const canAct = (st === 'pending');
 
@@ -9456,31 +9459,50 @@ function renderAIQueue(items){
             <b>${typ || 'AI item'}</b>
             <span class="chip" style="margin-left:8px">${st || 'unknown'}</span>
             ${conf ? `<span class="note" style="margin-left:8px">conf ${conf}</span>` : ``}
+            ${rowRef ? `<span class="note" style="margin-left:8px">row ${esc(String(rowRef))}</span>` : ``}
           </div>
           <div class="note">${when}</div>
         </div>
+
         ${why ? `<div class="small" style="margin-top:8px;opacity:.9">${why}</div>` : ``}
+
+        <details style="margin-top:8px">
+          <summary class="small" style="cursor:pointer">
+            Payload ${rowRef ? `(Row #${esc(String(rowRef))})` : ``}
+          </summary>
+          <pre class="small" style="
+            margin-top:8px;
+            white-space:pre-wrap;
+            word-break:break-word;
+            background:rgba(0,0,0,.25);
+            border:1px solid rgba(255,255,255,.08);
+            padding:10px;
+            border-radius:12px;
+            max-height:240px;
+            overflow:auto;
+          ">${payloadPretty}</pre>
+        </details>
+
         ${isOutbound ? `
-  <details style="margin-top:8px">
-    <summary class="small">Outbound draft (click to edit)</summary>
-    <div style="margin-top:8px">
-      ${it.payload?.row ? `<div class="note" style="margin-bottom:6px">Row #${esc(it.payload.row)}</div>` : ``}
-      ${typ === 'send_email' ? `
-        <input class="in" data-qid="${id}" data-field="subject"
-               value="${esc(it.payload?.subject || '')}"
-               placeholder="Email subject"
-               style="width:100%;margin-bottom:6px" />
-      ` : ``}
-      <textarea class="in"
-        data-qid="${id}"
-        data-field="body"
-        style="width:100%;min-height:90px"
-        placeholder="Message body">${esc(it.payload?.body || '')}</textarea>
-      <div class="note" style="margin-top:4px">Edits apply before sending</div>
-    </div>
-  </details>
-` : `
-`}
+          <details style="margin-top:8px">
+            <summary class="small">Outbound draft (click to edit)</summary>
+            <div style="margin-top:8px">
+              ${it.payload?.row ? `<div class="note" style="margin-bottom:6px">Row #${esc(it.payload.row)}</div>` : ``}
+              ${typ === 'send_email' ? `
+                <input class="in" data-qid="${id}" data-field="subject"
+                       value="${esc(it.payload?.subject || '')}"
+                       placeholder="Email subject"
+                       style="width:100%;margin-bottom:6px" />
+              ` : ``}
+              <textarea class="in"
+                data-qid="${id}"
+                data-field="body"
+                style="width:100%;min-height:90px"
+                placeholder="Message body">${esc(it.payload?.body || '')}</textarea>
+              <div class="note" style="margin-top:4px">Edits apply before sending</div>
+            </div>
+          </details>
+        ` : ``}
 
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           ${approveBtn}
