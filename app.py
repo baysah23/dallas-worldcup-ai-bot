@@ -6781,12 +6781,10 @@ def admin_api_ai_queue_deny(qid: str):
     if str(it.get("status")) != "pending":
         return jsonify({"ok": False, "error": "Not pending"}), 400
 
-    it["status"] = "denied"
-    it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    it["reviewed_by"] = actor
-    it["reviewed_role"] = role
-    it["applied_result"] = None
+    # remove from queue (keeps pending list clean)
+    queue = [x for x in queue if str(x.get("id")) != str(qid)]
     _save_ai_queue(queue)
+
     _audit("ai.queue.deny", {"id": qid, "type": it.get("type")})
     _notify("ai.queue.deny", {"id": qid, "type": it.get("type"), "by": actor, "role": role}, targets=["owner","manager"])
     return jsonify({"ok": True})
@@ -6820,16 +6818,36 @@ def admin_api_ai_queue_approve(qid: str):
             # Always require explicit approval here (this endpoint *is* the approval)
             applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
 
-    it["status"] = "approved"
-    it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    it["reviewed_by"] = actor
-    it["reviewed_role"] = role
-    it["applied_result"] = applied
-    _save_ai_queue(queue)
-    _audit("ai.queue.approve", {"id": qid, "type": it.get("type"), "applied": bool(applied and applied.get("ok"))})
-    _notify("ai.queue.approve", {"id": qid, "type": it.get("type"), "applied": bool(applied and applied.get("ok")), "by": actor, "role": role}, targets=["owner","manager"])
-    return jsonify({"ok": True, "applied_result": applied})
+    # --- auto-clean queue after approval (non-outbound only) ---
+    is_outbound = it_type in ("send_email", "send_sms", "send_whatsapp")
 
+    # If apply failed, keep item (so you can fix + retry)
+    applied_ok = (applied is None) or bool(applied.get("ok"))  # None = reviewed only
+
+    if (not is_outbound) and applied_ok:
+        # remove non-outbound items after successful apply/review
+        queue = [x for x in queue if str(x.get("id")) != str(qid)]
+        _save_ai_queue(queue)
+    else:
+        # keep outbound (needs send), or keep failures for retry
+        _save_ai_queue(queue)
+
+    _audit(
+        "ai.queue.approve",
+        {"id": qid, "type": it.get("type"), "applied": bool(applied and applied.get("ok"))}
+    )
+    _notify(
+        "ai.queue.approve",
+        {
+            "id": qid,
+            "type": it.get("type"),
+            "applied": bool(applied and applied.get("ok")),
+            "by": actor,
+            "role": role
+        },
+        targets=["owner", "manager"]
+    )
+    return jsonify({"ok": True, "applied_result": applied})
 
 
 @app.route("/admin/api/ai/queue/<qid>/send", methods=["POST"])
@@ -6874,10 +6892,14 @@ def admin_api_ai_queue_send(qid: str):
     it["sent_by"] = actor
     it["sent_role"] = role
     it["send_result"] = res
+
+    # remove from queue only if send succeeded; keep failures for retry
+    if bool(res and res.get("ok")):
+        queue = [x for x in queue if str(x.get("id")) != str(qid)]
     _save_ai_queue(queue)
 
-    _audit("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": bool(res.get("ok")), "by": actor})
-    _notify("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": bool(res.get("ok")), "by": actor, "role": role}, targets=["owner","manager"])
+    _audit("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": bool(res and res.get("ok")), "by": actor})
+    _notify("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": bool(res and res.get("ok")), "by": actor, "role": role}, targets=["owner","manager"])
     return jsonify({"ok": True, "result": res})
 
 
