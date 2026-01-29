@@ -9031,7 +9031,7 @@ async function saveMenuJson(){
   try { payload = JSON.parse(qs('#menu-json').value || '{}'); } catch(e) {
     alert('Invalid JSON'); if(msg) msg.textContent='Invalid JSON'; return;
   }
-  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE)), {
+  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE), {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify(payload)
