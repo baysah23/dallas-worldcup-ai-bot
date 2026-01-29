@@ -6813,6 +6813,12 @@ def admin_api_ai_queue_approve(qid: str):
     # Outbound sends are NEVER executed on approval. Approval only unlocks a human "Send Now" click.
     if it_type in ("send_email", "send_sms", "send_whatsapp"):
         applied = {"ok": True, "note": "Approved — ready to send (human click required)"}
+        it["status"] = "approved"
+        it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        it["reviewed_by"] = actor
+        it["reviewed_role"] = role
+        it["applied_result"] = applied
+
     else:
         if AI_SETTINGS.get("enabled") and (AI_SETTINGS.get("mode") in ("auto", "suggest", "off")):
             # Always require explicit approval here (this endpoint *is* the approval)
