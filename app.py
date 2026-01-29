@@ -6984,8 +6984,9 @@ def admin_api_ai_queue_override(qid: str):
 
     # Apply immediately ONLY for non-outbound actions
     applied = None
-    if (not is_outbound) and AI_SETTINGS.get("enabled"):
+    if not is_outbound:
         applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
+
 
 
     it["status"] = "approved"
