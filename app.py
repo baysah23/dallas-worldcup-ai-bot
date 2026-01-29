@@ -9496,25 +9496,33 @@ function renderAIQueue(items){
         </details>
 
         ${isOutbound ? `
-          <details style="margin-top:8px">
-            <summary class="small">Outbound draft (click to edit)</summary>
-            <div style="margin-top:8px">
-              ${it.payload?.row ? `<div class="note" style="margin-bottom:6px">Row #${esc(it.payload.row)}</div>` : ``}
-              ${typ === 'send_email' ? `
-                <input class="in" data-qid="${id}" data-field="subject"
-                       value="${esc(it.payload?.subject || '')}"
-                       placeholder="Email subject"
-                       style="width:100%;margin-bottom:6px" />
-              ` : ``}
-              <textarea class="in"
-                data-qid="${qid}"
-                data-field="body"
-                style="width:100%;min-height:90px"
-                placeholder="Message body">${esc(it.payload?.body || '')}</textarea>
-              <div class="note" style="margin-top:4px">Edits apply before sending</div>
-            </div>
-          </details>
-        ` : ``}
+  <details style="margin-top:8px">
+    <summary class="small">Outbound draft (click to edit)</summary>
+    <div style="margin-top:8px">
+      ${it.payload?.row ? `<div class="note" style="margin-bottom:6px">Row #${esc(it.payload.row)}</div>` : ``}
+
+      <input class="in" data-qid="${qid}" data-field="to"
+             value="${esc(it.payload?.to || it.payload?.email || '')}"
+             placeholder="${typ==='send_email' ? 'To (email)' : 'To (phone)'}"
+             style="width:100%;margin-bottom:6px" />
+
+      ${typ === 'send_email' ? `
+        <input class="in" data-qid="${qid}" data-field="subject"
+               value="${esc(it.payload?.subject || '')}"
+               placeholder="Email subject"
+               style="width:100%;margin-bottom:6px" />
+      ` : ``}
+
+      <textarea class="in"
+        data-qid="${qid}"
+        data-field="body"
+        style="width:100%;min-height:90px"
+        placeholder="Message body">${esc(it.payload?.body || '')}</textarea>
+
+      <div class="note" style="margin-top:4px">Edits apply before sending</div>
+    </div>
+  </details>
+` : ``}
 
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           ${approveBtn}
