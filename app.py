@@ -9219,7 +9219,7 @@ async function saveOps(){
 async function loadAI(){
   const msg = qs('#ai-msg'); if(msg) msg.textContent = '';
   try{
-    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}`, {cache:'no-store'});
+    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, { cache:'no-store' });
     const data = await r.json();
     if(!data.ok) throw new Error(data.error || 'Failed');
     const s = data.settings || {};
@@ -9610,7 +9610,7 @@ async function aiqDeny(id, btn){
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Denying…'; }
 
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Denying…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/deny?key=${encodeURIComponent(KEY)}`, {
+  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/deny?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({})
@@ -9694,7 +9694,7 @@ async function aiqOverride(id, btn){
 
   if(msg) msg.textContent = 'Applying override…';
 
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/override?key=${encodeURIComponent(KEY)}`, {
+  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/override?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({type: String(typ).trim(), payload: payloadObj})
@@ -9843,7 +9843,7 @@ async function loadNotifs(){
     const m = document.cookie.match(/(?:^|;\s*)venue_id=([^;]+)/);
     const VENUE = ((new URLSearchParams(location.search).get('venue') || '').trim()) || (m ? decodeURIComponent(m[1]) : '');
 
-    const r = await fetch(`/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}`, {
+    const r = await fetch(`/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}&venue=${encodeURIComponent(VENUE)}`, {
     cache: 'no-store',
     headers: { 'X-Venue-Id': VENUE }
     });
@@ -9941,7 +9941,7 @@ async function loadFanZoneState(){
   const ta  = document.querySelector('#fzJson');
   if(msg) msg.textContent = 'Loading…';
   try{
-    const r = await fetch(`/admin/api/fanzone/state?key=${encodeURIComponent(KEY||'')}`, {cache:'no-store'});
+    const r = await fetch(`/admin/api/fanzone/state?key=${encodeURIComponent(KEY||'')}&venue=${encodeURIComponent(VENUE)}`, { cache:'no-store' });
     const j = await r.json().catch(()=>null);
     if(!j || !j.ok) throw new Error('Load failed');
     if(ta) ta.value = JSON.stringify(j.state || {}, null, 2);
@@ -9957,7 +9957,7 @@ async function saveFanZoneState(){
   if(msg) msg.textContent = 'Saving…';
   try{
     const payload = JSON.parse((ta && ta.value) ? ta.value : '{}');
-    const r = await fetch(`/admin/api/fanzone/save?key=${encodeURIComponent(KEY||'')}`, {
+    const r = await fetch(`/admin/api/fanzone/save?key=${encodeURIComponent(KEY||'')}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify(payload)
@@ -10064,7 +10064,7 @@ async function runHealth(){
   const msg = qs('#health-msg'); if(msg) msg.textContent='Running…';
   const body = qs('#health-body'); if(body) body.textContent='';
   try{
-    const r = await fetch(`/admin/api/health/run?key=${encodeURIComponent(KEY)}`, {method:'POST'});
+    const r = await fetch(`/admin/api/health/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, { method:'POST' });
     const j = await r.json();
     if(!j.ok) throw new Error(j.error||'Failed');
     const rep = j.report || {};
@@ -10772,7 +10772,7 @@ async function loadForecast(){
   const msg = qs('#forecast-msg'); if(msg) msg.textContent = 'Loading…';
   const body = qs('#forecastBody'); if(body) body.textContent = '';
   try{
-    const r = await fetch(`/admin/api/analytics/load-forecast?key=${encodeURIComponent(KEY)}`, {cache:'no-store'});
+    const r = await fetch(`/admin/api/analytics/load-forecast?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, { cache:'no-store' });
     const d = await r.json();
     if(!d.ok) throw new Error(d.error || 'Failed');
     const lines = [];
