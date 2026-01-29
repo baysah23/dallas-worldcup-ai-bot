@@ -6908,6 +6908,38 @@ def admin_api_ai_queue_send(qid: str):
     _notify("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": bool(res and res.get("ok")), "by": actor, "role": role}, targets=["owner","manager"])
     return jsonify({"ok": True, "result": res})
 
+@app.route("/admin/api/ai/queue/<qid>", methods=["PATCH"])
+def admin_api_ai_queue_patch(qid: str):
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    data = request.get_json(silent=True) or {}
+    patch = data.get("payload") or {}
+    if not isinstance(patch, dict):
+        return jsonify({"ok": False, "error": "Invalid payload"}), 400
+
+    queue = _load_ai_queue()
+    it = _queue_find(queue, qid)
+    if not it:
+        return jsonify({"ok": False, "error": "Not found"}), 404
+
+    it_type = str(it.get("type") or "").lower().strip()
+    if it_type not in ("send_email", "send_sms", "send_whatsapp"):
+        return jsonify({"ok": False, "error": "Not outbound"}), 400
+
+    # merge allowed fields only
+    cur = it.get("payload") or {}
+    if not isinstance(cur, dict):
+        cur = {}
+    for k in ("to", "email", "subject", "body", "message"):
+        if k in patch:
+            cur[k] = patch.get(k)
+
+    it["payload"] = cur
+    _save_ai_queue(queue)
+    return jsonify({"ok": True, "id": qid, "payload": cur})
+
 
 @app.route("/admin/api/ai/queue/<qid>/override", methods=["POST"])
 def admin_api_ai_queue_override(qid: str):
