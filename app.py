@@ -9421,7 +9421,7 @@ async function runAIRow(){
 }
 
 
-function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function esc(s){ return (s==null?'':String(s)).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#39;"); }
 
 function renderAIQueue(items){
   const list = qs('#aiq-list');
@@ -9462,8 +9462,8 @@ function renderAIQueue(items){
    const sendBtn = isOutbound
       ? `<button type="button" class="btn" ${canSend ? '' : 'disabled'} onclick="aiqSend('${qid}', this)">${sendLabel}</button>`
       : '';
-
                 
+                      
     return `
       <div class="card" style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
@@ -9507,7 +9507,7 @@ function renderAIQueue(items){
                        style="width:100%;margin-bottom:6px" />
               ` : ``}
               <textarea class="in"
-                data-qid="${id}"
+                data-qid="${qid}"
                 data-field="body"
                 style="width:100%;min-height:90px"
                 placeholder="Message body">${esc(it.payload?.body || '')}</textarea>
