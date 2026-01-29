@@ -1331,10 +1331,15 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         to_email = str(pl.get("to") or pl.get("email") or "").strip()
         subject = str(pl.get("subject") or "World Cup Concierge").strip()
         body = str(pl.get("message") or pl.get("body") or "").strip()
-        if body and venue_name and (venue_name not in body):
-            body = body.rstrip() + f"\n\n— {venue_name}"
+
         if not to_email:
             return {"ok": False, "error": "Missing recipient email"}
+
+        # Branded footer (match manual email)
+        footer = f"\n\n— {venue_name}\nWorld Cup Concierge"
+        if body and footer.strip() not in body:
+            body = body.rstrip() + footer
+
         ok, msg = _outbound_send_email(to_email, subject, body)
         return {"ok": ok, "message": msg}
 
@@ -1342,14 +1347,19 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         ch = at.replace("send_", "")
         to_num = str(pl.get("to") or pl.get("phone") or "").strip()
         body = str(pl.get("message") or pl.get("body") or "").strip()
-        if body and venue_name and (venue_name not in body):
-            body = body.rstrip() + f"\n— {venue_name}"
+
         if not to_num:
             return {"ok": False, "error": "Missing recipient number"}
+
+        footer = f"\n— {venue_name}"
+        if body and footer.strip() not in body:
+            body = body.rstrip() + footer
+
         ok, msg = _outbound_send_twilio(ch, to_num, body)
         return {"ok": ok, "message": msg}
 
     return {"ok": False, "error": "Unsupported outbound action"}
+
 # ============================================================
 # AI Action Queue (Approval / Deny / Override)
 # - Queue stores proposed AI actions (e.g., tag VIP, update status, draft reply)
