@@ -1564,7 +1564,7 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
     # Use the same Sheets update logic as /admin/update-lead
     try:
         gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
         header = ws.row_values(1) or []
         hmap = header_map(header)
 
@@ -6541,7 +6541,7 @@ def admin_api_ai_run():
     # Load sheet (best-effort). If Sheets isn't configured, return a friendly error.
     try:
         gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
         header = ensure_sheet_schema(ws)
         hmap = header_map(header)
     except Exception as e:
@@ -7416,7 +7416,7 @@ def admin_update_lead():
             return jsonify({"ok": False, "error": "Invalid vip"}), 400
 
     gc = get_gspread_client()
-    ws = _open_default_spreadsheet(gc).sheet1
+    ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
     header = ensure_sheet_schema(ws)
     hmap = header_map(header)
 
@@ -10273,7 +10273,7 @@ def admin_api_ai_draft_reply():
 
     try:
         gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
         header = ws.row_values(1) or []
         vals = ws.row_values(row_num) or []
         hmap = header_map(header)
@@ -10378,7 +10378,7 @@ def admin_api_load_forecast():
 
     try:
         gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
         header = ws.row_values(1) or []
         hmap = header_map(header)
 
@@ -10472,7 +10472,7 @@ def admin_api_ai_replay():
 
     try:
         gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
         header = ws.row_values(1) or []
         vals = ws.row_values(row_num) or []
         hmap = header_map(header)
