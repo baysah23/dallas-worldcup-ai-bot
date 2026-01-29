@@ -9558,19 +9558,24 @@ async function aiqApprove(id, btn){
 async function aiqSend(id, btn){
 
   // save inline edits before sending
+  const toEl   = document.querySelector(`input[data-qid="${id}"][data-field="to"]`);
   const bodyEl = document.querySelector(`textarea[data-qid="${id}"][data-field="body"]`);
   const subjEl = document.querySelector(`input[data-qid="${id}"][data-field="subject"]`);
 
+  const to = toEl ? toEl.value.trim() : null;
   const body = bodyEl ? bodyEl.value.trim() : null;
   const subject = subjEl ? subjEl.value.trim() : null;
 
-  if(body !== null){
-    await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`,{
-      method:'PATCH',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ payload: { body, subject } })
-    });
+  if(!to){
+    alert('Recipient is required');
+    return;
   }
+
+  await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`,{
+    method:'PATCH',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ payload: { to, body, subject } })
+  });
 
   if(!confirm('Send this outbound message now?')) return;
 
