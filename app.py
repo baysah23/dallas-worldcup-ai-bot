@@ -9645,7 +9645,7 @@ async function aiqOverride(id, btn){
   // Load the current item so prompts default to the REAL type/payload (no stale examples)
   let it = null;
   try{
-    const rr = await fetch(`/admin/api/ai/queue?key=${encodeURIComponent(KEY)}`, { method:'GET' });
+    const rr = await fetch(`/admin/api/ai/queue?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, { method:'GET' });
     const jj = await rr.json().catch(()=>null);
     const items = (jj && jj.ok && Array.isArray(jj.queue)) ? jj.queue : [];
     it = items.find(x => String(x && x.id) === String(id)) || null;
