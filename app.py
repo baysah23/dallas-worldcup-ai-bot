@@ -6845,9 +6845,8 @@ def admin_api_ai_queue_approve(qid: str):
         it["applied_result"] = applied
 
     else:
-        if AI_SETTINGS.get("enabled") and (AI_SETTINGS.get("mode") in ("auto", "suggest", "off")):
-            # Always require explicit approval here (this endpoint *is* the approval)
-            applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
+        # Always require explicit approval here (this endpoint *is* the approval)
+        applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
 
     # --- auto-clean queue after approval (non-outbound only) ---
     is_outbound = it_type in ("send_email", "send_sms", "send_whatsapp")
