@@ -9015,7 +9015,7 @@ async function testAlert(){
 
 async function loadMenu(){
   const msg = qs('#menu-msg'); if(msg) msg.textContent='';
-  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY));
+  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE));
   const j = await res.json().catch(()=>null);
   if(j && j.ok){
     qs('#menu-json').value = JSON.stringify(j.menu || {}, null, 2);
@@ -9031,7 +9031,7 @@ async function saveMenuJson(){
   try { payload = JSON.parse(qs('#menu-json').value || '{}'); } catch(e) {
     alert('Invalid JSON'); if(msg) msg.textContent='Invalid JSON'; return;
   }
-  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY), {
+  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE)), {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify(payload)
@@ -9284,7 +9284,7 @@ async function saveAI(){
   }
 
   try{
-    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}`, {
+    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify(payload)
@@ -9973,7 +9973,7 @@ async function saveFanZoneState(){
 async function clearNotifs(){
   const msg = qs('#notif-msg'); if(msg) msg.textContent='Clearing…';
   try{
-    const r = await fetch(`/admin/api/notifications/clear?key=${encodeURIComponent(KEY||'')}`, {method:'POST'});
+    const r = await fetch(`/admin/api/notifications/clear?key=${encodeURIComponent(KEY||'')}&venue=${encodeURIComponent(VENUE)}`, {method:'POST'});
     const j = await r.json();
     if(j.ok){
       if(msg) msg.textContent='Cleared';
@@ -10037,7 +10037,7 @@ async function loadHealth(){
   const msg = qs('#health-msg'); if(msg) msg.textContent='Loading…';
   const body = qs('#health-body'); if(body) body.textContent='';
   try{
-    const r = await fetch(`/admin/api/health?key=${encodeURIComponent(KEY)}`, {cache:'no-store'});
+    const r = await fetch(`/admin/api/health?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, { cache:'no-store' });
     const j = await r.json();
     if(!j.ok) throw new Error(j.error||'Failed');
     const rep = j.report || {};
