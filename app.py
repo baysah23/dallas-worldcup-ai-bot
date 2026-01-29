@@ -9625,28 +9625,93 @@ async function aiqOverride(id, btn){
     alert('Owner-only: override is locked for managers.');
     return;
   }
+
   const _btn = btn;
-  if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Overriding…'; }
+  const restoreBtn = ()=>{
+    if(_btn){
+      _btn.disabled = false;
+      _btn.textContent = (_btn.dataset.prevText || 'Owner Override');
+    }
+  };
+
+  if(_btn){
+    _btn.disabled = true;
+    _btn.dataset.prevText = _btn.textContent || '';
+    _btn.textContent = 'Overriding…';
+  }
+
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Loading item…';
+
+  // Load the current item so prompts default to the REAL type/payload (no stale examples)
+  let it = null;
+  try{
+    const rr = await fetch(`/admin/api/ai/queue?key=${encodeURIComponent(KEY)}`, { method:'GET' });
+    const jj = await rr.json().catch(()=>null);
+    const items = (jj && jj.ok && Array.isArray(jj.queue)) ? jj.queue : [];
+    it = items.find(x => String(x && x.id) === String(id)) || null;
+  }catch(e){
+    it = null;
+  }
+
+  if(!it){
+    if(msg) msg.textContent = 'Override failed';
+    restoreBtn();
+    alert('Override failed: Not found');
+    return;
+  }
 
   // Owner-only: allow quick edit of payload/type before applying
-  const typ = prompt('Override action type (vip_tag, status_update, reply_draft, send_email, send_sms, send_whatsapp):', 'vip_tag');
-  if(!typ){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } return; }
-  let payloadTxt = prompt('Override payload JSON (must be valid JSON object):', '{"row":2,"vip":"VIP"}');
-  if(payloadTxt === null){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } return; }
-  payloadTxt = payloadTxt.trim();
+  const defaultType = String(it.type || 'vip_tag');
+  const typ = prompt(
+    'Override action type (vip_tag, status_update, reply_draft, send_email, send_sms, send_whatsapp):',
+    defaultType
+  );
+  if(!typ){ if(msg) msg.textContent=''; restoreBtn(); return; }
+
+  let payloadTxt = prompt(
+    'Override payload JSON (must be valid JSON object):',
+    JSON.stringify(it.payload || {}, null, 2)
+  );
+  if(payloadTxt === null){ if(msg) msg.textContent=''; restoreBtn(); return; }
+
+  payloadTxt = String(payloadTxt).trim();
   let payloadObj = null;
-  try{ payloadObj = JSON.parse(payloadTxt); }catch(e){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } alert('Invalid JSON'); return; }
-  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Applying override…';
+  try{
+    payloadObj = JSON.parse(payloadTxt);
+  }catch(e){
+    if(msg) msg.textContent = 'Override failed';
+    restoreBtn();
+    alert('Invalid JSON');
+    return;
+  }
+
+  if(!payloadObj || typeof payloadObj !== 'object' || Array.isArray(payloadObj)){
+    if(msg) msg.textContent = 'Override failed';
+    restoreBtn();
+    alert('Payload must be a JSON object (e.g., {"row":9,...})');
+    return;
+  }
+
+  if(msg) msg.textContent = 'Applying override…';
+
   const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/override?key=${encodeURIComponent(KEY)}`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({type: typ, payload: payloadObj})
+    body: JSON.stringify({type: String(typ).trim(), payload: payloadObj})
   });
-  const j = await r.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Override applied ✔'; if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } await loadAIQueue(); }
-  else { if(msg) msg.textContent='Override failed'; if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } alert('Override failed: '+(j && j.error ? j.error : r.status)); }
-}
 
+  const j = await r.json().catch(()=>null);
+
+  if(j && j.ok){
+    if(msg) msg.textContent = 'Override applied ✔';
+    restoreBtn();
+    await loadAIQueue();
+  }else{
+    if(msg) msg.textContent = 'Override failed';
+    restoreBtn();
+    alert('Override failed: ' + (j && j.error ? j.error : r.status));
+  }
+}
 
 function esc(s){
   return (s==null?'':String(s))
