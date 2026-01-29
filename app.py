@@ -1535,9 +1535,14 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
         partner_id = _derive_partner_id(payload=payload)
     except Exception:
         partner_id = "default"
-    ok_pol, why_pol = _policy_check_action(partner_id, typ, payload, role=str((ctx or {}).get("role") or ""))
+    ok_pol, why_pol = _policy_check_action(
+        partner_id, typ, payload, role=str((ctx or {}).get("role") or "")
+    )
     if not ok_pol:
-        _audit("policy.block", {"partner": partner_id, "type": typ, "reason": why_pol, "row": payload.get("row")})
+        _audit(
+            "policy.block",
+            {"partner": partner_id, "type": typ, "reason": why_pol, "row": payload.get("row")},
+        )
         return {"ok": False, "error": why_pol}
 
     # Feature flag gate (secondary to allow_actions)
@@ -1571,9 +1576,18 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
         if typ == "vip_tag":
             if not allow.get("vip_tag", True):
                 return {"ok": False, "error": "vip_tag not allowed"}
-            vip = str(payload.get("vip") or "").strip()
-            if vip not in ("VIP", "Regular"):
+
+            vip_in = str(payload.get("vip") or "").strip()
+            vip_norm = vip_in.lower()
+
+            # Normalize to Sheet-friendly Yes / No
+            if vip_norm in ("vip", "yes", "true", "1", "y", "on"):
+                vip = "Yes"
+            elif vip_norm in ("regular", "no", "false", "0", "n", "off", ""):
+                vip = "No"
+            else:
                 return {"ok": False, "error": "Invalid vip"}
+
             col = hmap.get("vip")
             if not col:
                 return {"ok": False, "error": "VIP column not found"}
@@ -1598,6 +1612,7 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
         return {"ok": False, "error": "Unsupported action type"}
     except Exception as e:
         return {"ok": False, "error": f"Apply failed: {e}"}
+
 
 def _ai_build_lead_prompt(lead: Dict[str, Any]) -> str:
     # Keep prompt small + deterministic
@@ -1671,7 +1686,7 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[s
         is_vip = any(k in notes for k in ["vip", "bottle", "table", "suite"]) or any(k in budget for k in ["1000", "1500", "2000", "2500"])
         actions = []
         if is_vip and allow.get("vip_tag", False) and sheet_row:
-            actions.append({"type":"vip_tag","payload":{"row": sheet_row, "vip":"VIP"},"reason":"Lead looks VIP/high-intent"})
+            actions.append({"type":"vip_tag","payload":{"row": sheet_row, "vip":"Yes"},"reason":"Lead looks VIP/high-intent"})
         return {"ok": True, "confidence": 0.55 if actions else 0.3, "actions": actions, "notes":"Heuristic suggestion (AI not configured)"}
 
     # Parse JSON safely
