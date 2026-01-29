@@ -1323,7 +1323,7 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     at = (action_type or "").strip().lower()
     pl = payload or {}
 
-    venue_name = str(pl.get("venue_name") or pl.get("venue") or "").strip()
+    venue_name = str(_venue_cfg().get("name") or _venue_cfg().get("venue_name") or "").strip()
     if not venue_name:
         venue_name = "Your Venue"
 
