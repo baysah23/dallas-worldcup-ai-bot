@@ -6937,9 +6937,14 @@ def admin_api_ai_queue_override(qid: str):
         it["payload"] = data.get("payload") or {}
 
     # Apply immediately
+    it_type = str(it.get("type") or "").strip().lower()
+    is_outbound = it_type in ("send_email", "send_sms", "send_whatsapp")
+
+    # Apply immediately ONLY for non-outbound actions
     applied = None
-    if AI_SETTINGS.get("enabled"):
+    if (not is_outbound) and AI_SETTINGS.get("enabled"):
         applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
+
 
     it["status"] = "approved"
     it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -9429,7 +9434,8 @@ function renderAIQueue(items){
   }
 
   const rows = (items || []).map((it)=>{
-    const id = esc(it.id || '');
+    const qid = String(it.id || '');
+    const id  = esc(qid);
     const typ = esc(it.type || '');
     const st  = esc(it.status || '');
     const conf = (typeof it.confidence === 'number') ? it.confidence.toFixed(2) : '';
@@ -9440,11 +9446,12 @@ function renderAIQueue(items){
     const rowRef = it?.payload?.row ?? it?.payload?.sheet_row ?? it?.payload?.sheetRow ?? '';
     const payloadPretty = esc(JSON.stringify(it.payload || {}, null, 2));
 
-    const canAct = (st === 'pending');
+    const canAct = (st === 'pending' || st === 'approved');
 
-    const approveBtn = `<button type="button" class="btn" ${canAct ? '' : 'disabled'} onclick="aiqApprove('${id}', this)">Approve</button>`;
-    const denyBtn    = `<button type="button" class="btn2" ${canAct ? '' : 'disabled'} onclick="aiqDeny('${id}', this)">Deny</button>`;
-    const overrideBtn = `<button type="button" class="btn" onclick="aiqOverride('${id}', this)">Owner Override</button>`;
+    const approveBtn = `<button type="button" class="btn" ${canAct ? '' : 'disabled'} onclick="aiqApprove('${qid}', this)">Approve</button>`;
+    const denyBtn    = `<button type="button" class="btn2" ${canAct ? '' : 'disabled'} onclick="aiqDeny('${qid}', this)">Deny</button>`;
+    const overrideBtn = `<button type="button" class="btn" onclick="aiqOverride('${qid}', this)">Owner Override</button>`;
+
     const isOutbound = (typ === 'send_email' || typ === 'send_sms' || typ === 'send_whatsapp');
     const canSend = (st === 'approved' && isOutbound && !it.sent_at);
     const sendLabel = (typ === 'send_sms') ? 'Send SMS'
@@ -9452,10 +9459,9 @@ function renderAIQueue(items){
                    : (typ === 'send_email') ? 'Send Email'
                    : 'Send';
 
-    const sendBtn = isOutbound
-      ? `<button type="button" class="btn" ${canSend ? '' : 'disabled'} onclick="aiqSend('${id}', this)">${sendLabel}</button>`
+   const sendBtn = isOutbound
+      ? `<button type="button" class="btn" ${canSend ? '' : 'disabled'} onclick="aiqSend('${qid}', this)">${sendLabel}</button>`
       : '';
-
 
                 
     return `
