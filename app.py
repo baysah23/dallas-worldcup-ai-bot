@@ -281,6 +281,7 @@ def privacy_policy():
     .card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:18px;}
     a{color:#b9c7ee;}
     .muted{color:rgba(232,238,252,.75);font-size:13px;margin-top:18px;}
+    hr{border:0;border-top:1px solid rgba(255,255,255,.12);margin:14px 0;}
   </style>
 </head>
 <body>
@@ -291,13 +292,21 @@ def privacy_policy():
 
       <p>Phone numbers are collected solely for transactional and operational purposes, including reservation confirmations, VIP status updates, system alerts, and customer support communications.</p>
 
-      <p>We do not send marketing or promotional SMS messages. SMS messages are sent only to users who explicitly opt in by providing their phone number.</p>
+      <hr>
 
-      <p>Users may opt out of SMS communications at any time by replying <strong>STOP</strong>.</p>
+      <p><strong>SMS Consent</strong></p>
 
-      <p>We do not sell or share personal information with third parties for marketing purposes.</p>
+      <p>By providing your phone number and submitting a form on this website, you expressly consent to receive transactional SMS (text) messages from <strong>World Cup Concierge</strong>, operated by <strong>NYLA AI Solutions, LLC</strong>. Consent is not a condition of purchase.</p>
+
+      <p>SMS messages may include reservation confirmations, VIP status updates, operational alerts, and customer support notifications. Message and data rates may apply. Message frequency varies.</p>
+
+      <p>You may opt out of SMS communications at any time by replying <strong>STOP</strong>. For assistance, reply <strong>HELP</strong>.</p>
+
+      <p>We do not send marketing or promotional SMS messages, and we do not sell or share personal information with third parties for marketing purposes.</p>
 
       <p>For questions about this policy, contact: <a href="mailto:admin@worldcupconcierge.app">admin@worldcupconcierge.app</a></p>
+
+      <p class="muted">World Cup Concierge is a product operated by NYLA AI Solutions, LLC.</p>
 
       <div class="muted">Last updated: January 2026</div>
     </div>
@@ -954,6 +963,9 @@ def _default_ai_settings() -> Dict[str, Any]:
             "vip_tag": True,
             "status_update": False,
             "reply_draft": True,
+            "send_email": True,
+            "send_sms": True,
+            "send_whatsapp": True,
         },
         # Feature gates (safe rollout). These further restrict what AI can do, even if allow_actions is true.
         "features": {
@@ -1319,23 +1331,44 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     """Execute outbound send (human-triggered). Never called automatically."""
     at = (action_type or "").strip().lower()
     pl = payload or {}
+
+    venue_name = str(_venue_cfg().get("name") or _venue_cfg().get("venue_name") or "").strip()
+    if not venue_name:
+        venue_name = "Your Venue"
+
     if at == "send_email":
         to_email = str(pl.get("to") or pl.get("email") or "").strip()
         subject = str(pl.get("subject") or "World Cup Concierge").strip()
         body = str(pl.get("message") or pl.get("body") or "").strip()
+
         if not to_email:
             return {"ok": False, "error": "Missing recipient email"}
+
+        # Branded footer (match manual email)
+        footer = f"\n\n— {venue_name}\nWorld Cup Concierge"
+        if body and footer.strip() not in body:
+            body = body.rstrip() + footer
+
         ok, msg = _outbound_send_email(to_email, subject, body)
         return {"ok": ok, "message": msg}
+
     if at in ("send_sms", "send_whatsapp"):
         ch = at.replace("send_", "")
         to_num = str(pl.get("to") or pl.get("phone") or "").strip()
         body = str(pl.get("message") or pl.get("body") or "").strip()
+
         if not to_num:
             return {"ok": False, "error": "Missing recipient number"}
+
+        footer = f"\n— {venue_name}"
+        if body and footer.strip() not in body:
+            body = body.rstrip() + footer
+
         ok, msg = _outbound_send_twilio(ch, to_num, body)
         return {"ok": ok, "message": msg}
+
     return {"ok": False, "error": "Unsupported outbound action"}
+
 # ============================================================
 # AI Action Queue (Approval / Deny / Override)
 # - Queue stores proposed AI actions (e.g., tag VIP, update status, draft reply)
@@ -1511,9 +1544,14 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
         partner_id = _derive_partner_id(payload=payload)
     except Exception:
         partner_id = "default"
-    ok_pol, why_pol = _policy_check_action(partner_id, typ, payload, role=str((ctx or {}).get("role") or ""))
+    ok_pol, why_pol = _policy_check_action(
+        partner_id, typ, payload, role=str((ctx or {}).get("role") or "")
+    )
     if not ok_pol:
-        _audit("policy.block", {"partner": partner_id, "type": typ, "reason": why_pol, "row": payload.get("row")})
+        _audit(
+            "policy.block",
+            {"partner": partner_id, "type": typ, "reason": why_pol, "row": payload.get("row")},
+        )
         return {"ok": False, "error": why_pol}
 
     # Feature flag gate (secondary to allow_actions)
@@ -1540,16 +1578,25 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
     # Use the same Sheets update logic as /admin/update-lead
     try:
         gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
         header = ws.row_values(1) or []
         hmap = header_map(header)
 
         if typ == "vip_tag":
             if not allow.get("vip_tag", True):
                 return {"ok": False, "error": "vip_tag not allowed"}
-            vip = str(payload.get("vip") or "").strip()
-            if vip not in ("VIP", "Regular"):
+
+            vip_in = str(payload.get("vip") or "").strip()
+            vip_norm = vip_in.lower()
+
+            # Normalize to Sheet-friendly Yes / No
+            if vip_norm in ("vip", "yes", "true", "1", "y", "on"):
+                vip = "Yes"
+            elif vip_norm in ("regular", "no", "false", "0", "n", "off", ""):
+                vip = "No"
+            else:
                 return {"ok": False, "error": "Invalid vip"}
+
             col = hmap.get("vip")
             if not col:
                 return {"ok": False, "error": "VIP column not found"}
@@ -1574,6 +1621,7 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
         return {"ok": False, "error": "Unsupported action type"}
     except Exception as e:
         return {"ok": False, "error": f"Apply failed: {e}"}
+
 
 def _ai_build_lead_prompt(lead: Dict[str, Any]) -> str:
     # Keep prompt small + deterministic
@@ -1607,15 +1655,23 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[s
     system_msg = (settings.get("system_prompt") or "").strip()
     # Tight JSON contract
     contract = {
-        "confidence": "number 0..1",
-        "actions": [
-            {
-                "type": f"one of: {allowed_types}",
-                "payload": "object (include row)",
-                "reason": "short string"
-            }
-        ],
-        "notes": "short string"
+      "confidence": "number 0..1",
+      "actions": [
+        {
+          "type": f"one of: {allowed_types}",
+          "reason": "short string",
+          "payload": {
+            "row": "int (required)",
+            "vip": "VIP|Regular (vip_tag only)",
+            "status": "New|Confirmed|Seated|No-Show|Handled (status_update only)",
+            "draft": "string (reply_draft only)",
+            "to": "email or phone (send_email/send_sms/send_whatsapp)",
+            "subject": "string (send_email only)",
+            "body": "string message (send_email/send_sms/send_whatsapp)"
+          }
+        }
+      ],
+      "notes": "short string"
     }
     user_msg = _ai_build_lead_prompt(lead) + "\n\nJSON schema:\n" + json.dumps(contract)
 
@@ -1639,7 +1695,7 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[s
         is_vip = any(k in notes for k in ["vip", "bottle", "table", "suite"]) or any(k in budget for k in ["1000", "1500", "2000", "2500"])
         actions = []
         if is_vip and allow.get("vip_tag", False) and sheet_row:
-            actions.append({"type":"vip_tag","payload":{"row": sheet_row, "vip":"VIP"},"reason":"Lead looks VIP/high-intent"})
+            actions.append({"type":"vip_tag","payload":{"row": sheet_row, "vip":"Yes"},"reason":"Lead looks VIP/high-intent"})
         return {"ok": True, "confidence": 0.55 if actions else 0.3, "actions": actions, "notes":"Heuristic suggestion (AI not configured)"}
 
     # Parse JSON safely
@@ -6449,7 +6505,7 @@ def admin_api_ai_settings():
         if "allow_actions" in data and isinstance(data.get("allow_actions"), dict):
             # Only allow known keys
             allow = {}
-            for k in ("vip_tag", "status_update", "reply_draft"):
+            for k in ("vip_tag","status_update","reply_draft","send_email","send_sms","send_whatsapp"):
                 if k in data["allow_actions"]:
                     allow[k] = bool(as_bool(data["allow_actions"].get(k)))
             patch["allow_actions"] = _deep_merge(AI_SETTINGS.get("allow_actions") or {}, allow)
@@ -6509,7 +6565,7 @@ def admin_api_ai_run():
     # Load sheet (best-effort). If Sheets isn't configured, return a friendly error.
     try:
         gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
         header = ensure_sheet_schema(ws)
         hmap = header_map(header)
     except Exception as e:
@@ -6664,11 +6720,17 @@ def admin_api_outbound_propose():
         return jsonify({"ok": False, "error": "Invalid channel"}), 400
     action_type = f"send_{channel}"
     payload = {
-        "partner": data.get("partner"),
-        "row": data.get("row"),
-        "to": data.get("to"),
-        "subject": data.get("subject"),
-        "message": data.get("message"),
+    "partner": data.get("partner"),
+    "row": data.get("row"),
+    "to": data.get("to"),
+    "subject": data.get("subject"),
+    "message": data.get("message"),
+    "body": data.get("message"),  # UI + editor use `body`
+    "venue_name": (
+        _venue_cfg().get("name")
+        or _venue_cfg().get("venue_name")
+        or _venue_id()
+        ),
     }
     # Best-effort partner id for policy gating
     partner = _derive_partner_id(payload=payload)
@@ -6710,7 +6772,7 @@ def admin_api_ai_queue_propose():
 
     data = request.get_json(silent=True) or {}
     typ = str(data.get("type") or "").strip()
-    if typ not in ("vip_tag", "status_update", "reply_draft"):
+    if typ not in ("vip_tag", "status_update", "reply_draft", "send_email", "send_sms", "send_whatsapp"):
         return jsonify({"ok": False, "error": "Invalid type"}), 400
 
     confidence = float(data.get("confidence") or 0.0)
@@ -6753,12 +6815,10 @@ def admin_api_ai_queue_deny(qid: str):
     if str(it.get("status")) != "pending":
         return jsonify({"ok": False, "error": "Not pending"}), 400
 
-    it["status"] = "denied"
-    it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    it["reviewed_by"] = actor
-    it["reviewed_role"] = role
-    it["applied_result"] = None
+    # remove from queue (keeps pending list clean)
+    queue = [x for x in queue if str(x.get("id")) != str(qid)]
     _save_ai_queue(queue)
+
     _audit("ai.queue.deny", {"id": qid, "type": it.get("type")})
     _notify("ai.queue.deny", {"id": qid, "type": it.get("type"), "by": actor, "role": role}, targets=["owner","manager"])
     return jsonify({"ok": True})
@@ -6787,21 +6847,46 @@ def admin_api_ai_queue_approve(qid: str):
     # Outbound sends are NEVER executed on approval. Approval only unlocks a human "Send Now" click.
     if it_type in ("send_email", "send_sms", "send_whatsapp"):
         applied = {"ok": True, "note": "Approved — ready to send (human click required)"}
+        it["status"] = "approved"
+        it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        it["reviewed_by"] = actor
+        it["reviewed_role"] = role
+        it["applied_result"] = applied
+
     else:
-        if AI_SETTINGS.get("enabled") and (AI_SETTINGS.get("mode") in ("auto", "suggest", "off")):
-            # Always require explicit approval here (this endpoint *is* the approval)
-            applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
+        # Always require explicit approval here (this endpoint *is* the approval)
+        applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
 
-    it["status"] = "approved"
-    it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    it["reviewed_by"] = actor
-    it["reviewed_role"] = role
-    it["applied_result"] = applied
-    _save_ai_queue(queue)
-    _audit("ai.queue.approve", {"id": qid, "type": it.get("type"), "applied": bool(applied and applied.get("ok"))})
-    _notify("ai.queue.approve", {"id": qid, "type": it.get("type"), "applied": bool(applied and applied.get("ok")), "by": actor, "role": role}, targets=["owner","manager"])
+    # --- auto-clean queue after approval (non-outbound only) ---
+    is_outbound = it_type in ("send_email", "send_sms", "send_whatsapp")
+
+    # If apply failed, keep item (so you can fix + retry)
+    applied_ok = (applied is None) or bool(applied.get("ok"))  # None = reviewed only
+
+    if (not is_outbound) and applied_ok:
+        # remove non-outbound items after successful apply/review
+        queue = [x for x in queue if str(x.get("id")) != str(qid)]
+        _save_ai_queue(queue)
+    else:
+        # keep outbound (needs send), or keep failures for retry
+        _save_ai_queue(queue)
+
+    _audit(
+        "ai.queue.approve",
+        {"id": qid, "type": it.get("type"), "applied": bool(applied and applied.get("ok"))}
+    )
+    _notify(
+        "ai.queue.approve",
+        {
+            "id": qid,
+            "type": it.get("type"),
+            "applied": bool(applied and applied.get("ok")),
+            "by": actor,
+            "role": role
+        },
+        targets=["owner", "manager"]
+    )
     return jsonify({"ok": True, "applied_result": applied})
-
 
 
 @app.route("/admin/api/ai/queue/<qid>/send", methods=["POST"])
@@ -6846,11 +6931,47 @@ def admin_api_ai_queue_send(qid: str):
     it["sent_by"] = actor
     it["sent_role"] = role
     it["send_result"] = res
+
+    # remove from queue only if send succeeded; keep failures for retry
+    if bool(res and res.get("ok")):
+        queue = [x for x in queue if str(x.get("id")) != str(qid)]
     _save_ai_queue(queue)
 
-    _audit("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": bool(res.get("ok")), "by": actor})
-    _notify("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": bool(res.get("ok")), "by": actor, "role": role}, targets=["owner","manager"])
+    _audit("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": bool(res and res.get("ok")), "by": actor})
+    _notify("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": bool(res and res.get("ok")), "by": actor, "role": role}, targets=["owner","manager"])
     return jsonify({"ok": True, "result": res})
+
+@app.route("/admin/api/ai/queue/<qid>", methods=["PATCH"])
+def admin_api_ai_queue_patch(qid: str):
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    data = request.get_json(silent=True) or {}
+    patch = data.get("payload") or {}
+    if not isinstance(patch, dict):
+        return jsonify({"ok": False, "error": "Invalid payload"}), 400
+
+    queue = _load_ai_queue()
+    it = _queue_find(queue, qid)
+    if not it:
+        return jsonify({"ok": False, "error": "Not found"}), 404
+
+    it_type = str(it.get("type") or "").lower().strip()
+    if it_type not in ("send_email", "send_sms", "send_whatsapp"):
+        return jsonify({"ok": False, "error": "Not outbound"}), 400
+
+    # merge allowed fields only
+    cur = it.get("payload") or {}
+    if not isinstance(cur, dict):
+        cur = {}
+    for k in ("to", "email", "subject", "body", "message"):
+        if k in patch:
+            cur[k] = patch.get(k)
+
+    it["payload"] = cur
+    _save_ai_queue(queue)
+    return jsonify({"ok": True, "id": qid, "payload": cur})
 
 
 @app.route("/admin/api/ai/queue/<qid>/override", methods=["POST"])
@@ -6874,16 +6995,22 @@ def admin_api_ai_queue_override(qid: str):
     # override payload/type (owner-only)
     if "type" in data:
         typ = str(data.get("type") or "").strip()
-        if typ not in ("vip_tag", "status_update", "reply_draft"):
+        if typ not in ("vip_tag", "status_update", "reply_draft", "send_email", "send_sms", "send_whatsapp"):
             return jsonify({"ok": False, "error": "Invalid type"}), 400
         it["type"] = typ
     if "payload" in data and isinstance(data.get("payload"), dict):
         it["payload"] = data.get("payload") or {}
 
     # Apply immediately
+    it_type = str(it.get("type") or "").strip().lower()
+    is_outbound = it_type in ("send_email", "send_sms", "send_whatsapp")
+
+    # Apply immediately ONLY for non-outbound actions
     applied = None
-    if AI_SETTINGS.get("enabled"):
+    if not is_outbound:
         applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
+
+
 
     it["status"] = "approved"
     it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -7313,7 +7440,7 @@ def admin_update_lead():
             return jsonify({"ok": False, "error": "Invalid vip"}), 400
 
     gc = get_gspread_client()
-    ws = _open_default_spreadsheet(gc).sheet1
+    ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
     header = ensure_sheet_schema(ws)
     hmap = header_map(header)
 
@@ -8059,6 +8186,11 @@ th{
         <label class="small"><input type="checkbox" id="ai-act-vip"> VIP tagging</label><br/>
         <label class="small"><input type="checkbox" id="ai-act-status"> Status updates</label><br/>
         <label class="small"><input type="checkbox" id="ai-act-draft"> Reply drafts</label>
+        <br/>
+        <label class="small"><input type="checkbox" id="ai-act-email"> Send email (proposal only)</label><br/>
+        <label class="small"><input type="checkbox" id="ai-act-sms"> Send SMS (proposal only)</label><br/>
+        <label class="small"><input type="checkbox" id="ai-act-whatsapp"> Send WhatsApp (proposal only)</label>
+
       </div>
 
       <div class="note">Tip: keep actions limited until you trust the workflow.</div>
@@ -8098,6 +8230,28 @@ th{
       <span id="aiq-msg" class="note"></span>
     </div>
   </div>
+<div class="card" style="margin:10px 0;padding:10px">
+  <b>Compose outbound</b>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+    <select id="ob-type" class="in">
+      <option value="send_sms">SMS</option>
+      <option value="send_whatsapp">WhatsApp</option>
+      <option value="send_email">Email</option>
+    </select>
+    <input id="ob-to" class="in" placeholder="To (phone or email)" style="min-width:220px"/>
+    <input id="ob-subject" class="in" placeholder="Subject (email only)" style="min-width:220px"/>
+    <div class="sub" style="margin-top:8px">Row # (optional)</div>
+    <input id="ob-row" class="in" placeholder="e.g. 12" style="min-width:220px"/>
+
+  </div>
+  <div style="margin-top:8px">
+    <textarea id="ob-body" class="in" placeholder="Message" style="width:100%;min-height:90px"></textarea>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+    <button type="button" class="btn" onclick="composeOutbound(this)">Queue</button>
+    <span id="ob-msg" class="note"></span>
+  </div>
+</div>
 
   <div class="card">
     <div id="aiq-list" class="small">Loading…</div>
@@ -8927,7 +9081,7 @@ async function testAlert(){
 
 async function loadMenu(){
   const msg = qs('#menu-msg'); if(msg) msg.textContent='';
-  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY));
+  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE));
   const j = await res.json().catch(()=>null);
   if(j && j.ok){
     qs('#menu-json').value = JSON.stringify(j.menu || {}, null, 2);
@@ -8943,7 +9097,7 @@ async function saveMenuJson(){
   try { payload = JSON.parse(qs('#menu-json').value || '{}'); } catch(e) {
     alert('Invalid JSON'); if(msg) msg.textContent='Invalid JSON'; return;
   }
-  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY), {
+  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE), {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify(payload)
@@ -9131,7 +9285,7 @@ async function saveOps(){
 async function loadAI(){
   const msg = qs('#ai-msg'); if(msg) msg.textContent = '';
   try{
-    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}`, {cache:'no-store'});
+    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, { cache:'no-store' });
     const data = await r.json();
     if(!data.ok) throw new Error(data.error || 'Failed');
     const s = data.settings || {};
@@ -9150,6 +9304,10 @@ async function loadAI(){
     qs('#ai-act-vip').checked = !!allow.vip_tag;
     qs('#ai-act-status').checked = !!allow.status_update;
     qs('#ai-act-draft').checked = !!allow.reply_draft;
+    qs('#ai-act-email').checked = !!allow.send_email;
+    qs('#ai-act-sms').checked = !!allow.send_sms;
+    qs('#ai-act-whatsapp').checked = !!allow.send_whatsapp;
+
 
     const feat = s.features || {};
     if(qs('#ai-feat-vip')) qs('#ai-feat-vip').checked = (feat.auto_vip_tag !== false);
@@ -9157,7 +9315,7 @@ async function loadAI(){
     if(qs('#ai-feat-draft')) qs('#ai-feat-draft').checked = (feat.auto_reply_draft !== false);
 
     // lock owner-only fields for managers
-    ['ai-model','ai-prompt','ai-act-vip','ai-act-status','ai-act-draft'].forEach(id=>{
+    ['ai-model','ai-prompt','ai-act-vip','ai-act-status','ai-act-draft','ai-act-email','ai-act-sms','ai-act-whatsapp'].forEach(id=>{
       const el = qs('#'+id); if(!el) return;
       el.disabled = !isOwner;
       el.style.opacity = isOwner ? '1' : '.55';
@@ -9180,15 +9338,19 @@ async function saveAI(){
   if(ROLE === 'owner'){
     payload.model = (qs('#ai-model')?.value || '').trim();
     payload.system_prompt = (qs('#ai-prompt')?.value || '').trim();
-    payload.allow_actions = {
-      vip_tag: qs('#ai-act-vip')?.checked ? true : false,
-      status_update: qs('#ai-act-status')?.checked ? true : false,
-      reply_draft: qs('#ai-act-draft')?.checked ? true : false,
-    };
+   payload.allow_actions = {
+     vip_tag: qs('#ai-act-vip')?.checked ? true : false,
+     status_update: qs('#ai-act-status')?.checked ? true : false,
+     reply_draft: qs('#ai-act-draft')?.checked ? true : false,
+     send_email: qs('#ai-act-email')?.checked ? true : false,
+     send_sms: qs('#ai-act-sms')?.checked ? true : false,
+     send_whatsapp: qs('#ai-act-whatsapp')?.checked ? true : false,
+
+   };
   }
 
   try{
-    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}`, {
+    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify(payload)
@@ -9228,7 +9390,7 @@ async function loadAIQueue(){
   const list = qs('#aiq-list'); if(list) list.innerHTML = 'Loading…';
   try{
     const filt = (qs('#aiq-filter')?.value || '').trim();
-    const url = `/admin/api/ai/queue?key=${encodeURIComponent(KEY)}` + (filt ? `&status=${encodeURIComponent(filt)}` : '');
+    const url = `/admin/api/ai/queue?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}` + (filt ? `&status=${encodeURIComponent(filt)}` : '');
     const r = await fetch(url, {cache:'no-store'});
     const data = await r.json();
     if(!data.ok) throw new Error(data.error || 'Failed');
@@ -9240,12 +9402,55 @@ async function loadAIQueue(){
       renderAIQueue([]); // explicit empty state for CI
   }
 }
+                
+async function composeOutbound(btn){
+  const msg = qs('#ob-msg'); if(msg) msg.textContent='Queuing…';
+  if(btn) btn.disabled = true;
+
+  const typ = qs('#ob-type')?.value || 'send_sms';
+  const to = (qs('#ob-to')?.value || '').trim();
+  const subject = (qs('#ob-subject')?.value || '').trim();
+  const body = (qs('#ob-body')?.value || '').trim();
+  const row = parseInt((qs('#ob-row')?.value || '').trim(), 10) || 0;
+
+  if(!to || !body){
+    if(msg) msg.textContent='Missing To or Message';
+    if(btn) btn.disabled=false;
+    return;
+  }
+
+  const payload = { to, body };
+  if(typ === 'send_email') payload.subject = subject || `${VENUE} — World Cup Concierge`;
+
+  const r = await fetch(`/admin/api/outbound/propose?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      channel: (typ || 'send_sms').replace('send_',''),
+      to: to,
+      subject: (typ === 'send_email' ? (subject || `${VENUE} — World Cup Concierge`) : ''),
+      message: body,
+      row: (row >= 2 ? row : null),
+    })
+
+  });
+
+  const j = await r.json().catch(()=>null);
+  if(j && j.ok){
+    if(msg) msg.textContent='Queued ✔';
+    await loadAIQueue();
+  } else {
+    if(msg) msg.textContent='Queue failed';
+    alert('Queue failed: ' + (j && j.error ? j.error : r.status));
+  }
+  if(btn) btn.disabled=false;
+}
 
 async function runAINew(){
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running AI…';
   const lim = parseInt(qs('#ai-run-limit')?.value || '5', 10);
   try{
-    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}`, {
+    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({mode:'new', limit: isNaN(lim)?5:lim})
@@ -9267,10 +9472,10 @@ async function runAIRow(){
     return;
   }
   try{
-    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}`, {
+    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({row})
+      body: JSON.stringify({mode:'row', row})
     });
     const data = await r.json();
     if(!data.ok) throw new Error(data.error || 'Failed');
@@ -9282,7 +9487,7 @@ async function runAIRow(){
 }
 
 
-function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function esc(s){ return (s==null?'':String(s)).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'","&#39;"); }
 
 function renderAIQueue(items){
   const list = qs('#aiq-list');
@@ -9295,19 +9500,24 @@ function renderAIQueue(items){
   }
 
   const rows = (items || []).map((it)=>{
-    const id = esc(it.id || '');
+    const qid = String(it.id || '');
+    const id  = esc(qid);
     const typ = esc(it.type || '');
     const st  = esc(it.status || '');
     const conf = (typeof it.confidence === 'number') ? it.confidence.toFixed(2) : '';
     const when = esc(it.created_at || '');
     const why  = esc(it.why || it.reason || '');
     const payload = esc(JSON.stringify(it.payload || {}));
+                
+    const rowRef = it?.payload?.row ?? it?.payload?.sheet_row ?? it?.payload?.sheetRow ?? '';
+    const payloadPretty = esc(JSON.stringify(it.payload || {}, null, 2));
 
-    const canAct = (st === 'pending');
+    const canAct = (st === 'pending' || st === 'approved');
 
-    const approveBtn = `<button type="button" class="btn" ${canAct ? '' : 'disabled'} onclick="aiqApprove('${id}', this)">Approve</button>`;
-    const denyBtn    = `<button type="button" class="btn2" ${canAct ? '' : 'disabled'} onclick="aiqDeny('${id}', this)">Deny</button>`;
-    const overrideBtn = `<button type="button" class="btn" onclick="aiqOverride('${id}', this)">Owner Override</button>`;
+    const approveBtn = `<button type="button" class="btn" ${canAct ? '' : 'disabled'} onclick="aiqApprove('${qid}', this)">Approve</button>`;
+    const denyBtn    = `<button type="button" class="btn2" ${canAct ? '' : 'disabled'} onclick="aiqDeny('${qid}', this)">Deny</button>`;
+    const overrideBtn = `<button type="button" class="btn" onclick="aiqOverride('${qid}', this)">Owner Override</button>`;
+
     const isOutbound = (typ === 'send_email' || typ === 'send_sms' || typ === 'send_whatsapp');
     const canSend = (st === 'approved' && isOutbound && !it.sent_at);
     const sendLabel = (typ === 'send_sms') ? 'Send SMS'
@@ -9315,12 +9525,11 @@ function renderAIQueue(items){
                    : (typ === 'send_email') ? 'Send Email'
                    : 'Send';
 
-    const sendBtn = isOutbound
-      ? `<button type="button" class="btn" ${canSend ? '' : 'disabled'} onclick="aiqSend('${id}', this)">${sendLabel}</button>`
+   const sendBtn = isOutbound
+      ? `<button type="button" class="btn" ${canSend ? '' : 'disabled'} onclick="aiqSend('${qid}', this)">${sendLabel}</button>`
       : '';
-
-
                 
+                      
     return `
       <div class="card" style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
@@ -9328,14 +9537,59 @@ function renderAIQueue(items){
             <b>${typ || 'AI item'}</b>
             <span class="chip" style="margin-left:8px">${st || 'unknown'}</span>
             ${conf ? `<span class="note" style="margin-left:8px">conf ${conf}</span>` : ``}
+            ${rowRef ? `<span class="note" style="margin-left:8px">row ${esc(String(rowRef))}</span>` : ``}
           </div>
           <div class="note">${when}</div>
         </div>
+
         ${why ? `<div class="small" style="margin-top:8px;opacity:.9">${why}</div>` : ``}
+
         <details style="margin-top:8px">
-          <summary class="small">Payload</summary>
-          <pre class="small" style="white-space:pre-wrap;opacity:.9">${payload}</pre>
+          <summary class="small" style="cursor:pointer">
+            Payload ${rowRef ? `(Row #${esc(String(rowRef))})` : ``}
+          </summary>
+          <pre class="small" style="
+            margin-top:8px;
+            white-space:pre-wrap;
+            word-break:break-word;
+            background:rgba(0,0,0,.25);
+            border:1px solid rgba(255,255,255,.08);
+            padding:10px;
+            border-radius:12px;
+            max-height:240px;
+            overflow:auto;
+          ">${payloadPretty}</pre>
         </details>
+
+        ${isOutbound ? `
+  <details style="margin-top:8px">
+    <summary class="small">Outbound draft (click to edit)</summary>
+    <div style="margin-top:8px">
+      ${it.payload?.row ? `<div class="note" style="margin-bottom:6px">Row #${esc(it.payload.row)}</div>` : ``}
+
+      <input class="in" data-qid="${qid}" data-field="to"
+             value="${esc(it.payload?.to || it.payload?.email || '')}"
+             placeholder="${typ==='send_email' ? 'To (email)' : 'To (phone)'}"
+             style="width:100%;margin-bottom:6px" />
+
+      ${typ === 'send_email' ? `
+        <input class="in" data-qid="${qid}" data-field="subject"
+               value="${esc(it.payload?.subject || '')}"
+               placeholder="Email subject"
+               style="width:100%;margin-bottom:6px" />
+      ` : ``}
+
+      <textarea class="in"
+        data-qid="${qid}"
+        data-field="body"
+        style="width:100%;min-height:90px"
+        placeholder="Message body">${esc(it.payload?.body || '')}</textarea>
+
+      <div class="note" style="margin-top:4px">Edits apply before sending</div>
+    </div>
+  </details>
+` : ``}
+
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           ${approveBtn}
           ${denyBtn}
@@ -9368,24 +9622,64 @@ async function aiqApprove(id, btn){
 
 
 async function aiqSend(id, btn){
-  if(!confirm('Send this outbound message now?')) return;
-  const _btn = btn;
-  if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Sending…'; }
-  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Sending…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/send?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
-    method:'POST',
+
+  // save inline edits before sending
+  const toEl   = document.querySelector(`input[data-qid="${id}"][data-field="to"]`);
+  const bodyEl = document.querySelector(`textarea[data-qid="${id}"][data-field="body"]`);
+  const subjEl = document.querySelector(`input[data-qid="${id}"][data-field="subject"]`);
+
+  const to = toEl ? toEl.value.trim() : null;
+  const body = bodyEl ? bodyEl.value.trim() : null;
+  const subject = subjEl ? subjEl.value.trim() : null;
+
+  if(!to){
+    alert('Recipient is required');
+    return;
+  }
+
+  await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`,{
+    method:'PATCH',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({})
+    body: JSON.stringify({ payload: { to, body, subject } })
   });
+
+  if(!confirm('Send this outbound message now?')) return;
+
+  const _btn = btn;
+  if(_btn){
+    _btn.disabled = true;
+    _btn.dataset.prevText = _btn.textContent || '';
+    _btn.textContent = 'Sending…';
+  }
+
+  const msg = qs('#aiq-msg');
+  if(msg) msg.textContent = 'Sending…';
+
+  const r = await fetch(
+    `/admin/api/ai/queue/${encodeURIComponent(id)}/send?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`,
+    {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({})
+    }
+  );
+
   const j = await r.json().catch(()=>null);
+
   if(j && j.ok){
-    if(msg) msg.textContent='Sent ✔';
-    if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Send'); }
+    if(msg) msg.textContent = 'Sent ✔';
+    if(_btn){
+      _btn.disabled = false;
+      _btn.textContent = (_btn.dataset.prevText || 'Send');
+    }
     await loadAIQueue();
   }else{
-    if(msg) msg.textContent='Send failed';
-    if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Send'); }
-    alert('Send failed: '+(j && j.error ? j.error : r.status));
+    if(msg) msg.textContent = 'Send failed';
+    if(_btn){
+      _btn.disabled = false;
+      _btn.textContent = (_btn.dataset.prevText || 'Send');
+    }
+    alert('Send failed: ' + (j && j.error ? j.error : r.status));
   }
 }
 
@@ -9395,7 +9689,7 @@ async function aiqDeny(id, btn){
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Denying…'; }
 
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Denying…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/deny?key=${encodeURIComponent(KEY)}`, {
+  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/deny?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({})
@@ -9410,28 +9704,93 @@ async function aiqOverride(id, btn){
     alert('Owner-only: override is locked for managers.');
     return;
   }
+
   const _btn = btn;
-  if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Overriding…'; }
+  const restoreBtn = ()=>{
+    if(_btn){
+      _btn.disabled = false;
+      _btn.textContent = (_btn.dataset.prevText || 'Owner Override');
+    }
+  };
+
+  if(_btn){
+    _btn.disabled = true;
+    _btn.dataset.prevText = _btn.textContent || '';
+    _btn.textContent = 'Overriding…';
+  }
+
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Loading item…';
+
+  // Load the current item so prompts default to the REAL type/payload (no stale examples)
+  let it = null;
+  try{
+    const rr = await fetch(`/admin/api/ai/queue?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, { method:'GET' });
+    const jj = await rr.json().catch(()=>null);
+    const items = (jj && jj.ok && Array.isArray(jj.queue)) ? jj.queue : [];
+    it = items.find(x => String(x && x.id) === String(id)) || null;
+  }catch(e){
+    it = null;
+  }
+
+  if(!it){
+    if(msg) msg.textContent = 'Override failed';
+    restoreBtn();
+    alert('Override failed: Not found');
+    return;
+  }
 
   // Owner-only: allow quick edit of payload/type before applying
-  const typ = prompt('Override action type (vip_tag, status_update, reply_draft):', 'vip_tag');
-  if(!typ){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } return; }
-  let payloadTxt = prompt('Override payload JSON (must be valid JSON object):', '{"row":2,"vip":"VIP"}');
-  if(payloadTxt === null){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } return; }
-  payloadTxt = payloadTxt.trim();
+  const defaultType = String(it.type || 'vip_tag');
+  const typ = prompt(
+    'Override action type (vip_tag, status_update, reply_draft, send_email, send_sms, send_whatsapp):',
+    defaultType
+  );
+  if(!typ){ if(msg) msg.textContent=''; restoreBtn(); return; }
+
+  let payloadTxt = prompt(
+    'Override payload JSON (must be valid JSON object):',
+    JSON.stringify(it.payload || {}, null, 2)
+  );
+  if(payloadTxt === null){ if(msg) msg.textContent=''; restoreBtn(); return; }
+
+  payloadTxt = String(payloadTxt).trim();
   let payloadObj = null;
-  try{ payloadObj = JSON.parse(payloadTxt); }catch(e){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } alert('Invalid JSON'); return; }
-  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Applying override…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/override?key=${encodeURIComponent(KEY)}`, {
+  try{
+    payloadObj = JSON.parse(payloadTxt);
+  }catch(e){
+    if(msg) msg.textContent = 'Override failed';
+    restoreBtn();
+    alert('Invalid JSON');
+    return;
+  }
+
+  if(!payloadObj || typeof payloadObj !== 'object' || Array.isArray(payloadObj)){
+    if(msg) msg.textContent = 'Override failed';
+    restoreBtn();
+    alert('Payload must be a JSON object (e.g., {"row":9,...})');
+    return;
+  }
+
+  if(msg) msg.textContent = 'Applying override…';
+
+  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/override?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({type: typ, payload: payloadObj})
+    body: JSON.stringify({type: String(typ).trim(), payload: payloadObj})
   });
-  const j = await r.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Override applied ✔'; if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } await loadAIQueue(); }
-  else { if(msg) msg.textContent='Override failed'; if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } alert('Override failed: '+(j && j.error ? j.error : r.status)); }
-}
 
+  const j = await r.json().catch(()=>null);
+
+  if(j && j.ok){
+    if(msg) msg.textContent = 'Override applied ✔';
+    restoreBtn();
+    await loadAIQueue();
+  }else{
+    if(msg) msg.textContent = 'Override failed';
+    restoreBtn();
+    alert('Override failed: ' + (j && j.error ? j.error : r.status));
+  }
+}
 
 function esc(s){
   return (s==null?'':String(s))
@@ -9563,7 +9922,7 @@ async function loadNotifs(){
     const m = document.cookie.match(/(?:^|;\s*)venue_id=([^;]+)/);
     const VENUE = ((new URLSearchParams(location.search).get('venue') || '').trim()) || (m ? decodeURIComponent(m[1]) : '');
 
-    const r = await fetch(`/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}`, {
+    const r = await fetch(`/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}&venue=${encodeURIComponent(VENUE)}`, {
     cache: 'no-store',
     headers: { 'X-Venue-Id': VENUE }
     });
@@ -9661,7 +10020,7 @@ async function loadFanZoneState(){
   const ta  = document.querySelector('#fzJson');
   if(msg) msg.textContent = 'Loading…';
   try{
-    const r = await fetch(`/admin/api/fanzone/state?key=${encodeURIComponent(KEY||'')}`, {cache:'no-store'});
+    const r = await fetch(`/admin/api/fanzone/state?key=${encodeURIComponent(KEY||'')}&venue=${encodeURIComponent(VENUE)}`, { cache:'no-store' });
     const j = await r.json().catch(()=>null);
     if(!j || !j.ok) throw new Error('Load failed');
     if(ta) ta.value = JSON.stringify(j.state || {}, null, 2);
@@ -9677,7 +10036,7 @@ async function saveFanZoneState(){
   if(msg) msg.textContent = 'Saving…';
   try{
     const payload = JSON.parse((ta && ta.value) ? ta.value : '{}');
-    const r = await fetch(`/admin/api/fanzone/save?key=${encodeURIComponent(KEY||'')}`, {
+    const r = await fetch(`/admin/api/fanzone/save?key=${encodeURIComponent(KEY||'')}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify(payload)
@@ -9693,7 +10052,7 @@ async function saveFanZoneState(){
 async function clearNotifs(){
   const msg = qs('#notif-msg'); if(msg) msg.textContent='Clearing…';
   try{
-    const r = await fetch(`/admin/api/notifications/clear?key=${encodeURIComponent(KEY||'')}`, {method:'POST'});
+    const r = await fetch(`/admin/api/notifications/clear?key=${encodeURIComponent(KEY||'')}&venue=${encodeURIComponent(VENUE)}`, {method:'POST'});
     const j = await r.json();
     if(j.ok){
       if(msg) msg.textContent='Cleared';
@@ -9757,7 +10116,7 @@ async function loadHealth(){
   const msg = qs('#health-msg'); if(msg) msg.textContent='Loading…';
   const body = qs('#health-body'); if(body) body.textContent='';
   try{
-    const r = await fetch(`/admin/api/health?key=${encodeURIComponent(KEY)}`, {cache:'no-store'});
+    const r = await fetch(`/admin/api/health?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, { cache:'no-store' });
     const j = await r.json();
     if(!j.ok) throw new Error(j.error||'Failed');
     const rep = j.report || {};
@@ -9784,7 +10143,7 @@ async function runHealth(){
   const msg = qs('#health-msg'); if(msg) msg.textContent='Running…';
   const body = qs('#health-body'); if(body) body.textContent='';
   try{
-    const r = await fetch(`/admin/api/health/run?key=${encodeURIComponent(KEY)}`, {method:'POST'});
+    const r = await fetch(`/admin/api/health/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, { method:'POST' });
     const j = await r.json();
     if(!j.ok) throw new Error(j.error||'Failed');
     const rep = j.report || {};
@@ -9938,7 +10297,7 @@ def admin_api_ai_draft_reply():
 
     try:
         gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
         header = ws.row_values(1) or []
         vals = ws.row_values(row_num) or []
         hmap = header_map(header)
@@ -10043,7 +10402,7 @@ def admin_api_load_forecast():
 
     try:
         gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
         header = ws.row_values(1) or []
         hmap = header_map(header)
 
@@ -10137,7 +10496,7 @@ def admin_api_ai_replay():
 
     try:
         gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
         header = ws.row_values(1) or []
         vals = ws.row_values(row_num) or []
         hmap = header_map(header)
@@ -10492,7 +10851,7 @@ async function loadForecast(){
   const msg = qs('#forecast-msg'); if(msg) msg.textContent = 'Loading…';
   const body = qs('#forecastBody'); if(body) body.textContent = '';
   try{
-    const r = await fetch(`/admin/api/analytics/load-forecast?key=${encodeURIComponent(KEY)}`, {cache:'no-store'});
+    const r = await fetch(`/admin/api/analytics/load-forecast?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, { cache:'no-store' });
     const d = await r.json();
     if(!d.ok) throw new Error(d.error || 'Failed');
     const lines = [];
@@ -10829,8 +11188,20 @@ def __test_ai_queue_seed():
 
     body = request.get_json(silent=True) or {}
     action_type = str(body.get("type") or body.get("action_type") or "reply_draft").strip().lower()
-    if action_type not in ("vip_tag", "status_update", "reply_draft"):
-        return jsonify({"ok": False, "error": "Invalid type. Use vip_tag | status_update | reply_draft"}), 400
+
+    if action_type not in (
+        "vip_tag",
+        "status_update",
+        "reply_draft",
+        "send_email",
+        "send_sms",
+        "send_whatsapp",
+    ):
+        return jsonify({
+            "ok": False,
+            "error": "Invalid type. Use vip_tag | status_update | reply_draft | send_email | send_sms | send_whatsapp"
+        }), 400
+
 
     entry = {
         "id": _queue_new_id(),
