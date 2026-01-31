@@ -281,6 +281,7 @@ def privacy_policy():
     .card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:18px;}
     a{color:#b9c7ee;}
     .muted{color:rgba(232,238,252,.75);font-size:13px;margin-top:18px;}
+    hr{border:0;border-top:1px solid rgba(255,255,255,.12);margin:14px 0;}
   </style>
 </head>
 <body>
@@ -291,13 +292,21 @@ def privacy_policy():
 
       <p>Phone numbers are collected solely for transactional and operational purposes, including reservation confirmations, VIP status updates, system alerts, and customer support communications.</p>
 
-      <p>We do not send marketing or promotional SMS messages. SMS messages are sent only to users who explicitly opt in by providing their phone number.</p>
+      <hr>
 
-      <p>Users may opt out of SMS communications at any time by replying <strong>STOP</strong>.</p>
+      <p><strong>SMS Consent</strong></p>
 
-      <p>We do not sell or share personal information with third parties for marketing purposes.</p>
+      <p>By providing your phone number and submitting a form on this website, you expressly consent to receive transactional SMS (text) messages from <strong>World Cup Concierge</strong>, operated by <strong>NYLA AI Solutions, LLC</strong>. Consent is not a condition of purchase.</p>
+
+      <p>SMS messages may include reservation confirmations, VIP status updates, operational alerts, and customer support notifications. Message and data rates may apply. Message frequency varies.</p>
+
+      <p>You may opt out of SMS communications at any time by replying <strong>STOP</strong>. For assistance, reply <strong>HELP</strong>.</p>
+
+      <p>We do not send marketing or promotional SMS messages, and we do not sell or share personal information with third parties for marketing purposes.</p>
 
       <p>For questions about this policy, contact: <a href="mailto:admin@worldcupconcierge.app">admin@worldcupconcierge.app</a></p>
+
+      <p class="muted">World Cup Concierge is a product operated by NYLA AI Solutions, LLC.</p>
 
       <div class="muted">Last updated: January 2026</div>
     </div>
