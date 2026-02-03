@@ -4794,45 +4794,89 @@
     /* ===== END MENU SCROLL FIX ===== */
 
 
-    /*fix: hero section*/
-    /* --- 2. BANNER CONTAINER --- */
-    /* Old: .hero-banner -> New: .banner-section */
+    /*fixes*/
+    
+    /* =========================================
+   1. HERO BANNER LAYOUT (Floating Full Width)
+   ========================================= */
+
+    /* Main Container */
     .banner-section {
       position: relative;
-      width: 100%;
+
+      /* BREAKOUT LOGIC: Centers relative to the screen, ignoring parent padding */
+      left: 50%;
+      transform: translateX(-50%);
+
+      /* SIZING: Full viewport width minus 40px (20px gap on left & right) */
+      width: calc(100vw - 40px);
+
+      /* Styling */
       background: #000;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+      /* Clips the zoomed image */
+      border-radius: 20px;
+      /* Rounded corners for the floating look */
+      margin: 0;
+      /* Reset margins */
     }
 
-    /* --- 3. MEDIA FRAME --- */
-    /* Old: .media-container -> New: .banner-media */
+    /* Media Frame (The "Window" for the image) */
     .banner-media {
       position: relative;
       width: 100%;
       overflow: hidden;
+
+      /* Mobile Default: Taller Aspect Ratio using padding hack */
+      height: 0;
+      padding-bottom: 60%;
+      border-radius: 20px;
+      /* Matches parent */
     }
 
-    /* --- 4. IMAGE STYLING --- */
-    /* Old: .hero-img -> New: .banner-image */
+
+    /* =========================================
+   2. IMAGE & OVERLAYS (Manual Zoom)
+   ========================================= */
+
+    /* Hero Image Styling - MANUAL ZOOM */
     .banner-image {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
+      position: absolute;
       display: block;
+
+      /* CENTER ALIGNMENT */
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+
+      /* ZOOM LOGIC: > 100% dimensions forces the zoom */
+      /* This ensures it covers the area + zooms in slightly */
+      min-width: 110%;
+      min-height: 110%;
+
+      /* Reset standard constraints to allow zooming */
+      width: auto;
+      height: auto;
+      max-width: none;
     }
 
-    /* --- 5. OVERLAY --- */
-    /* Old: .vignette -> New: .shadow-overlay */
+    /* Gradient Overlay */
     .shadow-overlay {
       position: absolute;
       inset: 0;
-      background: radial-gradient(circle at 70% 80%, transparent 50%, rgba(0, 0, 0, 0.6) 100%);
+      background: radial-gradient(circle at 70% 80%, transparent 40%, rgba(0, 0, 0, 0.7) 100%);
       pointer-events: none;
       z-index: 10;
+      border-radius: 20px;
     }
 
-    /* --- 6. COUNTDOWN WIDGET --- */
-    /* Old: .countdown-wrapper -> New: .counter-container */
+
+    /* =========================================
+   3. COUNTDOWN WIDGET COMPONENT
+   ========================================= */
+
+    /* Widget Wrapper */
     .counter-container {
       position: absolute;
       bottom: 20px;
@@ -4844,7 +4888,7 @@
       gap: 4px;
     }
 
-    /* Old: .countdown-label -> New: .counter-title */
+    /* Small Title Label */
     .counter-title {
       color: rgba(255, 255, 255, 0.9);
       font-size: 10px;
@@ -4852,33 +4896,37 @@
       letter-spacing: 1px;
       margin-right: 4px;
       text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+      text-transform: uppercase;
     }
 
-    /* Old: .countdown-box -> New: .counter-card */
+    /* Glassmorphism Card */
     .counter-card {
       background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
       border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 12px;
       padding: 10px 16px;
       box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
     }
 
-    /* Old: .timer-row -> New: .time-grid */
+    /* Timer Grid */
     .time-grid {
       display: flex;
-      gap: 12px;
       align-items: baseline;
+      gap: 12px;
       color: #fff;
     }
 
-    /* Old: .timer-cell -> New: .time-unit */
+    /* Individual Time Unit */
     .time-unit {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       text-align: center;
     }
 
-    /* Old: .timer-num -> New: .time-val */
+    /* The Big Number */
     .time-val {
       font-weight: 900;
       font-size: 24px;
@@ -4886,48 +4934,62 @@
       font-variant-numeric: tabular-nums;
     }
 
-    /* Old: .timer-lbl -> New: .time-key */
+    /* The Label */
     .time-key {
       font-size: 9px;
-      opacity: 0.8;
       font-weight: 700;
+      opacity: 0.8;
       margin-top: 2px;
+      text-transform: uppercase;
     }
 
-    /* Old: .timer-sep -> New: .time-dot */
+    /* Separator Dots */
     .time-dot {
       font-size: 16px;
       opacity: 0.5;
       transform: translateY(-4px);
     }
 
-    /* --- 7. RESPONSIVE ZOOM LOGIC --- */
 
-    /* DEFAULT (Mobile/Tablet) - Natural Aspect Ratio */
-    .banner-media {
-      aspect-ratio: 16/9;
-      border-radius: 0 0 20px 20px;
-    }
+    /* =========================================
+   4. RESPONSIVE BEHAVIOR
+   ========================================= */
 
-    /* PC & LAPTOP (Screens wider than 1024px) */
-    @media (min-width: 1024px) {
+    /* Tablet & iPad Air (768px+) */
+    @media (min-width: 768px) {
 
-      /* Force fixed height strip */
       .banner-media {
-        height: 600px !important;
-        aspect-ratio: auto !important;
+        /* Switch to "Cinema Strip" height */
+        height: 460px !important;
+        padding-bottom: 0 !important;
+        /* Disable mobile aspect ratio */
       }
 
-      /* Force Zoom (Full Width) + Center Crop */
+      /* Adjust Zoom for medium screens */
       .banner-image {
-        width: 100% !important;
-        height: auto !important;
-        min-height: 100%;
+        min-width: 100%;
+        min-height: 115%;
+        /* Slight vertical zoom */
+      }
 
-        position: absolute !important;
-        top: 50% !important;
-        left: 0 !important;
-        transform: translateY(-50%) !important;
+      .counter-container {
+        bottom: 30px;
+        right: 30px;
+      }
+    }
+
+    /* Desktop & Laptop (1200px+) */
+    @media (min-width: 1200px) {
+
+      .banner-media {
+        height: 600px !important;
+        /* Taller strip for big monitors */
+      }
+
+      .banner-image {
+        /* Less aggressive zoom on big screens */
+        min-width: 100%;
+        min-height: 110%;
       }
     }
   </style>
