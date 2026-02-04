@@ -4795,7 +4795,7 @@
 
 
     /*fixes*/
-    
+
     /* =========================================
    1. HERO BANNER LAYOUT (Floating Full Width)
    ========================================= */
@@ -4960,7 +4960,7 @@
 
       .banner-media {
         /* Switch to "Cinema Strip" height */
-        height: 460px !important;
+        height: 400px !important;
         padding-bottom: 0 !important;
         /* Disable mobile aspect ratio */
       }
@@ -4982,7 +4982,7 @@
     @media (min-width: 1200px) {
 
       .banner-media {
-        height: 600px !important;
+        height: 540px !important;
         /* Taller strip for big monitors */
       }
 
@@ -5229,6 +5229,7 @@
         <aside aria-label="Fan Zone Left Panel" class="fanzone fanzone-left" id="fanZoneLeft">
           <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
             <span class="fz-muted fz-rail-title">Fan Zone</span>
+            <!-- To do:There is not any feature or backend functionality  created or implemented for this fzCollapseToggle -->
             <button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button>
           </div>
           <div class="fz-row" style="justify-content:flex-start;">
@@ -5263,6 +5264,7 @@
       </aside>
       <aside aria-label="Fan Zone Right Panel" class="fanzone fanzone-right" id="fanZoneRight"
         style="padding-bottom: 100px; padding-top:10px;">
+        <!-- To do:There is not any feature or backend functionality  created or implemented for this fzCollapseToggle2 -->
         <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
           <span class="fz-muted fz-rail-title">Extras</span>
           <button class="fz-iconbtn" id="fzCollapseToggle2" title="Collapse / expand">⫶</button>
@@ -5331,31 +5333,40 @@
     <div class="modalCard" role="document">
       <div class="modalHead">
         <h3>Matchday request</h3>
-        <button class="iconBtn" id="closeModal" type="button" aria-label="Close">✕</button>
+        <button class="iconBtn" id="closeModal" type="button" aria-label="Close" onclick="closeModal()">✕</button>
       </div>
       <div class="modalBody">
         <label for="iCity">Business context (optional)</label>
         <input id="iCity" placeholder="e.g., client name, suite name, or event context (optional)" />
+
         <label class="required" for="iName">Name</label>
         <input id="iName" placeholder="Guest name" />
+
         <label class="required" for="iDate">Date</label>
         <input id="iDate" type="date" />
+
         <label class="required" for="iGroup">Party size</label>
         <input id="iGroup" inputmode="numeric" placeholder="e.g., 4" />
+
         <label class="required" for="iTime">Time window</label>
         <input id="iTime" placeholder="e.g., 7–9pm" />
+
         <label for="iVibe">Experience / vibe (optional)</label>
         <input id="iVibe" placeholder="e.g., VIP, quiet lounge, lively, premium" />
+
         <label for="iNotes">Notes (optional)</label>
         <textarea id="iNotes" rows="3" placeholder="Any preferences, constraints, or special requests"></textarea>
 
         <label for="iBudget">Budget (optional)</label>
         <input id="iBudget" placeholder="e.g., $200–$400" />
+
         <label class="required" for="iContact">Contact</label>
         <input id="iContact" placeholder="Phone or email" />
-        <button class="ctaBtn" id="submitIntake" type="button">Submit request</button>
-        <div id="intakeMsg" class="hint"></div>
-        <div class="hint">Saved to your Admin Leads list. You can confirm details and follow up from there.</div>
+
+        <button class="ctaBtn" id="submitIntake" type="button" onclick="submitIntake()">Submit request</button>
+
+        <div class="hint" style="margin-top:10px;">Saved to your Admin Leads list. You can confirm details and follow up
+          from there.</div>
       </div>
     </div>
   </div>
@@ -6407,32 +6418,44 @@
       m.classList.add('hidden');
       document.body.classList.remove('modalOpen');
     }
+
+
     async function submitIntake() {
+      // 1. Prevent double clicking
       if (window.__intakeSubmitting) return;
       window.__intakeSubmitting = true;
-      $('submitIntake')?.setAttribute('disabled', 'disabled');
 
-      const msg = $('intakeMsg');
-      const iName = $('iName')?.value || '';
-      const iCity = $('iCity')?.value || '';
-      const iDate = $('iDate')?.value || '';
-      const iGroup = $('iGroup')?.value || '';
-      const iTime = $('iTime')?.value || '';
-      const iVibe = $('iVibe')?.value || '';
-      const iBudget = $('iBudget')?.value || '';
-      const iNotes = $('iNotes')?.value || '';
-      const iContact = $('iContact')?.value || '';
+      const btn = document.getElementById('submitIntake');
+      if (btn) {
+        btn.setAttribute('disabled', 'disabled');
+        btn.textContent = "Sending...";
+      }
 
+      // 2. Get Values
+      const iName = document.getElementById('iName')?.value.trim() || '';
+      const iCity = document.getElementById('iCity')?.value.trim() || '';
+      const iDate = document.getElementById('iDate')?.value || '';
+      const iGroup = document.getElementById('iGroup')?.value.trim() || '';
+      const iTime = document.getElementById('iTime')?.value.trim() || '';
+      const iVibe = document.getElementById('iVibe')?.value.trim() || '';
+      const iBudget = document.getElementById('iBudget')?.value.trim() || '';
+      const iNotes = document.getElementById('iNotes')?.value.trim() || '';
+      const iContact = document.getElementById('iContact')?.value.trim() || '';
+
+      // 3. Validation
       if (!iName || !iDate || !iGroup || !iTime || !iContact) {
-        if (msg) msg.textContent = 'Please fill Name, Date, Party size, Time window, and Contact.';
+        alert('⚠️ Please fill in all required fields:\n- Name\n- Date\n- Party size\n- Time window\n- Contact');
+
         window.__intakeSubmitting = false;
-        $('submitIntake')?.removeAttribute('disabled');
+        if (btn) {
+          btn.removeAttribute('disabled');
+          btn.textContent = "Submit request";
+        }
         return;
       }
 
-      if (msg) msg.textContent = 'Sending…';
-
       try {
+        // 4. Send to Server
         const res = await fetch('/api/intake', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -6452,15 +6475,40 @@
         });
 
         const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.ok) throw new Error();
 
-        closeModal();
-        toast(`Request saved as ${data.tier || ''} — view it in Admin → Leads.`, 2400);
+        // 5. Check Success
+        if (res.ok) {
+          // SUCCESS POPUP
+          alert(`✅ Success!\n\nYour request has been saved to the Admin Leads list.`);
+
+          closeModal();
+
+          // 6. RESET ALL FORM FIELDS
+          const modalInputs = document.querySelectorAll('#intakeModal input, #intakeModal textarea');
+          modalInputs.forEach(input => input.value = '');
+
+        } else {
+          // 7. ERROR HANDLING
+          let errorMsg = data.error || "Unknown issue";
+
+          // Rewrite 500 or specific DB errors to generic "Server Error"
+          if (res.status === 500 || errorMsg.includes("Failed to store intake")) {
+            errorMsg = "Server Error: Please try again later.";
+          }
+
+          throw new Error(errorMsg);
+        }
+
       } catch (e) {
-        if (msg) msg.textContent = 'Could not submit. Please try again.';
+        // 8. FAILURE POPUP
+        console.error(e);
+        alert(`❌ Error:\n\n${e.message}`);
       } finally {
         window.__intakeSubmitting = false;
-        $('submitIntake')?.removeAttribute('disabled');
+        if (btn) {
+          btn.removeAttribute('disabled');
+          btn.textContent = "Submit request";
+        }
       }
     }
 
