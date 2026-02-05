@@ -7025,16 +7025,23 @@
       async function sendPollVoteApi(team) {
         const client_id = getOrCreateClientId();
         try {
-          const r = await fetch('/api/poll/vote', {
+          const res = await fetch('/api/poll/vote', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ client_id, team })
           });
-          if (!r.ok) return null;
-          const j = await r.json();
-          return (j && j.ok) ? j : null;
+
+          let j = null;
+          try { j = await res.json(); } catch (e) { }
+
+          return {
+            ok: res.ok,        
+            status: res.status, 
+            data: j          
+          };
+
         } catch (e) {
-          return null;
+          return { ok: false, status: 0, data: null };
         }
       }
 
@@ -7066,13 +7073,21 @@
             // optimistic UI
             btn.disabled = true;
             const res = await sendPollVoteApi(teamLabel);
-            if (res) {
+            // CASE 1: SUCCESS
+            if (res.ok) {
               luxToast('Vote submitted ✅', 2200);
-              // Close after vote (requested behavior)
               hide(pc);
-            } else {
+            }
+            // CASE 2: ALREADY VOTED (409)
+            else if (res.status === 409) {
+              luxToast('⚠️ You have already voted!', 3000);
+              
+            }
+            // CASE 3: OTHER ERROR
+            else {
               btn.disabled = false;
-              luxToast('Could not submit vote. Try again.', 2600);
+              const msg = (res.data && res.data.error) ? res.data.error : 'Could not submit vote.';
+              luxToast(msg, 2600);
             }
           });
           return btn;
