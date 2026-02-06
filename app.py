@@ -3734,9 +3734,18 @@ def get_session(sid: str) -> Dict[str, Any]:
                 "status": "New",
                 "vip": "No",
             },
+            # Conversation history for AI context (Recall feature)
+            "history": [],  # List of {"role": "user"|"assistant", "content": str}
+            # Last saved reservation for follow-up modifications
+            "last_reservation": None,
             "updated_at": time.time(),
         }
         _sessions[sid] = s
+    # Ensure existing sessions have new fields (back-compat)
+    if "history" not in s:
+        s["history"] = []
+    if "last_reservation" not in s:
+        s["last_reservation"] = None
     return s
 
 
@@ -3754,6 +3763,21 @@ def want_recall(text: str, lang: str) -> bool:
 def want_reservation(text: str) -> bool:
     t = text.lower()
     return any(k in t for k in ["reservation", "reserve", "book a table", "table for", "reserva", "réservation"])
+
+
+def want_modification(text: str) -> bool:
+    """Detect if user wants to modify their last reservation."""
+    t = text.lower().strip()
+    patterns = [
+        r"make it (for )?(\d+)",           # "make it for 4 people"
+        r"change (it )?(to|for)",           # "change to 8pm", "change it for 4"
+        r"update (it )?(to|for)",           # "update to 6 people"
+        r"(actually|instead).*(for )?(\d+)",# "actually, make it for 4"
+        r"(\d+) (people|guests|persons|pax) instead",
+        r"modify",
+        r"switch (it )?(to|for)",
+    ]
+    return any(re.search(p, t) for p in patterns)
 
 
 def extract_party_size(text: str) -> Optional[int]:
@@ -4030,6 +4054,8 @@ def recall_text(sess: Dict[str, Any]) -> str:
     lang = sess.get("lang", "en")
     L = LANG[lang]
     lead = sess["lead"]
+    
+    # Check current in-progress reservation first
     if any([lead.get("date"), lead.get("time"), lead.get("party_size"), lead.get("name"), lead.get("phone")]):
         parts = [
             L["recall_title"],
@@ -4040,6 +4066,22 @@ def recall_text(sess: Dict[str, Any]) -> str:
             f"Phone: {lead.get('phone') or '—'}",
         ]
         return "\n".join(parts)
+    
+    # If no current reservation, show last saved reservation
+    last_res = sess.get("last_reservation")
+    if last_res:
+        parts = [
+            "📋 Your last saved reservation:",
+            f"Date: {last_res.get('date') or '—'}",
+            f"Time: {last_res.get('time') or '—'}",
+            f"Party size: {last_res.get('party_size') or '—'}",
+            f"Name: {last_res.get('name') or '—'}",
+            f"Phone: {last_res.get('phone') or '—'}",
+            f"Status: {last_res.get('status', 'New')}",
+            "\nWant to modify? Just tell me what to change (e.g., 'make it for 4 people').",
+        ]
+        return "\n".join(parts)
+    
     return L["recall_empty"]
 
 
@@ -5342,9 +5384,59 @@ def chat():
         if not msg:
             return jsonify({"reply": "Please type a message.", "rate_limit_remaining": remaining})
 
+        # Store user message in conversation history
+        sess["history"].append({"role": "user", "content": msg})
+        # Trim history to last 20 messages to prevent memory bloat
+        if len(sess["history"]) > 20:
+            sess["history"] = sess["history"][-20:]
+
         # Recall support (all languages)
         if want_recall(msg, lang):
-            return jsonify({"reply": recall_text(sess), "rate_limit_remaining": remaining})
+            reply = recall_text(sess)
+            sess["history"].append({"role": "assistant", "content": reply})
+            return jsonify({"reply": reply, "rate_limit_remaining": remaining})
+
+        # Handle modification requests for last saved reservation
+        if sess["mode"] == "idle" and want_modification(msg) and sess.get("last_reservation"):
+            last_res = sess["last_reservation"]
+            # Extract new values from the modification request
+            new_ps = extract_party_size(msg)
+            new_time = extract_time(msg)
+            new_date = extract_date(msg)
+            
+            changes = []
+            if new_ps:
+                last_res["party_size"] = new_ps
+                changes.append(f"Party size: {new_ps}")
+            if new_time:
+                last_res["time"] = new_time
+                changes.append(f"Time: {new_time}")
+            if new_date and validate_date_iso(new_date):
+                last_res["date"] = new_date
+                changes.append(f"Date: {new_date}")
+            
+            if changes:
+                # Note: In a real system, you'd update the Google Sheet row here
+                # For now, we acknowledge the modification request with the updated details
+                reply = (
+                    f"✅ Got it! I've noted the update for your reservation:\n"
+                    f"Name: {last_res['name']}\n"
+                    f"Phone: {last_res['phone']}\n"
+                    f"Date: {last_res['date']}\n"
+                    f"Time: {last_res['time']}\n"
+                    f"Party size: {last_res['party_size']}\n"
+                    f"\nChanges made: {', '.join(changes)}\n"
+                    f"\nNote: To officially update your reservation, please contact us directly or make a new booking."
+                )
+                sess["history"].append({"role": "assistant", "content": reply})
+                return jsonify({"reply": reply, "rate_limit_remaining": remaining})
+            else:
+                reply = (
+                    f"I see you want to modify your reservation for {last_res['date']} at {last_res['time']}. "
+                    f"What would you like to change? (e.g., party size, time, date)"
+                )
+                sess["history"].append({"role": "assistant", "content": reply})
+                return jsonify({"reply": reply, "rate_limit_remaining": remaining})
 
         # Start reservation flow if user indicates intent
         if sess["mode"] == "idle" and want_reservation(msg):
@@ -5447,6 +5539,16 @@ def chat():
                         f"Status: {lead.get('status','New')}\n"
                         f"VIP: {lead.get('vip','No')}"
                     )
+                    # Save the reservation for potential follow-up modifications
+                    sess["last_reservation"] = {
+                        "name": lead["name"],
+                        "phone": lead["phone"],
+                        "date": lead["date"],
+                        "time": lead["time"],
+                        "party_size": lead["party_size"],
+                        "status": lead.get("status", "New"),
+                        "vip": lead.get("vip", "No"),
+                    }
                     sess["lead"] = {
                         "name": "",
                         "phone": "",
@@ -5457,6 +5559,8 @@ def chat():
                         "status": "New",
                         "vip": "No",
                     }
+                    # Store confirmation in history
+                    sess["history"].append({"role": "assistant", "content": confirm})
                     return jsonify({"reply": confirm, "rate_limit_remaining": remaining})
                 except Exception as e:
                     # Always return JSON so the UI never shows "no reply received".
@@ -5489,12 +5593,18 @@ Rules:
         try:
             if not _OPENAI_AVAILABLE or client is None:
                 raise RuntimeError("OpenAI SDK not installed / not configured")
+            
+            # Build messages array with conversation history for context
+            messages = [{"role": "system", "content": system_msg}]
+            # Add recent conversation history (last 10 exchanges for context)
+            recent_history = sess.get("history", [])[-10:]
+            for h in recent_history[:-1]:  # Exclude the current message we just added
+                messages.append({"role": h["role"], "content": h["content"]})
+            messages.append({"role": "user", "content": msg})
+            
             resp = client.responses.create(
                 model=os.environ.get("CHAT_MODEL", "gpt-4o-mini"),
-                input=[
-                    {"role": "system", "content": system_msg},
-                    {"role": "user", "content": msg},
-                ],
+                input=messages,
             )
             reply = (resp.output_text or "").strip() or "(No response)"
 
@@ -5505,6 +5615,8 @@ Rules:
                     "I can still help with a reservation — **how many guests** and **what time**?"
                 )
 
+            # Store assistant response in history
+            sess["history"].append({"role": "assistant", "content": reply})
             return jsonify({"reply": reply, "rate_limit_remaining": remaining})
         except Exception as e:
             # Customer-safe fallback (no “chat unavailable”), still routes + continues booking
@@ -5521,6 +5633,39 @@ Rules:
             "I can still help with a reservation — **how many guests** and **what time**?"
         )
         return jsonify({"reply": fallback, "rate_limit_remaining": 0}), 200
+
+
+@app.route("/chat/clear", methods=["POST"])
+def chat_clear():
+    """Clear the chat session history for the current user."""
+    try:
+        data = request.get_json(force=True) or {}
+        sid = (data.get("session_id") or "").strip()
+        if not sid:
+            sid = get_session_id()
+        
+        # Clear the session if it exists
+        if sid in _sessions:
+            sess = _sessions[sid]
+            sess["history"] = []
+            sess["last_reservation"] = None
+            sess["mode"] = "idle"
+            sess["lead"] = {
+                "name": "",
+                "phone": "",
+                "date": "",
+                "time": "",
+                "party_size": 0,
+                "language": sess.get("lang", "en"),
+                "status": "New",
+                "vip": "No",
+            }
+            sess["updated_at"] = time.time()
+        
+        return jsonify({"ok": True, "message": "Chat session cleared."})
+    except Exception as e:
+        return jsonify({"ok": False, "error": repr(e)}), 500
+
 
 # ============================================================
 # Admin dashboard
@@ -15028,9 +15173,18 @@ def get_session(sid: str) -> Dict[str, Any]:
                 "status": "New",
                 "vip": "No",
             },
+            # Conversation history for AI context (Recall feature)
+            "history": [],  # List of {"role": "user"|"assistant", "content": str}
+            # Last saved reservation for follow-up modifications
+            "last_reservation": None,
             "updated_at": time.time(),
         }
         _sessions[sid] = s
+    # Ensure existing sessions have new fields (back-compat)
+    if "history" not in s:
+        s["history"] = []
+    if "last_reservation" not in s:
+        s["last_reservation"] = None
     return s
 
 
@@ -15048,6 +15202,21 @@ def want_recall(text: str, lang: str) -> bool:
 def want_reservation(text: str) -> bool:
     t = text.lower()
     return any(k in t for k in ["reservation", "reserve", "book a table", "table for", "reserva", "réservation"])
+
+
+def want_modification(text: str) -> bool:
+    """Detect if user wants to modify their last reservation."""
+    t = text.lower().strip()
+    patterns = [
+        r"make it (for )?(\d+)",           # "make it for 4 people"
+        r"change (it )?(to|for)",           # "change to 8pm", "change it for 4"
+        r"update (it )?(to|for)",           # "update to 6 people"
+        r"(actually|instead).*(for )?(\d+)",# "actually, make it for 4"
+        r"(\d+) (people|guests|persons|pax) instead",
+        r"modify",
+        r"switch (it )?(to|for)",
+    ]
+    return any(re.search(p, t) for p in patterns)
 
 
 def extract_party_size(text: str) -> Optional[int]:
@@ -15324,6 +15493,8 @@ def recall_text(sess: Dict[str, Any]) -> str:
     lang = sess.get("lang", "en")
     L = LANG[lang]
     lead = sess["lead"]
+    
+    # Check current in-progress reservation first
     if any([lead.get("date"), lead.get("time"), lead.get("party_size"), lead.get("name"), lead.get("phone")]):
         parts = [
             L["recall_title"],
@@ -15334,6 +15505,22 @@ def recall_text(sess: Dict[str, Any]) -> str:
             f"Phone: {lead.get('phone') or '—'}",
         ]
         return "\n".join(parts)
+    
+    # If no current reservation, show last saved reservation
+    last_res = sess.get("last_reservation")
+    if last_res:
+        parts = [
+            "📋 Your last saved reservation:",
+            f"Date: {last_res.get('date') or '—'}",
+            f"Time: {last_res.get('time') or '—'}",
+            f"Party size: {last_res.get('party_size') or '—'}",
+            f"Name: {last_res.get('name') or '—'}",
+            f"Phone: {last_res.get('phone') or '—'}",
+            f"Status: {last_res.get('status', 'New')}",
+            "\nWant to modify? Just tell me what to change (e.g., 'make it for 4 people').",
+        ]
+        return "\n".join(parts)
+    
     return L["recall_empty"]
 
 
