@@ -5919,6 +5919,17 @@
       if (!log) return;
       log.innerHTML = '';
       log.dataset.hasWelcome = '';
+      
+      // Clear localStorage chat history
+      clearChatHistory();
+      
+      // Clear server-side session (fire and forget)
+      fetch('/chat/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: getSessionId() })
+      }).catch(() => {});
+      
       try { ensureChatWelcome(); } catch (e) { console.warn('chat welcome failed', e); }
     }
 

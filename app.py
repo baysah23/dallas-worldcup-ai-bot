@@ -5634,6 +5634,39 @@ Rules:
         )
         return jsonify({"reply": fallback, "rate_limit_remaining": 0}), 200
 
+
+@app.route("/chat/clear", methods=["POST"])
+def chat_clear():
+    """Clear the chat session history for the current user."""
+    try:
+        data = request.get_json(force=True) or {}
+        sid = (data.get("session_id") or "").strip()
+        if not sid:
+            sid = get_session_id()
+        
+        # Clear the session if it exists
+        if sid in _sessions:
+            sess = _sessions[sid]
+            sess["history"] = []
+            sess["last_reservation"] = None
+            sess["mode"] = "idle"
+            sess["lead"] = {
+                "name": "",
+                "phone": "",
+                "date": "",
+                "time": "",
+                "party_size": 0,
+                "language": sess.get("lang", "en"),
+                "status": "New",
+                "vip": "No",
+            }
+            sess["updated_at"] = time.time()
+        
+        return jsonify({"ok": True, "message": "Chat session cleared."})
+    except Exception as e:
+        return jsonify({"ok": False, "error": repr(e)}), 500
+
+
 # ============================================================
 # Admin dashboard
 # ============================================================
