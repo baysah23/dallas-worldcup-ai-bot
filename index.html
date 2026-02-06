@@ -5532,6 +5532,10 @@
       sec: 'home',
       lang: (localStorage.getItem('wc_lang') || 'en'),
       scope: (localStorage.getItem('wc_scope') || 'all'), // 'all' | 'featured' (future-proof)
+      // === FIX: Venue context persistence ===
+      venue_id: '',           // Active venue identifier
+      venue_name: '',         // Venue display name for chat header
+      venue_greeting: '',     // Venue-specific greeting message
     };
 
     const LANGS = ['en', 'es', 'pt', 'fr'];
@@ -5596,6 +5600,11 @@
     };
 
     function getWelcomeForState(lang) {
+      // === FIX: Use venue-specific greeting if available ===
+      if (state.venue_greeting) {
+        return state.venue_greeting;
+      }
+      
       const k = window.__wcCountdownStateKind || '';
       const L = (lang || state.lang || 'en').toLowerCase();
       const primary = WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
@@ -5982,7 +5991,8 @@
           body: JSON.stringify({
             message: msg,
             language: state.lang,
-            session_id: getSessionId()  // Include session_id for server-side context
+            session_id: getSessionId(),  // Include session_id for server-side context
+            venue_id: state.venue_id || ''  // === FIX: Include venue_id for persistent venue context ===
           })
         });
         const data = await r.json().catch(() => ({ reply: 'Sorry — something went wrong.' }));
@@ -6878,7 +6888,7 @@
 
     async function loadVenueIdentityLine() {
       const el = $('venueIdentityLine');
-      if (!el) return;
+      const chatTitleEl = document.querySelector('#sec-chat .cardTitle');
 
       // extract venue_id from /v/<venue_id>
       const m = location.pathname.match(/^\/v\/([^/]+)/);
@@ -6895,21 +6905,33 @@
         const d = await r.json().catch(() => null);
 
         if (d && d.ok) {
+          // === FIX: Store venue context in state for persistent chat context ===
+          state.venue_id = d.venue_id || venueId || '';
+          state.venue_name = d.venue_name || '';
+          state.venue_greeting = d.greeting || '';
+
+          // Update chat header title with venue name if available
+          if (chatTitleEl && state.venue_name) {
+            chatTitleEl.textContent = state.venue_name;
+          }
+
           // Prefer automated location_line, fallback to venue_name
           const line = String(
             (d.show_location_line && d.location_line) ? d.location_line : (d.venue_name || '')
           ).trim();
 
-          if (line) {
+          if (line && el) {
             el.textContent = line;
             el.hidden = false;
             return;
           }
         }
-      } catch (e) { }
+      } catch (e) { console.warn('[Venue] identity load error:', e); }
 
-      el.textContent = '';
-      el.hidden = true;
+      if (el) {
+        el.textContent = '';
+        el.hidden = true;
+      }
     }
 
     function init() {

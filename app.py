@@ -1,4 +1,4 @@
-try:
+﻿try:
     from dotenv import load_dotenv
     load_dotenv()
 except Exception:
@@ -272,7 +272,7 @@ def privacy_policy():
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Privacy Policy — World Cup Concierge</title>
+  <title>Privacy Policy â€” World Cup Concierge</title>
   <style>
     body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0b1220;color:#e8eefc;}
     .wrap{max-width:900px;margin:0 auto;padding:40px 18px;}
@@ -645,6 +645,41 @@ def _venue_features(venue_id: Optional[str] = None) -> Dict[str, Any]:
     return dict(feat or {})
 
 
+def _venue_business_profile(venue_id: Optional[str] = None) -> str:
+    """Get venue-specific business profile for AI context.
+    
+    Falls back to global BUSINESS_PROFILE if venue doesn't have one.
+    This ensures the AI always has proper venue context.
+    """
+    cfg = _venue_cfg(venue_id)
+    ident = cfg.get("identity") if isinstance(cfg.get("identity"), dict) else {}
+    
+    # Try venue-specific business_profile first
+    profile = str(
+        cfg.get("business_profile") or cfg.get("ai_context") or
+        (ident or {}).get("business_profile") or ""
+    ).strip()
+    
+    if profile:
+        return profile
+    
+    # Fallback to global BUSINESS_PROFILE (from file or env)
+    return BUSINESS_PROFILE
+
+
+def _venue_name(venue_id: Optional[str] = None) -> str:
+    """Get venue display name for chat header and context."""
+    cfg = _venue_cfg(venue_id)
+    ident = cfg.get("identity") if isinstance(cfg.get("identity"), dict) else {}
+    
+    name = str(
+        cfg.get("venue_name") or cfg.get("name") or
+        (ident or {}).get("venue_name") or (ident or {}).get("name") or ""
+    ).strip()
+    
+    return name or "World Cup Concierge"
+
+
 def _venue_is_active(venue_id: Optional[str] = None) -> bool:
     """Return whether a venue is active (fan-facing intake allowed)."""
     try:
@@ -759,7 +794,7 @@ if not BUSINESS_PROFILE and os.path.exists(BUSINESS_PROFILE_PATH):
     except Exception:
         BUSINESS_PROFILE = ""
 if not BUSINESS_PROFILE:
-    BUSINESS_PROFILE = "You are World Cup Concierge — a premium reservation assistant for World Cup fans. Keep replies concise, helpful, and action-oriented."
+    BUSINESS_PROFILE = "You are World Cup Concierge â€” a premium reservation assistant for World Cup fans. Keep replies concise, helpful, and action-oriented."
 
 # ============================================================
 # Business Rules (edit here)
@@ -781,7 +816,7 @@ BUSINESS_RULES = {
         # "2026-12-25",
     ],
     "max_party_size": 12,
-    "match_day_banner": "🏟️ Match-day mode: Opening at 11am on match days!",
+    "match_day_banner": "ðŸŸï¸ Match-day mode: Opening at 11am on match days!",
 }
 
 
@@ -935,7 +970,7 @@ def _dispatch_alert(title: str, details: str, key: str, severity: str = "error")
     sent = {"slack": False, "email": False, "sms": False}
     if not _should_send_alert(key):
         return {"ok": True, "sent": sent, "rate_limited": True}
-    msg = f"{'🚨' if severity=='error' else '⚠️'} {title}\n{details}".strip()
+    msg = f"{'ðŸš¨' if severity=='error' else 'âš ï¸'} {title}\n{details}".strip()
     sent["slack"] = _send_slack(msg)
     sent["email"] = _send_email(title, msg)
     # SMS only for error severity (you can widen later)
@@ -1027,8 +1062,8 @@ def _default_drafts() -> Dict[str, Any]:
         "drafts": {
             "sms_confirm": {
                 "channel": "sms",
-                "title": "SMS — Confirmation",
-                "body": "Hi {name}, you’re confirmed for {date} at {time} for {party_size}.",
+                "title": "SMS â€” Confirmation",
+                "body": "Hi {name}, youâ€™re confirmed for {date} at {time} for {party_size}.",
             }
         }
     }
@@ -1175,7 +1210,7 @@ def _policy_check_action(partner: str, action_type: str, payload: Dict[str, Any]
             # budget may be on payload (preferred) or absent; treat absent as 0
             b = _parse_budget_to_number((payload or {}).get("budget"))
             if b < min_budget:
-                return False, f"Blocked by partner policy: VIP requires budget ≥ {int(min_budget)}"
+                return False, f"Blocked by partner policy: VIP requires budget â‰¥ {int(min_budget)}"
 
     # Outbound sending (reserved for next phase)
     if at in ("send_sms", "send_email", "send_whatsapp"):
@@ -1345,7 +1380,7 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
             return {"ok": False, "error": "Missing recipient email"}
 
         # Branded footer (match manual email)
-        footer = f"\n\n— {venue_name}\nWorld Cup Concierge"
+        footer = f"\n\nâ€” {venue_name}\nWorld Cup Concierge"
         if body and footer.strip() not in body:
             body = body.rstrip() + footer
 
@@ -1360,7 +1395,7 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         if not to_num:
             return {"ok": False, "error": "Missing recipient number"}
 
-        footer = f"\n— {venue_name}"
+        footer = f"\nâ€” {venue_name}"
         if body and footer.strip() not in body:
             body = body.rstrip() + footer
 
@@ -2028,7 +2063,7 @@ def _admin_auth() -> Dict[str, str]:
     akeys = access.get("admin_keys") if isinstance(access.get("admin_keys"), list) else []
     mkeys = access.get("manager_keys") if isinstance(access.get("manager_keys"), list) else []
 
-    # ✅ Accept per-venue generated keys stored under cfg["keys"]
+    # âœ… Accept per-venue generated keys stored under cfg["keys"]
     k = vc.get("keys") if isinstance(vc.get("keys"), dict) else {}
     k_admin = str((k or {}).get("admin_key") or "").strip()
     k_mgr = str((k or {}).get("manager_key") or "").strip()
@@ -2105,7 +2140,7 @@ def api_lead():
     # Read JSON body from landing page
     lead = request.get_json(silent=True) or {}
 
-    # Minimal validation (don’t block too hard)
+    # Minimal validation (donâ€™t block too hard)
     name = str(lead.get("name") or "").strip()
     venue = str(lead.get("venue") or "").strip()
     email = str(lead.get("email") or "").strip()
@@ -2116,8 +2151,8 @@ def api_lead():
     # Save to Google Sheet
     ok_sheet, msg_sheet = _append_landing_lead_to_sheet(lead)
 
-    # Email alert (best-effort; don’t fail the lead if email isn’t configured)
-    subj = "New demo request — World Cup Concierge"
+    # Email alert (best-effort; donâ€™t fail the lead if email isnâ€™t configured)
+    subj = "New demo request â€” World Cup Concierge"
     body = (
     f"New landing lead:\n\n"
     f"Name: {name}\n"
@@ -2287,12 +2322,12 @@ def admin_api_venues_create():
         "status": "active",
         "plan": plan,
 
-        # ✅ Consistent, env-safe links (matches create_and_save)
+        # âœ… Consistent, env-safe links (matches create_and_save)
         "admin_url": f"{base}/admin?key={admin_key}&venue={venue_id}",
         "manager_url": f"{base}/admin?key={manager_key}&venue={venue_id}",
         "qr_url": f"{base}/v/{venue_id}",
 
-        # ✅ Consistent schema (no more "keys" vs "access" mismatch)
+        # âœ… Consistent schema (no more "keys" vs "access" mismatch)
         "access": {
             "admin_keys": [admin_key],
             "manager_keys": [manager_key],
@@ -2361,7 +2396,7 @@ def admin_api_venues_create_and_save():
         "status": "active",
         "plan": plan,
 
-        # ✅ environment-safe links
+        # âœ… environment-safe links
         "admin_url": f"{base}/admin?key={admin_key}&venue={venue_id}",
         "manager_url": f"{base}/admin?key={manager_key}&venue={venue_id}",
         "qr_url": f"{base}/v/{venue_id}",
@@ -2395,7 +2430,7 @@ def admin_api_venues_create_and_save():
         "path": write_path,
         "admin_key": admin_key,
         "manager_key": manager_key,
-        "pack": pack,   # ✅ THIS is required
+        "pack": pack,   # âœ… THIS is required
     })
 
     wrote, write_path, err = _write_venue_config(venue_id, pack)
@@ -2444,7 +2479,7 @@ def super_admin_api_venue_create():
             pack["ready_checked_at"] = chk.get("checked_at")
         except Exception:
             pass
-        # write again so this is atomic for operators (one call → ready/pass-fail recorded)
+        # write again so this is atomic for operators (one call â†’ ready/pass-fail recorded)
         try:
             wrote2, write_path2, err2 = _write_venue_config(venue_id, pack)
             wrote = bool(wrote or wrote2)
@@ -2634,7 +2669,7 @@ def _require_admin(min_role: str = "manager"):
     if not key:
         return False, (jsonify({"ok": False, "error": "unauthorized"}), 401)
     
-    # 🔐 GLOBAL OWNER KEY — MUST SHORT-CIRCUIT (even if venue cfg fails)
+    # ðŸ” GLOBAL OWNER KEY â€” MUST SHORT-CIRCUIT (even if venue cfg fails)
     if key and (ADMIN_OWNER_KEY or "") and key == (ADMIN_OWNER_KEY or ""):
         g.admin_role = "owner"
         g.admin_actor = "owner:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
@@ -2898,7 +2933,7 @@ def _safe_write_json_file(path: str, payload: Any) -> None:
                 ok = _redis_set_json(full_key, payload)
                 if ok:
                     return
-                # Redis was enabled, but write failed — mark fallback for enterprise gate
+                # Redis was enabled, but write failed â€” mark fallback for enterprise gate
                 _REDIS_FALLBACK_USED = True
                 _REDIS_FALLBACK_LAST_PATH = str(path)
     except Exception:
@@ -3133,7 +3168,7 @@ def filter_matches(scope: str, q: str = "") -> List[Dict[str, Any]]:
 
 
 # ============================================================
-# Menu (4 languages) — edit/add items here
+# Menu (4 languages) â€” edit/add items here
 # ============================================================
 MENU = {
     "en": {
@@ -3141,7 +3176,7 @@ MENU = {
         "items": [
             {
                 "category_id": "chef",
-                "name": "Chef’s Wagyu Sliders",
+                "name": "Chefâ€™s Wagyu Sliders",
                 "price": "$24",
                 "desc": "A5-style sear, truffle aioli, brioche. Limited matchday batch.",
                 "tag": "Chef Special"
@@ -3157,7 +3192,7 @@ MENU = {
                 "category_id": "bites",
                 "name": "Stadium Nachos XL",
                 "price": "$16",
-                "desc": "Three-cheese blend, jalapeño, pico, crema, choice of protein.",
+                "desc": "Three-cheese blend, jalapeÃ±o, pico, crema, choice of protein.",
                 "tag": "Share"
             },
             {
@@ -3205,7 +3240,7 @@ MENU = {
         ]
     },
     "es": {
-        "title": "Menú",
+        "title": "MenÃº",
         "items": [
             {
                 "category_id": "chef",
@@ -3216,7 +3251,7 @@ MENU = {
             },
             {
                 "category_id": "chef",
-                "name": "Bowl de Ceviche Cítrico",
+                "name": "Bowl de Ceviche CÃ­trico",
                 "price": "$19",
                 "desc": "Pesca fresca, lima, chile, aguacate, tostadas.",
                 "tag": "Especial del Chef"
@@ -3225,14 +3260,14 @@ MENU = {
                 "category_id": "bites",
                 "name": "Nachos XL del Estadio",
                 "price": "$16",
-                "desc": "Tres quesos, jalapeño, pico, crema, proteína a elección.",
+                "desc": "Tres quesos, jalapeÃ±o, pico, crema, proteÃ­na a elecciÃ³n.",
                 "tag": "Para compartir"
             },
             {
                 "category_id": "bites",
                 "name": "Alitas Peri-Peri (8/16)",
                 "price": "$14/$24",
-                "desc": "Alitas crujientes, glaseado peri-peri, sal cítrica.",
+                "desc": "Alitas crujientes, glaseado peri-peri, sal cÃ­trica.",
                 "tag": "Picante"
             },
             {
@@ -3240,11 +3275,11 @@ MENU = {
                 "name": "Hamburguesa Concierge",
                 "price": "$18",
                 "desc": "Angus, cheddar, lechuga, tomate, salsa de la casa, papas.",
-                "tag": "Clásico"
+                "tag": "ClÃ¡sico"
             },
             {
                 "category_id": "classics",
-                "name": "Sándwich de Pollo Picante",
+                "name": "SÃ¡ndwich de Pollo Picante",
                 "price": "$16",
                 "desc": "Pollo crujiente, salsa picante, pepinillos, papas opcionales.",
                 "tag": "Favorito"
@@ -3253,14 +3288,14 @@ MENU = {
                 "category_id": "sweets",
                 "name": "Churros Medalla de Oro",
                 "price": "$10",
-                "desc": "Azúcar y canela, dip de chocolate.",
+                "desc": "AzÃºcar y canela, dip de chocolate.",
                 "tag": "Dulce"
             },
             {
                 "category_id": "drinks",
                 "name": "Mocktail de Partido",
                 "price": "$9",
-                "desc": "Cítricos, menta, final espumoso.",
+                "desc": "CÃ­tricos, menta, final espumoso.",
                 "tag": "Sin alcohol"
             },
             {
@@ -3268,12 +3303,12 @@ MENU = {
                 "name": "Espresso Premium",
                 "price": "$5",
                 "desc": "Doble shot, crema suave.",
-                "tag": "Café"
+                "tag": "CafÃ©"
             }
         ]
     },
     "pt": {
-        "title": "Cardápio",
+        "title": "CardÃ¡pio",
         "items": [
             {
                 "category_id": "chef",
@@ -3284,23 +3319,23 @@ MENU = {
             },
             {
                 "category_id": "chef",
-                "name": "Bowl de Ceviche Cítrico",
+                "name": "Bowl de Ceviche CÃ­trico",
                 "price": "$19",
-                "desc": "Peixe fresco, limão, pimenta, abacate, tostadas.",
+                "desc": "Peixe fresco, limÃ£o, pimenta, abacate, tostadas.",
                 "tag": "Especial do Chef"
             },
             {
                 "category_id": "bites",
-                "name": "Nachos XL do Estádio",
+                "name": "Nachos XL do EstÃ¡dio",
                 "price": "$16",
-                "desc": "Três queijos, jalapeño, pico, creme, proteína à escolha.",
+                "desc": "TrÃªs queijos, jalapeÃ±o, pico, creme, proteÃ­na Ã  escolha.",
                 "tag": "Compartilhar"
             },
             {
                 "category_id": "bites",
                 "name": "Asinhas Peri-Peri (8/16)",
                 "price": "$14/$24",
-                "desc": "Asinhas crocantes, glaze peri-peri, sal cítrico.",
+                "desc": "Asinhas crocantes, glaze peri-peri, sal cÃ­trico.",
                 "tag": "Picante"
             },
             {
@@ -3308,11 +3343,11 @@ MENU = {
                 "name": "Burger Concierge",
                 "price": "$18",
                 "desc": "Angus, cheddar, alface, tomate, molho da casa, fritas.",
-                "tag": "Clássico"
+                "tag": "ClÃ¡ssico"
             },
             {
                 "category_id": "classics",
-                "name": "Sanduíche de Frango Picante",
+                "name": "SanduÃ­che de Frango Picante",
                 "price": "$16",
                 "desc": "Frango crocante, molho picante, picles, fritas opcionais.",
                 "tag": "Favorito"
@@ -3321,22 +3356,22 @@ MENU = {
                 "category_id": "sweets",
                 "name": "Churros Medalha de Ouro",
                 "price": "$10",
-                "desc": "Canela e açúcar, molho de chocolate.",
+                "desc": "Canela e aÃ§Ãºcar, molho de chocolate.",
                 "tag": "Doce"
             },
             {
                 "category_id": "drinks",
                 "name": "Mocktail de Jogo",
                 "price": "$9",
-                "desc": "Cítricos, hortelã, final com gás.",
-                "tag": "Sem álcool"
+                "desc": "CÃ­tricos, hortelÃ£, final com gÃ¡s.",
+                "tag": "Sem Ã¡lcool"
             },
             {
                 "category_id": "drinks",
                 "name": "Espresso Premium",
                 "price": "$5",
                 "desc": "Dose dupla, crema suave.",
-                "tag": "Café"
+                "tag": "CafÃ©"
             }
         ]
     },
@@ -3347,29 +3382,29 @@ MENU = {
                 "category_id": "chef",
                 "name": "Mini-burgers Wagyu du Chef",
                 "price": "$24",
-                "desc": "Saisie style A5, aïoli à la truffe, brioche. Série limitée.",
-                "tag": "Spécialité du Chef"
+                "desc": "Saisie style A5, aÃ¯oli Ã  la truffe, brioche. SÃ©rie limitÃ©e.",
+                "tag": "SpÃ©cialitÃ© du Chef"
             },
             {
                 "category_id": "chef",
                 "name": "Bol de Ceviche aux Agrumes",
                 "price": "$19",
                 "desc": "Poisson frais, citron vert, piment, avocat, tostadas.",
-                "tag": "Spécialité du Chef"
+                "tag": "SpÃ©cialitÃ© du Chef"
             },
             {
                 "category_id": "bites",
                 "name": "Nachos XL du Stade",
                 "price": "$16",
-                "desc": "Trois fromages, jalapeño, pico, crème, protéine au choix.",
-                "tag": "À partager"
+                "desc": "Trois fromages, jalapeÃ±o, pico, crÃ¨me, protÃ©ine au choix.",
+                "tag": "Ã€ partager"
             },
             {
                 "category_id": "bites",
                 "name": "Ailes Peri-Peri (8/16)",
                 "price": "$14/$24",
-                "desc": "Ailes croustillantes, glaçage peri-peri, sel aux agrumes.",
-                "tag": "Épicé"
+                "desc": "Ailes croustillantes, glaÃ§age peri-peri, sel aux agrumes.",
+                "tag": "Ã‰picÃ©"
             },
             {
                 "category_id": "classics",
@@ -3380,91 +3415,91 @@ MENU = {
             },
             {
                 "category_id": "classics",
-                "name": "Sandwich Poulet Épicé",
+                "name": "Sandwich Poulet Ã‰picÃ©",
                 "price": "$16",
-                "desc": "Poulet croustillant, sauce épicée, pickles, frites en option.",
+                "desc": "Poulet croustillant, sauce Ã©picÃ©e, pickles, frites en option.",
                 "tag": "Favori"
             },
             {
                 "category_id": "sweets",
-                "name": "Churros Médaille d’Or",
+                "name": "Churros MÃ©daille dâ€™Or",
                 "price": "$10",
                 "desc": "Cannelle-sucre, sauce chocolat.",
-                "tag": "Sucré"
+                "tag": "SucrÃ©"
             },
             {
                 "category_id": "drinks",
                 "name": "Mocktail de Match",
                 "price": "$9",
-                "desc": "Agrumes, menthe, touche pétillante.",
+                "desc": "Agrumes, menthe, touche pÃ©tillante.",
                 "tag": "Sans alcool"
             },
             {
                 "category_id": "drinks",
                 "name": "Espresso Premium",
                 "price": "$5",
-                "desc": "Double, crème onctueuse.",
-                "tag": "Café"
+                "desc": "Double, crÃ¨me onctueuse.",
+                "tag": "CafÃ©"
             }
         ]
     }
 }
 
 # ============================================================
-# Language strings (prompts + “recall”)
+# Language strings (prompts + â€œrecallâ€)
 # ============================================================
 LANG = {
     "en": {
-        "welcome": "⚽ Welcome, World Cup fan! I'm your Dallas Match-Day Concierge.\nType reservation to book a table, or ask about Dallas matches, all matches, or the menu.",
-        "ask_date": "What date would you like? (Example: June 23, 2026)\n\n(You can also type: “Recall reservation so far”)",
+        "welcome": "âš½ Welcome, World Cup fan! I'm your Dallas Match-Day Concierge.\nType reservation to book a table, or ask about Dallas matches, all matches, or the menu.",
+        "ask_date": "What date would you like? (Example: June 23, 2026)\n\n(You can also type: â€œRecall reservation so farâ€)",
         "ask_time": "What time would you like?",
         "ask_party": "How many people are in your party?",
         "ask_name": "What name should we put the reservation under?",
         "ask_phone": "What phone number should we use?",
-        "recall_title": "📌 Reservation so far:",
-        "recall_empty": "No reservation details yet. Say “reservation” to start.",
-        "saved": "✅ Reservation saved!",
-        "rule_party": "⚠️ That party size is above our limit. Please call the business to confirm a larger group.",
-        "rule_closed": "⚠️ We’re closed on that date. Want the next available day?",
+        "recall_title": "ðŸ“Œ Reservation so far:",
+        "recall_empty": "No reservation details yet. Say â€œreservationâ€ to start.",
+        "saved": "âœ… Reservation saved!",
+        "rule_party": "âš ï¸ That party size is above our limit. Please call the business to confirm a larger group.",
+        "rule_closed": "âš ï¸ Weâ€™re closed on that date. Want the next available day?",
     },
     "es": {
-        "welcome": "⚽ ¡Bienvenido, fan del Mundial! Soy tu concierge de días de partido en Dallas.\nEscribe reserva para reservar una mesa, o pregunta por los partidos (Dallas / todos) o el menú.",
-        "ask_date": "¿Qué fecha te gustaría? (Ejemplo: 23 de junio de 2026)\n\n(También puedes escribir: “Recordar reserva”)",
-        "ask_time": "¿A qué hora te gustaría?",
-        "ask_party": "¿Cuántas personas serán?",
-        "ask_name": "¿A nombre de quién será la reserva?",
-        "ask_phone": "¿Qué número de teléfono debemos usar?",
-        "recall_title": "📌 Reserva hasta ahora:",
-        "recall_empty": "Aún no hay detalles. Escribe “reserva” para comenzar.",
-        "saved": "✅ ¡Reserva guardada!",
-        "rule_party": "⚠️ Ese tamaño de grupo supera nuestro límite. Llama al negocio para confirmar un grupo grande.",
-        "rule_closed": "⚠️ Estamos cerrados ese día. ¿Quieres el siguiente día disponible?",
+        "welcome": "âš½ Â¡Bienvenido, fan del Mundial! Soy tu concierge de dÃ­as de partido en Dallas.\nEscribe reserva para reservar una mesa, o pregunta por los partidos (Dallas / todos) o el menÃº.",
+        "ask_date": "Â¿QuÃ© fecha te gustarÃ­a? (Ejemplo: 23 de junio de 2026)\n\n(TambiÃ©n puedes escribir: â€œRecordar reservaâ€)",
+        "ask_time": "Â¿A quÃ© hora te gustarÃ­a?",
+        "ask_party": "Â¿CuÃ¡ntas personas serÃ¡n?",
+        "ask_name": "Â¿A nombre de quiÃ©n serÃ¡ la reserva?",
+        "ask_phone": "Â¿QuÃ© nÃºmero de telÃ©fono debemos usar?",
+        "recall_title": "ðŸ“Œ Reserva hasta ahora:",
+        "recall_empty": "AÃºn no hay detalles. Escribe â€œreservaâ€ para comenzar.",
+        "saved": "âœ… Â¡Reserva guardada!",
+        "rule_party": "âš ï¸ Ese tamaÃ±o de grupo supera nuestro lÃ­mite. Llama al negocio para confirmar un grupo grande.",
+        "rule_closed": "âš ï¸ Estamos cerrados ese dÃ­a. Â¿Quieres el siguiente dÃ­a disponible?",
     },
     "pt": {
-        "welcome": "⚽ Bem-vindo, fã da Copa do Mundo! Sou seu concierge de dias de jogo em Dallas.\nDigite reserva para reservar uma mesa, ou pergunte sobre jogos em Dallas, todos os jogos ou o cardápio.",
-        "ask_date": "Qual data você gostaria? (Exemplo: 23 de junho de 2026)\n\n(Você também pode digitar: “Relembrar reserva”)",
-        "ask_time": "Que horas você gostaria?",
+        "welcome": "âš½ Bem-vindo, fÃ£ da Copa do Mundo! Sou seu concierge de dias de jogo em Dallas.\nDigite reserva para reservar uma mesa, ou pergunte sobre jogos em Dallas, todos os jogos ou o cardÃ¡pio.",
+        "ask_date": "Qual data vocÃª gostaria? (Exemplo: 23 de junho de 2026)\n\n(VocÃª tambÃ©m pode digitar: â€œRelembrar reservaâ€)",
+        "ask_time": "Que horas vocÃª gostaria?",
         "ask_party": "Quantas pessoas?",
         "ask_name": "Em qual nome devemos colocar a reserva?",
-        "ask_phone": "Qual número de telefone devemos usar?",
-        "recall_title": "📌 Reserva até agora:",
-        "recall_empty": "Ainda não há detalhes. Digite “reserva” para começar.",
-        "saved": "✅ Reserva salva!",
-        "rule_party": "⚠️ Esse tamanho de grupo excede o limite. Ligue para confirmar um grupo maior.",
-        "rule_closed": "⚠️ Estaremos fechados nessa data. Quer o próximo dia disponível?",
+        "ask_phone": "Qual nÃºmero de telefone devemos usar?",
+        "recall_title": "ðŸ“Œ Reserva atÃ© agora:",
+        "recall_empty": "Ainda nÃ£o hÃ¡ detalhes. Digite â€œreservaâ€ para comeÃ§ar.",
+        "saved": "âœ… Reserva salva!",
+        "rule_party": "âš ï¸ Esse tamanho de grupo excede o limite. Ligue para confirmar um grupo maior.",
+        "rule_closed": "âš ï¸ Estaremos fechados nessa data. Quer o prÃ³ximo dia disponÃ­vel?",
     },
     "fr": {
-        "welcome": "⚽ Bienvenue, fan de la Coupe du Monde ! Je suis votre concierge des jours de match à Dallas.\nTapez réservation pour réserver une table, ou demandez les matchs (Dallas / tous) ou le menu.",
-        "ask_date": "Quelle date souhaitez-vous ? (Exemple : 23 juin 2026)\n\n(Vous pouvez aussi écrire : « Rappeler la réservation »)",
-        "ask_time": "À quelle heure ?",
+        "welcome": "âš½ Bienvenue, fan de la Coupe du Monde ! Je suis votre concierge des jours de match Ã  Dallas.\nTapez rÃ©servation pour rÃ©server une table, ou demandez les matchs (Dallas / tous) ou le menu.",
+        "ask_date": "Quelle date souhaitez-vous ? (Exemple : 23 juin 2026)\n\n(Vous pouvez aussi Ã©crire : Â« Rappeler la rÃ©servation Â»)",
+        "ask_time": "Ã€ quelle heure ?",
         "ask_party": "Pour combien de personnes ?",
         "ask_name": "Au nom de qui ?",
-        "ask_phone": "Quel numéro de téléphone devons-nous utiliser ?",
-        "recall_title": "📌 Réservation jusqu’ici :",
-        "recall_empty": "Aucun détail pour l’instant. Dites « réservation » pour commencer.",
-        "saved": "✅ Réservation enregistrée !",
-        "rule_party": "⚠️ Ce nombre dépasse notre limite. Veuillez appeler pour un grand groupe.",
-        "rule_closed": "⚠️ Nous sommes fermés ce jour-là. Voulez-vous le prochain jour disponible ?",
+        "ask_phone": "Quel numÃ©ro de tÃ©lÃ©phone devons-nous utiliser ?",
+        "recall_title": "ðŸ“Œ RÃ©servation jusquâ€™ici :",
+        "recall_empty": "Aucun dÃ©tail pour lâ€™instant. Dites Â« rÃ©servation Â» pour commencer.",
+        "saved": "âœ… RÃ©servation enregistrÃ©e !",
+        "rule_party": "âš ï¸ Ce nombre dÃ©passe notre limite. Veuillez appeler pour un grand groupe.",
+        "rule_closed": "âš ï¸ Nous sommes fermÃ©s ce jour-lÃ . Voulez-vous le prochain jour disponible ?",
     },
 }
 
@@ -3612,7 +3647,7 @@ def ensure_sheet_schema(ws) -> List[str]:
         return desired
 
     # If the existing header doesn't even contain "timestamp" (common sign row1 isn't a header),
-    # don't try to reshuffle rows automatically—just ensure required columns exist at the end.
+    # don't try to reshuffle rows automaticallyâ€”just ensure required columns exist at the end.
     header = existing[:]  # keep original display names
     header_norm = existing_norm[:]
 
@@ -3723,6 +3758,7 @@ def get_session(sid: str) -> Dict[str, Any]:
         s = {
             "mode": "idle",         # idle | reserving
             "lang": "en",
+            "venue_id": "",         # === FIX: Persist venue context across conversation ===
             # status/vip are CRM fields shown in /admin.
             "lead": {
                 "name": "",
@@ -3746,6 +3782,8 @@ def get_session(sid: str) -> Dict[str, Any]:
         s["history"] = []
     if "last_reservation" not in s:
         s["last_reservation"] = None
+    if "venue_id" not in s:
+        s["venue_id"] = ""
     return s
 
 
@@ -3754,15 +3792,15 @@ def want_recall(text: str, lang: str) -> bool:
     triggers = [
         "recall reservation", "recall", "reservation so far",
         "recordar reserva", "recordar", "reserva hasta ahora",
-        "relembrar reserva", "relembrar", "reserva até agora",
-        "rappeler", "réservation", "reservation jusqu",
+        "relembrar reserva", "relembrar", "reserva atÃ© agora",
+        "rappeler", "rÃ©servation", "reservation jusqu",
     ]
     return any(x in t for x in triggers)
 
 
 def want_reservation(text: str) -> bool:
     t = text.lower()
-    return any(k in t for k in ["reservation", "reserve", "book a table", "table for", "reserva", "réservation"])
+    return any(k in t for k in ["reservation", "reserve", "book a table", "table for", "reserva", "rÃ©servation"])
 
 
 def want_modification(text: str) -> bool:
@@ -3807,8 +3845,8 @@ def extract_party_size(text: str) -> Optional[int]:
         "january","jan","february","feb","march","mar","april","apr","may","june","jun","july","jul",
         "august","aug","september","sep","sept","october","oct","november","nov","december","dec",
         "enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre",
-        "janeiro","fevereiro","março","marco","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro",
-        "janvier","février","fevrier","mars","avril","mai","juin","juillet","août","aout","septembre","octobre","novembre","décembre","decembre",
+        "janeiro","fevereiro","marÃ§o","marco","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro",
+        "janvier","fÃ©vrier","fevrier","mars","avril","mai","juin","juillet","aoÃ»t","aout","septembre","octobre","novembre","dÃ©cembre","decembre",
     ]
     if any(mo in t for mo in months):
         return None
@@ -3864,7 +3902,7 @@ def extract_name(text: str) -> Optional[str]:
     # Don't treat reservation trigger words as a person's name
     trigger_words = {
         "reservation", "reserve", "reserving", "book", "booking", "book a table",
-        "reserva", "reservar", "réservation", "réservation"
+        "reserva", "reservar", "rÃ©servation", "rÃ©servation"
     }
     if lower in trigger_words:
         return None
@@ -3937,12 +3975,12 @@ def extract_date(text: str) -> Optional[str]:
         "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6, "julio": 7,
         "agosto": 8, "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12,
         # Portuguese
-        "janeiro": 1, "fevereiro": 2, "março": 3, "abril": 4, "maio": 5, "junho": 6, "julho": 7,
+        "janeiro": 1, "fevereiro": 2, "marÃ§o": 3, "abril": 4, "maio": 5, "junho": 6, "julho": 7,
         "agosto": 8, "setembro": 9, "outubro": 10, "novembro": 11, "dezembro": 12,
         # French
-        "janvier": 1, "février": 2, "fevrier": 2, "mars": 3, "avril": 4, "mai": 5,
-        "juin": 6, "juillet": 7, "août": 8, "aout": 8, "septembre": 9, "octobre": 10,
-        "novembre": 11, "décembre": 12, "decembre": 12,
+        "janvier": 1, "fÃ©vrier": 2, "fevrier": 2, "mars": 3, "avril": 4, "mai": 5,
+        "juin": 6, "juillet": 7, "aoÃ»t": 8, "aout": 8, "septembre": 9, "octobre": 10,
+        "novembre": 11, "dÃ©cembre": 12, "decembre": 12,
     }
 
     # Find month word, then day number
@@ -3972,7 +4010,7 @@ def extract_name_candidate(text: str) -> Optional[str]:
 
     lower = s.lower().strip()
     # Don't treat trigger words as names
-    if lower in ["reservation", "reserva", "réservation", "reserve", "book", "book a table"]:
+    if lower in ["reservation", "reserva", "rÃ©servation", "reserve", "book", "book a table"]:
         return None
 
 
@@ -3999,8 +4037,8 @@ def extract_name_candidate(text: str) -> Optional[str]:
         "january","jan","february","feb","march","mar","april","apr","may","june","jun","july","jul",
         "august","aug","september","sep","sept","october","oct","november","nov","december","dec",
         "enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre",
-        "janeiro","fevereiro","março","marco","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro",
-        "janvier","février","fevrier","mars","avril","mai","juin","juillet","août","aout","septembre","octobre","novembre","décembre","decembre",
+        "janeiro","fevereiro","marÃ§o","marco","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro",
+        "janvier","fÃ©vrier","fevrier","mars","avril","mai","juin","juillet","aoÃ»t","aout","septembre","octobre","novembre","dÃ©cembre","decembre",
     ]
     s = re.sub(r"\b(?:" + "|".join(re.escape(w) for w in month_words) + r")\b", " ", s, flags=re.I)
 
@@ -4059,11 +4097,11 @@ def recall_text(sess: Dict[str, Any]) -> str:
     if any([lead.get("date"), lead.get("time"), lead.get("party_size"), lead.get("name"), lead.get("phone")]):
         parts = [
             L["recall_title"],
-            f"Date: {lead.get('date') or '—'}",
-            f"Time: {lead.get('time') or '—'}",
-            f"Party size: {lead.get('party_size') or '—'}",
-            f"Name: {lead.get('name') or '—'}",
-            f"Phone: {lead.get('phone') or '—'}",
+            f"Date: {lead.get('date') or 'â€”'}",
+            f"Time: {lead.get('time') or 'â€”'}",
+            f"Party size: {lead.get('party_size') or 'â€”'}",
+            f"Name: {lead.get('name') or 'â€”'}",
+            f"Phone: {lead.get('phone') or 'â€”'}",
         ]
         return "\n".join(parts)
     
@@ -4071,12 +4109,12 @@ def recall_text(sess: Dict[str, Any]) -> str:
     last_res = sess.get("last_reservation")
     if last_res:
         parts = [
-            "📋 Your last saved reservation:",
-            f"Date: {last_res.get('date') or '—'}",
-            f"Time: {last_res.get('time') or '—'}",
-            f"Party size: {last_res.get('party_size') or '—'}",
-            f"Name: {last_res.get('name') or '—'}",
-            f"Phone: {last_res.get('phone') or '—'}",
+            "ðŸ“‹ Your last saved reservation:",
+            f"Date: {last_res.get('date') or 'â€”'}",
+            f"Time: {last_res.get('time') or 'â€”'}",
+            f"Party size: {last_res.get('party_size') or 'â€”'}",
+            f"Name: {last_res.get('name') or 'â€”'}",
+            f"Phone: {last_res.get('phone') or 'â€”'}",
             f"Status: {last_res.get('status', 'New')}",
             "\nWant to modify? Just tell me what to change (e.g., 'make it for 4 people').",
         ]
@@ -4188,7 +4226,7 @@ FANZONE_ADMIN_HTML = r"""
     <div class="card">
       <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
         <div>
-          <div style="font-weight:800;font-size:18px">Fan Zone • Poll Controls</div>
+          <div style="font-weight:800;font-size:18px">Fan Zone â€¢ Poll Controls</div>
           <div class="sub">Edit sponsor text + set Match of the Day (no redeploy). Also shows live poll status.</div>
           <div class="sub">Venue: <span id="vid"></span></div>
         </div>
@@ -4200,8 +4238,8 @@ FANZONE_ADMIN_HTML = r"""
 
       <div class="controls" style="margin:12px 0 0 0">
         <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
-          <div class="sub">Sponsor label (“Presented by …”)</div>
-          <input class="inp" id="pollSponsorText" placeholder="Fan Pick presented by …" />
+          <div class="sub">Sponsor label (â€œPresented by â€¦â€)</div>
+          <input class="inp" id="pollSponsorText" placeholder="Fan Pick presented by â€¦" />
           <div class="small">Saved into config and shown in Fan Zone.</div>
         </div>
 
@@ -4233,7 +4271,7 @@ FANZONE_ADMIN_HTML = r"""
       </div>
 
       <div id="pollStatus" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
-        <div class="sub">Loading poll status…</div>
+        <div class="sub">Loading poll statusâ€¦</div>
       </div>
     </div>
   </div>
@@ -4267,7 +4305,7 @@ FANZONE_ADMIN_HTML = r"""
 
   async function loadPollStatus(){
     try{
-      setPollStatus('<div class="sub">Loading poll status…</div>');
+      setPollStatus('<div class="sub">Loading poll statusâ€¦</div>');
       const res = await fetch(`/api/poll/state?venue=${encodeURIComponent(VENUE)}`, {cache:"no-store"});
       const data = await res.json().catch(()=>null);
       if(!data || data.ok === false){
@@ -4297,7 +4335,7 @@ FANZONE_ADMIN_HTML = r"""
 
       setPollStatus(
         `<div class="h2">${escapeHtml(title)}</div>` +
-        `<div class="small">${locked ? "🔒 Locked" : "🟢 Open"}</div>` +
+        `<div class="small">${locked ? "ðŸ”’ Locked" : "ðŸŸ¢ Open"}</div>` +
         `<div style="margin-top:10px;display:grid;gap:8px">${rows}</div>`
       );
     }catch(e){
@@ -4314,7 +4352,7 @@ FANZONE_ADMIN_HTML = r"""
       const data = await res.json().catch(()=>null);
       const matches = (data && Array.isArray(data.matches)) ? data.matches : [];
       const current = sel.value || "";
-      sel.innerHTML = '<option value="">Select a match…</option>';
+      sel.innerHTML = '<option value="">Select a matchâ€¦</option>';
       let added = 0;
       for(const m of matches){
         if(added >= 250) break;
@@ -4323,7 +4361,7 @@ FANZONE_ADMIN_HTML = r"""
         const away = String(m.away||"");
         if(!dt || !home || !away) continue;
         const id = (dt + "|" + home + "|" + away).replace(/[^A-Za-z0-9|:_-]+/g,"_").slice(0,180);
-        const label = `${m.date||""} ${m.time||""} • ${home} vs ${away} • ${m.venue||""}`.trim();
+        const label = `${m.date||""} ${m.time||""} â€¢ ${home} vs ${away} â€¢ ${m.venue||""}`.trim();
         const opt = document.createElement("option");
         opt.value = id;
         opt.textContent = label || (home + " vs " + away);
@@ -4340,7 +4378,7 @@ FANZONE_ADMIN_HTML = r"""
       }
     }catch(e){
       sel.disabled = false;
-      toast("Couldn’t load matches");
+      toast("Couldnâ€™t load matches");
     }
   }
 
@@ -4365,7 +4403,7 @@ window.VENUE = (window.VENUE || new URLSearchParams(location.search).get("venue"
   const lockEl = $("pollLockMode");
   if(!btn) return;
 
-  // 🔒 venue guard (critical)
+  // ðŸ”’ venue guard (critical)
   if(!window.VENUE || String(window.VENUE).trim()===""){
     toast("Missing venue", "error");
     return;
@@ -4382,7 +4420,7 @@ window.VENUE = (window.VENUE || new URLSearchParams(location.search).get("venue"
 
   const prev = btn.textContent;
   btn.disabled = true;
-  btn.textContent = "Saving…";
+  btn.textContent = "Savingâ€¦";
 
   try{
     const res = await fetch(
@@ -4401,7 +4439,7 @@ window.VENUE = (window.VENUE || new URLSearchParams(location.search).get("venue"
       return;
     }
 
-    btn.textContent = "Saved ✓";
+    btn.textContent = "Saved âœ“";
     toast("Saved", "ok");
     setTimeout(()=>{ btn.textContent = prev; btn.disabled = false; }, 900);
 
@@ -4508,16 +4546,16 @@ FANZONE_DEMO = {
         {"date": "2026-06-12", "city": "Host City", "title": "Watch Party Night", "location": "Partner Venue", "description": "Reservations recommended."},
     ],
     "es": [
-        {"date": "2026-06-11", "city": "Ciudad Sede", "title": "Festival Oficial de Aficionados", "location": "Centro", "description": "Pantallas, música y comida."},
+        {"date": "2026-06-11", "city": "Ciudad Sede", "title": "Festival Oficial de Aficionados", "location": "Centro", "description": "Pantallas, mÃºsica y comida."},
         {"date": "2026-06-12", "city": "Ciudad Sede", "title": "Noche de Partido", "location": "Lugar Asociado", "description": "Se recomienda reservar."},
     ],
     "pt": [
-        {"date": "2026-06-11", "city": "Cidade-Sede", "title": "Festival Oficial do Torcedor", "location": "Centro", "description": "Transmissão ao vivo, música e comida."},
+        {"date": "2026-06-11", "city": "Cidade-Sede", "title": "Festival Oficial do Torcedor", "location": "Centro", "description": "TransmissÃ£o ao vivo, mÃºsica e comida."},
         {"date": "2026-06-12", "city": "Cidade-Sede", "title": "Noite de Jogo", "location": "Local Parceiro", "description": "Reservas recomendadas."},
     ],
     "fr": [
-        {"date": "2026-06-11", "city": "Ville Hôte", "title": "Festival Officiel des Fans", "location": "Centre-ville", "description": "Diffusion live, musique et food."},
-        {"date": "2026-06-12", "city": "Ville Hôte", "title": "Soirée Match", "location": "Lieu Partenaire", "description": "Réservation conseillée."},
+        {"date": "2026-06-11", "city": "Ville HÃ´te", "title": "Festival Officiel des Fans", "location": "Centre-ville", "description": "Diffusion live, musique et food."},
+        {"date": "2026-06-12", "city": "Ville HÃ´te", "title": "SoirÃ©e Match", "location": "Lieu Partenaire", "description": "RÃ©servation conseillÃ©e."},
     ],
 }
 
@@ -4583,7 +4621,7 @@ def schedule_json():
 
 
 # ============================================================
-# Qualified teams (World Cup 2026) — server-side fetch
+# Qualified teams (World Cup 2026) â€” server-side fetch
 # - Returns the teams that have qualified *so far* (qualification is ongoing).
 # - Source: Wikipedia qualified teams table (updates over time).
 # ============================================================
@@ -4646,10 +4684,10 @@ DEFAULT_COUNTRY_LIST = [
   "Costa Rica",
   "Croatia",
   "Cuba",
-  "Curaçao",
+  "CuraÃ§ao",
   "Cyprus",
   "Czech Republic",
-  "Côte d'Ivoire",
+  "CÃ´te d'Ivoire",
   "Denmark",
   "Djibouti",
   "Dominica",
@@ -4774,7 +4812,7 @@ DEFAULT_COUNTRY_LIST = [
   "Romania",
   "Russia",
   "Rwanda",
-  "Saint Barthélemy",
+  "Saint BarthÃ©lemy",
   "Saint Helena, Ascension and Tristan da Cunha",
   "Saint Kitts and Nevis",
   "Saint Lucia",
@@ -5342,7 +5380,7 @@ def test_sheet():
             "party_size": 4,
             "language": "en",
         })
-        return jsonify({"ok": True, "sheet": SHEET_NAME, "message": "✅ Test row appended."})
+        return jsonify({"ok": True, "sheet": SHEET_NAME, "message": "âœ… Test row appended."})
     except Exception as e:
         return jsonify({"ok": False, "sheet": SHEET_NAME, "error": repr(e)}), 500
 
@@ -5359,23 +5397,35 @@ def chat():
         allowed, remaining = check_rate_limit(ip)
         if not allowed:
             return jsonify({
-                "reply": "⚠️ Too many requests. Please wait a minute and try again.",
+                "reply": "âš ï¸ Too many requests. Please wait a minute and try again.",
                 "rate_limit_remaining": 0,
             }), 429
 
-        # ✅ NEW: block chat for inactive venues (prevents lingering fan access)
-        vid = _venue_id()
+        # âœ… NEW: block chat for inactive venues (prevents lingering fan access)
+        # Accept venue_id from request payload for multi-venue context persistence
+        data = request.get_json(force=True) or {}
+        req_venue_id = (data.get("venue_id") or "").strip()
+        vid = req_venue_id if req_venue_id else _venue_id()
+        
         if not _venue_is_active(vid):
             return jsonify({
                 "reply": "This venue is currently inactive.",
                 "rate_limit_remaining": remaining,
             }), 403
 
-        data = request.get_json(force=True) or {}
         msg = (data.get("message") or "").strip()
         lang = norm_lang(data.get("language") or data.get("lang"))
         sid = get_session_id()
         sess = get_session(sid)
+
+        # === FIX: Persist venue context in session ===
+        # If venue_id was provided, update session; otherwise use existing session venue_id or current
+        if req_venue_id:
+            sess["venue_id"] = req_venue_id
+        elif not sess.get("venue_id"):
+            sess["venue_id"] = vid
+        # Use session venue_id for all subsequent operations
+        vid = sess.get("venue_id") or vid
 
         # Update session language if user toggled
         sess["lang"] = lang
@@ -5419,7 +5469,7 @@ def chat():
                 # Note: In a real system, you'd update the Google Sheet row here
                 # For now, we acknowledge the modification request with the updated details
                 reply = (
-                    f"✅ Got it! I've noted the update for your reservation:\n"
+                    f"âœ… Got it! I've noted the update for your reservation:\n"
                     f"Name: {last_res['name']}\n"
                     f"Phone: {last_res['phone']}\n"
                     f"Date: {last_res['date']}\n"
@@ -5444,10 +5494,10 @@ def chat():
 
             # Match-day ops toggles
             if ops.get("vip_only") and not re.search(r"\bvip\b", msg.lower()):
-                return jsonify({"reply": "🔒 Reservations are VIP-only right now. If you have VIP access, type **VIP** to continue. Otherwise, I can add you to the waitlist.", "rate_limit_remaining": remaining})
+                return jsonify({"reply": "ðŸ”’ Reservations are VIP-only right now. If you have VIP access, type **VIP** to continue. Otherwise, I can add you to the waitlist.", "rate_limit_remaining": remaining})
 
             if ops.get("pause_reservations") and not ops.get("waitlist_mode"):
-                return jsonify({"reply": "⏸️ Reservations are temporarily paused. Please check back soon, or ask a staff member for help.", "rate_limit_remaining": remaining})
+                return jsonify({"reply": "â¸ï¸ Reservations are temporarily paused. Please check back soon, or ask a staff member for help.", "rate_limit_remaining": remaining})
 
             sess["mode"] = "reserving"
 
@@ -5460,7 +5510,7 @@ def chat():
                 sess["lead"]["vip"] = "Yes"
 
             # IMPORTANT: do NOT treat the word "reservation" as the name.
-            if msg.lower().strip() in ["reservation", "reserva", "réservation"]:
+            if msg.lower().strip() in ["reservation", "reserva", "rÃ©servation"]:
                 sess["lead"]["name"] = ""
 
             q = next_question(sess)
@@ -5519,16 +5569,16 @@ def chat():
 
                 if ops2.get("pause_reservations") and not ops2.get("waitlist_mode"):
                     sess["mode"] = "idle"
-                    return jsonify({"reply": "⏸️ Reservations were just paused. Please check back soon.", "rate_limit_remaining": remaining})
+                    return jsonify({"reply": "â¸ï¸ Reservations were just paused. Please check back soon.", "rate_limit_remaining": remaining})
 
                 if ops2.get("vip_only") and str(lead.get("vip", "No")).strip().lower() != "yes":
                     sess["mode"] = "idle"
-                    return jsonify({"reply": "🔒 VIP-only is active right now. Type VIP and start again to continue.", "rate_limit_remaining": remaining})
+                    return jsonify({"reply": "ðŸ”’ VIP-only is active right now. Type VIP and start again to continue.", "rate_limit_remaining": remaining})
 
                 try:
                     append_lead_to_sheet(lead)
                     sess["mode"] = "idle"
-                    saved_msg = ("✅ Added to waitlist!" if str(lead.get("status", "")).strip().lower() == "waitlist" else LANG[lang]["saved"])
+                    saved_msg = ("âœ… Added to waitlist!" if str(lead.get("status", "")).strip().lower() == "waitlist" else LANG[lang]["saved"])
                     confirm = (
                         f"{saved_msg}\n"
                         f"Name: {lead['name']}\n"
@@ -5564,18 +5614,22 @@ def chat():
                     return jsonify({"reply": confirm, "rate_limit_remaining": remaining})
                 except Exception as e:
                     # Always return JSON so the UI never shows "no reply received".
-                    return jsonify({"reply": f"⚠️ Could not save reservation: {repr(e)}", "rate_limit_remaining": remaining}), 500
+                    return jsonify({"reply": f"âš ï¸ Could not save reservation: {repr(e)}", "rate_limit_remaining": remaining}), 500
 
             # Otherwise ask next missing field
             q = next_question(sess)
             return jsonify({"reply": q, "rate_limit_remaining": remaining})
 
         # Otherwise: normal Q&A using OpenAI (with language + business profile + menu)
+        # === FIX: Use venue-specific business profile and name ===
+        venue_profile = _venue_business_profile(vid)
+        venue_display_name = _venue_name(vid)
+        
         system_msg = f"""
-    You are a World Cup 2026 Dallas business concierge.
+    You are an AI Concierge for {venue_display_name}, assisting World Cup 2026 fans.
 
     Business profile (source of truth):
-    {BUSINESS_PROFILE}
+    {venue_profile}
 
     Menu (source of truth, language={lang}):
     {json.dumps(MENU.get(lang, MENU['en']), ensure_ascii=False)}
@@ -5583,11 +5637,13 @@ def chat():
 Rules:
 - Be friendly, fast, and concise.
 - Always respond in the user's chosen language: {lang}.
+- You are the concierge for {venue_display_name} â€” maintain this venue context throughout the conversation.
 - If user asks about the World Cup match schedule, tell them to use the **Schedule** panel on the page, then continue booking.
 - For menu/food/drink/prices/diet questions, do NOT guess: direct them to the **Menu** panel on the page, then continue booking.
 - If the user wants a reservation, do NOT tell them to type "reservation". Start collecting details immediately.
 - If you are unsure or missing info, do NOT dead-end. Redirect to Menu/Info panels and continue booking.
 - Always keep the reservation flow alive by asking for missing details: party size and preferred time.
+- IMPORTANT: Always remember the venue context ({venue_display_name}) across all follow-up questions.
 """
 
         try:
@@ -5612,17 +5668,17 @@ Rules:
             if re.search(r"\b(i (can't|cannot)|not sure|i don't know|unable to|no information)\b", reply.lower()):
                 reply = (
                     "For accurate details, please check the **Menu** or **Info** panels on this page.\n\n"
-                    "I can still help with a reservation — **how many guests** and **what time**?"
+                    "I can still help with a reservation â€” **how many guests** and **what time**?"
                 )
 
             # Store assistant response in history
             sess["history"].append({"role": "assistant", "content": reply})
             return jsonify({"reply": reply, "rate_limit_remaining": remaining})
         except Exception as e:
-            # Customer-safe fallback (no “chat unavailable”), still routes + continues booking
+            # Customer-safe fallback (no â€œchat unavailableâ€), still routes + continues booking
             fallback = (
                 "For accurate details, please check the **Menu** or **Info** panels on this page.\n\n"
-                "I can still help with a reservation — **how many guests** and **what time**?"
+                "I can still help with a reservation â€” **how many guests** and **what time**?"
             )
             return jsonify({"reply": fallback, "rate_limit_remaining": remaining}), 200
 
@@ -5630,7 +5686,7 @@ Rules:
         # Never break the UI: always return JSON.
         fallback = (
             "For accurate details, please check the **Menu** or **Info** panels on this page.\n\n"
-            "I can still help with a reservation — **how many guests** and **what time**?"
+            "I can still help with a reservation â€” **how many guests** and **what time**?"
         )
         return jsonify({"reply": fallback, "rate_limit_remaining": 0}), 200
 
@@ -6194,7 +6250,7 @@ def api_poll_state():
     Always returns JSON so the Fan Zone UI never breaks.
     """
     try:
-        # ✅ venue from query
+        # âœ… venue from query
         venue = (request.args.get("venue") or "").strip()
 
         def _venue_fanzone_cfg():
@@ -6282,11 +6338,11 @@ def api_poll_state():
             "percent": {t: round(pct[t], 1) for t in teams},
             "total_votes": int(total),
             "total": int(total),
-            # ✅ venue-scoped sponsor text
+            # âœ… venue-scoped sponsor text
             "sponsor_text": fz_cfg.get("poll_sponsor_text", ""),
         })
     except Exception:
-        # Absolute fallback — never break UI
+        # Absolute fallback â€” never break UI
         return jsonify({
             "ok": True,
             "locked": True,
@@ -6364,7 +6420,7 @@ def admin_update_config():
 
     data = request.get_json(silent=True) or {}
 
-    # ✅ venue isolation
+    # âœ… venue isolation
     venue = (request.args.get("venue") or data.get("venue") or "").strip()
     if not venue:
         return jsonify({"ok": False, "error": "Missing venue"}), 400
@@ -6409,7 +6465,7 @@ def admin_update_config():
             "ops_waitlist_mode": _norm_bool(ops_wait),
         }
 
-        # ✅ load + write ONLY this venue file
+        # âœ… load + write ONLY this venue file
         path = os.path.join(VENUES_DIR, f"{venue}.json")
         if not os.path.exists(path):
             return jsonify({"ok": False, "error": f"Unknown venue: {venue}"}), 404
@@ -6423,7 +6479,7 @@ def admin_update_config():
         with open(path, "w", encoding="utf-8") as f:
             json.dump(vcfg, f, indent=2, ensure_ascii=False)
 
-        # ✅ invalidate caches (if present)
+        # âœ… invalidate caches (if present)
         try:
             _invalidate_venues_cache()
         except Exception:
@@ -6991,7 +7047,7 @@ def admin_api_ai_queue_approve(qid: str):
     it_type = str(it.get("type") or "").strip().lower()
     # Outbound sends are NEVER executed on approval. Approval only unlocks a human "Send Now" click.
     if it_type in ("send_email", "send_sms", "send_whatsapp"):
-        applied = {"ok": True, "note": "Approved — ready to send (human click required)"}
+        applied = {"ok": True, "note": "Approved â€” ready to send (human click required)"}
         it["status"] = "approved"
         it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         it["reviewed_by"] = actor
@@ -7176,15 +7232,15 @@ def admin_api_ai_queue_override(qid: str):
 MATCHDAY_PRESETS: Dict[str, Dict[str, Any]] = {
     "Kickoff Rush": {
         "ops": {"pause_reservations": False, "vip_only": True, "waitlist_mode": True},
-        "rules": {"max_party_size": 6, "match_day_banner": "🏟️ Kickoff Rush: VIP priority + waitlist enabled"},
+        "rules": {"max_party_size": 6, "match_day_banner": "ðŸŸï¸ Kickoff Rush: VIP priority + waitlist enabled"},
     },
     "Halftime Surge": {
         "ops": {"pause_reservations": False, "vip_only": False, "waitlist_mode": True},
-        "rules": {"max_party_size": 4, "match_day_banner": "⏱️ Halftime Surge: fast seating + waitlist enabled"},
+        "rules": {"max_party_size": 4, "match_day_banner": "â±ï¸ Halftime Surge: fast seating + waitlist enabled"},
     },
     "Post-game": {
         "ops": {"pause_reservations": False, "vip_only": False, "waitlist_mode": False},
-        "rules": {"max_party_size": 10, "match_day_banner": "🌙 Post-game: larger groups welcome"},
+        "rules": {"max_party_size": 10, "match_day_banner": "ðŸŒ™ Post-game: larger groups welcome"},
     },
 }
 
@@ -7294,12 +7350,12 @@ def admin_api_notifications():
     # Role-based branding (visual only)
     is_owner = (role == "owner")
     page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
-    page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
+    page_sub = ("Full control â€” Admin key" if is_owner else "Operations control â€” Manager key")
 
     # Role-based branding (visual only)
     is_owner = (role == "owner")
     page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
-    page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
+    page_sub = ("Full control â€” Admin key" if is_owner else "Operations control â€” Manager key")
 
     try:
         limit = int(request.args.get("limit", 50) or 50)
@@ -7450,7 +7506,7 @@ def admin_api_audit():
                     entries.append(json.loads(item))
                 except Exception:
                     continue
-            if entries:  # 🔑 do NOT short-circuit on empty Redis
+            if entries:  # ðŸ”‘ do NOT short-circuit on empty Redis
                 return jsonify({"ok": True, "entries": entries, "source": "redis"})
     except Exception:
         pass
@@ -7649,7 +7705,7 @@ def admin_tpl():
     role = ctx.get("role", "manager")
     is_owner = (role == "owner")
     page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
-    page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
+    page_sub = ("Full control â€” Admin key" if is_owner else "Operations control â€” Manager key")
     return render_template("admin_console.html",
                            page_title=page_title,
                            page_sub=page_sub,
@@ -7659,7 +7715,7 @@ def admin_tpl():
 @app.route("/admin")
 def admin():
     """
-    Admin Dashboard v1 (Steps 1–3)
+    Admin Dashboard v1 (Steps 1â€“3)
     - Tabs: Leads | Rules | Menu
     - Rules config persists to BUSINESS_RULES_FILE
     - Menu upload persists to MENU_FILE and updates /menu.json (fan UI unchanged)
@@ -7683,13 +7739,13 @@ def admin():
     except Exception:
         pass
 
-    # ✅ KEEP THE REST OF YOUR ORIGINAL /admin CODE BELOW THIS LINE
+    # âœ… KEEP THE REST OF YOUR ORIGINAL /admin CODE BELOW THIS LINE
     # (everything that builds `html = []` and ends with `return ...`)
 
     # Role-based branding (visual only)
     is_owner = (role == "owner")
     page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
-    page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
+    page_sub = ("Full control â€” Admin key" if is_owner else "Operations control â€” Manager key")
 
     # Leads (best-effort)
     rows = []
@@ -7758,7 +7814,7 @@ def admin():
     html = []
     html.append("<!doctype html><html><head><meta charset='utf-8'>")
     html.append("<meta name='viewport' content='width=device-width, initial-scale=1'/><meta name='color-scheme' content='dark light'/>")
-    html.append(f"<title>{page_title} — World Cup Concierge</title>")
+    html.append(f"<title>{page_title} â€” World Cup Concierge</title>")
     html.append("\n<div class=\"card\" style=\"margin-top:12px\">\n  <div class=\"row\" style=\"display:flex;gap:10px;flex-wrap:wrap;align-items:center\">\n    <a class=\"btn2\" href=\"/admin?key=__KEY__\">All</a>\n    <a class=\"btn2\" href=\"/admin?key=__KEY__&days=7\">Last 7 days</a>\n    <a class=\"btn2\" href=\"/admin?key=__KEY__&days=30\">Last 30 days</a>\n    <a class=\"btn\" href=\"/admin/api/leads/export?key=__KEY____DAYS__\">Export CSV</a>\n    <span class=\"note\" style=\"margin-left:auto;opacity:.75\">Export matches current filter</span>\n  </div>\n</div>\n".replace('__KEY__', __import__('html').escape(key)).replace('__DAYS__', days_q))
     html.append(r"""
 <style>
@@ -7970,7 +8026,7 @@ th{
 .note{margin-top:8px;font-size:12px;color:var(--muted)}
 .hidden{display:none}
 .locked{opacity:.45;filter:saturate(.7);cursor:not-allowed}
-.locked::after{content:'⛔ No permission';margin-left:6px;font-size:12px;opacity:.8}
+.locked::after{content:'â›” No permission';margin-left:6px;font-size:12px;opacity:.8}
 
 .code{
   font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
@@ -7995,22 +8051,22 @@ th{
     html.append("<div class='topbar'>")
     html.append("<div>")
     html.append(f"<div class='h1'>{page_title}</div>")
-    html.append(f"<div class='sub'>Tabs + Rules Config + Menu Upload (fan UI unchanged) · {page_sub}</div>")
+    html.append(f"<div class='sub'>Tabs + Rules Config + Menu Upload (fan UI unchanged) Â· {page_sub}</div>")
     html.append("<div class='pills'>")
     html.append(f"<span class='pill'><b>Ops</b> {len(body)}</span>")
     html.append(f"<span class='pill'><b>VIP</b> {vip_count}</span>")
-    html.append("<button class='pill' id='notifBtn' type='button' onclick=\"openNotifications()\">🔔 <b id='notifCount'>0</b></button>")
+    html.append("<button class='pill' id='notifBtn' type='button' onclick=\"openNotifications()\">ðŸ”” <b id='notifCount'>0</b></button>")
 
-    html.append("<button class='pill pillbtn' id='refreshBtn' type='button' onclick=\"refreshAll('manual')\">↻ <b>Refresh</b></button>")
-    html.append("<button class='pill pillbtn' id='autoBtn' type='button' onclick=\"toggleAutoRefresh()\">⟳ <b id='autoLabel'>Auto: Off</b></button>")
+    html.append("<button class='pill pillbtn' id='refreshBtn' type='button' onclick=\"refreshAll('manual')\">â†» <b>Refresh</b></button>")
+    html.append("<button class='pill pillbtn' id='autoBtn' type='button' onclick=\"toggleAutoRefresh()\">âŸ³ <b id='autoLabel'>Auto: Off</b></button>")
     html.append("<select class='pillselect' id='autoEvery' onchange=\"autoEveryChanged()\"><option value='10'>10s</option><option value='30' selected>30s</option><option value='60'>60s</option></select>")
-    html.append("<span class='pill' id='lastRef'>Last refresh: —</span>")
+    html.append("<span class='pill' id='lastRef'>Last refresh: â€”</span>")
     for k, v in status_counts.items():
         html.append(f"<span class='pill'><b>{k}</b> {v}</span>")
     html.append("</div>")
     html.append("</div>")
     html.append("<div style='text-align:right'>")
-    html.append(f"<div class='small'>Admin key: <span class='code'>••••••</span></div>")
+    html.append(f"<div class='small'>Admin key: <span class='code'>â€¢â€¢â€¢â€¢â€¢â€¢</span></div>")
     html.append(
     "<div style='margin-top:8px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap'>"
     f"<a class='btn2' style='text-decoration:none' href='/admin/export.csv{admin_key_q}'>Export CSV</a>"
@@ -8070,7 +8126,7 @@ th{
 
     <div id="ops-msg" class="note" style="margin-top:10px"></div>
     <div class="small" style="margin-top:10px;opacity:.72">
-      Tip: toggles auto-save (“Saving…” → “Saved”).
+      Tip: toggles auto-save (â€œSavingâ€¦â€ â†’ â€œSavedâ€).
     </div>
   </div>
 
@@ -8223,8 +8279,8 @@ th{
             html.append(f"<td>{t}</td>")
             html.append(f"<td>{ps}</td>")
             # Segment badge (VIP vs Regular)
-            seg = "⭐ VIP" if tier_key == "vip" else "Regular"
-            seg_cls = "badge warn" if seg.startswith("⭐") else "badge"
+            seg = "â­ VIP" if tier_key == "vip" else "Regular"
+            seg_cls = "badge warn" if seg.startswith("â­") else "badge"
             html.append(f"<td><span class='{seg_cls}'>{_hesc(seg)}</span></td>")
             html.append("<td><span class='pill'>" + _hesc(ep) + "</span></td>")
             html.append("<td><span class='badge good'>" + _hesc(queue) + "</span></td>")
@@ -8237,8 +8293,8 @@ th{
                 note_txt = (note_txt + (" | " if note_txt else "") + f"vibe: {vibe.strip()}").strip()
             def _cell_details(label, txt):
                 if not txt:
-                    return "<span class='small'>—</span>"
-                short = txt if len(txt) <= 34 else (txt[:34] + "…")
+                    return "<span class='small'>â€”</span>"
+                short = txt if len(txt) <= 34 else (txt[:34] + "â€¦")
                 return "<details><summary class='small'>" + _hesc(short) + "</summary><div style='margin-top:6px;white-space:pre-wrap' class='small'>" + _hesc(txt) + "</div></details>"
             html.append("<td>" + _cell_details("context", ctx_txt) + "</td>")
             html.append("<td>" + _cell_details("notes", note_txt) + "</td>")
@@ -8258,7 +8314,7 @@ th{
 
 
             html.append("<td>")
-            html.append(f"<button class='btn2' onclick='saveLead({sheet_row})'>Save</button><button class='btnTiny' title='Mark handled' onclick='markHandled({sheet_row})'>✅</button>")
+            html.append(f"<button class='btn2' onclick='saveLead({sheet_row})'>Save</button><button class='btnTiny' title='Mark handled' onclick='markHandled({sheet_row})'>âœ…</button>")
             html.append("</td>")
 
             html.append("</tr>")
@@ -8301,7 +8357,7 @@ th{
       </div>
 
       <div style="margin-top:10px">
-        <label class="small">Min confidence (0–1)</label>
+        <label class="small">Min confidence (0â€“1)</label>
         <input class="inp" id="ai-minconf" type="number" min="0" max="1" step="0.05" />
       </div>
 
@@ -8399,7 +8455,7 @@ th{
 </div>
 
   <div class="card">
-    <div id="aiq-list" class="small">Loading…</div>
+    <div id="aiq-list" class="small">Loadingâ€¦</div>
   </div>
 </div>
 
@@ -8417,7 +8473,7 @@ th{
       </div>
       <div>
         <label class="small">Match-day banner</label>
-        <input id="rules-banner" class="inp" placeholder="🏟️ Match-day mode..."/>
+        <input id="rules-banner" class="inp" placeholder="ðŸŸï¸ Match-day mode..."/>
       </div>
     </div>
 
@@ -8656,7 +8712,7 @@ window.showTab = function(tab){
       var minr = (b && b.getAttribute) ? (b.getAttribute('data-minrole') || 'manager') : 'manager';
       if(ROLE_RANK && ROLE_RANK[ROLE] !== undefined && ROLE_RANK[minr] !== undefined){
         if(ROLE_RANK[ROLE] < ROLE_RANK[minr]){
-          try{ toast('Owner only — redirected to Ops', 'warn'); }catch(e){}
+          try{ toast('Owner only â€” redirected to Ops', 'warn'); }catch(e){}
           try{ setActive('ops'); }catch(e){}
           return false;
         }
@@ -9028,7 +9084,7 @@ async function saveRules(){
   });
   const j = await res.json().catch(()=>null);
   if(j && j.ok){
-    if(msg) msg.textContent='Saved ✔';
+    if(msg) msg.textContent='Saved âœ”';
     // Optional: normalize inputs from server (in case it clamps values)
     try{ await loadRules(); }catch(e){}
     setTimeout(()=>{ try{ if(msg) msg.textContent=''; }catch(e){} }, 1400);
@@ -9055,7 +9111,7 @@ async function loadPartnerList(){
         ? ('<b>Known partners:</b> ' + partners.map(p=>'<code style="padding:2px 6px;border:1px solid rgba(255,255,255,.12);border-radius:10px">'+escapeHtml(p)+'</code>').join(' '))
         : 'No partner policies saved yet (only default).';
     }
-    if(msg) msg.textContent='Loaded ✔';
+    if(msg) msg.textContent='Loaded âœ”';
   }catch(e){
     if(msg) msg.textContent='Error';
   }
@@ -9081,7 +9137,7 @@ async function loadPartnerPolicy(){
     const allowed = Object.keys(oa).filter(k=>oa[k]);
     qs('#pp-allowed-channels').value = allowed.join(', ');
     qs('#pp-outbound-role').value = (pol.outbound_require_role || 'manager');
-    if(msg) msg.textContent='Loaded ✔';
+    if(msg) msg.textContent='Loaded âœ”';
   }catch(e){
     if(msg) msg.textContent='Error';
   }
@@ -9119,7 +9175,7 @@ async function savePartnerPolicy(){
     });
     const j = await res.json().catch(()=>null);
     if(j && j.ok){
-      if(msg) msg.textContent='Saved ✔';
+      if(msg) msg.textContent='Saved âœ”';
       try{ await loadPartnerList(); }catch(e){}
     } else {
       if(msg) msg.textContent=(j && j.error) ? ('Blocked: '+j.error) : 'Failed';
@@ -9140,7 +9196,7 @@ async function deletePartnerPolicy(){
     });
     const j = await res.json().catch(()=>null);
     if(j && j.ok){
-      if(msg) msg.textContent='Deleted ✔';
+      if(msg) msg.textContent='Deleted âœ”';
       try{ await loadPartnerList(); }catch(e){}
       if(partner !== 'default'){ qs('#pp-partner').value=''; }
       try{ await loadPartnerPolicy(); }catch(e){}
@@ -9154,7 +9210,7 @@ async function deletePartnerPolicy(){
 
 async function loadAlerts(){
   try{
-    qs('#al-msg').textContent = 'Loading…';
+    qs('#al-msg').textContent = 'Loadingâ€¦';
     const res = await fetch('/admin/api/alerts/settings?key='+encodeURIComponent(KEY));
     const j = await res.json().catch(()=>null);
     if(!j || !j.ok){ qs('#al-msg').textContent = 'Load failed: ' + ((j&&j.error)||res.status); return; }
@@ -9188,7 +9244,7 @@ async function loadAlerts(){
 async function saveAlerts(){
   if(!hasRole('owner')){ qs('#al-msg').textContent = 'Owner only'; return; }
   try{
-    qs('#al-msg').textContent = 'Saving…';
+    qs('#al-msg').textContent = 'Savingâ€¦';
     const payload = {
       enabled: qs('#al-enabled').checked,
       rate_limit_seconds: parseInt(qs('#al-rate').value||'600',10),
@@ -9214,7 +9270,7 @@ async function saveAlerts(){
 async function testAlert(){
   if(!hasRole('owner')){ qs('#al-msg').textContent = 'Owner only'; return; }
   try{
-    qs('#al-msg').textContent = 'Sending test…';
+    qs('#al-msg').textContent = 'Sending testâ€¦';
     const res = await fetch('/admin/api/alerts/test?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE), { method:'POST' });
     const j = await res.json().catch(()=>null);
     if(!j || !j.ok){ qs('#al-msg').textContent = 'Test failed: ' + ((j&&j.error)||res.status); return; }
@@ -9230,7 +9286,7 @@ async function loadMenu(){
   const j = await res.json().catch(()=>null);
   if(j && j.ok){
     qs('#menu-json').value = JSON.stringify(j.menu || {}, null, 2);
-    if(msg) msg.textContent='Loaded ✔';
+    if(msg) msg.textContent='Loaded âœ”';
   } else {
     if(msg) msg.textContent='Failed to load';
   }
@@ -9248,7 +9304,7 @@ async function saveMenuJson(){
     body: JSON.stringify(payload)
   });
   const j = await res.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Saved ✔'; }
+  if(j && j.ok){ if(msg) msg.textContent='Saved âœ”'; }
   else { if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }
 }
 
@@ -9263,7 +9319,7 @@ async function uploadMenu(){
     body: fd
   });
   const j = await res.json().catch(()=>null);
-  if(j && j.ok){ qs('#menu-json').value = JSON.stringify(j.menu || {}, null, 2); if(msg) msg.textContent='Uploaded ✔'; }
+  if(j && j.ok){ qs('#menu-json').value = JSON.stringify(j.menu || {}, null, 2); if(msg) msg.textContent='Uploaded âœ”'; }
   else { if(msg) msg.textContent='Upload failed'; alert('Upload failed: '+(j && j.error ? j.error : res.status)); }
 }
 
@@ -9273,13 +9329,13 @@ function draftsLoad(){
   const st  = document.getElementById('drafts-status');
   if(!box || !st) return;
 
-  st.textContent = 'Loading…';
+  st.textContent = 'Loadingâ€¦';
   fetch(`/admin/api/drafts?key=${encodeURIComponent(KEY)}`, { cache: 'no-store' })
     .then(r => r.json())
     .then(j => {
       if(!j.ok) throw new Error(j.error || 'Failed');
       box.value = JSON.stringify(j.drafts || {}, null, 2);
-      st.textContent = j.meta && j.meta.updated_at ? `Loaded • ${j.meta.updated_at}` : 'Loaded';
+      st.textContent = j.meta && j.meta.updated_at ? `Loaded â€¢ ${j.meta.updated_at}` : 'Loaded';
     })
     .catch(e => {
       st.textContent = `Error: ${e.message || e}`;
@@ -9310,7 +9366,7 @@ function draftsSave(){
     return;
   }
 
-  st.textContent = 'Saving…';
+  st.textContent = 'Savingâ€¦';
   fetch(`/admin/api/drafts?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -9319,7 +9375,7 @@ function draftsSave(){
     .then(r => r.json())
     .then(j => {
       if(!j.ok) throw new Error(j.error || 'Failed');
-      st.textContent = j.meta && j.meta.updated_at ? `Saved • ${j.meta.updated_at}` : 'Saved';
+      st.textContent = j.meta && j.meta.updated_at ? `Saved â€¢ ${j.meta.updated_at}` : 'Saved';
     })
     .catch(e => {
       st.textContent = `Error: ${e.message || e}`;
@@ -9401,9 +9457,9 @@ async function saveOps(){
   const elPause = qs('#ops-pause');
   const elVip   = qs('#ops-viponly');
   const elWait  = qs('#ops-waitlist');
-  _setMiniState(elPause,'pause','Saving…');
-  _setMiniState(elVip,'vip','Saving…');
-  _setMiniState(elWait,'wait','Saving…');
+  _setMiniState(elPause,'pause','Savingâ€¦');
+  _setMiniState(elVip,'vip','Savingâ€¦');
+  _setMiniState(elWait,'wait','Savingâ€¦');
   if(elPause) elPause.disabled = true;
   if(elVip) elVip.disabled = true;
   if(elWait) elWait.disabled = true;
@@ -9413,7 +9469,7 @@ async function saveOps(){
     body: JSON.stringify(payload)
   });
   const j = await res.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Saved ✔'; }
+  if(j && j.ok){ if(msg) msg.textContent='Saved âœ”'; }
   else { if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }
 }
 
@@ -9471,7 +9527,7 @@ async function loadAI(){
 }
 
 async function saveAI(){
-  const msg = qs('#ai-msg'); if(msg) msg.textContent = 'Saving…';
+  const msg = qs('#ai-msg'); if(msg) msg.textContent = 'Savingâ€¦';
   const payload = {
     enabled: qs('#ai-enabled')?.checked ? true : false,
     mode: qs('#ai-mode')?.value || 'suggest',
@@ -9502,7 +9558,7 @@ async function saveAI(){
     });
     const data = await r.json();
     if(!data.ok) throw new Error(data.error || 'Failed');
-    if(msg) msg.textContent = 'Saved ✔';
+    if(msg) msg.textContent = 'Saved âœ”';
     // refresh to reflect merged settings
     loadAI();
   }catch(e){
@@ -9518,7 +9574,7 @@ async function applyPreset(name){
   });
   const j = await res.json().catch(()=>null);
   if(j && j.ok){
-    if(msg) msg.textContent='Applied ✔ (logged)';
+    if(msg) msg.textContent='Applied âœ” (logged)';
     await loadOps();
     // If you are owner and preset touched rules, refresh rules form for visibility.
     if(j.rules) await loadRules();
@@ -9531,8 +9587,8 @@ async function applyPreset(name){
 
 // ===== AI Approval Queue =====
 async function loadAIQueue(){
-  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Loading…';
-  const list = qs('#aiq-list'); if(list) list.innerHTML = 'Loading…';
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Loadingâ€¦';
+  const list = qs('#aiq-list'); if(list) list.innerHTML = 'Loadingâ€¦';
   try{
     const filt = (qs('#aiq-filter')?.value || '').trim();
     const url = `/admin/api/ai/queue?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}` + (filt ? `&status=${encodeURIComponent(filt)}` : '');
@@ -9549,7 +9605,7 @@ async function loadAIQueue(){
 }
                 
 async function composeOutbound(btn){
-  const msg = qs('#ob-msg'); if(msg) msg.textContent='Queuing…';
+  const msg = qs('#ob-msg'); if(msg) msg.textContent='Queuingâ€¦';
   if(btn) btn.disabled = true;
 
   const typ = qs('#ob-type')?.value || 'send_sms';
@@ -9565,7 +9621,7 @@ async function composeOutbound(btn){
   }
 
   const payload = { to, body };
-  if(typ === 'send_email') payload.subject = subject || `${VENUE} — World Cup Concierge`;
+  if(typ === 'send_email') payload.subject = subject || `${VENUE} â€” World Cup Concierge`;
 
   const r = await fetch(`/admin/api/outbound/propose?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`,{
     method:'POST',
@@ -9573,7 +9629,7 @@ async function composeOutbound(btn){
     body: JSON.stringify({
       channel: (typ || 'send_sms').replace('send_',''),
       to: to,
-      subject: (typ === 'send_email' ? (subject || `${VENUE} — World Cup Concierge`) : ''),
+      subject: (typ === 'send_email' ? (subject || `${VENUE} â€” World Cup Concierge`) : ''),
       message: body,
       row: (row >= 2 ? row : null),
     })
@@ -9582,7 +9638,7 @@ async function composeOutbound(btn){
 
   const j = await r.json().catch(()=>null);
   if(j && j.ok){
-    if(msg) msg.textContent='Queued ✔';
+    if(msg) msg.textContent='Queued âœ”';
     await loadAIQueue();
   } else {
     if(msg) msg.textContent='Queue failed';
@@ -9592,7 +9648,7 @@ async function composeOutbound(btn){
 }
 
 async function runAINew(){
-  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running AI…';
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running AIâ€¦';
   const lim = parseInt(qs('#ai-run-limit')?.value || '5', 10);
   try{
     const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
@@ -9610,7 +9666,7 @@ async function runAINew(){
 }
 
 async function runAIRow(){
-  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running AI…';
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running AIâ€¦';
   const row = parseInt(qs('#ai-run-row')?.value || '0', 10);
   if(!row || row < 2){
     if(msg) msg.textContent = 'Enter a valid sheet Row # (>= 2).';
@@ -9640,7 +9696,7 @@ function renderAIQueue(items){
 
   // Explicit empty state for CI tests + clarity
   if(!items || !items.length){
-    list.innerHTML = '<div class="note">AI Queue empty — no queued actions.</div>';
+    list.innerHTML = '<div class="note">AI Queue empty â€” no queued actions.</div>';
     return;
   }
 
@@ -9752,16 +9808,16 @@ async function aiqApprove(id, btn){
   if(!confirm('Approve this action?')) return;
   // Button-level loading state
   const _btn = btn;
-  if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Approving…'; }
+  if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Approvingâ€¦'; }
 
-  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Approving…';
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Approvingâ€¦';
   const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/approve?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({})
   });
   const j = await r.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Approved ✔'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Approve'); } await loadAIQueue(); }
+  if(j && j.ok){ if(msg) msg.textContent='Approved âœ”'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Approve'); } await loadAIQueue(); }
   else { if(msg) msg.textContent='Approve failed'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Approve'); } alert('Approve failed: '+(j && j.error ? j.error : r.status)); }
 }
 
@@ -9794,11 +9850,11 @@ async function aiqSend(id, btn){
   if(_btn){
     _btn.disabled = true;
     _btn.dataset.prevText = _btn.textContent || '';
-    _btn.textContent = 'Sending…';
+    _btn.textContent = 'Sendingâ€¦';
   }
 
   const msg = qs('#aiq-msg');
-  if(msg) msg.textContent = 'Sending…';
+  if(msg) msg.textContent = 'Sendingâ€¦';
 
   const r = await fetch(
     `/admin/api/ai/queue/${encodeURIComponent(id)}/send?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`,
@@ -9812,7 +9868,7 @@ async function aiqSend(id, btn){
   const j = await r.json().catch(()=>null);
 
   if(j && j.ok){
-    if(msg) msg.textContent = 'Sent ✔';
+    if(msg) msg.textContent = 'Sent âœ”';
     if(_btn){
       _btn.disabled = false;
       _btn.textContent = (_btn.dataset.prevText || 'Send');
@@ -9831,16 +9887,16 @@ async function aiqSend(id, btn){
 async function aiqDeny(id, btn){
   if(!confirm('Deny this action?')) return;
   const _btn = btn;
-  if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Denying…'; }
+  if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Denyingâ€¦'; }
 
-  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Denying…';
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Denyingâ€¦';
   const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/deny?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({})
   });
   const j = await r.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Denied ✔'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Deny'); } await loadAIQueue(); }
+  if(j && j.ok){ if(msg) msg.textContent='Denied âœ”'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Deny'); } await loadAIQueue(); }
   else { if(msg) msg.textContent='Deny failed'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Deny'); } alert('Deny failed: '+(j && j.error ? j.error : r.status)); }
 }
 
@@ -9861,10 +9917,10 @@ async function aiqOverride(id, btn){
   if(_btn){
     _btn.disabled = true;
     _btn.dataset.prevText = _btn.textContent || '';
-    _btn.textContent = 'Overriding…';
+    _btn.textContent = 'Overridingâ€¦';
   }
 
-  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Loading item…';
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Loading itemâ€¦';
 
   // Load the current item so prompts default to the REAL type/payload (no stale examples)
   let it = null;
@@ -9916,7 +9972,7 @@ async function aiqOverride(id, btn){
     return;
   }
 
-  if(msg) msg.textContent = 'Applying override…';
+  if(msg) msg.textContent = 'Applying overrideâ€¦';
 
   const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/override?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
     method:'POST',
@@ -9927,7 +9983,7 @@ async function aiqOverride(id, btn){
   const j = await r.json().catch(()=>null);
 
   if(j && j.ok){
-    if(msg) msg.textContent = 'Override applied ✔';
+    if(msg) msg.textContent = 'Override applied âœ”';
     restoreBtn();
     await loadAIQueue();
   }else{
@@ -9952,7 +10008,7 @@ async function loadAudit(){
   const filterEl = qs('#audit-filter');
   const selected = (filterEl && filterEl.value) ? filterEl.value : 'all';
 
-  // ✅ Always pass venue explicitly (never rely on cookie)
+  // âœ… Always pass venue explicitly (never rely on cookie)
   const venueVal =
     (typeof VENUE !== 'undefined' && VENUE) ? VENUE :
     (window.VENUE ? window.VENUE : '');
@@ -10061,7 +10117,7 @@ async function loadAudit(){
 
 async function loadNotifs(){
   const msg = qs('#notif-msg'); 
-  if(msg) msg.textContent = 'Loading…';
+  if(msg) msg.textContent = 'Loadingâ€¦';
 
   try{
     const m = document.cookie.match(/(?:^|;\s*)venue_id=([^;]+)/);
@@ -10092,7 +10148,7 @@ async function loadNotifs(){
           row.style.cssText =
             'padding:12px;border:1px solid rgba(255,255,255,.16);border-radius:14px;margin-bottom:10px;background:rgba(255,255,255,.06)';
 
-          // ✅ SAFE pretty-print (strings or objects)
+          // âœ… SAFE pretty-print (strings or objects)
           let text;
           if (typeof d === 'string') {
             text = d;
@@ -10163,13 +10219,13 @@ async function initFanZoneAdmin(){
 async function loadFanZoneState(){
   const msg = document.querySelector('#fzMsg');
   const ta  = document.querySelector('#fzJson');
-  if(msg) msg.textContent = 'Loading…';
+  if(msg) msg.textContent = 'Loadingâ€¦';
   try{
     const r = await fetch(`/admin/api/fanzone/state?key=${encodeURIComponent(KEY||'')}&venue=${encodeURIComponent(VENUE)}`, { cache:'no-store' });
     const j = await r.json().catch(()=>null);
     if(!j || !j.ok) throw new Error('Load failed');
     if(ta) ta.value = JSON.stringify(j.state || {}, null, 2);
-    if(msg) msg.textContent = 'Loaded ✓';
+    if(msg) msg.textContent = 'Loaded âœ“';
   }catch(e){
     if(msg) msg.textContent = 'Load failed';
   }
@@ -10178,7 +10234,7 @@ async function loadFanZoneState(){
 async function saveFanZoneState(){
   const msg = document.querySelector('#fzMsg');
   const ta  = document.querySelector('#fzJson');
-  if(msg) msg.textContent = 'Saving…';
+  if(msg) msg.textContent = 'Savingâ€¦';
   try{
     const payload = JSON.parse((ta && ta.value) ? ta.value : '{}');
     const r = await fetch(`/admin/api/fanzone/save?key=${encodeURIComponent(KEY||'')}&venue=${encodeURIComponent(VENUE)}`, {
@@ -10188,14 +10244,14 @@ async function saveFanZoneState(){
     });
     const j = await r.json().catch(()=>null);
     if(!j || !j.ok) throw new Error('Save failed');
-    if(msg) msg.textContent = 'Saved ✓';
+    if(msg) msg.textContent = 'Saved âœ“';
   }catch(e){
     if(msg) msg.textContent = 'Save failed (bad JSON?)';
   }
 }
 
 async function clearNotifs(){
-  const msg = qs('#notif-msg'); if(msg) msg.textContent='Clearing…';
+  const msg = qs('#notif-msg'); if(msg) msg.textContent='Clearingâ€¦';
   try{
     const r = await fetch(`/admin/api/notifications/clear?key=${encodeURIComponent(KEY||'')}&venue=${encodeURIComponent(VENUE)}`, {method:'POST'});
     const j = await r.json();
@@ -10248,7 +10304,7 @@ function refreshAll(source){
   try{ loadMenu(); }catch(e){}
   try{ loadHealth(); }catch(e){}
 
-  // ✅ Refresh audit automatically if user is currently on the Audit tab
+  // âœ… Refresh audit automatically if user is currently on the Audit tab
   try{
     const ap = document.getElementById('tab-audit');
     if(ap && !ap.classList.contains('hidden')) loadAudit();
@@ -10258,7 +10314,7 @@ function refreshAll(source){
 }
 
 async function loadHealth(){
-  const msg = qs('#health-msg'); if(msg) msg.textContent='Loading…';
+  const msg = qs('#health-msg'); if(msg) msg.textContent='Loadingâ€¦';
   const body = qs('#health-body'); if(body) body.textContent='';
   try{
     const r = await fetch(`/admin/api/health?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, { cache:'no-store' });
@@ -10267,13 +10323,13 @@ async function loadHealth(){
     const rep = j.report || {};
     if(msg) {
       const last = (j.alerts_last_any_ts||'').trim();
-      const lastTxt = last ? (' · last alert ' + last.replace('T',' ').replace('Z','')) : ' · last alert never';
-      msg.textContent = (rep.status||'ok').toUpperCase() + (j.alerts_enabled ? ' · alerts ON' : ' · alerts OFF') + lastTxt;
+      const lastTxt = last ? (' Â· last alert ' + last.replace('T',' ').replace('Z','')) : ' Â· last alert never';
+      msg.textContent = (rep.status||'ok').toUpperCase() + (j.alerts_enabled ? ' Â· alerts ON' : ' Â· alerts OFF') + lastTxt;
     }
     const ts = qs('#health-ts'); if(ts) ts.textContent = rep.ts ? ('Updated '+rep.ts) : '';
     if(body){
       const lines = (rep.checks||[]).map(c=>{
-        const badge = c.ok ? '✅' : (c.severity==='error' ? '🚨' : '⚠️');
+        const badge = c.ok ? 'âœ…' : (c.severity==='error' ? 'ðŸš¨' : 'âš ï¸');
         return `${badge} ${c.name}: ${c.message||''}`;
       });
       body.textContent = lines.join('\\n');
@@ -10285,7 +10341,7 @@ async function loadHealth(){
 }
 
 async function runHealth(){
-  const msg = qs('#health-msg'); if(msg) msg.textContent='Running…';
+  const msg = qs('#health-msg'); if(msg) msg.textContent='Runningâ€¦';
   const body = qs('#health-body'); if(body) body.textContent='';
   try{
     const r = await fetch(`/admin/api/health/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, { method:'POST' });
@@ -10294,13 +10350,13 @@ async function runHealth(){
     const rep = j.report || {};
     if(msg){
       const last = (j.alerts_last_any_ts||'').trim();
-      const lastTxt = last ? (' · last alert ' + last.replace('T',' ').replace('Z','')) : ' · last alert never';
-      msg.textContent = (rep.status||'ok').toUpperCase() + ' · checked' + lastTxt;
+      const lastTxt = last ? (' Â· last alert ' + last.replace('T',' ').replace('Z','')) : ' Â· last alert never';
+      msg.textContent = (rep.status||'ok').toUpperCase() + ' Â· checked' + lastTxt;
     }
     const ts = qs('#health-ts'); if(ts) ts.textContent = rep.ts ? ('Updated '+rep.ts) : '';
     if(body){
       const lines = (rep.checks||[]).map(c=>{
-        const badge = c.ok ? '✅' : (c.severity==='error' ? '🚨' : '⚠️');
+        const badge = c.ok ? 'âœ…' : (c.severity==='error' ? 'ðŸš¨' : 'âš ï¸');
         return `${badge} ${c.name}: ${c.message||''}`;
       });
       body.textContent = lines.join('\\n');
@@ -10367,7 +10423,7 @@ function _initRefreshControls(){
 }
 
 async function replayAI(){
-  const msg = qs('#replay-msg'); if(msg) msg.textContent = 'Replaying…';
+  const msg = qs('#replay-msg'); if(msg) msg.textContent = 'Replayingâ€¦';
   const out = qs('#replayOut'); if(out) out.textContent = '';
   const row = parseInt(qs('#replay-row')?.value || '0', 10);
   if(!row){ if(msg) msg.textContent = 'Enter a sheet row #'; return; }
@@ -10380,7 +10436,7 @@ async function replayAI(){
     const d = await r.json();
     if(!d.ok) throw new Error(d.error || 'Failed');
     if(out) out.textContent = JSON.stringify(d, null, 2);
-    if(msg) msg.textContent = 'Done ✔';
+    if(msg) msg.textContent = 'Done âœ”';
   }catch(e){
     if(msg) msg.textContent = 'Failed: ' + (e.message || e);
   }
@@ -10508,7 +10564,7 @@ def admin_api_ai_draft_reply():
         except Exception:
             draft_text = (
                 f"Hi {lead.get('name') or 'there'}, thanks for reaching out. "
-                "Confirm your party size and preferred time, and we’ll reserve the best available option for match day."
+                "Confirm your party size and preferred time, and weâ€™ll reserve the best available option for match day."
             )
 
         entry = {
@@ -10770,7 +10826,7 @@ select option{
     html.append("</head><body><div class='wrap'>")
 
     html.append("<div class='topbar'>")
-    html.append(f"<div><div class='h1'>Fan Zone Admin — {_hesc(SHEET_NAME or 'World Cup')}</div><div class='sub'>Poll controls (Sponsor text + Match of the Day) • Key required</div></div>")
+    html.append(f"<div><div class='h1'>Fan Zone Admin â€” {_hesc(SHEET_NAME or 'World Cup')}</div><div class='sub'>Poll controls (Sponsor text + Match of the Day) â€¢ Key required</div></div>")
     html.append("<div style='display:flex;gap:10px;align-items:center;flex-wrap:wrap'>")
     html.append(f"<a class='btn' href='/admin?key={key}' style='text-decoration:none;display:inline-block'>Ops</a>")
     html.append(f"<a class='btn' href='/admin/fanzone?key={key}&venue={venue_id}' "f"style='text-decoration:none;display:inline-block'>Poll Controls</a>")
@@ -10784,7 +10840,7 @@ select option{
 <div class="panelcard" style="margin:14px 0;border:1px solid var(--line);border-radius:16px;padding:12px;background:rgba(255,255,255,.03);box-shadow:0 10px 35px rgba(0,0,0,.25)">
   <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
     <div>
-      <div style="font-weight:800;letter-spacing:.02em">Fan Zone • Poll Controls</div>
+      <div style="font-weight:800;letter-spacing:.02em">Fan Zone â€¢ Poll Controls</div>
       <div class="sub">Edit sponsor text + set Match of the Day (no redeploy). Also shows live poll status.</div>
     </div>
     <button type="button" class="btn" id="btnSaveConfig">Save settings</button>
@@ -10792,19 +10848,19 @@ select option{
 
   <div class="controls" style="margin:12px 0 0 0">
     <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
-      <div class="sub">Sponsor label (“Presented by …”)</div>
-      <input class="inp" id="pollSponsorText" placeholder="Fan Pick presented by …" />
+      <div class="sub">Sponsor label (â€œPresented by â€¦â€)</div>
+      <input class="inp" id="pollSponsorText" placeholder="Fan Pick presented by â€¦" />
     </div>
     <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
       <div class="sub">Match of the Day</div>
       <select id="motdSelect"></select>
-      <div class="sub" style="margin-top:8px">If schedule options don’t load (or you want to override), set Match of the Day manually:</div>
+      <div class="sub" style="margin-top:8px">If schedule options donâ€™t load (or you want to override), set Match of the Day manually:</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
         <div><div class="sub">Home team</div><input id="motdHome" placeholder="Home team"/></div>
         <div><div class="sub">Away team</div><input id="motdAway" placeholder="Away team"/></div>
       </div>
       <div style="margin-top:10px">
-        <div class="sub">Kickoff (UTC, ISO 8601, e.g. 2026-06-11T19:00:00Z) — used to lock poll at kickoff</div>
+        <div class="sub">Kickoff (UTC, ISO 8601, e.g. 2026-06-11T19:00:00Z) â€” used to lock poll at kickoff</div>
         <input id="motdKickoff" placeholder="2026-06-11T19:00:00Z"/>
       </div>
       <div style="margin-top:10px">
@@ -10820,7 +10876,7 @@ select option{
   </div>
 
   <div id="pollStatus" style="margin-top:12px;border-top:1px solid var(--line);padding-top:12px">
-    <div class="sub">Loading poll status…</div>
+    <div class="sub">Loading poll statusâ€¦</div>
   </div>
 
 </div> <!-- end tab-menu -->
@@ -10832,7 +10888,7 @@ select option{
 (function(){
   const qs = new URLSearchParams(location.search);
 
-  // ✅ Venue bootstrap (scoped, no redeclare issues)
+  // âœ… Venue bootstrap (scoped, no redeclare issues)
   window.VENUE = (window.VENUE || qs.get("venue") || "").trim();
   const VENUE = window.VENUE;
 
@@ -10864,9 +10920,9 @@ select option{
 
   async function loadPollStatus(){
     try{
-      setPollStatus('<div class="sub">Loading poll status…</div>');
+      setPollStatus('<div class="sub">Loading poll statusâ€¦</div>');
 
-      // ✅ Venue-scoped poll state
+      // âœ… Venue-scoped poll state
       const res = await fetch(
         `/api/poll/state?venue=${encodeURIComponent(VENUE||"")}&_=${Date.now()}`,
         { cache: "no-store" }
@@ -10892,7 +10948,7 @@ select option{
 
       setPollStatus(
         `<div class="h2">${escapeHtml(title)}</div>` +
-        `<div class="small">${locked ? "🔒 Locked" : "🟢 Open"}</div>` +
+        `<div class="small">${locked ? "ðŸ”’ Locked" : "ðŸŸ¢ Open"}</div>` +
         `<div style="margin-top:10px;display:grid;gap:8px">${rows}</div>`
       );
     }catch(e){
@@ -10914,7 +10970,7 @@ select option{
       const matches = (data && Array.isArray(data.matches)) ? data.matches : [];
       // preserve current selection if possible
       const current = sel.value || "";
-      sel.innerHTML = '<option value="">Select a match…</option>';
+      sel.innerHTML = '<option value="">Select a matchâ€¦</option>';
       let added = 0;
       for(const m of matches){
         if(added >= 250) break;
@@ -10924,7 +10980,7 @@ select option{
         if(!dt || !home || !away) continue;
 
         const id = (dt + "|" + home + "|" + away).replace(/[^A-Za-z0-9|:_-]+/g,"_").slice(0,180);
-        const label = `${m.date||""} ${m.time||""} • ${home} vs ${away} • ${m.venue||""}`.trim();
+        const label = `${m.date||""} ${m.time||""} â€¢ ${home} vs ${away} â€¢ ${m.venue||""}`.trim();
 
         const opt = document.createElement("option");
         opt.value = id;
@@ -10943,7 +10999,7 @@ select option{
       }
     }catch(e){
       sel.disabled = false;
-      toast("Couldn’t load matches", "error");
+      toast("Couldnâ€™t load matches", "error");
     }
   }
 
@@ -10993,7 +11049,7 @@ select option{
 
 
 async function loadForecast(){
-  const msg = qs('#forecast-msg'); if(msg) msg.textContent = 'Loading…';
+  const msg = qs('#forecast-msg'); if(msg) msg.textContent = 'Loadingâ€¦';
   const body = qs('#forecastBody'); if(body) body.textContent = '';
   try{
     const r = await fetch(`/admin/api/analytics/load-forecast?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, { cache:'no-store' });
@@ -11010,7 +11066,7 @@ async function loadForecast(){
       lines.push(`Top days (7d): ` + d.top_days_7.map(x=>`${x.key} (${x.count})`).join(', '));
     }
     if(body) body.textContent = lines.join('\\n');
-    if(msg) msg.textContent = 'Updated ✔';
+    if(msg) msg.textContent = 'Updated âœ”';
   }catch(e){
     if(msg) msg.textContent = 'Failed: ' + (e.message || e);
   }
@@ -11106,18 +11162,21 @@ def api_intake():
 
 @app.route("/api/venue_identity")
 def api_venue_identity():
-    """Fan-safe: minimal venue identity (branding-safe).
+    """Fan-safe: venue identity for chat header, greeting, and AI context.
 
     Returns:
       - show_location_line (bool feature flag)
       - location_line (string)
+      - venue_name (string) - for chat header display
+      - greeting (string) - venue-specific welcome message
+      - business_profile (string) - venue-specific AI context
     """
     try:
         vid = _venue_id()
     except Exception:
         vid = DEFAULT_VENUE_ID
 
-    # ✅ NEW: if venue is inactive, hide identity (prevents lingering fan views)
+    # âœ… NEW: if venue is inactive, hide identity (prevents lingering fan views)
     if not _venue_is_active(vid):
         return jsonify({"ok": False, "error": "Venue is inactive"}), 404
 
@@ -11129,11 +11188,32 @@ def api_venue_identity():
     show = bool(cfg.get("show_location_line", (feat or {}).get("show_location_line", False)))
     loc = str(cfg.get("location_line") or (ident or {}).get("location_line") or "").strip()
 
+    # === NEW: Venue name for chat header ===
+    venue_name = str(
+        cfg.get("venue_name") or cfg.get("name") or
+        (ident or {}).get("venue_name") or (ident or {}).get("name") or ""
+    ).strip()
+
+    # === NEW: Venue-specific greeting ===
+    greeting = str(
+        cfg.get("greeting") or cfg.get("welcome_message") or
+        (ident or {}).get("greeting") or (ident or {}).get("welcome_message") or ""
+    ).strip()
+
+    # === NEW: Venue-specific business profile for AI context ===
+    business_profile = str(
+        cfg.get("business_profile") or cfg.get("ai_context") or
+        (ident or {}).get("business_profile") or ""
+    ).strip()
+
     return jsonify({
         "ok": True,
         "venue_id": vid,
         "show_location_line": show,
         "location_line": loc,
+        "venue_name": venue_name,
+        "greeting": greeting,
+        "business_profile": business_profile,
     })
 
 def _append_lead_local(row: dict) -> None:
@@ -11367,7 +11447,7 @@ def __test_ai_queue_seed():
 
 
 # ============================================================
-# Super Admin (Platform Owner) — hard isolated surface
+# Super Admin (Platform Owner) â€” hard isolated surface
 # ============================================================
 
 # Embedded Super Admin UI HTML (avoids template path issues in some deploys)
@@ -11376,7 +11456,7 @@ LEGACY_SUPER_CONSOLE_HTML = r"""<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>World Cup Concierge — Super Admin</title>
+  <title>World Cup Concierge â€” Super Admin</title>
   <style>
 :root{
   --bg:#070A10;
@@ -11488,10 +11568,10 @@ select option:hover{
   <div class="wrap">
     <div class="top">
       <div>
-        <div class="title">Super Admin — Global Overview</div>
-        <div class="pill">Hard isolated • Read-only by default</div>
+        <div class="title">Super Admin â€” Global Overview</div>
+        <div class="pill">Hard isolated â€¢ Read-only by default</div>
       </div>
-      <div class="pill" id="ts">Loading…</div>
+      <div class="pill" id="ts">Loadingâ€¦</div>
     </div>
 
     <div class="tabs" style="display:flex;gap:8px;align-items:center;margin:10px 0 6px 0;flex-wrap:wrap">
@@ -11570,7 +11650,7 @@ select option:hover{
 <div class="card" style="margin-top:12px">
       <div class="k">All Leads (cross-venue)</div>
       <div style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
-        <input id="q" placeholder="Search name/phone/venue…" style="flex:1;min-width:220px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
+        <input id="q" placeholder="Search name/phone/venueâ€¦" style="flex:1;min-width:220px;background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
         <select id="perPage" style="background:rgba(255,255,255,.03);border:1px solid var(--line);border-radius:12px;padding:10px;color:var(--text)">
           <option value="10" selected>10</option>
           <option value="25">25</option>
@@ -11581,7 +11661,7 @@ select option:hover{
                 <option value="">All venues</option>
                 <option value="__active__">Active venues</option>
                 <option value="__inactive__">Inactive venues</option>
-                <option value="__divider__" disabled>────────</option>
+                <option value="__divider__" disabled>â”€â”€â”€â”€â”€â”€â”€â”€</option>
               </select>
               <label style="display:inline-flex;align-items:center;gap:8px;margin-left:10px;font-size:12px;color:rgba(255,255,255,0.82)"><input type="checkbox" id="demoToggle" style="transform:scale(1.1)"><span>Demo Mode</span><span id="demoBadge" style="display:none;padding:2px 8px;border-radius:999px;background:rgba(240,180,60,0.18);border:1px solid rgba(240,180,60,0.45);color:rgba(240,180,60,0.95)">ON</span></label><button id="exportCsv" class="btn" style="margin-left:8px;">Export CSV</button>
       </div>
@@ -11610,9 +11690,9 @@ select option:hover{
 
         </div>
     <div class="tabpane" data-tab="venues">
-<div class="card"><div class="k">Venues</div><div class="v" id="venues">—</div></div>
-      <div class="card"><div class="k">AI Queue items</div><div class="v" id="aiq">—</div></div>
-      <div class="card"><div class="k">Build</div><div class="v" id="build">—</div></div>
+<div class="card"><div class="k">Venues</div><div class="v" id="venues">â€”</div></div>
+      <div class="card"><div class="k">AI Queue items</div><div class="v" id="aiq">â€”</div></div>
+      <div class="card"><div class="k">Build</div><div class="v" id="build">â€”</div></div>
     </div>
     </div>
 
@@ -11688,7 +11768,7 @@ function renderVenues(){
     const tr = document.createElement("tr");
     const vid = (v.venue_id||"");
     const sheet = String(v.google_sheet_id||"").trim();
-    const sheetDisp = sheet ? (sheet.length>16 ? (sheet.slice(0,8)+"…"+sheet.slice(-6)) : sheet) : "—";
+    const sheetDisp = sheet ? (sheet.length>16 ? (sheet.slice(0,8)+"â€¦"+sheet.slice(-6)) : sheet) : "â€”";
     const sheetBadge = sheet
       ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.16);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">SET</span>`
       : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING</span>`;
@@ -11778,12 +11858,12 @@ async function loadVenues(){
         const tr = document.createElement("tr");
         const vid = (v.venue_id||"");
         const sheet = String(v.google_sheet_id||"").trim();
-        const sheetDisp = sheet ? (sheet.length>16 ? (sheet.slice(0,8)+"…"+sheet.slice(-6)) : sheet) : "—";
+        const sheetDisp = sheet ? (sheet.length>16 ? (sheet.slice(0,8)+"â€¦"+sheet.slice(-6)) : sheet) : "â€”";
         const sheetBadge = sheet
           ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">READY</span>`
           : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING SHEET</span>`;
         const sid = String(v.google_sheet_id||"").trim();
-        const sidDisp = sid ? (sid.length>16 ? (sid.slice(0,8)+"…"+sid.slice(-6)) : sid) : "—";
+        const sidDisp = sid ? (sid.length>16 ? (sid.slice(0,8)+"â€¦"+sid.slice(-6)) : sid) : "â€”";
         const st = String(v.status||"").trim();
         const statusBadge = (st==="READY")
           ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(34,197,94,.18);border:1px solid rgba(34,197,94,.35);color:#86efac;font-size:12px;">READY</span>`
@@ -11791,7 +11871,7 @@ async function loadVenues(){
             ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(239,68,68,.16);border:1px solid rgba(239,68,68,.35);color:#fecaca;font-size:12px;">SHEET FAIL</span>`
             : (st==="MISSING_SHEET")
               ? `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(245,158,11,.16);border:1px solid rgba(245,158,11,.35);color:#fcd34d;font-size:12px;">MISSING SHEET</span>`
-              : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.22);color:#e2e8f0;font-size:12px;">${st||"—"}</span>`;
+              : `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.22);color:#e2e8f0;font-size:12px;">${st||"â€”"}</span>`;
         tr.innerHTML = `<td>${esc(vid)}</td><td>${esc(v.venue_name||"")}</td><td>${esc(v.plan||"")}</td><td title="${esc(sid)}">${esc(sidDisp)}</td><td>${statusBadge}</td><td><button class="btn ghost" data-recheck="${esc(vid)}">Re-check</button> <button class="btn ghost" data-rotate="${esc(vid)}">Rotate Keys</button></td>`;
         rows.appendChild(tr);
       });
@@ -12076,7 +12156,7 @@ ueErr.style.display="none"; }, 2000);
   async function loadLeads(){
     if(!leadRowsEl) return;
     leadErrEl.textContent = "";
-    leadRowsEl.innerHTML = "<tr><td colspan=\"8\">Loading…</td></tr>";
+    leadRowsEl.innerHTML = "<tr><td colspan=\"8\">Loadingâ€¦</td></tr>";
 
     const perPage = (perPageEl && perPageEl.value) ? Number(perPageEl.value) : 10;
     const query = (qEl && qEl.value || "").trim();
@@ -12126,7 +12206,7 @@ ueErr.style.display="none"; }, 2000);
       const pages = (__lastLeadMeta.pages||1);
       const total = (__lastLeadMeta.total||0);
       const pageInfo = document.getElementById("pageInfo");
-      if(pageInfo) pageInfo.textContent = `Page ${pg} / ${pages} • ${total} total`;
+      if(pageInfo) pageInfo.textContent = `Page ${pg} / ${pages} â€¢ ${total} total`;
       const prevBtn = document.getElementById("prevPage");
       const nextBtn = document.getElementById("nextPage");
       if(prevBtn) prevBtn.disabled = (pg<=1);
@@ -12224,7 +12304,7 @@ try{
   try{
     const b = await fetch("/super/api/diag?super_key="+encodeURIComponent(super_key), {headers:_demoHeaders()});
     const bj = await b.json();
-    document.getElementById("build").textContent = (bj.app_version || bj.app_version_env || "—");
+    document.getElementById("build").textContent = (bj.app_version || bj.app_version_env || "â€”");
   }catch(e){}
 })();
 </script>
@@ -12238,7 +12318,7 @@ SUPER_CONSOLE_HTML_OPTIONA = r"""<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>World Cup Concierge — Super Admin</title>
+  <title>World Cup Concierge â€” Super Admin</title>
   <style>
 :root{
   --bg0:#05070c;
@@ -12483,21 +12563,21 @@ th{
     <div class="toprow">
       <div class="title">
         <h1>Super Admin</h1>
-        <small>Command view • bounded panels • problems float to the top</small>
+        <small>Command view â€¢ bounded panels â€¢ problems float to the top</small>
       </div>
       <div class="tabs">
         <button class="tabbtn active" id="tabVenues" type="button">Venues</button>
         <button class="tabbtn" id="tabLeads" type="button">Leads</button>
       </div>
       <div class="chips" id="healthChips">
-        <div class="chip active" data-filter="all"><span class="dot"></span>All <span class="pill" id="c_all">—</span></div>
-        <div class="chip" data-filter="active"><span class="dot" style="background:var(--good)"></span>Active <span class="pill" id="c_active">—</span></div>
-        <div class="chip" data-filter="inactive"><span class="dot" style="background:var(--warn)"></span>Inactive <span class="pill" id="c_inactive">—</span></div>
-        <div class="chip" data-filter="needs"><span class="dot" style="background:var(--bad)"></span>Needs attention <span class="pill" id="c_needs">—</span></div>
-        <div class="chip" data-filter="sheetfail"><span class="dot" style="background:var(--bad)"></span>Sheet fail <span class="pill" id="c_sheetfail">—</span></div>
-        <div class="chip" data-filter="notready"><span class="dot" style="background:var(--warn)"></span>Not ready <span class="pill" id="c_notready">—</span></div>
+        <div class="chip active" data-filter="all"><span class="dot"></span>All <span class="pill" id="c_all">â€”</span></div>
+        <div class="chip" data-filter="active"><span class="dot" style="background:var(--good)"></span>Active <span class="pill" id="c_active">â€”</span></div>
+        <div class="chip" data-filter="inactive"><span class="dot" style="background:var(--warn)"></span>Inactive <span class="pill" id="c_inactive">â€”</span></div>
+        <div class="chip" data-filter="needs"><span class="dot" style="background:var(--bad)"></span>Needs attention <span class="pill" id="c_needs">â€”</span></div>
+        <div class="chip" data-filter="sheetfail"><span class="dot" style="background:var(--bad)"></span>Sheet fail <span class="pill" id="c_sheetfail">â€”</span></div>
+        <div class="chip" data-filter="notready"><span class="dot" style="background:var(--warn)"></span>Not ready <span class="pill" id="c_notready">â€”</span></div>
       </div>
-      <div class="meta"><span id="ts">—</span><span>Build</span><strong id="build">—</strong></div>
+      <div class="meta"><span id="ts">â€”</span><span>Build</span><strong id="build">â€”</strong></div>
     </div>
   </div>
 
@@ -12508,9 +12588,9 @@ th{
         <button class="btn primary" id="btnCreate" type="button">+ Create venue</button>
         <button class="btn" id="btnRefresh" type="button">Refresh</button>
       </div>
-      <input id="venueSearch" placeholder="Search venue name/id…" />
-      <div class="list" id="venuesRail"><div class="vrow"><div class="vname">Loading venues…</div></div></div>
-      <div class="muted" style="font-size:12px">Tip: click a venue → details + actions on the right.</div>
+      <input id="venueSearch" placeholder="Search venue name/idâ€¦" />
+      <div class="list" id="venuesRail"><div class="vrow"><div class="vname">Loading venuesâ€¦</div></div></div>
+      <div class="muted" style="font-size:12px">Tip: click a venue â†’ details + actions on the right.</div>
     </div>
 
     <div class="main">
@@ -12535,12 +12615,12 @@ th{
 
       <div class="card" style="margin-top:12px">
         <h2>Diagnostics</h2>
-        <pre id="diagBox" style="white-space:pre-wrap;word-break:break-word;min-height:44px;margin:0" class="muted">—</pre>
+        <pre id="diagBox" style="white-space:pre-wrap;word-break:break-word;min-height:44px;margin:0" class="muted">â€”</pre>
       </div>
 
       <div class="panel section active" id="sectionVenues">
         <div class="panelhead">
-          <div class="left"><strong style="font-size:13px">Venues status</strong><span class="muted" style="font-size:12px">Issues first • bounded table</span></div>
+          <div class="left"><strong style="font-size:13px">Venues status</strong><span class="muted" style="font-size:12px">Issues first â€¢ bounded table</span></div>
           <div class="right">
             <span class="muted" style="font-size:12px">Filter:</span>
             <select id="venuesFilter">
@@ -12552,7 +12632,7 @@ th{
         <div class="tablewrap">
           <table>
             <thead><tr><th>Venue</th><th>Plan</th><th>Sheet</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody id="venuesTbody"><tr><td colspan="5" class="muted">Loading…</td></tr></tbody>
+            <tbody id="venuesTbody"><tr><td colspan="5" class="muted">Loadingâ€¦</td></tr></tbody>
           </table>
         </div>
       </div>
@@ -12561,7 +12641,7 @@ th{
         <div class="panelhead">
           <div class="left">
             <strong style="font-size:13px">All Leads (cross-venue)</strong>
-            <input id="leadsSearch" placeholder="Search name/phone/venue…" style="min-width:220px" />
+            <input id="leadsSearch" placeholder="Search name/phone/venueâ€¦" style="min-width:220px" />
             <select id="leadsPerPage"><option value="10">10 / page</option><option value="25">25 / page</option><option value="50">50 / page</option></select>
             <select id="leadsVenueState"><option value="all">All venues</option><option value="active">Active venues</option><option value="inactive">Inactive venues</option></select>
             <select id="leadsVenueId"><option value="">All venues</option></select>
@@ -12574,15 +12654,15 @@ th{
         <div class="tablewrap">
           <table>
             <thead><tr><th>Venue</th><th>Name</th><th>Phone</th><th>Date/Time</th><th>Party</th><th>Status</th><th>Tier</th><th>Queue</th></tr></thead>
-            <tbody id="leadsTbody"><tr><td colspan="8" class="muted">Click Leads to load…</td></tr></tbody>
+            <tbody id="leadsTbody"><tr><td colspan="8" class="muted">Click Leads to loadâ€¦</td></tr></tbody>
           </table>
         </div>
         <div class="pager">
-          <span class="muted" id="leadsCount">—</span>
+          <span class="muted" id="leadsCount">â€”</span>
           <button class="btn" id="btnPrev" type="button">Prev</button>
           <button class="btn" id="btnNext" type="button">Next</button>
         </div>
-        <div class="card" style="margin:12px"><h2>Diagnostics</h2><div id="leadsDiag" class="diag">—</div></div>
+        <div class="card" style="margin:12px"><h2>Diagnostics</h2><div id="leadsDiag" class="diag">â€”</div></div>
       </div>
     </div>
   </div>
@@ -12639,7 +12719,7 @@ th{
         return;
       }
 
-      setDiag('Saved identity ✔');
+      setDiag('Saved identity âœ”');
 
       // Refresh UI (these functions exist later in this script)
       try{ await loadVenues(); }catch(e){}
@@ -12764,7 +12844,7 @@ th{
       filtered.forEach(v=>{
         const f=venueFlags(v);
         const sheet=v.sheet||{};
-        const sheetTxt = sheet && sheet.sheet_id ? (String(sheet.sheet_id).slice(0,8)+'…') : '—';
+        const sheetTxt = sheet && sheet.sheet_id ? (String(sheet.sheet_id).slice(0,8)+'â€¦') : 'â€”';
         const sheetBadge='<span class="badge '+(f.sheet_ok?'good':'bad')+'">'+(f.sheet_ok?'OK':'FAIL')+'</span>';
         const actBadge='<span class="badge '+(f.active?'good':'warn')+'">'+(f.active?'ACTIVE':'INACTIVE')+'</span>';
         const readyBadge='<span class="badge '+(f.ready?'good':'warn')+'">'+(f.ready?'READY':'NOT READY')+'</span>';
@@ -12814,7 +12894,7 @@ th{
       hesc(sheet.title || sheet.error || '')+
     '</div>'+
 
-    // 🔹 NEW: Fan-facing subtitle editor (location_line)
+    // ðŸ”¹ NEW: Fan-facing subtitle editor (location_line)
     '<div class="muted" style="margin-top:12px; font-size:12px">Fan subtitle (location line)</div>'+
     '<input id="saLocationLine" style="width:100%; margin-top:6px" placeholder="Dallas, TX" value="'+hesc(v.location_line||'')+'"/>'+
 
@@ -12824,7 +12904,7 @@ th{
       '<button class="btn" id="vdDemo">Demo Mode: '+(demoEnabled?'ON':'OFF')+'</button>'+
       '<button class="btn" id="vdCheck">Re-check Sheet</button>'+
       '<button class="btn" id="vdRotate">Rotate Keys</button>'+
-      '<button class="btn" id="vdSetSheet">Set Sheet…</button>'+
+      '<button class="btn" id="vdSetSheet">Set Sheetâ€¦</button>'+
       '<a class="btn" style="text-decoration:none" href="/admin?venue='+encodeURIComponent(v.venue_id||'')+'" target="_blank">Open Admin</a>'+
     '</div>';
 
@@ -12898,7 +12978,7 @@ th{
     if(venue_id) params.set('venue_id', venue_id);
 
     const url='/admin/api/leads_all?'+params.toString();
-    document.getElementById('leadsTbody').innerHTML='<tr><td colspan="8" class="muted">Loading…</td></tr>';
+    document.getElementById('leadsTbody').innerHTML='<tr><td colspan="8" class="muted">Loadingâ€¦</td></tr>';
     setLeadsDiag('Fetching: '+url);
 
     try{
@@ -12913,7 +12993,7 @@ th{
       const items=j.items||[];
       const errors=j.errors||[];
       state.leadsTotal=parseInt(j.total||0,10)||0;
-      document.getElementById('leadsCount').textContent='Total: '+state.leadsTotal+' • Page '+state.leadsPage;
+      document.getElementById('leadsCount').textContent='Total: '+state.leadsTotal+' â€¢ Page '+state.leadsPage;
       if(!items.length){
         setLeadsDiag(JSON.stringify({note:'No leads returned', total: state.leadsTotal, errors: errors}, null, 2));
         document.getElementById('leadsTbody').innerHTML='<tr><td colspan="8" class="muted">No leads found.</td></tr>';
@@ -12996,7 +13076,7 @@ th{
   const sheet=prompt('Google Sheet ID (optional)',''); if(sheet===null) return;
   const plan=prompt('Plan (standard/premium)','standard'); if(plan===null) return;
 
-  // ✅ FIX: use google_sheet_id (not sheet_id)
+  // âœ… FIX: use google_sheet_id (not sheet_id)
   const payload={
     venue_name:name.trim(),
     venue_id:(vid||'').trim(),
@@ -13018,10 +13098,10 @@ th{
       return;
     }
 
-    // ✅ SHOW PACK + make it easy to copy/send
+    // âœ… SHOW PACK + make it easy to copy/send
 const p = j.pack || {};
 const text =
-  "✅ Venue created\n\n" +
+  "âœ… Venue created\n\n" +
   "Admin: " + (p.admin_url||"") + "\n" +
   "Manager: " + (p.manager_url||"") + "\n" +
   "Fan / QR: " + (p.qr_url||"") + "\n";
@@ -13039,7 +13119,7 @@ prompt("Copy & send this to the customer:", text);
   document.getElementById('ts').textContent=new Date().toLocaleString();
   loadVenues();
   fetch('/super/api/diag?super_key='+encodeURIComponent(super_key), {headers: hdrs()}).then(r=>r.json()).then(j=>{
-    document.getElementById('build').textContent=(j.app_version || j.app_version_env || '—');
+    document.getElementById('build').textContent=(j.app_version || j.app_version_env || 'â€”');
   }).catch(()=>{});
 })();
 </script>
@@ -13277,12 +13357,12 @@ def super_api_venues_create():
         "active": True,
         "plan": plan,
 
-        # ✅ AUTO DEFAULTS (fully automated, one-click)
+        # âœ… AUTO DEFAULTS (fully automated, one-click)
         # If no location_line is provided, it safely falls back to venue_name
         "show_location_line": True,
         "location_line": str(body.get("location_line") or venue_name).strip(),
 
-        # ✅ env-safe, consistent links
+        # âœ… env-safe, consistent links
         "admin_url": f"{base}/admin?key={admin_key}&venue={venue_id}",
         "manager_url": f"{base}/admin?key={manager_key}&venue={venue_id}",
         "qr_url": f"{base}/v/{venue_id}",
@@ -13355,7 +13435,7 @@ def super_api_overview():
             total["venues"] += 1
             total["ai_queue"] += int(count)
         except Exception:
-            # best effort — never break the dashboard
+            # best effort â€” never break the dashboard
             continue
 
     out.sort(key=lambda x: x.get("venue_id",""))
@@ -13401,21 +13481,21 @@ def _mask_phone(v: str) -> str:
         return ""
     digits = re.sub(r"\D+", "", s)
     if len(digits) >= 4:
-        return "•••-•••-" + digits[-4:]
-    return "•••"
+        return "â€¢â€¢â€¢-â€¢â€¢â€¢-" + digits[-4:]
+    return "â€¢â€¢â€¢"
 
 def _mask_email(v: str) -> str:
     s = str(v or "").strip()
     if "@" not in s:
-        return "•••"
+        return "â€¢â€¢â€¢"
     user, dom = s.split("@", 1)
-    u = (user[:1] + "•••") if user else "•••"
+    u = (user[:1] + "â€¢â€¢â€¢") if user else "â€¢â€¢â€¢"
     # keep TLD hint
     parts = dom.split(".")
     if len(parts) >= 2:
-        d = (parts[0][:1] + "•••") + "." + parts[-1]
+        d = (parts[0][:1] + "â€¢â€¢â€¢") + "." + parts[-1]
     else:
-        d = dom[:1] + "•••"
+        d = dom[:1] + "â€¢â€¢â€¢"
     return u + "@" + d
 
 def _apply_demo_mask_to_lead(item: Dict[str, Any]) -> Dict[str, Any]:
@@ -13623,7 +13703,7 @@ def super_api_venues_list():
                 "active": active,
                 "sheet_ok": sheet_ok,
 
-                # ✅ ADDED: UI expects v.sheet.ok
+                # âœ… ADDED: UI expects v.sheet.ok
                 "sheet": {
                     "ok": sheet_ok,
                     "last_checked": cfg.get("last_checked"),
@@ -14390,7 +14470,7 @@ def _safe_write_json_file(path: str, payload: Any) -> None:
                 ok = _redis_set_json(full_key, payload)
                 if ok:
                     return
-                # Redis was enabled, but write failed — mark fallback for enterprise gate
+                # Redis was enabled, but write failed â€” mark fallback for enterprise gate
                 _REDIS_FALLBACK_USED = True
                 _REDIS_FALLBACK_LAST_PATH = str(path)
     except Exception:
@@ -14625,7 +14705,7 @@ def filter_matches(scope: str, q: str = "") -> List[Dict[str, Any]]:
 
 
 # ============================================================
-# Menu (4 languages) — edit/add items here
+# Menu (4 languages) â€” edit/add items here
 # ============================================================
 MENU = {
     "en": {
@@ -14633,7 +14713,7 @@ MENU = {
         "items": [
             {
                 "category_id": "chef",
-                "name": "Chef’s Wagyu Sliders",
+                "name": "Chefâ€™s Wagyu Sliders",
                 "price": "$24",
                 "desc": "A5-style sear, truffle aioli, brioche. Limited matchday batch.",
                 "tag": "Chef Special"
@@ -14649,7 +14729,7 @@ MENU = {
                 "category_id": "bites",
                 "name": "Stadium Nachos XL",
                 "price": "$16",
-                "desc": "Three-cheese blend, jalapeño, pico, crema, choice of protein.",
+                "desc": "Three-cheese blend, jalapeÃ±o, pico, crema, choice of protein.",
                 "tag": "Share"
             },
             {
@@ -14697,7 +14777,7 @@ MENU = {
         ]
     },
     "es": {
-        "title": "Menú",
+        "title": "MenÃº",
         "items": [
             {
                 "category_id": "chef",
@@ -14708,7 +14788,7 @@ MENU = {
             },
             {
                 "category_id": "chef",
-                "name": "Bowl de Ceviche Cítrico",
+                "name": "Bowl de Ceviche CÃ­trico",
                 "price": "$19",
                 "desc": "Pesca fresca, lima, chile, aguacate, tostadas.",
                 "tag": "Especial del Chef"
@@ -14717,14 +14797,14 @@ MENU = {
                 "category_id": "bites",
                 "name": "Nachos XL del Estadio",
                 "price": "$16",
-                "desc": "Tres quesos, jalapeño, pico, crema, proteína a elección.",
+                "desc": "Tres quesos, jalapeÃ±o, pico, crema, proteÃ­na a elecciÃ³n.",
                 "tag": "Para compartir"
             },
             {
                 "category_id": "bites",
                 "name": "Alitas Peri-Peri (8/16)",
                 "price": "$14/$24",
-                "desc": "Alitas crujientes, glaseado peri-peri, sal cítrica.",
+                "desc": "Alitas crujientes, glaseado peri-peri, sal cÃ­trica.",
                 "tag": "Picante"
             },
             {
@@ -14732,11 +14812,11 @@ MENU = {
                 "name": "Hamburguesa Concierge",
                 "price": "$18",
                 "desc": "Angus, cheddar, lechuga, tomate, salsa de la casa, papas.",
-                "tag": "Clásico"
+                "tag": "ClÃ¡sico"
             },
             {
                 "category_id": "classics",
-                "name": "Sándwich de Pollo Picante",
+                "name": "SÃ¡ndwich de Pollo Picante",
                 "price": "$16",
                 "desc": "Pollo crujiente, salsa picante, pepinillos, papas opcionales.",
                 "tag": "Favorito"
@@ -14745,14 +14825,14 @@ MENU = {
                 "category_id": "sweets",
                 "name": "Churros Medalla de Oro",
                 "price": "$10",
-                "desc": "Azúcar y canela, dip de chocolate.",
+                "desc": "AzÃºcar y canela, dip de chocolate.",
                 "tag": "Dulce"
             },
             {
                 "category_id": "drinks",
                 "name": "Mocktail de Partido",
                 "price": "$9",
-                "desc": "Cítricos, menta, final espumoso.",
+                "desc": "CÃ­tricos, menta, final espumoso.",
                 "tag": "Sin alcohol"
             },
             {
@@ -14760,12 +14840,12 @@ MENU = {
                 "name": "Espresso Premium",
                 "price": "$5",
                 "desc": "Doble shot, crema suave.",
-                "tag": "Café"
+                "tag": "CafÃ©"
             }
         ]
     },
     "pt": {
-        "title": "Cardápio",
+        "title": "CardÃ¡pio",
         "items": [
             {
                 "category_id": "chef",
@@ -14776,23 +14856,23 @@ MENU = {
             },
             {
                 "category_id": "chef",
-                "name": "Bowl de Ceviche Cítrico",
+                "name": "Bowl de Ceviche CÃ­trico",
                 "price": "$19",
-                "desc": "Peixe fresco, limão, pimenta, abacate, tostadas.",
+                "desc": "Peixe fresco, limÃ£o, pimenta, abacate, tostadas.",
                 "tag": "Especial do Chef"
             },
             {
                 "category_id": "bites",
-                "name": "Nachos XL do Estádio",
+                "name": "Nachos XL do EstÃ¡dio",
                 "price": "$16",
-                "desc": "Três queijos, jalapeño, pico, creme, proteína à escolha.",
+                "desc": "TrÃªs queijos, jalapeÃ±o, pico, creme, proteÃ­na Ã  escolha.",
                 "tag": "Compartilhar"
             },
             {
                 "category_id": "bites",
                 "name": "Asinhas Peri-Peri (8/16)",
                 "price": "$14/$24",
-                "desc": "Asinhas crocantes, glaze peri-peri, sal cítrico.",
+                "desc": "Asinhas crocantes, glaze peri-peri, sal cÃ­trico.",
                 "tag": "Picante"
             },
             {
@@ -14800,11 +14880,11 @@ MENU = {
                 "name": "Burger Concierge",
                 "price": "$18",
                 "desc": "Angus, cheddar, alface, tomate, molho da casa, fritas.",
-                "tag": "Clássico"
+                "tag": "ClÃ¡ssico"
             },
             {
                 "category_id": "classics",
-                "name": "Sanduíche de Frango Picante",
+                "name": "SanduÃ­che de Frango Picante",
                 "price": "$16",
                 "desc": "Frango crocante, molho picante, picles, fritas opcionais.",
                 "tag": "Favorito"
@@ -14813,22 +14893,22 @@ MENU = {
                 "category_id": "sweets",
                 "name": "Churros Medalha de Ouro",
                 "price": "$10",
-                "desc": "Canela e açúcar, molho de chocolate.",
+                "desc": "Canela e aÃ§Ãºcar, molho de chocolate.",
                 "tag": "Doce"
             },
             {
                 "category_id": "drinks",
                 "name": "Mocktail de Jogo",
                 "price": "$9",
-                "desc": "Cítricos, hortelã, final com gás.",
-                "tag": "Sem álcool"
+                "desc": "CÃ­tricos, hortelÃ£, final com gÃ¡s.",
+                "tag": "Sem Ã¡lcool"
             },
             {
                 "category_id": "drinks",
                 "name": "Espresso Premium",
                 "price": "$5",
                 "desc": "Dose dupla, crema suave.",
-                "tag": "Café"
+                "tag": "CafÃ©"
             }
         ]
     },
@@ -14839,29 +14919,29 @@ MENU = {
                 "category_id": "chef",
                 "name": "Mini-burgers Wagyu du Chef",
                 "price": "$24",
-                "desc": "Saisie style A5, aïoli à la truffe, brioche. Série limitée.",
-                "tag": "Spécialité du Chef"
+                "desc": "Saisie style A5, aÃ¯oli Ã  la truffe, brioche. SÃ©rie limitÃ©e.",
+                "tag": "SpÃ©cialitÃ© du Chef"
             },
             {
                 "category_id": "chef",
                 "name": "Bol de Ceviche aux Agrumes",
                 "price": "$19",
                 "desc": "Poisson frais, citron vert, piment, avocat, tostadas.",
-                "tag": "Spécialité du Chef"
+                "tag": "SpÃ©cialitÃ© du Chef"
             },
             {
                 "category_id": "bites",
                 "name": "Nachos XL du Stade",
                 "price": "$16",
-                "desc": "Trois fromages, jalapeño, pico, crème, protéine au choix.",
-                "tag": "À partager"
+                "desc": "Trois fromages, jalapeÃ±o, pico, crÃ¨me, protÃ©ine au choix.",
+                "tag": "Ã€ partager"
             },
             {
                 "category_id": "bites",
                 "name": "Ailes Peri-Peri (8/16)",
                 "price": "$14/$24",
-                "desc": "Ailes croustillantes, glaçage peri-peri, sel aux agrumes.",
-                "tag": "Épicé"
+                "desc": "Ailes croustillantes, glaÃ§age peri-peri, sel aux agrumes.",
+                "tag": "Ã‰picÃ©"
             },
             {
                 "category_id": "classics",
@@ -14872,91 +14952,91 @@ MENU = {
             },
             {
                 "category_id": "classics",
-                "name": "Sandwich Poulet Épicé",
+                "name": "Sandwich Poulet Ã‰picÃ©",
                 "price": "$16",
-                "desc": "Poulet croustillant, sauce épicée, pickles, frites en option.",
+                "desc": "Poulet croustillant, sauce Ã©picÃ©e, pickles, frites en option.",
                 "tag": "Favori"
             },
             {
                 "category_id": "sweets",
-                "name": "Churros Médaille d’Or",
+                "name": "Churros MÃ©daille dâ€™Or",
                 "price": "$10",
                 "desc": "Cannelle-sucre, sauce chocolat.",
-                "tag": "Sucré"
+                "tag": "SucrÃ©"
             },
             {
                 "category_id": "drinks",
                 "name": "Mocktail de Match",
                 "price": "$9",
-                "desc": "Agrumes, menthe, touche pétillante.",
+                "desc": "Agrumes, menthe, touche pÃ©tillante.",
                 "tag": "Sans alcool"
             },
             {
                 "category_id": "drinks",
                 "name": "Espresso Premium",
                 "price": "$5",
-                "desc": "Double, crème onctueuse.",
-                "tag": "Café"
+                "desc": "Double, crÃ¨me onctueuse.",
+                "tag": "CafÃ©"
             }
         ]
     }
 }
 
 # ============================================================
-# Language strings (prompts + “recall”)
+# Language strings (prompts + â€œrecallâ€)
 # ============================================================
 LANG = {
     "en": {
-        "welcome": "⚽ Welcome, World Cup fan! I'm your Dallas Match-Day Concierge.\nType reservation to book a table, or ask about Dallas matches, all matches, or the menu.",
-        "ask_date": "What date would you like? (Example: June 23, 2026)\n\n(You can also type: “Recall reservation so far”)",
+        "welcome": "âš½ Welcome, World Cup fan! I'm your Dallas Match-Day Concierge.\nType reservation to book a table, or ask about Dallas matches, all matches, or the menu.",
+        "ask_date": "What date would you like? (Example: June 23, 2026)\n\n(You can also type: â€œRecall reservation so farâ€)",
         "ask_time": "What time would you like?",
         "ask_party": "How many people are in your party?",
         "ask_name": "What name should we put the reservation under?",
         "ask_phone": "What phone number should we use?",
-        "recall_title": "📌 Reservation so far:",
-        "recall_empty": "No reservation details yet. Say “reservation” to start.",
-        "saved": "✅ Reservation saved!",
-        "rule_party": "⚠️ That party size is above our limit. Please call the business to confirm a larger group.",
-        "rule_closed": "⚠️ We’re closed on that date. Want the next available day?",
+        "recall_title": "ðŸ“Œ Reservation so far:",
+        "recall_empty": "No reservation details yet. Say â€œreservationâ€ to start.",
+        "saved": "âœ… Reservation saved!",
+        "rule_party": "âš ï¸ That party size is above our limit. Please call the business to confirm a larger group.",
+        "rule_closed": "âš ï¸ Weâ€™re closed on that date. Want the next available day?",
     },
     "es": {
-        "welcome": "⚽ ¡Bienvenido, fan del Mundial! Soy tu concierge de días de partido en Dallas.\nEscribe reserva para reservar una mesa, o pregunta por los partidos (Dallas / todos) o el menú.",
-        "ask_date": "¿Qué fecha te gustaría? (Ejemplo: 23 de junio de 2026)\n\n(También puedes escribir: “Recordar reserva”)",
-        "ask_time": "¿A qué hora te gustaría?",
-        "ask_party": "¿Cuántas personas serán?",
-        "ask_name": "¿A nombre de quién será la reserva?",
-        "ask_phone": "¿Qué número de teléfono debemos usar?",
-        "recall_title": "📌 Reserva hasta ahora:",
-        "recall_empty": "Aún no hay detalles. Escribe “reserva” para comenzar.",
-        "saved": "✅ ¡Reserva guardada!",
-        "rule_party": "⚠️ Ese tamaño de grupo supera nuestro límite. Llama al negocio para confirmar un grupo grande.",
-        "rule_closed": "⚠️ Estamos cerrados ese día. ¿Quieres el siguiente día disponible?",
+        "welcome": "âš½ Â¡Bienvenido, fan del Mundial! Soy tu concierge de dÃ­as de partido en Dallas.\nEscribe reserva para reservar una mesa, o pregunta por los partidos (Dallas / todos) o el menÃº.",
+        "ask_date": "Â¿QuÃ© fecha te gustarÃ­a? (Ejemplo: 23 de junio de 2026)\n\n(TambiÃ©n puedes escribir: â€œRecordar reservaâ€)",
+        "ask_time": "Â¿A quÃ© hora te gustarÃ­a?",
+        "ask_party": "Â¿CuÃ¡ntas personas serÃ¡n?",
+        "ask_name": "Â¿A nombre de quiÃ©n serÃ¡ la reserva?",
+        "ask_phone": "Â¿QuÃ© nÃºmero de telÃ©fono debemos usar?",
+        "recall_title": "ðŸ“Œ Reserva hasta ahora:",
+        "recall_empty": "AÃºn no hay detalles. Escribe â€œreservaâ€ para comenzar.",
+        "saved": "âœ… Â¡Reserva guardada!",
+        "rule_party": "âš ï¸ Ese tamaÃ±o de grupo supera nuestro lÃ­mite. Llama al negocio para confirmar un grupo grande.",
+        "rule_closed": "âš ï¸ Estamos cerrados ese dÃ­a. Â¿Quieres el siguiente dÃ­a disponible?",
     },
     "pt": {
-        "welcome": "⚽ Bem-vindo, fã da Copa do Mundo! Sou seu concierge de dias de jogo em Dallas.\nDigite reserva para reservar uma mesa, ou pergunte sobre jogos em Dallas, todos os jogos ou o cardápio.",
-        "ask_date": "Qual data você gostaria? (Exemplo: 23 de junho de 2026)\n\n(Você também pode digitar: “Relembrar reserva”)",
-        "ask_time": "Que horas você gostaria?",
+        "welcome": "âš½ Bem-vindo, fÃ£ da Copa do Mundo! Sou seu concierge de dias de jogo em Dallas.\nDigite reserva para reservar uma mesa, ou pergunte sobre jogos em Dallas, todos os jogos ou o cardÃ¡pio.",
+        "ask_date": "Qual data vocÃª gostaria? (Exemplo: 23 de junho de 2026)\n\n(VocÃª tambÃ©m pode digitar: â€œRelembrar reservaâ€)",
+        "ask_time": "Que horas vocÃª gostaria?",
         "ask_party": "Quantas pessoas?",
         "ask_name": "Em qual nome devemos colocar a reserva?",
-        "ask_phone": "Qual número de telefone devemos usar?",
-        "recall_title": "📌 Reserva até agora:",
-        "recall_empty": "Ainda não há detalhes. Digite “reserva” para começar.",
-        "saved": "✅ Reserva salva!",
-        "rule_party": "⚠️ Esse tamanho de grupo excede o limite. Ligue para confirmar um grupo maior.",
-        "rule_closed": "⚠️ Estaremos fechados nessa data. Quer o próximo dia disponível?",
+        "ask_phone": "Qual nÃºmero de telefone devemos usar?",
+        "recall_title": "ðŸ“Œ Reserva atÃ© agora:",
+        "recall_empty": "Ainda nÃ£o hÃ¡ detalhes. Digite â€œreservaâ€ para comeÃ§ar.",
+        "saved": "âœ… Reserva salva!",
+        "rule_party": "âš ï¸ Esse tamanho de grupo excede o limite. Ligue para confirmar um grupo maior.",
+        "rule_closed": "âš ï¸ Estaremos fechados nessa data. Quer o prÃ³ximo dia disponÃ­vel?",
     },
     "fr": {
-        "welcome": "⚽ Bienvenue, fan de la Coupe du Monde ! Je suis votre concierge des jours de match à Dallas.\nTapez réservation pour réserver une table, ou demandez les matchs (Dallas / tous) ou le menu.",
-        "ask_date": "Quelle date souhaitez-vous ? (Exemple : 23 juin 2026)\n\n(Vous pouvez aussi écrire : « Rappeler la réservation »)",
-        "ask_time": "À quelle heure ?",
+        "welcome": "âš½ Bienvenue, fan de la Coupe du Monde ! Je suis votre concierge des jours de match Ã  Dallas.\nTapez rÃ©servation pour rÃ©server une table, ou demandez les matchs (Dallas / tous) ou le menu.",
+        "ask_date": "Quelle date souhaitez-vous ? (Exemple : 23 juin 2026)\n\n(Vous pouvez aussi Ã©crire : Â« Rappeler la rÃ©servation Â»)",
+        "ask_time": "Ã€ quelle heure ?",
         "ask_party": "Pour combien de personnes ?",
         "ask_name": "Au nom de qui ?",
-        "ask_phone": "Quel numéro de téléphone devons-nous utiliser ?",
-        "recall_title": "📌 Réservation jusqu’ici :",
-        "recall_empty": "Aucun détail pour l’instant. Dites « réservation » pour commencer.",
-        "saved": "✅ Réservation enregistrée !",
-        "rule_party": "⚠️ Ce nombre dépasse notre limite. Veuillez appeler pour un grand groupe.",
-        "rule_closed": "⚠️ Nous sommes fermés ce jour-là. Voulez-vous le prochain jour disponible ?",
+        "ask_phone": "Quel numÃ©ro de tÃ©lÃ©phone devons-nous utiliser ?",
+        "recall_title": "ðŸ“Œ RÃ©servation jusquâ€™ici :",
+        "recall_empty": "Aucun dÃ©tail pour lâ€™instant. Dites Â« rÃ©servation Â» pour commencer.",
+        "saved": "âœ… RÃ©servation enregistrÃ©e !",
+        "rule_party": "âš ï¸ Ce nombre dÃ©passe notre limite. Veuillez appeler pour un grand groupe.",
+        "rule_closed": "âš ï¸ Nous sommes fermÃ©s ce jour-lÃ . Voulez-vous le prochain jour disponible ?",
     },
 }
 
@@ -15051,7 +15131,7 @@ def ensure_sheet_schema(ws) -> List[str]:
         return desired
 
     # If the existing header doesn't even contain "timestamp" (common sign row1 isn't a header),
-    # don't try to reshuffle rows automatically—just ensure required columns exist at the end.
+    # don't try to reshuffle rows automaticallyâ€”just ensure required columns exist at the end.
     header = existing[:]  # keep original display names
     header_norm = existing_norm[:]
 
@@ -15162,6 +15242,7 @@ def get_session(sid: str) -> Dict[str, Any]:
         s = {
             "mode": "idle",         # idle | reserving
             "lang": "en",
+            "venue_id": "",         # === FIX: Persist venue context across conversation ===
             # status/vip are CRM fields shown in /admin.
             "lead": {
                 "name": "",
@@ -15185,6 +15266,8 @@ def get_session(sid: str) -> Dict[str, Any]:
         s["history"] = []
     if "last_reservation" not in s:
         s["last_reservation"] = None
+    if "venue_id" not in s:
+        s["venue_id"] = ""
     return s
 
 
@@ -15193,15 +15276,15 @@ def want_recall(text: str, lang: str) -> bool:
     triggers = [
         "recall reservation", "recall", "reservation so far",
         "recordar reserva", "recordar", "reserva hasta ahora",
-        "relembrar reserva", "relembrar", "reserva até agora",
-        "rappeler", "réservation", "reservation jusqu",
+        "relembrar reserva", "relembrar", "reserva atÃ© agora",
+        "rappeler", "rÃ©servation", "reservation jusqu",
     ]
     return any(x in t for x in triggers)
 
 
 def want_reservation(text: str) -> bool:
     t = text.lower()
-    return any(k in t for k in ["reservation", "reserve", "book a table", "table for", "reserva", "réservation"])
+    return any(k in t for k in ["reservation", "reserve", "book a table", "table for", "reserva", "rÃ©servation"])
 
 
 def want_modification(text: str) -> bool:
@@ -15246,8 +15329,8 @@ def extract_party_size(text: str) -> Optional[int]:
         "january","jan","february","feb","march","mar","april","apr","may","june","jun","july","jul",
         "august","aug","september","sep","sept","october","oct","november","nov","december","dec",
         "enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre",
-        "janeiro","fevereiro","março","marco","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro",
-        "janvier","février","fevrier","mars","avril","mai","juin","juillet","août","aout","septembre","octobre","novembre","décembre","decembre",
+        "janeiro","fevereiro","marÃ§o","marco","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro",
+        "janvier","fÃ©vrier","fevrier","mars","avril","mai","juin","juillet","aoÃ»t","aout","septembre","octobre","novembre","dÃ©cembre","decembre",
     ]
     if any(mo in t for mo in months):
         return None
@@ -15303,7 +15386,7 @@ def extract_name(text: str) -> Optional[str]:
     # Don't treat reservation trigger words as a person's name
     trigger_words = {
         "reservation", "reserve", "reserving", "book", "booking", "book a table",
-        "reserva", "reservar", "réservation", "réservation"
+        "reserva", "reservar", "rÃ©servation", "rÃ©servation"
     }
     if lower in trigger_words:
         return None
@@ -15376,12 +15459,12 @@ def extract_date(text: str) -> Optional[str]:
         "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6, "julio": 7,
         "agosto": 8, "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12,
         # Portuguese
-        "janeiro": 1, "fevereiro": 2, "março": 3, "abril": 4, "maio": 5, "junho": 6, "julho": 7,
+        "janeiro": 1, "fevereiro": 2, "marÃ§o": 3, "abril": 4, "maio": 5, "junho": 6, "julho": 7,
         "agosto": 8, "setembro": 9, "outubro": 10, "novembro": 11, "dezembro": 12,
         # French
-        "janvier": 1, "février": 2, "fevrier": 2, "mars": 3, "avril": 4, "mai": 5,
-        "juin": 6, "juillet": 7, "août": 8, "aout": 8, "septembre": 9, "octobre": 10,
-        "novembre": 11, "décembre": 12, "decembre": 12,
+        "janvier": 1, "fÃ©vrier": 2, "fevrier": 2, "mars": 3, "avril": 4, "mai": 5,
+        "juin": 6, "juillet": 7, "aoÃ»t": 8, "aout": 8, "septembre": 9, "octobre": 10,
+        "novembre": 11, "dÃ©cembre": 12, "decembre": 12,
     }
 
     # Find month word, then day number
@@ -15411,7 +15494,7 @@ def extract_name_candidate(text: str) -> Optional[str]:
 
     lower = s.lower().strip()
     # Don't treat trigger words as names
-    if lower in ["reservation", "reserva", "réservation", "reserve", "book", "book a table"]:
+    if lower in ["reservation", "reserva", "rÃ©servation", "reserve", "book", "book a table"]:
         return None
 
 
@@ -15438,8 +15521,8 @@ def extract_name_candidate(text: str) -> Optional[str]:
         "january","jan","february","feb","march","mar","april","apr","may","june","jun","july","jul",
         "august","aug","september","sep","sept","october","oct","november","nov","december","dec",
         "enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre",
-        "janeiro","fevereiro","março","marco","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro",
-        "janvier","février","fevrier","mars","avril","mai","juin","juillet","août","aout","septembre","octobre","novembre","décembre","decembre",
+        "janeiro","fevereiro","marÃ§o","marco","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro",
+        "janvier","fÃ©vrier","fevrier","mars","avril","mai","juin","juillet","aoÃ»t","aout","septembre","octobre","novembre","dÃ©cembre","decembre",
     ]
     s = re.sub(r"\b(?:" + "|".join(re.escape(w) for w in month_words) + r")\b", " ", s, flags=re.I)
 
@@ -15498,11 +15581,11 @@ def recall_text(sess: Dict[str, Any]) -> str:
     if any([lead.get("date"), lead.get("time"), lead.get("party_size"), lead.get("name"), lead.get("phone")]):
         parts = [
             L["recall_title"],
-            f"Date: {lead.get('date') or '—'}",
-            f"Time: {lead.get('time') or '—'}",
-            f"Party size: {lead.get('party_size') or '—'}",
-            f"Name: {lead.get('name') or '—'}",
-            f"Phone: {lead.get('phone') or '—'}",
+            f"Date: {lead.get('date') or 'â€”'}",
+            f"Time: {lead.get('time') or 'â€”'}",
+            f"Party size: {lead.get('party_size') or 'â€”'}",
+            f"Name: {lead.get('name') or 'â€”'}",
+            f"Phone: {lead.get('phone') or 'â€”'}",
         ]
         return "\n".join(parts)
     
@@ -15510,12 +15593,12 @@ def recall_text(sess: Dict[str, Any]) -> str:
     last_res = sess.get("last_reservation")
     if last_res:
         parts = [
-            "📋 Your last saved reservation:",
-            f"Date: {last_res.get('date') or '—'}",
-            f"Time: {last_res.get('time') or '—'}",
-            f"Party size: {last_res.get('party_size') or '—'}",
-            f"Name: {last_res.get('name') or '—'}",
-            f"Phone: {last_res.get('phone') or '—'}",
+            "ðŸ“‹ Your last saved reservation:",
+            f"Date: {last_res.get('date') or 'â€”'}",
+            f"Time: {last_res.get('time') or 'â€”'}",
+            f"Party size: {last_res.get('party_size') or 'â€”'}",
+            f"Name: {last_res.get('name') or 'â€”'}",
+            f"Phone: {last_res.get('phone') or 'â€”'}",
             f"Status: {last_res.get('status', 'New')}",
             "\nWant to modify? Just tell me what to change (e.g., 'make it for 4 people').",
         ]
@@ -16541,21 +16624,21 @@ def _mask_phone(v: str) -> str:
         return ""
     digits = re.sub(r"\D+", "", s)
     if len(digits) >= 4:
-        return "•••-•••-" + digits[-4:]
-    return "•••"
+        return "â€¢â€¢â€¢-â€¢â€¢â€¢-" + digits[-4:]
+    return "â€¢â€¢â€¢"
 
 def _mask_email(v: str) -> str:
     s = str(v or "").strip()
     if "@" not in s:
-        return "•••"
+        return "â€¢â€¢â€¢"
     user, dom = s.split("@", 1)
-    u = (user[:1] + "•••") if user else "•••"
+    u = (user[:1] + "â€¢â€¢â€¢") if user else "â€¢â€¢â€¢"
     # keep TLD hint
     parts = dom.split(".")
     if len(parts) >= 2:
-        d = (parts[0][:1] + "•••") + "." + parts[-1]
+        d = (parts[0][:1] + "â€¢â€¢â€¢") + "." + parts[-1]
     else:
-        d = dom[:1] + "•••"
+        d = dom[:1] + "â€¢â€¢â€¢"
     return u + "@" + d
 
 def _apply_demo_mask_to_lead(item: Dict[str, Any]) -> Dict[str, Any]:
