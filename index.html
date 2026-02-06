@@ -5459,14 +5459,16 @@
   </section>
 
   <!-- VIP -->
-  <section class="section" id="sec-vip" aria-label="VIP">
+  <section class="section" id="sec-vip" aria-label="VIP"
+    style="padding-bottom: calc(120px + env(safe-area-inset-bottom)); min-height: 60vh;">
     <div class="sidepad" style="padding-top:10px;">
-      <div class="fz-card vip-card lux-reveal">
-        <h3>⭐ VIP</h3>
-        <div id="vipBody"></div>
+      <div class="fz-card vip-card lux-reveal" style="padding: 16px; min-height: 200px;">
+        <h3 style="margin: 0 0 12px 0;">⭐ VIP</h3>
+        <div id="vipBody" style="min-height: 100px;"></div>
       </div>
     </div>
   </section>
+
 
   </main>
   </div>
@@ -5604,7 +5606,7 @@
       if (state.venue_greeting) {
         return state.venue_greeting;
       }
-      
+
       const k = window.__wcCountdownStateKind || '';
       const L = (lang || state.lang || 'en').toLowerCase();
       const primary = WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
@@ -7356,7 +7358,7 @@
 
         const home = st.match.home || 'Team A';
         const away = st.match.away || 'Team B';
-        
+
         // BUG FIX: Check if user already voted (persisted across refresh)
         const votedFor = st.voted_for || null;
         const canVote = st.can_vote !== false && !st.locked && !votedFor;
@@ -7370,7 +7372,7 @@
           btn.style.display = 'flex';
           btn.style.justifyContent = 'space-between';
           btn.style.alignItems = 'center';
-          
+
           // Show different state if already voted
           if (isVotedTeam) {
             btn.innerHTML = `<span style="font-weight:900;">${teamLabel}</span><span class="fz-muted" style="font-weight:800;color:#4ade80;">✓ Your Vote</span>`;
@@ -7384,7 +7386,7 @@
           } else {
             btn.innerHTML = `<span style="font-weight:900;">${teamLabel}</span><span class="fz-muted" style="font-weight:800;">Vote</span>`;
           }
-          
+
           if (canVote) {
             btn.addEventListener('click', async (e) => {
               e.preventDefault();
@@ -7412,7 +7414,7 @@
         };
 
         list.innerHTML = '';
-        
+
         // Show header if already voted
         if (votedFor) {
           const statusDiv = document.createElement('div');
@@ -7423,7 +7425,7 @@
           statusDiv.textContent = '✓ You voted! Here are the results:';
           list.appendChild(statusDiv);
         }
-        
+
         // Optional counts if provided
         const counts = st.counts || {};
         const percent = st.percent || st.percentages || {};
