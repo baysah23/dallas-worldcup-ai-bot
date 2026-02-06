@@ -7310,7 +7310,9 @@
 
       async function fetchPollStateApi() {
         try {
-          const r = await fetch('/api/poll/state', { cache: 'no-store' });
+          // BUG FIX: Include client_id so backend can return voted_for status
+          const clientId = getOrCreateClientId();
+          const r = await fetch(`/api/poll/state?client_id=${encodeURIComponent(clientId)}`, { cache: 'no-store' });
           if (!r.ok) return null;
           const j = await r.json();
           return (j && j.ok) ? j : null;
@@ -7354,9 +7356,13 @@
 
         const home = st.match.home || 'Team A';
         const away = st.match.away || 'Team B';
+        
+        // BUG FIX: Check if user already voted (persisted across refresh)
+        const votedFor = st.voted_for || null;
+        const canVote = st.can_vote !== false && !st.locked && !votedFor;
 
         // minimal iOS/premium buttons using existing fz-btn style
-        const mkBtn = (teamLabel) => {
+        const mkBtn = (teamLabel, isVotedTeam) => {
           const btn = document.createElement('button');
           btn.type = 'button';
           btn.className = 'fz-btn';
@@ -7364,42 +7370,71 @@
           btn.style.display = 'flex';
           btn.style.justifyContent = 'space-between';
           btn.style.alignItems = 'center';
-          btn.innerHTML = `<span style="font-weight:900;">${teamLabel}</span><span class="fz-muted" style="font-weight:800;">Vote</span>`;
-          btn.addEventListener('click', async (e) => {
-            e.preventDefault();
-            // optimistic UI
+          
+          // Show different state if already voted
+          if (isVotedTeam) {
+            btn.innerHTML = `<span style="font-weight:900;">${teamLabel}</span><span class="fz-muted" style="font-weight:800;color:#4ade80;">✓ Your Vote</span>`;
             btn.disabled = true;
-            const res = await sendPollVoteApi(teamLabel);
-            // CASE 1: SUCCESS
-            if (res.ok) {
-              luxToast('Vote submitted ✅', 2200);
-              hide(pc);
-            }
-            // CASE 2: ALREADY VOTED (409)
-            else if (res.status === 409) {
-              luxToast('⚠️ You have already voted!', 3000);
-            }
-            // CASE 3: OTHER ERROR
-            else {
-              btn.disabled = false;
-              const msg = (res.data && res.data.error) ? res.data.error : 'Could not submit vote.';
-              luxToast(msg, 2600);
-            }
-          });
+            btn.style.opacity = '0.95';
+            btn.style.border = '2px solid rgba(74, 222, 128, 0.5)';
+          } else if (!canVote) {
+            btn.innerHTML = `<span style="font-weight:900;">${teamLabel}</span><span class="fz-muted" style="font-weight:800;opacity:0.5;">${st.locked ? 'Locked' : ''}</span>`;
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+          } else {
+            btn.innerHTML = `<span style="font-weight:900;">${teamLabel}</span><span class="fz-muted" style="font-weight:800;">Vote</span>`;
+          }
+          
+          if (canVote) {
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              // optimistic UI
+              btn.disabled = true;
+              const res = await sendPollVoteApi(teamLabel);
+              // CASE 1: SUCCESS
+              if (res.ok) {
+                luxToast('Vote submitted ✅', 2200);
+                hide(pc);
+              }
+              // CASE 2: ALREADY VOTED (409)
+              else if (res.status === 409) {
+                luxToast('⚠️ You have already voted!', 3000);
+              }
+              // CASE 3: OTHER ERROR
+              else {
+                btn.disabled = false;
+                const msg = (res.data && res.data.error) ? res.data.error : 'Could not submit vote.';
+                luxToast(msg, 2600);
+              }
+            });
+          }
           return btn;
         };
 
         list.innerHTML = '';
+        
+        // Show header if already voted
+        if (votedFor) {
+          const statusDiv = document.createElement('div');
+          statusDiv.className = 'fz-muted';
+          statusDiv.style.marginBottom = '8px';
+          statusDiv.style.fontSize = '12px';
+          statusDiv.style.fontWeight = '700';
+          statusDiv.textContent = '✓ You voted! Here are the results:';
+          list.appendChild(statusDiv);
+        }
+        
         // Optional counts if provided
         const counts = st.counts || {};
         const percent = st.percent || st.percentages || {};
         const row = (label) => {
           const c = counts[label] ?? 0;
           const p = percent[label] ?? 0;
+          const isVotedTeam = votedFor === label;
           const wrap = document.createElement('div');
           wrap.style.display = 'grid';
           wrap.style.gap = '6px';
-          const b = mkBtn(label);
+          const b = mkBtn(label, isVotedTeam);
           // add micro stats line
           const meta = document.createElement('div');
           meta.className = 'fz-muted';

@@ -2616,19 +2616,25 @@ POLL_STORE_FILE = os.environ.get("POLL_STORE_FILE", "/tmp/wc26_{venue}_poll_vote
 
 def _safe_read_json_file(path: str, default: Any = None) -> Any:
     """Read JSON from Redis (if enabled) or disk safely."""
-    # Multi-venue: expand {venue} placeholder
+    # BUG FIX: Lookup Redis key BEFORE expanding {venue} placeholder
+    # The _REDIS_PATH_KEY_MAP uses template paths with {venue}
+    original_path = str(path)
+    try:
+        vid = _venue_id()
+        # Check Redis using the TEMPLATE path (with {venue})
+        if _REDIS_ENABLED:
+            suffix = _REDIS_PATH_KEY_MAP.get(original_path)
+            if suffix:
+                full_key = f"{_REDIS_NS}:{vid}:{suffix}"
+                return _redis_get_json(full_key, default=default)
+    except Exception:
+        pass
+
+    # Expand {venue} for disk fallback
     try:
         vid = _venue_id()
         if '{venue}' in str(path):
             path = str(path).replace('{venue}', vid)
-    except Exception:
-        pass
-    try:
-        if _REDIS_ENABLED:
-            suffix = _REDIS_PATH_KEY_MAP.get(path)
-            if suffix:
-                full_key = f"{_REDIS_NS}:{_venue_id()}:{suffix}"
-                return _redis_get_json(full_key, default=default)
     except Exception:
         pass
 
@@ -2643,16 +2649,14 @@ def _safe_read_json_file(path: str, default: Any = None) -> Any:
 def _safe_write_json_file(path: str, payload: Any) -> None:
     global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
     """Write JSON to Redis (if enabled) or disk safely."""
-    # Multi-venue: expand {venue} placeholder
+    # BUG FIX: Lookup Redis key BEFORE expanding {venue} placeholder
+    # The _REDIS_PATH_KEY_MAP uses template paths with {venue}
+    original_path = str(path)
     try:
         vid = _venue_id()
-        if '{venue}' in str(path):
-            path = str(path).replace('{venue}', vid)
-    except Exception:
-        pass
-    try:
+        # Check Redis using the TEMPLATE path (with {venue})
         if _REDIS_ENABLED:
-            suffix = _REDIS_PATH_KEY_MAP.get(path)
+            suffix = _REDIS_PATH_KEY_MAP.get(original_path)
             if suffix:
                 full_key = f"{_REDIS_NS}:{_venue_id()}:{suffix}"
                 ok = _redis_set_json(full_key, payload)
@@ -2660,15 +2664,23 @@ def _safe_write_json_file(path: str, payload: Any) -> None:
                     return
                 # Redis was enabled, but write failed — mark fallback for enterprise gate
                 _REDIS_FALLBACK_USED = True
-                _REDIS_FALLBACK_LAST_PATH = str(path)
+                _REDIS_FALLBACK_LAST_PATH = original_path
     except Exception:
         # Mark fallback on unexpected redis path errors too (best effort)
         try:
             _REDIS_FALLBACK_USED = True
-            _REDIS_FALLBACK_LAST_PATH = str(path)
+            _REDIS_FALLBACK_LAST_PATH = original_path
         except Exception:
             pass
 
+
+    # Expand {venue} for disk fallback
+    try:
+        vid = _venue_id()
+        if '{venue}' in str(path):
+            path = str(path).replace('{venue}', vid)
+    except Exception:
+        pass
 
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -5514,13 +5526,35 @@ def get_config() -> Dict[str, str]:
         "ops_waitlist_mode": "false",
     }
 
+    # ============================================================
+    # BUG FIX: Read fan_zone settings from venue config file
+    # Admin saves to config/venues/{venue}.json under fan_zone key
+    # This was the source of BUG_FAN_ZONE_PERSISTENCE_001
+    # ============================================================
+    try:
+        venue_cfg_path = os.path.join(VENUES_DIR, f"{vid}.json")
+        if os.path.exists(venue_cfg_path):
+            with open(venue_cfg_path, "r", encoding="utf-8") as f:
+                vcfg = json.load(f) or {}
+            fan_zone = vcfg.get("fan_zone") or {}
+            if isinstance(fan_zone, dict):
+                for k, v in fan_zone.items():
+                    if str(k).startswith("_"):
+                        continue
+                    cfg[str(k)] = "" if v is None else str(v)
+    except Exception:
+        pass
+
+    # Legacy: also check the old CONFIG_FILE location (for back-compat)
     path = str(CONFIG_FILE).replace("{venue}", vid)
     local = _safe_read_json(path)
     if isinstance(local, dict):
         for k, v in local.items():
             if str(k).startswith("_"):
                 continue
-            cfg[str(k)] = "" if v is None else str(v)
+            # Only apply if not already set from venue config
+            if str(k) not in cfg or cfg.get(str(k), "") == "":
+                cfg[str(k)] = "" if v is None else str(v)
 
     try:
         gc = get_gspread_client()
@@ -13474,19 +13508,25 @@ POLL_STORE_FILE = os.environ.get("POLL_STORE_FILE", "/tmp/wc26_{venue}_poll_vote
 
 def _safe_read_json_file(path: str, default: Any = None) -> Any:
     """Read JSON from Redis (if enabled) or disk safely."""
-    # Multi-venue: expand {venue} placeholder
+    # BUG FIX: Lookup Redis key BEFORE expanding {venue} placeholder
+    # The _REDIS_PATH_KEY_MAP uses template paths with {venue}
+    original_path = str(path)
+    try:
+        vid = _venue_id()
+        # Check Redis using the TEMPLATE path (with {venue})
+        if _REDIS_ENABLED:
+            suffix = _REDIS_PATH_KEY_MAP.get(original_path)
+            if suffix:
+                full_key = f"{_REDIS_NS}:{vid}:{suffix}"
+                return _redis_get_json(full_key, default=default)
+    except Exception:
+        pass
+
+    # Expand {venue} for disk fallback
     try:
         vid = _venue_id()
         if '{venue}' in str(path):
             path = str(path).replace('{venue}', vid)
-    except Exception:
-        pass
-    try:
-        if _REDIS_ENABLED:
-            suffix = _REDIS_PATH_KEY_MAP.get(path)
-            if suffix:
-                full_key = f"{_REDIS_NS}:{_venue_id()}:{suffix}"
-                return _redis_get_json(full_key, default=default)
     except Exception:
         pass
 
@@ -13501,16 +13541,14 @@ def _safe_read_json_file(path: str, default: Any = None) -> Any:
 def _safe_write_json_file(path: str, payload: Any) -> None:
     global _REDIS_FALLBACK_USED, _REDIS_FALLBACK_LAST_PATH
     """Write JSON to Redis (if enabled) or disk safely."""
-    # Multi-venue: expand {venue} placeholder
+    # BUG FIX: Lookup Redis key BEFORE expanding {venue} placeholder
+    # The _REDIS_PATH_KEY_MAP uses template paths with {venue}
+    original_path = str(path)
     try:
         vid = _venue_id()
-        if '{venue}' in str(path):
-            path = str(path).replace('{venue}', vid)
-    except Exception:
-        pass
-    try:
+        # Check Redis using the TEMPLATE path (with {venue})
         if _REDIS_ENABLED:
-            suffix = _REDIS_PATH_KEY_MAP.get(path)
+            suffix = _REDIS_PATH_KEY_MAP.get(original_path)
             if suffix:
                 full_key = f"{_REDIS_NS}:{_venue_id()}:{suffix}"
                 ok = _redis_set_json(full_key, payload)
@@ -13518,15 +13556,23 @@ def _safe_write_json_file(path: str, payload: Any) -> None:
                     return
                 # Redis was enabled, but write failed — mark fallback for enterprise gate
                 _REDIS_FALLBACK_USED = True
-                _REDIS_FALLBACK_LAST_PATH = str(path)
+                _REDIS_FALLBACK_LAST_PATH = original_path
     except Exception:
         # Mark fallback on unexpected redis path errors too (best effort)
         try:
             _REDIS_FALLBACK_USED = True
-            _REDIS_FALLBACK_LAST_PATH = str(path)
+            _REDIS_FALLBACK_LAST_PATH = original_path
         except Exception:
             pass
 
+
+    # Expand {venue} for disk fallback
+    try:
+        vid = _venue_id()
+        if '{venue}' in str(path):
+            path = str(path).replace('{venue}', vid)
+    except Exception:
+        pass
 
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -15222,13 +15268,35 @@ def get_config() -> Dict[str, str]:
         "ops_waitlist_mode": "false",
     }
 
+    # ============================================================
+    # BUG FIX: Read fan_zone settings from venue config file
+    # Admin saves to config/venues/{venue}.json under fan_zone key
+    # This was the source of BUG_FAN_ZONE_PERSISTENCE_001
+    # ============================================================
+    try:
+        venue_cfg_path = os.path.join(VENUES_DIR, f"{vid}.json")
+        if os.path.exists(venue_cfg_path):
+            with open(venue_cfg_path, "r", encoding="utf-8") as f:
+                vcfg = json.load(f) or {}
+            fan_zone = vcfg.get("fan_zone") or {}
+            if isinstance(fan_zone, dict):
+                for k, v in fan_zone.items():
+                    if str(k).startswith("_"):
+                        continue
+                    cfg[str(k)] = "" if v is None else str(v)
+    except Exception:
+        pass
+
+    # Legacy: also check the old CONFIG_FILE location (for back-compat)
     path = str(CONFIG_FILE).replace("{venue}", vid)
     local = _safe_read_json(path)
     if isinstance(local, dict):
         for k, v in local.items():
             if str(k).startswith("_"):
                 continue
-            cfg[str(k)] = "" if v is None else str(v)
+            # Only apply if not already set from venue config
+            if str(k) not in cfg or cfg.get(str(k), "") == "":
+                cfg[str(k)] = "" if v is None else str(v)
 
     try:
         gc = get_gspread_client()
