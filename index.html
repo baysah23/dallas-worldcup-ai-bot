@@ -553,12 +553,13 @@
       gap: 10px;
       align-items: center;
       margin-top: 10px;
-      padding: 10px 10px calc(10px + env(safe-area-inset-bottom));
+      padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
       border-radius: 18px;
       background: rgba(7, 16, 34, .82);
       border: 1px solid rgba(255, 255, 255, .10);
       -webkit-backdrop-filter: blur(18px) saturate(1.35);
       backdrop-filter: blur(18px) saturate(1.35);
+      box-sizing: border-box;
     }
 
     #msg {
@@ -612,11 +613,13 @@
       opacity: .75;
     }
 
+
     /* Chat language segmented control (make it look like iOS capsule) */
     .segWrap {
       position: relative;
       display: flex;
-      gap: 2px;
+      gap: 0;
+      /* Remove gap - buttons should be flush */
       padding: 3px;
       border-radius: 999px;
       background: rgba(255, 255, 255, .06);
@@ -629,12 +632,14 @@
     .segWrap::before {
       content: "";
       position: absolute;
-      inset: 3px;
+      top: 3px;
+      bottom: 3px;
+      left: 3px;
       border-radius: 999px;
-      background: rgba(255, 255, 255, .06);
-      transform: translateX(var(--seg-left, 0px));
+      background: rgba(255, 255, 255, .12);
+      transform: translateX(var(--seg-offset, 0));
       width: var(--seg-width, 60px);
-      transition: transform .22s ease, width .22s ease;
+      transition: transform .22s cubic-bezier(.4, 0, .2, 1), width .22s cubic-bezier(.4, 0, .2, 1);
       pointer-events: none;
       box-shadow: 0 8px 18px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .12);
       border: 1px solid rgba(255, 255, 255, .14);
@@ -643,8 +648,9 @@
     .segBtn {
       position: relative;
       z-index: 1;
-      flex: 1 1 auto;
-      padding: 8px 10px;
+      flex: 0 0 auto;
+      /* Don't stretch - use natural width */
+      padding: 8px 12px;
       border-radius: 999px;
       border: 0;
       background: transparent;
@@ -653,9 +659,12 @@
       font-size: 12px;
       letter-spacing: .02em;
       cursor: pointer;
+      white-space: nowrap;
+      transition: color .15s ease;
     }
 
-    .segBtn[aria-selected="true"] {
+    .segBtn[aria-selected="true"],
+    .segBtn.active {
       color: rgba(255, 255, 255, .98);
     }
 
@@ -4169,37 +4178,36 @@
         pointer-events: none;
       }
 
+      /* Segment buttons - responsive sizing */
       #chatLangRow .segBtn {
         position: relative;
         z-index: 1;
+        flex: 0 0 auto;
+        padding: 8px 14px;
+        border-radius: 999px;
         border: 0;
         background: transparent;
-        color: rgba(234, 240, 255, .78);
-        font-weight: 750;
-        font-size: 11.5px;
-        letter-spacing: -0.01em;
-        border-radius: 999px;
+        color: rgba(234, 240, 255, .82);
+        font-weight: 700;
+        font-size: 12px;
+        letter-spacing: .02em;
         cursor: pointer;
-        -webkit-tap-highlight-color: transparent;
         white-space: nowrap;
-        opacity: .92;
-        transition: transform .10s ease, color .12s ease, opacity .12s ease;
-
+        transition: color .15s ease;
+        min-height: 32px;
         display: flex;
         align-items: center;
         justify-content: center;
-        height: 28px;
-        padding: 0 10px;
-        line-height: 1;
       }
+
 
       #chatLangRow .segBtn:active {
         transform: translateY(1px) scale(.99);
       }
 
+      #chatLangRow .segBtn[aria-selected="true"],
       #chatLangRow .segBtn.active {
-        color: rgba(15, 27, 51, .92);
-        opacity: 1;
+        color: rgba(255, 255, 255, .98);
       }
 
       .chatInputRow {
@@ -4207,6 +4215,10 @@
         align-items: center;
         gap: 8px;
         flex-wrap: nowrap;
+        padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+        margin: 10px -14px -16px;
+        border-radius: 0 0 18px 18px;
+        box-sizing: border-box;
       }
 
       #msg {
@@ -4223,8 +4235,15 @@
 
       /* === Chat header one-line micro-polish === */
       #sec-chat .cardHead.chatHead {
+        display: flex;
         align-items: center;
-        gap: 10px;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 14px 14px;
+        margin-bottom: 0;
+        /* Card body handles spacing */
+        flex-wrap: wrap;
+        /* Allow wrap on smaller tablets */
       }
 
       #sec-chat .cardTitle {
@@ -4350,11 +4369,26 @@
       }
 
       /* iOS-ish capsule refinements (piggybacks on existing .segWrap/.segBtn rules) */
-      #chatLangRow.segWrap {
-        background: rgba(255, 255, 255, .055) !important;
-        border-color: rgba(255, 255, 255, .13) !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10), 0 10px 22px rgba(0, 0, 0, .18) !important;
+      /* Language toggle wrapper - base fixes */
+      #chatLangRow.segWrap,
+      #chatLangRow.segmented {
+        position: relative;
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 0;
+        padding: 3px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, .06);
+        border: 1px solid rgba(255, 255, 255, .12);
+        -webkit-backdrop-filter: blur(16px) saturate(1.35);
+        backdrop-filter: blur(16px) saturate(1.35);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+        overflow: visible;
+        /* Don't clip the bubble */
+        flex-shrink: 1;
+        min-width: 0;
       }
+
 
       #chatLangRow.segWrap::before {
         background: rgba(255, 255, 255, .085) !important;
@@ -4362,6 +4396,95 @@
       }
 
 
+    }
+
+
+    /* ===== MOBILE SPECIFIC (< 480px) ===== */
+    @media (max-width: 479px) {
+
+      /* Chat header - allow stacking if needed */
+      #sec-chat .cardHead.chatHead {
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 12px;
+      }
+
+      /* Title takes full width on tiny screens */
+      #sec-chat .chatHeadLeft {
+        flex: 0 0 auto;
+      }
+
+      /* Language toggle - compact to fit all 4 */
+      #chatLangRow.segWrap,
+      #chatLangRow.segmented {
+        flex: 1 1 100%;
+        max-width: 100%;
+        padding: 2px;
+        justify-content: space-between;
+        /* Distribute buttons evenly */
+      }
+
+      /* Smaller buttons on mobile */
+      #chatLangRow .segBtn {
+        padding: 6px 8px;
+        font-size: 11px;
+        font-weight: 600;
+        min-height: 28px;
+        flex: 1 1 auto;
+        /* Allow buttons to share space equally */
+      }
+
+      /* Adjust bubble for smaller padding */
+      #chatLangRow.segWrap::before,
+      #chatLangRow.segmented::before {
+        top: 2px;
+        bottom: 2px;
+        left: 2px;
+      }
+
+      .chatInputRow {
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        flex-wrap: nowrap;
+        padding: 5px 5px 5px 5px;
+        /* margin:10px; */
+      }
+      .hint{
+        margin-top: 40px;
+      }
+    }
+
+    /* ===== VERY SMALL MOBILE (< 360px) ===== */
+    @media (max-width: 359px) {
+
+      #chatLangRow .segBtn {
+        padding: 5px 6px;
+        font-size: 10px;
+        letter-spacing: 0;
+      }
+    }
+
+    /* ===== TABLET & DESKTOP (>= 768px) ===== */
+    @media (min-width: 768px) {
+
+      #sec-chat .cardHead.chatHead {
+        flex-wrap: nowrap;
+        padding: 16px 18px 16px;
+      }
+
+      #chatLangRow .segBtn {
+        padding: 8px 16px;
+        font-size: 12px;
+      }
+    }
+
+    /* ===== LARGE DESKTOP (>= 1024px) ===== */
+    @media (min-width: 1024px) {
+
+      #sec-chat .cardHead.chatHead {
+        padding: 18px 20px 18px;
+      }
     }
 
     /* AUTO-FIX: close mobile msec @media block */
@@ -5182,126 +5305,128 @@
           </div>
           <p class="hint">Recall is enabled — context and follow-ups are remembered.</p>
         </div>
+      </section>
+
+
+
+      <!-- MENU -->
+      <section class="section" id="sec-menu" aria-label="Menu">
+        <div class="card">
+          <div class="cardHead">
+            <h2 class="cardTitle"><span id="menuTitle"></span></h2>
+            <button class="pill" id="reloadMenu" type="button">Refresh</button>
+          </div>
+          <div class="cardBody">
+            <div id="menuUpsell" class="menuUpsell" aria-live="polite"></div>
+            <div id="menuFilters" class="menuFilters" aria-label="Country filters"></div>
+            <div id="menuBody" class="list"></div>
+            <div id="menuHint" class="hint">Tap Refresh to load menu items.</div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- SCHEDULE -->
+      <section class="section" id="sec-schedule" aria-label="Schedule">
+        <div class="sidepad" style="padding-top:10px;">
+          <div class="segbar" id="scheduleTabs" role="tablist" aria-label="Schedule views">
+            <button class="segbtn" type="button" data-view="fixtures" aria-selected="true">Fixtures</button>
+            <button class="segbtn" type="button" data-view="live" aria-selected="false">Live</button>
+            <button class="segbtn" type="button" data-view="groups" aria-selected="false">Groups</button>
+          </div>
+          <div class="metaLine" id="scheduleMetaLine" aria-live="polite"></div>
+          <div class="schedule" id="schedule"></div>
+          <div class="sidepad" id="pager" style="display:none; padding-top:10px;">
+            <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
+              <button class="secondary" id="prevPage" style="min-width:88px;">Prev</button>
+              <div class="pill" id="pageIndicator">Page 1 of 1</div>
+              <button class="secondary" id="nextPage" style="min-width:88px;">Next</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- FAN ZONE -->
+      <section class="section" id="sec-fanzone" aria-label="Fan Zone">
+        <div class="sidepad" style="padding-top:10px;">
+          <div style="display:grid; gap:12px;">
+            <aside aria-label="Fan Zone Left Panel" class="fanzone fanzone-left" id="fanZoneLeft">
+              <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
+                <span class="fz-muted fz-rail-title">Fan Zone</span>
+                <!-- To do:There is not any feature or backend functionality  created or implemented for this fzCollapseToggle -->
+                <button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button>
+              </div>
+              <div class="fz-row" style="justify-content:flex-start;">
+                <div class="fz-chip" id="supporterChip" title="Personalization stored on this device only">
+                  <span id="supporterFlag" aria-hidden="true">🏁</span><span>Supporting:</span> <b
+                    id="supporterLabel">Not
+                    set</b>
+                </div>
+              </div>
+              <div class="fz-actions" style="margin-top:10px;">
+                <button class="fz-iconbtn" id="fzIconCountry" title="Pick country">🏁</button>
+                <button class="fz-iconbtn" id="fzIconPoll" title="Fan poll">📊</button>
+                <button class="fz-btn" id="btnPickCountry">Which country are you supporting?</button>
+                <button class="fz-btn" id="btnOpenPoll">Match poll</button>
+              </div>
+              <div class="fz-card lux-reveal" id="opsPanelMount" style="display:none; margin-top:10px;">
+                <div class="fz-minirow" style="justify-content:space-between; margin-bottom:6px;">
+                  <span class="fz-muted fz-rail-title">Ops</span>
+                  <span class="fz-muted" style="font-size:12px;">Admin</span>
+                </div>
+                <div id="opsPanelBody" style="display:grid; gap:10px;"></div>
+              </div>
+          </div>
+          <div class="fz-card lux-reveal" id="pollCard"
+            style="display:none; margin-top:10px; max-height:52vh; overflow:auto;">
+            <div class="fz-minirow" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <h3 style="margin:0;">⚔️ Match of the Day Poll</h3>
+              <button class="fz-iconbtn" id="closePollCard" type="button" aria-label="Close poll">✕</button>
+            </div>
+            <div class="fz-muted">Vote for who you think will win.</div>
+            <div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
+          </div>
+          </aside>
+          <aside aria-label="Fan Zone Right Panel" class="fanzone fanzone-right" id="fanZoneRight"
+            style="padding-bottom: 100px; padding-top:10px;">
+            <!-- To do:There is not any feature or backend functionality  created or implemented for this fzCollapseToggle2 -->
+            <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
+              <span class="fz-muted fz-rail-title">Extras</span>
+              <button class="fz-iconbtn" id="fzCollapseToggle2" title="Collapse / expand">⫶</button>
+            </div>
+            <div class="fz-actions" style="justify-content:flex-end;">
+              <button class="fz-iconbtn" id="fzIconDrinks" title="Drink highlight">🍹</button>
+              <button class="fz-iconbtn" id="fzIconQR" title="QR poster">📱</button>
+              <button class="fz-btn" id="btnSharePoster">QR poster</button>
+            </div>
+            <div class="fz-card lux-reveal" id="drinkCard" style="margin-top:50px;">
+              <h3>🍹 Drink highlights</h3>
+              <div id="drinkHighlight" style="margin-top:10px;">
+                <div
+                  style="border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:10px; background: rgba(0,0,0,.10);">
+                  <div id="drinkName" style="font-weight:900;">Country-themed drink</div>
+                  <div id="drinkDesc" class="fz-muted" style="margin-top:4px;"></div>
+                </div>
+              </div>
+            </div>
+            <div class="fz-card lux-reveal" id="qrCard" style="display:none; margin-top:10px;">
+              <div class="fz-minirow" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <h3 style="margin:0;">📱 QR poster</h3>
+                <button class="fz-iconbtn" id="closeQRCard" type="button" aria-label="Close QR">✕</button>
+              </div>
+              <div class="fz-muted">Print/display at the entrance. Scan to open the app.</div>
+              <div class="qrWrap" style="margin-top:10px;">
+                <img id="qrImg" alt="QR code"
+                  style="width:220px;height:220px;border-radius:12px;background:#fff;padding:10px;display:block;margin:0 auto;" />
+                <div class="qrText">
+                  <div class="fz-muted" style="margin-bottom:6px;">Link:</div>
+                  <div><a href="#" id="qrLink" rel="noopener" target="_blank">Open app</a></div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
   </div>
-  </section>
-
-  <!-- MENU -->
-  <section class="section" id="sec-menu" aria-label="Menu">
-    <div class="card">
-      <div class="cardHead">
-        <h2 class="cardTitle"><span id="menuTitle"></span></h2>
-        <button class="pill" id="reloadMenu" type="button">Refresh</button>
-      </div>
-      <div class="cardBody">
-        <div id="menuUpsell" class="menuUpsell" aria-live="polite"></div>
-        <div id="menuFilters" class="menuFilters" aria-label="Country filters"></div>
-        <div id="menuBody" class="list"></div>
-        <div id="menuHint" class="hint">Tap Refresh to load menu items.</div>
-      </div>
-    </div>
-
-  </section>
-
-  <!-- SCHEDULE -->
-  <section class="section" id="sec-schedule" aria-label="Schedule">
-    <div class="sidepad" style="padding-top:10px;">
-      <div class="segbar" id="scheduleTabs" role="tablist" aria-label="Schedule views">
-        <button class="segbtn" type="button" data-view="fixtures" aria-selected="true">Fixtures</button>
-        <button class="segbtn" type="button" data-view="live" aria-selected="false">Live</button>
-        <button class="segbtn" type="button" data-view="groups" aria-selected="false">Groups</button>
-      </div>
-      <div class="metaLine" id="scheduleMetaLine" aria-live="polite"></div>
-      <div class="schedule" id="schedule"></div>
-      <div class="sidepad" id="pager" style="display:none; padding-top:10px;">
-        <div style="display:flex; gap:10px; align-items:center; justify-content:space-between;">
-          <button class="secondary" id="prevPage" style="min-width:88px;">Prev</button>
-          <div class="pill" id="pageIndicator">Page 1 of 1</div>
-          <button class="secondary" id="nextPage" style="min-width:88px;">Next</button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- FAN ZONE -->
-  <section class="section" id="sec-fanzone" aria-label="Fan Zone">
-    <div class="sidepad" style="padding-top:10px;">
-      <div style="display:grid; gap:12px;">
-        <aside aria-label="Fan Zone Left Panel" class="fanzone fanzone-left" id="fanZoneLeft">
-          <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
-            <span class="fz-muted fz-rail-title">Fan Zone</span>
-            <!-- To do:There is not any feature or backend functionality  created or implemented for this fzCollapseToggle -->
-            <button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button>
-          </div>
-          <div class="fz-row" style="justify-content:flex-start;">
-            <div class="fz-chip" id="supporterChip" title="Personalization stored on this device only">
-              <span id="supporterFlag" aria-hidden="true">🏁</span><span>Supporting:</span> <b id="supporterLabel">Not
-                set</b>
-            </div>
-          </div>
-          <div class="fz-actions" style="margin-top:10px;">
-            <button class="fz-iconbtn" id="fzIconCountry" title="Pick country">🏁</button>
-            <button class="fz-iconbtn" id="fzIconPoll" title="Fan poll">📊</button>
-            <button class="fz-btn" id="btnPickCountry">Which country are you supporting?</button>
-            <button class="fz-btn" id="btnOpenPoll">Match poll</button>
-          </div>
-          <div class="fz-card lux-reveal" id="opsPanelMount" style="display:none; margin-top:10px;">
-            <div class="fz-minirow" style="justify-content:space-between; margin-bottom:6px;">
-              <span class="fz-muted fz-rail-title">Ops</span>
-              <span class="fz-muted" style="font-size:12px;">Admin</span>
-            </div>
-            <div id="opsPanelBody" style="display:grid; gap:10px;"></div>
-          </div>
-      </div>
-      <div class="fz-card lux-reveal" id="pollCard"
-        style="display:none; margin-top:10px; max-height:52vh; overflow:auto;">
-        <div class="fz-minirow" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <h3 style="margin:0;">⚔️ Match of the Day Poll</h3>
-          <button class="fz-iconbtn" id="closePollCard" type="button" aria-label="Close poll">✕</button>
-        </div>
-        <div class="fz-muted">Vote for who you think will win.</div>
-        <div id="pollList" style="margin-top:10px; display:grid; gap:8px;"></div>
-      </div>
-      </aside>
-      <aside aria-label="Fan Zone Right Panel" class="fanzone fanzone-right" id="fanZoneRight"
-        style="padding-bottom: 100px; padding-top:10px;">
-        <!-- To do:There is not any feature or backend functionality  created or implemented for this fzCollapseToggle2 -->
-        <div class="fz-minirow" style="justify-content:space-between; margin-bottom:8px;">
-          <span class="fz-muted fz-rail-title">Extras</span>
-          <button class="fz-iconbtn" id="fzCollapseToggle2" title="Collapse / expand">⫶</button>
-        </div>
-        <div class="fz-actions" style="justify-content:flex-end;">
-          <button class="fz-iconbtn" id="fzIconDrinks" title="Drink highlight">🍹</button>
-          <button class="fz-iconbtn" id="fzIconQR" title="QR poster">📱</button>
-          <button class="fz-btn" id="btnSharePoster">QR poster</button>
-        </div>
-        <div class="fz-card lux-reveal" id="drinkCard" style="margin-top:50px;">
-          <h3>🍹 Drink highlights</h3>
-          <div id="drinkHighlight" style="margin-top:10px;">
-            <div
-              style="border:1px solid rgba(255,255,255,.14); border-radius:14px; padding:10px; background: rgba(0,0,0,.10);">
-              <div id="drinkName" style="font-weight:900;">Country-themed drink</div>
-              <div id="drinkDesc" class="fz-muted" style="margin-top:4px;"></div>
-            </div>
-          </div>
-        </div>
-        <div class="fz-card lux-reveal" id="qrCard" style="display:none; margin-top:10px;">
-          <div class="fz-minirow" style="justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <h3 style="margin:0;">📱 QR poster</h3>
-            <button class="fz-iconbtn" id="closeQRCard" type="button" aria-label="Close QR">✕</button>
-          </div>
-          <div class="fz-muted">Print/display at the entrance. Scan to open the app.</div>
-          <div class="qrWrap" style="margin-top:10px;">
-            <img id="qrImg" alt="QR code"
-              style="width:220px;height:220px;border-radius:12px;background:#fff;padding:10px;display:block;margin:0 auto;" />
-            <div class="qrText">
-              <div class="fz-muted" style="margin-bottom:6px;">Link:</div>
-              <div><a href="#" id="qrLink" rel="noopener" target="_blank">Open app</a></div>
-            </div>
-          </div>
-        </div>
-      </aside>
-    </div>
-    </div>
   </section>
 
   <!-- VIP -->
@@ -5549,43 +5674,77 @@
     }
 
     // ---------- language ----------
+    // Find the section that updates the language selector and replace/add this function
+
+    // Find and replace the updateSegmentIndicator function
+
+    function updateSegmentIndicator(container, activeBtn) {
+      if (!container || !activeBtn) return;
+
+      // Get computed padding from CSS (handles responsive changes)
+      const style = getComputedStyle(container);
+      const containerPadding = parseFloat(style.paddingLeft) || 3;
+
+      const containerRect = container.getBoundingClientRect();
+      const btnRect = activeBtn.getBoundingClientRect();
+
+      // Calculate offset relative to container's content area
+      const offset = btnRect.left - containerRect.left - containerPadding;
+      const width = btnRect.width;
+
+      container.style.setProperty('--seg-offset', `${Math.max(0, offset)}px`);
+      container.style.setProperty('--seg-width', `${width}px`);
+    }
+
+    // Add orientation change handler
+    window.addEventListener('orientationchange', () => {
+      setTimeout(() => {
+        const segWrap = document.querySelector('#chatLangRow.segWrap, #chatLangRow.segmented');
+        if (segWrap) {
+          const activeBtn = segWrap.querySelector('.segBtn[aria-selected="true"], .segBtn.active');
+          if (activeBtn) {
+            updateSegmentIndicator(segWrap, activeBtn);
+          }
+        }
+      }, 150);
+    });
+
+    // Update the setLang function to call this
     function setLang(lang) {
-      lang = (lang || 'en').toLowerCase().trim();
-      if (!LANGS.includes(lang)) lang = 'en';
       state.lang = lang;
       localStorage.setItem('wc_lang', lang);
 
-      // Home pill
-      const homePill = $('pillLang');
-      if (homePill) {
-        homePill.textContent = `${lang.toUpperCase()} · 4`;
-        homePill.setAttribute('aria-label', `Change language (current ${lang.toUpperCase()})`);
+      const segWrap = document.querySelector('#chatLangRow.segWrap, #chatLangRow.segmented');
+      if (segWrap) {
+        const btns = segWrap.querySelectorAll('.segBtn');
+        btns.forEach(btn => {
+          const isActive = btn.dataset.lang === lang || btn.textContent.toLowerCase().includes(lang);
+          btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+          btn.classList.toggle('active', isActive);
+
+          if (isActive) {
+            // Use requestAnimationFrame to ensure DOM has updated
+            requestAnimationFrame(() => {
+              updateSegmentIndicator(segWrap, btn);
+            });
+          }
+        });
       }
 
-      // Chat language selector
-      $$('#chatLangRow [data-lang]').forEach(btn => {
-        const b = (btn.dataset?.lang || '').toLowerCase();
-        const isOn = b === (state.lang || 'en').toLowerCase();
-        btn.classList.toggle('active', isOn);
-        // aria-selected drives the visual highlight (CSS targets [aria-selected="true"])
-        btn.setAttribute('aria-selected', isOn ? 'true' : 'false');
-      });
-
-      // UI-only: iOS segmented capsule positioning
-      try {
-        const wrap = document.getElementById('chatLangRow');
-        if (wrap && wrap.classList.contains('segmented')) {
-          const active = wrap.querySelector('[data-lang].active') || wrap.querySelector('.segBtn.active');
-          if (active) {
-            const w = wrap.getBoundingClientRect();
-            const a = active.getBoundingClientRect();
-            wrap.style.setProperty('--seg-left', Math.max(3, Math.round(a.left - w.left)) + 'px');
-            wrap.style.setProperty('--seg-width', Math.max(44, Math.round(a.width)) + 'px');
-          }
-        }
-      } catch (e) { }// Keep single welcome updated
-      try { normalizeChatWelcome(); } catch (e) { }
+      normalizeChatWelcome();
     }
+
+    // Also add resize/orientation handler to keep bubble aligned
+    window.addEventListener('resize', () => {
+      const segWrap = document.querySelector('#chatLangRow.segWrap, #chatLangRow.segmented');
+      if (segWrap) {
+        const activeBtn = segWrap.querySelector('.segBtn[aria-selected="true"], .segBtn.active');
+        if (activeBtn) {
+          updateSegmentIndicator(segWrap, activeBtn);
+        }
+      }
+    });
+
 
     function cycleLang() {
       const i = LANGS.indexOf(state.lang);
@@ -7035,9 +7194,9 @@
           try { j = await res.json(); } catch (e) { }
 
           return {
-            ok: res.ok,        
-            status: res.status, 
-            data: j          
+            ok: res.ok,
+            status: res.status,
+            data: j
           };
 
         } catch (e) {
@@ -7081,7 +7240,6 @@
             // CASE 2: ALREADY VOTED (409)
             else if (res.status === 409) {
               luxToast('⚠️ You have already voted!', 3000);
-              
             }
             // CASE 3: OTHER ERROR
             else {
