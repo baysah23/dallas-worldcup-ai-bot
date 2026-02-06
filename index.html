@@ -4450,7 +4450,8 @@
         padding: 5px 5px 5px 5px;
         /* margin:10px; */
       }
-      .hint{
+
+      .hint {
         margin-top: 40px;
       }
     }
@@ -5079,6 +5080,31 @@
    ========================================= */
 
     /* Tablet & iPad Air (768px+) */
+    @media (max-width: 479px) {
+
+      .banner-media {
+        height: 230px !important;
+        width: 100%;
+        position: relative;
+        padding-bottom: 0 !important;
+      }
+
+      .banner-image {
+        width: 100%;
+        height: auto;
+        display: block;
+        object-fit: contain;
+      }
+
+      .counter-container {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        transform: scale(0.8);
+        transform-origin: bottom right;
+      }
+    }
+
     @media (min-width: 768px) {
 
       .banner-media {
@@ -5106,13 +5132,16 @@
 
       .banner-media {
         height: 540px !important;
-        /* Taller strip for big monitors */
+        width: 100%;
+        position: relative;
+        padding-bottom: 0 !important;
       }
 
       .banner-image {
-        /* Less aggressive zoom on big screens */
-        min-width: 100%;
-        min-height: 110%;
+        width: 100%;
+        height: auto;
+        display: block;
+        object-fit: contain;
       }
     }
   </style>
@@ -5506,11 +5535,11 @@
     };
 
     const LANGS = ['en', 'es', 'pt', 'fr'];
-    
+
     // ---------- Session & Chat Persistence ----------
     const CHAT_SESSION_KEY = 'wc_chat_session_id';
     const CHAT_HISTORY_KEY = 'wc_chat_history';
-    
+
     function getSessionId() {
       let sid = localStorage.getItem(CHAT_SESSION_KEY);
       if (!sid) {
@@ -5520,7 +5549,7 @@
       }
       return sid;
     }
-    
+
     function saveChatHistory(messages) {
       try {
         // Keep only the last 50 messages to prevent bloat
@@ -5530,7 +5559,7 @@
         console.warn('Could not save chat history:', e);
       }
     }
-    
+
     function loadChatHistory() {
       try {
         const raw = localStorage.getItem(CHAT_HISTORY_KEY);
@@ -5541,7 +5570,7 @@
         return [];
       }
     }
-    
+
     function clearChatHistory() {
       localStorage.removeItem(CHAT_HISTORY_KEY);
     }
@@ -5887,19 +5916,19 @@
     function ensureChatWelcome() {
       normalizeChatWelcome();
     }
-    
+
     function restoreChatHistory() {
       const log = $('chatLog');
       if (!log) return;
-      
+
       const history = loadChatHistory();
       if (history.length === 0) return;
-      
+
       // Clear existing content except welcome
       const welcomeEl = log.querySelector('.chatLine.bot[data-welcome="1"]');
       log.innerHTML = '';
       if (welcomeEl) log.appendChild(welcomeEl);
-      
+
       // Restore saved messages
       history.forEach(msg => {
         const wrap = document.createElement('div');
@@ -5910,7 +5939,7 @@
         wrap.appendChild(bubble);
         log.appendChild(wrap);
       });
-      
+
       log.scrollTop = log.scrollHeight;
     }
 
@@ -5919,17 +5948,17 @@
       if (!log) return;
       log.innerHTML = '';
       log.dataset.hasWelcome = '';
-      
+
       // Clear localStorage chat history
       clearChatHistory();
-      
+
       // Clear server-side session (fire and forget)
       fetch('/chat/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: getSessionId() })
-      }).catch(() => {});
-      
+      }).catch(() => { });
+
       try { ensureChatWelcome(); } catch (e) { console.warn('chat welcome failed', e); }
     }
 
@@ -5950,8 +5979,8 @@
         const r = await fetch('/chat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            message: msg, 
+          body: JSON.stringify({
+            message: msg,
             language: state.lang,
             session_id: getSessionId()  // Include session_id for server-side context
           })
