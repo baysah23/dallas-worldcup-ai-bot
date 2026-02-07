@@ -5028,8 +5028,8 @@
       background: rgba(255, 255, 255, 0.15);
       border: 1px solid rgba(255, 255, 255, 0.2);
       border-radius: 12px;
-      padding: 10px 16px;
-      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+      padding: 10px 10px;
+      box-shadow: 0 8px 20px rgba(106, 85, 85, 0.3);
       backdrop-filter: blur(10px);
       -webkit-backdrop-filter: blur(10px);
     }
@@ -5083,7 +5083,7 @@
     @media (max-width: 479px) {
 
       .banner-media {
-        height: 230px !important;
+        height: 218px !important;
         width: 100%;
         position: relative;
         padding-bottom: 0 !important;
@@ -5102,10 +5102,14 @@
         right: 20px;
         transform: scale(0.8);
         transform-origin: bottom right;
+        gap: 0px;
       }
     }
 
     @media (min-width: 768px) {
+      .heroMedia {
+        height: 400px;
+      }
 
       .banner-media {
         /* Switch to "Cinema Strip" height */
@@ -5129,6 +5133,9 @@
 
     /* Desktop & Laptop (1200px+) */
     @media (min-width: 1200px) {
+      .heroMedia {
+        height: 540px;
+      }
 
       .banner-media {
         height: 540px !important;
@@ -5158,43 +5165,41 @@
     <!-- PURE HERO IMAGE (NO OVERLAYS) -->
     <section class="banner-section" aria-label="World Cup Banner">
 
-      <div class="banner-media">
-        <img src="/static/hero_stadium_night.png" alt="Stadium" class="banner-image">
+      <!-- <div class="banner-media">
+        <div class="heroCine">
+          <img src="/static/hero_stadium_night.png" alt="Stadium" class="banner-image">
+        </div>
         <div class="shadow-overlay"></div>
+      </div> -->
+
+      <div class="heroMedia" aria-hidden="true">
+        <div class="heroCine" id="heroCine">
+          <img class="heroImg" id="heroImg" src="/static/hero_stadium_night.png" alt="Stadium crowd under lights">
+        </div>
       </div>
 
-      <section class="counter-container" aria-label="Countdown Timer">
-        <div class="counter-title">UNTIL KICKOFF</div>
-
-        <div class="counter-card">
-          <div class="time-grid">
-
-            <div class="time-unit">
-              <div class="time-val" id="cdD">134</div>
-              <div class="time-key">DAYS</div>
-            </div>
-
-            <span class="time-dot">•</span>
-
-            <div class="time-unit">
-              <div class="time-val" id="cdH">05</div>
-              <div class="time-key">HRS</div>
-            </div>
-
-            <span class="time-dot">•</span>
-
-            <div class="time-unit">
-              <div class="time-val" id="cdM">42</div>
-              <div class="time-key">MINS</div>
-            </div>
-
-            <span class="time-dot">•</span>
-
-            <div class="time-unit">
-              <div class="time-val" id="cdS">12</div>
-              <div class="time-key">SECS</div>
-            </div>
-
+      <section class="countdownGlass" aria-label="Live countdown">
+        <div class="cdTop"><span id="cdTopText">UNTIL KICKOFF</span><span id="cdBadge" class="cdBadge" hidden>GAME
+            DAY</span></div>
+        <div class="cdRow" role="timer" aria-live="polite">
+          <div class="cdCell">
+            <div class="cdNum" id="cdD">00</div>
+            <div class="cdLbl">D</div>
+          </div>
+          <div class="cdSep">•</div>
+          <div class="cdCell">
+            <div class="cdNum" id="cdH">00</div>
+            <div class="cdLbl">H</div>
+          </div>
+          <div class="cdSep">•</div>
+          <div class="cdCell">
+            <div class="cdNum" id="cdM">00</div>
+            <div class="cdLbl">M</div>
+          </div>
+          <div class="cdSep">•</div>
+          <div class="cdCell">
+            <div class="cdNum" id="cdS">00</div>
+            <div class="cdLbl">S</div>
           </div>
         </div>
       </section>
