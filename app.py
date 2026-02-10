@@ -725,6 +725,27 @@ if not BUSINESS_PROFILE and os.path.exists(BUSINESS_PROFILE_PATH):
 if not BUSINESS_PROFILE:
     BUSINESS_PROFILE = "You are World Cup Concierge — a premium reservation assistant for World Cup fans. Keep replies concise, helpful, and action-oriented."
 
+
+def _venue_business_profile(venue_id: Optional[str] = None) -> str:
+    """
+    Return a venue-specific business profile if configured; otherwise fall back
+    to the global BUSINESS_PROFILE (which is sourced from business_profile.txt or env).
+
+    NOTE: Fallback still uses BUSINESS_PROFILE / business_profile.txt.
+    """
+    try:
+        cfg = _venue_cfg(venue_id)
+        ident = cfg.get("identity") if isinstance(cfg.get("identity"), dict) else {}
+        bp = ident.get("business_profile")
+        if isinstance(bp, str) and bp.strip():
+            return bp.strip()
+    except Exception:
+        pass
+
+    # Fallback: use the global BUSINESS_PROFILE (Demo/business_profile.txt).
+    # This is intentional so existing deployments continue to work.
+    return BUSINESS_PROFILE
+
 # ============================================================
 # Business Rules (edit here)
 # ============================================================
@@ -5232,12 +5253,14 @@ def chat():
             q = next_question(sess)
             return jsonify({"reply": q, "rate_limit_remaining": remaining})
 
-        # Otherwise: normal Q&A using OpenAI (with language + business profile + menu)
+        # Otherwise: normal Q&A using OpenAI (with language + venue-specific business profile + menu)
+        vid_for_profile = _venue_id()
+        bp = _venue_business_profile(vid_for_profile)
         system_msg = f"""
-    You are a World Cup 2026 Dallas business concierge.
+    You are a World Cup 2026 business concierge for this venue.
 
     Business profile (source of truth):
-    {BUSINESS_PROFILE}
+    {bp}
 
     Menu (source of truth, language={lang}):
     {json.dumps(MENU.get(lang, MENU['en']), ensure_ascii=False)}
@@ -10314,9 +10337,15 @@ def api_venue_identity():
     show = bool(cfg.get("show_location_line", (feat or {}).get("show_location_line", False)))
     loc = str(cfg.get("location_line") or (ident or {}).get("location_line") or "").strip()
 
+    # Venue display name + greeting (fully venue-driven)
+    venue_name = str(cfg.get("name") or ident.get("venue_name") or "").strip()
+    greeting = str(ident.get("greeting") or "").strip()
+
     return jsonify({
         "ok": True,
         "venue_id": vid,
+        "venue_name": venue_name,
+        "greeting": greeting,
         "show_location_line": show,
         "location_line": loc,
     })
