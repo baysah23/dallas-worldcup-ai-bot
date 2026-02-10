@@ -5117,6 +5117,15 @@ def chat():
             }), 403
 
         data = request.get_json(force=True) or {}
+
+        # Venue context for fan chat:
+        try:
+            raw_vid = str(data.get("venue_id") or "").strip()
+            if raw_vid:
+                g.venue_id = _slugify_venue_id(raw_vid)
+        except Exception:
+            # If anything goes wrong, fall back to whatever _set_venue_ctx resolved.
+            pass
         msg = (data.get("message") or "").strip()
         lang = norm_lang(data.get("language") or data.get("lang"))
         sid = get_session_id()
