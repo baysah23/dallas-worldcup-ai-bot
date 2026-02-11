@@ -7317,9 +7317,11 @@
 
       async function fetchPollStateApi() {
         try {
-          // BUG FIX: Include client_id so backend can return voted_for status
           const clientId = getOrCreateClientId();
-          const r = await fetch(`/api/poll/state?client_id=${encodeURIComponent(clientId)}`, { cache: 'no-store' });
+          const params = new URLSearchParams();
+          if (state.venue_id) params.set('venue', state.venue_id);
+          params.set('client_id', clientId);
+          const r = await fetch(`/api/poll/state?${params.toString()}`, { cache: 'no-store' });
           if (!r.ok) return null;
           const j = await r.json();
           return (j && j.ok) ? j : null;
@@ -7330,11 +7332,13 @@
 
       async function sendPollVoteApi(team) {
         const client_id = getOrCreateClientId();
+        const payload = { client_id, team };
+        if (state.venue_id) payload.venue_id = state.venue_id;
         try {
           const res = await fetch('/api/poll/vote', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ client_id, team })
+            body: JSON.stringify(payload)
           });
 
           let j = null;
