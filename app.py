@@ -4010,6 +4010,8 @@ FANZONE_ADMIN_HTML = r"""
     box.innerHTML = html;
   }
 
+  let pollStatusTimer = null;
+
   async function loadPollStatus(){
     try{
       setPollStatus('<div class="sub">Loading poll status…</div>');
@@ -4047,6 +4049,9 @@ FANZONE_ADMIN_HTML = r"""
       );
     }catch(e){
       setPollStatus('<div class="sub">Poll status unavailable</div>');
+    }finally{
+      if(pollStatusTimer) clearTimeout(pollStatusTimer);
+      pollStatusTimer = setTimeout(loadPollStatus, 5000);
     }
   }
 
@@ -5763,6 +5768,28 @@ def _poll_store_read() -> Dict[str, Any]:
 def _poll_store_write(data: Dict[str, Any]) -> None:
     _safe_write_json_file(POLL_STORE_FILE, data)
 
+
+def _ensure_venue_ctx_from_poll(body: Optional[Dict[str, Any]] = None) -> str:
+    """Resolve venue for poll APIs from query/header/body and apply to g.venue_id."""
+    raw_candidates = [
+        (request.args.get("venue") or "").strip(),
+        (request.headers.get("X-Venue-Id") or "").strip(),
+        (body.get("venue_id") or "").strip() if isinstance(body, dict) else "",
+        getattr(g, "venue_id", "").strip(),
+    ]
+    raw = ""
+    for v in raw_candidates:
+        if v:
+            raw = str(v).strip()
+            if raw:
+                break
+    vid = _slugify_venue_id(raw) if raw else _venue_id()
+    try:
+        g.venue_id = vid
+    except Exception:
+        pass
+    return vid
+
 def _poll_match_bucket(match_id: str) -> Dict[str, Any]:
     data = _poll_store_read()
     matches = data.get("matches", {})
@@ -5869,14 +5896,11 @@ def api_poll_state():
     Always returns JSON so the Fan Zone UI never breaks.
     """
     try:
-        # ✅ venue from query
-        venue = (request.args.get("venue") or "").strip()
+        vid = _ensure_venue_ctx_from_poll()
 
         def _venue_fanzone_cfg():
-            if not venue:
-                return {}
             try:
-                path = os.path.join(VENUES_DIR, f"{venue}.json")
+                path = os.path.join(VENUES_DIR, f"{vid}.json")
                 if not os.path.exists(path):
                     return {}
                 with open(path, "r", encoding="utf-8") as f:
@@ -5935,6 +5959,8 @@ def api_poll_state():
         if total > 0:
             winner = max(teams, key=lambda t: counts.get(t, 0))
 
+        top = [{"name": t, "votes": int(counts.get(t, 0))} for t in teams]
+
         return jsonify({
             "ok": True,
             "can_vote": can_vote,
@@ -5952,6 +5978,8 @@ def api_poll_state():
             "locked": locked,
             "post_match": post_match,
             "winner": winner,
+            "title": "Match of the Day Poll",
+            "top": top,
             "counts": {t: int(counts.get(t, 0)) for t in teams},
             "percentages": {t: round(pct[t], 1) for t in teams},
             "percent": {t: round(pct[t], 1) for t in teams},
@@ -5985,6 +6013,7 @@ def api_poll_state():
 @app.route("/api/poll/vote", methods=["POST"])
 def api_poll_vote():
     data = request.get_json(silent=True) or {}
+    _ensure_venue_ctx_from_poll(data)
     client_id_raw = (data.get("client_id") or "").strip()
     client_id = _poll_client_id(client_id_raw)
     team = (data.get("team") or "").strip()
@@ -10059,11 +10088,12 @@ select option{
     box.innerHTML = html;
   }
 
+  let pollStatusTimer = null;
+
   async function loadPollStatus(){
     try{
       setPollStatus('<div class="sub">Loading poll status…</div>');
 
-      // ✅ Venue-scoped poll state
       const res = await fetch(
         `/api/poll/state?venue=${encodeURIComponent(VENUE||"")}&_=${Date.now()}`,
         { cache: "no-store" }
@@ -10094,6 +10124,9 @@ select option{
       );
     }catch(e){
       setPollStatus('<div class="sub">Poll status unavailable</div>');
+    }finally{
+      if(pollStatusTimer) clearTimeout(pollStatusTimer);
+      pollStatusTimer = setTimeout(loadPollStatus, 5000);
     }
   }
 
