@@ -5815,7 +5815,36 @@
         });
       }
 
-      normalizeChatWelcome();
+      // On language switch: clear chat, clear message input, show loading, fetch greeting (cached after first time), then show translated bubble
+      clearChatOnly();
+      const msgInput = $('msg');
+      if (msgInput) msgInput.value = '';
+      const log = $('chatLog');
+      if (log) {
+        const wrap = document.createElement('div');
+        wrap.className = 'chatLine bot';
+        wrap.setAttribute('data-welcome', '1');
+        wrap.setAttribute('data-loading', '1');
+        const bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        bubble.textContent = 'Loading…';
+        wrap.appendChild(bubble);
+        log.appendChild(wrap);
+        log.scrollTop = log.scrollHeight;
+      }
+      loadVenueIdentityLine(lang).then(() => {
+        try {
+          const el = log && log.querySelector('.chatLine.bot[data-loading="1"] .bubble, .chatLine.bot .bubble');
+          if (el) {
+            el.closest('.chatLine')?.removeAttribute?.('data-loading');
+            el.textContent = state.venue_greeting || 'Hello!';
+          } else {
+            ensureChatWelcome();
+            const b = log && log.querySelector('.chatLine.bot .bubble');
+            if (b && state.venue_greeting) b.textContent = state.venue_greeting;
+          }
+        } catch (e) { console.warn('greeting after lang switch', e); }
+      });
     }
 
     // Also add resize/orientation handler to keep bubble aligned
@@ -5959,22 +5988,22 @@
       log.scrollTop = log.scrollHeight;
     }
 
-    function clearChatPreserveWelcome() {
+    /** Clear chat DOM + localStorage + server session. Does NOT add any welcome bubble. */
+    function clearChatOnly() {
       const log = $('chatLog');
       if (!log) return;
       log.innerHTML = '';
       log.dataset.hasWelcome = '';
-
-      // Clear localStorage chat history
       clearChatHistory();
-
-      // Clear server-side session (fire and forget)
       fetch('/chat/clear', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: getSessionId() })
+        body: JSON.stringify({ session_id: getSessionId(), lang: state.lang || 'en' })
       }).catch(() => { });
+    }
 
+    function clearChatPreserveWelcome() {
+      clearChatOnly();
       try { ensureChatWelcome(); } catch (e) { console.warn('chat welcome failed', e); }
     }
 
@@ -6874,7 +6903,6 @@
       $$('#chatLangRow [data-lang]').forEach(btn => {
         btn.addEventListener('click', () => {
           setLang((btn.dataset?.lang || 'en'));
-          try { normalizeChatWelcome(); } catch (e) { }
         });
       });
     }
@@ -6893,7 +6921,7 @@
 
     // ---------- boot ----------
 
-    async function loadVenueIdentityLine() {
+    async function loadVenueIdentityLine(optionalLang) {
       const el = $('venueIdentityLine');
       const chatTitleEl = document.querySelector('#sec-chat .cardTitle');
 
@@ -6906,6 +6934,9 @@
         if (venueId && !params.get('venue')) {
           params.set('venue', venueId);
         }
+        // Pass lang so backend can return greeting in that language (or translate via LLM)
+        const lang = optionalLang != null ? optionalLang : (state.lang || 'en');
+        params.set('lang', lang);
 
         const url = '/api/venue_identity' + (params.toString() ? ('?' + params.toString()) : '');
         const r = await fetch(url, { cache: 'no-store' });
