@@ -5281,7 +5281,7 @@ def chat():
 
 Rules:
 - Be friendly, fast, and concise.
-- Always respond in the user's chosen language: {lang}.
+- Always respond in the user's chosen language: {lang}. This includes short greetings: if the user says "hi", "hello", "hola", "bonjour", etc., respond with a brief friendly greeting in language {lang} only (e.g. in Spanish if lang is es, in French if lang is fr).
 - If user asks about the World Cup match schedule, tell them to use the **Schedule** panel on the page, then continue booking.
 - For menu/food/drink/prices/diet questions, do NOT guess: direct them to the **Menu** panel on the page, then continue booking.
 - If the user wants a reservation, do NOT tell them to type "reservation". Start collecting details immediately.
@@ -5324,6 +5324,35 @@ Rules:
             "I can still help with a reservation — **how many guests** and **what time**?"
         )
         return jsonify({"reply": fallback, "rate_limit_remaining": 0}), 200
+
+
+@app.route("/chat/clear", methods=["POST"])
+def chat_clear():
+    """Clear server-side chat/reservation session for the given session_id.
+    Used when the user switches language so the conversation and reservation state reset.
+    """
+    data = request.get_json(silent=True) or {}
+    sid = (data.get("session_id") or "").strip()
+    lang = norm_lang(data.get("lang") or data.get("language") or "en")
+    if sid:
+        # Reset session to initial state (same sid, fresh state)
+        _sessions[sid] = {
+            "mode": "idle",
+            "lang": lang,
+            "lead": {
+                "name": "",
+                "phone": "",
+                "date": "",
+                "time": "",
+                "party_size": 0,
+                "language": lang,
+                "status": "New",
+                "vip": "No",
+            },
+            "updated_at": time.time(),
+        }
+    return jsonify({"ok": True})
+
 
 # ============================================================
 # Admin dashboard
@@ -10354,20 +10383,77 @@ def api_intake():
 
 
 
+# In-memory cache for translated greetings: (greeting_text, lang) -> translated_text. Avoids repeated LLM calls.
+_greeting_translation_cache = {}
+
+def _translate_greeting_via_llm(text: str, target_lang: str) -> str:
+    """Translate greeting to target language using LLM. lang param from frontend: en, es, fr, pt.
+    Use LLM to translate; return original text on failure.
+    Uses OpenAI v1 API (chat.completions) when available; openai>=1.0.0 removed ChatCompletion.
+    Results are cached so same (text, lang) returns instantly.
+    """
+    if not (text and target_lang and target_lang != "en"):
+        return text or ""
+    cache_key = (text, target_lang)
+    if cache_key in _greeting_translation_cache:
+        return _greeting_translation_cache[cache_key]
+    try:
+        lang_meaning = {"en": "English", "es": "Spanish", "pt": "Portuguese", "fr": "French"}
+        lang_name = lang_meaning.get(target_lang, target_lang)
+        messages = [
+            {"role": "system", "content": (
+                f"The user will send a short text. Translate it to {lang_name} only. "
+                "Reply with ONLY the translation, no explanation or quotes."
+            )},
+            {"role": "user", "content": text},
+        ]
+        model = os.environ.get("CHAT_MODEL", "gpt-4o-mini")
+        out = None
+        try:
+            from openai import OpenAI
+            api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+            if not api_key:
+                raise ValueError("OPENAI_API_KEY not set")
+            v1 = OpenAI(api_key=api_key)
+            r = v1.chat.completions.create(model=model, messages=messages)
+            out = (r.choices[0].message.content or "").strip()
+        except Exception:
+            pass
+        if out:
+            _greeting_translation_cache[cache_key] = out
+            return out
+        try:
+            if client is not None and hasattr(client, "responses"):
+                resp = client.responses.create(model=model, input=messages)
+                out = (resp.output_text or "").strip()
+                if out:
+                    _greeting_translation_cache[cache_key] = out
+                    return out
+        except Exception:
+            pass
+        return text
+    except Exception:
+        return text
+
+
 @app.route("/api/venue_identity")
 def api_venue_identity():
     """Fan-safe: minimal venue identity (branding-safe).
 
+    Query params:
+      - venue: venue slug (e.g. qa-sandbox)
+      - lang: optional; if set and not 'en', greeting is translated to that language via LLM.
+
     Returns:
       - show_location_line (bool feature flag)
       - location_line (string)
+      - greeting: in requested language when lang is provided
     """
     try:
         vid = _venue_id()
     except Exception:
         vid = DEFAULT_VENUE_ID
 
-    # ✅ NEW: if venue is inactive, hide identity (prevents lingering fan views)
     if not _venue_is_active(vid):
         return jsonify({"ok": False, "error": "Venue is inactive"}), 404
 
@@ -10375,13 +10461,15 @@ def api_venue_identity():
     feat = cfg.get("features") if isinstance(cfg.get("features"), dict) else {}
     ident = cfg.get("identity") if isinstance(cfg.get("identity"), dict) else {}
 
-    # Prefer top-level (new schema), fallback to legacy nested keys
     show = bool(cfg.get("show_location_line", (feat or {}).get("show_location_line", False)))
     loc = str(cfg.get("location_line") or (ident or {}).get("location_line") or "").strip()
 
-    # Venue display name + greeting (fully venue-driven)
     venue_name = str(cfg.get("name") or ident.get("venue_name") or "").strip()
     greeting = str(ident.get("greeting") or "").strip()
+
+    req_lang = norm_lang(request.args.get("lang"))
+    if req_lang != "en" and greeting:
+        greeting = _translate_greeting_via_llm(greeting, req_lang)
 
     return jsonify({
         "ok": True,
