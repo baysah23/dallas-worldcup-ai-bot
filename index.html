@@ -4410,7 +4410,7 @@
       /* Chat header - allow stacking if needed */
       #sec-chat .cardHead.chatHead {
         flex-wrap: wrap;
-        gap: 10px;
+        gap: 5px;
         padding: 12px;
       }
 
@@ -4424,15 +4424,15 @@
       #chatLangRow.segmented {
         flex: 1 1 100%;
         max-width: 100%;
-        padding: 2px;
+        padding: 4px;
         justify-content: space-between;
         /* Distribute buttons evenly */
       }
 
       /* Smaller buttons on mobile */
       #chatLangRow .segBtn {
-        padding: 6px 8px;
-        font-size: 11px;
+        padding: 6px 5px;
+        font-size: 10px;
         font-weight: 600;
         min-height: 28px;
         flex: 1 1 auto;
@@ -4450,7 +4450,7 @@
       .chatInputRow {
         display: flex;
         align-items: center;
-        gap: 3px;
+        gap: 2px;
         flex-wrap: nowrap;
         padding: 5px 5px 5px 5px;
         /* margin:10px; */
@@ -4459,6 +4459,12 @@
       .hint {
         margin-top: 40px;
       }
+
+      #sec-chat .chatHeadLeft .cardTitle {
+      font-size: 16px; /* Reduced from default h2 size */
+      line-height: 1.2;
+      margin: 0; /* Remove default browser margins if any */
+  }
     }
 
     /* ===== VERY SMALL MOBILE (< 360px) ===== */
@@ -5170,19 +5176,12 @@
     <!-- PURE HERO IMAGE (NO OVERLAYS) -->
     <section class="banner-section" aria-label="World Cup Banner">
 
-      <!-- <div class="banner-media">
-        <div class="heroCine">
-          <img src="/static/hero_stadium_night.png" alt="Stadium" class="banner-image">
-        </div>
-        <div class="shadow-overlay"></div>
-      </div> -->
-
       <div class="heroMedia" aria-hidden="true">
         <div class="heroCine" id="heroCine">
           <img class="heroImg" id="heroImg" src="/static/hero_stadium_night.png" alt="Stadium crowd under lights">
         </div>
       </div>
-
+      
       <section class="countdownGlass" aria-label="Live countdown">
         <div class="cdTop"><span id="cdTopText">UNTIL KICKOFF</span><span id="cdBadge" class="cdBadge" hidden>GAME
             DAY</span></div>
