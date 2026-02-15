@@ -4022,13 +4022,14 @@ FANZONE_ADMIN_HTML = r"""
         return;
       }
 
-      // Prefill fields from live poll state (best-effort)
+      // Prefill fields from live poll state (best-effort); do not overwrite when user is typing (field focused)
       try{
-        if($("pollSponsorText") && typeof data.sponsor_text === "string") $("pollSponsorText").value = data.sponsor_text;
+        const sponsorEl = $("pollSponsorText");
+        if(sponsorEl && typeof data.sponsor_text === "string" && document.activeElement !== sponsorEl) sponsorEl.value = data.sponsor_text;
         const m = data.match || {};
-        if($("motdHome") && m.home) $("motdHome").value = m.home;
-        if($("motdAway") && m.away) $("motdAway").value = m.away;
-        if($("motdKickoff") && (m.datetime_utc || m.kickoff)) $("motdKickoff").value = (m.datetime_utc || m.kickoff);
+        const motdHome = $("motdHome"); if(motdHome && m.home && document.activeElement !== motdHome) motdHome.value = m.home;
+        const motdAway = $("motdAway"); if(motdAway && m.away && document.activeElement !== motdAway) motdAway.value = m.away;
+        const motdKickoff = $("motdKickoff"); if(motdKickoff && (m.datetime_utc || m.kickoff) && document.activeElement !== motdKickoff) motdKickoff.value = (m.datetime_utc || m.kickoff);
       }catch(e){}
 
       const locked = !!data.locked;
@@ -4278,7 +4279,33 @@ def norm_lang(lang: str) -> str:
 @app.route("/fanzone.json")
 def fanzone_json():
     lang = norm_lang(request.args.get("lang"))
-    return jsonify({"lang": lang, "events": FANZONE_DEMO.get(lang, FANZONE_DEMO["en"])})
+    raw_venue = (request.args.get("venue") or "").strip()
+    # Fallback: derive venue from Referer path (e.g. .../v/qa-sandbox) if not in query
+    if not raw_venue and request.referrer:
+        m = re.search(r"/v/([^/?#]+)", request.referrer)
+        if m:
+            raw_venue = m.group(1).strip()
+    try:
+        vid = _slugify_venue_id(raw_venue or getattr(g, "venue_id", "") or _venue_id()) if (raw_venue or getattr(g, "venue_id", None)) else None
+    except Exception:
+        vid = None
+    sponsor_text = ""
+    if vid:
+        # Read venue file directly so sponsor_text is always what admin last saved (no cache)
+        path = os.path.join(VENUES_DIR, f"{vid}.json")
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    vcfg = json.load(f) or {}
+                fz = (vcfg.get("fan_zone") or {}) if isinstance(vcfg.get("fan_zone"), dict) else {}
+                sponsor_text = str(fz.get("poll_sponsor_text") or "").strip()
+            except Exception:
+                pass
+    return jsonify({
+        "lang": lang,
+        "events": FANZONE_DEMO.get(lang, FANZONE_DEMO["en"]),
+        "sponsor_text": sponsor_text,
+    })
 
 @app.route("/schedule.json")
 def schedule_json():
@@ -5581,7 +5608,7 @@ def get_config() -> Dict[str, str]:
         return dict(cached)
 
     cfg: Dict[str, str] = {
-        "poll_sponsor_text": "Fan Pick presented by World Cup Dallas HQ",
+        "poll_sponsor_text": "",
         "match_of_day_id": "",
         "motd_home": "",
         "motd_away": "",
@@ -5592,11 +5619,7 @@ def get_config() -> Dict[str, str]:
         "ops_waitlist_mode": "false",
     }
 
-    # ============================================================
-    # BUG FIX: Read fan_zone settings from venue config file
-    # Admin saves to config/venues/{venue}.json under fan_zone key
-    # This was the source of BUG_FAN_ZONE_PERSISTENCE_001
-    # ============================================================
+    # Sponsor and fan_zone: always from venue config (what admin sets); no hardcoded fallback.
     try:
         venue_cfg_path = os.path.join(VENUES_DIR, f"{vid}.json")
         if os.path.exists(venue_cfg_path):
@@ -15416,7 +15439,7 @@ def get_config() -> Dict[str, str]:
         return dict(cached)
 
     cfg: Dict[str, str] = {
-        "poll_sponsor_text": "Fan Pick presented by World Cup Dallas HQ",
+        "poll_sponsor_text": "",
         "match_of_day_id": "",
         "motd_home": "",
         "motd_away": "",
@@ -15427,11 +15450,7 @@ def get_config() -> Dict[str, str]:
         "ops_waitlist_mode": "false",
     }
 
-    # ============================================================
-    # BUG FIX: Read fan_zone settings from venue config file
-    # Admin saves to config/venues/{venue}.json under fan_zone key
-    # This was the source of BUG_FAN_ZONE_PERSISTENCE_001
-    # ============================================================
+    # Sponsor and fan_zone: always from venue config (what admin sets); no hardcoded fallback.
     try:
         venue_cfg_path = os.path.join(VENUES_DIR, f"{vid}.json")
         if os.path.exists(venue_cfg_path):

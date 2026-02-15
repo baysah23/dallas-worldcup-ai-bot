@@ -1917,6 +1917,7 @@
       justify-content: space-between;
       gap: 10px;
       margin-bottom: 8px;
+      min-width: 0;
     }
 
     .menuUpsellTitle {
@@ -1926,6 +1927,9 @@
       text-transform: uppercase;
       opacity: .86;
       white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      min-width: 0;
     }
 
     .menuUpsellBadge {
@@ -1937,6 +1941,7 @@
       background: rgba(255, 255, 255, .06);
       opacity: .9;
       white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .menuUpsellItem {
@@ -5390,6 +5395,9 @@
                 <!-- To do:There is not any feature or backend functionality  created or implemented for this fzCollapseToggle -->
                 <button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button>
               </div>
+              <div class="fz-row fz-muted" style="justify-content:flex-start; font-size:12px; margin-bottom:6px;" id="fanzoneSponsorRow">
+                <span id="fanzoneSponsorLabel">Presented by …</span>
+              </div>
               <div class="fz-row" style="justify-content:flex-start;">
                 <div class="fz-chip" id="supporterChip" title="Personalization stored on this device only">
                   <span id="supporterFlag" aria-hidden="true">🏁</span><span>Supporting:</span> <b
@@ -5540,7 +5548,7 @@
       lang: (localStorage.getItem('wc_lang') || 'en'),
       scope: (localStorage.getItem('wc_scope') || 'all'), // 'all' | 'featured' (future-proof)
       // === FIX: Venue context persistence ===
-      venue_id: '',           // Active venue identifier
+      venue_id: (function(){ var m = (typeof location !== 'undefined' && location.pathname || '').match(/\/v\/([^/]+)/); return m ? m[1] : ''; })(), // from path so Fan Zone / fanzone.json have venue before API
       venue_name: '',         // Venue display name for chat header
       venue_greeting: '',     // Venue-specific greeting message
     };
@@ -5765,18 +5773,18 @@
     function updateSegmentIndicator(container, activeBtn) {
       if (!container || !activeBtn) return;
 
-      // Get computed padding from CSS (handles responsive changes)
-      const style = getComputedStyle(container);
-      const containerPadding = parseFloat(style.paddingLeft) || 3;
+      // Use layout coordinates (offsetLeft/offsetWidth) so the bubble stays aligned when the
+      // language row is scrollable on mobile; getBoundingClientRect can misalign when container scrolls.
+      let offset = 0;
+      let el = activeBtn;
+      while (el && el !== container) {
+        offset += el.offsetLeft || 0;
+        el = el.offsetParent;
+      }
+      const width = activeBtn.offsetWidth || activeBtn.getBoundingClientRect().width;
+      offset = Math.max(0, offset);
 
-      const containerRect = container.getBoundingClientRect();
-      const btnRect = activeBtn.getBoundingClientRect();
-
-      // Calculate offset relative to container's content area
-      const offset = btnRect.left - containerRect.left - containerPadding;
-      const width = btnRect.width;
-
-      container.style.setProperty('--seg-offset', `${Math.max(0, offset)}px`);
+      container.style.setProperty('--seg-offset', `${offset}px`);
       container.style.setProperty('--seg-width', `${width}px`);
     }
 
@@ -5807,9 +5815,10 @@
           btn.classList.toggle('active', isActive);
 
           if (isActive) {
-            // Use requestAnimationFrame to ensure DOM has updated
+            // Run once after DOM update, then again after layout settles (fixes mobile bubble misalignment)
             requestAnimationFrame(() => {
               updateSegmentIndicator(segWrap, btn);
+              requestAnimationFrame(() => updateSegmentIndicator(segWrap, btn));
             });
           }
         });
@@ -6691,18 +6700,30 @@
     // ---------- fanzone / vip (placeholders if routes return data) ----------
     async function loadFanzone() {
       const box = $('fanzoneBody');
-      if (!box) return;
-      box.innerHTML = `<div class="hint">Loading…</div>`;
+      if (box) box.innerHTML = `<div class="hint">Loading…</div>`;
+      // Match /v/<id> at start or after subpath (e.g. /v/qa-sandbox or /app/v/qa-sandbox)
+      const venueId = state.venue_id || (location.pathname.match(/\/v\/([^/]+)/) || [])[1] || '';
+      const venueParam = venueId ? `&venue=${encodeURIComponent(venueId)}` : '';
       try {
-        const data = await fetchJSON('/fanzone.json');
+        const data = await fetchJSON('/fanzone.json?lang=' + (state.lang || 'en') + venueParam);
         const items = data.items || data.events || [];
-        box.innerHTML = items.map(it => `<div class="fzItem">
+        if (box) {
+          box.innerHTML = items.map(it => `<div class="fzItem">
       <div class="fzTitle">${escapeHtml(it.title || it.name || '')}</div>
       <div class="fzMeta">${escapeHtml(it.when || it.date || '')}</div>
       <div class="fzDesc">${escapeHtml(it.desc || it.description || '')}</div>
     </div>`).join('') || `<div class="hint">No events right now.</div>`;
+        }
+        const sponsorEl = $('fanzoneSponsorLabel');
+        const sponsorRow = $('fanzoneSponsorRow');
+        if (sponsorEl && typeof data.sponsor_text === 'string' && data.sponsor_text.trim()) {
+          sponsorEl.textContent = 'Presented by ' + data.sponsor_text.trim();
+          if (sponsorRow) sponsorRow.style.display = '';
+        } else if (sponsorRow) {
+          sponsorRow.style.display = 'none';
+        }
       } catch (e) {
-        box.innerHTML = `<div class="hint">Fan Zone unavailable.</div>`;
+        if (box) box.innerHTML = `<div class="hint">Fan Zone unavailable.</div>`;
       }
     }
 
@@ -6925,8 +6946,8 @@
       const el = $('venueIdentityLine');
       const chatTitleEl = document.querySelector('#sec-chat .cardTitle');
 
-      // extract venue_id from /v/<venue_id>
-      const m = location.pathname.match(/^\/v\/([^/]+)/);
+      // extract venue_id from /v/<venue_id> (works with subpaths e.g. /app/v/qa-sandbox)
+      const m = location.pathname.match(/\/v\/([^/]+)/);
       const venueId = m ? m[1] : '';
 
       try {
