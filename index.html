@@ -5557,6 +5557,7 @@
     // ---------- Session & Chat Persistence ----------
     const CHAT_SESSION_KEY = 'wc_chat_session_id';
     const CHAT_HISTORY_KEY = 'wc_chat_history';
+    const LAST_RESERVATION_KEY = 'wc_last_reservation';
 
     function getSessionId() {
       let sid = localStorage.getItem(CHAT_SESSION_KEY);
@@ -5591,6 +5592,55 @@
 
     function clearChatHistory() {
       localStorage.removeItem(CHAT_HISTORY_KEY);
+    }
+
+    function saveLastReservation(replyText) {
+      // Detect reservation confirmation: has "Name:", "Phone:", "Date:", "Time:", "Party size:"
+      if (!replyText || typeof replyText !== 'string') return;
+      const hasName = /Name:\s*[^\n]+/i.test(replyText);
+      const hasPhone = /Phone:\s*[^\n]+/i.test(replyText);
+      const hasDate = /Date:\s*[^\n]+/i.test(replyText);
+      if (hasName && hasPhone && hasDate) {
+        try {
+          const reservation = {
+            name: (replyText.match(/Name:\s*([^\n]+)/i)?.[1] || '').trim(),
+            phone: (replyText.match(/Phone:\s*([^\n]+)/i)?.[1] || '').trim(),
+            date: (replyText.match(/Date:\s*([^\n]+)/i)?.[1] || '').trim(),
+            time: (replyText.match(/Time:\s*([^\n]+)/i)?.[1] || '').trim(),
+            party_size: (replyText.match(/Party size:\s*([^\n]+)/i)?.[1] || '').trim(),
+            status: (replyText.match(/Status:\s*([^\n]+)/i)?.[1] || 'New').trim(),
+            vip: (replyText.match(/VIP:\s*([^\n]+)/i)?.[1] || 'No').trim(),
+            saved_at: new Date().toISOString()
+          };
+          localStorage.setItem(LAST_RESERVATION_KEY, JSON.stringify(reservation));
+        } catch (e) {
+          console.warn('Could not save reservation:', e);
+        }
+      }
+    }
+
+    function getLastReservation() {
+      try {
+        const raw = localStorage.getItem(LAST_RESERVATION_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function formatReservationRecall(reservation) {
+      if (!reservation) return null;
+      return [
+        '📌 Your last saved reservation:',
+        `Name: ${reservation.name || '—'}`,
+        `Phone: ${reservation.phone || '—'}`,
+        `Date: ${reservation.date || '—'}`,
+        `Time: ${reservation.time || '—'}`,
+        `Party size: ${reservation.party_size || '—'}`,
+        `Status: ${reservation.status || '—'}`,
+        `VIP: ${reservation.vip || '—'}`
+      ].join('\n');
     }
 
     // ---------- helpers ----------
@@ -6065,7 +6115,10 @@
           })
         });
         const data = await r.json().catch(() => ({ reply: 'Sorry — something went wrong.' }));
-        chatAppend('bot', data.reply || '…');
+        const reply = data.reply || '…';
+        chatAppend('bot', reply);
+        // Save reservation to localStorage if it's a confirmation (survives refresh/restart)
+        saveLastReservation(reply);
       } catch (e) {
         chatAppend('bot', 'Network issue — please try again.');
       } finally {
