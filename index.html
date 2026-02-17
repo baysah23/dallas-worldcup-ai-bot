@@ -5614,16 +5614,22 @@
     };
 
     function getWelcomeForState(lang) {
-      // === FIX: Use venue-specific greeting if available ===
+      const k = window.__wcCountdownStateKind || '';
+      const L = (lang || state.lang || 'en').toLowerCase();
+      
+      // === FIX: Match-day greeting ALWAYS takes priority (even if venue greeting exists) ===
+      if (k === 'game_day') {
+        // Return match-day greeting in requested language
+        return WELCOME_GAMEDAY_BY_LANG[L] || WELCOME_GAMEDAY_BY_LANG.en;
+      }
+      
+      // === FIX: Use venue-specific greeting if available (non-game-day only) ===
       if (state.venue_greeting) {
         return state.venue_greeting;
       }
-
-      const k = window.__wcCountdownStateKind || '';
-      const L = (lang || state.lang || 'en').toLowerCase();
-      const primary = WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
-      const gameday = WELCOME_GAMEDAY_BY_LANG[L] || WELCOME_GAMEDAY_BY_LANG.en;
-      return (k === 'game_day') ? gameday : primary;
+      
+      // Fallback to primary greeting
+      return WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
     }
     // ---------- admin-only countdown indicator ----------
     function isAdminDebug() {
@@ -5823,7 +5829,7 @@
         });
       }
 
-      // On language switch: clear chat, clear message input, show loading, fetch greeting (cached after first time), then show translated bubble
+      // On language switch: clear chat, clear message input, show loading, then show greeting
       clearChatOnly();
       const msgInput = $('msg');
       if (msgInput) msgInput.value = '';
@@ -5840,19 +5846,38 @@
         log.appendChild(wrap);
         log.scrollTop = log.scrollHeight;
       }
-      loadVenueIdentityLine(lang).then(() => {
-        try {
-          const el = log && log.querySelector('.chatLine.bot[data-loading="1"] .bubble, .chatLine.bot .bubble');
-          if (el) {
-            el.closest('.chatLine')?.removeAttribute?.('data-loading');
-            el.textContent = state.venue_greeting || 'Hello!';
-          } else {
-            ensureChatWelcome();
-            const b = log && log.querySelector('.chatLine.bot .bubble');
-            if (b && state.venue_greeting) b.textContent = state.venue_greeting;
-          }
-        } catch (e) { console.warn('greeting after lang switch', e); }
-      });
+      
+      // On game day, skip loading venue greeting (match-day greeting takes priority)
+      const isGameDay = (window.__wcCountdownStateKind || '') === 'game_day';
+      if (isGameDay) {
+        // Clear venue greeting on game day so match-day greeting shows
+        state.venue_greeting = '';
+        // Show match-day greeting immediately
+        setTimeout(() => {
+          try {
+            const el = log && log.querySelector('.chatLine.bot[data-loading="1"] .bubble');
+            if (el) {
+              el.closest('.chatLine')?.removeAttribute?.('data-loading');
+              el.textContent = getWelcomeForState(lang);
+            } else {
+              ensureChatWelcome();
+            }
+          } catch (e) { console.warn('greeting after lang switch', e); }
+        }, 100);
+      } else {
+        // Non-game day: load venue greeting (will be translated)
+        loadVenueIdentityLine(lang).then(() => {
+          try {
+            const el = log && log.querySelector('.chatLine.bot[data-loading="1"] .bubble, .chatLine.bot .bubble');
+            if (el) {
+              el.closest('.chatLine')?.removeAttribute?.('data-loading');
+              el.textContent = getWelcomeForState(lang);
+            } else {
+              ensureChatWelcome();
+            }
+          } catch (e) { console.warn('greeting after lang switch', e); }
+        });
+      }
     }
 
     // Also add resize/orientation handler to keep bubble aligned
@@ -6049,8 +6074,16 @@
       }
     }
 
-    function openChatPrefill(text) {
+    async function openChatPrefill(text) {
       setSection('chat');
+      // On game day, skip loading venue greeting (match-day greeting takes priority)
+      const isGameDay = (window.__wcCountdownStateKind || '') === 'game_day';
+      if (isGameDay) {
+        // Clear venue greeting on game day so match-day greeting shows
+        state.venue_greeting = '';
+      } else {
+        await loadVenueIdentityLine();
+      }
       ensureChatWelcome();
       const input = $('msg');
       if (input) {
@@ -6199,6 +6232,20 @@
       function tick() {
         const now = new Date();
         const st = computeState(now, matches);
+        
+        // Allow manual override for testing (via localStorage or URL param)
+        let overrideKind = null;
+        try {
+          overrideKind = localStorage.getItem('wc_countdown_override') || 
+                        new URLSearchParams(location.search).get('countdown_state');
+          if (overrideKind) {
+            window.__wcCountdownStateKind = overrideKind;
+            updateAdminCountdownState(overrideKind);
+            maybeTriggerGameDayMessage(overrideKind);
+            return; // Skip normal countdown update when overridden
+          }
+        } catch (e) { }
+        
         window.__wcCountdownStateKind = st.kind;
         updateAdminCountdownState(st.kind);
         maybeTriggerGameDayMessage(st.kind);

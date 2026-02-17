@@ -6202,6 +6202,91 @@ def admin_update_config():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
 
+@app.route("/admin/api/drafts", methods=["GET", "POST"])
+def admin_api_drafts():
+    """Owner-only: manage message drafts (stored in venue config).
+    
+    GET: Returns drafts object from venue config.
+    POST: Saves drafts object to venue config (owner-only).
+    
+    Query params:
+      - key: admin key (required)
+      - venue: venue ID (required for POST, optional for GET - uses context)
+    """
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    
+    # POST requires owner role
+    if request.method == "POST":
+        ok2, resp2 = _require_admin(min_role="owner")
+        if not ok2:
+            return resp2
+    
+    # ✅ VENUE-SPECIFIC: Require explicit venue parameter (no fallback to context)
+    venue = (request.args.get("venue") or "").strip()
+    if not venue:
+        return jsonify({"ok": False, "error": "Missing venue parameter (required for venue-specific drafts)"}), 400
+    
+    venue_id = _slugify_venue_id(venue)
+    
+    # Load venue config
+    path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+    if not os.path.exists(path):
+        return jsonify({"ok": False, "error": f"Venue not found: {venue_id}"}), 404
+    
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            vcfg = json.load(f) or {}
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Failed to read venue config: {str(e)}"}), 500
+    
+    # GET: Return drafts
+    if request.method == "GET":
+        drafts = vcfg.get("drafts") if isinstance(vcfg.get("drafts"), dict) else {}
+        meta = {}
+        if "updated_at" in vcfg:
+            meta["updated_at"] = vcfg["updated_at"]
+        return jsonify({"ok": True, "drafts": drafts, "meta": meta})
+    
+    # POST: Save drafts (owner-only)
+    data = request.get_json(silent=True) or {}
+    drafts_data = data.get("drafts")
+    
+    if drafts_data is None:
+        return jsonify({"ok": False, "error": "Missing drafts object"}), 400
+    
+    if not isinstance(drafts_data, dict):
+        return jsonify({"ok": False, "error": "drafts must be a JSON object"}), 400
+    
+    # Update venue config with drafts
+    vcfg["drafts"] = drafts_data
+    vcfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    
+    # Write back to file
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(vcfg, f, indent=2, ensure_ascii=False, sort_keys=True)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Failed to write venue config: {str(e)}"}), 500
+    
+    # Invalidate cache
+    try:
+        _invalidate_venues_cache()
+    except Exception:
+        pass
+    
+    # Audit
+    ctx = _admin_ctx()
+    _audit("drafts.update", {
+        "venue": venue_id,
+        "actor": ctx.get("actor", ""),
+        "draft_keys": list(drafts_data.keys()) if isinstance(drafts_data, dict) else []
+    })
+    
+    meta = {"updated_at": vcfg["updated_at"]}
+    return jsonify({"ok": True, "drafts": drafts_data, "meta": meta})
+
 @app.route("/admin/api/rules", methods=["GET","POST"])
 def admin_api_rules():
     ok, resp = _require_admin(min_role="manager")
@@ -7286,6 +7371,17 @@ def admin_tpl():
                            role=role)
 
 
+@app.get("/admin/drafts")
+def admin_drafts_page():
+    """Standalone Drafts page: no tabs, fetch on load. Requires owner."""
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+    key = (request.args.get("key") or "").strip()
+    venue = (request.args.get("venue") or "").strip()
+    return render_template("admin_drafts.html", key=key, venue=venue)
+
+
 @app.route("/admin")
 def admin():
     """
@@ -7597,6 +7693,50 @@ th{
 }
 .btnTiny:hover{background:rgba(255,255,255,.10)}
 
+.modal-overlay{
+  display:none;
+  position:fixed;
+  top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.75);
+  z-index:9999;
+  align-items:center;
+  justify-content:center;
+  animation:fadeIn .2s ease
+}
+.modal-overlay.show{display:flex}
+.modal-box{
+  background:linear-gradient(180deg, rgba(15,27,51,.98), rgba(11,16,32,.98));
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:18px;
+  padding:20px;
+  max-width:700px;
+  width:90%;
+  max-height:85vh;
+  overflow:auto;
+  box-shadow:0 12px 40px rgba(0,0,0,.5);
+  animation:slideUp .25s ease
+}
+.modal-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:14px
+}
+.modal-title{font-size:18px;font-weight:800}
+.modal-close{
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.12);
+  color:var(--text);
+  border-radius:8px;
+  padding:6px 12px;
+  cursor:pointer;
+  font-size:13px;
+  font-weight:700
+}
+.modal-close:hover{background:rgba(255,255,255,.12)}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
 .note{margin-top:8px;font-size:12px;color:var(--muted)}
 .hidden{display:none}
 .locked{opacity:.45;filter:saturate(.7);cursor:not-allowed}
@@ -7666,6 +7806,7 @@ th{
     <button type="button" class="tabbtn" data-tab="ai" data-minrole="owner" onclick="showTab('ai');return false;">AI Settings</button>
     <button type="button" class="tabbtn" data-tab="rules" data-minrole="owner" onclick="showTab('rules');return false;">Rules</button>
     <button type="button" class="tabbtn" data-tab="menu" data-minrole="owner" onclick="showTab('menu');return false;">Menu</button>
+    <button type="button" class="tabbtn" data-minrole="owner" onclick="showDraftsModal();return false;">Drafts</button>
     <button type="button" class="tabbtn" data-tab="policies" data-minrole="owner" onclick="showTab('policies');return false;">Policies</button>
   </div>
 </div>
@@ -8169,6 +8310,23 @@ th{
     </div>
   </div>
 </div>
+
+<!-- Drafts Modal -->
+<div id="drafts-modal" class="modal-overlay" onclick="if(event.target===this)closeDraftsModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">Message Drafts</div>
+      <button type="button" class="modal-close" onclick="closeDraftsModal()">Close</button>
+    </div>
+    <div class="small" style="margin-bottom:12px">Edit message templates and drafts (owner-only). Stored in venue config.</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <button type="button" class="btn2" onclick="loadDrafts()">Reload</button>
+      <button type="button" class="btn" data-min-role="owner" onclick="saveDrafts()">Save</button>
+      <span id="drafts-modal-msg" class="note"></span>
+    </div>
+    <textarea id="drafts-modal-json" class="inp" style="width:100%;min-height:420px;font-family:monospace;font-size:13px;box-sizing:border-box" spellcheck="false"></textarea>
+  </div>
+</div>
 """)
 
     # Scripts
@@ -8536,7 +8694,7 @@ qsa('.tabbtn').forEach(btn=>{
     qsa('.tabbtn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
 
-    ['ops','leads','ai','aiq','rules','menu','audit'].forEach(x=>{
+    ['ops','leads','ai','aiq','rules','menu','drafts','policies','audit','monitor'].forEach(x=>{
       const pane = document.getElementById('tab-'+x);
       if(!pane) return;
       pane.classList.toggle('hidden', x!==t);
@@ -8546,6 +8704,7 @@ qsa('.tabbtn').forEach(btn=>{
     if(t==='aiq') loadAIQueue();
     if(t==='rules') loadRules();
     if(t==='menu') loadMenu();
+    if(t==='drafts') loadDrafts();
     if(t==='audit') loadAudit();
   });
 });
@@ -9046,6 +9205,63 @@ async function applyPreset(name){
   }
 }
 
+
+// ===== Drafts Modal =====
+function showDraftsModal(){
+  const modal = qs('#drafts-modal');
+  if(modal){
+    modal.classList.add('show');
+    loadDrafts();
+    document.addEventListener('keydown', _draftModalEscHandler);
+  }
+}
+
+function closeDraftsModal(){
+  const modal = qs('#drafts-modal');
+  if(modal) modal.classList.remove('show');
+  document.removeEventListener('keydown', _draftModalEscHandler);
+}
+
+function _draftModalEscHandler(e){
+  if(e.key === 'Escape') closeDraftsModal();
+}
+
+async function loadDrafts(){
+  const msg = qs('#drafts-modal-msg'); if(msg) msg.textContent = 'Loading…';
+  const box = qs('#drafts-modal-json');
+  try{
+    const url = `/admin/api/drafts?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`;
+    const r = await fetch(url, {cache:'no-store'});
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error || 'Failed');
+    if(box) box.value = JSON.stringify(j.drafts || {}, null, 2);
+    if(msg) msg.textContent = j.meta?.updated_at ? `Loaded • ${j.meta.updated_at}` : 'Loaded';
+  }catch(e){
+    if(msg) msg.textContent = `Error: ${e.message || e}`;
+  }
+}
+
+async function saveDrafts(){
+  const msg = qs('#drafts-modal-msg'); if(msg) msg.textContent = 'Saving…';
+  const box = qs('#drafts-modal-json');
+  if(!box){ if(msg) msg.textContent = 'No textarea found'; return; }
+  let obj;
+  try{ obj = JSON.parse(box.value || '{}'); }catch(e){ if(msg) msg.textContent = 'Invalid JSON'; return; }
+  if(typeof obj !== 'object' || obj === null){ if(msg) msg.textContent = 'JSON must be an object'; return; }
+  try{
+    const url = `/admin/api/drafts?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`;
+    const r = await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({drafts: obj})
+    });
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error || 'Failed');
+    if(msg) msg.textContent = j.meta?.updated_at ? `Saved • ${j.meta.updated_at}` : 'Saved';
+  }catch(e){
+    if(msg) msg.textContent = `Error: ${e.message || e}`;
+  }
+}
 
 // ===== AI Approval Queue =====
 async function loadAIQueue(){
