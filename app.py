@@ -223,6 +223,145 @@ except Exception:
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _TEMPLATE_DIR = os.path.join(_BASE_DIR, "templates")
 _STATIC_DIR = os.path.join(_BASE_DIR, "static")
+
+# Local reservations when Google Sheets is not configured (no Google Cloud project needed)
+RESERVATIONS_LOCAL_PATH = os.environ.get("RESERVATIONS_LOCAL_PATH", "data/reservations.jsonl")
+
+
+def _generate_reservation_id() -> str:
+    """Unique ID for a reservation (e.g. WC-A1B2C3D4). User can recall with this."""
+    return "WC-" + secrets.token_hex(4).upper()
+
+
+def _append_reservation_local(lead: dict, reservation_id: Optional[str] = None) -> None:
+    """Save one reservation to local JSONL. reservation_id is required for recall by ID."""
+    try:
+        path = os.path.join(_BASE_DIR, RESERVATIONS_LOCAL_PATH)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        rid = (reservation_id or lead.get("reservation_id") or "").strip()
+        row = {
+            "reservation_id": rid,
+            "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "name": lead.get("name", ""),
+            "phone": lead.get("phone", ""),
+            "date": lead.get("date", ""),
+            "time": lead.get("time", ""),
+            "party_size": lead.get("party_size", 0),
+            "language": lead.get("language", "en"),
+            "status": (lead.get("status") or "New").strip() or "New",
+            "vip": "Yes" if str(lead.get("vip") or "").strip().lower() in ("1", "true", "yes", "y") else "No",
+        }
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+def _get_reservation_by_id(reservation_id: str) -> Optional[Dict[str, Any]]:
+    """Find reservation by unique ID: local file first, then Google Sheets (if available)."""
+    rid = (reservation_id or "").strip().upper()
+    if not rid:
+        return None
+    # Normalize: allow "WC-abc123" or "abc123"
+    if not rid.startswith("WC-"):
+        rid = "WC-" + rid
+    # 1) Local file
+    try:
+        path = os.path.join(_BASE_DIR, RESERVATIONS_LOCAL_PATH)
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                for line in reversed(list(f)):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                        if (row.get("reservation_id") or "").strip().upper() == rid:
+                            return row
+                    except Exception:
+                        continue
+    except Exception:
+        pass
+    # 2) Google Sheets (if configured)
+    try:
+        gc = get_gspread_client()
+        ws = _open_default_spreadsheet(gc).sheet1
+        header = (ws.row_values(1) or [])
+        hnorm = [_normalize_header(h) for h in header]
+        if "reservation_id" not in hnorm:
+            return None
+        col = hnorm.index("reservation_id") + 1
+        rows = ws.get_all_values() or []
+        for r in rows[1:]:
+            if len(r) >= col and (r[col - 1] or "").strip().upper() == rid:
+                out = {}
+                for i, h in enumerate(header):
+                    if i < len(r):
+                        out[_normalize_header(h)] = r[i]
+                return {
+                    "reservation_id": out.get("reservation_id", rid),
+                    "name": out.get("name", ""),
+                    "phone": out.get("phone", ""),
+                    "date": out.get("date", ""),
+                    "time": out.get("time", ""),
+                    "party_size": out.get("party_size", ""),
+                    "status": out.get("status", "New"),
+                    "vip": out.get("vip", "No"),
+                }
+    except Exception:
+        pass
+    return None
+
+
+def extract_recall_id(text: str) -> Optional[str]:
+    """If message is 'recall <id>' or 'recall WC-xxx', return the id (WC-xxx or normalized). Else None.
+    Handles formats like: 'recall WC-XXXX', 'recall : WC-XXXX', 'recall **WC-XXXX**', etc.
+    """
+    t = (text or "").strip()
+    if not t:
+        return None
+    lower = t.lower()
+    if not (lower.startswith("recall") or "recall" in lower.split()[:2]):
+        return None
+    # Match "recall" followed by optional whitespace/punctuation, then capture the ID
+    # Handles: "recall WC-XXXX", "recall : WC-XXXX", "recall **WC-XXXX**", etc.
+    # Use non-greedy \W*? to stop at first word char, then capture ID (WC- followed by alphanumeric)
+    m = re.search(r"recall\W*?(WC-?[A-Za-z0-9]+)", t, re.I)
+    if m:
+        raw = (m.group(1) or "").strip().upper()
+        if raw.startswith("WC-"):
+            return raw
+        if raw.startswith("WC"):
+            return "WC-" + raw[2:] if len(raw) > 2 else None
+        if len(raw) >= 4:
+            return "WC-" + raw
+    # Fallback: try to extract any alphanumeric sequence after "recall" (for IDs without WC- prefix)
+    m = re.search(r"recall\W+([A-Za-z0-9\-]{4,})", t, re.I)
+    if m:
+        raw = (m.group(1) or "").strip().upper()
+        if len(raw) >= 4:
+            return "WC-" + raw
+    return None
+
+
+def format_reservation_row(row: Optional[Dict[str, Any]]) -> str:
+    """Format a reservation dict for display. Returns instruction message if row is None."""
+    if not row or not any([row.get("date"), row.get("name"), row.get("phone")]):
+        return "No reservation found for that ID. Check the ID and try again (e.g. recall WC-XXXX)."
+    parts = [
+        "📌 Reservation:",
+        f"ID: {row.get('reservation_id') or '—'}",
+        f"Name: {row.get('name') or '—'}",
+        f"Phone: {row.get('phone') or '—'}",
+        f"Date: {row.get('date') or '—'}",
+        f"Time: {row.get('time') or '—'}",
+        f"Party size: {row.get('party_size') or '—'}",
+        f"Status: {row.get('status') or '—'}",
+        f"VIP: {row.get('vip') or '—'}",
+    ]
+    return "\n".join(parts)
+
+
 app = Flask(__name__, template_folder=_TEMPLATE_DIR, static_folder=_STATIC_DIR)
 
 # ============================================================
@@ -3209,7 +3348,7 @@ MENU = {
 LANG = {
     "en": {
         "welcome": "⚽ Welcome, World Cup fan! I'm your Dallas Match-Day Concierge.\nType reservation to book a table, or ask about Dallas matches, all matches, or the menu.",
-        "ask_date": "What date would you like? (Example: June 23, 2026)\n\n(You can also type: “Recall reservation so far”)",
+        "ask_date": "What date would you like? (Example: June 23, 2026)\n\n(To recall a past reservation, type: recall followed by your reservation ID, e.g. recall WC-XXXX)",
         "ask_time": "What time would you like?",
         "ask_party": "How many people are in your party?",
         "ask_name": "What name should we put the reservation under?",
@@ -3394,7 +3533,7 @@ def ensure_sheet_schema(ws) -> List[str]:
     Make sure row 1 is the header and includes the CRM columns we need.
     Returns the final header list (as stored in the sheet).
     """
-    desired = ["timestamp", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier", "queue", "business_context", "budget", "notes", "vibe"]
+    desired = ["timestamp", "reservation_id", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier", "queue", "business_context", "budget", "notes", "vibe"]
 
     existing = ws.row_values(1) or []
     existing_norm = [_normalize_header(x) for x in existing]
@@ -3449,6 +3588,7 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
             row[hmap[k] - 1] = val
 
     setv("timestamp", datetime.now().isoformat(timespec="seconds"))
+    setv("reservation_id", (lead.get("reservation_id") or "").strip())
     setv("name", lead.get("name", ""))
     setv("phone", lead.get("phone", ""))
     setv("date", lead.get("date", ""))
@@ -3581,11 +3721,25 @@ def extract_party_size(text: str) -> Optional[int]:
     ]
     if any(mo in t for mo in months):
         return None
+    # Also check for partial month names that might indicate a date (e.g., "fe" for feb, "ju" for jun/jul)
+    # This prevents "fe 18" from being read as party size 18
+    month_prefixes = ["fe", "feb", "mar", "ap", "apr", "ma", "may", "ju", "jun", "jul", "au", "aug", "se", "sep", "sept", "oc", "oct", "no", "nov", "de", "dec"]
+    if any(t.startswith(pref) or f" {pref}" in t or f",{pref}" in t for pref in month_prefixes if len(pref) >= 2):
+        # If there's a number right after a month prefix, it's likely a date, not party size
+        for pref in month_prefixes:
+            if len(pref) >= 2 and (t.startswith(pref) or f" {pref}" in t or f",{pref}" in t):
+                # Check if there's a digit within 5 chars after the prefix
+                idx = t.find(pref)
+                if idx >= 0:
+                    after = t[idx + len(pref):idx + len(pref) + 5]
+                    if re.search(r"\d", after):
+                        return None
     if re.search(r"\b\d{4}-\d{1,2}-\d{1,2}\b", t):
         return None
     if re.search(r"\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b", t):
         return None
-    if re.search(r"\b\d{1,2}(:\d{2})\s*(am|pm)?\b", t):
+    # Time patterns: "4 pm", "4:30 pm", "4am", etc. - don't treat as party size
+    if re.search(r"\b\d{1,2}(:\d{2})?\s*(am|pm)\b", t):
         return None
 
     # Fallback: a plain number, but keep it reasonable
@@ -3725,6 +3879,19 @@ def extract_date(text: str) -> Optional[str]:
                 if my:
                     y = int(my.group(1))
                 return f"{y:04d}-{mon:02d}-{dd:02d}"
+    
+    # Fuzzy match: handle partial month names like "fe" -> "feb"
+    # Only try if we didn't find a full match above, and only for unambiguous prefixes
+    # Check for common typos/abbreviations: "fe" -> february, "feb" -> february
+    if lower.startswith("fe") and len(lower) >= 3:
+        m = re.search(r"^fe[b]?\D*(\d{1,2})", lower)
+        if m:
+            dd = int(m.group(1))
+            y = 2026
+            my = re.search(r"\b(20\d{2})\b", lower)
+            if my:
+                y = int(my.group(1))
+            return f"{y:04d}-02-{dd:02d}"
 
     return None
 
@@ -3819,21 +3986,9 @@ def apply_business_rules(lead: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def recall_text(sess: Dict[str, Any]) -> str:
-    lang = sess.get("lang", "en")
-    L = LANG[lang]
-    lead = sess["lead"]
-    if any([lead.get("date"), lead.get("time"), lead.get("party_size"), lead.get("name"), lead.get("phone")]):
-        parts = [
-            L["recall_title"],
-            f"Date: {lead.get('date') or '—'}",
-            f"Time: {lead.get('time') or '—'}",
-            f"Party size: {lead.get('party_size') or '—'}",
-            f"Name: {lead.get('name') or '—'}",
-            f"Phone: {lead.get('phone') or '—'}",
-        ]
-        return "\n".join(parts)
-    return L["recall_empty"]
+def recall_text(sess: Dict[str, Any], session_id: Optional[str] = None) -> str:
+    # Recall is by reservation ID only (no session). Use the ID you got when you made the reservation.
+    return "To recall a reservation, type **recall** followed by your reservation ID (e.g. **recall WC-XXXX**). You received this ID when you made the reservation."
 
 
 def next_question(sess: Dict[str, Any]) -> str:
@@ -5170,9 +5325,15 @@ def chat():
         if not msg:
             return jsonify({"reply": "Please type a message.", "rate_limit_remaining": remaining})
 
-        # Recall support (all languages)
+        # Recall by reservation ID: "recall WC-XXXX" fetches that reservation; "recall" alone shows instruction
         if want_recall(msg, lang):
-            return jsonify({"reply": recall_text(sess), "rate_limit_remaining": remaining})
+            rid = extract_recall_id(msg)
+            if rid:
+                row = _get_reservation_by_id(rid)
+                reply = format_reservation_row(row)
+            else:
+                reply = "To recall a reservation, type **recall** followed by your reservation ID (e.g. **recall WC-XXXX**). You received this ID when you made the reservation."
+            return jsonify({"reply": reply, "rate_limit_remaining": remaining})
 
         # Start reservation flow if user indicates intent
         if sess["mode"] == "idle" and want_reservation(msg):
@@ -5261,34 +5422,43 @@ def chat():
                     sess["mode"] = "idle"
                     return jsonify({"reply": "🔒 VIP-only is active right now. Type VIP and start again to continue.", "rate_limit_remaining": remaining})
 
+                rid = _generate_reservation_id()
+                lead["reservation_id"] = rid
                 try:
                     append_lead_to_sheet(lead)
-                    sess["mode"] = "idle"
-                    saved_msg = ("✅ Added to waitlist!" if str(lead.get("status", "")).strip().lower() == "waitlist" else LANG[lang]["saved"])
-                    confirm = (
-                        f"{saved_msg}\n"
-                        f"Name: {lead['name']}\n"
-                        f"Phone: {lead['phone']}\n"
-                        f"Date: {lead['date']}\n"
-                        f"Time: {lead['time']}\n"
-                        f"Party size: {lead['party_size']}\n"
-                        f"Status: {lead.get('status','New')}\n"
-                        f"VIP: {lead.get('vip','No')}"
-                    )
-                    sess["lead"] = {
-                        "name": "",
-                        "phone": "",
-                        "date": "",
-                        "time": "",
-                        "party_size": 0,
-                        "language": lang,
-                        "status": "New",
-                        "vip": "No",
-                    }
-                    return jsonify({"reply": confirm, "rate_limit_remaining": remaining})
-                except Exception as e:
-                    # Always return JSON so the UI never shows "no reply received".
-                    return jsonify({"reply": f"⚠️ Could not save reservation: {repr(e)}", "rate_limit_remaining": remaining}), 500
+                except Exception:
+                    pass  # fallback: local file below
+                # Always save to local file too so recall by ID works (even after page reload)
+                try:
+                    _append_reservation_local(lead)
+                except Exception:
+                    return jsonify({"reply": "⚠️ Could not save reservation.", "rate_limit_remaining": remaining}), 500
+
+                sess["mode"] = "idle"
+                saved_msg = ("✅ Added to waitlist!" if str(lead.get("status", "")).strip().lower() == "waitlist" else LANG[lang]["saved"])
+                confirm = (
+                    f"{saved_msg}\n\n"
+                    f"Your reservation ID is: **{rid}** — save it!\n"
+                    f"To recall this reservation later, type: **recall {rid}**\n\n"
+                    f"Name: {lead['name']}\n"
+                    f"Phone: {lead['phone']}\n"
+                    f"Date: {lead['date']}\n"
+                    f"Time: {lead['time']}\n"
+                    f"Party size: {lead['party_size']}\n"
+                    f"Status: {lead.get('status','New')}\n"
+                    f"VIP: {lead.get('vip','No')}"
+                )
+                sess["lead"] = {
+                    "name": "",
+                    "phone": "",
+                    "date": "",
+                    "time": "",
+                    "party_size": 0,
+                    "language": lang,
+                    "status": "New",
+                    "vip": "No",
+                }
+                return jsonify({"reply": confirm, "rate_limit_remaining": remaining})
 
             # Otherwise ask next missing field
             q = next_question(sess)
@@ -14478,7 +14648,7 @@ MENU = {
 LANG = {
     "en": {
         "welcome": "⚽ Welcome, World Cup fan! I'm your Dallas Match-Day Concierge.\nType reservation to book a table, or ask about Dallas matches, all matches, or the menu.",
-        "ask_date": "What date would you like? (Example: June 23, 2026)\n\n(You can also type: “Recall reservation so far”)",
+        "ask_date": "What date would you like? (Example: June 23, 2026)\n\n(To recall a past reservation, type: recall followed by your reservation ID, e.g. recall WC-XXXX)",
         "ask_time": "What time would you like?",
         "ask_party": "How many people are in your party?",
         "ask_name": "What name should we put the reservation under?",
@@ -14610,7 +14780,7 @@ def ensure_sheet_schema(ws) -> List[str]:
     Make sure row 1 is the header and includes the CRM columns we need.
     Returns the final header list (as stored in the sheet).
     """
-    desired = ["timestamp", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier", "queue", "business_context", "budget", "notes", "vibe"]
+    desired = ["timestamp", "reservation_id", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier", "queue", "business_context", "budget", "notes", "vibe"]
 
     existing = ws.row_values(1) or []
     existing_norm = [_normalize_header(x) for x in existing]
@@ -14665,6 +14835,7 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
             row[hmap[k] - 1] = val
 
     setv("timestamp", datetime.now().isoformat(timespec="seconds"))
+    setv("reservation_id", (lead.get("reservation_id") or "").strip())
     setv("name", lead.get("name", ""))
     setv("phone", lead.get("phone", ""))
     setv("date", lead.get("date", ""))
@@ -14797,11 +14968,25 @@ def extract_party_size(text: str) -> Optional[int]:
     ]
     if any(mo in t for mo in months):
         return None
+    # Also check for partial month names that might indicate a date (e.g., "fe" for feb, "ju" for jun/jul)
+    # This prevents "fe 18" from being read as party size 18
+    month_prefixes = ["fe", "feb", "mar", "ap", "apr", "ma", "may", "ju", "jun", "jul", "au", "aug", "se", "sep", "sept", "oc", "oct", "no", "nov", "de", "dec"]
+    if any(t.startswith(pref) or f" {pref}" in t or f",{pref}" in t for pref in month_prefixes if len(pref) >= 2):
+        # If there's a number right after a month prefix, it's likely a date, not party size
+        for pref in month_prefixes:
+            if len(pref) >= 2 and (t.startswith(pref) or f" {pref}" in t or f",{pref}" in t):
+                # Check if there's a digit within 5 chars after the prefix
+                idx = t.find(pref)
+                if idx >= 0:
+                    after = t[idx + len(pref):idx + len(pref) + 5]
+                    if re.search(r"\d", after):
+                        return None
     if re.search(r"\b\d{4}-\d{1,2}-\d{1,2}\b", t):
         return None
     if re.search(r"\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b", t):
         return None
-    if re.search(r"\b\d{1,2}(:\d{2})\s*(am|pm)?\b", t):
+    # Time patterns: "4 pm", "4:30 pm", "4am", etc. - don't treat as party size
+    if re.search(r"\b\d{1,2}(:\d{2})?\s*(am|pm)\b", t):
         return None
 
     # Fallback: a plain number, but keep it reasonable
@@ -14941,6 +15126,19 @@ def extract_date(text: str) -> Optional[str]:
                 if my:
                     y = int(my.group(1))
                 return f"{y:04d}-{mon:02d}-{dd:02d}"
+    
+    # Fuzzy match: handle partial month names like "fe" -> "feb"
+    # Only try if we didn't find a full match above, and only for unambiguous prefixes
+    # Check for common typos/abbreviations: "fe" -> february, "feb" -> february
+    if lower.startswith("fe") and len(lower) >= 3:
+        m = re.search(r"^fe[b]?\D*(\d{1,2})", lower)
+        if m:
+            dd = int(m.group(1))
+            y = 2026
+            my = re.search(r"\b(20\d{2})\b", lower)
+            if my:
+                y = int(my.group(1))
+            return f"{y:04d}-02-{dd:02d}"
 
     return None
 
@@ -15035,21 +15233,9 @@ def apply_business_rules(lead: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def recall_text(sess: Dict[str, Any]) -> str:
-    lang = sess.get("lang", "en")
-    L = LANG[lang]
-    lead = sess["lead"]
-    if any([lead.get("date"), lead.get("time"), lead.get("party_size"), lead.get("name"), lead.get("phone")]):
-        parts = [
-            L["recall_title"],
-            f"Date: {lead.get('date') or '—'}",
-            f"Time: {lead.get('time') or '—'}",
-            f"Party size: {lead.get('party_size') or '—'}",
-            f"Name: {lead.get('name') or '—'}",
-            f"Phone: {lead.get('phone') or '—'}",
-        ]
-        return "\n".join(parts)
-    return L["recall_empty"]
+def recall_text(sess: Dict[str, Any], session_id: Optional[str] = None) -> str:
+    # Recall is by reservation ID only (no session). Use the ID you got when you made the reservation.
+    return "To recall a reservation, type **recall** followed by your reservation ID (e.g. **recall WC-XXXX**). You received this ID when you made the reservation."
 
 
 def next_question(sess: Dict[str, Any]) -> str:
