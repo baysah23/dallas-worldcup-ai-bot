@@ -2121,6 +2121,22 @@
       font-weight: 700;
     }
 
+    /* Fan Zone sponsor pill */
+    .fz-sponsor-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .08); /* matches --glass used in project */
+      border: 1px solid var(--line); /* rgba(255, 255, 255, .10) - existing grey */
+      color: rgba(255, 255, 255, .95); /* white text */
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
 
     /* Ensure supporter chip handles long country names gracefully */
     #supporterChip {
@@ -5394,8 +5410,8 @@
                 <!-- To do:There is not any feature or backend functionality  created or implemented for this fzCollapseToggle -->
                 <button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button>
               </div>
-              <div class="fz-row fz-muted" style="justify-content:flex-start; font-size:12px; margin-bottom:6px;" id="fanzoneSponsorRow">
-                <span id="fanzoneSponsorLabel">Presented by …</span>
+              <div class="fz-row" style="justify-content:flex-start; font-size:11px; margin-bottom:6px;" id="fanzoneSponsorRow">
+                <span id="fanzoneSponsorLabel" class="fz-sponsor-pill">Presented by …</span>
               </div>
               <div class="fz-row" style="justify-content:flex-start;">
                 <div class="fz-chip" id="supporterChip" title="Personalization stored on this device only">
