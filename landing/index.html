@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -7,8 +8,9 @@
   <meta name="description" content="Turn match-night chaos into calm control. Capture reservations + VIP leads automatically, reduce phone/DM overload, and drive revenue with fewer staff." />
   <link rel="stylesheet" href="styles.css?v=4" />
 </head>
-<body>
 
+<body>
+  
 <!-- HERO (VIDEO ONLY) -->
 <div class="heroSection" id="top">
   <header class="hero">
@@ -218,31 +220,36 @@
         <input id="venue" name="venue" required placeholder="Your bar / lounge / restaurant" />
       </div>
       <div class="field">
-  <label for="phone">Phone</label>
-  <input id="phone" name="phone" type="tel" placeholder="(555) 555-5555" />
-</div>
+        <label for="phone">Phone</label>
+        <input id="phone" name="phone" type="tel" placeholder="(555) 555-5555" />
+        <p class="sms-disclaimer">
+          By providing your number, you agree to receive SMS from World Cup Concierge. Msg & data rates may apply. Msg frequency varies. Reply STOP to opt out, HELP for help.    
+          <a href="https://admin.worldcupconcierge.app/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a> | 
+          <a href="https://admin.worldcupconcierge.app/privacy" target="_blank" rel="noopener noreferrer">Terms</a>
+        </p>
+      </div>
 
-<div class="field">
-  <label for="contact_method">Best way to contact</label>
-  <select id="contact_method" name="contact_method" required>
-    <option value="" selected disabled>Select one</option>
-    <option value="phone">Phone call</option>
-    <option value="text">Text</option>
-    <option value="email">Email</option>
-  </select>
-</div>
+      <div class="field">
+        <label for="contact_method">Best way to contact</label>
+        <select id="contact_method" name="contact_method" required>
+          <option value="" selected disabled>Select one</option>
+          <option value="phone">Phone call</option>
+          <option value="text">Text</option>
+          <option value="email">Email</option>
+        </select>
+      </div>
 
-<div class="field">
-  <label for="contact_time">Best time to contact</label>
-  <select id="contact_time" name="contact_time" required>
-    <option value="" selected disabled>Select one</option>
-    <option value="morning">Morning</option>
-    <option value="midday">Midday</option>
-    <option value="afternoon">Afternoon</option>
-    <option value="evening">Evening</option>
-    <option value="anytime">Anytime</option>
-  </select>
-</div>
+      <div class="field">
+        <label for="contact_time">Best time to contact</label>
+        <select id="contact_time" name="contact_time" required>
+          <option value="" selected disabled>Select one</option>
+          <option value="morning">Morning</option>
+          <option value="midday">Midday</option>
+          <option value="afternoon">Afternoon</option>
+          <option value="evening">Evening</option>
+          <option value="anytime">Anytime</option>
+        </select>
+      </div>
       <div class="field">
         <label for="email">Email</label>
         <input id="email" name="email" type="email" required placeholder="you@venue.com" />
