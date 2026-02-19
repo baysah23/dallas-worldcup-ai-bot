@@ -76,8 +76,11 @@ _REDIS_FALLBACK_LAST_PATH = ""
 
 # Map our on-disk JSON files to Redis keys when enabled (single source of truth)
 # NOTE: These files still exist for local/dev fallback.
+# Drafts: per-venue only. Override DRAFTS_FILE for localhost (e.g. Windows) or production path.
+DRAFTS_FILE = os.environ.get("DRAFTS_FILE", "/tmp/wc26_{venue}_drafts.json")
 _REDIS_PATH_KEY_MAP = {  # values are suffixes; full key includes namespace + venue
     os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_{venue}_ai_queue.json"): "ai_queue",
+    DRAFTS_FILE: "drafts",
     os.environ.get("AI_SETTINGS_FILE", "/tmp/wc26_{venue}_ai_settings.json"): "ai_settings",
     os.environ.get("PARTNER_POLICIES_FILE", "/tmp/wc26_{venue}_partner_policies.json"): "partner_policies",
     os.environ.get("BUSINESS_RULES_FILE", "/tmp/wc26_{venue}_business_rules.json"): "business_rules",
@@ -1190,6 +1193,172 @@ def _save_partner_policy(partner: str, policy_patch: Dict[str, Any]) -> Dict[str
     _safe_write_json_file(PARTNER_POLICIES_FILE, _PARTNER_POLICIES)
     return merged
 
+
+# ============================================================
+# Draft templates (per-venue; file or Redis — never in venue config)
+# Works on localhost, staging, production. Override DRAFTS_FILE via env if needed.
+# ============================================================
+def _default_drafts() -> Dict[str, Any]:
+    return {
+        "updated_at": None,
+        "updated_by": None,
+        "updated_role": None,
+        "drafts": {
+            "sms_confirm": {
+                "channel": "sms",
+                "title": "SMS — Confirmation",
+                "body": "Hi {name}, you're confirmed for {date} at {time} for {party_size}.",
+            },
+            "email_confirm": {
+                "channel": "email",
+                "title": "Email confirmation",
+                "subject": "",
+                "body": "Hi {name}, your table is confirmed for {date}.",
+            }
+        }
+    }
+
+
+def _load_drafts_from_disk() -> Dict[str, Any]:
+    """Load drafts for current venue (g.venue_id). Uses DRAFTS_FILE or Redis when enabled.
+    Returns defaults only if file doesn't exist. If file exists (even with empty drafts), returns it as-is."""
+    payload = _safe_read_json_file(DRAFTS_FILE, default=None)
+    if isinstance(payload, dict) and payload:
+        # If payload has 'drafts' key, it means user has saved before (even if empty) - return as-is, don't merge defaults
+        if "drafts" in payload:
+            return payload
+        # Otherwise merge defaults (for backward compatibility with old format)
+        return _deep_merge(_default_drafts(), payload)
+    return _default_drafts()
+
+
+def _save_drafts_to_disk(patch: Dict[str, Any], actor: str, role: str) -> Dict[str, Any]:
+    """Save drafts for current venue. When patch contains 'drafts', that object fully replaces stored drafts (so delete = remove key and save)."""
+    current = _load_drafts_from_disk()
+    merged = _deep_merge(current, patch or {})
+    # Full replace: if caller sent a "drafts" key, use it as-is so removing a key in the UI and saving actually deletes it
+    if "drafts" in (patch or {}):
+        merged["drafts"] = dict((patch or {}).get("drafts") or {})
+    merged["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    merged["updated_by"] = (actor or "").strip()
+    merged["updated_role"] = (role or "").strip()
+    _safe_write_json_file(DRAFTS_FILE, merged)
+    return merged
+
+
+def _migrate_drafts_out_of_venue_config(venue_id: str) -> None:
+    """One-time: if venue config has 'drafts', copy to dedicated store and remove from config."""
+    path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            vcfg = json.load(f) or {}
+    except Exception:
+        return
+    drafts = vcfg.get("drafts")
+    if not isinstance(drafts, dict) or not drafts:
+        return
+    # Save to dedicated store (g.venue_id must be set; caller sets it)
+    _save_drafts_to_disk({"drafts": drafts}, actor="migration", role="system")
+    # Remove from venue config so config stays static
+    vcfg.pop("drafts", None)
+    vcfg.pop("updated_at", None)  # draft-specific meta
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(vcfg, f, indent=2, ensure_ascii=False, sort_keys=True)
+    except Exception:
+        pass
+
+
+def _load_lead_from_sheet_row(row_num: int) -> Dict[str, Any]:
+    """Load lead data from Google Sheet row number. Returns dict with name, date, time, party_size, etc."""
+    if row_num < 2:
+        return {}
+    try:
+        gc = get_gspread_client()
+        ws = _open_default_spreadsheet(gc).sheet1
+        header = ws.row_values(1) or []
+        hmap = header_map(header)
+        row_data = ws.row_values(row_num) or []
+        
+        lead = {}
+        for key in ["name", "date", "time", "party_size", "phone", "email", "budget", "notes"]:
+            col = hmap.get(key)
+            if col and col <= len(row_data):
+                val = str(row_data[col - 1] or "").strip()
+                if val:
+                    lead[key] = val
+        
+        return lead
+    except Exception:
+        return {}
+
+
+def _format_draft_template(template: str, data: Dict[str, Any]) -> str:
+    """Replace placeholders in draft template with actual values.
+    Supports: {name}, {date}, {time}, {party_size}, {phone}, {email}, {budget}, {notes}
+    Missing values are replaced with empty string or placeholder name."""
+    if not template:
+        return ""
+    
+    replacements = {
+        "name": str(data.get("name") or "").strip(),
+        "date": str(data.get("date") or "").strip(),
+        "time": str(data.get("time") or "").strip(),
+        "party_size": str(data.get("party_size") or "").strip(),
+        "phone": str(data.get("phone") or "").strip(),
+        "email": str(data.get("email") or "").strip(),
+        "budget": str(data.get("budget") or "").strip(),
+        "notes": str(data.get("notes") or "").strip(),
+    }
+    
+    result = template
+    for key, value in replacements.items():
+        placeholder = "{" + key + "}"
+        result = result.replace(placeholder, value if value else "")
+    
+    return result
+
+
+def _select_draft_for_channel(channel: str, context: Optional[str] = None) -> Optional[str]:
+    """Select appropriate draft key based on channel and context.
+    Returns draft key like 'email_confirm', 'sms_confirm', 'sms_more_info', etc.
+    Context can be 'confirm', 'more_info', etc. If None, defaults to 'confirm'."""
+    channel = (channel or "").strip().lower()
+    context = (context or "confirm").strip().lower()
+    
+    # Map channel + context to draft key
+    if channel == "email":
+        return f"email_{context}" if context != "confirm" else "email_confirm"
+    elif channel in ("sms", "whatsapp"):
+        return f"sms_{context}" if context != "confirm" else "sms_confirm"
+    
+    return None
+
+
+def _get_draft_content(draft_key: str, data: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+    """Get formatted draft body and subject for given draft key.
+    Returns (body, subject) tuple. Both can be None if draft not found."""
+    drafts_data = _load_drafts_from_disk()
+    drafts = drafts_data.get("drafts") or {}
+    
+    draft = drafts.get(draft_key)
+    if not isinstance(draft, dict):
+        return None, None
+    
+    body_template = str(draft.get("body") or "").strip()
+    subject_template = str(draft.get("subject") or "").strip()
+    
+    if not body_template:
+        return None, None
+    
+    body = _format_draft_template(body_template, data)
+    subject = _format_draft_template(subject_template, data) if subject_template else None
+    
+    return body, subject
+
+
 def _derive_partner_id(lead: Optional[Dict[str, Any]] = None, payload: Optional[Dict[str, Any]] = None) -> str:
     """Best-effort partner/venue identifier, so policies can apply even if schema varies."""
     lead = lead or {}
@@ -1347,13 +1516,27 @@ def _outbound_send_twilio(channel: str, to_number_or_id: str, body_text: str) ->
         return False, f"Twilio send failed: {e}"
 
 def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute outbound send (human-triggered). Never called automatically."""
+    """Execute outbound send (human-triggered). Never called automatically.
+    Payload can contain 'message' or 'body' (both supported for compatibility).
+    If payload has 'row' and draft placeholders remain, will reload lead data and re-format."""
     at = (action_type or "").strip().lower()
     pl = payload or {}
+    
+    # If message has placeholders and we have row data, try to reload and re-format
+    message = str(pl.get("message") or pl.get("body") or "").strip()
+    row_num = pl.get("row")
+    if row_num and "{" in message:
+        try:
+            lead_data = _load_lead_from_sheet_row(int(row_num))
+            if lead_data:
+                message = _format_draft_template(message, lead_data)
+        except Exception:
+            pass  # Use original message if reload fails
+    
     if at == "send_email":
         to_email = str(pl.get("to") or pl.get("email") or "").strip()
         subject = str(pl.get("subject") or "World Cup Concierge").strip()
-        body = str(pl.get("message") or pl.get("body") or "").strip()
+        body = message
         if not to_email:
             return {"ok": False, "error": "Missing recipient email"}
         ok, msg = _outbound_send_email(to_email, subject, body)
@@ -1361,7 +1544,7 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     if at in ("send_sms", "send_whatsapp"):
         ch = at.replace("send_", "")
         to_num = str(pl.get("to") or pl.get("phone") or "").strip()
-        body = str(pl.get("message") or pl.get("body") or "").strip()
+        body = message
         if not to_num:
             return {"ok": False, "error": "Missing recipient number"}
         ok, msg = _outbound_send_twilio(ch, to_num, body)
@@ -6374,88 +6557,76 @@ def admin_update_config():
 
 @app.route("/admin/api/drafts", methods=["GET", "POST"])
 def admin_api_drafts():
-    """Owner-only: manage message drafts (stored in venue config).
-    
-    GET: Returns drafts object from venue config.
-    POST: Saves drafts object to venue config (owner-only).
-    
-    Query params:
-      - key: admin key (required)
-      - venue: venue ID (required for POST, optional for GET - uses context)
+    """Manage message drafts in dedicated per-venue storage (file or Redis). Never writes to venue config.
+    GET: Returns drafts from DRAFTS_FILE / Redis for the given venue.
+    POST: Saves drafts to DRAFTS_FILE / Redis (owner-only).
+    Query: key (required), venue (required). Works on localhost, staging, production.
     """
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
-    
-    # POST requires owner role
+
     if request.method == "POST":
         ok2, resp2 = _require_admin(min_role="owner")
         if not ok2:
             return resp2
-    
-    # ✅ VENUE-SPECIFIC: Require explicit venue parameter (no fallback to context)
+
     venue = (request.args.get("venue") or "").strip()
     if not venue:
         return jsonify({"ok": False, "error": "Missing venue parameter (required for venue-specific drafts)"}), 400
-    
+
     venue_id = _slugify_venue_id(venue)
-    
-    # Load venue config
-    path = os.path.join(VENUES_DIR, f"{venue_id}.json")
-    if not os.path.exists(path):
+    # Ensure venue exists (we do not write to venue config, but we require a valid venue)
+    venue_cfg_path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+    if not os.path.exists(venue_cfg_path):
         return jsonify({"ok": False, "error": f"Venue not found: {venue_id}"}), 404
-    
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            vcfg = json.load(f) or {}
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"Failed to read venue config: {str(e)}"}), 500
-    
-    # GET: Return drafts
+
+    # Set venue context so _load_drafts_from_disk / _save_drafts_to_disk use correct path/Redis key
+    g.venue_id = venue_id
+
+    # One-time migration: if this venue's config still has 'drafts', move to dedicated store
+    _migrate_drafts_out_of_venue_config(venue_id)
+
     if request.method == "GET":
-        drafts = vcfg.get("drafts") if isinstance(vcfg.get("drafts"), dict) else {}
-        meta = {}
-        if "updated_at" in vcfg:
-            meta["updated_at"] = vcfg["updated_at"]
+        data = _load_drafts_from_disk()
+        drafts = data.get("drafts") if isinstance(data.get("drafts"), dict) else {}
+        meta = {
+            "updated_at": data.get("updated_at"),
+            "updated_by": data.get("updated_by"),
+            "updated_role": data.get("updated_role"),
+        }
         return jsonify({"ok": True, "drafts": drafts, "meta": meta})
-    
-    # POST: Save drafts (owner-only)
+
+    # POST
     data = request.get_json(silent=True) or {}
     drafts_data = data.get("drafts")
-    
     if drafts_data is None:
         return jsonify({"ok": False, "error": "Missing drafts object"}), 400
-    
     if not isinstance(drafts_data, dict):
         return jsonify({"ok": False, "error": "drafts must be a JSON object"}), 400
-    
-    # Update venue config with drafts
-    vcfg["drafts"] = drafts_data
-    vcfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    
-    # Write back to file
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(vcfg, f, indent=2, ensure_ascii=False, sort_keys=True)
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"Failed to write venue config: {str(e)}"}), 500
-    
-    # Invalidate cache
-    try:
-        _invalidate_venues_cache()
-    except Exception:
-        pass
-    
-    # Audit
+
+    # Sanitize: keep only string keys and dict values with body (body max 5000)
+    clean = {}
+    for k, v in drafts_data.items():
+        if not isinstance(k, str) or not k.strip():
+            continue
+        if not isinstance(v, dict):
+            continue
+        body = str(v.get("body") or "").strip()
+        if not body:
+            continue
+        clean[k.strip()] = {
+            "channel": str(v.get("channel") or "").strip(),
+            "title": str(v.get("title") or "").strip(),
+            "subject": str(v.get("subject") or "").strip(),
+            "body": body[:5000],
+        }
+
     ctx = _admin_ctx()
-    _audit("drafts.update", {
-        "venue": venue_id,
-        "actor": ctx.get("actor", ""),
-        "draft_keys": list(drafts_data.keys()) if isinstance(drafts_data, dict) else []
-    })
-    
-    meta = {"updated_at": vcfg["updated_at"]}
-    return jsonify({"ok": True, "drafts": drafts_data, "meta": meta})
+    saved = _save_drafts_to_disk({"drafts": clean}, actor=ctx.get("actor", ""), role=ctx.get("role", ""))
+    _audit("drafts.update", {"venue": venue_id, "actor": ctx.get("actor", ""), "draft_keys": list(clean.keys())})
+    meta = {"updated_at": saved.get("updated_at")}
+    return jsonify({"ok": True, "drafts": clean, "meta": meta})
 
 @app.route("/admin/api/rules", methods=["GET","POST"])
 def admin_api_rules():
@@ -6859,8 +7030,10 @@ def admin_api_outbound_propose():
       "channel": "email|sms|whatsapp",
       "to": "...",
       "subject": "..." (email only),
-      "message": "..."
-      "row": 12 (optional lead row)
+      "message": "..." (optional - will use draft if not provided and draft_key/row provided),
+      "draft_key": "email_confirm" (optional - use specific draft),
+      "context": "confirm" (optional - for draft selection),
+      "row": 12 (optional lead row - used for draft template replacement)
     }
     """
     ok, resp = _require_admin(min_role="manager")
@@ -6875,13 +7048,77 @@ def admin_api_outbound_propose():
     if channel not in ("email", "sms", "whatsapp"):
         return jsonify({"ok": False, "error": "Invalid channel"}), 400
     action_type = f"send_{channel}"
-    payload = {
-        "partner": data.get("partner"),
-        "row": data.get("row"),
-        "to": data.get("to"),
-        "subject": data.get("subject"),
-        "message": data.get("message"),
-    }
+    
+    # Load lead data if row provided (for template replacement)
+    lead_data = {}
+    row_num = data.get("row")
+    if row_num:
+        try:
+            lead_data = _load_lead_from_sheet_row(int(row_num))
+        except Exception:
+            pass
+    
+    # Determine message body and subject
+    message = data.get("message") or ""
+    subject = data.get("subject") or ""
+    draft_key = data.get("draft_key")
+    
+    # If no message provided, try to use draft
+    if not message.strip():
+        if not draft_key:
+            # Auto-select draft based on channel and context
+            context = data.get("context", "confirm")
+            draft_key = _select_draft_for_channel(channel, context)
+        
+        if draft_key:
+            draft_body, draft_subject = _get_draft_content(draft_key, lead_data)
+            if draft_body:
+                message = draft_body
+                if draft_subject and not subject:
+                    subject = draft_subject
+                # Store draft_key in payload for reference
+                payload = {
+                    "partner": data.get("partner"),
+                    "row": row_num,
+                    "to": data.get("to"),
+                    "subject": subject,
+                    "message": message,
+                    "body": message,  # UI uses 'body'
+                    "draft_key": draft_key,  # Track which draft was used
+                }
+            else:
+                # Draft not found or empty
+                payload = {
+                    "partner": data.get("partner"),
+                    "row": row_num,
+                    "to": data.get("to"),
+                    "subject": subject,
+                    "message": message,
+                    "body": message,
+                }
+        else:
+            # No draft available
+            payload = {
+                "partner": data.get("partner"),
+                "row": row_num,
+                "to": data.get("to"),
+                "subject": subject,
+                "message": message,
+                "body": message,
+            }
+    else:
+        # Message provided explicitly - format it if it has placeholders and we have lead data
+        if lead_data and ("{" in message):
+            message = _format_draft_template(message, lead_data)
+        payload = {
+            "partner": data.get("partner"),
+            "row": row_num,
+            "to": data.get("to"),
+            "subject": subject,
+            "message": message,
+            "body": message,
+        }
+    
     # Best-effort partner id for policy gating
     partner = _derive_partner_id(payload=payload)
 
@@ -6905,7 +7142,7 @@ def admin_api_outbound_propose():
     }
     q.insert(0, item)
     _save_ai_queue(q)
-    _audit("outbound.queue", {"id": qid, "partner": partner, "type": action_type, "by": actor})
+    _audit("outbound.queue", {"id": qid, "partner": partner, "type": action_type, "by": actor, "draft_key": draft_key})
     _notify("outbound.queue", {"id": qid, "partner": partner, "type": action_type, "by": actor, "role": role}, targets=["owner","manager"])
     return jsonify({"ok": True, "id": qid})
 
@@ -8488,7 +8725,7 @@ th{
       <div class="modal-title">Message Drafts</div>
       <button type="button" class="modal-close" onclick="closeDraftsModal()">Close</button>
     </div>
-    <div class="small" style="margin-bottom:12px">Edit message templates and drafts (owner-only). Stored in venue config.</div>
+    <div class="small" style="margin-bottom:12px">Edit message templates and drafts (owner-only). Stored in per-venue drafts store (file or Redis), not in venue config.</div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
       <button type="button" class="btn2" onclick="loadDrafts()">Reload</button>
       <button type="button" class="btn" data-min-role="owner" onclick="saveDrafts()">Save</button>
