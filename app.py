@@ -1008,31 +1008,31 @@ def _send_slack(text: str) -> bool:
         return False
 
 def _send_email(subject: str, body: str) -> bool:
-    # SendGrid (best-effort). If not configured, just return False.
+    """
+    Send alert email using the SAME SendGrid path as the landing page,
+    so behavior is consistent and proven to work.
+    """
     try:
         ch = (ALERT_SETTINGS.get("channels") or {}).get("email") or {}
-        api_key = os.environ.get("SENDGRID_API_KEY", "")
-        to_addr = str(ch.get("to") or "").strip()
-        from_addr = str(ch.get("from") or "").strip()
-        if not (ch.get("enabled") and api_key and to_addr and from_addr):
+        if not ch.get("enabled"):
             return False
-        payload = {
-            "personalizations": [{"to": [{"email": to_addr}]}],
-            "from": {"email": from_addr},
-            "subject": subject,
-            "content": [{"type":"text/plain","value": body}],
-        }
-        req = urllib.request.Request(
-            "https://api.sendgrid.com/v3/mail/send",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type":"application/json"},
-            method="POST",
+
+        to_addr = str(ch.get("to") or "").strip()
+        if not to_addr:
+            return False
+
+        ok, msg = _outbound_send_email(
+            to_email=to_addr,
+            subject=subject,
+            body_text=body
         )
-        with urllib.request.urlopen(req, timeout=10) as r:
-            r.read()
-        return True
-    except Exception:
+        if not ok:
+            print("[ALERT EMAIL FAILED]", msg)
+        return bool(ok)
+    except Exception as e:
+        print("[ALERT EMAIL ERROR]", repr(e))
         return False
+
 
 def _send_sms(text: str) -> bool:
     # Twilio (best-effort). If not configured, return False.
@@ -1279,6 +1279,65 @@ try:
     import requests  # type: ignore
 except Exception:
     requests = None  # type: ignore
+
+# ============================================================
+# Landing lead capture (public)
+# - Sheet ID + alert email are configurable via env vars
+# ============================================================
+LANDING_LEADS_SHEET_ID = os.environ.get(
+    "LANDING_LEADS_SHEET_ID",
+    "1PH0pqj6qKLmtXc0G46hO63-39CdmFSin6RqfYIJ5uSM"
+).strip()
+
+LANDING_LEAD_ALERT_TO = os.environ.get(
+    "LANDING_LEAD_ALERT_TO",
+    "bayz23@gmail.com"
+).strip()
+
+def _append_landing_lead_to_sheet(lead: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Append a landing lead to the configured Google Sheet.
+    Expects your existing Google creds env + gspread helpers to already work in this app.
+    Returns (ok, message).
+    """
+    try:
+        # Reuse your existing spreadsheet open + worksheet patterns if available.
+        # We try to open by key and write to a tab named "Landing Leads" (auto-create if missing).
+        gc = get_gspread_client()
+        sh = gc.open_by_key(LANDING_LEADS_SHEET_ID)
+
+        tab_name = os.environ.get("LANDING_LEADS_TAB", "Landing Leads").strip() or "Landing Leads"
+        try:
+            ws = sh.worksheet(tab_name)
+        except Exception:
+            ws = sh.add_worksheet(title=tab_name, rows=2000, cols=20)
+
+        # Ensure header row exists
+        header = ["ts", "name", "venue", "email", "phone", "contact_method", "contact_time", "source", "notes"]
+        try:
+            existing = ws.row_values(1)
+        except Exception:
+            existing = []
+        if not existing:
+            ws.append_row(header, value_input_option="RAW")
+
+        row = [
+            str(lead.get("ts") or ""),
+            str(lead.get("name") or ""),
+            str(lead.get("venue") or ""),
+            str(lead.get("email") or ""),
+            str(lead.get("phone") or ""),
+            str(lead.get("contact_method") or ""),
+            str(lead.get("contact_time") or ""),
+            str(lead.get("source") or "landing"),
+            str(lead.get("notes") or ""),
+        ]
+
+        ws.append_row(row, value_input_option="RAW")
+        return True, "saved"
+    except Exception as e:
+        return False, f"sheet_error: {e}"
+
 
 def _outbound_send_email(to_email: str, subject: str, body_text: str) -> Tuple[bool, str]:
     """Send email via SendGrid (recommended). Returns (ok, message)."""
@@ -2068,6 +2127,44 @@ def _write_venue_config(venue_id: str, pack: Dict[str, Any]) -> Tuple[bool, str,
         err = str(e)
     return wrote, write_path, err
 
+from flask import request, jsonify
+
+@app.post("/api/lead")
+def api_lead():
+    # Read JSON body from landing page
+    lead = request.get_json(silent=True) or {}
+
+    # Minimal validation (don’t block too hard)
+    name = str(lead.get("name") or "").strip()
+    venue = str(lead.get("venue") or "").strip()
+    email = str(lead.get("email") or "").strip()
+
+    if not email:
+        return jsonify(ok=False, error="missing_email"), 400
+
+    # Save to Google Sheet
+    ok_sheet, msg_sheet = _append_landing_lead_to_sheet(lead)
+
+    # Email alert (best-effort; don’t fail the lead if email isn’t configured)
+    subj = "New demo request — World Cup Concierge"
+    body = (
+    f"New landing lead:\n\n"
+    f"Name: {name}\n"
+    f"Venue: {venue}\n"
+    f"Email: {email}\n"
+    f"Phone: {lead.get('phone','')}\n"
+    f"Best contact: {lead.get('contact_method','')} ({lead.get('contact_time','')})\n"
+    f"TS: {lead.get('ts','')}\n"
+    f"Source: {lead.get('source','landing')}\n"
+)
+    _outbound_send_email(LANDING_LEAD_ALERT_TO, subj, body)
+
+    # Respond to frontend
+    if ok_sheet:
+        return jsonify(ok=True, saved=True), 200
+    return jsonify(ok=False, saved=False, error=msg_sheet), 500
+
+
 @app.post("/super/api/venues/set_active")
 def super_api_venues_set_active():
     # Super Admin auth
@@ -2394,6 +2491,20 @@ def super_admin_api_venue_create():
 @app.route("/")
 def marketing_landing():
     return send_from_directory("landing", "index.html")
+
+# Serve landing CSS/JS at root paths (because index.html references /styles.css and /app.js)
+@app.route("/styles.css")
+def landing_styles():
+    return send_from_directory("landing", "styles.css", mimetype="text/css")
+
+@app.route("/app.js")
+def landing_js():
+    return send_from_directory("landing", "app.js", mimetype="application/javascript")
+
+@app.route("/assets/<path:filename>")
+def landing_assets(filename):
+    return send_from_directory("landing/assets", filename)
+
 
 
 @app.route("/admin/api/_build", methods=["GET"])
