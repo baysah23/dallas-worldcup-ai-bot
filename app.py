@@ -223,6 +223,145 @@ except Exception:
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _TEMPLATE_DIR = os.path.join(_BASE_DIR, "templates")
 _STATIC_DIR = os.path.join(_BASE_DIR, "static")
+
+# Local reservations when Google Sheets is not configured (no Google Cloud project needed)
+RESERVATIONS_LOCAL_PATH = os.environ.get("RESERVATIONS_LOCAL_PATH", "data/reservations.jsonl")
+
+
+def _generate_reservation_id() -> str:
+    """Unique ID for a reservation (e.g. WC-A1B2C3D4). User can recall with this."""
+    return "WC-" + secrets.token_hex(4).upper()
+
+
+def _append_reservation_local(lead: dict, reservation_id: Optional[str] = None) -> None:
+    """Save one reservation to local JSONL. reservation_id is required for recall by ID."""
+    try:
+        path = os.path.join(_BASE_DIR, RESERVATIONS_LOCAL_PATH)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        rid = (reservation_id or lead.get("reservation_id") or "").strip()
+        row = {
+            "reservation_id": rid,
+            "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "name": lead.get("name", ""),
+            "phone": lead.get("phone", ""),
+            "date": lead.get("date", ""),
+            "time": lead.get("time", ""),
+            "party_size": lead.get("party_size", 0),
+            "language": lead.get("language", "en"),
+            "status": (lead.get("status") or "New").strip() or "New",
+            "vip": "Yes" if str(lead.get("vip") or "").strip().lower() in ("1", "true", "yes", "y") else "No",
+        }
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+def _get_reservation_by_id(reservation_id: str) -> Optional[Dict[str, Any]]:
+    """Find reservation by unique ID: local file first, then Google Sheets (if available)."""
+    rid = (reservation_id or "").strip().upper()
+    if not rid:
+        return None
+    # Normalize: allow "WC-abc123" or "abc123"
+    if not rid.startswith("WC-"):
+        rid = "WC-" + rid
+    # 1) Local file
+    try:
+        path = os.path.join(_BASE_DIR, RESERVATIONS_LOCAL_PATH)
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                for line in reversed(list(f)):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                        if (row.get("reservation_id") or "").strip().upper() == rid:
+                            return row
+                    except Exception:
+                        continue
+    except Exception:
+        pass
+    # 2) Google Sheets (if configured)
+    try:
+        gc = get_gspread_client()
+        ws = _open_default_spreadsheet(gc).sheet1
+        header = (ws.row_values(1) or [])
+        hnorm = [_normalize_header(h) for h in header]
+        if "reservation_id" not in hnorm:
+            return None
+        col = hnorm.index("reservation_id") + 1
+        rows = ws.get_all_values() or []
+        for r in rows[1:]:
+            if len(r) >= col and (r[col - 1] or "").strip().upper() == rid:
+                out = {}
+                for i, h in enumerate(header):
+                    if i < len(r):
+                        out[_normalize_header(h)] = r[i]
+                return {
+                    "reservation_id": out.get("reservation_id", rid),
+                    "name": out.get("name", ""),
+                    "phone": out.get("phone", ""),
+                    "date": out.get("date", ""),
+                    "time": out.get("time", ""),
+                    "party_size": out.get("party_size", ""),
+                    "status": out.get("status", "New"),
+                    "vip": out.get("vip", "No"),
+                }
+    except Exception:
+        pass
+    return None
+
+
+def extract_recall_id(text: str) -> Optional[str]:
+    """If message is 'recall <id>' or 'recall WC-xxx', return the id (WC-xxx or normalized). Else None.
+    Handles formats like: 'recall WC-XXXX', 'recall : WC-XXXX', 'recall **WC-XXXX**', etc.
+    """
+    t = (text or "").strip()
+    if not t:
+        return None
+    lower = t.lower()
+    if not (lower.startswith("recall") or "recall" in lower.split()[:2]):
+        return None
+    # Match "recall" followed by optional whitespace/punctuation, then capture the ID
+    # Handles: "recall WC-XXXX", "recall : WC-XXXX", "recall **WC-XXXX**", etc.
+    # Use non-greedy \W*? to stop at first word char, then capture ID (WC- followed by alphanumeric)
+    m = re.search(r"recall\W*?(WC-?[A-Za-z0-9]+)", t, re.I)
+    if m:
+        raw = (m.group(1) or "").strip().upper()
+        if raw.startswith("WC-"):
+            return raw
+        if raw.startswith("WC"):
+            return "WC-" + raw[2:] if len(raw) > 2 else None
+        if len(raw) >= 4:
+            return "WC-" + raw
+    # Fallback: try to extract any alphanumeric sequence after "recall" (for IDs without WC- prefix)
+    m = re.search(r"recall\W+([A-Za-z0-9\-]{4,})", t, re.I)
+    if m:
+        raw = (m.group(1) or "").strip().upper()
+        if len(raw) >= 4:
+            return "WC-" + raw
+    return None
+
+
+def format_reservation_row(row: Optional[Dict[str, Any]]) -> str:
+    """Format a reservation dict for display. Returns instruction message if row is None."""
+    if not row or not any([row.get("date"), row.get("name"), row.get("phone")]):
+        return "No reservation found for that ID. Check the ID and try again (e.g. recall WC-XXXX)."
+    parts = [
+        "📌 Reservation:",
+        f"ID: {row.get('reservation_id') or '—'}",
+        f"Name: {row.get('name') or '—'}",
+        f"Phone: {row.get('phone') or '—'}",
+        f"Date: {row.get('date') or '—'}",
+        f"Time: {row.get('time') or '—'}",
+        f"Party size: {row.get('party_size') or '—'}",
+        f"Status: {row.get('status') or '—'}",
+        f"VIP: {row.get('vip') or '—'}",
+    ]
+    return "\n".join(parts)
+
+
 app = Flask(__name__, template_folder=_TEMPLATE_DIR, static_folder=_STATIC_DIR)
 
 # ============================================================
@@ -3214,7 +3353,7 @@ MENU = {
 LANG = {
     "en": {
         "welcome": "⚽ Welcome, World Cup fan! I'm your Dallas Match-Day Concierge.\nType reservation to book a table, or ask about Dallas matches, all matches, or the menu.",
-        "ask_date": "What date would you like? (Example: June 23, 2026)\n\n(You can also type: “Recall reservation so far”)",
+        "ask_date": "What date would you like? (Example: June 23, 2026)\n\n(To recall a past reservation, type: recall followed by your reservation ID, e.g. recall WC-XXXX)",
         "ask_time": "What time would you like?",
         "ask_party": "How many people are in your party?",
         "ask_name": "What name should we put the reservation under?",
@@ -3399,7 +3538,7 @@ def ensure_sheet_schema(ws) -> List[str]:
     Make sure row 1 is the header and includes the CRM columns we need.
     Returns the final header list (as stored in the sheet).
     """
-    desired = ["timestamp", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier", "queue", "business_context", "budget", "notes", "vibe"]
+    desired = ["timestamp", "reservation_id", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier", "queue", "business_context", "budget", "notes", "vibe"]
 
     existing = ws.row_values(1) or []
     existing_norm = [_normalize_header(x) for x in existing]
@@ -3454,6 +3593,7 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
             row[hmap[k] - 1] = val
 
     setv("timestamp", datetime.now().isoformat(timespec="seconds"))
+    setv("reservation_id", (lead.get("reservation_id") or "").strip())
     setv("name", lead.get("name", ""))
     setv("phone", lead.get("phone", ""))
     setv("date", lead.get("date", ""))
@@ -3586,11 +3726,25 @@ def extract_party_size(text: str) -> Optional[int]:
     ]
     if any(mo in t for mo in months):
         return None
+    # Also check for partial month names that might indicate a date (e.g., "fe" for feb, "ju" for jun/jul)
+    # This prevents "fe 18" from being read as party size 18
+    month_prefixes = ["fe", "feb", "mar", "ap", "apr", "ma", "may", "ju", "jun", "jul", "au", "aug", "se", "sep", "sept", "oc", "oct", "no", "nov", "de", "dec"]
+    if any(t.startswith(pref) or f" {pref}" in t or f",{pref}" in t for pref in month_prefixes if len(pref) >= 2):
+        # If there's a number right after a month prefix, it's likely a date, not party size
+        for pref in month_prefixes:
+            if len(pref) >= 2 and (t.startswith(pref) or f" {pref}" in t or f",{pref}" in t):
+                # Check if there's a digit within 5 chars after the prefix
+                idx = t.find(pref)
+                if idx >= 0:
+                    after = t[idx + len(pref):idx + len(pref) + 5]
+                    if re.search(r"\d", after):
+                        return None
     if re.search(r"\b\d{4}-\d{1,2}-\d{1,2}\b", t):
         return None
     if re.search(r"\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b", t):
         return None
-    if re.search(r"\b\d{1,2}(:\d{2})\s*(am|pm)?\b", t):
+    # Time patterns: "4 pm", "4:30 pm", "4am", etc. - don't treat as party size
+    if re.search(r"\b\d{1,2}(:\d{2})?\s*(am|pm)\b", t):
         return None
 
     # Fallback: a plain number, but keep it reasonable
@@ -3730,6 +3884,19 @@ def extract_date(text: str) -> Optional[str]:
                 if my:
                     y = int(my.group(1))
                 return f"{y:04d}-{mon:02d}-{dd:02d}"
+    
+    # Fuzzy match: handle partial month names like "fe" -> "feb"
+    # Only try if we didn't find a full match above, and only for unambiguous prefixes
+    # Check for common typos/abbreviations: "fe" -> february, "feb" -> february
+    if lower.startswith("fe") and len(lower) >= 3:
+        m = re.search(r"^fe[b]?\D*(\d{1,2})", lower)
+        if m:
+            dd = int(m.group(1))
+            y = 2026
+            my = re.search(r"\b(20\d{2})\b", lower)
+            if my:
+                y = int(my.group(1))
+            return f"{y:04d}-02-{dd:02d}"
 
     return None
 
@@ -3824,21 +3991,9 @@ def apply_business_rules(lead: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def recall_text(sess: Dict[str, Any]) -> str:
-    lang = sess.get("lang", "en")
-    L = LANG[lang]
-    lead = sess["lead"]
-    if any([lead.get("date"), lead.get("time"), lead.get("party_size"), lead.get("name"), lead.get("phone")]):
-        parts = [
-            L["recall_title"],
-            f"Date: {lead.get('date') or '—'}",
-            f"Time: {lead.get('time') or '—'}",
-            f"Party size: {lead.get('party_size') or '—'}",
-            f"Name: {lead.get('name') or '—'}",
-            f"Phone: {lead.get('phone') or '—'}",
-        ]
-        return "\n".join(parts)
-    return L["recall_empty"]
+def recall_text(sess: Dict[str, Any], session_id: Optional[str] = None) -> str:
+    # Recall is by reservation ID only (no session). Use the ID you got when you made the reservation.
+    return "To recall a reservation, type **recall** followed by your reservation ID (e.g. **recall WC-XXXX**). You received this ID when you made the reservation."
 
 
 def next_question(sess: Dict[str, Any]) -> str:
@@ -5175,9 +5330,15 @@ def chat():
         if not msg:
             return jsonify({"reply": "Please type a message.", "rate_limit_remaining": remaining})
 
-        # Recall support (all languages)
+        # Recall by reservation ID: "recall WC-XXXX" fetches that reservation; "recall" alone shows instruction
         if want_recall(msg, lang):
-            return jsonify({"reply": recall_text(sess), "rate_limit_remaining": remaining})
+            rid = extract_recall_id(msg)
+            if rid:
+                row = _get_reservation_by_id(rid)
+                reply = format_reservation_row(row)
+            else:
+                reply = "To recall a reservation, type **recall** followed by your reservation ID (e.g. **recall WC-XXXX**). You received this ID when you made the reservation."
+            return jsonify({"reply": reply, "rate_limit_remaining": remaining})
 
         # Start reservation flow if user indicates intent
         if sess["mode"] == "idle" and want_reservation(msg):
@@ -5266,34 +5427,43 @@ def chat():
                     sess["mode"] = "idle"
                     return jsonify({"reply": "🔒 VIP-only is active right now. Type VIP and start again to continue.", "rate_limit_remaining": remaining})
 
+                rid = _generate_reservation_id()
+                lead["reservation_id"] = rid
                 try:
                     append_lead_to_sheet(lead)
-                    sess["mode"] = "idle"
-                    saved_msg = ("✅ Added to waitlist!" if str(lead.get("status", "")).strip().lower() == "waitlist" else LANG[lang]["saved"])
-                    confirm = (
-                        f"{saved_msg}\n"
-                        f"Name: {lead['name']}\n"
-                        f"Phone: {lead['phone']}\n"
-                        f"Date: {lead['date']}\n"
-                        f"Time: {lead['time']}\n"
-                        f"Party size: {lead['party_size']}\n"
-                        f"Status: {lead.get('status','New')}\n"
-                        f"VIP: {lead.get('vip','No')}"
-                    )
-                    sess["lead"] = {
-                        "name": "",
-                        "phone": "",
-                        "date": "",
-                        "time": "",
-                        "party_size": 0,
-                        "language": lang,
-                        "status": "New",
-                        "vip": "No",
-                    }
-                    return jsonify({"reply": confirm, "rate_limit_remaining": remaining})
-                except Exception as e:
-                    # Always return JSON so the UI never shows "no reply received".
-                    return jsonify({"reply": f"⚠️ Could not save reservation: {repr(e)}", "rate_limit_remaining": remaining}), 500
+                except Exception:
+                    pass  # fallback: local file below
+                # Always save to local file too so recall by ID works (even after page reload)
+                try:
+                    _append_reservation_local(lead)
+                except Exception:
+                    return jsonify({"reply": "⚠️ Could not save reservation.", "rate_limit_remaining": remaining}), 500
+
+                sess["mode"] = "idle"
+                saved_msg = ("✅ Added to waitlist!" if str(lead.get("status", "")).strip().lower() == "waitlist" else LANG[lang]["saved"])
+                confirm = (
+                    f"{saved_msg}\n\n"
+                    f"Your reservation ID is: **{rid}** — save it!\n"
+                    f"To recall this reservation later, type: **recall {rid}**\n\n"
+                    f"Name: {lead['name']}\n"
+                    f"Phone: {lead['phone']}\n"
+                    f"Date: {lead['date']}\n"
+                    f"Time: {lead['time']}\n"
+                    f"Party size: {lead['party_size']}\n"
+                    f"Status: {lead.get('status','New')}\n"
+                    f"VIP: {lead.get('vip','No')}"
+                )
+                sess["lead"] = {
+                    "name": "",
+                    "phone": "",
+                    "date": "",
+                    "time": "",
+                    "party_size": 0,
+                    "language": lang,
+                    "status": "New",
+                    "vip": "No",
+                }
+                return jsonify({"reply": confirm, "rate_limit_remaining": remaining})
 
             # Otherwise ask next missing field
             q = next_question(sess)
@@ -6206,6 +6376,91 @@ def admin_update_config():
         }})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
+
+@app.route("/admin/api/drafts", methods=["GET", "POST"])
+def admin_api_drafts():
+    """Owner-only: manage message drafts (stored in venue config).
+    
+    GET: Returns drafts object from venue config.
+    POST: Saves drafts object to venue config (owner-only).
+    
+    Query params:
+      - key: admin key (required)
+      - venue: venue ID (required for POST, optional for GET - uses context)
+    """
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    
+    # POST requires owner role
+    if request.method == "POST":
+        ok2, resp2 = _require_admin(min_role="owner")
+        if not ok2:
+            return resp2
+    
+    # ✅ VENUE-SPECIFIC: Require explicit venue parameter (no fallback to context)
+    venue = (request.args.get("venue") or "").strip()
+    if not venue:
+        return jsonify({"ok": False, "error": "Missing venue parameter (required for venue-specific drafts)"}), 400
+    
+    venue_id = _slugify_venue_id(venue)
+    
+    # Load venue config
+    path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+    if not os.path.exists(path):
+        return jsonify({"ok": False, "error": f"Venue not found: {venue_id}"}), 404
+    
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            vcfg = json.load(f) or {}
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Failed to read venue config: {str(e)}"}), 500
+    
+    # GET: Return drafts
+    if request.method == "GET":
+        drafts = vcfg.get("drafts") if isinstance(vcfg.get("drafts"), dict) else {}
+        meta = {}
+        if "updated_at" in vcfg:
+            meta["updated_at"] = vcfg["updated_at"]
+        return jsonify({"ok": True, "drafts": drafts, "meta": meta})
+    
+    # POST: Save drafts (owner-only)
+    data = request.get_json(silent=True) or {}
+    drafts_data = data.get("drafts")
+    
+    if drafts_data is None:
+        return jsonify({"ok": False, "error": "Missing drafts object"}), 400
+    
+    if not isinstance(drafts_data, dict):
+        return jsonify({"ok": False, "error": "drafts must be a JSON object"}), 400
+    
+    # Update venue config with drafts
+    vcfg["drafts"] = drafts_data
+    vcfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    
+    # Write back to file
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(vcfg, f, indent=2, ensure_ascii=False, sort_keys=True)
+    except Exception as e:
+        return jsonify({"ok": False, "error": f"Failed to write venue config: {str(e)}"}), 500
+    
+    # Invalidate cache
+    try:
+        _invalidate_venues_cache()
+    except Exception:
+        pass
+    
+    # Audit
+    ctx = _admin_ctx()
+    _audit("drafts.update", {
+        "venue": venue_id,
+        "actor": ctx.get("actor", ""),
+        "draft_keys": list(drafts_data.keys()) if isinstance(drafts_data, dict) else []
+    })
+    
+    meta = {"updated_at": vcfg["updated_at"]}
+    return jsonify({"ok": True, "drafts": drafts_data, "meta": meta})
 
 @app.route("/admin/api/rules", methods=["GET","POST"])
 def admin_api_rules():
@@ -7291,6 +7546,17 @@ def admin_tpl():
                            role=role)
 
 
+@app.get("/admin/drafts")
+def admin_drafts_page():
+    """Standalone Drafts page: no tabs, fetch on load. Requires owner."""
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+    key = (request.args.get("key") or "").strip()
+    venue = (request.args.get("venue") or "").strip()
+    return render_template("admin_drafts.html", key=key, venue=venue)
+
+
 @app.route("/admin")
 def admin():
     """
@@ -7602,6 +7868,50 @@ th{
 }
 .btnTiny:hover{background:rgba(255,255,255,.10)}
 
+.modal-overlay{
+  display:none;
+  position:fixed;
+  top:0;left:0;right:0;bottom:0;
+  background:rgba(0,0,0,.75);
+  z-index:9999;
+  align-items:center;
+  justify-content:center;
+  animation:fadeIn .2s ease
+}
+.modal-overlay.show{display:flex}
+.modal-box{
+  background:linear-gradient(180deg, rgba(15,27,51,.98), rgba(11,16,32,.98));
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:18px;
+  padding:20px;
+  max-width:700px;
+  width:90%;
+  max-height:85vh;
+  overflow:auto;
+  box-shadow:0 12px 40px rgba(0,0,0,.5);
+  animation:slideUp .25s ease
+}
+.modal-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:14px
+}
+.modal-title{font-size:18px;font-weight:800}
+.modal-close{
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.12);
+  color:var(--text);
+  border-radius:8px;
+  padding:6px 12px;
+  cursor:pointer;
+  font-size:13px;
+  font-weight:700
+}
+.modal-close:hover{background:rgba(255,255,255,.12)}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+
 .note{margin-top:8px;font-size:12px;color:var(--muted)}
 .hidden{display:none}
 .locked{opacity:.45;filter:saturate(.7);cursor:not-allowed}
@@ -7671,6 +7981,7 @@ th{
     <button type="button" class="tabbtn" data-tab="ai" data-minrole="owner" onclick="showTab('ai');return false;">AI Settings</button>
     <button type="button" class="tabbtn" data-tab="rules" data-minrole="owner" onclick="showTab('rules');return false;">Rules</button>
     <button type="button" class="tabbtn" data-tab="menu" data-minrole="owner" onclick="showTab('menu');return false;">Menu</button>
+    <button type="button" class="tabbtn" data-minrole="owner" onclick="showDraftsModal();return false;">Drafts</button>
     <button type="button" class="tabbtn" data-tab="policies" data-minrole="owner" onclick="showTab('policies');return false;">Policies</button>
   </div>
 </div>
@@ -8174,6 +8485,23 @@ th{
     </div>
   </div>
 </div>
+
+<!-- Drafts Modal -->
+<div id="drafts-modal" class="modal-overlay" onclick="if(event.target===this)closeDraftsModal()">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div class="modal-title">Message Drafts</div>
+      <button type="button" class="modal-close" onclick="closeDraftsModal()">Close</button>
+    </div>
+    <div class="small" style="margin-bottom:12px">Edit message templates and drafts (owner-only). Stored in venue config.</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <button type="button" class="btn2" onclick="loadDrafts()">Reload</button>
+      <button type="button" class="btn" data-min-role="owner" onclick="saveDrafts()">Save</button>
+      <span id="drafts-modal-msg" class="note"></span>
+    </div>
+    <textarea id="drafts-modal-json" class="inp" style="width:100%;min-height:420px;font-family:monospace;font-size:13px;box-sizing:border-box" spellcheck="false"></textarea>
+  </div>
+</div>
 """)
 
     # Scripts
@@ -8541,7 +8869,7 @@ qsa('.tabbtn').forEach(btn=>{
     qsa('.tabbtn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
 
-    ['ops','leads','ai','aiq','rules','menu','audit'].forEach(x=>{
+    ['ops','leads','ai','aiq','rules','menu','drafts','policies','audit','monitor'].forEach(x=>{
       const pane = document.getElementById('tab-'+x);
       if(!pane) return;
       pane.classList.toggle('hidden', x!==t);
@@ -8551,6 +8879,7 @@ qsa('.tabbtn').forEach(btn=>{
     if(t==='aiq') loadAIQueue();
     if(t==='rules') loadRules();
     if(t==='menu') loadMenu();
+    if(t==='drafts') loadDrafts();
     if(t==='audit') loadAudit();
   });
 });
@@ -9051,6 +9380,63 @@ async function applyPreset(name){
   }
 }
 
+
+// ===== Drafts Modal =====
+function showDraftsModal(){
+  const modal = qs('#drafts-modal');
+  if(modal){
+    modal.classList.add('show');
+    loadDrafts();
+    document.addEventListener('keydown', _draftModalEscHandler);
+  }
+}
+
+function closeDraftsModal(){
+  const modal = qs('#drafts-modal');
+  if(modal) modal.classList.remove('show');
+  document.removeEventListener('keydown', _draftModalEscHandler);
+}
+
+function _draftModalEscHandler(e){
+  if(e.key === 'Escape') closeDraftsModal();
+}
+
+async function loadDrafts(){
+  const msg = qs('#drafts-modal-msg'); if(msg) msg.textContent = 'Loading…';
+  const box = qs('#drafts-modal-json');
+  try{
+    const url = `/admin/api/drafts?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`;
+    const r = await fetch(url, {cache:'no-store'});
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error || 'Failed');
+    if(box) box.value = JSON.stringify(j.drafts || {}, null, 2);
+    if(msg) msg.textContent = j.meta?.updated_at ? `Loaded • ${j.meta.updated_at}` : 'Loaded';
+  }catch(e){
+    if(msg) msg.textContent = `Error: ${e.message || e}`;
+  }
+}
+
+async function saveDrafts(){
+  const msg = qs('#drafts-modal-msg'); if(msg) msg.textContent = 'Saving…';
+  const box = qs('#drafts-modal-json');
+  if(!box){ if(msg) msg.textContent = 'No textarea found'; return; }
+  let obj;
+  try{ obj = JSON.parse(box.value || '{}'); }catch(e){ if(msg) msg.textContent = 'Invalid JSON'; return; }
+  if(typeof obj !== 'object' || obj === null){ if(msg) msg.textContent = 'JSON must be an object'; return; }
+  try{
+    const url = `/admin/api/drafts?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`;
+    const r = await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({drafts: obj})
+    });
+    const j = await r.json();
+    if(!j.ok) throw new Error(j.error || 'Failed');
+    if(msg) msg.textContent = j.meta?.updated_at ? `Saved • ${j.meta.updated_at}` : 'Saved';
+  }catch(e){
+    if(msg) msg.textContent = `Error: ${e.message || e}`;
+  }
+}
 
 // ===== AI Approval Queue =====
 async function loadAIQueue(){
@@ -14267,7 +14653,7 @@ MENU = {
 LANG = {
     "en": {
         "welcome": "⚽ Welcome, World Cup fan! I'm your Dallas Match-Day Concierge.\nType reservation to book a table, or ask about Dallas matches, all matches, or the menu.",
-        "ask_date": "What date would you like? (Example: June 23, 2026)\n\n(You can also type: “Recall reservation so far”)",
+        "ask_date": "What date would you like? (Example: June 23, 2026)\n\n(To recall a past reservation, type: recall followed by your reservation ID, e.g. recall WC-XXXX)",
         "ask_time": "What time would you like?",
         "ask_party": "How many people are in your party?",
         "ask_name": "What name should we put the reservation under?",
@@ -14399,7 +14785,7 @@ def ensure_sheet_schema(ws) -> List[str]:
     Make sure row 1 is the header and includes the CRM columns we need.
     Returns the final header list (as stored in the sheet).
     """
-    desired = ["timestamp", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier", "queue", "business_context", "budget", "notes", "vibe"]
+    desired = ["timestamp", "reservation_id", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier", "queue", "business_context", "budget", "notes", "vibe"]
 
     existing = ws.row_values(1) or []
     existing_norm = [_normalize_header(x) for x in existing]
@@ -14454,6 +14840,7 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
             row[hmap[k] - 1] = val
 
     setv("timestamp", datetime.now().isoformat(timespec="seconds"))
+    setv("reservation_id", (lead.get("reservation_id") or "").strip())
     setv("name", lead.get("name", ""))
     setv("phone", lead.get("phone", ""))
     setv("date", lead.get("date", ""))
@@ -14586,11 +14973,25 @@ def extract_party_size(text: str) -> Optional[int]:
     ]
     if any(mo in t for mo in months):
         return None
+    # Also check for partial month names that might indicate a date (e.g., "fe" for feb, "ju" for jun/jul)
+    # This prevents "fe 18" from being read as party size 18
+    month_prefixes = ["fe", "feb", "mar", "ap", "apr", "ma", "may", "ju", "jun", "jul", "au", "aug", "se", "sep", "sept", "oc", "oct", "no", "nov", "de", "dec"]
+    if any(t.startswith(pref) or f" {pref}" in t or f",{pref}" in t for pref in month_prefixes if len(pref) >= 2):
+        # If there's a number right after a month prefix, it's likely a date, not party size
+        for pref in month_prefixes:
+            if len(pref) >= 2 and (t.startswith(pref) or f" {pref}" in t or f",{pref}" in t):
+                # Check if there's a digit within 5 chars after the prefix
+                idx = t.find(pref)
+                if idx >= 0:
+                    after = t[idx + len(pref):idx + len(pref) + 5]
+                    if re.search(r"\d", after):
+                        return None
     if re.search(r"\b\d{4}-\d{1,2}-\d{1,2}\b", t):
         return None
     if re.search(r"\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b", t):
         return None
-    if re.search(r"\b\d{1,2}(:\d{2})\s*(am|pm)?\b", t):
+    # Time patterns: "4 pm", "4:30 pm", "4am", etc. - don't treat as party size
+    if re.search(r"\b\d{1,2}(:\d{2})?\s*(am|pm)\b", t):
         return None
 
     # Fallback: a plain number, but keep it reasonable
@@ -14730,6 +15131,19 @@ def extract_date(text: str) -> Optional[str]:
                 if my:
                     y = int(my.group(1))
                 return f"{y:04d}-{mon:02d}-{dd:02d}"
+    
+    # Fuzzy match: handle partial month names like "fe" -> "feb"
+    # Only try if we didn't find a full match above, and only for unambiguous prefixes
+    # Check for common typos/abbreviations: "fe" -> february, "feb" -> february
+    if lower.startswith("fe") and len(lower) >= 3:
+        m = re.search(r"^fe[b]?\D*(\d{1,2})", lower)
+        if m:
+            dd = int(m.group(1))
+            y = 2026
+            my = re.search(r"\b(20\d{2})\b", lower)
+            if my:
+                y = int(my.group(1))
+            return f"{y:04d}-02-{dd:02d}"
 
     return None
 
@@ -14824,21 +15238,9 @@ def apply_business_rules(lead: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def recall_text(sess: Dict[str, Any]) -> str:
-    lang = sess.get("lang", "en")
-    L = LANG[lang]
-    lead = sess["lead"]
-    if any([lead.get("date"), lead.get("time"), lead.get("party_size"), lead.get("name"), lead.get("phone")]):
-        parts = [
-            L["recall_title"],
-            f"Date: {lead.get('date') or '—'}",
-            f"Time: {lead.get('time') or '—'}",
-            f"Party size: {lead.get('party_size') or '—'}",
-            f"Name: {lead.get('name') or '—'}",
-            f"Phone: {lead.get('phone') or '—'}",
-        ]
-        return "\n".join(parts)
-    return L["recall_empty"]
+def recall_text(sess: Dict[str, Any], session_id: Optional[str] = None) -> str:
+    # Recall is by reservation ID only (no session). Use the ID you got when you made the reservation.
+    return "To recall a reservation, type **recall** followed by your reservation ID (e.g. **recall WC-XXXX**). You received this ID when you made the reservation."
 
 
 def next_question(sess: Dict[str, Any]) -> str:

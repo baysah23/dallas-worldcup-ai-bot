@@ -2121,6 +2121,22 @@
       font-weight: 700;
     }
 
+    /* Fan Zone sponsor pill */
+    .fz-sponsor-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .08); /* matches --glass used in project */
+      border: 1px solid var(--line); /* rgba(255, 255, 255, .10) - existing grey */
+      color: rgba(255, 255, 255, .95); /* white text */
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
 
     /* Ensure supporter chip handles long country names gracefully */
     #supporterChip {
@@ -5394,8 +5410,8 @@
                 <!-- To do:There is not any feature or backend functionality  created or implemented for this fzCollapseToggle -->
                 <button class="fz-iconbtn" id="fzCollapseToggle" title="Collapse / expand">⫶</button>
               </div>
-              <div class="fz-row fz-muted" style="justify-content:flex-start; font-size:12px; margin-bottom:6px;" id="fanzoneSponsorRow">
-                <span id="fanzoneSponsorLabel">Presented by …</span>
+              <div class="fz-row" style="justify-content:flex-start; font-size:11px; margin-bottom:6px;" id="fanzoneSponsorRow">
+                <span id="fanzoneSponsorLabel" class="fz-sponsor-pill">Presented by …</span>
               </div>
               <div class="fz-row" style="justify-content:flex-start;">
                 <div class="fz-chip" id="supporterChip" title="Personalization stored on this device only">
@@ -5557,6 +5573,7 @@
     // ---------- Session & Chat Persistence ----------
     const CHAT_SESSION_KEY = 'wc_chat_session_id';
     const CHAT_HISTORY_KEY = 'wc_chat_history';
+    const LAST_RESERVATION_KEY = 'wc_last_reservation';
 
     function getSessionId() {
       let sid = localStorage.getItem(CHAT_SESSION_KEY);
@@ -5593,6 +5610,55 @@
       localStorage.removeItem(CHAT_HISTORY_KEY);
     }
 
+    function saveLastReservation(replyText) {
+      // Detect reservation confirmation: has "Name:", "Phone:", "Date:", "Time:", "Party size:"
+      if (!replyText || typeof replyText !== 'string') return;
+      const hasName = /Name:\s*[^\n]+/i.test(replyText);
+      const hasPhone = /Phone:\s*[^\n]+/i.test(replyText);
+      const hasDate = /Date:\s*[^\n]+/i.test(replyText);
+      if (hasName && hasPhone && hasDate) {
+        try {
+          const reservation = {
+            name: (replyText.match(/Name:\s*([^\n]+)/i)?.[1] || '').trim(),
+            phone: (replyText.match(/Phone:\s*([^\n]+)/i)?.[1] || '').trim(),
+            date: (replyText.match(/Date:\s*([^\n]+)/i)?.[1] || '').trim(),
+            time: (replyText.match(/Time:\s*([^\n]+)/i)?.[1] || '').trim(),
+            party_size: (replyText.match(/Party size:\s*([^\n]+)/i)?.[1] || '').trim(),
+            status: (replyText.match(/Status:\s*([^\n]+)/i)?.[1] || 'New').trim(),
+            vip: (replyText.match(/VIP:\s*([^\n]+)/i)?.[1] || 'No').trim(),
+            saved_at: new Date().toISOString()
+          };
+          localStorage.setItem(LAST_RESERVATION_KEY, JSON.stringify(reservation));
+        } catch (e) {
+          console.warn('Could not save reservation:', e);
+        }
+      }
+    }
+
+    function getLastReservation() {
+      try {
+        const raw = localStorage.getItem(LAST_RESERVATION_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function formatReservationRecall(reservation) {
+      if (!reservation) return null;
+      return [
+        '📌 Your last saved reservation:',
+        `Name: ${reservation.name || '—'}`,
+        `Phone: ${reservation.phone || '—'}`,
+        `Date: ${reservation.date || '—'}`,
+        `Time: ${reservation.time || '—'}`,
+        `Party size: ${reservation.party_size || '—'}`,
+        `Status: ${reservation.status || '—'}`,
+        `VIP: ${reservation.vip || '—'}`
+      ].join('\n');
+    }
+
     // ---------- helpers ----------
     const $ = (id) => document.getElementById(id);
     const $$ = (sel, root = document) => Array.from((root || document).querySelectorAll(sel));
@@ -5614,16 +5680,22 @@
     };
 
     function getWelcomeForState(lang) {
-      // === FIX: Use venue-specific greeting if available ===
+      const k = window.__wcCountdownStateKind || '';
+      const L = (lang || state.lang || 'en').toLowerCase();
+      
+      // === FIX: Match-day greeting ALWAYS takes priority (even if venue greeting exists) ===
+      if (k === 'game_day') {
+        // Return match-day greeting in requested language
+        return WELCOME_GAMEDAY_BY_LANG[L] || WELCOME_GAMEDAY_BY_LANG.en;
+      }
+      
+      // === FIX: Use venue-specific greeting if available (non-game-day only) ===
       if (state.venue_greeting) {
         return state.venue_greeting;
       }
-
-      const k = window.__wcCountdownStateKind || '';
-      const L = (lang || state.lang || 'en').toLowerCase();
-      const primary = WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
-      const gameday = WELCOME_GAMEDAY_BY_LANG[L] || WELCOME_GAMEDAY_BY_LANG.en;
-      return (k === 'game_day') ? gameday : primary;
+      
+      // Fallback to primary greeting
+      return WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
     }
     // ---------- admin-only countdown indicator ----------
     function isAdminDebug() {
@@ -5823,7 +5895,7 @@
         });
       }
 
-      // On language switch: clear chat, clear message input, show loading, fetch greeting (cached after first time), then show translated bubble
+      // On language switch: clear chat, clear message input, show loading, then show greeting
       clearChatOnly();
       const msgInput = $('msg');
       if (msgInput) msgInput.value = '';
@@ -5840,19 +5912,38 @@
         log.appendChild(wrap);
         log.scrollTop = log.scrollHeight;
       }
-      loadVenueIdentityLine(lang).then(() => {
-        try {
-          const el = log && log.querySelector('.chatLine.bot[data-loading="1"] .bubble, .chatLine.bot .bubble');
-          if (el) {
-            el.closest('.chatLine')?.removeAttribute?.('data-loading');
-            el.textContent = state.venue_greeting || 'Hello!';
-          } else {
-            ensureChatWelcome();
-            const b = log && log.querySelector('.chatLine.bot .bubble');
-            if (b && state.venue_greeting) b.textContent = state.venue_greeting;
-          }
-        } catch (e) { console.warn('greeting after lang switch', e); }
-      });
+      
+      // On game day, skip loading venue greeting (match-day greeting takes priority)
+      const isGameDay = (window.__wcCountdownStateKind || '') === 'game_day';
+      if (isGameDay) {
+        // Clear venue greeting on game day so match-day greeting shows
+        state.venue_greeting = '';
+        // Show match-day greeting immediately
+        setTimeout(() => {
+          try {
+            const el = log && log.querySelector('.chatLine.bot[data-loading="1"] .bubble');
+            if (el) {
+              el.closest('.chatLine')?.removeAttribute?.('data-loading');
+              el.textContent = getWelcomeForState(lang);
+            } else {
+              ensureChatWelcome();
+            }
+          } catch (e) { console.warn('greeting after lang switch', e); }
+        }, 100);
+      } else {
+        // Non-game day: load venue greeting (will be translated)
+        loadVenueIdentityLine(lang).then(() => {
+          try {
+            const el = log && log.querySelector('.chatLine.bot[data-loading="1"] .bubble, .chatLine.bot .bubble');
+            if (el) {
+              el.closest('.chatLine')?.removeAttribute?.('data-loading');
+              el.textContent = getWelcomeForState(lang);
+            } else {
+              ensureChatWelcome();
+            }
+          } catch (e) { console.warn('greeting after lang switch', e); }
+        });
+      }
     }
 
     // Also add resize/orientation handler to keep bubble aligned
@@ -6040,7 +6131,10 @@
           })
         });
         const data = await r.json().catch(() => ({ reply: 'Sorry — something went wrong.' }));
-        chatAppend('bot', data.reply || '…');
+        const reply = data.reply || '…';
+        chatAppend('bot', reply);
+        // Save reservation to localStorage if it's a confirmation (survives refresh/restart)
+        saveLastReservation(reply);
       } catch (e) {
         chatAppend('bot', 'Network issue — please try again.');
       } finally {
@@ -6049,8 +6143,16 @@
       }
     }
 
-    function openChatPrefill(text) {
+    async function openChatPrefill(text) {
       setSection('chat');
+      // On game day, skip loading venue greeting (match-day greeting takes priority)
+      const isGameDay = (window.__wcCountdownStateKind || '') === 'game_day';
+      if (isGameDay) {
+        // Clear venue greeting on game day so match-day greeting shows
+        state.venue_greeting = '';
+      } else {
+        await loadVenueIdentityLine();
+      }
       ensureChatWelcome();
       const input = $('msg');
       if (input) {
@@ -6199,6 +6301,20 @@
       function tick() {
         const now = new Date();
         const st = computeState(now, matches);
+        
+        // Allow manual override for testing (via localStorage or URL param)
+        let overrideKind = null;
+        try {
+          overrideKind = localStorage.getItem('wc_countdown_override') || 
+                        new URLSearchParams(location.search).get('countdown_state');
+          if (overrideKind) {
+            window.__wcCountdownStateKind = overrideKind;
+            updateAdminCountdownState(overrideKind);
+            maybeTriggerGameDayMessage(overrideKind);
+            return; // Skip normal countdown update when overridden
+          }
+        } catch (e) { }
+        
         window.__wcCountdownStateKind = st.kind;
         updateAdminCountdownState(st.kind);
         maybeTriggerGameDayMessage(st.kind);
