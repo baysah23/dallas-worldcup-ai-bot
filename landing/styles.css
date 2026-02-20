@@ -233,7 +233,7 @@ a {
 /* video area below header */
 .heroVideoWrap {
   position: relative;
-  min-height: 52vh; /* locked */
+  min-height: 70vh; /* locked */
   overflow: hidden;
 }
 
@@ -342,6 +342,30 @@ a {
   font-size: 14px; /* match primary */
 }
 
+/* Custom CTA Banner */
+.cta-banner {
+  background: var(--bg0); /* Ensures the dark background stays consistent */
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.cta-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.cta-content .heroSub {
+  margin: 10px auto 0; /* Keeps the subtitle perfectly centered under the H2 */
+}
+
+/* Forces the flex buttons to center horizontally */
+.justify-center {
+  justify-content: center;
+  margin-top: 24px;
+}
+
 /* ===== Glass modal ===== */
 .modalOverlay {
   position: fixed;
@@ -406,17 +430,6 @@ a {
   margin: 0 0 12px 0;
   line-height: 1.65;
   font-size: 14.5px;
-}
-
-/* Mobile safety */
-@media (max-width: 980px) {
-  .modalCard {
-    width: min(760px, 94vw);
-    max-height: 82vh;
-  }
-  .modalBody {
-    font-size: 14px;
-  }
 }
 
 @keyframes pillFadeIn {
@@ -497,7 +510,7 @@ a {
   padding: 16px 14px 18px;
 }
 
-/* Carousel (kept as your existing structure; we’ll fix rotation after you paste carousel snippet) */
+/* Carousel */
 .carousel {
   margin-top: 16px;
   position: relative;
@@ -681,13 +694,6 @@ select {
   text-decoration: none;
 }
 
-/* Extra mobile/zoom safety */
-@media (max-width: 480px) {
-  .sms-disclaimer {
-    font-size: 0.6875rem; /* ~11px on very small screens if needed */
-  }
-}
-
 /* subtle caret */
 select {
   background-image:
@@ -832,47 +838,12 @@ select {
   }
 }
 
-/* Responsive */
-@media (max-width: 980px) {
-  .heroHeader {
-    padding: 12px 12px 10px;
-  }
-  .countdownOverlay--hero {
-    padding: 9px 12px;
-    border-radius: 16px;
-  }
-  .cdNum {
-    font-size: 17px;
-  }
-  .heroVideoWrap {
-    min-height: 82vh;
-  }
-  .heroOverlay {
-    min-height: auto;
-    padding: 18px 0 16px;
-    max-width: 92vw;
-  }
-  .heroCta {
-    margin-top: 14px;
-  }
-  .soundPill {
-    right: 12px;
-    bottom: 12px;
-  }
-  .chaosStrip {
-    grid-template-columns: 1fr;
-  }
-  .steps {
-    grid-template-columns: 1fr;
-  }
-  .scrollCue {
-    right: 12px;
-    bottom: 16px;
-    height: 42px;
-  }
-}
+/* =========================================================================
+   RESPONSIVE OVERRIDES 
+   Arranged from largest screen rules down to smallest screen rules
+   ========================================================================= */
 
-/* 6. Restore original behavior on larger screens (tablet/desktop) */
+/* 1. Desktop / Larger Screens override the mobile base */
 @media (min-width: 768px) {
   .heroVideoWrap {
     min-height: 78vh; /* back to your original tall hero */
@@ -908,5 +879,56 @@ select {
   .heroOverlay {
     padding: 22px 0 18px; /* your original rhythm */
     max-width: 760px;
+  }
+}
+
+/* 2. Tablet / Smaller Laptop adjustments */
+@media (max-width: 980px) {
+  .modalCard {
+    width: min(760px, 94vw);
+    max-height: 82vh;
+  }
+  .modalBody {
+    font-size: 14px;
+  }
+  .heroHeader {
+    padding: 12px 12px 10px;
+  }
+  .countdownOverlay--hero {
+    padding: 9px 12px;
+    border-radius: 16px;
+  }
+  .cdNum {
+    font-size: 17px;
+  }
+  .heroOverlay {
+    min-height: auto;
+    padding: 18px 0 16px;
+    max-width: 92vw;
+  }
+  .heroCta {
+    margin-top: 14px;
+  }
+  .soundPill {
+    right: 12px;
+    bottom: 12px;
+  }
+  .chaosStrip {
+    grid-template-columns: 1fr;
+  }
+  .steps {
+    grid-template-columns: 1fr;
+  }
+  .scrollCue {
+    right: 12px;
+    bottom: 16px;
+    height: 42px;
+  }
+}
+
+/* 3. Small Mobile / Zoom safety */
+@media (max-width: 480px) {
+  .sms-disclaimer {
+    font-size: 0.6875rem; /* ~11px on very small screens if needed */
   }
 }
