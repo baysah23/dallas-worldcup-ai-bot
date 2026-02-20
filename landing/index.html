@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>World Cup Concierge — Match-night chaos → calm control</title>
   <meta name="description" content="Turn match-night chaos into calm control. Capture reservations + VIP leads automatically, reduce phone/DM overload, and drive revenue with fewer staff." />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
   <link rel="stylesheet" href="styles.css?v=4" />
 </head>
 
@@ -15,57 +16,57 @@
 <div class="heroSection" id="top">
   <header class="hero">
 
-  <!-- TOP HEADER (ABOVE VIDEO, LOCKED) -->
-  <div class="heroHeader">
-    <div class="heroBrand heroBrand--title">World Cup Concierge</div>
+    <!-- TOP HEADER (ABOVE VIDEO, LOCKED) -->
+    <div class="heroHeader">
+      <div class="heroBrand heroBrand--title">World Cup Concierge</div>
 
-    <!-- ROLEX-STYLE COUNTDOWN -->
-    <div class="countdownOverlay countdownOverlay--hero" aria-label="Kickoff countdown">
-      <div class="countdownLabel">Until Kickoff</div>
-      <div class="countdownRow">
-        <span class="cdNum" id="d">--</span><span class="cdLbl">D</span>
-        <span class="cdNum" id="h">--</span><span class="cdLbl">H</span>
-        <span class="cdNum" id="m">--</span><span class="cdLbl">M</span>
-        <span class="cdNum" id="s">--</span><span class="cdLbl">S</span>
+      <!-- ROLEX-STYLE COUNTDOWN -->
+      <div class="countdownOverlay countdownOverlay--hero" aria-label="Kickoff countdown">
+        <div class="countdownLabel">Until Kickoff</div>
+        <div class="countdownRow">
+          <span class="cdNum" id="d">--</span><span class="cdLbl">D</span>
+          <span class="cdNum" id="h">--</span><span class="cdLbl">H</span>
+          <span class="cdNum" id="m">--</span><span class="cdLbl">M</span>
+          <span class="cdNum" id="s">--</span><span class="cdLbl">S</span>
+        </div>
       </div>
     </div>
-  </div>
 
-  <!-- VIDEO AREA (BELOW HEADER) -->
-  <div class="heroVideoWrap">
+    <!-- VIDEO AREA (BELOW HEADER) -->
+    <div class="heroVideoWrap">
 
-    <!-- Background blurred video -->
-    <video
-      class="heroVideo heroVideo--blur"
-      autoplay
-      muted
-      loop
-      playsinline
-      preload="auto"
-      aria-hidden="true">
-      <source src="https://media.worldcupconcierge.app/highlight.mp4" type="video/mp4" />
-    </video>
+      <!-- Background blurred video -->
+      <video
+        class="heroVideo heroVideo--blur"
+        autoplay
+        muted
+        loop
+        playsinline
+        preload="auto"
+        aria-hidden="true">
+        <source src="https://media.worldcupconcierge.app/highlight.mp4" type="video/mp4" />
+      </video>
 
-    <!-- Foreground video -->
-    <video
-      id="heroVideo"
-      class="heroVideo heroVideo--contain"
-      autoplay
-      muted
-      loop
-      playsinline
-      preload="auto">
-      <source src="https://media.worldcupconcierge.app/highlight.mp4" type="video/mp4" />
-    </video>
+      <!-- Foreground video -->
+      <video
+        id="heroVideo"
+        class="heroVideo heroVideo--contain"
+        autoplay
+        muted
+        loop
+        playsinline
+        preload="auto">
+        <source src="https://media.worldcupconcierge.app/highlight.mp4" type="video/mp4" />
+      </video>
 
-    <!-- Apple-style sound pill -->
-    <button id="soundToggle" class="soundPill" aria-label="Toggle sound">
-      🔊 Sound
-    </button>
+      <!-- Apple-style sound pill -->
+      <button id="soundToggle" class="soundPill" aria-label="Toggle sound">
+        🔊 Sound
+      </button>
 
-    
-  </div>
-</header>
+      
+    </div>
+  </header>
 </div>
 
 <!-- HERO COPY -->
