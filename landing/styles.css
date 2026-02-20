@@ -24,10 +24,10 @@
 * {
   box-sizing: border-box;
 }
-html,
+/* html,
 body {
   height: 100%;
-}
+} */
 body {
   margin: 0;
   color: var(--text);
@@ -41,6 +41,24 @@ body {
     Arial;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* background:
+    radial-gradient(
+      1200px 700px at 15% 10%,
+      rgba(40, 90, 200, 0.16) 0%,
+      transparent 58%
+    ),
+    radial-gradient(
+      900px 520px at 88% 18%,
+      rgba(255, 215, 140, 0.1) 0%,
+      transparent 55%
+    ),
+    linear-gradient(180deg, var(--bg1), var(--bg0)); */
+  overflow-x: hidden;
+}
+
+/* Section colors */
+/* 1. The Top Premium Glow (Best for the Hero / Top section) */
+.bg-hero-glow {
   background:
     radial-gradient(
       1200px 700px at 15% 10%,
@@ -53,7 +71,16 @@ body {
       transparent 55%
     ),
     linear-gradient(180deg, var(--bg1), var(--bg0));
-  overflow-x: hidden;
+}
+
+/* 2. Smooth Linear Transition (Best for middle sections) */
+.bg-fade-down {
+  background: linear-gradient(180deg, var(--bg1), var(--bg0));
+}
+
+/* 3. Solid Dark Blue (Best for lower sections and footer) */
+.bg-solid-dark {
+  background-color: var(--bg0);
 }
 
 a {
@@ -923,6 +950,14 @@ select {
     right: 12px;
     bottom: 16px;
     height: 42px;
+  }
+
+  /* Merge the Chaos and Calm sections visually */
+  .chaos-section {
+    padding-bottom: 0;
+  }
+  .calm-section {
+    padding-top: 14px;
   }
 }
 
