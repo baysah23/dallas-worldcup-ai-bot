@@ -369,9 +369,9 @@ a {
   font-size: 14px; /* match primary */
 }
 
-/* Custom CTA Banner */
+/* A calmer way to run match nights. Section (Mobile view) */
 .cta-banner {
-  background: var(--bg0); /* Ensures the dark background stays consistent */
+  background: var(--bg0);
   border-top: 1px solid rgba(255, 255, 255, 0.05);
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
@@ -381,16 +381,33 @@ a {
   flex-direction: column;
   align-items: center;
   text-align: center;
+  gap: 24px;
 }
 
-.cta-content .heroSub {
-  margin: 10px auto 0; /* Keeps the subtitle perfectly centered under the H2 */
+.cta-text .h2 {
+  margin-top: 0;
 }
 
-/* Forces the flex buttons to center horizontally */
-.justify-center {
+.cta-text .heroSub {
+  margin: 10px auto 0;
+}
+
+.cta-actions {
+  display: flex;
+  flex-direction: row !important; /* Overrides your previous column rule */
+  flex-wrap: nowrap !important; /* Prevents stacking */
   justify-content: center;
-  margin-top: 24px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin-top: 0;
+}
+
+.cta-actions .btn {
+  flex: 1;
+  white-space: nowrap;
+  padding: 12px 8px;
+  font-size: clamp(12px, 3.5vw, 14px);
 }
 
 /* ===== Glass modal ===== */
@@ -413,7 +430,7 @@ a {
 
 .modalCard {
   width: min(720px, 92vw);
-  max-height: min(78vh, 720px);
+  max-height: min(82vh, 720px);
   border-radius: var(--r28);
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.06);
@@ -873,7 +890,7 @@ select {
 /* 1. Desktop / Larger Screens override the mobile base */
 @media (min-width: 768px) {
   .heroVideoWrap {
-    min-height: 78vh; /* back to your original tall hero */
+    min-height: 82vh; /* back to your original tall hero */
   }
 
   .heroVideo--contain {
@@ -886,7 +903,7 @@ select {
   }
 
   .cdNum {
-    font-size: 18px; /* back to original size */
+    font-size: 18px;
   }
 
   .cdLbl,
@@ -906,6 +923,28 @@ select {
   .heroOverlay {
     padding: 22px 0 18px; /* your original rhythm */
     max-width: 760px;
+  }
+
+  /* A calmer way to run match nights. section */
+  .cta-content {
+    flex-direction: row;
+    justify-content: space-between;
+    text-align: left;
+  }
+
+  .cta-text .heroSub {
+    margin: 10px 0 0 0;
+  }
+
+  .cta-actions {
+    width: auto;
+    justify-content: flex-end;
+  }
+
+  .cta-actions .btn {
+    flex: none;
+    padding: 12px 16px;
+    font-size: 14px;
   }
 }
 
