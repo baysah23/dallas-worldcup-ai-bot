@@ -534,7 +534,7 @@ a {
   box-shadow: var(--shadow2);
   padding: 12px;
 }
-.calmVisual img {
+.calmVisual,.tileVisual img {
   display: block;
   width: 100%;
   height: auto;
