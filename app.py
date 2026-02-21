@@ -76,8 +76,11 @@ _REDIS_FALLBACK_LAST_PATH = ""
 
 # Map our on-disk JSON files to Redis keys when enabled (single source of truth)
 # NOTE: These files still exist for local/dev fallback.
+# Drafts: per-venue only. Override DRAFTS_FILE for localhost (e.g. Windows) or production path.
+DRAFTS_FILE = os.environ.get("DRAFTS_FILE", "/tmp/wc26_{venue}_drafts.json")
 _REDIS_PATH_KEY_MAP = {  # values are suffixes; full key includes namespace + venue
     os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_{venue}_ai_queue.json"): "ai_queue",
+    DRAFTS_FILE: "drafts",
     os.environ.get("AI_SETTINGS_FILE", "/tmp/wc26_{venue}_ai_settings.json"): "ai_settings",
     os.environ.get("PARTNER_POLICIES_FILE", "/tmp/wc26_{venue}_partner_policies.json"): "partner_policies",
     os.environ.get("BUSINESS_RULES_FILE", "/tmp/wc26_{venue}_business_rules.json"): "business_rules",
@@ -1080,6 +1083,9 @@ def _default_ai_settings() -> Dict[str, Any]:
             "vip_tag": True,
             "status_update": False,
             "reply_draft": True,
+            "send_sms": False,
+            "send_email": False,
+            "send_whatsapp": False,
         },
         # Feature gates (safe rollout). These further restrict what AI can do, even if allow_actions is true.
         "features": {
@@ -1189,6 +1195,176 @@ def _save_partner_policy(partner: str, policy_patch: Dict[str, Any]) -> Dict[str
     _PARTNER_POLICIES[partner] = merged
     _safe_write_json_file(PARTNER_POLICIES_FILE, _PARTNER_POLICIES)
     return merged
+
+
+# ============================================================
+# Draft templates (per-venue; file or Redis — NEVER in venue config)
+# - Venue config files must remain static (identity, keys, feature flags only).
+# - Drafts are operational reply templates (SMS, email, WhatsApp, AI Queue).
+# - Storage: per-venue file e.g. /tmp/wc26_qa-sandbox_drafts.json (or Redis when enabled).
+# - Override DRAFTS_FILE via env if needed. Never read/write drafts from VENUES_DIR.
+# ============================================================
+def _default_drafts() -> Dict[str, Any]:
+    return {
+        "updated_at": None,
+        "updated_by": None,
+        "updated_role": None,
+        "drafts": {
+            "sms_confirm": {
+                "channel": "sms",
+                "title": "SMS — Confirmation",
+                "body": "Hi {name}, you're confirmed for {date} at {time} for {party_size}.",
+            },
+            "email_confirm": {
+                "channel": "email",
+                "title": "Email confirmation",
+                "subject": "",
+                "body": "Hi {name}, your table is confirmed for {date}.",
+            }
+        }
+    }
+
+
+def _load_drafts_from_disk() -> Dict[str, Any]:
+    """Load drafts for current venue (g.venue_id). Uses DRAFTS_FILE or Redis when enabled.
+    Returns defaults only if file doesn't exist. If file exists (even with empty drafts), returns it as-is."""
+    payload = _safe_read_json_file(DRAFTS_FILE, default=None)
+    if isinstance(payload, dict) and payload:
+        # If payload has 'drafts' key, it means user has saved before (even if empty) - return as-is, don't merge defaults
+        if "drafts" in payload:
+            return payload
+        # Otherwise merge defaults (for backward compatibility with old format)
+        return _deep_merge(_default_drafts(), payload)
+    return _default_drafts()
+
+
+def _save_drafts_to_disk(patch: Dict[str, Any], actor: str, role: str) -> Dict[str, Any]:
+    """Save drafts for current venue to DRAFTS_FILE or Redis only. Never writes to venue config.
+    When patch contains 'drafts', that object fully replaces stored drafts (so delete = remove key and save)."""
+    current = _load_drafts_from_disk()
+    merged = _deep_merge(current, patch or {})
+    # Full replace: if caller sent a "drafts" key, use it as-is so removing a key in the UI and saving actually deletes it
+    if "drafts" in (patch or {}):
+        merged["drafts"] = dict((patch or {}).get("drafts") or {})
+    merged["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    merged["updated_by"] = (actor or "").strip()
+    merged["updated_role"] = (role or "").strip()
+    _safe_write_json_file(DRAFTS_FILE, merged)
+    return merged
+
+
+def _migrate_drafts_out_of_venue_config(venue_id: str) -> None:
+    """One-time: if venue config has 'drafts', copy to dedicated store and remove from config."""
+    path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+    if not os.path.exists(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            vcfg = json.load(f) or {}
+    except Exception:
+        return
+    drafts = vcfg.get("drafts")
+    if not isinstance(drafts, dict) or not drafts:
+        return
+    # Save to dedicated store (g.venue_id must be set; caller sets it)
+    _save_drafts_to_disk({"drafts": drafts}, actor="migration", role="system")
+    # Remove from venue config so config stays static
+    vcfg.pop("drafts", None)
+    vcfg.pop("updated_at", None)  # draft-specific meta
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(vcfg, f, indent=2, ensure_ascii=False, sort_keys=True)
+    except Exception:
+        pass
+
+
+def _load_lead_from_sheet_row(row_num: int) -> Dict[str, Any]:
+    """Load lead data from Google Sheet row number. Returns dict with name, date, time, party_size, etc."""
+    if row_num < 2:
+        return {}
+    try:
+        gc = get_gspread_client()
+        ws = _open_default_spreadsheet(gc).sheet1
+        header = ws.row_values(1) or []
+        hmap = header_map(header)
+        row_data = ws.row_values(row_num) or []
+        
+        lead = {}
+        for key in ["name", "date", "time", "party_size", "phone", "email", "budget", "notes"]:
+            col = hmap.get(key)
+            if col and col <= len(row_data):
+                val = str(row_data[col - 1] or "").strip()
+                if val:
+                    lead[key] = val
+        
+        return lead
+    except Exception:
+        return {}
+
+
+def _format_draft_template(template: str, data: Dict[str, Any]) -> str:
+    """Replace placeholders in draft template with actual values.
+    Supports: {name}, {date}, {time}, {party_size}, {phone}, {email}, {budget}, {notes}
+    Missing values are replaced with empty string or placeholder name."""
+    if not template:
+        return ""
+    
+    replacements = {
+        "name": str(data.get("name") or "").strip(),
+        "date": str(data.get("date") or "").strip(),
+        "time": str(data.get("time") or "").strip(),
+        "party_size": str(data.get("party_size") or "").strip(),
+        "phone": str(data.get("phone") or "").strip(),
+        "email": str(data.get("email") or "").strip(),
+        "budget": str(data.get("budget") or "").strip(),
+        "notes": str(data.get("notes") or "").strip(),
+    }
+    
+    result = template
+    for key, value in replacements.items():
+        placeholder = "{" + key + "}"
+        result = result.replace(placeholder, value if value else "")
+    
+    return result
+
+
+def _select_draft_for_channel(channel: str, context: Optional[str] = None) -> Optional[str]:
+    """Select appropriate draft key based on channel and context.
+    Returns draft key like 'email_confirm', 'sms_confirm', 'sms_more_info', etc.
+    Context can be 'confirm', 'more_info', etc. If None, defaults to 'confirm'."""
+    channel = (channel or "").strip().lower()
+    context = (context or "confirm").strip().lower()
+    
+    # Map channel + context to draft key
+    if channel == "email":
+        return f"email_{context}" if context != "confirm" else "email_confirm"
+    elif channel in ("sms", "whatsapp"):
+        return f"sms_{context}" if context != "confirm" else "sms_confirm"
+    
+    return None
+
+
+def _get_draft_content(draft_key: str, data: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
+    """Get formatted draft body and subject for given draft key.
+    Returns (body, subject) tuple. Both can be None if draft not found."""
+    drafts_data = _load_drafts_from_disk()
+    drafts = drafts_data.get("drafts") or {}
+    
+    draft = drafts.get(draft_key)
+    if not isinstance(draft, dict):
+        return None, None
+    
+    body_template = str(draft.get("body") or "").strip()
+    subject_template = str(draft.get("subject") or "").strip()
+    
+    if not body_template:
+        return None, None
+    
+    body = _format_draft_template(body_template, data)
+    subject = _format_draft_template(subject_template, data) if subject_template else None
+    
+    return body, subject
+
 
 def _derive_partner_id(lead: Optional[Dict[str, Any]] = None, payload: Optional[Dict[str, Any]] = None) -> str:
     """Best-effort partner/venue identifier, so policies can apply even if schema varies."""
@@ -1406,13 +1582,27 @@ def _outbound_send_twilio(channel: str, to_number_or_id: str, body_text: str) ->
         return False, f"Twilio send failed: {e}"
 
 def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
-    """Execute outbound send (human-triggered). Never called automatically."""
+    """Execute outbound send (human-triggered). Never called automatically.
+    Payload can contain 'message' or 'body' (both supported for compatibility).
+    If payload has 'row' and draft placeholders remain, will reload lead data and re-format."""
     at = (action_type or "").strip().lower()
     pl = payload or {}
+    
+    # If message has placeholders and we have row data, try to reload and re-format
+    message = str(pl.get("message") or pl.get("body") or "").strip()
+    row_num = pl.get("row")
+    if row_num and "{" in message:
+        try:
+            lead_data = _load_lead_from_sheet_row(int(row_num))
+            if lead_data:
+                message = _format_draft_template(message, lead_data)
+        except Exception:
+            pass  # Use original message if reload fails
+    
     if at == "send_email":
         to_email = str(pl.get("to") or pl.get("email") or "").strip()
         subject = str(pl.get("subject") or "World Cup Concierge").strip()
-        body = str(pl.get("message") or pl.get("body") or "").strip()
+        body = message
         if not to_email:
             return {"ok": False, "error": "Missing recipient email"}
         ok, msg = _outbound_send_email(to_email, subject, body)
@@ -1420,7 +1610,7 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     if at in ("send_sms", "send_whatsapp"):
         ch = at.replace("send_", "")
         to_num = str(pl.get("to") or pl.get("phone") or "").strip()
-        body = str(pl.get("message") or pl.get("body") or "").strip()
+        body = message
         if not to_num:
             return {"ok": False, "error": "Missing recipient number"}
         ok, msg = _outbound_send_twilio(ch, to_num, body)
@@ -6485,88 +6675,76 @@ def admin_update_config():
 
 @app.route("/admin/api/drafts", methods=["GET", "POST"])
 def admin_api_drafts():
-    """Owner-only: manage message drafts (stored in venue config).
-    
-    GET: Returns drafts object from venue config.
-    POST: Saves drafts object to venue config (owner-only).
-    
-    Query params:
-      - key: admin key (required)
-      - venue: venue ID (required for POST, optional for GET - uses context)
+    """Manage message drafts in dedicated per-venue storage (file or Redis). Never writes to venue config.
+    GET: Returns drafts from DRAFTS_FILE / Redis for the given venue.
+    POST: Saves drafts to DRAFTS_FILE / Redis (owner-only).
+    Query: key (required), venue (required). Works on localhost, staging, production.
     """
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
-    
-    # POST requires owner role
+
     if request.method == "POST":
         ok2, resp2 = _require_admin(min_role="owner")
         if not ok2:
             return resp2
-    
-    # ✅ VENUE-SPECIFIC: Require explicit venue parameter (no fallback to context)
+
     venue = (request.args.get("venue") or "").strip()
     if not venue:
         return jsonify({"ok": False, "error": "Missing venue parameter (required for venue-specific drafts)"}), 400
-    
+
     venue_id = _slugify_venue_id(venue)
-    
-    # Load venue config
-    path = os.path.join(VENUES_DIR, f"{venue_id}.json")
-    if not os.path.exists(path):
+    # Ensure venue exists (we do not write to venue config, but we require a valid venue)
+    venue_cfg_path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+    if not os.path.exists(venue_cfg_path):
         return jsonify({"ok": False, "error": f"Venue not found: {venue_id}"}), 404
-    
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            vcfg = json.load(f) or {}
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"Failed to read venue config: {str(e)}"}), 500
-    
-    # GET: Return drafts
+
+    # Set venue context so _load_drafts_from_disk / _save_drafts_to_disk use correct path/Redis key
+    g.venue_id = venue_id
+
+    # One-time migration: if this venue's config still has 'drafts', move to dedicated store
+    _migrate_drafts_out_of_venue_config(venue_id)
+
     if request.method == "GET":
-        drafts = vcfg.get("drafts") if isinstance(vcfg.get("drafts"), dict) else {}
-        meta = {}
-        if "updated_at" in vcfg:
-            meta["updated_at"] = vcfg["updated_at"]
+        data = _load_drafts_from_disk()
+        drafts = data.get("drafts") if isinstance(data.get("drafts"), dict) else {}
+        meta = {
+            "updated_at": data.get("updated_at"),
+            "updated_by": data.get("updated_by"),
+            "updated_role": data.get("updated_role"),
+        }
         return jsonify({"ok": True, "drafts": drafts, "meta": meta})
-    
-    # POST: Save drafts (owner-only)
+
+    # POST
     data = request.get_json(silent=True) or {}
     drafts_data = data.get("drafts")
-    
     if drafts_data is None:
         return jsonify({"ok": False, "error": "Missing drafts object"}), 400
-    
     if not isinstance(drafts_data, dict):
         return jsonify({"ok": False, "error": "drafts must be a JSON object"}), 400
-    
-    # Update venue config with drafts
-    vcfg["drafts"] = drafts_data
-    vcfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    
-    # Write back to file
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(vcfg, f, indent=2, ensure_ascii=False, sort_keys=True)
-    except Exception as e:
-        return jsonify({"ok": False, "error": f"Failed to write venue config: {str(e)}"}), 500
-    
-    # Invalidate cache
-    try:
-        _invalidate_venues_cache()
-    except Exception:
-        pass
-    
-    # Audit
+
+    # Sanitize: keep only string keys and dict values with body (body max 5000)
+    clean = {}
+    for k, v in drafts_data.items():
+        if not isinstance(k, str) or not k.strip():
+            continue
+        if not isinstance(v, dict):
+            continue
+        body = str(v.get("body") or "").strip()
+        if not body:
+            continue
+        clean[k.strip()] = {
+            "channel": str(v.get("channel") or "").strip(),
+            "title": str(v.get("title") or "").strip(),
+            "subject": str(v.get("subject") or "").strip(),
+            "body": body[:5000],
+        }
+
     ctx = _admin_ctx()
-    _audit("drafts.update", {
-        "venue": venue_id,
-        "actor": ctx.get("actor", ""),
-        "draft_keys": list(drafts_data.keys()) if isinstance(drafts_data, dict) else []
-    })
-    
-    meta = {"updated_at": vcfg["updated_at"]}
-    return jsonify({"ok": True, "drafts": drafts_data, "meta": meta})
+    saved = _save_drafts_to_disk({"drafts": clean}, actor=ctx.get("actor", ""), role=ctx.get("role", ""))
+    _audit("drafts.update", {"venue": venue_id, "actor": ctx.get("actor", ""), "draft_keys": list(clean.keys())})
+    meta = {"updated_at": saved.get("updated_at")}
+    return jsonify({"ok": True, "drafts": clean, "meta": meta})
 
 @app.route("/admin/api/rules", methods=["GET","POST"])
 def admin_api_rules():
@@ -6770,9 +6948,9 @@ def admin_api_ai_settings():
             if sp:
                 patch["system_prompt"] = sp
         if "allow_actions" in data and isinstance(data.get("allow_actions"), dict):
-            # Only allow known keys
+            # Only allow known keys (including outbound for AI-suggested messages)
             allow = {}
-            for k in ("vip_tag", "status_update", "reply_draft"):
+            for k in ("vip_tag", "status_update", "reply_draft", "send_sms", "send_email", "send_whatsapp"):
                 if k in data["allow_actions"]:
                     allow[k] = bool(as_bool(data["allow_actions"].get(k)))
             patch["allow_actions"] = _deep_merge(AI_SETTINGS.get("allow_actions") or {}, allow)
@@ -6848,6 +7026,7 @@ def admin_api_ai_run():
         lead = {
             "name": get("name"),
             "phone": get("phone"),
+            "email": get("email"),
             "date": get("date"),
             "time": get("time"),
             "party_size": get("party_size"),
@@ -6913,10 +7092,24 @@ def admin_api_ai_run():
         actions = out.get("actions") or []
         for a in actions:
             typ = str(a.get("type") or "").strip()
-            payload = a.get("payload") or {}
+            payload = dict(a.get("payload") or {})
             # Always attach sheet_row for safe apply handlers
-            if isinstance(payload, dict) and "sheet_row" not in payload:
+            if "sheet_row" not in payload:
                 payload["sheet_row"] = sheet_row
+            payload["row"] = sheet_row  # outbound/send also uses "row"
+            # Enrich outbound payload from drafts + lead when body/to missing
+            if typ in ("send_sms", "send_email", "send_whatsapp"):
+                lead_data = {k: str(lead.get(k) or "").strip() for k in ["name", "date", "time", "party_size", "phone", "email"]}
+                if not payload.get("to"):
+                    payload["to"] = lead_data.get("email") if typ == "send_email" else lead_data.get("phone")
+                if not payload.get("body") and not payload.get("message"):
+                    ch = "email" if typ == "send_email" else "sms"
+                    draft_key = _select_draft_for_channel(ch, "confirm")
+                    body, subj = _get_draft_content(draft_key, lead_data)
+                    if body:
+                        payload["body"] = payload["message"] = body
+                    if subj and typ == "send_email":
+                        payload["subject"] = subj
             rationale = str(a.get("reason") or out.get("notes") or "")[:1500]
             entry = {
                 "id": _queue_new_id(),
@@ -6970,8 +7163,10 @@ def admin_api_outbound_propose():
       "channel": "email|sms|whatsapp",
       "to": "...",
       "subject": "..." (email only),
-      "message": "..."
-      "row": 12 (optional lead row)
+      "message": "..." (optional - will use draft if not provided and draft_key/row provided),
+      "draft_key": "email_confirm" (optional - use specific draft),
+      "context": "confirm" (optional - for draft selection),
+      "row": 12 (optional lead row - used for draft template replacement)
     }
     """
     ok, resp = _require_admin(min_role="manager")
@@ -6986,13 +7181,77 @@ def admin_api_outbound_propose():
     if channel not in ("email", "sms", "whatsapp"):
         return jsonify({"ok": False, "error": "Invalid channel"}), 400
     action_type = f"send_{channel}"
-    payload = {
-        "partner": data.get("partner"),
-        "row": data.get("row"),
-        "to": data.get("to"),
-        "subject": data.get("subject"),
-        "message": data.get("message"),
-    }
+    
+    # Load lead data if row provided (for template replacement)
+    lead_data = {}
+    row_num = data.get("row")
+    if row_num:
+        try:
+            lead_data = _load_lead_from_sheet_row(int(row_num))
+        except Exception:
+            pass
+    
+    # Determine message body and subject
+    message = data.get("message") or ""
+    subject = data.get("subject") or ""
+    draft_key = data.get("draft_key")
+    
+    # If no message provided, try to use draft
+    if not message.strip():
+        if not draft_key:
+            # Auto-select draft based on channel and context
+            context = data.get("context", "confirm")
+            draft_key = _select_draft_for_channel(channel, context)
+        
+        if draft_key:
+            draft_body, draft_subject = _get_draft_content(draft_key, lead_data)
+            if draft_body:
+                message = draft_body
+                if draft_subject and not subject:
+                    subject = draft_subject
+                # Store draft_key in payload for reference
+                payload = {
+                    "partner": data.get("partner"),
+                    "row": row_num,
+                    "to": data.get("to"),
+                    "subject": subject,
+                    "message": message,
+                    "body": message,  # UI uses 'body'
+                    "draft_key": draft_key,  # Track which draft was used
+                }
+            else:
+                # Draft not found or empty
+                payload = {
+                    "partner": data.get("partner"),
+                    "row": row_num,
+                    "to": data.get("to"),
+                    "subject": subject,
+                    "message": message,
+                    "body": message,
+                }
+        else:
+            # No draft available
+            payload = {
+                "partner": data.get("partner"),
+                "row": row_num,
+                "to": data.get("to"),
+                "subject": subject,
+                "message": message,
+                "body": message,
+            }
+    else:
+        # Message provided explicitly - format it if it has placeholders and we have lead data
+        if lead_data and ("{" in message):
+            message = _format_draft_template(message, lead_data)
+        payload = {
+            "partner": data.get("partner"),
+            "row": row_num,
+            "to": data.get("to"),
+            "subject": subject,
+            "message": message,
+            "body": message,
+        }
+    
     # Best-effort partner id for policy gating
     partner = _derive_partner_id(payload=payload)
 
@@ -7016,7 +7275,7 @@ def admin_api_outbound_propose():
     }
     q.insert(0, item)
     _save_ai_queue(q)
-    _audit("outbound.queue", {"id": qid, "partner": partner, "type": action_type, "by": actor})
+    _audit("outbound.queue", {"id": qid, "partner": partner, "type": action_type, "by": actor, "draft_key": draft_key})
     _notify("outbound.queue", {"id": qid, "partner": partner, "type": action_type, "by": actor, "role": role}, targets=["owner","manager"])
     return jsonify({"ok": True, "id": qid})
 
@@ -8381,7 +8640,10 @@ th{
         <div class="small" style="font-weight:800;margin-bottom:6px">Allowed actions</div>
         <label class="small"><input type="checkbox" id="ai-act-vip"> VIP tagging</label><br/>
         <label class="small"><input type="checkbox" id="ai-act-status"> Status updates</label><br/>
-        <label class="small"><input type="checkbox" id="ai-act-draft"> Reply drafts</label>
+        <label class="small"><input type="checkbox" id="ai-act-draft"> Reply drafts</label><br/>
+        <label class="small"><input type="checkbox" id="ai-act-sms"> Send SMS</label>
+        <label class="small"><input type="checkbox" id="ai-act-email" style="margin-left:12px"> Send Email</label>
+        <label class="small"><input type="checkbox" id="ai-act-whatsapp" style="margin-left:12px"> Send WhatsApp</label>
       </div>
 
       <div class="note">Tip: keep actions limited until you trust the workflow.</div>
@@ -8420,6 +8682,41 @@ th{
       </select>
       <span id="aiq-msg" class="note"></span>
     </div>
+  </div>
+
+  <div class="card">
+    <div class="h2" style="margin-bottom:8px">Compose message (queue outbound)</div>
+    <div class="small" style="margin-bottom:10px">Add an SMS, Email, or WhatsApp message to the queue. Leave message empty to use draft template (set Row to fill placeholders from the sheet).</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div>
+        <label class="small">Channel</label>
+        <select id="ob-channel" class="inp" style="min-width:100px" onchange="var w=document.getElementById('ob-subject-wrap');var v=document.getElementById('ob-channel').value;if(w)w.classList.toggle('hidden',v!=='email');">
+          <option value="sms">SMS</option>
+          <option value="email">Email</option>
+          <option value="whatsapp">WhatsApp</option>
+        </select>
+      </div>
+      <div>
+        <label class="small">To (phone or email)</label>
+        <input id="ob-to" class="inp" placeholder="+1..." style="min-width:140px" />
+      </div>
+      <div>
+        <label class="small">Row # (optional, for draft)</label>
+        <input id="ob-row" class="inp" type="number" min="2" placeholder="e.g. 38" style="max-width:80px" />
+      </div>
+      <div id="ob-subject-wrap" class="hidden">
+        <label class="small">Subject</label>
+        <input id="ob-subject" class="inp" placeholder="Subject" style="min-width:180px" />
+      </div>
+      <div style="flex:1;min-width:200px">
+        <label class="small">Message (empty = use draft)</label>
+        <input id="ob-body" class="inp" placeholder="Leave empty to use draft template" style="width:100%" />
+      </div>
+      <div>
+        <button type="button" class="btn" onclick="composeOutbound(this)">Queue</button>
+      </div>
+    </div>
+    <span id="ob-msg" class="note" style="display:block;margin-top:8px"></span>
   </div>
 
   <div class="card">
@@ -8599,7 +8896,7 @@ th{
       <div class="modal-title">Message Drafts</div>
       <button type="button" class="modal-close" onclick="closeDraftsModal()">Close</button>
     </div>
-    <div class="small" style="margin-bottom:12px">Edit message templates and drafts (owner-only). Stored in venue config.</div>
+    <div class="small" style="margin-bottom:12px">Edit message templates and drafts (owner-only). Stored in per-venue drafts store (file or Redis), not in venue config.</div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
       <button type="button" class="btn2" onclick="loadDrafts()">Reload</button>
       <button type="button" class="btn" data-min-role="owner" onclick="saveDrafts()">Save</button>
@@ -9415,6 +9712,9 @@ async function loadAI(){
     qs('#ai-act-vip').checked = !!allow.vip_tag;
     qs('#ai-act-status').checked = !!allow.status_update;
     qs('#ai-act-draft').checked = !!allow.reply_draft;
+    if(qs('#ai-act-sms')) qs('#ai-act-sms').checked = !!allow.send_sms;
+    if(qs('#ai-act-email')) qs('#ai-act-email').checked = !!allow.send_email;
+    if(qs('#ai-act-whatsapp')) qs('#ai-act-whatsapp').checked = !!allow.send_whatsapp;
 
     const feat = s.features || {};
     if(qs('#ai-feat-vip')) qs('#ai-feat-vip').checked = (feat.auto_vip_tag !== false);
@@ -9422,7 +9722,7 @@ async function loadAI(){
     if(qs('#ai-feat-draft')) qs('#ai-feat-draft').checked = (feat.auto_reply_draft !== false);
 
     // lock owner-only fields for managers
-    ['ai-model','ai-prompt','ai-act-vip','ai-act-status','ai-act-draft'].forEach(id=>{
+    ['ai-model','ai-prompt','ai-act-vip','ai-act-status','ai-act-draft','ai-act-sms','ai-act-email','ai-act-whatsapp'].forEach(id=>{
       const el = qs('#'+id); if(!el) return;
       el.disabled = !isOwner;
       el.style.opacity = isOwner ? '1' : '.55';
@@ -9449,6 +9749,9 @@ async function saveAI(){
       vip_tag: qs('#ai-act-vip')?.checked ? true : false,
       status_update: qs('#ai-act-status')?.checked ? true : false,
       reply_draft: qs('#ai-act-draft')?.checked ? true : false,
+      send_sms: qs('#ai-act-sms')?.checked ? true : false,
+      send_email: qs('#ai-act-email')?.checked ? true : false,
+      send_whatsapp: qs('#ai-act-whatsapp')?.checked ? true : false,
     };
   }
 
@@ -9550,7 +9853,7 @@ async function loadAIQueue(){
   const list = qs('#aiq-list'); if(list) list.innerHTML = 'Loading…';
   try{
     const filt = (qs('#aiq-filter')?.value || '').trim();
-    const url = `/admin/api/ai/queue?key=${encodeURIComponent(KEY)}` + (filt ? `&status=${encodeURIComponent(filt)}` : '');
+    const url = `/admin/api/ai/queue?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}` + (filt ? `&status=${encodeURIComponent(filt)}` : '');
     const r = await fetch(url, {cache:'no-store'});
     const data = await r.json();
     if(!data.ok) throw new Error(data.error || 'Failed');
@@ -9567,7 +9870,7 @@ async function runAINew(){
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running AI…';
   const lim = parseInt(qs('#ai-run-limit')?.value || '5', 10);
   try{
-    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}`, {
+    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({mode:'new', limit: isNaN(lim)?5:lim})
@@ -9589,7 +9892,7 @@ async function runAIRow(){
     return;
   }
   try{
-    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}`, {
+    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({row})
@@ -9601,6 +9904,29 @@ async function runAIRow(){
   }catch(e){
     if(msg) msg.textContent = 'Run failed: ' + (e.message || e);
   }
+}
+
+async function composeOutbound(btn){
+  const msg = qs('#ob-msg'); if(msg) msg.textContent = '';
+  if(btn) btn.disabled = true;
+  const ch = (qs('#ob-channel')?.value || 'sms').trim();
+  const to = (qs('#ob-to')?.value || '').trim();
+  const rowVal = qs('#ob-row')?.value;
+  const row = (rowVal && parseInt(rowVal,10) >= 2) ? parseInt(rowVal,10) : null;
+  const subject = (qs('#ob-subject')?.value || '').trim();
+  const body = (qs('#ob-body')?.value || '').trim();
+  if(!to){ if(msg) msg.textContent = 'Enter To (phone or email).'; if(btn) btn.disabled = false; return; }
+  try{
+    const r = await fetch(`/admin/api/outbound/propose?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ channel: ch, to: to, row: row || undefined, subject: subject || undefined, message: body || undefined })
+    });
+    const j = await r.json().catch(()=>null);
+    if(j && j.ok){ if(msg) msg.textContent = 'Queued.'; await loadAIQueue(); }
+    else{ if(msg) msg.textContent = (j && j.error) ? j.error : 'Queue failed'; }
+  }catch(e){ if(msg) msg.textContent = 'Error: ' + (e.message || e); }
+  if(btn) btn.disabled = false;
 }
 
 
@@ -9622,10 +9948,14 @@ function renderAIQueue(items){
     const st  = esc(it.status || '');
     const conf = (typeof it.confidence === 'number') ? it.confidence.toFixed(2) : '';
     const when = esc(it.created_at || '');
-    const why  = esc(it.why || it.reason || '');
+    const why  = esc(it.rationale || it.why || it.reason || '');
     const payload = esc(JSON.stringify(it.payload || {}));
 
     const canAct = (st === 'pending');
+    const isOutbound = (typ === 'send_email' || typ === 'send_sms' || typ === 'send_whatsapp');
+    const canSend = isOutbound && (st === 'approved') && !it.sent_at;
+    const sendLabel = (typ === 'send_sms') ? 'Send SMS' : (typ === 'send_whatsapp') ? 'Send WhatsApp' : (typ === 'send_email') ? 'Send Email' : 'Send';
+    const sendBtn = isOutbound ? `<button type="button" class="btn" ${canSend ? '' : 'disabled'} onclick="aiqSend('${id}', this)">${sendLabel}</button>` : '';
 
     const approveBtn = `<button type="button" class="btn" ${canAct ? '' : 'disabled'} onclick="aiqApprove('${id}', this)">Approve</button>`;
     const denyBtn    = `<button type="button" class="btn2" ${canAct ? '' : 'disabled'} onclick="aiqDeny('${id}', this)">Deny</button>`;
@@ -9649,6 +9979,7 @@ function renderAIQueue(items){
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           ${approveBtn}
           ${denyBtn}
+          ${sendBtn}
           ${overrideBtn}
         </div>
       </div>
@@ -9665,7 +9996,7 @@ async function aiqApprove(id, btn){
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Approving…'; }
 
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Approving…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/approve?key=${encodeURIComponent(KEY)}`, {
+  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/approve?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({})
@@ -9681,7 +10012,7 @@ async function aiqSend(id, btn){
   const _btn = btn;
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Sending…'; }
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Sending…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/send?key=${encodeURIComponent(KEY)}`, {
+  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/send?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({})
@@ -9704,7 +10035,7 @@ async function aiqDeny(id, btn){
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Denying…'; }
 
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Denying…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/deny?key=${encodeURIComponent(KEY)}`, {
+  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/deny?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({})
@@ -9731,7 +10062,7 @@ async function aiqOverride(id, btn){
   let payloadObj = null;
   try{ payloadObj = JSON.parse(payloadTxt); }catch(e){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } alert('Invalid JSON'); return; }
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Applying override…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/override?key=${encodeURIComponent(KEY)}`, {
+  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/override?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({type: typ, payload: payloadObj})
