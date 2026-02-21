@@ -5682,19 +5682,10 @@
     function getWelcomeForState(lang) {
       const k = window.__wcCountdownStateKind || '';
       const L = (lang || state.lang || 'en').toLowerCase();
-      
-      // === FIX: Match-day greeting ALWAYS takes priority (even if venue greeting exists) ===
+      // Greeting is always hardcoded here; we do not read from venue JSON. Translation by language key only.
       if (k === 'game_day') {
-        // Return match-day greeting in requested language
         return WELCOME_GAMEDAY_BY_LANG[L] || WELCOME_GAMEDAY_BY_LANG.en;
       }
-      
-      // === FIX: Use venue-specific greeting if available (non-game-day only) ===
-      if (state.venue_greeting) {
-        return state.venue_greeting;
-      }
-      
-      // Fallback to primary greeting
       return WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
     }
     // ---------- admin-only countdown indicator ----------
@@ -7082,7 +7073,8 @@
           // === FIX: Store venue context in state for persistent chat context ===
           state.venue_id = d.venue_id || venueId || '';
           state.venue_name = d.venue_name || '';
-          state.venue_greeting = d.greeting || '';
+          // Greeting is never read from venue JSON; chat welcome uses hardcoded WELCOME_*_BY_LANG only.
+          state.venue_greeting = '';
 
           // Update chat header title with venue name if available
           if (chatTitleEl && state.venue_name) {
