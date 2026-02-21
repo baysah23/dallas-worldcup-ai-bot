@@ -148,7 +148,7 @@ a {
 /* top header centered over video */
 .heroHeader {
   position: absolute;
-  z-index: 10;
+  z-index: 10;wif
   top: 18px; /* or 22px if you want more space */
   left: 50%;
   transform: translateX(-50%);
@@ -534,7 +534,7 @@ a {
   box-shadow: var(--shadow2);
   padding: 12px;
 }
-.calmVisual img {
+.calmVisual,.tileVisual img {
   display: block;
   width: 100%;
   height: auto;
