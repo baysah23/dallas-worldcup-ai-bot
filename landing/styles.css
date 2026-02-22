@@ -148,7 +148,7 @@ a {
 /* top header centered over video */
 .heroHeader {
   position: absolute;
-  z-index: 10;wif
+  z-index: 10;
   top: 18px; /* or 22px if you want more space */
   left: 50%;
   transform: translateX(-50%);
@@ -260,7 +260,7 @@ a {
 /* video area below header */
 .heroVideoWrap {
   position: relative;
-  min-height: 70vh; /* locked */
+  min-height: 78vh; /* locked */
   overflow: hidden;
 }
 
@@ -272,23 +272,19 @@ a {
 }
 
 .heroVideo--blur {
-  /* object-fit:cover; */
+  object-fit:cover;
   filter: blur(14px) brightness(1.35) saturate(1.08) contrast(1.02);
   transform: scale(1.06);
   opacity: 0.78;
 }
 
 .heroVideo--contain {
-  /* object-fit:contain; */
+  object-fit:contain;
   background: transparent;
   filter: brightness(1.28) saturate(1.06) contrast(1.02);
 }
 
-.heroVideo--blur,
-.heroVideo--contain {
-  object-fit: cover !important; /* override contain → cover removes bars */
-  object-position: center; /* keep important parts centered when cropping */
-}
+
 
 /* scrim removed entirely */
 .heroScrim {

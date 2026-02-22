@@ -4790,7 +4790,7 @@
           position: relative;
           display: flex;
           flex-wrap: nowrap;
-          gap: 0;
+          gap: 6px;
           padding: 3px;
           border-radius: 999px;
           background: rgba(255, 255, 255, 0.06);
@@ -4814,9 +4814,13 @@
       @media (max-width: 479px) {
         /* Chat header - allow stacking if needed */
         #sec-chat .cardHead.chatHead {
-          flex-wrap: wrap;
-          gap: 5px;
-          padding: 12px;
+          display: flex;
+          flex-direction: row; /* Strict single row */
+          flex-wrap: nowrap; /* Never stack */
+          align-items: center; /* Center vertically */
+          justify-content: space-between; /* Push title left, buttons right */
+          gap: 8px;
+          padding: 12px 10px; /* Slightly tighter outer padding */
         }
 
         /* Title takes full width on tiny screens */
@@ -4824,27 +4828,44 @@
           flex: 0 0 auto;
         }
 
-        /* Language toggle - compact to fit all 4 */
+        #sec-chat .chatHeadLeft h2 {
+          font-size: 17px; /* Scaled down to leave room for buttons */
+          line-height: 1;
+          margin: 0;
+          letter-spacing: -0.3px;
+        }
+
+        /* Language Row - Hugs to the right, allows tight squeeze */
         #chatLangRow.segWrap,
         #chatLangRow.segmented {
-          flex: 1 1 100%;
-          max-width: 100%;
-          padding: 4px;
-          justify-content: space-between;
-          /* Distribute buttons evenly */
+          display: flex;
+          flex-wrap: nowrap;
+          flex: 0 1 auto;
+          justify-content: flex-end;
+          padding: 6px;
+          margin: 0;
+
+          /* Pro-tip: Lets users swipe the buttons horizontally if their screen is unimaginably small (like a Galaxy Fold front screen) without breaking your layout */
+          overflow-x: auto;
+          scrollbar-width: none; /* Hides scrollbar in Firefox */
+          
+        }
+        
+
+        #chatLangRow.segWrap::-webkit-scrollbar {
+          display: none; /* Hides scrollbar in Chrome/Safari */
         }
 
-        /* Smaller buttons on mobile */
         #chatLangRow .segBtn {
-          padding: 6px 5px;
-          font-size: 10px;
+          flex: 0 0 auto;
+          padding: 6px 8px; /* Very tight horizontal padding */
+          font-size: 10px; /* Small but readable */
           font-weight: 600;
+          white-space: nowrap; /* Prevents text from breaking */
           min-height: 28px;
-          flex: 1 1 auto;
-          /* Allow buttons to share space equally */
+          letter-spacing: -0.2px; /* Pulls letters slightly closer */
         }
 
-        /* Adjust bubble for smaller padding */
         #chatLangRow.segWrap::before,
         #chatLangRow.segmented::before {
           top: 2px;
@@ -4855,10 +4876,9 @@
         .chatInputRow {
           display: flex;
           align-items: center;
-          gap: 2px;
+          gap: 6px;
           flex-wrap: nowrap;
-          padding: 5px 5px 5px 5px;
-          /* margin:10px; */
+          padding: 10px;
         }
 
         .hint {
@@ -4866,18 +4886,26 @@
         }
 
         #sec-chat .chatHeadLeft .cardTitle {
-          font-size: 16px; /* Reduced from default h2 size */
+          font-size: 16px;
           line-height: 1.2;
-          margin: 0; /* Remove default browser margins if any */
+          margin: 0;
         }
       }
 
       /* ===== VERY SMALL MOBILE (< 360px) ===== */
       @media (max-width: 359px) {
+        #sec-chat .cardHead.chatHead {
+          gap: 4px;
+          padding: 10px 6px;
+        }
+
+        #sec-chat .chatHeadLeft h2 {
+          font-size: 14px;
+        }
+
         #chatLangRow .segBtn {
           padding: 5px 6px;
-          font-size: 10px;
-          letter-spacing: 0;
+          font-size: 9px;
         }
       }
 
@@ -5424,9 +5452,11 @@
         border-radius: 20px;
       }
 
-      /* =========================================
+      /* 
+      =========================================
    3. COUNTDOWN WIDGET COMPONENT
-   ========================================= */
+   ========================================= 
+   */
 
       /* Widget Wrapper */
       .counter-container {
@@ -5872,7 +5902,7 @@
           <div class="card">
             <div class="cardHead chatHead">
               <div class="chatHeadLeft">
-                <h2 class="cardTitle">Chat</h2>
+                <h2 style="font-size: 16px; margin: 0px">Chat</h2>
               </div>
               <div
                 class="segmented segWrap"
@@ -6618,62 +6648,62 @@
         fr: "Bonjour, fans de la Coupe du Monde. C’est jour de match. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et les besoins en temps réel pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails.",
       };
 
-    function getWelcomeForState(lang) {
-      const k = window.__wcCountdownStateKind || '';
-      const L = (lang || state.lang || 'en').toLowerCase();
-      // Greeting is always hardcoded here; we do not read from venue JSON. Translation by language key only.
-      if (k === 'game_day') {
-        return WELCOME_GAMEDAY_BY_LANG[L] || WELCOME_GAMEDAY_BY_LANG.en;
+      function getWelcomeForState(lang) {
+        const k = window.__wcCountdownStateKind || "";
+        const L = (lang || state.lang || "en").toLowerCase();
+        // Greeting is always hardcoded here; we do not read from venue JSON. Translation by language key only.
+        if (k === "game_day") {
+          return WELCOME_GAMEDAY_BY_LANG[L] || WELCOME_GAMEDAY_BY_LANG.en;
+        }
+        return WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
       }
-      return WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
-    }
-    // ---------- admin-only countdown indicator ----------
-    function isAdminDebug() {
-      try {
-        const q = new URLSearchParams(location.search);
-        if (q.get('admin') === '1' || q.get('debug') === '1') return true;
-        if (localStorage.getItem('wc_admin') === '1') return true;
-      } catch (e) { }
-      return false;
-    }
-    function ensureAdminBadge() {
-      if (!isAdminDebug()) return null;
-      let el = document.getElementById('adminCountdownState');
-      if (el) return el;
-      el = document.createElement('div');
-      el.id = 'adminCountdownState';
-      el.style.position = 'fixed';
-      el.style.right = '10px';
-      el.style.bottom = '10px';
-      el.style.zIndex = '9999';
-      el.style.padding = '6px 10px';
-      el.style.borderRadius = '10px';
-      el.style.fontSize = '12px';
-      el.style.letterSpacing = '.04em';
-      el.style.backdropFilter = 'blur(10px)';
-      el.style.webkitBackdropFilter = 'blur(10px)';
-      el.style.background = 'rgba(0,0,0,.35)';
-      el.style.border = '1px solid rgba(255,255,255,.18)';
-      el.style.color = '#fff';
-      el.textContent = 'STATE: …';
-      document.body.appendChild(el);
-      return el;
-    }
-    function updateAdminCountdownState(kind) {
-      const el = ensureAdminBadge();
-      if (!el) return;
-      const map = {
-        pre_tournament: 'PRE_TOURNAMENT',
-        pre_game_day: 'BETWEEN_DAYS',
-        between_days: 'BETWEEN_DAYS',
-        post_day: 'BETWEEN_DAYS',
-        game_day: 'GAME_DAY',
-        complete: 'COMPLETE',
-        fallback: 'FALLBACK'
-      };
-      el.textContent = 'STATE: ' + (map[kind] || String(kind || 'UNKNOWN').toUpperCase());
-    }
-
+      // ---------- admin-only countdown indicator ----------
+      function isAdminDebug() {
+        try {
+          const q = new URLSearchParams(location.search);
+          if (q.get("admin") === "1" || q.get("debug") === "1") return true;
+          if (localStorage.getItem("wc_admin") === "1") return true;
+        } catch (e) {}
+        return false;
+      }
+      function ensureAdminBadge() {
+        if (!isAdminDebug()) return null;
+        let el = document.getElementById("adminCountdownState");
+        if (el) return el;
+        el = document.createElement("div");
+        el.id = "adminCountdownState";
+        el.style.position = "fixed";
+        el.style.right = "10px";
+        el.style.bottom = "10px";
+        el.style.zIndex = "9999";
+        el.style.padding = "6px 10px";
+        el.style.borderRadius = "10px";
+        el.style.fontSize = "12px";
+        el.style.letterSpacing = ".04em";
+        el.style.backdropFilter = "blur(10px)";
+        el.style.webkitBackdropFilter = "blur(10px)";
+        el.style.background = "rgba(0,0,0,.35)";
+        el.style.border = "1px solid rgba(255,255,255,.18)";
+        el.style.color = "#fff";
+        el.textContent = "STATE: …";
+        document.body.appendChild(el);
+        return el;
+      }
+      function updateAdminCountdownState(kind) {
+        const el = ensureAdminBadge();
+        if (!el) return;
+        const map = {
+          pre_tournament: "PRE_TOURNAMENT",
+          pre_game_day: "BETWEEN_DAYS",
+          between_days: "BETWEEN_DAYS",
+          post_day: "BETWEEN_DAYS",
+          game_day: "GAME_DAY",
+          complete: "COMPLETE",
+          fallback: "FALLBACK",
+        };
+        el.textContent =
+          "STATE: " + (map[kind] || String(kind || "UNKNOWN").toUpperCase());
+      }
 
       // ---------- admin ops panel: relocate Match-Day Ops Toggles ----------
       function relocateMatchDayOpsToggles() {
@@ -6808,19 +6838,17 @@
       function updateSegmentIndicator(container, activeBtn) {
         if (!container || !activeBtn) return;
 
-        // Use layout coordinates (offsetLeft/offsetWidth) so the bubble stays aligned when the
-        // language row is scrollable on mobile; getBoundingClientRect can misalign when container scrolls.
-        let offset = 0;
-        let el = activeBtn;
-        while (el && el !== container) {
-          offset += el.offsetLeft || 0;
-          el = el.offsetParent;
-        }
-        const width =
-          activeBtn.offsetWidth || activeBtn.getBoundingClientRect().width;
-        offset = Math.max(0, offset);
+        // Use precise screen coordinates instead of offsetParent loops
+        const containerRect = container.getBoundingClientRect();
+        const btnRect = activeBtn.getBoundingClientRect();
 
-        container.style.setProperty("--seg-offset", `${offset}px`);
+        // Calculate exact distance from container's left edge to button's left edge
+        // (Adding container.scrollLeft handles the invisible mobile scrolling!)
+        let offset = (btnRect.left - containerRect.left) + container.scrollLeft;
+        const width = btnRect.width;
+
+        // Apply exactly
+        container.style.setProperty("--seg-offset", `${Math.max(0, offset)}px`);
         container.style.setProperty("--seg-width", `${width}px`);
       }
 
@@ -6931,6 +6959,8 @@
         }
       }
 
+      
+
       // Also add resize/orientation handler to keep bubble aligned
       window.addEventListener("resize", () => {
         const segWrap = document.querySelector(
@@ -6950,6 +6980,10 @@
         const i = LANGS.indexOf(state.lang);
         setLang(LANGS[(i + 1) % LANGS.length]);
       }
+
+      window.addEventListener("load", () => {
+        setLang("en"); 
+      });
 
       // ---------- scope (kept generic; no city/location) ----------
       function setScope(scope) {
@@ -8342,12 +8376,12 @@
           const r = await fetch(url, { cache: "no-store" });
           const d = await r.json().catch(() => null);
 
-        if (d && d.ok) {
-          // === FIX: Store venue context in state for persistent chat context ===
-          state.venue_id = d.venue_id || venueId || '';
-          state.venue_name = d.venue_name || '';
-          // Greeting is never read from venue JSON; chat welcome uses hardcoded WELCOME_*_BY_LANG only.
-          state.venue_greeting = '';
+          if (d && d.ok) {
+            // === FIX: Store venue context in state for persistent chat context ===
+            state.venue_id = d.venue_id || venueId || "";
+            state.venue_name = d.venue_name || "";
+            // Greeting is never read from venue JSON; chat welcome uses hardcoded WELCOME_*_BY_LANG only.
+            state.venue_greeting = "";
 
             // Update chat header title with venue name if available
             if (chatTitleEl && state.venue_name) {
@@ -8381,7 +8415,7 @@
         // state-derived UI
         setLang(state.lang);
         setScope(state.scope);
-
+        
         bindNav();
         bindHome();
         bindChat();
