@@ -6618,71 +6618,62 @@
         fr: "Bonjour, fans de la Coupe du Monde. C’est jour de match. Je suis votre concierge — là pour vous aider avec les réservations, les expériences VIP et les besoins en temps réel pour votre entreprise et vos invités. Dites-moi ce dont vous avez besoin, je m’occupe des détails.",
       };
 
-      function getWelcomeForState(lang) {
-        const k = window.__wcCountdownStateKind || "";
-        const L = (lang || state.lang || "en").toLowerCase();
+    function getWelcomeForState(lang) {
+      const k = window.__wcCountdownStateKind || '';
+      const L = (lang || state.lang || 'en').toLowerCase();
+      // Greeting is always hardcoded here; we do not read from venue JSON. Translation by language key only.
+      if (k === 'game_day') {
+        return WELCOME_GAMEDAY_BY_LANG[L] || WELCOME_GAMEDAY_BY_LANG.en;
+      }
+      return WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
+    }
+    // ---------- admin-only countdown indicator ----------
+    function isAdminDebug() {
+      try {
+        const q = new URLSearchParams(location.search);
+        if (q.get('admin') === '1' || q.get('debug') === '1') return true;
+        if (localStorage.getItem('wc_admin') === '1') return true;
+      } catch (e) { }
+      return false;
+    }
+    function ensureAdminBadge() {
+      if (!isAdminDebug()) return null;
+      let el = document.getElementById('adminCountdownState');
+      if (el) return el;
+      el = document.createElement('div');
+      el.id = 'adminCountdownState';
+      el.style.position = 'fixed';
+      el.style.right = '10px';
+      el.style.bottom = '10px';
+      el.style.zIndex = '9999';
+      el.style.padding = '6px 10px';
+      el.style.borderRadius = '10px';
+      el.style.fontSize = '12px';
+      el.style.letterSpacing = '.04em';
+      el.style.backdropFilter = 'blur(10px)';
+      el.style.webkitBackdropFilter = 'blur(10px)';
+      el.style.background = 'rgba(0,0,0,.35)';
+      el.style.border = '1px solid rgba(255,255,255,.18)';
+      el.style.color = '#fff';
+      el.textContent = 'STATE: …';
+      document.body.appendChild(el);
+      return el;
+    }
+    function updateAdminCountdownState(kind) {
+      const el = ensureAdminBadge();
+      if (!el) return;
+      const map = {
+        pre_tournament: 'PRE_TOURNAMENT',
+        pre_game_day: 'BETWEEN_DAYS',
+        between_days: 'BETWEEN_DAYS',
+        post_day: 'BETWEEN_DAYS',
+        game_day: 'GAME_DAY',
+        complete: 'COMPLETE',
+        fallback: 'FALLBACK'
+      };
+      el.textContent = 'STATE: ' + (map[kind] || String(kind || 'UNKNOWN').toUpperCase());
+    }
 
-        // === FIX: Match-day greeting ALWAYS takes priority (even if venue greeting exists) ===
-        if (k === "game_day") {
-          // Return match-day greeting in requested language
-          return WELCOME_GAMEDAY_BY_LANG[L] || WELCOME_GAMEDAY_BY_LANG.en;
-        }
-
-        // === FIX: Use venue-specific greeting if available (non-game-day only) ===
-        if (state.venue_greeting) {
-          return state.venue_greeting;
-        }
-
-        // Fallback to primary greeting
-        return WELCOME_PRIMARY_BY_LANG[L] || WELCOME_PRIMARY_BY_LANG.en;
-      }
-      // ---------- admin-only countdown indicator ----------
-      function isAdminDebug() {
-        try {
-          const q = new URLSearchParams(location.search);
-          if (q.get("admin") === "1" || q.get("debug") === "1") return true;
-          if (localStorage.getItem("wc_admin") === "1") return true;
-        } catch (e) {}
-        return false;
-      }
-      function ensureAdminBadge() {
-        if (!isAdminDebug()) return null;
-        let el = document.getElementById("adminCountdownState");
-        if (el) return el;
-        el = document.createElement("div");
-        el.id = "adminCountdownState";
-        el.style.position = "fixed";
-        el.style.right = "10px";
-        el.style.bottom = "10px";
-        el.style.zIndex = "9999";
-        el.style.padding = "6px 10px";
-        el.style.borderRadius = "10px";
-        el.style.fontSize = "12px";
-        el.style.letterSpacing = ".04em";
-        el.style.backdropFilter = "blur(10px)";
-        el.style.webkitBackdropFilter = "blur(10px)";
-        el.style.background = "rgba(0,0,0,.35)";
-        el.style.border = "1px solid rgba(255,255,255,.18)";
-        el.style.color = "#fff";
-        el.textContent = "STATE: …";
-        document.body.appendChild(el);
-        return el;
-      }
-      function updateAdminCountdownState(kind) {
-        const el = ensureAdminBadge();
-        if (!el) return;
-        const map = {
-          pre_tournament: "PRE_TOURNAMENT",
-          pre_game_day: "BETWEEN_DAYS",
-          between_days: "BETWEEN_DAYS",
-          post_day: "BETWEEN_DAYS",
-          game_day: "GAME_DAY",
-          complete: "COMPLETE",
-          fallback: "FALLBACK",
-        };
-        el.textContent =
-          "STATE: " + (map[kind] || String(kind || "UNKNOWN").toUpperCase());
-      }
 
       // ---------- admin ops panel: relocate Match-Day Ops Toggles ----------
       function relocateMatchDayOpsToggles() {
@@ -8351,11 +8342,12 @@
           const r = await fetch(url, { cache: "no-store" });
           const d = await r.json().catch(() => null);
 
-          if (d && d.ok) {
-            // === FIX: Store venue context in state for persistent chat context ===
-            state.venue_id = d.venue_id || venueId || "";
-            state.venue_name = d.venue_name || "";
-            state.venue_greeting = d.greeting || "";
+        if (d && d.ok) {
+          // === FIX: Store venue context in state for persistent chat context ===
+          state.venue_id = d.venue_id || venueId || '';
+          state.venue_name = d.venue_name || '';
+          // Greeting is never read from venue JSON; chat welcome uses hardcoded WELCOME_*_BY_LANG only.
+          state.venue_greeting = '';
 
             // Update chat header title with venue name if available
             if (chatTitleEl && state.venue_name) {
