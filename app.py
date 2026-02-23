@@ -2357,10 +2357,10 @@ def api_lead():
 
 @app.post("/super/api/venues/set_active")
 def super_api_venues_set_active():
-    # Super Admin auth
-    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
-    if key != SUPER_ADMIN_KEY:
-        return jsonify({"ok": False, "error": "unauthorized"}), 403
+    """Activate or deactivate venue per spec."""
+    ok, resp = _require_super_admin()
+    if not ok:
+        return resp
 
     body = request.get_json(silent=True) or {}
     venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
@@ -2401,10 +2401,10 @@ def super_api_venues_set_active():
 
 @app.post("/super/api/venues/set_identity")
 def super_api_venues_set_identity():
-    # Super Admin auth
-    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
-    if key != SUPER_ADMIN_KEY:
-        return jsonify({"ok": False, "error": "unauthorized"}), 403
+    """Update venue identity metadata per spec."""
+    ok, resp = _require_super_admin()
+    if not ok:
+        return resp
 
     body = request.get_json(silent=True) or {}
     venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
@@ -2832,19 +2832,24 @@ def admin_api_redis_smoke():
 def _is_super_admin_request() -> bool:
     """Return True iff caller presents SUPER_ADMIN_KEY.
 
-    Accepted:
-      - super_key query param
-      - X-Super-Key header
-      - key query param on /super/* endpoints
+    Accepted (per spec):
+      - X-Super-Key header (preferred)
+      - ?super_key= query param
+      - super_key cookie (set after successful console load)
+      - ?key= query param (back-compat for /super/* calls)
     """
     try:
-        sk = (request.args.get("super_key") or request.headers.get("X-Super-Key") or request.cookies.get("super_key") or "").strip()
-        if SUPER_ADMIN_KEY and sk == SUPER_ADMIN_KEY:
-            return True
-        # Allow /super/* calls that pass SUPER key as the standard key param
-        k = (request.args.get("key") or "").strip()
-        if SUPER_ADMIN_KEY and k == SUPER_ADMIN_KEY:
-            return True
+        sk = SUPER_ADMIN_KEY
+        if not sk:
+            return False
+        for src in (
+            request.headers.get("X-Super-Key"),
+            request.args.get("super_key"),
+            request.cookies.get("super_key"),
+            request.args.get("key"),
+        ):
+            if src and str(src).strip() == sk:
+                return True
     except Exception:
         pass
     return False
@@ -12860,6 +12865,11 @@ th{
     }
   }
 
+  function buildAdminUrl(v){
+    const k = (v && v.admin_key) ? v.admin_key : '';
+    const vid = (v && v.venue_id) ? v.venue_id : '';
+    return '/admin?key='+encodeURIComponent(k)+'&venue='+encodeURIComponent(vid);
+  }
   function hesc(s){s=(s===null||s===undefined)?'':String(s);return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
   function hdrs(extra){const h={'Content-Type':'application/json'}; if(super_key) h['X-Super-Key']=super_key; if(demoEnabled) h['X-Demo-Mode']='1'; if(extra) Object.assign(h,extra); return h;}
 
@@ -12953,7 +12963,7 @@ th{
         const readyBadge='<span class="badge '+(f.ready?'good':'warn')+'">'+(f.ready?'READY':'NOT READY')+'</span>';
         const actions='<button class="btn" data-act="check" data-vid="'+hesc(v.venue_id||'')+'">Re-check</button> '+
                       '<button class="btn" data-act="rotate" data-vid="'+hesc(v.venue_id||'')+'">Rotate Keys</button> '+
-                      '<a href="/admin?venue='+encodeURIComponent(v.venue_id||'')+'" target="_blank">Open</a>';
+                      '<a href="'+buildAdminUrl(v)+'" target="_blank">Open</a>';
         const tr=document.createElement('tr');
         tr.innerHTML='<td><div><div style="font-weight:700">'+hesc(v.name||v.venue_name||v.venue_id)+'</div><div class="muted">'+hesc(v.venue_id||'')+'</div></div></td>'+
                      '<td>'+hesc(v.plan||'standard')+'</td>'+
@@ -13008,7 +13018,7 @@ th{
       '<button class="btn" id="vdCheck">Re-check Sheet</button>'+
       '<button class="btn" id="vdRotate">Rotate Keys</button>'+
       '<button class="btn" id="vdSetSheet">Set Sheet…</button>'+
-      '<a class="btn" style="text-decoration:none" href="/admin?venue='+encodeURIComponent(v.venue_id||'')+'" target="_blank">Open Admin</a>'+
+      '<a class="btn" style="text-decoration:none" href="'+buildAdminUrl(v)+'" target="_blank">Open Admin</a>'+
     '</div>';
 
   // existing actions
@@ -13236,36 +13246,29 @@ SUPER_CONSOLE_HTML = SUPER_CONSOLE_HTML_OPTIONA
 
 @app.get("/admin/api/super")
 def admin_api_super_console_redirect():
-    """Back-compat: super admin UI entrypoint.
-
-    Historically some links used /admin/api/super. The Super Admin console UI
-    actually lives at /super/admin. This route keeps old links working and
-    prevents falling back to the fan UI shell.
-    """
+    """Back-compat redirect to /super/admin, preserving query params per spec."""
     try:
-        if not _is_super_admin_request():
-            return "Forbidden", 403
-        # Preserve query params so the embedded console JS can call /super/api/*
-        # NOTE: keep both `key` and `super_key` in the URL.
         q = request.query_string.decode("utf-8") if request.query_string else ""
         url = "/super/admin"
         if q:
             url = url + "?" + q
         return redirect(url, code=302)
     except Exception:
-        return ("Forbidden", 403)
+        return redirect("/super/admin", code=302)
 
 @app.get("/super/admin")
 def super_admin_console():
     """
-    Super Admin console. Must NEVER hard-500; if something goes wrong we return
-    a minimal diagnostic page so you can see the real exception (production-safe
-    because it's still protected by SUPER_ADMIN_KEY).
+    Super Admin console per spec. Sets super_key cookie for session persistence.
+    Must NEVER hard-500; returns minimal diagnostic fallback HTML on failure.
     """
     try:
         if not _is_super_admin_request():
-            return "Forbidden", 403
+            return jsonify({"ok": False, "error": "unauthorized"}), 403
         resp = make_response(render_template_string(SUPER_CONSOLE_HTML))
+        resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+        resp.headers["Expires"] = "0"
         try:
             sk = (request.args.get("super_key") or request.headers.get("X-Super-Key") or "").strip()
             if sk:
@@ -13275,7 +13278,6 @@ def super_admin_console():
         return resp
     except Exception as e:
         tb = traceback.format_exc()
-        # still return 200 so the platform doesn't show a generic error page
         return (
             "<h1>Super Admin</h1>"
             "<p>Dashboard failed to render. Copy the details below.</p>"
@@ -13314,30 +13316,52 @@ def _handle_any_exception(e):
 
 @app.get("/super/api/diag")
 def super_api_diag():
-    """Quick diagnostics for Super Admin (requires SUPER_ADMIN_KEY)."""
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
+    """Platform diagnostic endpoint per spec: redis, build, runtime, env, key presence."""
+    ok, resp = _require_super_admin()
+    if not ok:
+        return resp
     try:
-        # Basic environment + template sanity
+        rs = _redis_runtime_status() if callable(globals().get("_redis_runtime_status", None)) else {}
+        venues = _load_venues_from_disk() or {}
         return jsonify({
             "ok": True,
-            "path": request.path,
-            "has_super_key": bool(SUPER_ADMIN_KEY),
-            "redis_enabled": bool(_REDIS_ENABLED),
-            "redis_namespace": _REDIS_NS,
-            "venues_count": (len(_load_venues_from_disk() or {}) if isinstance(_load_venues_from_disk(), dict) else 0),
-            "app_version": (os.environ.get("APP_VERSION") or "1.4.2"),
+            "redis": {
+                "enabled": bool(_REDIS_ENABLED),
+                "namespace": _REDIS_NS,
+                "status": rs.get("redis_enabled", False),
+                "error": rs.get("redis_error", ""),
+            },
+            "build": {
+                "app_version": os.environ.get("APP_VERSION") or "1.4.2",
+                "python_version": __import__("sys").version,
+                "pid": os.getpid(),
+            },
+            "runtime": {
+                "data_dir": DATA_DIR,
+                "venues_dir": VENUES_DIR,
+                "venues_count": len(venues) if isinstance(venues, dict) else 0,
+                "multi_venue": bool(MULTI_VENUE),
+            },
+            "env": {
+                "SUPER_ADMIN_KEY_present": bool(SUPER_ADMIN_KEY),
+                "ADMIN_KEY_present": bool(ADMIN_KEY),
+                "REDIS_URL_present": bool(os.environ.get("REDIS_URL")),
+                "VENUE_LOCK": VENUE_LOCK or "",
+                "DEFAULT_VENUE_ID": DEFAULT_VENUE_ID,
+            },
         })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
 @app.route("/super/api/venues/set_sheet", methods=["POST", "OPTIONS"])
 def super_api_venues_set_sheet():
+    """Attach or update Google Sheet ID for venue. Does NOT validate sheet."""
     if request.method == "OPTIONS":
         return ("", 204)
 
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
+    ok, resp = _require_super_admin()
+    if not ok:
+        return resp
 
     body = request.get_json(silent=True) or {}
     venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
@@ -13348,63 +13372,30 @@ def super_api_venues_set_sheet():
     if not sheet_id:
         return jsonify({"ok": False, "error": "missing sheet_id"}), 400
 
-    cfg = _venue_cfg(venue_id)
-    path = str(cfg.get("_path") or "")
-    if not path:
-        return jsonify({"ok": False, "error": "venue config not found"}), 404
+    venues = _load_venues_from_disk() or {}
+    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
+    if not isinstance(cfg, dict):
+        return jsonify({"ok": False, "error": "venue_not_found"}), 404
 
-@app.route("/super/api/venues/set_location", methods=["POST","OPTIONS"])
-def super_api_venues_set_location():
-    if request.method == "OPTIONS":
-        return ("", 204)
-    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
-    if key != SUPER_ADMIN_KEY:
-        return jsonify({"ok": False, "error": "unauthorized"}), 403
+    path = str(cfg.get("_path") or os.path.join(VENUES_DIR, f"{venue_id}.json"))
 
-    body = request.get_json(silent=True) or {}
-    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
-    location_line = str(body.get("location_line") or "").strip()
-
-    if not venue_id:
-        return jsonify({"ok": False, "error": "missing venue_id"}), 400
-    if not location_line:
-        return jsonify({"ok": False, "error": "missing location_line"}), 400
-
-    cfg = _venue_cfg(venue_id)
-    path = str(cfg.get("_path") or "")
-    if not path:
-        return jsonify({"ok": False, "error": "venue config not found"}), 404
-
-    cfg["show_location_line"] = True
-    cfg["location_line"] = location_line
-    cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00","Z")
-
-    _safe_write_json_file(path, cfg)
-    _invalidate_venues_cache()
-    return jsonify({"ok": True, "venue_id": venue_id, "location_line": location_line})
-
-    # persist sheet id in the canonical place
-    cfg["data"] = cfg.get("data", {}) if isinstance(cfg.get("data"), dict) else {}
+    cfg["data"] = cfg.get("data") if isinstance(cfg.get("data"), dict) else {}
     cfg["data"]["google_sheet_id"] = sheet_id
+    cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
-    # validate + persist status flags
-    chk = _check_sheet_id(sheet_id)
-    cfg["sheet_ok"] = bool(chk.get("ok"))
-    cfg["ready"] = bool(cfg["sheet_ok"] and cfg.get("active", True))
-    cfg["last_checked"] = chk.get("checked_at")
-
-    _safe_write_json_file(path, cfg)
+    wrote, write_path, err = _write_venue_config(venue_id, cfg)
     _invalidate_venues_cache()
 
-    return jsonify({"ok": True, "venue_id": venue_id, "sheet_id": sheet_id, "check": chk})
+    return jsonify({"ok": True, "venue_id": venue_id, "google_sheet_id": sheet_id, "persisted": wrote, "error": err})
 
 @app.route("/super/api/venues/check_sheet", methods=["POST", "OPTIONS"])
 def super_api_venues_check_sheet():
     if request.method == "OPTIONS":
         return ("", 204)
 
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
+    ok, resp = _require_super_admin()
+    if not ok:
+        return resp
 
     body = request.get_json(silent=True) or {}
     venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
@@ -13432,12 +13423,13 @@ def super_api_venues_check_sheet():
 
 @app.route("/super/api/venues/create", methods=["POST", "OPTIONS"])
 def super_api_venues_create():
+    """Create a new venue configuration per spec."""
     if request.method == "OPTIONS":
         return ("", 204)
 
-    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
-    if key != SUPER_ADMIN_KEY:
-        return jsonify({"ok": False, "error": "unauthorized"}), 403
+    ok, resp = _require_super_admin()
+    if not ok:
+        return resp
 
     body = request.get_json(silent=True) or {}
 
@@ -13507,42 +13499,51 @@ def super_api_venues_create():
 
 @app.get("/super/api/overview")
 def super_api_overview():
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
+    """Platform-wide summary metrics per spec."""
+    ok, resp = _require_super_admin()
+    if not ok:
+        return resp
 
-    venues = _load_venues_from_disk()
-    out = []
-    total = {"venues": 0, "ai_queue": 0}
+    venues = _load_venues_from_disk() or {}
+    total_venues = 0
+    active = 0
+    inactive = 0
+    needs_attention = 0
+    sheet_fail = 0
+    not_ready = 0
+
     for vid, cfg in (venues or {}).items():
-        try:
-            # count AI queue items per venue without relying on request-scoped _venue_id()
-            count = 0
-            if _REDIS_ENABLED and _REDIS:
-                try:
-                    payload = _redis_get_json(f"{_REDIS_NS}:{vid}:ai_queue", default=[])
-                    if isinstance(payload, list):
-                        count = len(payload)
-                except Exception:
-                    count = 0
-            else:
-                path = str(AI_QUEUE_FILE).replace("{venue}", vid)
-                payload = _safe_read_json_file(path, default=[])
-                if isinstance(payload, list):
-                    count = len(payload)
-            out.append({
-                "venue_id": vid,
-                "active": bool(_venue_is_active(vid)),
-                "venue_name": str((cfg or {}).get("venue_name") or (cfg or {}).get("name") or vid),
-                "ai_queue": int(count),
-            })
-            total["venues"] += 1
-            total["ai_queue"] += int(count)
-        except Exception:
-            # best effort — never break the dashboard
+        if not isinstance(cfg, dict):
             continue
+        total_venues += 1
+        is_active = bool(_venue_is_active(vid))
+        if is_active:
+            active += 1
+        else:
+            inactive += 1
 
-    out.sort(key=lambda x: x.get("venue_id",""))
-    return jsonify({"ok": True, "total": total, "venues": out})
+        sid = _venue_sheet_id(vid)
+        s_ok = cfg.get("sheet_ok")
+        ready = bool(cfg.get("ready", False))
+
+        if s_ok is False:
+            sheet_fail += 1
+            needs_attention += 1
+        elif not sid:
+            not_ready += 1
+            needs_attention += 1
+        elif not ready:
+            not_ready += 1
+
+    return jsonify({
+        "ok": True,
+        "total_venues": total_venues,
+        "active": active,
+        "inactive": inactive,
+        "needs_attention": needs_attention,
+        "sheet_fail": sheet_fail,
+        "not_ready": not_ready,
+    })
 
 
 
@@ -13619,16 +13620,16 @@ def _apply_demo_mask_to_lead(item: Dict[str, Any]) -> Dict[str, Any]:
 
 @app.route("/super/api/demo_mode", methods=["POST","OPTIONS"])
 def super_api_demo_mode():
+    """Toggle demo mode globally for Super Admin session per spec."""
     if request.method == "OPTIONS":
         return ("", 204, {
             "Access-Control-Allow-Methods": "POST, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type, X-Super-Key",
         })
 
-    # Normalized Super Admin auth
-    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
-    if key != SUPER_ADMIN_KEY:
-        return jsonify({"ok": False, "error": "unauthorized"}), 403
+    ok, resp = _require_super_admin()
+    if not ok:
+        return resp
 
     try:
         payload = request.get_json(silent=True) or {}
@@ -13685,13 +13686,25 @@ def super_api_demo_mode():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 def _is_super_admin_request():
-    k = (request.args.get("key") or request.args.get("super_key") or request.headers.get("X-Super-Key") or "").strip()
-    sk = _get_super_admin_key()
-    return bool(sk) and k == sk
+    try:
+        sk = _get_super_admin_key()
+        if not sk:
+            return False
+        for src in (
+            request.headers.get("X-Super-Key"),
+            request.args.get("super_key"),
+            request.cookies.get("super_key"),
+            request.args.get("key"),
+        ):
+            if src and str(src).strip() == sk:
+                return True
+    except Exception:
+        pass
+    return False
 
 def _require_super_admin():
     if not _is_super_admin_request():
-        return False, (jsonify({"ok": False, "error": "forbidden"}), 403)
+        return False, (jsonify({"ok": False, "error": "unauthorized"}), 403)
     return True, None
 
 
@@ -13758,126 +13771,86 @@ def _save_fanzone_state(st: Dict[str, Any], actor: str, role: str) -> Dict[str, 
 # ============================================================
 @app.get("/super/api/venues")
 def super_api_venues_list():
-    # Normalized Super Admin auth
-    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
-    if key != SUPER_ADMIN_KEY:
-        return jsonify({"ok": False, "error": "unauthorized"}), 403
+    """Return full list of venues with platform metadata per spec."""
+    ok, resp = _require_super_admin()
+    if not ok:
+        return resp
 
-    # CRITICAL: force fresh disk read (Refresh must not be stale)
     try:
         _invalidate_venues_cache()
     except Exception:
         pass
 
-    venues = _load_venues_from_disk()
-    out = []
-    if isinstance(venues, dict):
-        for vid, cfg in sorted(venues.items(), key=lambda kv: kv[0]):
-            if not isinstance(cfg, dict):
-                continue
-
-            name = str(cfg.get("venue_name") or cfg.get("name") or vid)
-            plan = str(cfg.get("plan") or "")
-
-            # Read sheet id directly from config
-            sid = _venue_sheet_id(vid)
-
-            # Use the NEW persisted fields (not legacy _sheet_check)
-            sheet_ok = cfg.get("sheet_ok", None)
-            ready = bool(cfg.get("ready", False))
-            active = bool(_venue_is_active(vid))
-
-            status = str(cfg.get("status") or "").strip()
-            if not sid:
-                status = "MISSING_SHEET"
-            elif sheet_ok is True and ready:
-                status = "READY"
-            elif sheet_ok is False:
-                status = "SHEET_FAIL"
-            else:
-                status = status or "SHEET_SET"
-
-            out.append({
-                "venue_id": vid,
-                "venue_name": name,
-                "plan": plan,
-                "google_sheet_id": sid,
-                "status": status,
-                "active": active,
-                "sheet_ok": sheet_ok,
-
-                # ✅ ADDED: UI expects v.sheet.ok
-                "sheet": {
-                    "ok": sheet_ok,
-                    "last_checked": cfg.get("last_checked"),
-                    "sheet_id": sid,
-                },
-
-                "ready": ready,
-                "last_checked": cfg.get("last_checked"),
-            })
-
-        return jsonify({"ok": True, "venues": out})
-
-    body = request.get_json(silent=True) or {}
-    venue_id = _slugify_venue_id(str(body.get("venue_id") or ""))
-    sheet_id = str(body.get("google_sheet_id") or "").strip()
-    if not venue_id:
-        return jsonify({"ok": False, "error": "missing_venue_id"}), 400
-    if not sheet_id:
-        return jsonify({"ok": False, "error": "missing_google_sheet_id"}), 400
-
     venues = _load_venues_from_disk() or {}
-    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
-    if not isinstance(cfg, dict):
-        return jsonify({"ok": False, "error": "venue_not_found"}), 404
+    out = []
+    for vid, cfg in sorted((venues or {}).items(), key=lambda kv: kv[0]):
+        if not isinstance(cfg, dict):
+            continue
 
-    path = str(cfg.get("_path") or "")
-    if not path:
-        # fallback to expected json path
-        path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+        name = str(cfg.get("venue_name") or cfg.get("name") or vid)
+        sid = _venue_sheet_id(vid)
+        sheet_ok = cfg.get("sheet_ok", None)
+        ready = bool(cfg.get("ready", False))
+        is_active = bool(_venue_is_active(vid))
 
-    wrote = False
-    err = ""
-    try:
-        # load existing file as dict
-        cur = {}
-        try:
-            cur_txt = pathlib.Path(path).read_text(encoding="utf-8")
-            cur = json.loads(cur_txt) if cur_txt else {}
-        except Exception:
-            cur = cfg.copy()
+        status = str(cfg.get("status") or "").strip()
+        if not sid:
+            status = "MISSING_SHEET"
+        elif sheet_ok is True and ready:
+            status = "READY"
+        elif sheet_ok is False:
+            status = "SHEET_FAIL"
+        else:
+            status = status or "SHEET_SET"
 
-        if not isinstance(cur, dict):
-            cur = {}
+        access = cfg.get("access") if isinstance(cfg.get("access"), dict) else {}
+        a_keys = access.get("admin_keys") if isinstance(access.get("admin_keys"), list) else []
+        k = cfg.get("keys") if isinstance(cfg.get("keys"), dict) else {}
+        first_admin_key = ""
+        if a_keys:
+            first_admin_key = str(a_keys[0]).strip()
+        elif k and k.get("admin_key"):
+            first_admin_key = str(k["admin_key"]).strip()
+        if not first_admin_key:
+            first_admin_key = ADMIN_OWNER_KEY or ""
 
-        data = cur.get("data") if isinstance(cur.get("data"), dict) else {}
-        data["google_sheet_id"] = sheet_id
-        cur["data"] = data
+        admin_url = str(cfg.get("admin_url") or "").strip()
+        manager_url = str(cfg.get("manager_url") or "").strip()
+        qr_url = str(cfg.get("qr_url") or "").strip()
 
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(cur, f, indent=2, sort_keys=True)
+        out.append({
+            "venue_id": vid,
+            "venue_name": name,
+            "name": name,
+            "plan": str(cfg.get("plan") or ""),
+            "google_sheet_id": sid,
+            "status": status,
+            "active": is_active,
+            "sheet_ok": sheet_ok,
+            "sheet": {
+                "ok": sheet_ok,
+                "last_checked": cfg.get("last_checked"),
+                "sheet_id": sid,
+            },
+            "ready": ready,
+            "last_checked": cfg.get("last_checked"),
+            "last_activity": cfg.get("updated_at") or cfg.get("created_at") or "",
+            "admin_url": admin_url,
+            "manager_url": manager_url,
+            "qr_url": qr_url,
+            "admin_key": first_admin_key,
+            "location_line": str(cfg.get("location_line") or cfg.get("identity", {}).get("location_line", "") if isinstance(cfg.get("identity"), dict) else cfg.get("location_line") or ""),
+        })
 
-        wrote = True
-        _MULTI_VENUE_CACHE["ts"] = 0.0
-    except Exception as e:
-        err = str(e)
-
-    try:
-        _audit("super.venues.set_sheet", {"venue_id": venue_id, "sheet_id": sheet_id, "persisted": wrote, "path": path, "error": err})
-    except Exception:
-        pass
-
-    return jsonify({"ok": True, "venue_id": venue_id, "google_sheet_id": sheet_id, "persisted": wrote, "path": path, "error": err})
+    return jsonify({"ok": True, "total": len(out), "venues": out})
 
 
 @app.post("/super/api/venues/rotate_keys")
 def super_api_venues_rotate_keys():
-    """Super-admin: rotate a venue's keys and attempt to persist."""
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
-
+    """Rotate admin + manager keys for venue per spec."""
+    ok, resp = _require_super_admin()
+    if not ok:
+        return resp
 
     if _demo_mode_enabled():
         return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
@@ -13887,48 +13860,44 @@ def super_api_venues_rotate_keys():
     if not venue_id:
         return jsonify({"ok": False, "error": "venue_id required"}), 400
 
-    rotate_admin = bool(body.get("rotate_admin", True))
-    rotate_manager = bool(body.get("rotate_manager", True))
-
     venues = _load_venues_from_disk() or {}
     cfg = venues.get(venue_id)
     if not isinstance(cfg, dict):
         return jsonify({"ok": False, "error": "unknown venue"}), 404
 
-    keys = cfg.get("keys") if isinstance(cfg.get("keys"), dict) else {}
-    new_admin = secrets.token_hex(16) if rotate_admin else keys.get("admin_key")
-    new_manager = secrets.token_hex(16) if rotate_manager else keys.get("manager_key")
-    keys = {"admin_key": new_admin, "manager_key": new_manager}
-    cfg["keys"] = keys
+    new_admin = secrets.token_hex(16)
+    new_manager = secrets.token_hex(16)
+
+    cfg["access"] = cfg.get("access") if isinstance(cfg.get("access"), dict) else {}
+    cfg["access"]["admin_keys"] = [new_admin]
+    cfg["access"]["manager_keys"] = [new_manager]
+    cfg["keys"] = {"admin_key": new_admin, "manager_key": new_manager}
+
+    base = _public_base_url()
+    cfg["admin_url"] = f"{base}/admin?key={new_admin}&venue={venue_id}"
+    cfg["manager_url"] = f"{base}/admin?key={new_manager}&venue={venue_id}"
     cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
-    wrote = False
-    write_path = ""
-    err = ""
-    try:
-        os.makedirs(VENUES_DIR, exist_ok=True)
-        write_path = os.path.join(VENUES_DIR, f"{venue_id}.json")
-        with open(write_path, "w", encoding="utf-8") as f:
-            json.dump(cfg, f, indent=2, sort_keys=True)
-        wrote = True
-        _MULTI_VENUE_CACHE["ts"] = 0.0
-    except Exception as e:
-        err = str(e)
+    wrote, write_path, err = _write_venue_config(venue_id, cfg)
+    _invalidate_venues_cache()
 
     try:
-        _audit("super.venues.rotate_keys", {"venue_id": venue_id, "persisted": wrote, "path": write_path, "error": err, "rotate_admin": rotate_admin, "rotate_manager": rotate_manager})
+        _audit("super.venues.rotate_keys", {"venue_id": venue_id, "persisted": wrote})
     except Exception:
         pass
 
-    return jsonify({"ok": True, "venue_id": venue_id, "keys": keys, "qr_url": f"https://worldcupconcierge.app/v/{venue_id}", "admin_url": f"https://admin.worldcupconcierge.app/v/{venue_id}/admin?key={keys.get('admin_key')}", "manager_url": f"https://manager.worldcupconcierge.app/v/{venue_id}/manager?key={keys.get('manager_key')}", "persisted": wrote, "path": write_path, "error": err})
+    return jsonify({
+        "ok": True,
+        "admin_key": new_admin,
+        "manager_key": new_manager,
+    })
 
 @app.get("/super/api/leads")
 def super_api_leads():
     """Cross-venue leads for Super Admin (read-only)."""
-    # Normalized Super Admin auth
-    key = request.headers.get("X-Super-Key") or request.args.get("super_key")
-    if key != SUPER_ADMIN_KEY:
-        return jsonify({"ok": False, "error": "unauthorized"}), 403
+    ok, resp = _require_super_admin()
+    if not ok:
+        return resp
 
     # Server-authoritative demo mode (Redis preferred, disk fallback)
     demo_enabled = False
@@ -14045,9 +14014,10 @@ def super_api_leads():
 
 @app.get("/super/api/sheets/check")
 def super_api_sheets_check():
-    """Best-effort validation that the service account can open the given sheet."""
-    if not _is_super_admin_request():
-        return jsonify({"ok": False, "error": "forbidden"}), 403
+    """Validate Google Sheet accessibility per spec."""
+    ok_auth, resp = _require_super_admin()
+    if not ok_auth:
+        return resp
 
     sheet_id = (request.args.get("sheet_id") or "").strip()
     if not sheet_id:
@@ -14057,7 +14027,7 @@ def super_api_sheets_check():
         return jsonify({"ok": False, "error": "gspread not available in this runtime"}), 400
 
     try:
-        gc = _get_gspread_client()
+        gc = get_gspread_client()
         sh = gc.open_by_key(sheet_id)
         title = getattr(sh, "title", "")
         try:
@@ -14069,7 +14039,7 @@ def super_api_sheets_check():
             _audit("super.sheets.check", {"sheet_id": sheet_id, "title": title})
         except Exception:
             pass
-        return jsonify({"ok": True, "sheet_id": sheet_id, "title": title})
+        return jsonify({"ok": True, "title": title, "status": "connected"})
     except Exception as e:
         try:
             _audit("super.sheets.check_failed", {"sheet_id": sheet_id, "error": str(e)})
@@ -14411,6 +14381,7 @@ def admin_api_leads_all():
 
     return jsonify({
         "ok": True,
+        "total": total,
         "count": total,
         "page": page,
         "per_page": per_page,
@@ -16749,13 +16720,25 @@ def _apply_demo_mask_to_lead(item: Dict[str, Any]) -> Dict[str, Any]:
     return x
 
 def _is_super_admin_request():
-    k = (request.args.get("key") or request.args.get("super_key") or request.headers.get("X-Super-Key") or "").strip()
-    sk = _get_super_admin_key()
-    return bool(sk) and k == sk
+    try:
+        sk = _get_super_admin_key()
+        if not sk:
+            return False
+        for src in (
+            request.headers.get("X-Super-Key"),
+            request.args.get("super_key"),
+            request.cookies.get("super_key"),
+            request.args.get("key"),
+        ):
+            if src and str(src).strip() == sk:
+                return True
+    except Exception:
+        pass
+    return False
 
 def _require_super_admin():
     if not _is_super_admin_request():
-        return False, (jsonify({"ok": False, "error": "forbidden"}), 403)
+        return False, (jsonify({"ok": False, "error": "unauthorized"}), 403)
     return True, None
 
 
