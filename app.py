@@ -612,11 +612,14 @@ def _iter_venue_json_configs() -> List[Dict[str, Any]]:
 
 
 def _resolve_venue_id() -> str:
-    """Resolve venue_id from request (path/query/cookie/header) with optional VENUE_LOCK."""
-    if VENUE_LOCK:
-        return VENUE_LOCK
+    """Resolve venue_id from request (path/query/cookie/header) with optional VENUE_LOCK.
 
-    # 1) /v/<venue_id>/... from path
+    In multi-venue mode, VENUE_LOCK is only used as a FALLBACK (not a hard override)
+    so that explicit venue indicators in the URL/header still win.
+    In single-venue mode, VENUE_LOCK is a hard override as before.
+    """
+
+    # 1) /v/<venue_id>/... from path (always wins — this IS the venue)
     try:
         m = re.match(r"^/v/([^/]+)", (request.path or ""))
         if m:
@@ -624,7 +627,7 @@ def _resolve_venue_id() -> str:
     except Exception:
         pass
 
-    # 2) ?venue=<venue_id> query param
+    # 2) ?venue=<venue_id> query param (explicit per-request)
     try:
         q = (request.args.get("venue") or "").strip()
         if q:
@@ -632,7 +635,7 @@ def _resolve_venue_id() -> str:
     except Exception:
         pass
 
-    # 3) X-Venue-Id header  (must beat cookie for per-tab isolation)
+    # 3) X-Venue-Id header (must beat cookie for per-tab isolation)
     try:
         h = (request.headers.get("X-Venue-Id") or "").strip()
         if h:
@@ -640,7 +643,11 @@ def _resolve_venue_id() -> str:
     except Exception:
         pass
 
-    # 4) venue_id cookie  (fallback only)
+    # 4) VENUE_LOCK: hard lock for dedicated single-venue deployments
+    if VENUE_LOCK:
+        return VENUE_LOCK
+
+    # 5) venue_id cookie (fallback only)
     try:
         c = (request.cookies.get("venue_id") or "").strip()
         if c:
