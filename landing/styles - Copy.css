@@ -44,6 +44,7 @@ a{color:inherit; text-decoration:none}
   font-size:11px;
   color:rgba(238,242,255,.66);
 }
+
 .h2{
   margin:10px 0 0;
   font-size:clamp(18px, 2.3vw, 28px);

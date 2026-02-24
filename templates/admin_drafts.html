@@ -1,0 +1,97 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <meta name="color-scheme" content="dark light"/>
+  <title>Drafts — World Cup Concierge</title>
+  <style>
+  :root{color-scheme:dark;--bg:#0b1020;--text:#eaf0ff;--muted:#b9c7ee;}
+  body{margin:0;font-family:Arial,system-ui,sans-serif;background:radial-gradient(900px 700px at 20% 10%, #142a5b 0%, var(--bg) 55%);color:var(--text);}
+  .wrap{max-width:900px;margin:0 auto;padding:18px 14px 60px;}
+  .top{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:16px;}
+  .h1{font-size:22px;font-weight:800;}
+  .sub{font-size:12px;color:var(--muted);margin-top:4px;}
+  .btn{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.10);color:var(--text);padding:10px 12px;border-radius:12px;cursor:pointer;text-decoration:none;display:inline-block;}
+  .btn.primary{background:rgba(212,175,55,.2);border-color:rgba(212,175,55,.4);}
+  .muted{color:var(--muted);font-size:12px;}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .card{border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));border-radius:18px;padding:16px;margin-top:12px;}
+  #drafts-json{width:100%;min-height:360px;margin-top:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);color:var(--text);padding:12px;border-radius:12px;font-family:monospace;font-size:13px;box-sizing:border-box;}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <div class="h1">Message Drafts</div>
+      <div class="sub">Venue: <span id="venue-label">{{ venue or '—' }}</span></div>
+    </div>
+    <a href="{{ url_for('admin_tpl') }}?key={{ key|urlencode }}&venue={{ venue|urlencode }}" class="btn">← Back to Admin</a>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button type="button" class="btn" id="drafts-reload">Reload</button>
+      <button type="button" class="btn primary" id="drafts-save">Save</button>
+      <span class="muted" id="drafts-status"></span>
+    </div>
+    <p class="muted" style="margin-top:10px;">Edit JSON then Save (owner-only). Drafts are stored in the per-venue drafts store (file or Redis), not in venue config.</p>
+    <textarea id="drafts-json" spellcheck="false"></textarea>
+  </div>
+</div>
+
+<script>
+(function(){
+  var KEY = {{ key|tojson }};
+  var VENUE = {{ venue|tojson }};
+
+  function el(id){ return document.getElementById(id); }
+
+  function loadDrafts(){
+    var st = el('drafts-status');
+    var box = el('drafts-json');
+    if(!box){ return; }
+    if(!VENUE || !KEY){
+      st.textContent = 'Missing key or venue. Open this page from Admin with ?key=...&venue=...';
+      return;
+    }
+    st.textContent = 'Loading…';
+    fetch('/admin/api/drafts?key=' + encodeURIComponent(KEY) + '&venue=' + encodeURIComponent(VENUE), { cache: 'no-store' })
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(box) box.value = JSON.stringify(j.drafts || {}, null, 2);
+        if(st) st.textContent = j.ok ? (j.meta && j.meta.updated_at ? 'Loaded • ' + j.meta.updated_at : 'Loaded') : ('Error: ' + (j.error || 'Failed'));
+      })
+      .catch(function(e){ if(st) st.textContent = 'Error: ' + (e && e.message ? e.message : e); });
+  }
+
+  function saveDrafts(){
+    var st = el('drafts-status');
+    var box = el('drafts-json');
+    if(!box || !st){ return; }
+    if(!VENUE || !KEY){ st.textContent = 'Missing key or venue.'; return; }
+    var obj;
+    try{ obj = JSON.parse(box.value || '{}'); }catch(e){ st.textContent = 'Invalid JSON.'; return; }
+    if(typeof obj !== 'object' || obj === null){ st.textContent = 'JSON must be an object.'; return; }
+    st.textContent = 'Saving…';
+    fetch('/admin/api/drafts?key=' + encodeURIComponent(KEY) + '&venue=' + encodeURIComponent(VENUE), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ drafts: obj })
+    })
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        st.textContent = j.ok ? (j.meta && j.meta.updated_at ? 'Saved • ' + j.meta.updated_at : 'Saved') : ('Error: ' + (j.error || 'Failed'));
+      })
+      .catch(function(e){ st.textContent = 'Error: ' + (e && e.message ? e.message : e); });
+  }
+
+  el('drafts-reload').addEventListener('click', loadDrafts);
+  el('drafts-save').addEventListener('click', saveDrafts);
+
+  loadDrafts();
+})();
+</script>
+</body>
+</html>

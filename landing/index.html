@@ -1,285 +1,424 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>World Cup Concierge — Match-night chaos → calm control</title>
-  <meta name="description" content="Turn match-night chaos into calm control. Capture reservations + VIP leads automatically, reduce phone/DM overload, and drive revenue with fewer staff." />
-  <link rel="stylesheet" href="styles.css?v=4" />
-</head>
-<body>
+  <head>
+    <meta charset="utf-8" />
+    <title>World Cup Concierge — Match-night chaos → calm control</title>
+    <meta
+      name="description"
+      content="Turn match-night chaos into calm control. Capture reservations + VIP leads automatically, reduce phone/DM overload, and drive revenue with fewer staff."
+    />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1"
+    />
+    <link rel="stylesheet" href="styles.css?v=4" />
+  </head>
 
-<!-- HERO (VIDEO ONLY) -->
-<div class="heroSection" id="top">
-  <header class="hero">
+  <body>
+    <!-- HERO (VIDEO ONLY) -->
+    <div class="heroSection" id="top">
+      <header class="hero">
+        <!-- TOP HEADER (ABOVE VIDEO, LOCKED) -->
+        <div class="heroHeader">
+          <div class="heroBrand heroBrand--title">World Cup Concierge</div>
 
-  <!-- TOP HEADER (ABOVE VIDEO, LOCKED) -->
-  <div class="heroHeader">
-    <div class="heroBrand heroBrand--title">World Cup Concierge</div>
-
-    <!-- ROLEX-STYLE COUNTDOWN -->
-    <div class="countdownOverlay countdownOverlay--hero" aria-label="Kickoff countdown">
-      <div class="countdownLabel">Until Kickoff</div>
-      <div class="countdownRow">
-        <span class="cdNum" id="d">--</span><span class="cdLbl">D</span>
-        <span class="cdNum" id="h">--</span><span class="cdLbl">H</span>
-        <span class="cdNum" id="m">--</span><span class="cdLbl">M</span>
-        <span class="cdNum" id="s">--</span><span class="cdLbl">S</span>
-      </div>
-    </div>
-  </div>
-
-  <!-- VIDEO AREA (BELOW HEADER) -->
-  <div class="heroVideoWrap">
-
-    <!-- Background blurred video -->
-    <video
-      class="heroVideo heroVideo--blur"
-      autoplay
-      muted
-      loop
-      playsinline
-      preload="auto"
-      aria-hidden="true">
-      <source src="https://media.worldcupconcierge.app/highlight.mp4" type="video/mp4" />
-    </video>
-
-    <!-- Foreground video -->
-    <video
-      id="heroVideo"
-      class="heroVideo heroVideo--contain"
-      autoplay
-      muted
-      loop
-      playsinline
-      preload="auto">
-      <source src="https://media.worldcupconcierge.app/highlight.mp4" type="video/mp4" />
-    </video>
-
-    <!-- Apple-style sound pill -->
-    <button id="soundToggle" class="soundPill" aria-label="Toggle sound">
-      🔊 Sound
-    </button>
-
-    
-  </div>
-</header>
-</div>
-
-<!-- HERO COPY -->
- <section class="section sectionTight">
-    <div class="heroOverlay container">
-      <h1 class="heroH1">A calmer way to run match nights.</h1>
-      <p class="heroSub">Reservations and VIP requests, handled automatically.</p>
-
-      <div class="heroCta heroCtaRow">
-        <a class="btn btnPrimary" href="#demo" id="demoBtnTop">See it in action</a>
-        <button class="btn btnGhost" type="button" id="whatBtn">What you’re getting</button>
-      </div>
-
-    </div>
-  </section>
-
-<!-- CHAOS (VISUAL STORY) -->
-<section class="section sectionTight">
-  <div class="container" data-reveal>
-    <div class="kicker">The problem</div>
-    <h2 class="h2">Packed venue. Stress everywhere.</h2>
-
-    <div class="chaosStrip">
-      <figure class="tileVisual">
-        <img src="/static/chaos_1_phones_dms.png" alt="Staff overwhelmed by phones and DMs" />
-        <figcaption>Phones nonstop</figcaption>
-      </figure>
-      <figure class="tileVisual">
-        <img src="/static/chaos_2_lines_confusion.png" alt="Line building at the door" />
-        <figcaption>Lines build</figcaption>
-      </figure>
-      <figure class="tileVisual">
-        <img src="/static/chaos_3_missed_vip.png" alt="Packed bar and missed VIP opportunities" />
-        <figcaption>VIP money missed</figcaption>
-      </figure>
-    </div>
-  </div>
-</section>
-
-<!-- CALM CONTROL (RESET MOMENT) -->
-<section class="section sectionTight">
-  <div class="container" data-reveal>
-    <div class="chaosStrip">
-      <figure class="tileVisual">
-        <img
-          src="/static/calm_control_qr.png"
-          alt="Staff smiling while scanning a QR code"
-        />
-        <figcaption>Calm Control</figcaption>
-      </figure>
-    </div>
-  </div>
-</section>
-
-<!-- PRODUCT PROOF (CAROUSEL) -->
-<section class="section" id="screens">
-  <div class="container" data-reveal>
-    <div class="kicker">Real product</div>
-    <h2 class="h2">See the system running your venue.</h2>
-
-    <div class="carousel" aria-label="Product screenshots carousel">
-  <div class="carouselTrack" id="carouselTrack">
-    <article class="slide">
-      <div class="deviceFrame deviceDark">
-        <img src="/static/screenshot1.png" alt="App home screen" loading="lazy" />
-      </div>
-      <p class="slideCap">Guests reserve in seconds</p>
-    </article>
-
-    <article class="slide">
-      <div class="deviceFrame deviceLight">
-        <img src="/static/screenshot2.png" alt="App explore screen" loading="lazy" />
-      </div>
-      <p class="slideCap">Everything in one tap</p>
-    </article>
-
-    <article class="slide">
-      <div class="deviceFrame deviceDark">
-        <img src="/static/screenshot3.png" alt="AI concierge chat screen" loading="lazy" />
-      </div>
-      <p class="slideCap">AI handles questions instantly</p>
-    </article>
-
-    <article class="slide">
-      <div class="deviceFrame deviceLight">
-        <img src="/static/screenshot4.png" alt="Match schedule screen" loading="lazy" />
-      </div>
-      <p class="slideCap">Match schedules always clear</p>
-    </article>
-
-    <article class="slide">
-      <div class="deviceFrame deviceDark">
-        <img src="/static/screenshot5.png" alt="Fan Zone screen" loading="lazy" />
-      </div>
-      <p class="slideCap">Engagement drives repeat visits</p>
-    </article>
-
-    <article class="slide">
-      <div class="deviceFrame deviceLight">
-        <img src="/static/screenshot6.png" alt="VIP upsell screen" loading="lazy" />
-      </div>
-      <p class="slideCap">VIP tables captured automatically</p>
-    </article>
-  </div>
-
-  <div class="carouselControls">
-    <button class="iconBtn" type="button" id="prevSlide" aria-label="Previous">‹</button>
-    <button class="iconBtn" type="button" id="nextSlide" aria-label="Next">›</button>
-  </div>
-</div>
-
-<!-- HOW IT WORKS (3 STEPS) -->
-<section class="section">
-  <div class="container" data-reveal>
-    <div class="kicker">How it works</div>
-    <h2 class="h2">Three steps. Zero chaos.</h2>
-
-    <div class="stepsWrap">
-      <div class="steps">
-        <div class="stepCard">
-          <h3>1. Scan or tap</h3>
-          <p>Guests open your concierge instantly.</p>
+          <!-- ROLEX-STYLE COUNTDOWN -->
+          <div
+            class="countdownOverlay countdownOverlay--hero"
+            aria-label="Kickoff countdown"
+          >
+            <div class="countdownLabel">Until Kickoff</div>
+            <div class="countdownRow">
+              <span class="cdNum" id="d">--</span><span class="cdLbl">D</span>
+              <span class="cdNum" id="h">--</span><span class="cdLbl">H</span>
+              <span class="cdNum" id="m">--</span><span class="cdLbl">M</span>
+              <span class="cdNum" id="s">--</span><span class="cdLbl">S</span>
+            </div>
+          </div>
         </div>
 
-        <div class="stepCard">
-          <h3>2. Concierge handles it</h3>
-          <p>Questions, bookings, and VIP interest handled automatically.</p>
+        <!-- VIDEO AREA (BELOW HEADER) -->
+        <div class="heroVideoWrap">
+          <!-- Background blurred video -->
+          <video
+            class="heroVideo heroVideo--blur"
+            autoplay
+            muted
+            loop
+            playsinline
+            preload="auto"
+            aria-hidden="true"
+          >
+            <source
+              src="https://media.worldcupconcierge.app/highlight.mp4"
+              type="video/mp4"
+            />
+          </video>
+
+          <!-- Foreground video -->
+          <video
+            id="heroVideo"
+            class="heroVideo heroVideo--contain"
+            autoplay
+            muted
+            loop
+            playsinline
+            preload="auto"
+          >
+            <source
+              src="https://media.worldcupconcierge.app/highlight.mp4"
+              type="video/mp4"
+            />
+          </video>
+
+          <!-- Apple-style sound pill -->
+          <button id="soundToggle" class="soundPill" aria-label="Toggle sound">
+            🔊 Sound
+          </button>
+        </div>
+      </header>
+    </div>
+
+    <!-- HERO COPY -->
+
+    <section class="section sectionTight cta-banner">
+      <div class="container cta-content">
+        <div class="cta-text">
+          <h2 class="h2">A calmer way to run match nights.</h2>
+          <p class="heroSub">
+            Reservations and VIP requests, handled automatically.
+          </p>
         </div>
 
-        <div class="stepCard">
-          <h3>3. Staff stays focused</h3>
-          <p>VIPs captured. Follow-ups automated.</p>
+        <div class="heroCtaRow cta-actions">
+          <a class="btn btnPrimary" href="#demo" id="demoBtnTop"
+            >See it in action</a
+          >
+          <button class="btn btnGhost" type="button" id="whatBtn">
+            What you’re getting
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <div class="bg-hero-glow">
+      <!-- Chaos Section -->
+      <section class="section sectionTight chaos-section">
+        <div class="container" data-reveal>
+          <div class="kicker">The problem</div>
+          <h2 class="h2">Packed venue. Stress everywhere.</h2>
+
+          <div class="chaosStrip">
+            <figure class="tileVisual">
+              <img
+                src="/static/chaos_1_phones_dms.png"
+                alt="Staff overwhelmed by phones and DMs"
+              />
+              <figcaption>Phones nonstop</figcaption>
+            </figure>
+            <figure class="tileVisual">
+              <img
+                src="/static/chaos_2_lines_confusion.png"
+                alt="Line building at the door"
+              />
+              <figcaption>Lines build</figcaption>
+            </figure>
+            <figure class="tileVisual">
+              <img
+                src="/static/chaos_3_missed_vip.png"
+                alt="Packed bar and missed VIP opportunities"
+              />
+              <figcaption>VIP money missed</figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <!-- Calm section -->
+      <section class="section sectionTight calm-section">
+        <div class="container" data-reveal>
+          <div class="chaosStrip">
+            <figure class="tileVisual calmVisual">
+              <img
+                src="/static/calm_control_qr.png"
+                alt="Staff smiling while scanning a QR code"
+              />
+              <figcaption>Calm Control</figcaption>
+            </figure>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- PRODUCT PROOF (CAROUSEL) -->
+    <section class="section bg-fade-down" id="screens">
+      <div class="container" data-reveal>
+        <div class="kicker">Real product</div>
+        <h2 class="h2">See the system running your venue.</h2>
+
+        <div class="carousel" aria-label="Product screenshots carousel">
+          <section class="carouselTrack" id="carouselTrack">
+            <article class="slide">
+              <div class="deviceFrame deviceDark">
+                <img
+                  src="/static/screenshot1.png"
+                  alt="App home screen"
+                  loading="lazy"
+                />
+              </div>
+              <p class="slideCap">Guests reserve in seconds</p>
+            </article>
+
+            <article class="slide">
+              <div class="deviceFrame deviceLight">
+                <img
+                  src="/static/screenshot2.png"
+                  alt="App explore screen"
+                  loading="lazy"
+                />
+              </div>
+              <p class="slideCap">Everything in one tap</p>
+            </article>
+
+            <article class="slide">
+              <div class="deviceFrame deviceDark">
+                <img
+                  src="/static/screenshot3.png"
+                  alt="AI concierge chat screen"
+                  loading="lazy"
+                />
+              </div>
+              <p class="slideCap">AI handles questions instantly</p>
+            </article>
+
+            <article class="slide">
+              <div class="deviceFrame deviceLight">
+                <img
+                  src="/static/screenshot4.png"
+                  alt="Match schedule screen"
+                  loading="lazy"
+                />
+              </div>
+              <p class="slideCap">Match schedules always clear</p>
+            </article>
+
+            <article class="slide">
+              <div class="deviceFrame deviceDark">
+                <img
+                  src="/static/screenshot5.png"
+                  alt="Fan Zone screen"
+                  loading="lazy"
+                />
+              </div>
+              <p class="slideCap">Engagement drives repeat visits</p>
+            </article>
+
+            <article class="slide">
+              <div class="deviceFrame deviceLight">
+                <img
+                  src="/static/screenshot6.png"
+                  alt="VIP upsell screen"
+                  loading="lazy"
+                />
+              </div>
+              <p class="slideCap">VIP tables captured automatically</p>
+            </article>
+          </section>
+
+          <div class="carouselControls">
+            <button
+              class="iconBtn"
+              type="button"
+              id="prevSlide"
+              aria-label="Previous"
+            >
+              ‹
+            </button>
+            <button
+              class="iconBtn"
+              type="button"
+              id="nextSlide"
+              aria-label="Next"
+            >
+              ›
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOW IT WORKS (3 STEPS) -->
+    <section class="section bg-hero-glow">
+      <div class="container" data-reveal>
+        <div class="kicker">How it works</div>
+        <h2 class="h2">Three steps. Zero chaos.</h2>
+
+        <div class="stepsWrap">
+          <div class="steps">
+            <div class="stepCard">
+              <h3>1. Scan or tap</h3>
+              <p>Guests open your concierge instantly.</p>
+            </div>
+
+            <div class="stepCard">
+              <h3>2. Concierge handles it</h3>
+              <p>
+                Questions, bookings, and VIP interest handled automatically.
+              </p>
+            </div>
+
+            <div class="stepCard">
+              <h3>3. Staff stays focused</h3>
+              <p>VIPs captured. Follow-ups automated.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DEMO CTA (FINAL) -->
+    <section class="section bg-fade-down" id="demo">
+      <div class="container" data-reveal>
+        <div class="kicker">Book a demo</div>
+        <h2 class="h2">Get your venue match-ready.</h2>
+
+        <form class="demoForm" id="leadForm">
+          <div class="field">
+            <label for="name">Name</label>
+            <input id="name" name="name" required placeholder="Your name" />
+          </div>
+          <div class="field">
+            <label for="venue">Venue name</label>
+            <input
+              id="venue"
+              name="venue"
+              required
+              placeholder="Your bar / lounge / restaurant"
+            />
+          </div>
+          <div class="field">
+            <label for="phone">Phone</label>
+            <input
+              id="phone"
+              name="phone"
+              type="tel"
+              placeholder="(555) 555-5555"
+            />
+            <p class="sms-disclaimer">
+              By providing your number, you agree to receive SMS from World Cup
+              Concierge. Msg & data rates may apply. Msg frequency varies. Reply
+              STOP to opt out, HELP for help.
+              <a
+                href="https://admin.worldcupconcierge.app/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Privacy Policy</a
+              >
+              |
+              <a
+                href="https://admin.worldcupconcierge.app/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                >Terms</a
+              >
+            </p>
+          </div>
+
+          <div class="field">
+            <label for="contact_method">Best way to contact</label>
+            <select id="contact_method" name="contact_method" required>
+              <option value="" selected disabled>Select one</option>
+              <option value="phone">Phone call</option>
+              <option value="text">Text</option>
+              <option value="email">Email</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="contact_time">Best time to contact</label>
+            <select id="contact_time" name="contact_time" required>
+              <option value="" selected disabled>Select one</option>
+              <option value="morning">Morning</option>
+              <option value="midday">Midday</option>
+              <option value="afternoon">Afternoon</option>
+              <option value="evening">Evening</option>
+              <option value="anytime">Anytime</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="email">Email</label>
+            <input
+              id="email"
+              name="email"
+              type="email"
+              required
+              placeholder="you@venue.com"
+            />
+          </div>
+          <button class="btn btnPrimary btnFull" type="submit">
+            Request demo
+          </button>
+          <div id="leadStatus" aria-live="polite"></div>
+        </form>
+      </div>
+    </section>
+
+    <footer class="footer bg-hero-glow">
+      <div class="container footerRow">
+        <small>© <span id="yr"></span> World Cup Concierge</small>
+        <small
+          ><a href="#screens">Product</a> ·
+          <a href="mailto:hello@worldcupconcierge.app">Contact</a></small
+        >
+      </div>
+    </footer>
+
+    <div class="scrollCue" id="scrollCue" aria-hidden="true"></div>
+
+    <!-- WHAT YOU’RE GETTING (GLASS MODAL) -->
+    <div class="modalOverlay" id="whatModal" aria-hidden="true">
+      <div
+        class="modalCard"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="whatTitle"
+      >
+        <div class="modalHeader">
+          <div class="modalTitle" id="whatTitle">What you’re getting</div>
+          <button
+            class="iconBtn modalClose"
+            type="button"
+            id="whatClose"
+            aria-label="Close"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="modalBody">
+          <p>
+            It’s a premium World Cup concierge app designed for fans and venues.
+          </p>
+          <p>
+            Fans can chat with an AI concierge to reserve tables, request VIP
+            experiences, check match schedules, and join live fan zones.
+          </p>
+          <p>
+            Everything works across multiple venues, so each bar or lounge runs
+            its own branded experience.
+          </p>
+          <p>
+            On the back end, owners and managers control reservations, rules,
+            alerts, and AI automation from a secure admin dashboard.
+          </p>
+          <p>
+            The goal is to turn World Cup chaos into a smooth, high-end, managed
+            experience for both fans and venues.
+          </p>
         </div>
       </div>
     </div>
-  </div>
-</section>
 
-<!-- DEMO CTA (FINAL) -->
-<section class="section" id="demo">
-  <div class="container" data-reveal>
-    <div class="kicker">Book a demo</div>
-    <h2 class="h2">Get your venue match-ready.</h2>
-
-    <form class="demoForm" id="leadForm">
-      <div class="field">
-        <label for="name">Name</label>
-        <input id="name" name="name" required placeholder="Your name" />
-      </div>
-      <div class="field">
-        <label for="venue">Venue name</label>
-        <input id="venue" name="venue" required placeholder="Your bar / lounge / restaurant" />
-      </div>
-      <div class="field">
-  <label for="phone">Phone</label>
-  <input id="phone" name="phone" type="tel" placeholder="(555) 555-5555" />
-</div>
-
-<div class="field">
-  <label for="contact_method">Best way to contact</label>
-  <select id="contact_method" name="contact_method" required>
-    <option value="" selected disabled>Select one</option>
-    <option value="phone">Phone call</option>
-    <option value="text">Text</option>
-    <option value="email">Email</option>
-  </select>
-</div>
-
-<div class="field">
-  <label for="contact_time">Best time to contact</label>
-  <select id="contact_time" name="contact_time" required>
-    <option value="" selected disabled>Select one</option>
-    <option value="morning">Morning</option>
-    <option value="midday">Midday</option>
-    <option value="afternoon">Afternoon</option>
-    <option value="evening">Evening</option>
-    <option value="anytime">Anytime</option>
-  </select>
-</div>
-      <div class="field">
-        <label for="email">Email</label>
-        <input id="email" name="email" type="email" required placeholder="you@venue.com" />
-      </div>
-      <button class="btn btnPrimary btnFull" type="submit">Request demo</button>
-      <div id="leadStatus" aria-live="polite"></div>
-    </form>
-  </div>
-</section>
-
-<footer class="footer">
-  <div class="container footerRow">
-    <small>© <span id="yr"></span> World Cup Concierge</small>
-    <small><a href="#screens">Product</a> · <a href="mailto:hello@worldcupconcierge.app">Contact</a></small>
-  </div>
-</footer>
-
-<div class="scrollCue" id="scrollCue" aria-hidden="true"></div>
-
-<!-- WHAT YOU’RE GETTING (GLASS MODAL) -->
-<div class="modalOverlay" id="whatModal" aria-hidden="true">
-  <div class="modalCard" role="dialog" aria-modal="true" aria-labelledby="whatTitle">
-    <div class="modalHeader">
-      <div class="modalTitle" id="whatTitle">What you’re getting</div>
-      <button class="iconBtn modalClose" type="button" id="whatClose" aria-label="Close">×</button>
-    </div>
-
-    <div class="modalBody">
-      <p>It’s a premium World Cup concierge app designed for fans and venues.</p>
-      <p>Fans can chat with an AI concierge to reserve tables, request VIP experiences, check match schedules, and join live fan zones.</p>
-      <p>Everything works across multiple venues, so each bar or lounge runs its own branded experience.</p>
-      <p>On the back end, owners and managers control reservations, rules, alerts, and AI automation from a secure admin dashboard.</p>
-      <p>The goal is to turn World Cup chaos into a smooth, high-end, managed experience for both fans and venues.</p>
-    </div>
-  </div>
-</div>
-
-<script defer src="app.js?v=4"></script>
-</body>
+    <script defer src="app.js?v=4"></script>
+  </body>
 </html>

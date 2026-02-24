@@ -1,8 +1,11 @@
 .env
 venv/
+data/
 __pycache__/
 *.pyc
 leads.csv
 google_creds.json
 *.zip
 app.zip
+node_modules/
+env/

@@ -1,4 +1,22 @@
 {
   "venue_id": "qa-sandbox",
-  "status": "active"
+  "status": "active",
+  "name": "QA Sandbox Venue",
+  "identity": {
+    "venue_name": "QA Sandbox Venue",
+    "location_line": "QA Sandbox • Internal Test Venue",
+    "greeting": "Hello! Welcome to QA Sandbox Venue! How can I assist you today?",
+    "business_profile": "BUSINESS NAME: QA Sandbox Venue\nADDRESS: QA test environment\nHOURS: Varies for internal testing\nPHONE: (000) 000-0000\n\nTONE:\nFriendly, clear, and QA-focused.\n\nIMPORTANT RULES:\n- This venue is for QA sandbox testing only.\n- Do not reference any real Dallas business.\n- Focus responses on demonstrating features and flows for testers."
+  },
+  "fan_zone": {
+    "poll_sponsor_text": "Mountain Dew",
+    "match_of_day_id": "",
+    "motd_home": "Mexico",
+    "motd_away": "South Africa",
+    "motd_datetime_utc": "2026-06-11T19:00:00Z",
+    "poll_lock_mode": "auto",
+    "ops_pause_reservations": "false",
+    "ops_vip_only": "false",
+    "ops_waitlist_mode": "false"
+  }
 }
