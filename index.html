@@ -909,281 +909,242 @@
         border: 0;
       }
 
-      /* ===== Intake modal + toast (kept; home only uses it) ===== */
-      body.modalOpen {
-        overflow: hidden;
-      }
+/* ===== MODAL & TOAST UPDATES ===== */
+body.modalOpen {
+  overflow: hidden;
+}
 
-      .toast {
-        position: fixed;
-        left: 50%;
-        transform: translateX(-50%);
-        bottom: calc(74px + env(safe-area-inset-bottom));
-        background: rgba(15, 27, 51, 0.92);
-        border: 1px solid rgba(255, 255, 255, 0.18);
-        color: rgba(234, 240, 255, 0.96);
-        padding: 10px 12px;
-        border-radius: 14px;
-        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
-        z-index: 60;
-        width: min(92%, 460px);
-        font-size: 13px;
-      }
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(74px + env(safe-area-inset-bottom));
+  background: rgba(15, 27, 51, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: rgba(234, 240, 255, 0.96);
+  padding: 10px 12px;
+  border-radius: 14px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+  z-index: 60;
+  width: min(92%, 460px);
+  font-size: 13px;
+}
 
-      .toast.hidden {
-        display: none;
-      }
+.toast.hidden {
+  display: none;
+}
 
-      .modal {
-        position: fixed;
-        inset: 0;
-        display: flex;
-        align-items: flex-start;
-        /* CHANGED */
-        justify-content: center;
-        background: rgba(0, 0, 0, 0.55);
-        z-index: 70;
-        padding: 18px;
+/* 1. Modal Overlay & Smooth Transitions */
+.modal {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 8, 16, 0.78) !important;
+  backdrop-filter: blur(12px) saturate(0.9) !important;
+  -webkit-backdrop-filter: blur(12px) saturate(0.9) !important;
+  z-index: 70;
+  padding: 18px;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
 
-        overflow-y: auto;
-        /* ADDED */
-      }
+.modal.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
 
-      .modal.hidden {
-        opacity: 0;
-        visibility: hidden;
-        pointer-events: none;
-      }
+.modal.hidden .modalCard {
+  transform: scale(0.95);
+}
 
-      /* =========================
-   MODAL CONTRAST FIX (v2)
-   - Stronger dark+blur scrim behind modal
-   - Modal card gets true opaque glass (~0.82) so fields pop
-   ========================= */
-      body.modalOpen {
-        overflow: hidden;
-      }
+/* 2. Modal Card Styling */
+.modalCard {
+  width: 100%;
+  max-width: 440px;
+  border-radius: 20px;
+  padding: 20px;
+  background: linear-gradient(
+    180deg,
+    rgba(30, 35, 45, 0.85),
+    rgba(20, 22, 28, 0.95)
+  );
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+  transform: scale(1);
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
 
-      /* 1. Modal Overlay - Centered with deep blur */
-      .modal {
-        position: fixed;
-        inset: 0;
-        display: flex;
-        align-items: center; /* Centers the modal vertically */
-        justify-content: center;
-        background: rgba(5, 8, 16, 0.78) !important;
-        backdrop-filter: blur(12px) saturate(0.9) !important;
-        -webkit-backdrop-filter: blur(12px) saturate(0.9) !important;
-        z-index: 70;
-        padding: 18px;
-        opacity: 1;
-        transition: opacity 0.3s ease;
-      }
+/* 3. Header & Typography */
+.modalHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
 
-      .modal.hidden .modalCard {
-        transform: scale(0.95);
-      }
+.modalHead h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: rgba(245, 248, 255, 0.95) !important;
+  letter-spacing: 0.02em;
+}
 
-      /* Inputs: slightly darker so text contrast stays crisp */
-      .modalBody input,
-      .modalBody select,
-      .modalBody textarea {
-        background: rgba(0, 0, 0, 0.34) !important;
-        border-color: rgba(255, 255, 255, 0.22) !important;
-        resize: vertical;
-        min-height: 84px;
-      }
+/* 4. Close Button */
+.iconBtn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid transparent;
+  color: #fff;
+  font-size: 18px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
 
-      /* Improve label + helper readability */
-      .modalHead h3 {
-        color: rgba(245, 248, 255, 0.95) !important;
-      }
+.iconBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  transform: rotate(90deg);
+}
 
-      /* Step 2: scroll inside the modal body */
-      .modalBody {
-        max-height: calc(100vh - 200px);
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-      }
-      .modalCard {
-        width: 100%;
-        max-width: 440px; /* Kept your preferred original width */
-        border-radius: 20px;
-        padding: 20px;
-        background: linear-gradient(
-          180deg,
-          rgba(30, 35, 45, 0.85),
-          rgba(20, 22, 28, 0.95)
-        );
-        border: 1px solid rgba(255, 255, 255, 0.15);
-        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
-        max-height: calc(100vh - 40px);
-        display: flex;
-        flex-direction: column;
-        transform: scale(1);
-        transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-      }
+.iconBtn:active {
+  transform: scale(0.95);
+}
 
-      /* 3. Modal Header & Typography */
-      .modalHead {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
-      }
+/* 5. Custom Scrollbar for Body */
+.modalBody {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 4px;
+}
 
-      .modalHead h3 {
-        margin: 0;
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: rgba(245, 248, 255, 0.95) !important;
-        letter-spacing: 0.02em;
-      }
+.modalBody::-webkit-scrollbar {
+  width: 6px;
+}
+.modalBody::-webkit-scrollbar-track {
+  background: transparent;
+}
+.modalBody::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+}
 
-      /* 4. Close Button Interactions */
-      .iconBtn {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid transparent;
-        color: #fff;
-        font-size: 18px;
-        width: 36px;
-        height: 36px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 50%;
-        cursor: pointer;
-        transition: all 0.2s ease;
-      }
+/* 6. Form Labels */
+.modalBody label {
+  display: block;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.95);
+  margin-top: 12px;
+  margin-bottom: 4px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
 
-      .iconBtn:hover {
-        background: rgba(255, 255, 255, 0.1);
-        transform: rotate(90deg); /* Subtle spin on hover */
-      }
+.modalBody label.required::after {
+  content: " *";
+  color: #d4af37;
+  font-weight: 900;
+}
 
-      .iconBtn:active {
-        transform: scale(0.95);
-      }
+/* 7. Inputs & Textareas */
+.modalBody input,
+.modalBody select,
+.modalBody textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 18px 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35) !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  color: #fff !important; /* Force white text */
+  font-size: 0.95rem;
+  outline: none;
+  transition: all 0.2s ease;
+  color-scheme: dark;
+}
 
-      /* 5. Modal Body & Custom Scrollbar */
-      .modalBody {
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-        padding-right: 4px; /* Prevents scrollbar from hugging the edge */
-      }
+/* FIX: Stop browser autofill from turning inputs bright white */
+.modalBody input:-webkit-autofill,
+.modalBody input:-webkit-autofill:hover, 
+.modalBody input:-webkit-autofill:focus, 
+.modalBody input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px #1a1d24 inset !important;
+    -webkit-text-fill-color: white !important;
+    transition: background-color 5000s ease-in-out 0s;
+}
 
-      .modalBody::-webkit-scrollbar {
-        width: 6px;
-      }
-      .modalBody::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      .modalBody::-webkit-scrollbar-thumb {
-        background: rgba(255, 255, 255, 0.2);
-        border-radius: 10px;
-      }
+.modalBody textarea {
+  resize: vertical;
+  min-height: 64px;
+}
 
-      /* 2. Tighter Labels for better vertical fit */
-      .modalBody label {
-        display: block;
-        font-size: 0.85rem;
-        color: rgba(255, 255, 255, 0.95); /* High visibility */
-        margin-top: 12px; /* Tighter gap above */
-        margin-bottom: 4px; /* Tighter gap below */
-        font-weight: 500;
-        letter-spacing: 0.3px;
-      }
+.modalBody input::placeholder,
+.modalBody textarea::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
 
-      .modalBody label.required::after {
-        content: " *";
-        color: #d4af37;
-        font-weight: 900;
-      }
+.modalBody input:focus,
+.modalBody select:focus,
+.modalBody textarea:focus {
+  border-color: rgba(212, 175, 55, 0.8) !important;
+  background: rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);
+}
 
-      /* 3. Inputs - Shorter height, tighter fit, original colors */
-      .modalBody input,
-      .modalBody select,
-      .modalBody textarea {
-        width: 100%;
-        box-sizing: border-box;
+/* Date/Time Icon Styling */
+.modalBody input[type="date"]::-webkit-calendar-picker-indicator,
+.modalBody input[type="time"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.6;
+  transition: all 0.2s ease;
+  padding: 4px;
+}
 
-        /* DECREASED PADDING: Makes the field height noticeably smaller */
-        padding: 10px 12px;
+.modalBody input[type="date"]::-webkit-calendar-picker-indicator:hover,
+.modalBody input[type="time"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  filter: drop-shadow(0 0 4px rgba(212, 175, 55, 0.6));
+}
 
-        border-radius: 10px; /* Slightly sharper corners fit shorter fields better */
+/* 8. Call to Action Button */
+.ctaBtn {
+  margin-top: 20px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(212, 175, 55, 0.6);
+  background: linear-gradient(
+    180deg,
+    rgba(212, 175, 55, 0.25),
+    rgba(212, 175, 55, 0.12)
+  );
+  color: #fff;
+  font-weight: 900;
+  width: 100%;
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
 
-        /* Restored your preferred original high-contrast colors */
-        background: rgba(0, 0, 0, 0.35) !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+.ctaBtn:active {
+  transform: scale(0.98);
+}
 
-        color: #fff;
-        font-size: 0.95rem;
-        outline: none;
-        transition: all 0.2s ease;
-      }
-
-      /* Shorter default textarea so it doesn't push other fields down */
-      .modalBody textarea {
-        resize: vertical;
-        min-height: 64px;
-      }
-
-      /* Brighter placeholders for better visibility */
-      .modalBody input::placeholder,
-      .modalBody textarea::placeholder {
-        color: rgba(255, 255, 255, 0.4);
-      }
-
-      /* 4. Focus State */
-      .modalBody input:focus,
-      .modalBody select:focus,
-      .modalBody textarea:focus {
-        border-color: rgba(212, 175, 55, 0.8) !important;
-        background: rgba(0, 0, 0, 0.5) !important;
-        box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);
-      }
-
-      /* 1. Force the browser to use Dark Mode for the input and popup */
-      .modalBody input[type="date"],
-      .modalBody input[type="time"] {
-        color-scheme: dark; /* This magically turns the icon white and makes the calendar popup dark! */
-      }
-
-      /* 2. Style the actual calendar/clock icon */
-      .modalBody input[type="date"]::-webkit-calendar-picker-indicator,
-      .modalBody input[type="time"]::-webkit-calendar-picker-indicator {
-        cursor: pointer;
-        opacity: 0.6; /* Soft white by default */
-        transition: all 0.2s ease;
-        padding: 4px; /* Makes the click area a bit larger and easier to tap */
-      }
-
-      /* 3. Add a premium hover effect to the icon */
-      .modalBody input[type="date"]::-webkit-calendar-picker-indicator:hover,
-      .modalBody input[type="time"]::-webkit-calendar-picker-indicator:hover {
-        opacity: 1; /* Brightens on hover */
-        /* Adds a very subtle gold glow behind the icon */
-        filter: drop-shadow(0 0 4px rgba(212, 175, 55, 0.6));
-      }
-
-      .ctaBtn {
-        margin-top: 12px;
-        padding: 12px 16px;
-        border-radius: 14px;
-        border: 1px solid rgba(212, 175, 55, 0.6);
-        background: linear-gradient(
-          180deg,
-          rgba(212, 175, 55, 0.25),
-          rgba(212, 175, 55, 0.12)
-        );
-        color: #fff;
-        font-weight: 900;
-        width: 100%;
-      }
-
-      .ctaBtn:active {
-        transform: translateY(1px);
-      }
+/* Info Hint Styling */
+.hint {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+  margin-top: 12px;
+}
 
       /* ===== HERO COUNTDOWN (ULTRA-TRANSPARENT GLASS) ===== */
       .heroCountdown {
