@@ -9302,9 +9302,13 @@ qsa('.tabbtn').forEach(btn=>{
 async function saveLead(sheetRow){
   const status = qs('#status-'+sheetRow).value;
   const vip = qs('#vip-'+sheetRow).value;
-  const res = await fetch('/admin/update-lead?key='+encodeURIComponent(KEY), {
+  const url = '/admin/update-lead?key='+encodeURIComponent(KEY)+(typeof VENUE !== 'undefined' && VENUE ? '&venue='+encodeURIComponent(VENUE) : '');
+  const res = await fetch(url, {
     method:'POST',
-    headers:{'Content-Type':'application/json'},
+    headers:{
+      'Content-Type':'application/json',
+      ...(typeof VENUE !== 'undefined' && VENUE ? {'X-Venue-Id': String(VENUE)} : {}),
+    },
     body: JSON.stringify({row: sheetRow, status, vip})
   });
   const j = await res.json().catch(()=>{});
@@ -9314,9 +9318,13 @@ async function saveLead(sheetRow){
 
 async function markHandled(sheetRow){
   // Minimal: set status to Handled + write an audit entry.
-  const res = await fetch('/admin/update-lead?key='+encodeURIComponent(KEY), {
+  const url = '/admin/update-lead?key='+encodeURIComponent(KEY)+(typeof VENUE !== 'undefined' && VENUE ? '&venue='+encodeURIComponent(VENUE) : '');
+  const res = await fetch(url, {
     method:'POST',
-    headers:{'Content-Type':'application/json'},
+    headers:{
+      'Content-Type':'application/json',
+      ...(typeof VENUE !== 'undefined' && VENUE ? {'X-Venue-Id': String(VENUE)} : {}),
+    },
     body: JSON.stringify({row: sheetRow, status: 'Handled'})
   });
   const j = await res.json().catch(()=>{});
