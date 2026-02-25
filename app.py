@@ -4005,26 +4005,35 @@ def want_reservation(text: str) -> bool:
 def extract_party_size(text: str) -> Optional[int]:
     """Extract party size from free text.
 
-    IMPORTANT: avoid mis-reading dates like 'June 13' as a party size.
-    We only accept a standalone number when the message does NOT look like a date/time.
+    IMPORTANT: avoid mis-reading dates like 'June 13' as a party size,
+    but still support natural phrases like 'party size is 6' or
+    '7 pm and party size is 6'.
     """
     raw = (text or "").strip()
     if not raw:
         return None
     t = raw.lower()
 
-    # Strong patterns
+    # Strong patterns first – these win even if the message also contains a time.
+    m = re.search(r"party\s*(?:size)?\s*(?:is|=|:)?\s*(\d+)", t)
+    if m:
+        return int(m.group(1))
     m = re.search(r"party\s*of\s*(\d+)", t)
     if m:
         return int(m.group(1))
-    m = re.search(r"table\s*of\s*(\d+)", t)
+    m = re.search(r"table\s*(?:for|of)?\s*(\d+)", t)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"\b(\d+)\s*(people|persons|guests|pax)\b", t)
     if m:
         return int(m.group(1))
     m = re.search(r"for\s*(\d+)\s*(people|persons|guests|pax)\b", t)
     if m:
         return int(m.group(1))
 
-    # If the text looks like a date or time, do not treat numbers as party size.
+    # If the text looks like a date or time and we didn't hit any of the
+    # strong patterns above, be conservative and avoid treating numbers as
+    # party size.
     months = [
         "january","jan","february","feb","march","mar","april","apr","may","june","jun","july","jul",
         "august","aug","september","sep","sept","october","oct","november","nov","december","dec",
@@ -4266,8 +4275,13 @@ def extract_name_candidate(text: str) -> Optional[str]:
     if not s:
         return None
 
+    # Drop obvious non-name filler words that can appear in mixed messages
+    stopwords = {"and", "is", "size", "the", "for", "of"}
+    parts = [p for p in s.split() if p.lower() not in stopwords]
+    if not parts:
+        return None
+
     # Take up to first 3 words as name (e.g., 'Jeff Smith')
-    parts = s.split()
     name = " ".join(parts[:3]).strip()
     if 1 <= len(name) <= 40:
         return name
@@ -5707,14 +5721,16 @@ def chat():
             if ph:
                 sess["lead"]["phone"] = ph
 
-            # Name extraction
-            if not sess["lead"].get("name"):
+            lead = sess["lead"]
+
+            # Name extraction – only once we already have date, time, and party_size.
+            if not lead.get("name") and lead.get("date") and lead.get("time") and lead.get("party_size"):
                 cand = extract_name_candidate(msg)
                 if cand:
-                    sess["lead"]["name"] = cand
+                    lead["name"] = cand
 
             # Apply business rules if we have enough to check
-            rule = apply_business_rules(sess["lead"])
+            rule = apply_business_rules(lead)
             if rule == "party":
                 sess["mode"] = "idle"
                 return jsonify({"reply": LANG[lang]["rule_party"], "rate_limit_remaining": remaining})
@@ -5723,7 +5739,6 @@ def chat():
                 return jsonify({"reply": LANG[lang]["rule_closed"], "rate_limit_remaining": remaining})
 
             # If complete, save + confirm
-            lead = sess["lead"]
             if lead.get("date") and lead.get("time") and lead.get("party_size") and lead.get("name") and lead.get("phone"):
                 ops2 = get_ops()
 
@@ -15381,18 +15396,26 @@ def extract_party_size(text: str) -> Optional[int]:
         return None
     t = raw.lower()
 
-    # Strong patterns
+    # Strong patterns first – these win even if the message also contains a time.
+    m = re.search(r"party\s*(?:size)?\s*(?:is|=|:)?\s*(\d+)", t)
+    if m:
+        return int(m.group(1))
     m = re.search(r"party\s*of\s*(\d+)", t)
     if m:
         return int(m.group(1))
-    m = re.search(r"table\s*of\s*(\d+)", t)
+    m = re.search(r"table\s*(?:for|of)?\s*(\d+)", t)
+    if m:
+        return int(m.group(1))
+    m = re.search(r"\b(\d+)\s*(people|persons|guests|pax)\b", t)
     if m:
         return int(m.group(1))
     m = re.search(r"for\s*(\d+)\s*(people|persons|guests|pax)\b", t)
     if m:
         return int(m.group(1))
 
-    # If the text looks like a date or time, do not treat numbers as party size.
+    # If the text looks like a date or time and we didn't hit any of the
+    # strong patterns above, be conservative and avoid treating numbers as
+    # party size.
     months = [
         "january","jan","february","feb","march","mar","april","apr","may","june","jun","july","jul",
         "august","aug","september","sep","sept","october","oct","november","nov","december","dec",
