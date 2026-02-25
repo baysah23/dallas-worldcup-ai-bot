@@ -4479,6 +4479,9 @@ FANZONE_ADMIN_HTML = r"""
   }
 
   let pollStatusTimer = null;
+  // Only prefill form fields once from live state; after that, auto-refresh
+  // must NOT overwrite any edits the admin is making.
+  let hasPrefilledFromPoll = false;
 
   async function loadPollStatus(){
     try{
@@ -4489,16 +4492,19 @@ FANZONE_ADMIN_HTML = r"""
         setPollStatus('<div class="sub">Poll status unavailable</div>');
         return;
       }
-
-      // Prefill fields from live poll state (best-effort); do not overwrite when user is typing (field focused)
-      try{
-        const sponsorEl = $("pollSponsorText");
-        if(sponsorEl && typeof data.sponsor_text === "string" && document.activeElement !== sponsorEl) sponsorEl.value = data.sponsor_text;
-        const m = data.match || {};
-        const motdHome = $("motdHome"); if(motdHome && m.home && document.activeElement !== motdHome) motdHome.value = m.home;
-        const motdAway = $("motdAway"); if(motdAway && m.away && document.activeElement !== motdAway) motdAway.value = m.away;
-        const motdKickoff = $("motdKickoff"); if(motdKickoff && (m.datetime_utc || m.kickoff) && document.activeElement !== motdKickoff) motdKickoff.value = (m.datetime_utc || m.kickoff);
-      }catch(e){}
+      // Prefill form fields only once on initial load so the 5s auto-refresh
+      // for poll status never clobbers in-progress edits to Match of the Day.
+      if(!hasPrefilledFromPoll){
+        hasPrefilledFromPoll = true;
+        try{
+          const sponsorEl = $("pollSponsorText");
+          if(sponsorEl && typeof data.sponsor_text === "string") sponsorEl.value = data.sponsor_text;
+          const m = data.match || {};
+          const motdHome = $("motdHome"); if(motdHome && m.home) motdHome.value = m.home;
+          const motdAway = $("motdAway"); if(motdAway && m.away) motdAway.value = m.away;
+          const motdKickoff = $("motdKickoff"); if(motdKickoff && (m.datetime_utc || m.kickoff)) motdKickoff.value = (m.datetime_utc || m.kickoff);
+        }catch(e){}
+      }
 
       const locked = !!data.locked;
       const title = (data.title || "Match of the Day Poll");
