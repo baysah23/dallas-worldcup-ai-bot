@@ -909,242 +909,248 @@
         border: 0;
       }
 
-/* ===== MODAL & TOAST UPDATES ===== */
-body.modalOpen {
-  overflow: hidden;
-}
+      /* ===== MODAL & TOAST UPDATES ===== */
+      body.modalOpen {
+        overflow: hidden;
+      }
 
-.toast {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(74px + env(safe-area-inset-bottom));
-  background: rgba(15, 27, 51, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: rgba(234, 240, 255, 0.96);
-  padding: 10px 12px;
-  border-radius: 14px;
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
-  z-index: 60;
-  width: min(92%, 460px);
-  font-size: 13px;
-}
+      .toast {
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: calc(74px + env(safe-area-inset-bottom));
+        background: rgba(15, 27, 51, 0.92);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        color: rgba(234, 240, 255, 0.96);
+        padding: 10px 12px;
+        border-radius: 14px;
+        box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+        z-index: 60;
+        width: min(92%, 460px);
+        font-size: 13px;
+      }
 
-.toast.hidden {
-  display: none;
-}
+      .toast.hidden {
+        display: none;
+      }
 
-/* 1. Modal Overlay & Smooth Transitions */
-.modal {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(5, 8, 16, 0.78) !important;
-  backdrop-filter: blur(12px) saturate(0.9) !important;
-  -webkit-backdrop-filter: blur(12px) saturate(0.9) !important;
-  z-index: 70;
-  padding: 18px;
-  opacity: 1;
-  transition: opacity 0.3s ease;
-}
+      /* 1. Modal Overlay & Smooth Transitions */
+      .modal {
+        /* margin-top:50px;
+        margin-bottom:50px; */
 
-.modal.hidden {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-}
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(5, 8, 16, 0.78) !important;
+        backdrop-filter: blur(12px) saturate(0.9) !important;
+        -webkit-backdrop-filter: blur(12px) saturate(0.9) !important;
+        z-index: 2000;
+        padding: 18px;
+        opacity: 1;
+        transition: opacity 0.3s ease;
+      }
 
-.modal.hidden .modalCard {
-  transform: scale(0.95);
-}
+      .modal.hidden {
+        /* margin-top:100px;
+        margin-bottom:50px; */
 
-/* 2. Modal Card Styling */
-.modalCard {
-  width: 100%;
-  max-width: 440px;
-  border-radius: 20px;
-  padding: 20px;
-  background: linear-gradient(
-    180deg,
-    rgba(30, 35, 45, 0.85),
-    rgba(20, 22, 28, 0.95)
-  );
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
-  max-height: calc(100vh - 40px);
-  display: flex;
-  flex-direction: column;
-  transform: scale(1);
-  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
 
-/* 3. Header & Typography */
-.modalHead {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
+      .modal.hidden .modalCard {
+        transform: scale(0.95);
+      }
 
-.modalHead h3 {
-  margin: 0;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: rgba(245, 248, 255, 0.95) !important;
-  letter-spacing: 0.02em;
-}
+      /* 2. Modal Card Styling */
+      .modalCard {
+        width: 100%;
+        max-width: 440px;
+        border-radius: 20px;
+        padding: 20px;
+        background: linear-gradient(
+          180deg,
+          rgba(30, 35, 45, 0.85),
+          rgba(20, 22, 28, 0.95)
+        );
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+        max-height: calc(100vh - 80px);
+        display: flex;
+        flex-direction: column;
+        transform: scale(1);
+        transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
 
-/* 4. Close Button */
-.iconBtn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid transparent;
-  color: #fff;
-  font-size: 18px;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
+      /* 3. Header & Typography */
+      .modalHead {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 5px;
+      }
 
-.iconBtn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  transform: rotate(90deg);
-}
+      .modalHead h3 {
+        margin: 0;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: rgba(245, 248, 255, 0.95) !important;
+        letter-spacing: 0.02em;
+      }
 
-.iconBtn:active {
-  transform: scale(0.95);
-}
+      /* 4. Close Button */
+      .iconBtn {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid transparent;
+        color: #fff;
+        font-size: 18px;
+        width: 36px;
+        height: 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
 
-/* 5. Custom Scrollbar for Body */
-.modalBody {
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  padding-right: 4px;
-}
+      .iconBtn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        transform: rotate(90deg);
+      }
 
-.modalBody::-webkit-scrollbar {
-  width: 6px;
-}
-.modalBody::-webkit-scrollbar-track {
-  background: transparent;
-}
-.modalBody::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 10px;
-}
+      .iconBtn:active {
+        transform: scale(0.95);
+      }
 
-/* 6. Form Labels */
-.modalBody label {
-  display: block;
-  font-size: 0.85rem;
-  color: rgba(255, 255, 255, 0.95);
-  margin-top: 12px;
-  margin-bottom: 4px;
-  font-weight: 500;
-  letter-spacing: 0.3px;
-}
+      /* 5. Custom Scrollbar for Body */
+      .modalBody {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-right: 4px;
+      }
 
-.modalBody label.required::after {
-  content: " *";
-  color: #d4af37;
-  font-weight: 900;
-}
+      .modalBody::-webkit-scrollbar {
+        width: 6px;
+      }
+      .modalBody::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .modalBody::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+      }
 
-/* 7. Inputs & Textareas */
-.modalBody input,
-.modalBody select,
-.modalBody textarea {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 18px 12px;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.35) !important;
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  color: #fff !important; /* Force white text */
-  font-size: 0.95rem;
-  outline: none;
-  transition: all 0.2s ease;
-  color-scheme: dark;
-}
+      /* 6. Form Labels */
+      .modalBody label {
+        display: block;
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.95);
+        margin-top: 12px;
+        margin-bottom: 4px;
+        font-weight: 500;
+        letter-spacing: 0.3px;
+      }
 
-/* FIX: Stop browser autofill from turning inputs bright white */
-.modalBody input:-webkit-autofill,
-.modalBody input:-webkit-autofill:hover, 
-.modalBody input:-webkit-autofill:focus, 
-.modalBody input:-webkit-autofill:active {
-    -webkit-box-shadow: 0 0 0 30px #1a1d24 inset !important;
-    -webkit-text-fill-color: white !important;
-    transition: background-color 5000s ease-in-out 0s;
-}
+      .modalBody label.required::after {
+        content: " *";
+        color: #d4af37;
+        font-weight: 900;
+      }
 
-.modalBody textarea {
-  resize: vertical;
-  min-height: 64px;
-}
+      /* 7. Inputs & Textareas */
+      .modalBody input,
+      .modalBody select,
+      .modalBody textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 18px 12px;
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.35) !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        color: #fff !important; /* Force white text */
+        font-size: 0.95rem;
+        outline: none;
+        transition: all 0.2s ease;
+        color-scheme: dark;
+      }
 
-.modalBody input::placeholder,
-.modalBody textarea::placeholder {
-  color: rgba(255, 255, 255, 0.4);
-}
+      /* FIX: Stop browser autofill from turning inputs bright white */
+      .modalBody input:-webkit-autofill,
+      .modalBody input:-webkit-autofill:hover,
+      .modalBody input:-webkit-autofill:focus,
+      .modalBody input:-webkit-autofill:active {
+        -webkit-box-shadow: 0 0 0 30px #1a1d24 inset !important;
+        -webkit-text-fill-color: white !important;
+        transition: background-color 5000s ease-in-out 0s;
+      }
 
-.modalBody input:focus,
-.modalBody select:focus,
-.modalBody textarea:focus {
-  border-color: rgba(212, 175, 55, 0.8) !important;
-  background: rgba(0, 0, 0, 0.5) !important;
-  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);
-}
+      .modalBody textarea {
+        resize: vertical;
+        min-height: 64px;
+      }
 
-/* Date/Time Icon Styling */
-.modalBody input[type="date"]::-webkit-calendar-picker-indicator,
-.modalBody input[type="time"]::-webkit-calendar-picker-indicator {
-  cursor: pointer;
-  opacity: 0.6;
-  transition: all 0.2s ease;
-  padding: 4px;
-}
+      .modalBody input::placeholder,
+      .modalBody textarea::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+      }
 
-.modalBody input[type="date"]::-webkit-calendar-picker-indicator:hover,
-.modalBody input[type="time"]::-webkit-calendar-picker-indicator:hover {
-  opacity: 1;
-  filter: drop-shadow(0 0 4px rgba(212, 175, 55, 0.6));
-}
+      .modalBody input:focus,
+      .modalBody select:focus,
+      .modalBody textarea:focus {
+        border-color: rgba(212, 175, 55, 0.8) !important;
+        background: rgba(0, 0, 0, 0.5) !important;
+        box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.15);
+      }
 
-/* 8. Call to Action Button */
-.ctaBtn {
-  margin-top: 20px;
-  padding: 12px 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(212, 175, 55, 0.6);
-  background: linear-gradient(
-    180deg,
-    rgba(212, 175, 55, 0.25),
-    rgba(212, 175, 55, 0.12)
-  );
-  color: #fff;
-  font-weight: 900;
-  width: 100%;
-  cursor: pointer;
-  transition: transform 0.1s ease;
-}
+      /* Date/Time Icon Styling */
+      .modalBody input[type="date"]::-webkit-calendar-picker-indicator,
+      .modalBody input[type="time"]::-webkit-calendar-picker-indicator {
+        cursor: pointer;
+        opacity: 0.6;
+        transition: all 0.2s ease;
+        padding: 4px;
+      }
 
-.ctaBtn:active {
-  transform: scale(0.98);
-}
+      .modalBody input[type="date"]::-webkit-calendar-picker-indicator:hover,
+      .modalBody input[type="time"]::-webkit-calendar-picker-indicator:hover {
+        opacity: 1;
+        filter: drop-shadow(0 0 4px rgba(212, 175, 55, 0.6));
+      }
 
-/* Info Hint Styling */
-.hint {
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.5);
-  text-align: center;
-  margin-top: 12px;
-}
+      /* 8. Call to Action Button */
+      .ctaBtn {
+        margin-top: 20px;
+        padding: 12px 16px;
+        border-radius: 14px;
+        border: 1px solid rgba(212, 175, 55, 0.6);
+        background: linear-gradient(
+          180deg,
+          rgba(212, 175, 55, 0.25),
+          rgba(212, 175, 55, 0.12)
+        );
+        color: #fff;
+        font-weight: 900;
+        width: 100%;
+        cursor: pointer;
+        transition: transform 0.1s ease;
+      }
+
+      .ctaBtn:active {
+        transform: scale(0.98);
+      }
+
+      /* Info Hint Styling */
+      .hint {
+        font-size: 0.8rem;
+        color: rgba(255, 255, 255, 0.5);
+        text-align: center;
+        margin-top: 12px;
+      }
 
       /* ===== HERO COUNTDOWN (ULTRA-TRANSPARENT GLASS) ===== */
       .heroCountdown {
@@ -4809,9 +4815,7 @@ body.modalOpen {
           /* Pro-tip: Lets users swipe the buttons horizontally if their screen is unimaginably small (like a Galaxy Fold front screen) without breaking your layout */
           overflow-x: auto;
           scrollbar-width: none; /* Hides scrollbar in Firefox */
-          
         }
-        
 
         #chatLangRow.segWrap::-webkit-scrollbar {
           display: none; /* Hides scrollbar in Chrome/Safari */
@@ -6805,7 +6809,7 @@ body.modalOpen {
 
         // Calculate exact distance from container's left edge to button's left edge
         // (Adding container.scrollLeft handles the invisible mobile scrolling!)
-        let offset = (btnRect.left - containerRect.left) + container.scrollLeft;
+        let offset = btnRect.left - containerRect.left + container.scrollLeft;
         const width = btnRect.width;
 
         // Apply exactly
@@ -6920,8 +6924,6 @@ body.modalOpen {
         }
       }
 
-      
-
       // Also add resize/orientation handler to keep bubble aligned
       window.addEventListener("resize", () => {
         const segWrap = document.querySelector(
@@ -6943,7 +6945,7 @@ body.modalOpen {
       }
 
       window.addEventListener("load", () => {
-        setLang("en"); 
+        setLang("en");
       });
 
       // ---------- scope (kept generic; no city/location) ----------
@@ -8376,7 +8378,7 @@ body.modalOpen {
         // state-derived UI
         setLang(state.lang);
         setScope(state.scope);
-        
+
         bindNav();
         bindHome();
         bindChat();
