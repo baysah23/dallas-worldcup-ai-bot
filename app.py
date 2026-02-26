@@ -2872,6 +2872,8 @@ def _require_admin(min_role: str = "manager"):
         g.admin_role = "owner"
         g.admin_actor = "owner:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:10]
         if _ROLE_RANK.get(g.admin_role, 0) >= _ROLE_RANK.get(min_role, 0):
+            if not _venue_is_active(_venue_id()):
+                return False, (jsonify({"ok": False, "error": "venue_inactive"}), 403)
             return True, None
         return False, (jsonify({"ok": False, "error": "forbidden"}), 403)
 
@@ -2903,6 +2905,8 @@ def _require_admin(min_role: str = "manager"):
 
         if getattr(g, "admin_role", None):
             if _ROLE_RANK.get(g.admin_role, 0) >= _ROLE_RANK.get(min_role, 0):
+                if not _venue_is_active(_venue_id()):
+                    return False, (jsonify({"ok": False, "error": "venue_inactive"}), 403)
                 return True, None
             return False, (jsonify({"ok": False, "error": "forbidden"}), 403)
     except Exception:
@@ -2921,6 +2925,8 @@ def _require_admin(min_role: str = "manager"):
     if _ROLE_RANK.get(g.admin_role, 0) < _ROLE_RANK.get(min_role, 0):
         return False, (jsonify({"ok": False, "error": "forbidden"}), 403)
 
+    if not _venue_is_active(_venue_id()):
+        return False, (jsonify({"ok": False, "error": "venue_inactive"}), 403)
     return True, None
 
 def _redis_runtime_status() -> Dict[str, Any]:
@@ -6616,6 +6622,29 @@ def api_poll_vote():
         pass
     return api_poll_state()
 
+def _update_venue_fan_zone(venue_id: str, pairs: Dict[str, str]) -> None:
+    """Write key/value pairs into the venue JSON under fan_zone. get_config() reads from fan_zone first, so ops must be persisted here for the admin UI to see them. Invalidates config cache for this venue."""
+    if not venue_id or not pairs:
+        return
+    try:
+        path = os.path.join(VENUES_DIR, f"{venue_id}.json")
+        if not os.path.exists(path):
+            return
+        with open(path, "r", encoding="utf-8") as f:
+            vcfg = json.load(f) or {}
+        vcfg.setdefault("fan_zone", {})
+        for k, v in pairs.items():
+            if str(k).startswith("_"):
+                continue
+            vcfg["fan_zone"][str(k)] = "" if v is None else str(v)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(vcfg, f, indent=2, ensure_ascii=False)
+        _invalidate_venues_cache()
+        _CONFIG_CACHE.pop(venue_id, None)
+    except Exception:
+        pass
+
+
 @app.route("/admin/update-config", methods=["POST"])
 def admin_update_config():
     ok, resp = _require_admin(min_role="manager")
@@ -6890,6 +6919,7 @@ def admin_api_ops():
         "ops_vip_only": _norm_bool(data.get("vip_only")),
         "ops_waitlist_mode": _norm_bool(data.get("waitlist_mode")),
     }
+    _update_venue_fan_zone(_venue_id(), pairs)
     cfg = set_config(pairs)
     _audit("ops.update", {"ops": get_ops(cfg)})
     meta = _last_audit_event("ops.update")
@@ -7685,7 +7715,7 @@ def admin_api_presets_apply():
     if not preset:
         return jsonify({"ok": False, "error": "Unknown preset"}), 400
 
-    # Apply Ops (manager allowed)
+    # Apply Ops (manager allowed). Persist to venue fan_zone first so get_config() sees them (it reads fan_zone before CONFIG_FILE).
     ops = preset.get("ops") or {}
     def _b(v):
         return "true" if bool(v) else "false"
@@ -7694,20 +7724,33 @@ def admin_api_presets_apply():
         "ops_vip_only": _b(ops.get("vip_only", False)),
         "ops_waitlist_mode": _b(ops.get("waitlist_mode", False)),
     }
+    _update_venue_fan_zone(_venue_id(), pairs)
     cfg = set_config(pairs)
 
     # Apply Rules (owner only)
     rules_patch = preset.get("rules") or {}
+    rules_applied = False
+    rules_error = ""
     if rules_patch:
         ok2, resp2 = _require_admin(min_role="owner")
-        if not ok2:
-            return resp2
-        global BUSINESS_RULES
-        BUSINESS_RULES = _deep_merge(BUSINESS_RULES, rules_patch)
-        _persist_rules(rules_patch)
+        if ok2:
+            global BUSINESS_RULES
+            BUSINESS_RULES = _deep_merge(BUSINESS_RULES, rules_patch)
+            _persist_rules(rules_patch)
+            rules_applied = True
+        else:
+            # Managers are allowed to apply Ops presets, but Rules patches require Owner.
+            rules_error = "owner_required"
 
     _audit("preset.apply", {"name": name, "ops": get_ops(cfg), "rules_patch": rules_patch})
-    return jsonify({"ok": True, "name": name, "ops": get_ops(cfg), "rules": BUSINESS_RULES})
+    return jsonify({
+        "ok": True,
+        "name": name,
+        "ops": get_ops(cfg),
+        "rules": BUSINESS_RULES,
+        "rules_applied": bool(rules_applied),
+        "rules_error": rules_error,
+    })
 
 
 @app.route("/admin/api/audit", methods=["GET"])
@@ -9683,7 +9726,11 @@ function _renderOpsMeta(meta){
 
 async function loadOps(){
   const msg = qs('#ops-msg'); if(msg) msg.textContent='Loading...';
-  const res = await fetch('/admin/api/ops?key='+encodeURIComponent(KEY));
+  let url = '/admin/api/ops?key='+encodeURIComponent(KEY);
+  if(VENUE) url += '&venue='+encodeURIComponent(VENUE);
+  const opts = {};
+  if(VENUE) opts.headers = {'X-Venue-Id': VENUE};
+  const res = await fetch(url, opts);
   const j = await res.json().catch(()=>null);
   if(!j || !j.ok){ if(msg) msg.textContent='Failed to load ops'; return; }
   try{ _renderOpsMeta(j.meta); }catch(e){}
@@ -9711,26 +9758,22 @@ async function saveOps(){
   if(elPause) elPause.disabled = true;
   if(elVip) elVip.disabled = true;
   if(elWait) elWait.disabled = true;
-  const res = await fetch('/admin/api/ops?key='+encodeURIComponent(KEY), {
+  let url = '/admin/api/ops?key='+encodeURIComponent(KEY);
+  if(VENUE) url += '&venue='+encodeURIComponent(VENUE);
+  const headers = {'Content-Type':'application/json'};
+  if(VENUE) headers['X-Venue-Id'] = VENUE;
+  const res = await fetch(url, {
     method:'POST',
-    headers:{'Content-Type':'application/json'},
+    headers,
     body: JSON.stringify(payload)
   });
   const j = await res.json().catch(()=>null);
   if(j && j.ok){ if(msg) msg.textContent='Saved ✔'; }
   else { if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }
+  try{ if(elPause) elPause.disabled = false; if(elVip) elVip.disabled = false; if(elWait) elWait.disabled = false; }catch(e){}
 }
 
-
-
 // ===== AI Automation =====
-  // Re-enable toggles after save attempt
-  try{
-    if(elPause) elPause.disabled = false;
-    if(elVip) elVip.disabled = false;
-    if(elWait) elWait.disabled = false;
-  }catch(e){}
-
 async function loadAI(){
   const msg = qs('#ai-msg'); if(msg) msg.textContent = '';
   try{
@@ -9813,14 +9856,23 @@ async function saveAI(){
 }
 async function applyPreset(name){
   const msg = qs('#preset-msg'); if(msg) msg.textContent='Applying "'+name+'" ...';
-  const res = await fetch('/admin/api/presets/apply?key='+encodeURIComponent(KEY), {
+  let url = '/admin/api/presets/apply?key='+encodeURIComponent(KEY);
+  if(VENUE) url += '&venue='+encodeURIComponent(VENUE);
+  const headers = {'Content-Type':'application/json'};
+  if(VENUE) headers['X-Venue-Id'] = VENUE;
+  const res = await fetch(url, {
     method:'POST',
-    headers:{'Content-Type':'application/json'},
+    headers,
     body: JSON.stringify({name})
   });
   const j = await res.json().catch(()=>null);
   if(j && j.ok){
     if(msg) msg.textContent='Applied ✔ (logged)';
+    // Update ops toggles immediately from response so presets visibly select the right options
+    const o = j.ops || {};
+    const pause = qs('#ops-pause'); if(pause) pause.checked = (o.pause_reservations===true || o.pause_reservations==='true');
+    const vip = qs('#ops-viponly'); if(vip) vip.checked = (o.vip_only===true || o.vip_only==='true');
+    const wl = qs('#ops-waitlist'); if(wl) wl.checked = (o.waitlist_mode===true || o.waitlist_mode==='true');
     await loadOps();
     // If you are owner and preset touched rules, refresh rules form for visibility.
     if(j.rules) await loadRules();
