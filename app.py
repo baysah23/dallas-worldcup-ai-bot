@@ -400,6 +400,147 @@ def public_wsgi_probe():
         "server_software": server_sw,
         "python": (os.environ.get("PYTHON_VERSION") or ""),
     })
+    
+# privacy page
+@app.get("/privacy")
+def privacy_policy():
+    html = """
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Privacy Policy — World Cup Concierge</title>
+  <style>
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0b1220;color:#e8eefc;}
+    .wrap{max-width:900px;margin:0 auto;padding:40px 18px;}
+    h1{font-size:28px;margin:0 0 10px;}
+    p,li{line-height:1.6;color:rgba(232,238,252,.9);}
+    .card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:18px;}
+    a{color:#b9c7ee;}
+    .muted{color:rgba(232,238,252,.75);font-size:13px;margin-top:18px;}
+    hr{border:0;border-top:1px solid rgba(255,255,255,.12);margin:14px 0;}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Privacy Policy</h1>
+    <div class="card">
+      <p><strong>World Cup Concierge</strong> collects personal information such as name, phone number, and email address when users voluntarily submit information through our website or applications.</p>
+
+      <p>Phone numbers are collected solely for transactional and operational purposes, including reservation confirmations, VIP status updates, system alerts, and customer support communications.</p>
+
+      <hr>
+
+      <p><strong>SMS Consent</strong></p>
+
+      <p>By providing your phone number and submitting a form on this website, you expressly consent to receive transactional SMS (text) messages from <strong>World Cup Concierge</strong>, operated by <strong>NYLA AI Solutions, LLC</strong>. Consent is not a condition of purchase.</p>
+
+      <p>SMS messages may include reservation confirmations, VIP status updates, operational alerts, and customer support notifications. Message and data rates may apply. Message frequency varies.</p>
+
+      <p>You may opt out of SMS communications at any time by replying <strong>STOP</strong>. For assistance, reply <strong>HELP</strong>.</p>
+
+      <p>We do not send marketing or promotional SMS messages, and we do not sell or share personal information with third parties for marketing purposes.</p>
+
+      <p>For questions about this policy, contact: <a href="mailto:admin@worldcupconcierge.app">admin@worldcupconcierge.app</a></p>
+
+      <p class="muted">World Cup Concierge is a product operated by NYLA AI Solutions, LLC.</p>
+
+      <div class="muted">Last updated: January 2026</div>
+    </div>
+  </div>
+</body>
+</html>
+"""
+    resp = make_response(html, 200)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
+
+
+
+
+
+
+@app.get("/terms")
+def terms_and_conditions():
+    html = """
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Terms & Conditions — World Cup Concierge</title>
+<style>
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#0b1220;color:#e8eefc;}
+.wrap{max-width:900px;margin:0 auto;padding:40px 18px;}
+h1{font-size:28px;margin:0 0 10px;}
+h2{margin-top:22px;font-size:18px;}
+p,li{line-height:1.6;color:rgba(232,238,252,.9);}
+.card{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:18px;}
+a{color:#b9c7ee;}
+.muted{color:rgba(232,238,252,.75);font-size:13px;margin-top:18px;}
+hr{border:0;border-top:1px solid rgba(255,255,255,.12);margin:14px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Terms & Conditions</h1>
+<div class="card">
+
+<p><strong>World Cup Concierge</strong> is operated by <strong>NYLA AI Solutions, LLC</strong>. By accessing or using our website, applications, or services, you agree to these Terms & Conditions.</p>
+
+<h2>1. Service Description</h2>
+<p>World Cup Concierge provides reservation coordination, VIP access management, waitlist handling, and operational messaging tools for venues and event operators.</p>
+
+<h2>2. User Responsibilities</h2>
+<ul>
+<li>You agree to provide accurate information when submitting reservation or contact forms.</li>
+<li>You agree not to misuse, disrupt, or attempt unauthorized access to the platform.</li>
+<li>You are responsible for maintaining the confidentiality of any access credentials.</li>
+</ul>
+
+<h2>3. SMS Communications</h2>
+<p>By submitting your phone number through our website or applications, you consent to receive transactional SMS messages related to reservations, VIP status updates, waitlist notifications, and operational alerts.</p>
+<p>Message frequency varies. Message and data rates may apply. Consent is not a condition of purchase.</p>
+<p>You may opt out at any time by replying <strong>STOP</strong>. For help, reply <strong>HELP</strong>.</p>
+<p>We do not send marketing or promotional SMS messages.</p>
+
+<h2>4. Reservation Disclaimer</h2>
+<p>Submission of a reservation request does not guarantee confirmation. Final approval is subject to venue availability and venue policies.</p>
+
+<h2>5. Limitation of Liability</h2>
+<p>NYLA AI Solutions, LLC is not liable for venue decisions, service disruptions, delays, or third-party platform failures. Services are provided “as is” without warranties of any kind.</p>
+
+<h2>6. Intellectual Property</h2>
+<p>All branding, content, software, and design elements are the property of NYLA AI Solutions, LLC and may not be copied or redistributed without written permission.</p>
+
+<h2>7. Privacy</h2>
+<p>Your use of the service is also governed by our Privacy Policy available at 
+<a href="/privacy">/privacy</a>.</p>
+
+<h2>8. Modifications</h2>
+<p>We reserve the right to update these Terms at any time. Continued use of the service constitutes acceptance of the revised Terms.</p>
+
+<h2>9. Governing Law</h2>
+<p>These Terms are governed by the laws of the State of Texas, United States.</p>
+
+<h2>10. Contact</h2>
+<p>For questions regarding these Terms, contact:
+<a href="mailto:support@worldcupconcierge.app">support@worldcupconcierge.app</a></p>
+
+<p class="muted">World Cup Concierge is a product operated by NYLA AI Solutions, LLC.</p>
+<div class="muted">Last updated: January 2026</div>
+
+</div>
+</div>
+</body>
+</html>
+"""
+    resp = make_response(html, 200)
+    resp.headers["Content-Type"] = "text/html; charset=utf-8"
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 @app.get("/_prod_gate")
 def public_prod_gate():
