@@ -1079,6 +1079,16 @@
         color-scheme: dark;
       }
 
+      /* iOS Safari: prevent auto-zoom on form focus by ensuring
+         modal inputs/textareas are at least 16px on touch devices. */
+      @supports (-webkit-touch-callout: none) {
+        .modalBody input,
+        .modalBody select,
+        .modalBody textarea {
+          font-size: 16px;
+        }
+      }
+
       /* FIX: Stop browser autofill from turning inputs bright white */
       .modalBody input:-webkit-autofill,
       .modalBody input:-webkit-autofill:hover,
