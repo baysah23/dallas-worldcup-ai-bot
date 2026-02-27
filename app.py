@@ -1246,14 +1246,30 @@ def _default_ai_settings() -> Dict[str, Any]:
         "updated_role": None,
     }
 
+# In-memory cache of last-loaded settings (per-process). Always treat as
+# per-request, per-venue via _get_ai_settings().
 AI_SETTINGS: Dict[str, Any] = _default_ai_settings()
+
+def _get_ai_settings() -> Dict[str, Any]:
+    """
+    Return AI settings for the current venue.
+
+    - Reads from AI_SETTINGS_FILE using _safe_read_json_file, which is already
+      venue-aware (via {venue} + Redis path map).
+    - Deep-merges on top of defaults so new fields appear automatically.
+    """
+    payload = _safe_read_json_file(AI_SETTINGS_FILE, default=None)
+    if isinstance(payload, dict) and payload:
+        return _deep_merge(_default_ai_settings(), payload)
+    return _default_ai_settings()
+
 
 def _ai_feature_allows(action_type: str, settings: Optional[Dict[str, Any]] = None) -> bool:
     """Secondary gates for AI actions (feature flags).
 
     Even if allow_actions permits an action, features can disable it for safe rollout.
     """
-    s = settings or AI_SETTINGS or {}
+    s = settings or _get_ai_settings() or {}
     feat = s.get("features") or {}
     at = (action_type or "").strip().lower()
     if at == "vip_tag":
@@ -1266,15 +1282,26 @@ def _ai_feature_allows(action_type: str, settings: Optional[Dict[str, Any]] = No
 
 
 def _load_ai_settings_from_disk() -> None:
+    """
+    Back-compat boot loader. Kept so existing code that inspects AI_SETTINGS
+    during startup has a sane default, but all runtime callers should prefer
+    _get_ai_settings() which is venue-aware.
+    """
     global AI_SETTINGS
-    payload = _safe_read_json_file(AI_SETTINGS_FILE)
-    if isinstance(payload, dict) and payload:
-        # merge so new defaults appear automatically
-        AI_SETTINGS = _deep_merge(_default_ai_settings(), payload)
+    AI_SETTINGS = _get_ai_settings()
 
 def _save_ai_settings_to_disk(patch: Dict[str, Any], actor: str, role: str) -> Dict[str, Any]:
+    """
+    Persist AI settings for the current venue.
+
+    - Loads current venue's settings.
+    - Deep-merges the patch.
+    - Stamps audit metadata.
+    - Writes back via _safe_write_json_file (Redis or disk, per-venue).
+    """
     global AI_SETTINGS
-    merged = _deep_merge(AI_SETTINGS, patch or {})
+    current = _get_ai_settings()
+    merged = _deep_merge(current, patch or {})
     merged["updated_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     merged["updated_by"] = actor
     merged["updated_role"] = role
@@ -1945,9 +1972,10 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
         return {"ok": False, "error": why_pol}
 
     # Feature flag gate (secondary to allow_actions)
-    if not _ai_feature_allows(typ):
+    settings = _get_ai_settings()
+    if not _ai_feature_allows(typ, settings=settings):
         return {"ok": False, "error": f"{typ} disabled by feature flag"}
-    allow = (AI_SETTINGS.get("allow_actions") or {})
+    allow = (settings.get("allow_actions") or {})
 
     # lead row reference (Google Sheet row number)
     row_num = int(payload.get("row") or payload.get("sheet_row") or 0)
@@ -2022,7 +2050,7 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[s
     Ask the model for suggested workflow actions for a new lead.
     Returns dict: {ok, confidence, actions:[{type,payload,reason}], notes}
     """
-    settings = AI_SETTINGS or {}
+    settings = _get_ai_settings()
     if not settings.get("enabled"):
         return {"ok": False, "error": "AI disabled"}
 
@@ -2124,7 +2152,7 @@ def _ai_enqueue_or_apply_for_new_lead(lead: Dict[str, Any], sheet_row: int) -> N
     Never raises.
     """
     try:
-        settings = AI_SETTINGS or {}
+        settings = _get_ai_settings()
         if not settings.get("enabled"):
             return
         mode = str(settings.get("mode") or "suggest").lower()
@@ -7089,7 +7117,8 @@ def admin_api_ai_settings():
 
     if request.method == "GET":
         try:
-            return jsonify({"ok": True, "role": role, "settings": AI_SETTINGS})
+            settings = _get_ai_settings()
+            return jsonify({"ok": True, "role": role, "settings": settings})
         except Exception as e:
             return jsonify({"ok": False, "error": str(e), "role": role, "settings": {}})
 
@@ -7108,6 +7137,7 @@ def admin_api_ai_settings():
             return default
 
     patch: Dict[str, Any] = {}
+    current = _get_ai_settings()
 
     # Always-allowed fields (manager+)
     if "enabled" in data:
@@ -7122,7 +7152,7 @@ def admin_api_ai_settings():
 
     # Managers can adjust confidence gate (safe)
     if "min_confidence" in data:
-        mc = as_float(data.get("min_confidence"), float(AI_SETTINGS.get("min_confidence") or 0.7))
+        mc = as_float(data.get("min_confidence"), float(current.get("min_confidence") or 0.7))
         mc = max(0.0, min(1.0, mc))
         patch["min_confidence"] = mc
 
@@ -7143,7 +7173,7 @@ def admin_api_ai_settings():
     # Owner-only advanced fields
     if role == "owner":
         if "model" in data:
-            patch["model"] = str(data.get("model") or "").strip() or AI_SETTINGS.get("model")
+            patch["model"] = str(data.get("model") or "").strip() or current.get("model")
         if "system_prompt" in data:
             sp = str(data.get("system_prompt") or "").strip()
             # Keep prompt bounded to avoid accidental huge payloads
@@ -7157,14 +7187,14 @@ def admin_api_ai_settings():
             for k in ("vip_tag", "status_update", "reply_draft", "send_sms", "send_email", "send_whatsapp"):
                 if k in data["allow_actions"]:
                     allow[k] = bool(as_bool(data["allow_actions"].get(k)))
-            patch["allow_actions"] = _deep_merge(AI_SETTINGS.get("allow_actions") or {}, allow)
+            patch["allow_actions"] = _deep_merge(current.get("allow_actions") or {}, allow)
 
         if "notify" in data and isinstance(data.get("notify"), dict):
             notify = {}
             for k in ("owner", "manager"):
                 if k in data["notify"]:
                     notify[k] = bool(as_bool(data["notify"].get(k)))
-            patch["notify"] = _deep_merge(AI_SETTINGS.get("notify") or {}, notify)
+            patch["notify"] = _deep_merge(current.get("notify") or {}, notify)
 
     # If manager tried to send advanced fields, ignore (do not error)
     settings = _save_ai_settings_to_disk(patch, actor=actor, role=role)
@@ -7539,11 +7569,9 @@ def admin_api_ai_queue_deny(qid: str):
     if str(it.get("status")) != "pending":
         return jsonify({"ok": False, "error": "Not pending"}), 400
 
-    it["status"] = "denied"
-    it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    it["reviewed_by"] = actor
-    it["reviewed_role"] = role
-    it["applied_result"] = None
+    # Spec: Deny = immediate removal (keeps pending clean)
+    item_type = it.get("type")
+    queue = [q for q in queue if str(q.get("id")) != str(qid)]
     _save_ai_queue(queue)
     _audit("ai.queue.deny", {"id": qid, "type": it.get("type")})
     _notify("ai.queue.deny", {"id": qid, "type": it.get("type"), "by": actor, "role": role}, targets=["owner","manager"])
@@ -7566,23 +7594,29 @@ def admin_api_ai_queue_approve(qid: str):
     if str(it.get("status")) != "pending":
         return jsonify({"ok": False, "error": "Not pending"}), 400
 
-    # If AI disabled, still allow approval but do not apply (acts like "reviewed")
-    applied = None
-
     it_type = str(it.get("type") or "").strip().lower()
+
     # Outbound sends are NEVER executed on approval. Approval only unlocks a human "Send Now" click.
+    applied = None
     if it_type in ("send_email", "send_sms", "send_whatsapp"):
         applied = {"ok": True, "note": "Approved — ready to send (human click required)"}
+        # Keep item in queue; just mark as approved/reviewed.
+        it["status"] = "approved"
+        it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        it["reviewed_by"] = actor
+        it["reviewed_role"] = role
+        it["applied_result"] = applied
     else:
-        if AI_SETTINGS.get("enabled") and (AI_SETTINGS.get("mode") in ("auto", "suggest", "off")):
-            # Always require explicit approval here (this endpoint *is* the approval)
+        # Non-outbound: apply then remove on success; keep on failure.
+        settings = _get_ai_settings()
+        if settings.get("enabled") and (settings.get("mode") in ("auto", "suggest", "off")):
             applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
+        # Success -> remove from queue; Failure -> keep (pending) with applied_result for debugging.
+        if applied and applied.get("ok"):
+            queue = [q for q in queue if str(q.get("id")) != str(qid)]
+        else:
+            it["applied_result"] = applied
 
-    it["status"] = "approved"
-    it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    it["reviewed_by"] = actor
-    it["reviewed_role"] = role
-    it["applied_result"] = applied
     _save_ai_queue(queue)
     _audit("ai.queue.approve", {"id": qid, "type": it.get("type"), "applied": bool(applied and applied.get("ok"))})
     _notify("ai.queue.approve", {"id": qid, "type": it.get("type"), "applied": bool(applied and applied.get("ok")), "by": actor, "role": role}, targets=["owner","manager"])
@@ -7628,14 +7662,19 @@ def admin_api_ai_queue_send(qid: str):
 
     # Execute send
     res = _outbound_send(it_type, payload)
-    it["sent_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    it["sent_by"] = actor
-    it["sent_role"] = role
-    it["send_result"] = res
-    _save_ai_queue(queue)
 
-    _audit("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": bool(res.get("ok")), "by": actor})
-    _notify("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": bool(res.get("ok")), "by": actor, "role": role}, targets=["owner","manager"])
+    ok_send = bool(res.get("ok"))
+    if ok_send:
+        # Spec: Send Now (outbound): removes only if send succeeds; keeps failures for retry.
+        queue = [q for q in queue if str(q.get("id")) != str(qid)]
+        _save_ai_queue(queue)
+    else:
+        # Keep item for retry; optionally attach last error for debugging.
+        it["send_result"] = res
+        _save_ai_queue(queue)
+
+    _audit("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": ok_send, "by": actor})
+    _notify("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": ok_send, "by": actor, "role": role}, targets=["owner","manager"])
     return jsonify({"ok": True, "result": res})
 
 
@@ -7660,15 +7699,17 @@ def admin_api_ai_queue_override(qid: str):
     # override payload/type (owner-only)
     if "type" in data:
         typ = str(data.get("type") or "").strip()
-        if typ not in ("vip_tag", "status_update", "reply_draft"):
+        if typ not in ("vip_tag", "status_update", "reply_draft", "send_email", "send_sms", "send_whatsapp"):
             return jsonify({"ok": False, "error": "Invalid type"}), 400
         it["type"] = typ
     if "payload" in data and isinstance(data.get("payload"), dict):
         it["payload"] = data.get("payload") or {}
 
-    # Apply immediately
+    # Apply immediately for non-outbound actions.
     applied = None
-    if AI_SETTINGS.get("enabled"):
+    it_type = str(it.get("type") or "").strip().lower()
+    settings = _get_ai_settings()
+    if settings.get("enabled") and it_type in ("vip_tag", "status_update", "reply_draft"):
         applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
 
     it["status"] = "approved"
@@ -10288,7 +10329,7 @@ async function aiqOverride(id, btn){
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Overriding…'; }
 
   // Owner-only: allow quick edit of payload/type before applying
-  const typ = prompt('Override action type (vip_tag, status_update, reply_draft):', 'vip_tag');
+  const typ = prompt('Override action type (vip_tag, status_update, reply_draft, send_email, send_sms, send_whatsapp):', 'vip_tag');
   if(!typ){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } return; }
   let payloadTxt = prompt('Override payload JSON (must be valid JSON object):', '{"row":2,"vip":"VIP"}');
   if(payloadTxt === null){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } return; }
