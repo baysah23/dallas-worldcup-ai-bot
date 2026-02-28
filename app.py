@@ -7569,8 +7569,7 @@ def admin_api_ai_queue_deny(qid: str):
     if str(it.get("status")) != "pending":
         return jsonify({"ok": False, "error": "Not pending"}), 400
 
-    # Spec: Deny = immediate removal (keeps pending clean)
-    item_type = it.get("type")
+    # Client spec: deny removes item from queue immediately (keeps queue clean), audits + notifies
     queue = [q for q in queue if str(q.get("id")) != str(qid)]
     _save_ai_queue(queue)
     _audit("ai.queue.deny", {"id": qid, "type": it.get("type")})
@@ -8913,7 +8912,7 @@ th{
     <div class="h2">AI Replay (Read-only)</div>
     <div class="small">Owner tool to re-run AI suggestions for a specific lead row without applying changes.</div>
     <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <input id="replay-row" class="pillselect" style="min-width:120px" placeholder="Row #" />
+      <input id="replay-row" class="pillselect" type="number" min="2" style="min-width:120px" placeholder="Row #" />
       <button class="btn2" type="button" onclick="replayAI()">Replay</button>
       <span id="replay-msg" class="note"></span>
     </div>
@@ -8936,7 +8935,6 @@ th{
         <option value="">All</option>
         <option value="pending">Pending</option>
         <option value="approved">Approved</option>
-        <option value="denied">Denied</option>
       </select>
       <span id="aiq-msg" class="note"></span>
     </div>
@@ -11057,13 +11055,10 @@ def admin_api_ai_replay():
         q = _load_ai_queue()
         related = []
         for it in q:
-            acts = it.get("actions") or []
-            if isinstance(acts, list):
-                for a in acts:
-                    prow = (a.get("payload") or {}).get("row")
-                    if str(prow) == str(row_num):
-                        related.append(it)
-                        break
+            payload = it.get("payload") or {}
+            prow = payload.get("row") or payload.get("sheet_row")
+            if prow is not None and str(prow) == str(row_num):
+                related.append(it)
             if len(related) >= 5:
                 break
 
@@ -11405,9 +11400,9 @@ async function replayAI(){
   const msg = qs('#replay-msg'); if(msg) msg.textContent = 'Replaying…';
   const out = qs('#replayOut'); if(out) out.textContent = '';
   const row = parseInt(qs('#replay-row')?.value || '0', 10);
-  if(!row){ if(msg) msg.textContent = 'Enter a sheet row #'; return; }
+  if(!row || row < 2){ if(msg) msg.textContent = 'Enter a valid sheet row # (≥2)'; return; }
   try{
-    const r = await fetch(`/admin/api/ai/replay?key=${encodeURIComponent(KEY)}`, {
+    const r = await fetch(`/admin/api/ai/replay?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({row})
