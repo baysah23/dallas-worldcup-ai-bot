@@ -677,6 +677,7 @@
         display: flex;
         gap: 10px;
         align-items: center;
+        flex-wrap: wrap;
         margin-top: 10px;
         padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
         border-radius: 18px;
@@ -685,10 +686,13 @@
         -webkit-backdrop-filter: blur(18px) saturate(1.35);
         backdrop-filter: blur(18px) saturate(1.35);
         box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
       }
 
       #msg {
         flex: 1 1 auto;
+        min-width: 0;
         height: 46px;
         padding: 0 14px;
         border-radius: 16px;
@@ -712,6 +716,7 @@
 
       #sendBtn,
       #btnClear {
+        flex-shrink: 0;
         height: 44px;
         padding: 0 14px;
         border-radius: 16px;
@@ -741,6 +746,7 @@
       #btnClear {
         background: rgba(255, 255, 255, 0.06);
         color: rgba(234, 240, 255, 0.92);
+        margin-left: auto;
       }
 
       #sendBtn:active,
@@ -926,9 +932,10 @@
         overflow: hidden;
         overscroll-behavior: none;
         -webkit-overflow-scrolling: auto;
-        /* Prevent iOS bounce/scroll behind modal so it doesn't feel "floating" */
+        /* Safari: use svh when available (avoids address bar/keyboard viewport jitter) */
         height: 100%;
         height: 100dvh;
+        height: 100svh;
       }
 
       .toast {
@@ -951,16 +958,14 @@
         display: none;
       }
 
-      /* 1. Modal Overlay & Smooth Transitions — Safari mobile: no scroll, no "floating" */
+      /* 1. Modal Overlay — Safari: use inset, allow scroll, no touch-action lock */
       .modal {
         position: fixed;
-        left: 0;
-        top: 0;
-        right: 0;
-        bottom: 0;
+        inset: 0;
         width: 100%;
         min-height: 100vh;
         min-height: 100dvh;
+        min-height: 100svh;
         box-sizing: border-box;
         display: flex;
         align-items: center;
@@ -973,8 +978,11 @@
           max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
         opacity: 1;
         transition: opacity 0.3s ease;
-        overflow: hidden;
-        touch-action: none;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
       }
 
       .modal.hidden {
@@ -990,11 +998,11 @@
         transform: scale(0.95);
       }
 
-      /* 2. Modal Card Styling — contained in viewport, no cut-off on Safari mobile */
+      /* 2. Modal Card — simplified max-height for Safari keyboard; no horizontal drag */
       .modalCard {
         box-sizing: border-box;
         width: 100%;
-        max-width: min(440px, 100%);
+        max-width: min(440px, calc(100% - 36px));
         min-width: 0;
         flex-shrink: 0;
         align-self: center;
@@ -1008,13 +1016,49 @@
         );
         border: 1px solid rgba(255, 255, 255, 0.15);
         box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
-        max-height: min(calc(100vh - 80px), calc(100dvh - 80px));
+        max-height: 85vh;
+        max-height: min(85vh, 85dvh);
         display: flex;
         flex-direction: column;
         transform: scale(1);
         transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
         overflow: hidden;
         touch-action: pan-y;
+        -webkit-transform: translateZ(0);
+      }
+
+      /* 2b. iPhone Safari: modal nearly full-screen, anchored — no float/swim */
+      @media (max-width: 540px) {
+        .modal {
+          padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+            max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+          align-items: stretch;
+          justify-content: center;
+        }
+        .modalCard {
+          width: 100%;
+          max-width: none;
+          max-height: 90vh;
+          max-height: min(90vh, 90dvh);
+          min-height: min(320px, 70svh);
+          margin: auto 0;
+          padding: 16px;
+        }
+      }
+
+      /* 2c. Safari-only: fix viewport containment */
+      @supports (-webkit-touch-callout: none) {
+        .modal {
+          min-height: -webkit-fill-available;
+        }
+        .modalCard {
+          max-height: min(88vh, 88dvh);
+        }
+        @media (max-width: 540px) {
+          .modalCard {
+            min-height: min(320px, 65svh);
+          }
+        }
       }
 
       /* 3. Header & Typography */
@@ -1023,6 +1067,7 @@
         justify-content: space-between;
         align-items: center;
         margin-bottom: 5px;
+        flex-shrink: 0;
       }
 
       .modalHead h3 {
@@ -1060,6 +1105,10 @@
 
       /* 5. Custom Scrollbar for Body */
       .modalBody {
+        flex: 1 1 0;
+        min-height: 0;
+        min-width: 0;
+        overflow-x: hidden;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
         padding-right: 4px;
@@ -1098,6 +1147,7 @@
       .modalBody select,
       .modalBody textarea {
         width: 100%;
+        max-width: 100%;
         box-sizing: border-box;
         padding: 18px 12px;
         border-radius: 10px;
@@ -4631,11 +4681,16 @@
           display: flex;
           align-items: center;
           gap: 8px;
-          flex-wrap: nowrap;
+          flex-wrap: wrap;
           padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
           margin: 10px -14px -16px;
           border-radius: 0 0 18px 18px;
           box-sizing: border-box;
+        }
+
+        /* Mobile: input full width, Send + Clear side-by-side below */
+        #sec-chat .chatInputRow #msg {
+          flex: 1 1 100%;
         }
 
         #msg {
@@ -4883,8 +4938,13 @@
           display: flex;
           align-items: center;
           gap: 6px;
-          flex-wrap: nowrap;
+          flex-wrap: wrap;
           padding: 10px;
+        }
+
+        /* Intentional two-row layout: input full width, then Send + Clear side-by-side */
+        #sec-chat .chatInputRow #msg {
+          flex: 1 1 100%;
         }
 
         .hint {
@@ -4912,6 +4972,13 @@
         #chatLangRow .segBtn {
           padding: 5px 6px;
           font-size: 9px;
+        }
+
+        /* Tighter chat input buttons so Send + Clear stay visible */
+        #sendBtn,
+        #btnClear {
+          padding: 0 10px;
+          font-size: 13px;
         }
       }
 
