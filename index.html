@@ -997,8 +997,6 @@
       .modal.hidden .modalCard {
         transform: scale(0.95);
       }
-
-      /* 2. Modal Card — simplified max-height for Safari keyboard; no horizontal drag */
       .modalCard {
         box-sizing: border-box;
         width: 100%;
@@ -1016,8 +1014,8 @@
         );
         border: 1px solid rgba(255, 255, 255, 0.15);
         box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
-        max-height: 98vh;
-        max-height: min(98vh, 98dvh);
+        max-height: 100vh;
+        max-height: min(100vh, 100dvh);
         display: flex;
         flex-direction: column;
         transform: scale(1);
@@ -1027,7 +1025,7 @@
         -webkit-transform: translateZ(0);
       }
 
-      /* 2b. iPhone Safari: modal nearly full-screen, anchored — no float/swim */
+      /* 2b. Mobile: full height, same Safari-safe structure */
       @media (max-width: 540px) {
         .modal {
           padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
@@ -1038,25 +1036,25 @@
         .modalCard {
           width: 100%;
           max-width: none;
-          max-height: 99vh;
-          max-height: min(99vh, 99dvh);
-          min-height: min(520px, 88svh);
+          max-height: 100vh;
+          max-height: min(100vh, 100dvh);
+          min-height: min(640px, 98svh);
           margin: auto 0;
           padding: 16px;
         }
       }
 
-      /* 2c. Safari-only: fix viewport containment */
+      /* 2c. Safari-only: viewport containment, same overflow/touch fixes */
       @supports (-webkit-touch-callout: none) {
         .modal {
           min-height: -webkit-fill-available;
         }
         .modalCard {
-          max-height: min(98vh, 98dvh);
+          max-height: min(100vh, 100dvh);
         }
         @media (max-width: 540px) {
           .modalCard {
-            min-height: min(480px, 85svh);
+            min-height: min(600px, 96svh);
           }
         }
       }

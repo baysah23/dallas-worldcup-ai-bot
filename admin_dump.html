@@ -489,13 +489,19 @@ th{
 <div id="tab-aiq" class="tabpane hidden">
   <div class="card">
     <div class="h2">AI Approval Queue</div>
-    <div class="small">Proposed AI actions wait here for <b>Approve</b>, <b>Deny</b>, or <b>Owner Override</b>. This keeps automation powerful but controlled.</div>
+    <div class="small">
+      Proposed AI actions wait here for <b>Approve</b>, <b>Deny</b>, or <b>Owner Override</b>.
+      <br/>
+      <b>Run AI (New)</b> analyzes the newest leads whose sheet status matches your AI settings
+      (e.g. “New”) and adds proposals here. <b>Run AI (Row)</b> analyzes only the specific row
+      you enter and adds proposals for that one lead.
+    </div>
     <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <button class="btn2" onclick="loadAIQueue()">Refresh</button>
       <span class="note" style="opacity:.6">|</span>
-      <input id="ai-run-limit" class="inp" type="number" min="1" max="25" step="1" value="5" style="max-width:90px" title="How many newest New leads to analyze" />
+      <input id="ai-run-limit" class="inp" type="number" min="1" max="25" step="1" value="5" style="max-width:90px" title="How many newest eligible leads to analyze (per AI settings)" />
       <button class="btn2" onclick="runAINew()">Run AI (New)</button>
-      <input id="ai-run-row" class="inp" type="number" min="2" step="1" placeholder="Row #" style="max-width:110px" title="Run AI for a specific Google Sheet row number" />
+      <input id="ai-run-row" class="inp" type="number" min="2" step="1" placeholder="Row #" style="max-width:110px" title="Run AI for a specific Google Sheet row number (one lead only)" />
       <button class="btn2" onclick="runAIRow()">Run AI (Row)</button>
 
       <select id="aiq-filter" class="inp" style="max-width:180px" onchange="loadAIQueue()">

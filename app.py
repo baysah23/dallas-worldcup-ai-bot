@@ -1235,6 +1235,9 @@ def _default_ai_settings() -> Dict[str, Any]:
             "send_email": False,
             "send_whatsapp": False,
         },
+        # Which sheet status values count as "new" for Run AI (New).
+        # Per-venue overrides can set `new_status_values` in AI settings.
+        "new_status_values": ["new", ""],
         # Feature gates (safe rollout). These further restrict what AI can do, even if allow_actions is true.
         "features": {
             "auto_vip_tag": True,
@@ -7241,6 +7244,17 @@ def admin_api_ai_run():
     except Exception:
         row_num = 0
 
+    # Per-venue AI settings (used for selecting which statuses count as "new")
+    ai_settings = _get_ai_settings()
+    raw_new_statuses = ai_settings.get("new_status_values")
+    if isinstance(raw_new_statuses, list) and raw_new_statuses:
+        new_status_values = {
+            str(v or "").strip().lower() for v in raw_new_statuses
+        }
+    else:
+        # Back-compat: default to historical behavior
+        new_status_values = {"new", ""}
+
     # Load sheet (best-effort). If Sheets isn't configured, return a friendly error.
     try:
         gc = get_gspread_client()
@@ -7275,8 +7289,41 @@ def admin_api_ai_run():
             "status": get("status"),
             "vip": get("vip"),
         }
-        # Normalize vip to bool-ish for the AI prompt
-        lead["vip"] = str(lead.get("vip") or "").strip().lower() in ["1","true","yes","y"]
+        # Normalize vip to bool-ish for downstream policy + prompts
+        lead["vip"] = str(lead.get("vip") or "").strip().lower() in ["1", "true", "yes", "y"]
+
+        # Populate generic AI prompt fields so _ai_build_lead_prompt sees rich context.
+        # These mirror the mapping used by /admin/api/ai/replay and lead intake.
+        if not lead.get("intent"):
+            # Prefer explicit intent/entry_point/queue-like signals.
+            intent_parts = []
+            ep = (lead.get("entry_point") or "").strip()
+            if ep:
+                intent_parts.append(ep)
+            q = (lead.get("queue") or "").strip()
+            if q:
+                intent_parts.append(q)
+            lead["intent"] = " / ".join(intent_parts)[:200]
+
+        if not lead.get("contact"):
+            # Combine human-readable name + primary contact channel.
+            name = (lead.get("name") or "").strip()
+            phone = (lead.get("phone") or "").strip()
+            email = (lead.get("email") or "").strip()
+            contact = (f"{name} {phone}".strip() or email).strip()
+            lead["contact"] = contact
+
+        if not lead.get("datetime"):
+            # Fold date + time into a single string, as used elsewhere.
+            dt = " ".join(
+                part for part in [(lead.get("date") or "").strip(), (lead.get("time") or "").strip()] if part
+            ).strip()
+            lead["datetime"] = dt
+
+        if not lead.get("lang"):
+            # Mirror "language" into the generic lang field when present.
+            lead["lang"] = (lead.get("language") or "").strip()
+
         return lead
 
     targets = []
@@ -7296,18 +7343,22 @@ def admin_api_ai_run():
         if not rows or len(rows) < 2:
             return jsonify({"ok": True, "ran": 0, "proposed": 0, "queue_ids": []})
 
-        status_col = hmap.get("status")  # 1-based
-        # Walk from bottom (newest) upward, collect "New"
-        for i in range(len(rows)-1, 0, -1):
+        status_col = hmap.get("status")  # 1-based, optional
+        # Walk from bottom (newest) upward, collect rows whose status is in the
+        # configurable "new_status_values" list. If there is no status column,
+        # treat all rows as eligible and rely on limit for bounding.
+        for i in range(len(rows) - 1, 0, -1):
             if len(targets) >= limit:
                 break
             rv = rows[i]
-            st = ""
-            if status_col and (status_col-1) < len(rv):
-                st = (rv[status_col-1] or "").strip().lower()
-            if st in ["new", ""]:
-                sheet_row = i + 1  # rows includes header at index 0
-                targets.append((sheet_row, _lead_from_row(rv)))
+            if status_col:
+                st = ""
+                if (status_col - 1) < len(rv):
+                    st = (rv[status_col - 1] or "").strip().lower()
+                if st not in new_status_values:
+                    continue
+            sheet_row = i + 1  # rows includes header at index 0
+            targets.append((sheet_row, _lead_from_row(rv)))
 
     proposed_ids = []
     ran = 0
