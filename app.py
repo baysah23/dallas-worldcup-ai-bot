@@ -245,6 +245,8 @@ def _append_reservation_local(lead: dict, reservation_id: Optional[str] = None) 
         row = {
             "reservation_id": rid,
             "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            # Per-venue isolation: tag each local reservation with its venue_id.
+            "venue_id": _venue_id(),
             "name": lead.get("name", ""),
             "phone": lead.get("phone", ""),
             "date": lead.get("date", ""),
@@ -265,6 +267,11 @@ def _get_reservation_by_id(reservation_id: str) -> Optional[Dict[str, Any]]:
     rid = (reservation_id or "").strip().upper()
     if not rid:
         return None
+    # Current venue context (used for isolation across venues)
+    try:
+        current_vid = _slugify_venue_id(_venue_id())
+    except Exception:
+        current_vid = DEFAULT_VENUE_ID
     # Normalize: allow "WC-abc123" or "abc123"
     if not rid.startswith("WC-"):
         rid = "WC-" + rid
@@ -279,24 +286,35 @@ def _get_reservation_by_id(reservation_id: str) -> Optional[Dict[str, Any]]:
                         continue
                     try:
                         row = json.loads(line)
-                        if (row.get("reservation_id") or "").strip().upper() == rid:
-                            return row
+                        if (row.get("reservation_id") or "").strip().upper() != rid:
+                            continue
+                        row_vid = _slugify_venue_id(str(row.get("venue_id") or DEFAULT_VENUE_ID))
+                        if row_vid != current_vid:
+                            continue
+                        return row
                     except Exception:
                         continue
     except Exception:
         pass
     # 2) Google Sheets (if configured)
     try:
-        gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        # Use the same venue-scoped worksheet as the Admin Leads view.
+        ws = get_sheet()
         header = (ws.row_values(1) or [])
         hnorm = [_normalize_header(h) for h in header]
         if "reservation_id" not in hnorm:
             return None
         col = hnorm.index("reservation_id") + 1
+        vcol = None
+        if "venue_id" in hnorm:
+            vcol = hnorm.index("venue_id") + 1
         rows = ws.get_all_values() or []
         for r in rows[1:]:
             if len(r) >= col and (r[col - 1] or "").strip().upper() == rid:
+                if vcol and vcol - 1 < len(r):
+                    row_vid = _slugify_venue_id(str(r[vcol - 1] or DEFAULT_VENUE_ID))
+                    if row_vid != current_vid:
+                        continue
                 out = {}
                 for i, h in enumerate(header):
                     if i < len(r):
@@ -4024,7 +4042,26 @@ def ensure_sheet_schema(ws) -> List[str]:
     Make sure row 1 is the header and includes the CRM columns we need.
     Returns the final header list (as stored in the sheet).
     """
-    desired = ["timestamp", "reservation_id", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier", "queue", "business_context", "budget", "notes", "vibe"]
+    desired = [
+        "timestamp",
+        "reservation_id",
+        "venue_id",
+        "name",
+        "phone",
+        "date",
+        "time",
+        "party_size",
+        "language",
+        "status",
+        "vip",
+        "entry_point",
+        "tier",
+        "queue",
+        "business_context",
+        "budget",
+        "notes",
+        "vibe",
+    ]
 
     existing = ws.row_values(1) or []
     existing_norm = [_normalize_header(x) for x in existing]
@@ -4061,8 +4098,10 @@ def header_map(header: List[str]) -> Dict[str, int]:
 
 
 def append_lead_to_sheet(lead: Dict[str, Any]):
-    gc = get_gspread_client()
-    ws = _open_default_spreadsheet(gc).sheet1
+    # Write leads into the current venue's worksheet, with an explicit venue_id column
+    # so multi-venue deployments remain isolated even when sharing a spreadsheet.
+    vid = _venue_id()
+    ws = get_sheet(venue_id=vid)
 
     header = ensure_sheet_schema(ws)
     hmap = header_map(header)
@@ -4080,6 +4119,7 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
 
     setv("timestamp", datetime.now().isoformat(timespec="seconds"))
     setv("reservation_id", (lead.get("reservation_id") or "").strip())
+    setv("venue_id", vid)
     setv("name", lead.get("name", ""))
     setv("phone", lead.get("phone", ""))
     setv("date", lead.get("date", ""))
@@ -4088,13 +4128,13 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
     setv("language", lead.get("language", "en"))
     setv("status", status)
     setv("vip", vip)
-    setv("entry_point", lead.get("entry_point",""))
-    setv("tier", lead.get("tier",""))
-    setv("queue", lead.get("queue",""))
-    setv("business_context", lead.get("business_context",""))
-    setv("budget", lead.get("budget",""))
-    setv("notes", lead.get("notes",""))
-    setv("vibe", lead.get("vibe",""))
+    setv("entry_point", lead.get("entry_point", ""))
+    setv("tier", lead.get("tier", ""))
+    setv("queue", lead.get("queue", ""))
+    setv("business_context", lead.get("business_context", ""))
+    setv("budget", lead.get("budget", ""))
+    setv("notes", lead.get("notes", ""))
+    setv("vibe", lead.get("vibe", ""))
 
     # Append at bottom (keeps headers at the top)
     ws.append_row(row, value_input_option="USER_ENTERED")
@@ -4119,6 +4159,24 @@ def read_leads(limit: int = 200, venue_id: Optional[str] = None) -> List[List[st
     try:
         ws = get_sheet(venue_id=vid)  # uses venue sheet_name when present
         rows = ws.get_all_values() or []
+
+        # Optional per-row venue isolation when sharing a sheet:
+        # if a "venue_id" column exists, keep only rows matching the current venue.
+        if rows and len(rows) > 1:
+            header = rows[0]
+            hmap = header_map(header)
+            vcol = hmap.get("venue_id")
+            if vcol:
+                body = rows[1:]
+                kept = []
+                for r in body:
+                    if not isinstance(r, list) or len(r) < vcol:
+                        continue
+                    row_vid = _slugify_venue_id(str(r[vcol - 1] or DEFAULT_VENUE_ID))
+                    if row_vid == vid:
+                        kept.append(r)
+                rows = [header] + kept
+
         # cache regardless; even empty is useful to avoid hammering
         _LEADS_CACHE_BY_VENUE[vid] = {"ts": now, "rows": rows}
         return rows[:limit] if limit else rows

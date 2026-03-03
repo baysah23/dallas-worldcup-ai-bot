@@ -1103,13 +1103,33 @@
 
       /* 5. Custom Scrollbar for Body */
       .modalBody {
-        flex: 1 1 0;
-        min-height: 0;
-        min-width: 0;
+        /* Let content define height; scroll only when needed */
         overflow-x: hidden;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
         padding-right: 4px;
+      }
+
+      .modalBody .fieldGroup {
+        display: flex;
+        flex-direction: column;
+      }
+
+      @media (min-width: 900px) {
+        .modalCard {
+          max-width: 640px;
+        }
+
+        .modalBody {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          column-gap: 18px;
+          row-gap: 8px;
+        }
+
+        .modalBody .fieldGroup.fieldGroup--full {
+          grid-column: 1 / -1;
+        }
       }
 
       .modalBody::-webkit-scrollbar {
@@ -6487,55 +6507,75 @@
           </button>
         </div>
         <div class="modalBody">
-          <label for="iCity">Business context (optional)</label>
-          <input
-            id="iCity"
-            placeholder="e.g., client name, suite name, or event context (optional)"
-          />
+          <div class="fieldGroup fieldGroup--full">
+            <label for="iCity">Business context (optional)</label>
+            <input
+              id="iCity"
+              placeholder="e.g., client name, suite name, or event context (optional)"
+            />
+          </div>
 
-          <label class="required" for="iName">Name</label>
-          <input id="iName" placeholder="Guest name" />
+          <div class="fieldGroup">
+            <label class="required" for="iName">Name</label>
+            <input id="iName" placeholder="Guest name" />
+          </div>
 
-          <label class="required" for="iDate">Date</label>
-          <input id="iDate" type="date" />
+          <div class="fieldGroup">
+            <label class="required" for="iContact">Contact</label>
+            <input id="iContact" placeholder="Phone or email" />
+          </div>
 
-          <label class="required" for="iGroup">Party size</label>
-          <input id="iGroup" inputmode="numeric" placeholder="e.g., 4" />
+          <div class="fieldGroup">
+            <label class="required" for="iDate">Date</label>
+            <input id="iDate" type="date" />
+          </div>
 
-          <label class="required" for="iTime">Time window</label>
-          <input id="iTime" placeholder="e.g., 7–9pm" />
+          <div class="fieldGroup">
+            <label class="required" for="iTime">Time window</label>
+            <input id="iTime" placeholder="e.g., 7–9pm" />
+          </div>
 
-          <label for="iVibe">Experience / vibe (optional)</label>
-          <input
-            id="iVibe"
-            placeholder="e.g., VIP, quiet lounge, lively, premium"
-          />
+          <div class="fieldGroup">
+            <label class="required" for="iGroup">Party size</label>
+            <input id="iGroup" inputmode="numeric" placeholder="e.g., 4" />
+          </div>
 
-          <label for="iNotes">Notes (optional)</label>
-          <textarea
-            id="iNotes"
-            rows="3"
-            placeholder="Any preferences, constraints, or special requests"
-          ></textarea>
+          <div class="fieldGroup">
+            <label for="iVibe">Experience / vibe (optional)</label>
+            <input
+              id="iVibe"
+              placeholder="e.g., VIP, quiet lounge, lively, premium"
+            />
+          </div>
 
-          <label for="iBudget">Budget (optional)</label>
-          <input id="iBudget" placeholder="e.g., $200–$400" />
+          <div class="fieldGroup">
+            <label for="iBudget">Budget (optional)</label>
+            <input id="iBudget" placeholder="e.g., $200–$400" />
+          </div>
 
-          <label class="required" for="iContact">Contact</label>
-          <input id="iContact" placeholder="Phone or email" />
+          <div class="fieldGroup fieldGroup--full">
+            <label for="iNotes">Notes (optional)</label>
+            <textarea
+              id="iNotes"
+              rows="3"
+              placeholder="Any preferences, constraints, or special requests"
+            ></textarea>
+          </div>
 
-          <button
-            class="ctaBtn"
-            id="submitIntake"
-            type="button"
-            onclick="submitIntake()"
-          >
-            Submit request
-          </button>
+          <div class="fieldGroup fieldGroup--full">
+            <button
+              class="ctaBtn"
+              id="submitIntake"
+              type="button"
+              onclick="submitIntake()"
+            >
+              Submit request
+            </button>
 
-          <div class="hint" style="margin-top: 10px">
-            Saved to your Admin Leads list. You can confirm details and follow
-            up from there.
+            <div class="hint" style="margin-top: 10px">
+              Saved to your Admin Leads list. You can confirm details and follow
+              up from there.
+            </div>
           </div>
         </div>
       </div>
