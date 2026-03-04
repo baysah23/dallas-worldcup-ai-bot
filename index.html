@@ -588,6 +588,11 @@
         display: block;
       }
 
+      #sec-chat {
+        min-width: 0;
+        overflow-x: hidden;
+      }
+
       body[data-sec="menu"] #sec-menu {
         display: block;
       }
@@ -672,6 +677,7 @@
         display: flex;
         gap: 10px;
         align-items: center;
+        flex-wrap: wrap;
         margin-top: 10px;
         padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
         border-radius: 18px;
@@ -680,10 +686,13 @@
         -webkit-backdrop-filter: blur(18px) saturate(1.35);
         backdrop-filter: blur(18px) saturate(1.35);
         box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
       }
 
       #msg {
         flex: 1 1 auto;
+        min-width: 0;
         height: 46px;
         padding: 0 14px;
         border-radius: 16px;
@@ -698,8 +707,16 @@
         color: rgba(185, 199, 238, 0.75);
       }
 
+      /* iOS Safari: prevent auto-zoom when focusing chat input */
+      @supports (-webkit-touch-callout: none) {
+        #msg {
+          font-size: 16px;
+        }
+      }
+
       #sendBtn,
       #btnClear {
+        flex-shrink: 0;
         height: 44px;
         padding: 0 14px;
         border-radius: 16px;
@@ -729,6 +746,7 @@
       #btnClear {
         background: rgba(255, 255, 255, 0.06);
         color: rgba(234, 240, 255, 0.92);
+        margin-left: auto;
       }
 
       #sendBtn:active,
@@ -912,6 +930,12 @@
       /* ===== MODAL & TOAST UPDATES ===== */
       body.modalOpen {
         overflow: hidden;
+        overscroll-behavior: none;
+        -webkit-overflow-scrolling: auto;
+        /* Safari: use svh when available (avoids address bar/keyboard viewport jitter) */
+        height: 100%;
+        height: 100dvh;
+        height: 100svh;
       }
 
       .toast {
@@ -934,13 +958,15 @@
         display: none;
       }
 
-      /* 1. Modal Overlay & Smooth Transitions */
+      /* 1. Modal Overlay — Safari: use inset, allow scroll, no touch-action lock */
       .modal {
-        /* margin-top:50px;
-        margin-bottom:50px; */
-
         position: fixed;
         inset: 0;
+        width: 100%;
+        min-height: 100vh;
+        min-height: 100dvh;
+        min-height: 100svh;
+        box-sizing: border-box;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -948,9 +974,15 @@
         backdrop-filter: blur(12px) saturate(0.9) !important;
         -webkit-backdrop-filter: blur(12px) saturate(0.9) !important;
         z-index: 2000;
-        padding: 18px;
+        padding: max(18px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right))
+          max(18px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
         opacity: 1;
         transition: opacity 0.3s ease;
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
       }
 
       .modal.hidden {
@@ -965,11 +997,14 @@
       .modal.hidden .modalCard {
         transform: scale(0.95);
       }
-
-      /* 2. Modal Card Styling */
       .modalCard {
+        box-sizing: border-box;
         width: 100%;
-        max-width: 440px;
+        max-width: min(440px, calc(100% - 36px));
+        min-width: 0;
+        flex-shrink: 0;
+        align-self: center;
+        margin: 0 auto;
         border-radius: 20px;
         padding: 20px;
         background: linear-gradient(
@@ -979,11 +1014,49 @@
         );
         border: 1px solid rgba(255, 255, 255, 0.15);
         box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
-        max-height: calc(100vh - 80px);
+        max-height: 100vh;
+        max-height: min(100vh, 100dvh);
         display: flex;
         flex-direction: column;
         transform: scale(1);
         transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        overflow: hidden;
+        touch-action: pan-y;
+        -webkit-transform: translateZ(0);
+      }
+
+      /* 2b. Mobile: full height, same Safari-safe structure */
+      @media (max-width: 540px) {
+        .modal {
+          padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right))
+            max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+          align-items: stretch;
+          justify-content: center;
+        }
+        .modalCard {
+          width: 100%;
+          max-width: none;
+          max-height: 100vh;
+          max-height: min(100vh, 100dvh);
+          min-height: min(640px, 98svh);
+          margin: auto 0;
+          padding: 16px;
+        }
+      }
+
+      /* 2c. Safari-only: viewport containment, same overflow/touch fixes */
+      @supports (-webkit-touch-callout: none) {
+        .modal {
+          min-height: -webkit-fill-available;
+        }
+        .modalCard {
+          max-height: min(100vh, 100dvh);
+        }
+        @media (max-width: 540px) {
+          .modalCard {
+            min-height: min(600px, 96svh);
+          }
+        }
       }
 
       /* 3. Header & Typography */
@@ -992,6 +1065,7 @@
         justify-content: space-between;
         align-items: center;
         margin-bottom: 5px;
+        flex-shrink: 0;
       }
 
       .modalHead h3 {
@@ -1029,9 +1103,33 @@
 
       /* 5. Custom Scrollbar for Body */
       .modalBody {
+        /* Let content define height; scroll only when needed */
+        overflow-x: hidden;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
         padding-right: 4px;
+      }
+
+      .modalBody .fieldGroup {
+        display: flex;
+        flex-direction: column;
+      }
+
+      @media (min-width: 900px) {
+        .modalCard {
+          max-width: 640px;
+        }
+
+        .modalBody {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          column-gap: 18px;
+          row-gap: 8px;
+        }
+
+        .modalBody .fieldGroup.fieldGroup--full {
+          grid-column: 1 / -1;
+        }
       }
 
       .modalBody::-webkit-scrollbar {
@@ -1067,6 +1165,7 @@
       .modalBody select,
       .modalBody textarea {
         width: 100%;
+        max-width: 100%;
         box-sizing: border-box;
         padding: 18px 12px;
         border-radius: 10px;
@@ -4600,11 +4699,16 @@
           display: flex;
           align-items: center;
           gap: 8px;
-          flex-wrap: nowrap;
+          flex-wrap: wrap;
           padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
           margin: 10px -14px -16px;
           border-radius: 0 0 18px 18px;
           box-sizing: border-box;
+        }
+
+        /* Mobile: input full width, Send + Clear side-by-side below */
+        #sec-chat .chatInputRow #msg {
+          flex: 1 1 100%;
         }
 
         #msg {
@@ -4852,8 +4956,13 @@
           display: flex;
           align-items: center;
           gap: 6px;
-          flex-wrap: nowrap;
+          flex-wrap: wrap;
           padding: 10px;
+        }
+
+        /* Intentional two-row layout: input full width, then Send + Clear side-by-side */
+        #sec-chat .chatInputRow #msg {
+          flex: 1 1 100%;
         }
 
         .hint {
@@ -4881,6 +4990,13 @@
         #chatLangRow .segBtn {
           padding: 5px 6px;
           font-size: 9px;
+        }
+
+        /* Tighter chat input buttons so Send + Clear stay visible */
+        #sendBtn,
+        #btnClear {
+          padding: 0 10px;
+          font-size: 13px;
         }
       }
 
@@ -6391,55 +6507,75 @@
           </button>
         </div>
         <div class="modalBody">
-          <label for="iCity">Business context (optional)</label>
-          <input
-            id="iCity"
-            placeholder="e.g., client name, suite name, or event context (optional)"
-          />
+          <div class="fieldGroup fieldGroup--full">
+            <label for="iCity">Business context (optional)</label>
+            <input
+              id="iCity"
+              placeholder="e.g., client name, suite name, or event context (optional)"
+            />
+          </div>
 
-          <label class="required" for="iName">Name</label>
-          <input id="iName" placeholder="Guest name" />
+          <div class="fieldGroup">
+            <label class="required" for="iName">Name</label>
+            <input id="iName" placeholder="Guest name" />
+          </div>
 
-          <label class="required" for="iDate">Date</label>
-          <input id="iDate" type="date" />
+          <div class="fieldGroup">
+            <label class="required" for="iContact">Contact</label>
+            <input id="iContact" placeholder="Phone or email" />
+          </div>
 
-          <label class="required" for="iGroup">Party size</label>
-          <input id="iGroup" inputmode="numeric" placeholder="e.g., 4" />
+          <div class="fieldGroup">
+            <label class="required" for="iDate">Date</label>
+            <input id="iDate" type="date" />
+          </div>
 
-          <label class="required" for="iTime">Time window</label>
-          <input id="iTime" placeholder="e.g., 7–9pm" />
+          <div class="fieldGroup">
+            <label class="required" for="iTime">Time window</label>
+            <input id="iTime" placeholder="e.g., 7–9pm" />
+          </div>
 
-          <label for="iVibe">Experience / vibe (optional)</label>
-          <input
-            id="iVibe"
-            placeholder="e.g., VIP, quiet lounge, lively, premium"
-          />
+          <div class="fieldGroup">
+            <label class="required" for="iGroup">Party size</label>
+            <input id="iGroup" inputmode="numeric" placeholder="e.g., 4" />
+          </div>
 
-          <label for="iNotes">Notes (optional)</label>
-          <textarea
-            id="iNotes"
-            rows="3"
-            placeholder="Any preferences, constraints, or special requests"
-          ></textarea>
+          <div class="fieldGroup">
+            <label for="iVibe">Experience / vibe (optional)</label>
+            <input
+              id="iVibe"
+              placeholder="e.g., VIP, quiet lounge, lively, premium"
+            />
+          </div>
 
-          <label for="iBudget">Budget (optional)</label>
-          <input id="iBudget" placeholder="e.g., $200–$400" />
+          <div class="fieldGroup">
+            <label for="iBudget">Budget (optional)</label>
+            <input id="iBudget" placeholder="e.g., $200–$400" />
+          </div>
 
-          <label class="required" for="iContact">Contact</label>
-          <input id="iContact" placeholder="Phone or email" />
+          <div class="fieldGroup fieldGroup--full">
+            <label for="iNotes">Notes (optional)</label>
+            <textarea
+              id="iNotes"
+              rows="3"
+              placeholder="Any preferences, constraints, or special requests"
+            ></textarea>
+          </div>
 
-          <button
-            class="ctaBtn"
-            id="submitIntake"
-            type="button"
-            onclick="submitIntake()"
-          >
-            Submit request
-          </button>
+          <div class="fieldGroup fieldGroup--full">
+            <button
+              class="ctaBtn"
+              id="submitIntake"
+              type="button"
+              onclick="submitIntake()"
+            >
+              Submit request
+            </button>
 
-          <div class="hint" style="margin-top: 10px">
-            Saved to your Admin Leads list. You can confirm details and follow
-            up from there.
+            <div class="hint" style="margin-top: 10px">
+              Saved to your Admin Leads list. You can confirm details and follow
+              up from there.
+            </div>
           </div>
         </div>
       </div>

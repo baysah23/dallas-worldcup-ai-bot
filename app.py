@@ -245,6 +245,8 @@ def _append_reservation_local(lead: dict, reservation_id: Optional[str] = None) 
         row = {
             "reservation_id": rid,
             "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            # Per-venue isolation: tag each local reservation with its venue_id.
+            "venue_id": _venue_id(),
             "name": lead.get("name", ""),
             "phone": lead.get("phone", ""),
             "date": lead.get("date", ""),
@@ -265,6 +267,11 @@ def _get_reservation_by_id(reservation_id: str) -> Optional[Dict[str, Any]]:
     rid = (reservation_id or "").strip().upper()
     if not rid:
         return None
+    # Current venue context (used for isolation across venues)
+    try:
+        current_vid = _slugify_venue_id(_venue_id())
+    except Exception:
+        current_vid = DEFAULT_VENUE_ID
     # Normalize: allow "WC-abc123" or "abc123"
     if not rid.startswith("WC-"):
         rid = "WC-" + rid
@@ -279,24 +286,35 @@ def _get_reservation_by_id(reservation_id: str) -> Optional[Dict[str, Any]]:
                         continue
                     try:
                         row = json.loads(line)
-                        if (row.get("reservation_id") or "").strip().upper() == rid:
-                            return row
+                        if (row.get("reservation_id") or "").strip().upper() != rid:
+                            continue
+                        row_vid = _slugify_venue_id(str(row.get("venue_id") or DEFAULT_VENUE_ID))
+                        if row_vid != current_vid:
+                            continue
+                        return row
                     except Exception:
                         continue
     except Exception:
         pass
     # 2) Google Sheets (if configured)
     try:
-        gc = get_gspread_client()
-        ws = _open_default_spreadsheet(gc).sheet1
+        # Use the same venue-scoped worksheet as the Admin Leads view.
+        ws = get_sheet()
         header = (ws.row_values(1) or [])
         hnorm = [_normalize_header(h) for h in header]
         if "reservation_id" not in hnorm:
             return None
         col = hnorm.index("reservation_id") + 1
+        vcol = None
+        if "venue_id" in hnorm:
+            vcol = hnorm.index("venue_id") + 1
         rows = ws.get_all_values() or []
         for r in rows[1:]:
             if len(r) >= col and (r[col - 1] or "").strip().upper() == rid:
+                if vcol and vcol - 1 < len(r):
+                    row_vid = _slugify_venue_id(str(r[vcol - 1] or DEFAULT_VENUE_ID))
+                    if row_vid != current_vid:
+                        continue
                 out = {}
                 for i, h in enumerate(header):
                     if i < len(r):
@@ -1235,6 +1253,9 @@ def _default_ai_settings() -> Dict[str, Any]:
             "send_email": False,
             "send_whatsapp": False,
         },
+        # Which sheet status values count as "new" for Run AI (New).
+        # Per-venue overrides can set `new_status_values` in AI settings.
+        "new_status_values": ["new", ""],
         # Feature gates (safe rollout). These further restrict what AI can do, even if allow_actions is true.
         "features": {
             "auto_vip_tag": True,
@@ -4021,7 +4042,26 @@ def ensure_sheet_schema(ws) -> List[str]:
     Make sure row 1 is the header and includes the CRM columns we need.
     Returns the final header list (as stored in the sheet).
     """
-    desired = ["timestamp", "reservation_id", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier", "queue", "business_context", "budget", "notes", "vibe"]
+    desired = [
+        "timestamp",
+        "reservation_id",
+        "venue_id",
+        "name",
+        "phone",
+        "date",
+        "time",
+        "party_size",
+        "language",
+        "status",
+        "vip",
+        "entry_point",
+        "tier",
+        "queue",
+        "business_context",
+        "budget",
+        "notes",
+        "vibe",
+    ]
 
     existing = ws.row_values(1) or []
     existing_norm = [_normalize_header(x) for x in existing]
@@ -4058,8 +4098,10 @@ def header_map(header: List[str]) -> Dict[str, int]:
 
 
 def append_lead_to_sheet(lead: Dict[str, Any]):
-    gc = get_gspread_client()
-    ws = _open_default_spreadsheet(gc).sheet1
+    # Write leads into the current venue's worksheet, with an explicit venue_id column
+    # so multi-venue deployments remain isolated even when sharing a spreadsheet.
+    vid = _venue_id()
+    ws = get_sheet(venue_id=vid)
 
     header = ensure_sheet_schema(ws)
     hmap = header_map(header)
@@ -4077,6 +4119,7 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
 
     setv("timestamp", datetime.now().isoformat(timespec="seconds"))
     setv("reservation_id", (lead.get("reservation_id") or "").strip())
+    setv("venue_id", vid)
     setv("name", lead.get("name", ""))
     setv("phone", lead.get("phone", ""))
     setv("date", lead.get("date", ""))
@@ -4085,13 +4128,13 @@ def append_lead_to_sheet(lead: Dict[str, Any]):
     setv("language", lead.get("language", "en"))
     setv("status", status)
     setv("vip", vip)
-    setv("entry_point", lead.get("entry_point",""))
-    setv("tier", lead.get("tier",""))
-    setv("queue", lead.get("queue",""))
-    setv("business_context", lead.get("business_context",""))
-    setv("budget", lead.get("budget",""))
-    setv("notes", lead.get("notes",""))
-    setv("vibe", lead.get("vibe",""))
+    setv("entry_point", lead.get("entry_point", ""))
+    setv("tier", lead.get("tier", ""))
+    setv("queue", lead.get("queue", ""))
+    setv("business_context", lead.get("business_context", ""))
+    setv("budget", lead.get("budget", ""))
+    setv("notes", lead.get("notes", ""))
+    setv("vibe", lead.get("vibe", ""))
 
     # Append at bottom (keeps headers at the top)
     ws.append_row(row, value_input_option="USER_ENTERED")
@@ -4116,6 +4159,24 @@ def read_leads(limit: int = 200, venue_id: Optional[str] = None) -> List[List[st
     try:
         ws = get_sheet(venue_id=vid)  # uses venue sheet_name when present
         rows = ws.get_all_values() or []
+
+        # Optional per-row venue isolation when sharing a sheet:
+        # if a "venue_id" column exists, keep only rows matching the current venue.
+        if rows and len(rows) > 1:
+            header = rows[0]
+            hmap = header_map(header)
+            vcol = hmap.get("venue_id")
+            if vcol:
+                body = rows[1:]
+                kept = []
+                for r in body:
+                    if not isinstance(r, list) or len(r) < vcol:
+                        continue
+                    row_vid = _slugify_venue_id(str(r[vcol - 1] or DEFAULT_VENUE_ID))
+                    if row_vid == vid:
+                        kept.append(r)
+                rows = [header] + kept
+
         # cache regardless; even empty is useful to avoid hammering
         _LEADS_CACHE_BY_VENUE[vid] = {"ts": now, "rows": rows}
         return rows[:limit] if limit else rows
@@ -7241,6 +7302,17 @@ def admin_api_ai_run():
     except Exception:
         row_num = 0
 
+    # Per-venue AI settings (used for selecting which statuses count as "new")
+    ai_settings = _get_ai_settings()
+    raw_new_statuses = ai_settings.get("new_status_values")
+    if isinstance(raw_new_statuses, list) and raw_new_statuses:
+        new_status_values = {
+            str(v or "").strip().lower() for v in raw_new_statuses
+        }
+    else:
+        # Back-compat: default to historical behavior
+        new_status_values = {"new", ""}
+
     # Load sheet (best-effort). If Sheets isn't configured, return a friendly error.
     try:
         gc = get_gspread_client()
@@ -7275,8 +7347,41 @@ def admin_api_ai_run():
             "status": get("status"),
             "vip": get("vip"),
         }
-        # Normalize vip to bool-ish for the AI prompt
-        lead["vip"] = str(lead.get("vip") or "").strip().lower() in ["1","true","yes","y"]
+        # Normalize vip to bool-ish for downstream policy + prompts
+        lead["vip"] = str(lead.get("vip") or "").strip().lower() in ["1", "true", "yes", "y"]
+
+        # Populate generic AI prompt fields so _ai_build_lead_prompt sees rich context.
+        # These mirror the mapping used by /admin/api/ai/replay and lead intake.
+        if not lead.get("intent"):
+            # Prefer explicit intent/entry_point/queue-like signals.
+            intent_parts = []
+            ep = (lead.get("entry_point") or "").strip()
+            if ep:
+                intent_parts.append(ep)
+            q = (lead.get("queue") or "").strip()
+            if q:
+                intent_parts.append(q)
+            lead["intent"] = " / ".join(intent_parts)[:200]
+
+        if not lead.get("contact"):
+            # Combine human-readable name + primary contact channel.
+            name = (lead.get("name") or "").strip()
+            phone = (lead.get("phone") or "").strip()
+            email = (lead.get("email") or "").strip()
+            contact = (f"{name} {phone}".strip() or email).strip()
+            lead["contact"] = contact
+
+        if not lead.get("datetime"):
+            # Fold date + time into a single string, as used elsewhere.
+            dt = " ".join(
+                part for part in [(lead.get("date") or "").strip(), (lead.get("time") or "").strip()] if part
+            ).strip()
+            lead["datetime"] = dt
+
+        if not lead.get("lang"):
+            # Mirror "language" into the generic lang field when present.
+            lead["lang"] = (lead.get("language") or "").strip()
+
         return lead
 
     targets = []
@@ -7296,18 +7401,22 @@ def admin_api_ai_run():
         if not rows or len(rows) < 2:
             return jsonify({"ok": True, "ran": 0, "proposed": 0, "queue_ids": []})
 
-        status_col = hmap.get("status")  # 1-based
-        # Walk from bottom (newest) upward, collect "New"
-        for i in range(len(rows)-1, 0, -1):
+        status_col = hmap.get("status")  # 1-based, optional
+        # Walk from bottom (newest) upward, collect rows whose status is in the
+        # configurable "new_status_values" list. If there is no status column,
+        # treat all rows as eligible and rely on limit for bounding.
+        for i in range(len(rows) - 1, 0, -1):
             if len(targets) >= limit:
                 break
             rv = rows[i]
-            st = ""
-            if status_col and (status_col-1) < len(rv):
-                st = (rv[status_col-1] or "").strip().lower()
-            if st in ["new", ""]:
-                sheet_row = i + 1  # rows includes header at index 0
-                targets.append((sheet_row, _lead_from_row(rv)))
+            if status_col:
+                st = ""
+                if (status_col - 1) < len(rv):
+                    st = (rv[status_col - 1] or "").strip().lower()
+                if st not in new_status_values:
+                    continue
+            sheet_row = i + 1  # rows includes header at index 0
+            targets.append((sheet_row, _lead_from_row(rv)))
 
     proposed_ids = []
     ran = 0
@@ -7569,8 +7678,7 @@ def admin_api_ai_queue_deny(qid: str):
     if str(it.get("status")) != "pending":
         return jsonify({"ok": False, "error": "Not pending"}), 400
 
-    # Spec: Deny = immediate removal (keeps pending clean)
-    item_type = it.get("type")
+    # Client spec: deny removes item from queue immediately (keeps queue clean), audits + notifies
     queue = [q for q in queue if str(q.get("id")) != str(qid)]
     _save_ai_queue(queue)
     _audit("ai.queue.deny", {"id": qid, "type": it.get("type")})
@@ -8913,7 +9021,7 @@ th{
     <div class="h2">AI Replay (Read-only)</div>
     <div class="small">Owner tool to re-run AI suggestions for a specific lead row without applying changes.</div>
     <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <input id="replay-row" class="pillselect" style="min-width:120px" placeholder="Row #" />
+      <input id="replay-row" class="pillselect" type="number" min="2" style="min-width:120px" placeholder="Row #" />
       <button class="btn2" type="button" onclick="replayAI()">Replay</button>
       <span id="replay-msg" class="note"></span>
     </div>
@@ -8936,7 +9044,6 @@ th{
         <option value="">All</option>
         <option value="pending">Pending</option>
         <option value="approved">Approved</option>
-        <option value="denied">Denied</option>
       </select>
       <span id="aiq-msg" class="note"></span>
     </div>
@@ -11057,13 +11164,10 @@ def admin_api_ai_replay():
         q = _load_ai_queue()
         related = []
         for it in q:
-            acts = it.get("actions") or []
-            if isinstance(acts, list):
-                for a in acts:
-                    prow = (a.get("payload") or {}).get("row")
-                    if str(prow) == str(row_num):
-                        related.append(it)
-                        break
+            payload = it.get("payload") or {}
+            prow = payload.get("row") or payload.get("sheet_row")
+            if prow is not None and str(prow) == str(row_num):
+                related.append(it)
             if len(related) >= 5:
                 break
 
@@ -11405,9 +11509,9 @@ async function replayAI(){
   const msg = qs('#replay-msg'); if(msg) msg.textContent = 'Replaying…';
   const out = qs('#replayOut'); if(out) out.textContent = '';
   const row = parseInt(qs('#replay-row')?.value || '0', 10);
-  if(!row){ if(msg) msg.textContent = 'Enter a sheet row #'; return; }
+  if(!row || row < 2){ if(msg) msg.textContent = 'Enter a valid sheet row # (≥2)'; return; }
   try{
-    const r = await fetch(`/admin/api/ai/replay?key=${encodeURIComponent(KEY)}`, {
+    const r = await fetch(`/admin/api/ai/replay?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({row})
