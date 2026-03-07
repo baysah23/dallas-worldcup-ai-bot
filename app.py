@@ -4235,7 +4235,20 @@ def want_recall(text: str, lang: str) -> bool:
 
 def want_reservation(text: str) -> bool:
     t = text.lower()
-    return any(k in t for k in ["reservation", "reserve", "book a table", "table for", "reserva", "réservation"])
+    # Heuristics: catch natural phrases like "reservation", "need a table",
+    # "book a table", "table for 4", etc.
+    triggers = [
+        "reservation",
+        "reserve",
+        "book a table",
+        "book table",
+        "table for",
+        "need a table",
+        "need table",
+        "reserva",
+        "réservation",
+    ]
+    return any(k in t for k in triggers)
 
 
 def extract_party_size(text: str) -> Optional[int]:
@@ -4464,6 +4477,17 @@ def extract_name_candidate(text: str) -> Optional[str]:
     if not s:
         return None
 
+    # Explicit patterns: "name is X", "my name is X", "under name X", "for name X"
+    m = re.search(
+        r"\b(?:my\s+name\s+is|name\s+is|under\s+name|for\s+name)\s+([A-Za-z][A-Za-z\s']{0,40})",
+        s,
+        flags=re.I,
+    )
+    if m:
+        name = m.group(1).strip()
+        if name:
+            return name
+
     lower = s.lower().strip()
     # Don't treat trigger words as names
     if lower in ["reservation", "reserva", "réservation", "reserve", "book", "book a table"]:
@@ -4472,6 +4496,19 @@ def extract_name_candidate(text: str) -> Optional[str]:
 
     # Don't treat VIP intents/buttons as names
     if (lower == 'vip' or lower.startswith('vip ') or 'vip table' in lower or 'vip hold' in lower) and ('reservation' in lower or 'reserve' in lower or 'table' in lower or 'hold' in lower or lower == 'vip'):
+        return None
+    # If the message clearly looks like a date/time/party-size description
+    # (e.g. 'June 20, 2026 at 8 pm for 6 people'), skip heuristic name guessing
+    # and let the bot explicitly ask for a name.
+    if re.search(r"\b(?:am|pm)\b", lower) or \
+       re.search(r"\bparty\s*(?:size)?\s*(?:is|=|:)?\s*\d+", lower) or \
+       re.search(r"\btable\s*(?:for|of)\s*\d+", lower):
+        return None
+
+    # If the message clearly looks like a date/time/party-size description
+    # (e.g. 'June 20, 2026 at 8 pm for 6 people'), skip heuristic name guessing
+    # and let the bot explicitly ask for a name.
+    if re.search(r"\b(?:am|pm)\b", lower) or re.search(r"\bparty\s*(?:size)?\s*(?:is|=|:)?\s*\d+", lower) or re.search(r"\btable\s*(?:for|of)\s*\d+", lower):
         return None
     # Remove phone numbers (many formats)
     s = re.sub(r"\b(?:\+?1\s*)?\(?\d{3}\)?[-.\s]*\d{3}[-.\s]*\d{4}\b", " ", s)
@@ -5853,6 +5890,125 @@ def test_sheet():
 #   - MUST always return JSON with {reply: ...}
 #   - "reservation" triggers deterministic lead capture
 # ============================================================
+
+def _handle_reservation_turn(sess: Dict[str, Any], msg: str, lang: str, remaining: int) -> Dict[str, Any]:
+    """
+    Single turn of the deterministic reservation state machine.
+
+    - Always updates sess["lead"] from the current message.
+    - Applies business rules (max party size, closed dates).
+    - Either:
+      * finishes the reservation and returns a confirmation reply, OR
+      * asks for the next missing field.
+    """
+    # Allow VIP to be set at any time during reservation flow
+    if re.search(r"\bvip\b", msg.lower()):
+        sess["lead"]["vip"] = "Yes"
+
+    # Extract structured fields from free text
+    d_iso = extract_date(msg)
+    if d_iso:
+        if validate_date_iso(d_iso):
+            sess["lead"]["date"] = d_iso
+        else:
+            return {"reply": LANG[lang]["ask_date"], "rate_limit_remaining": remaining}
+
+    t = extract_time(msg)
+    if t:
+        sess["lead"]["time"] = t
+
+    ps = extract_party_size(msg)
+    if ps:
+        sess["lead"]["party_size"] = ps
+
+    ph = extract_phone(msg)
+    if ph:
+        sess["lead"]["phone"] = ph
+
+    lead = sess["lead"]
+
+    # Name extraction – only once we already have date, time, and party_size.
+    if not lead.get("name") and lead.get("date") and lead.get("time") and lead.get("party_size"):
+        cand = extract_name_candidate(msg)
+        if cand:
+            lead["name"] = cand
+
+    # Apply business rules if we have enough to check
+    rule = apply_business_rules(lead)
+    if rule == "party":
+        sess["mode"] = "idle"
+        return {"reply": LANG[lang]["rule_party"], "rate_limit_remaining": remaining}
+    if rule == "closed":
+        sess["mode"] = "idle"
+        return {"reply": LANG[lang]["rule_closed"], "rate_limit_remaining": remaining}
+
+    # If complete, save + confirm
+    if lead.get("date") and lead.get("time") and lead.get("party_size") and lead.get("name") and lead.get("phone"):
+        ops2 = get_ops()
+
+        # If waitlist is enabled, tag the reservation as Waitlist (still saved to the same sheet).
+        if ops2.get("waitlist_mode"):
+            lead["status"] = (lead.get("status") or "Waitlist").strip() or "Waitlist"
+            if lead["status"].lower() == "new":
+                lead["status"] = "Waitlist"
+
+        if ops2.get("pause_reservations") and not ops2.get("waitlist_mode"):
+            sess["mode"] = "idle"
+            return {"reply": "⏸️ Reservations were just paused. Please check back soon.", "rate_limit_remaining": remaining}
+
+        if ops2.get("vip_only") and str(lead.get("vip", "No")).strip().lower() != "yes":
+            sess["mode"] = "idle"
+            return {"reply": "🔒 VIP-only is active right now. Type VIP and start again to continue.", "rate_limit_remaining": remaining}
+
+        rid = _generate_reservation_id()
+        lead["reservation_id"] = rid
+        try:
+            append_lead_to_sheet(lead)
+        except Exception:
+            pass  # fallback: local file below
+        # Always save to local file too so recall by ID works (even after page reload)
+        try:
+            _append_reservation_local(lead)
+        except Exception:
+            return {"reply": "⚠️ Could not save reservation.", "rate_limit_remaining": remaining}
+
+        sess["mode"] = "idle"
+        saved_msg = ("✅ Added to waitlist!" if str(lead.get("status", "")).strip().lower() == "waitlist" else LANG[lang]["saved"])
+        confirm = (
+            f"{saved_msg}\n\n"
+            f"Your reservation ID is: **{rid}** — save it!\n"
+            f"To recall this reservation later, type: **recall {rid}**\n\n"
+            f"Name: {lead['name']}\n"
+            f"Phone: {lead['phone']}\n"
+            f"Date: {lead['date']}\n"
+            f"Time: {lead['time']}\n"
+            f"Party size: {lead['party_size']}\n"
+            f"Status: {lead.get('status','New')}\n"
+            f"VIP: {lead.get('vip','No')}"
+        )
+        sess["lead"] = {
+            "name": "",
+            "phone": "",
+            "date": "",
+            "time": "",
+            "party_size": 0,
+            "language": lang,
+            "status": "New",
+            "vip": "No",
+        }
+        # Remember the last reservation ID in-session so we can give better
+        # guidance when the user later asks about VIP upgrades.
+        try:
+            sess["last_reservation_id"] = rid
+        except Exception:
+            pass
+        return {"reply": confirm, "rate_limit_remaining": remaining}
+
+    # Otherwise ask next missing field
+    q = next_question(sess)
+    return {"reply": q, "rate_limit_remaining": remaining}
+
+
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
@@ -5904,7 +6060,7 @@ def chat():
                 reply = "To recall a reservation, type **recall** followed by your reservation ID (e.g. **recall WC-XXXX**). You received this ID when you made the reservation."
             return jsonify({"reply": reply, "rate_limit_remaining": remaining})
 
-        # Start reservation flow if user indicates intent
+        # Start reservation flow if user indicates intent (first turn for this reservation)
         if sess["mode"] == "idle" and want_reservation(msg):
             ops = get_ops()
 
@@ -5929,110 +6085,32 @@ def chat():
             if msg.lower().strip() in ["reservation", "reserva", "réservation"]:
                 sess["lead"]["name"] = ""
 
-            q = next_question(sess)
-            return jsonify({"reply": q, "rate_limit_remaining": remaining})
+            payload = _handle_reservation_turn(sess, msg, lang, remaining)
+            return jsonify(payload)
 
         # If reserving, keep collecting fields deterministically
         if sess["mode"] == "reserving":
-            # Allow VIP to be set at any time during reservation flow
-            if re.search(r"\bvip\b", msg.lower()):
-                sess["lead"]["vip"] = "Yes"
+            payload = _handle_reservation_turn(sess, msg, lang, remaining)
+            # _handle_reservation_turn may have set mode back to idle on completion/rule hit.
+            return jsonify(payload)
 
-            d_iso = extract_date(msg)
-            if d_iso:
-                if validate_date_iso(d_iso):
-                    sess["lead"]["date"] = d_iso
-                else:
-                    return jsonify({"reply": LANG[lang]["ask_date"], "rate_limit_remaining": remaining})
-
-            t = extract_time(msg)
-            if t:
-                sess["lead"]["time"] = t
-
-            ps = extract_party_size(msg)
-            if ps:
-                sess["lead"]["party_size"] = ps
-
-            ph = extract_phone(msg)
-            if ph:
-                sess["lead"]["phone"] = ph
-
-            lead = sess["lead"]
-
-            # Name extraction – only once we already have date, time, and party_size.
-            if not lead.get("name") and lead.get("date") and lead.get("time") and lead.get("party_size"):
-                cand = extract_name_candidate(msg)
-                if cand:
-                    lead["name"] = cand
-
-            # Apply business rules if we have enough to check
-            rule = apply_business_rules(lead)
-            if rule == "party":
-                sess["mode"] = "idle"
-                return jsonify({"reply": LANG[lang]["rule_party"], "rate_limit_remaining": remaining})
-            if rule == "closed":
-                sess["mode"] = "idle"
-                return jsonify({"reply": LANG[lang]["rule_closed"], "rate_limit_remaining": remaining})
-
-            # If complete, save + confirm
-            if lead.get("date") and lead.get("time") and lead.get("party_size") and lead.get("name") and lead.get("phone"):
-                ops2 = get_ops()
-
-                # If waitlist is enabled, tag the reservation as Waitlist (still saved to the same sheet).
-                if ops2.get("waitlist_mode"):
-                    lead["status"] = (lead.get("status") or "Waitlist").strip() or "Waitlist"
-                    if lead["status"].lower() == "new":
-                        lead["status"] = "Waitlist"
-
-                if ops2.get("pause_reservations") and not ops2.get("waitlist_mode"):
-                    sess["mode"] = "idle"
-                    return jsonify({"reply": "⏸️ Reservations were just paused. Please check back soon.", "rate_limit_remaining": remaining})
-
-                if ops2.get("vip_only") and str(lead.get("vip", "No")).strip().lower() != "yes":
-                    sess["mode"] = "idle"
-                    return jsonify({"reply": "🔒 VIP-only is active right now. Type VIP and start again to continue.", "rate_limit_remaining": remaining})
-
-                rid = _generate_reservation_id()
-                lead["reservation_id"] = rid
-                try:
-                    append_lead_to_sheet(lead)
-                except Exception:
-                    pass  # fallback: local file below
-                # Always save to local file too so recall by ID works (even after page reload)
-                try:
-                    _append_reservation_local(lead)
-                except Exception:
-                    return jsonify({"reply": "⚠️ Could not save reservation.", "rate_limit_remaining": remaining}), 500
-
-                sess["mode"] = "idle"
-                saved_msg = ("✅ Added to waitlist!" if str(lead.get("status", "")).strip().lower() == "waitlist" else LANG[lang]["saved"])
-                confirm = (
-                    f"{saved_msg}\n\n"
-                    f"Your reservation ID is: **{rid}** — save it!\n"
-                    f"To recall this reservation later, type: **recall {rid}**\n\n"
-                    f"Name: {lead['name']}\n"
-                    f"Phone: {lead['phone']}\n"
-                    f"Date: {lead['date']}\n"
-                    f"Time: {lead['time']}\n"
-                    f"Party size: {lead['party_size']}\n"
-                    f"Status: {lead.get('status','New')}\n"
-                    f"VIP: {lead.get('vip','No')}"
+        # If user asks to "make it VIP" after a reservation, provide clear guidance
+        low = msg.lower()
+        if "vip" in low and any(kw in low for kw in ["make it", "make me", "mark it", "upgrade", "make this"]):
+            last_id = (sess.get("last_reservation_id") or "").strip()
+            if last_id:
+                reply = (
+                    f"I've already saved your reservation with ID **{last_id}**.\n\n"
+                    "VIP upgrades are handled by the venue staff. Please share this reservation ID with your host or manager, "
+                    "and they can mark it as VIP in the Admin Leads view."
                 )
-                sess["lead"] = {
-                    "name": "",
-                    "phone": "",
-                    "date": "",
-                    "time": "",
-                    "party_size": 0,
-                    "language": lang,
-                    "status": "New",
-                    "vip": "No",
-                }
-                return jsonify({"reply": confirm, "rate_limit_remaining": remaining})
-
-            # Otherwise ask next missing field
-            q = next_question(sess)
-            return jsonify({"reply": q, "rate_limit_remaining": remaining})
+            else:
+                reply = (
+                    "VIP upgrades are handled by the venue staff. Once you have a reservation ID, "
+                    "share it with your host or manager and they can mark it as VIP in the Admin Leads view.\n\n"
+                    "If you’d like, I can also help you make a new reservation now — just tell me the date, time, and party size."
+                )
+            return jsonify({"reply": reply, "rate_limit_remaining": remaining})
 
         # Otherwise: normal Q&A using OpenAI (with language + venue-specific business profile + menu)
         vid_for_profile = _venue_id()
@@ -8205,8 +8283,9 @@ def admin_update_lead():
         elif vip not in ["Yes", "No"]:
             return jsonify({"ok": False, "error": "Invalid vip"}), 400
 
-    gc = get_gspread_client()
-    ws = _open_default_spreadsheet(gc).sheet1
+    # Use the current venue's worksheet so updates are venue-isolated.
+    vid = _venue_id()
+    ws = get_sheet(venue_id=vid)
     header = ensure_sheet_schema(ws)
     hmap = header_map(header)
 
@@ -15720,7 +15799,18 @@ def want_recall(text: str, lang: str) -> bool:
 
 def want_reservation(text: str) -> bool:
     t = text.lower()
-    return any(k in t for k in ["reservation", "reserve", "book a table", "table for", "reserva", "réservation"])
+    triggers = [
+        "reservation",
+        "reserve",
+        "book a table",
+        "book table",
+        "table for",
+        "need a table",
+        "need table",
+        "reserva",
+        "réservation",
+    ]
+    return any(k in t for k in triggers)
 
 
 def extract_party_size(text: str) -> Optional[int]:
@@ -15948,6 +16038,17 @@ def extract_name_candidate(text: str) -> Optional[str]:
     if not s:
         return None
 
+    # Explicit patterns: "name is X", "my name is X", "under name X", "for name X"
+    m = re.search(
+        r"\b(?:my\s+name\s+is|name\s+is|under\s+name|for\s+name)\s+([A-Za-z][A-Za-z\s']{0,40})",
+        s,
+        flags=re.I,
+    )
+    if m:
+        name = m.group(1).strip()
+        if name:
+            return name
+
     lower = s.lower().strip()
     # Don't treat trigger words as names
     if lower in ["reservation", "reserva", "réservation", "reserve", "book", "book a table"]:
@@ -15956,6 +16057,11 @@ def extract_name_candidate(text: str) -> Optional[str]:
 
     # Don't treat VIP intents/buttons as names
     if (lower == 'vip' or lower.startswith('vip ') or 'vip table' in lower or 'vip hold' in lower) and ('reservation' in lower or 'reserve' in lower or 'table' in lower or 'hold' in lower or lower == 'vip'):
+        return None
+    # If the message clearly looks like a date/time/party-size description
+    # (e.g. 'June 20, 2026 at 8 pm for 6 people'), skip heuristic name guessing
+    # and let the bot explicitly ask for a name.
+    if re.search(r"\b(?:am|pm)\b", lower) or re.search(r"\bparty\s*(?:size)?\s*(?:is|=|:)?\s*\d+", lower) or re.search(r"\btable\s*(?:for|of)\s*\d+", lower):
         return None
     # Remove phone numbers (many formats)
     s = re.sub(r"\b(?:\+?1\s*)?\(?\d{3}\)?[-.\s]*\d{3}[-.\s]*\d{4}\b", " ", s)
