@@ -334,6 +334,28 @@ def _get_reservation_by_id(reservation_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _normalize_reservation_id(raw: str) -> Optional[str]:
+    """Normalize a string to WC-XXXX format. Returns None if not a valid-looking ID."""
+    t = (raw or "").strip().upper()
+    if not t or len(t) < 4:
+        return None
+    if t.startswith("WC-") and len(t) > 3:
+        return t
+    if t.startswith("WC") and len(t) > 2:
+        return "WC-" + t[2:] if len(t) > 2 else None
+    if re.match(r"^[A-Z0-9\-]{4,}$", t):
+        return "WC-" + t
+    return None
+
+
+def _is_bare_reservation_id(text: str) -> bool:
+    """True if message is just a reservation ID (e.g. WC-BAC819C0) with no other words."""
+    t = (text or "").strip()
+    if not t:
+        return False
+    return bool(re.match(r"^\s*WC-?[A-Za-z0-9]{4,}\s*$", t, re.I))
+
+
 def extract_recall_id(text: str) -> Optional[str]:
     """If message is 'recall <id>' or 'recall WC-xxx', return the id (WC-xxx or normalized). Else None.
     Handles formats like: 'recall WC-XXXX', 'recall : WC-XXXX', 'recall **WC-XXXX**', etc.
@@ -346,7 +368,6 @@ def extract_recall_id(text: str) -> Optional[str]:
         return None
     # Match "recall" followed by optional whitespace/punctuation, then capture the ID
     # Handles: "recall WC-XXXX", "recall : WC-XXXX", "recall **WC-XXXX**", etc.
-    # Use non-greedy \W*? to stop at first word char, then capture ID (WC- followed by alphanumeric)
     m = re.search(r"recall\W*?(WC-?[A-Za-z0-9]+)", t, re.I)
     if m:
         raw = (m.group(1) or "").strip().upper()
@@ -4234,9 +4255,13 @@ def want_recall(text: str, lang: str) -> bool:
 
 
 def want_reservation(text: str) -> bool:
-    t = text.lower()
+    t = (text or "").lower().strip()
+    t_clean = t.rstrip(".!? \t")
+    # Standalone "VIP" (or "vip." etc.) = user wants VIP reservation
+    if t_clean == "vip":
+        return True
     # Heuristics: catch natural phrases like "reservation", "need a table",
-    # "book a table", "table for 4", etc.
+    # "book a table", "table for 4", "vip reservation", etc.
     triggers = [
         "reservation",
         "reserve",
@@ -4247,6 +4272,11 @@ def want_reservation(text: str) -> bool:
         "need table",
         "reserva",
         "réservation",
+        "vip reservation",
+        "vip table",
+        "vip reserve",
+        "vip book",
+        "vip hold",
     ]
     return any(k in t for k in triggers)
 
@@ -4255,15 +4285,20 @@ def extract_party_size(text: str) -> Optional[int]:
     """Extract party size from free text.
 
     IMPORTANT: avoid mis-reading dates like 'June 13' as a party size,
-    but still support natural phrases like 'party size is 6' or
-    '7 pm and party size is 6'.
+    but still support natural phrases like 'party size is 6' or 'party size to 3'
+    even when message contains a long digit string (e.g. phone number).
     """
     raw = (text or "").strip()
     if not raw:
         return None
     t = raw.lower()
 
-    # Strong patterns first – these win even if the message also contains a time.
+    # Strong patterns first – "party size to N" wins when message also has phone digits.
+    m = re.search(r"party\s*(?:size)?\s+to\s+(\d+)", t)
+    if m:
+        n = int(m.group(1))
+        if 1 <= n <= 200:
+            return n
     m = re.search(r"party\s*(?:size)?\s*(?:is|=|:)?\s*(\d+)", t)
     if m:
         return int(m.group(1))
@@ -6009,6 +6044,353 @@ def _handle_reservation_turn(sess: Dict[str, Any], msg: str, lang: str, remainin
     return {"reply": q, "rate_limit_remaining": remaining}
 
 
+def _is_thanks(msg: str) -> bool:
+    """True if the message is primarily a thank-you (any language)."""
+    if not (msg or isinstance(msg, str)):
+        return False
+    t = msg.lower().strip().rstrip(".!?")
+    thanks = (
+        "thank you", "thanks", "thankyou", "ty ", " ty", "thx",
+        "gracias", "muchas gracias", "obrigado", "obrigada", "merci", "merci beaucoup",
+    )
+    if t in ("thanks", "thank you", "thankyou", "ty", "thx", "gracias", "merci", "obrigado", "obrigada"):
+        return True
+    if any(t.startswith(p) or t == p for p in thanks):
+        return True
+    if re.match(r"^(thank\s+you|thanks|gracias|merci|obrigad[oa])\s*[.!?]*$", t):
+        return True
+    return False
+
+
+def _thanks_reply(lang: str) -> str:
+    """Localized, polished reply after user says thank you."""
+    try:
+        lang = norm_lang(lang)
+    except Exception:
+        lang = "en"
+    replies = {
+        "en": "You're welcome! If you have any other questions, feel free to ask.",
+        "es": "De nada. Si tienes más preguntas, no dudes en preguntar.",
+        "pt": "De nada. Se tiver mais alguma dúvida, é só perguntar.",
+        "fr": "Je vous en prie. Si vous avez d'autres questions, n'hésitez pas à demander.",
+    }
+    return replies.get(lang, replies["en"])
+
+
+def _is_menu_or_specials_question(msg: str) -> bool:
+    """True if the user is asking about menu, specials, food, drink, or pricing (direct to Menu tab)."""
+    if not (msg or isinstance(msg, str)):
+        return False
+    t = msg.lower().strip()
+    # Phrases that mean "what's on the menu" / "today's special" / food & drink
+    patterns = [
+        r"today['\u2019]?s?\s*special",
+        r"today\s*special",
+        r"what['\u2019]?s?\s*(on\s*)?(the\s*)?menu",
+        r"what\s+is\s+today",
+        r"specials?\s+(today|for\s+today)",
+        r"\bmenu\b",
+        r"\bfood\b",
+        r"\bdrink",
+        r"\bdrinks\b",
+        r"\bpric(e|es|ing)\b",
+        r"\bdiet\b",
+        r"\ballerg",
+        r"\bvegan\b",
+        r"\bvegetarian\b",
+        r"\bgluten\b",
+        r"what\s+do\s+you\s+have",
+        r"what\s+can\s+i\s+(get|order|eat|drink)",
+        r"do\s+you\s+have\s+(any|a)\s+",
+        r"any\s+special",
+        r"game\s+day\s+(special|bucket|deal)",
+    ]
+    for p in patterns:
+        if re.search(p, t):
+            return True
+    # Short queries that are clearly menu/specials
+    if t in ("menu", "specials", "today's special", "today special", "what's on the menu", "prices", "food", "drinks"):
+        return True
+    return False
+
+
+def _menu_redirect_reply(lang: str) -> str:
+    """Message that we're navigating the user to the Menu tab (app will switch section)."""
+    try:
+        lang = norm_lang(lang)
+    except Exception:
+        lang = "en"
+    replies = {
+        "en": "Taking you to the **Menu** tab for our full menu and specials. One moment…",
+        "es": "Llevándote a la pestaña **Menú** para ver la carta y especiales. Un momento…",
+        "pt": "Levando você ao separador **Menu** para o cardápio e promoções. Um momento…",
+        "fr": "Ouverture de l'onglet **Menu** pour la carte et les offres. Un instant…",
+    }
+    return replies.get(lang, replies["en"])
+
+
+def _find_sheet_row_by_reservation_id(reservation_id: str) -> Optional[Tuple[int, Dict[str, int], List[str]]]:
+    """Find sheet row number (1-based) for the given reservation_id in current venue. Returns (row_num, header_map, header) or None."""
+    rid = (reservation_id or "").strip().upper()
+    if not rid or not rid.startswith("WC-"):
+        rid = "WC-" + rid if rid else ""
+    if not rid:
+        return None
+    try:
+        rows = read_leads(limit=2000)
+        if not rows or len(rows) < 2:
+            return None
+        header = rows[0]
+        hmap = header_map(header)
+        if "reservation_id" not in hmap:
+            return None
+        col = hmap["reservation_id"]
+        for i, r in enumerate(rows[1:], start=2):
+            if isinstance(r, list) and len(r) >= col and (r[col - 1] or "").strip().upper() == rid:
+                return (i, hmap, header)
+    except Exception:
+        pass
+    return None
+
+
+def _update_reservation_local(reservation_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Update a reservation stored in local JSONL (date, time, party_size). Returns updated row dict or None."""
+    rid = (reservation_id or "").strip().upper()
+    if not rid or not rid.startswith("WC-"):
+        rid = "WC-" + rid if (reservation_id or "").strip() else ""
+    if not rid:
+        return None
+    try:
+        current_vid = _slugify_venue_id(_venue_id())
+    except Exception:
+        current_vid = DEFAULT_VENUE_ID
+    path = os.path.join(_BASE_DIR, RESERVATIONS_LOCAL_PATH)
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    except Exception:
+        return None
+    updated_row = None
+    out_lines = []
+    for line in lines:
+        if not line.strip():
+            out_lines.append(line)
+            continue
+        try:
+            row = json.loads(line)
+            row_rid = (row.get("reservation_id") or "").strip().upper()
+            row_vid = _slugify_venue_id(str(row.get("venue_id") or DEFAULT_VENUE_ID))
+            if row_rid != rid or row_vid != current_vid:
+                out_lines.append(line)
+                continue
+            # Apply updates (same keys as sheet path)
+            if "date" in updates and updates["date"] and str(updates["date"]).strip():
+                row["date"] = str(updates["date"]).strip()
+            if "time" in updates and updates["time"] is not None and str(updates["time"]).strip():
+                row["time"] = str(updates["time"]).strip()
+            if "party_size" in updates and updates["party_size"] is not None:
+                try:
+                    row["party_size"] = int(updates["party_size"])
+                except (TypeError, ValueError):
+                    pass
+            if "name" in updates and updates["name"] is not None and str(updates["name"]).strip():
+                row["name"] = str(updates["name"]).strip()
+            if "phone" in updates and updates["phone"] is not None and str(updates["phone"]).strip():
+                row["phone"] = str(updates["phone"]).strip()
+            updated_row = row
+            out_lines.append(json.dumps(row, ensure_ascii=False) + "\n")
+        except Exception:
+            out_lines.append(line)
+    if updated_row is None:
+        return None
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.writelines(out_lines)
+    except Exception:
+        return None
+    return updated_row
+
+
+def update_reservation_by_id(reservation_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Update an existing reservation by ID (date, time, party_size, name, phone). Writes to sheet or local JSONL; returns updated row dict or None."""
+    found = _find_sheet_row_by_reservation_id(reservation_id)
+    if found:
+        row_num, hmap, header = found
+        try:
+            vid = _venue_id()
+        except Exception:
+            return None
+        ws = get_sheet(venue_id=vid)
+        if not ws:
+            return None
+        updated = 0
+        if "date" in updates and updates["date"] and hmap.get("date"):
+            ws.update_cell(row_num, hmap["date"], str(updates["date"]).strip())
+            updated += 1
+        if "time" in updates and updates["time"] is not None and str(updates["time"]).strip() and hmap.get("time"):
+            ws.update_cell(row_num, hmap["time"], str(updates["time"]).strip())
+            updated += 1
+        if "party_size" in updates and updates["party_size"] is not None and hmap.get("party_size"):
+            try:
+                ps = int(updates["party_size"])
+                ws.update_cell(row_num, hmap["party_size"], ps)
+                updated += 1
+            except (TypeError, ValueError):
+                pass
+        if "name" in updates and updates["name"] is not None and str(updates["name"]).strip() and hmap.get("name"):
+            ws.update_cell(row_num, hmap["name"], str(updates["name"]).strip())
+            updated += 1
+        if "phone" in updates and updates["phone"] is not None and str(updates["phone"]).strip() and hmap.get("phone"):
+            ws.update_cell(row_num, hmap["phone"], str(updates["phone"]).strip())
+            updated += 1
+        if updated == 0:
+            return _get_reservation_by_id(reservation_id)
+        try:
+            _LEADS_CACHE_BY_VENUE.pop(_slugify_venue_id(vid), None)
+        except Exception:
+            pass
+        return _get_reservation_by_id(reservation_id)
+    # Reservation not in sheet: try local JSONL (e.g. when using data/reservations.jsonl only)
+    return _update_reservation_local(reservation_id, updates)
+
+
+def _want_modify_reservation(msg: str) -> bool:
+    """True if user is asking to change/update their reservation (time, date, party size, name, phone). Dynamic: many phrasings."""
+    if not (msg or isinstance(msg, str)):
+        return False
+    t = msg.lower().strip()
+    # Action verbs and field words – any combination indicates modify intent
+    actions = r"\b(change|update|modify|edit|set|fix|correct|switch|replace|make)\b"
+    # "change the name", "update my name", "set name to", "fix the time", "correct the date", etc.
+    fields = r"\b(reservation|time|date|party|booking|name|phone|number|guests|people|size)\b"
+    if re.search(actions, t) and re.search(fields, t):
+        return True
+    # "name to X", "name is X", "time to 9", "phone to ..." (user states new value directly)
+    if re.search(r"\bname\s+(?:to|is|as|=|:)\s+", t):
+        return True
+    if re.search(r"\bphone\s+(?:to|is|as|=|:)\s+", t) or re.search(r"\bnumber\s+(?:to|is|as|=|:)\s+", t):
+        return True
+    if re.search(r"\btime\s+to\s+\d", t) or re.search(r"\b(?:at|for)\s+\d{1,2}\s*(?:am|pm)\b", t):
+        return True
+    # "change it to 9 pm", "make it 6 people", "set it to Ahmad"
+    if re.search(r"\b(change|update|set|make)\s+it\s+(?:to\s+)?", t):
+        return True
+    # "instead of X", "rather Y"
+    if re.search(r"\d+\s*pm\s+instead\s+of\s+\d|\d+\s*am\s+instead\s+of\s+\d", t):
+        return True
+    # "just the name", "only the time", "the name too", "name too"
+    if re.search(r"\b(just|only|also|too)\s+(?:the\s+)?(name|time|date|phone|party)\b", t):
+        return True
+    if re.search(r"\b(name|time|date|phone|party)\s+too\b", t):
+        return True
+    return False
+
+
+def _extract_modification_name(msg: str) -> Optional[str]:
+    """Extract new name from an update message. Handles many phrasings: name to X, change name to X, set name as X, call me X, etc."""
+    raw = (msg or "").strip()
+    if not raw:
+        return None
+    t = raw
+    # Stop name at " and ", ",", digits, or end so "name to Ahmad and time to 9 pm" -> "Ahmad"
+    end_look = r"(?=\s+and\s+|\s*,\s*|\d|$)"
+    # (the|my)? name (to|is|as|=|:) X
+    m = re.search(r"(?:the\s+|my\s+)?name\s+(?:to|is|as|=|:)\s*([A-Za-z][A-Za-z\s\-']*?)" + end_look, t, re.IGNORECASE)
+    if m:
+        name = m.group(1).strip()
+        if 1 <= len(name) <= 40:
+            return name
+    # (update|change|modify|edit|set|fix) (the)? name to X
+    m = re.search(r"(?:update|change|modify|edit|set|fix)\s+(?:the\s+|my\s+)?name\s+to\s+([A-Za-z][A-Za-z\s\-']*?)" + end_look, t, re.IGNORECASE)
+    if m:
+        name = m.group(1).strip()
+        if 1 <= len(name) <= 40:
+            return name
+    # set name as X, change name as X
+    m = re.search(r"(?:set|change|update)\s+(?:the\s+)?name\s+as\s+([A-Za-z][A-Za-z\s\-']*?)" + end_look, t, re.IGNORECASE)
+    if m:
+        name = m.group(1).strip()
+        if 1 <= len(name) <= 40:
+            return name
+    # "call me X", "under the name X", "under X" (when X looks like a name)
+    m = re.search(r"call\s+me\s+([A-Za-z][A-Za-z\s\-']*?)" + end_look, t, re.IGNORECASE)
+    if m:
+        name = m.group(1).strip()
+        if 1 <= len(name) <= 40:
+            return name
+    m = re.search(r"under\s+(?:the\s+name\s+)?([A-Za-z][A-Za-z\s\-']*?)" + end_look, t, re.IGNORECASE)
+    if m:
+        name = m.group(1).strip()
+        if 1 <= len(name) <= 40:
+            return name
+    # "make it X" or "set it to X" when message is mostly a single name (no time/date pattern)
+    if re.search(r"\b(?:make|set)\s+it\s+(?:to\s+)?([A-Za-z][A-Za-z\s\-']+)\s*$", t, re.IGNORECASE) and not re.search(r"\d{1,2}\s*(?:am|pm|\d)", t):
+        m = re.search(r"\b(?:make|set)\s+it\s+(?:to\s+)?([A-Za-z][A-Za-z\s\-']+)\s*$", t, re.IGNORECASE)
+        if m:
+            name = m.group(1).strip()
+            if 1 <= len(name) <= 40:
+                return name
+    # "new name X", "name should be X"
+    m = re.search(r"(?:new\s+)?name\s+(?:should\s+be\s+)?([A-Za-z][A-Za-z\s\-']*?)" + end_look, t, re.IGNORECASE)
+    if m:
+        name = m.group(1).strip()
+        if 1 <= len(name) <= 40:
+            return name
+    return None
+
+
+def _get_modification_fields_mentioned(msg: str) -> List[str]:
+    """Return list of field keys (time, date, party_size, name, phone) mentioned in msg, in fixed order. Used when user says 'update X and Y too' with no values."""
+    low = (msg or "").lower()
+    fields = []
+    if re.search(r"\btime\b", low) or re.search(r"\bhour\b", low):
+        fields.append("time")
+    if re.search(r"\bdate\b", low):
+        fields.append("date")
+    if re.search(r"\bparty\b", low) or re.search(r"\bpeople\b", low) or re.search(r"\bguests\b", low):
+        fields.append("party_size")
+    if re.search(r"\bname\b", low):
+        fields.append("name")
+    if re.search(r"\bphone\b", low) or re.search(r"\bnumber\b", low):
+        fields.append("phone")
+    return fields
+
+
+def _modify_awaiting_prompt(field: str) -> str:
+    """Return the prompt to ask for the given modification field (time, date, party_size, name, phone)."""
+    prompts = {
+        "time": "What time would you like for this reservation? (e.g. 7 pm or 11 pm)",
+        "date": "What date would you like? (e.g. June 23, 2026)",
+        "party_size": "How many people will be in your party?",
+        "name": "What name should I put on the reservation?",
+        "phone": "What phone number should I use for this reservation?",
+    }
+    return prompts.get(field, "What would you like to change?")
+
+
+def _extract_modification(msg: str) -> Dict[str, Any]:
+    """Extract requested reservation changes from message. Returns dict with date, time, party_size, name, phone (only set if parsed)."""
+    out = {}
+    t = extract_time(msg)
+    if t:
+        out["time"] = t
+    d = extract_date(msg)
+    if d and validate_date_iso(d):
+        out["date"] = d
+    ps = extract_party_size(msg)
+    if ps is not None:
+        out["party_size"] = ps
+    name = _extract_modification_name(msg)
+    if name:
+        out["name"] = name
+    ph = extract_phone(msg)
+    if ph:
+        out["phone"] = ph
+    return out
+
+
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
@@ -6050,14 +6432,178 @@ def chat():
         if not msg:
             return jsonify({"reply": "Please type a message.", "rate_limit_remaining": remaining})
 
-        # Recall by reservation ID: "recall WC-XXXX" fetches that reservation; "recall" alone shows instruction
-        if want_recall(msg, lang):
-            rid = extract_recall_id(msg)
-            if rid:
-                row = _get_reservation_by_id(rid)
-                reply = format_reservation_row(row)
+        # Apply name/phone/time/date/party when we previously asked for that field for the recalled reservation (supports multiple in sequence)
+        if sess.get("recalled_reservation_id") and sess.get("modify_awaiting"):
+            rid = sess["recalled_reservation_id"]
+            awaiting = sess.get("modify_awaiting")
+            # Normalize: (current field, rest list) — modify_awaiting can be a string or list
+            if isinstance(awaiting, list):
+                if not awaiting:
+                    sess.pop("modify_awaiting", None)
+                    current, rest = None, []
+                else:
+                    current, rest = awaiting[0], awaiting[1:]
             else:
-                reply = "To recall a reservation, type **recall** followed by your reservation ID (e.g. **recall WC-XXXX**). You received this ID when you made the reservation."
+                current, rest = awaiting, []
+            reply = None
+            if current == "name" and msg and len(msg) <= 80 and not re.search(r"\d{3}[-.\s]?\d{3}", msg):
+                name = msg.strip()
+                if 1 <= len(name) <= 40:
+                    updated_row = update_reservation_by_id(rid, {"name": name})
+                    if updated_row:
+                        sess["recalled_reservation"] = updated_row
+                        if rest:
+                            sess["modify_awaiting"] = rest
+                            reply = _modify_awaiting_prompt(rest[0])
+                        else:
+                            sess.pop("modify_awaiting", None)
+                            reply = "✅ Reservation updated.\n\n" + format_reservation_row(updated_row)
+                    else:
+                        reply = "I couldn't update the name. Please try again or contact the venue."
+                else:
+                    reply = "What name should I put on the reservation? (e.g. first and last name)"
+            elif current == "phone":
+                ph = extract_phone(msg)
+                if ph:
+                    updated_row = update_reservation_by_id(rid, {"phone": ph})
+                    if updated_row:
+                        sess["recalled_reservation"] = updated_row
+                        if rest:
+                            sess["modify_awaiting"] = rest
+                            reply = _modify_awaiting_prompt(rest[0])
+                        else:
+                            sess.pop("modify_awaiting", None)
+                            reply = "✅ Reservation updated.\n\n" + format_reservation_row(updated_row)
+                    else:
+                        reply = "I couldn't update the phone number. Please try again or contact the venue."
+                else:
+                    sess["modify_awaiting"] = awaiting
+                    reply = "What phone number should I use for this reservation? (e.g. 10 digits)"
+            elif current == "time":
+                t = extract_time(msg)
+                if t:
+                    updated_row = update_reservation_by_id(rid, {"time": t})
+                    if updated_row:
+                        sess["recalled_reservation"] = updated_row
+                        if rest:
+                            sess["modify_awaiting"] = rest
+                            reply = _modify_awaiting_prompt(rest[0])
+                        else:
+                            sess.pop("modify_awaiting", None)
+                            reply = "✅ Reservation updated.\n\n" + format_reservation_row(updated_row)
+                    else:
+                        reply = "I couldn't update the time. Please try again or contact the venue."
+                else:
+                    sess["modify_awaiting"] = awaiting
+                    reply = "What time would you like for this reservation? (e.g. 7 pm or 11 pm)"
+            elif current == "date":
+                d = extract_date(msg)
+                if d and validate_date_iso(d):
+                    updated_row = update_reservation_by_id(rid, {"date": d})
+                    if updated_row:
+                        sess["recalled_reservation"] = updated_row
+                        if rest:
+                            sess["modify_awaiting"] = rest
+                            reply = _modify_awaiting_prompt(rest[0])
+                        else:
+                            sess.pop("modify_awaiting", None)
+                            reply = "✅ Reservation updated.\n\n" + format_reservation_row(updated_row)
+                    else:
+                        reply = "I couldn't update the date. Please try again or contact the venue."
+                else:
+                    sess["modify_awaiting"] = awaiting
+                    reply = "What date would you like? (e.g. June 23, 2026)"
+            elif current == "party_size":
+                ps = extract_party_size(msg)
+                if ps is not None and 1 <= ps <= 200:
+                    updated_row = update_reservation_by_id(rid, {"party_size": ps})
+                    if updated_row:
+                        sess["recalled_reservation"] = updated_row
+                        if rest:
+                            sess["modify_awaiting"] = rest
+                            reply = _modify_awaiting_prompt(rest[0])
+                        else:
+                            sess.pop("modify_awaiting", None)
+                            reply = "✅ Reservation updated.\n\n" + format_reservation_row(updated_row)
+                    else:
+                        reply = "I couldn't update the party size. Please try again or contact the venue."
+                else:
+                    sess["modify_awaiting"] = awaiting
+                    reply = "How many people will be in your party?"
+            else:
+                sess["modify_awaiting"] = awaiting
+            if reply is not None:
+                return jsonify({"reply": reply, "rate_limit_remaining": remaining})
+
+        # Recall: (1) bare "WC-XXXX" or (2) "recall WC-XXXX" or (3) "recall with this id" using last-entered ID
+        rid = None
+        if _is_bare_reservation_id(msg):
+            rid = _normalize_reservation_id(msg)
+            if rid:
+                sess["last_entered_reservation_id"] = rid
+        if not rid and want_recall(msg, lang):
+            rid = extract_recall_id(msg)
+            if not rid:
+                low = msg.lower()
+                if re.search(r"(this|that|the)\s+id", low) or "with this id" in low or "with that id" in low:
+                    rid = sess.get("last_entered_reservation_id")
+        if rid:
+            row = _get_reservation_by_id(rid)
+            if row:
+                sess["recalled_reservation_id"] = rid
+                sess["recalled_reservation"] = row
+                sess["last_entered_reservation_id"] = rid
+                mod = _extract_modification(msg)
+                if mod:
+                    updated_row = update_reservation_by_id(rid, mod)
+                    if updated_row:
+                        sess["recalled_reservation"] = updated_row
+                        reply = "✅ Reservation updated.\n\n" + format_reservation_row(updated_row)
+                    else:
+                        reply = format_reservation_row(row) + "\n\n(I couldn't update the reservation; please try again or contact the venue.)"
+                else:
+                    reply = format_reservation_row(row)
+            else:
+                sess.pop("recalled_reservation_id", None)
+                sess.pop("recalled_reservation", None)
+                reply = format_reservation_row(None)
+            return jsonify({"reply": reply, "rate_limit_remaining": remaining})
+        if want_recall(msg, lang) and not rid:
+            reply = "To recall a reservation, type **recall** followed by your reservation ID (e.g. **recall WC-XXXX**), or paste your ID (e.g. WC-BAC819C0) and I'll look it up."
+            return jsonify({"reply": reply, "rate_limit_remaining": remaining})
+
+        # Modify existing (recalled) reservation: keep context, don't reset to new flow (BUG-CHAT-001)
+        if _want_modify_reservation(msg) and sess.get("recalled_reservation_id"):
+            rid = sess["recalled_reservation_id"]
+            mod = _extract_modification(msg)
+            if mod:
+                sess.pop("modify_awaiting", None)
+                updated_row = update_reservation_by_id(rid, mod)
+                if updated_row:
+                    sess["recalled_reservation"] = updated_row
+                    reply = "✅ Reservation updated.\n\n" + format_reservation_row(updated_row)
+                else:
+                    reply = "I couldn't update that reservation. Please try **recall " + rid + "** again, or contact the venue."
+            else:
+                # Ask for the specific change(s); support multiple fields e.g. "update party size and name too"
+                mentioned = _get_modification_fields_mentioned(msg)
+                if len(mentioned) >= 2:
+                    sess["modify_awaiting"] = mentioned
+                    reply = _modify_awaiting_prompt(mentioned[0])
+                elif len(mentioned) == 1:
+                    sess["modify_awaiting"] = mentioned[0]
+                    reply = _modify_awaiting_prompt(mentioned[0])
+                else:
+                    sess.pop("modify_awaiting", None)
+                    reply = "What would you like to change — **time**, **date**, **party size**, **name**, or **phone**? Tell me the new value (e.g. 11 pm or Ahmad)."
+            return jsonify({"reply": reply, "rate_limit_remaining": remaining})
+
+        # If user wants to modify but no recalled context, direct them to recall first (skip when already making a new reservation)
+        if _want_modify_reservation(msg) and sess.get("mode") != "reserving":
+            reply = (
+                "Please recall your reservation first: type **recall WC-XXXX** with your reservation ID, "
+                "then tell me what you'd like to change (e.g. time, date, or party size)."
+            )
             return jsonify({"reply": reply, "rate_limit_remaining": remaining})
 
         # Start reservation flow if user indicates intent (first turn for this reservation)
@@ -6072,6 +6618,8 @@ def chat():
                 return jsonify({"reply": "⏸️ Reservations are temporarily paused. Please check back soon, or ask a staff member for help.", "rate_limit_remaining": remaining})
 
             sess["mode"] = "reserving"
+            sess.pop("recalled_reservation_id", None)
+            sess.pop("recalled_reservation", None)
 
             # If we are in waitlist mode, capture the same details but save as Waitlist (keeps fan UI unchanged).
             if ops.get("waitlist_mode"):
@@ -6081,8 +6629,8 @@ def chat():
             if re.search(r"\bvip\b", msg.lower()):
                 sess["lead"]["vip"] = "Yes"
 
-            # IMPORTANT: do NOT treat the word "reservation" as the name.
-            if msg.lower().strip() in ["reservation", "reserva", "réservation"]:
+            # IMPORTANT: do NOT treat trigger words as the name.
+            if msg.lower().strip() in ["reservation", "reserva", "réservation", "vip"]:
                 sess["lead"]["name"] = ""
 
             payload = _handle_reservation_turn(sess, msg, lang, remaining)
@@ -6112,25 +6660,32 @@ def chat():
                 )
             return jsonify({"reply": reply, "rate_limit_remaining": remaining})
 
-        # Otherwise: normal Q&A using OpenAI (with language + venue-specific business profile + menu)
+        # Deterministic replies: thank you (polished welcome) + menu/specials (direct to Menu tab only)
+        if _is_thanks(msg):
+            return jsonify({"reply": _thanks_reply(lang), "rate_limit_remaining": remaining})
+        if _is_menu_or_specials_question(msg):
+            return jsonify({
+                "reply": _menu_redirect_reply(lang),
+                "rate_limit_remaining": remaining,
+                "navigate_to": "menu",
+            })
+
+        # Otherwise: normal Q&A using OpenAI (venue profile only; no menu — chat is for reservations, menu in Menu tab)
         vid_for_profile = _venue_id()
         bp = _venue_business_profile(vid_for_profile)
         system_msg = f"""
-    You are a World Cup 2026 business concierge for this venue.
+    You are a World Cup 2026 business concierge for this venue. This chat is for reservations only.
 
-    Business profile (source of truth):
+    Business profile (source of truth for venue info only; do NOT quote menu items or specials):
     {bp}
-
-    Menu (source of truth, language={lang}):
-    {json.dumps(MENU.get(lang, MENU['en']), ensure_ascii=False)}
 
 Rules:
 - Be friendly, fast, and concise.
 - Always respond in the user's chosen language: {lang}. This includes short greetings: if the user says "hi", "hello", "hola", "bonjour", etc., respond with a brief friendly greeting in language {lang} only (e.g. in Spanish if lang is es, in French if lang is fr).
-- If user asks about the World Cup match schedule, tell them to use the **Schedule** panel on the page, then continue booking.
-- For menu/food/drink/prices/diet questions, do NOT guess: direct them to the **Menu** panel on the page, then continue booking.
-- If the user wants a reservation, do NOT tell them to type "reservation". Start collecting details immediately.
-- If you are unsure or missing info, do NOT dead-end. Redirect to Menu/Info panels and continue booking.
+- If the user wants a reservation (or says "VIP" to start a VIP reservation), do NOT tell them to type "reservation". Start collecting details immediately.
+- For the World Cup match schedule, tell them to use the **Schedule** tab on the page, then offer to help with a reservation.
+- For menu, food, drink, specials, prices, or diet questions: do NOT list or quote any menu items. Tell them to use the **Menu** tab on this page for the full menu and pricing, then offer to help with a reservation.
+- If you are unsure or missing info, do NOT dead-end. Redirect to the Menu or Schedule tabs as needed and keep the conversation focused on reservations.
 - Always keep the reservation flow alive by asking for missing details: party size and preferred time.
 """
 
@@ -6149,15 +6704,20 @@ Rules:
             # If the model gives a dead-end answer, force redirect + continue booking
             if re.search(r"\b(i (can't|cannot)|not sure|i don't know|unable to|no information)\b", reply.lower()):
                 reply = (
-                    "For accurate details, please check the **Menu** or **Info** panels on this page.\n\n"
+                    "For accurate details, please check the **Menu** or **Schedule** tabs on this page.\n\n"
                     "I can still help with a reservation — **how many guests** and **what time**?"
                 )
+
+            # Safety: if the model quoted menu/specials/prices (e.g. from business profile), redirect to Menu tab
+            if re.search(r"\$\s*\d+|\d+\s*dollars?|(today'?s?|game\s+day)\s+special|(\d+\s*beers?|bucket\s+for)", reply.lower()):
+                reply = _menu_redirect_reply(lang)
+                return jsonify({"reply": reply, "rate_limit_remaining": remaining, "navigate_to": "menu"})
 
             return jsonify({"reply": reply, "rate_limit_remaining": remaining})
         except Exception as e:
             # Customer-safe fallback (no “chat unavailable”), still routes + continues booking
             fallback = (
-                "For accurate details, please check the **Menu** or **Info** panels on this page.\n\n"
+                "For accurate details, please check the **Menu** or **Schedule** tabs on this page.\n\n"
                 "I can still help with a reservation — **how many guests** and **what time**?"
             )
             return jsonify({"reply": fallback, "rate_limit_remaining": remaining}), 200
@@ -6165,7 +6725,7 @@ Rules:
     except Exception as e:
         # Never break the UI: always return JSON.
         fallback = (
-            "For accurate details, please check the **Menu** or **Info** panels on this page.\n\n"
+            "For accurate details, please check the **Menu** or **Schedule** tabs on this page.\n\n"
             "I can still help with a reservation — **how many guests** and **what time**?"
         )
         return jsonify({"reply": fallback, "rate_limit_remaining": 0}), 200
@@ -11682,6 +12242,37 @@ def api_intake():
     except Exception as e:
         return jsonify({"ok": False, "error": "Failed to store intake"}), 500
 
+
+@app.route("/api/reservation/update", methods=["POST"])
+def api_reservation_update():
+    """Fan-facing: update an existing reservation by ID (date, time, party_size). Used by chat and optional frontend."""
+    vid = _venue_id()
+    if not _venue_is_active(vid):
+        return jsonify({"ok": False, "error": "Venue is inactive"}), 403
+    payload = request.get_json(silent=True) or {}
+    rid = (payload.get("reservation_id") or "").strip()
+    if not rid:
+        return jsonify({"ok": False, "error": "Missing reservation_id"}), 400
+    if not rid.upper().startswith("WC-"):
+        rid = "WC-" + rid
+    updates = {}
+    if "date" in payload and str(payload.get("date") or "").strip():
+        updates["date"] = str(payload["date"]).strip()
+    if "time" in payload and str(payload.get("time") or "").strip():
+        updates["time"] = str(payload["time"]).strip()
+    if "party_size" in payload and payload.get("party_size") is not None:
+        try:
+            updates["party_size"] = int(payload["party_size"])
+        except (TypeError, ValueError):
+            pass
+    if not updates:
+        return jsonify({"ok": False, "error": "No valid updates (date, time, or party_size)"}), 400
+    row = update_reservation_by_id(rid, updates)
+    if not row:
+        return jsonify({"ok": False, "error": "Reservation not found or could not be updated"}), 404
+    return jsonify({"ok": True, "reservation": row, "message": "Reservation updated."})
+
+
     # ============================================================
     # Leads intake (used by the new UI)
     # - Stores locally to static/data/leads.jsonl
@@ -15798,7 +16389,10 @@ def want_recall(text: str, lang: str) -> bool:
 
 
 def want_reservation(text: str) -> bool:
-    t = text.lower()
+    t = (text or "").lower().strip()
+    t_clean = t.rstrip(".!? \t")
+    if t_clean == "vip":
+        return True
     triggers = [
         "reservation",
         "reserve",
@@ -15809,6 +16403,11 @@ def want_reservation(text: str) -> bool:
         "need table",
         "reserva",
         "réservation",
+        "vip reservation",
+        "vip table",
+        "vip reserve",
+        "vip book",
+        "vip hold",
     ]
     return any(k in t for k in triggers)
 
@@ -15817,14 +16416,19 @@ def extract_party_size(text: str) -> Optional[int]:
     """Extract party size from free text.
 
     IMPORTANT: avoid mis-reading dates like 'June 13' as a party size.
-    We only accept a standalone number when the message does NOT look like a date/time.
+    'party size to N' wins when message also contains a long digit string (e.g. phone).
     """
     raw = (text or "").strip()
     if not raw:
         return None
     t = raw.lower()
 
-    # Strong patterns first – these win even if the message also contains a time.
+    # Strong patterns first – "party size to N" when message also has phone digits.
+    m = re.search(r"party\s*(?:size)?\s+to\s+(\d+)", t)
+    if m:
+        n = int(m.group(1))
+        if 1 <= n <= 200:
+            return n
     m = re.search(r"party\s*(?:size)?\s*(?:is|=|:)?\s*(\d+)", t)
     if m:
         return int(m.group(1))
