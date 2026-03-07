@@ -272,19 +272,17 @@ a {
 }
 
 .heroVideo--blur {
-  object-fit:cover;
+  object-fit: cover;
   filter: blur(14px) brightness(1.35) saturate(1.08) contrast(1.02);
   transform: scale(1.06);
   opacity: 0.78;
 }
 
 .heroVideo--contain {
-  object-fit:contain;
+  object-fit: contain;
   background: transparent;
   filter: brightness(1.28) saturate(1.06) contrast(1.02);
 }
-
-
 
 /* scrim removed entirely */
 .heroScrim {
@@ -530,7 +528,8 @@ a {
   box-shadow: var(--shadow2);
   padding: 12px;
 }
-.calmVisual,.tileVisual img {
+.calmVisual,
+.tileVisual img {
   display: block;
   width: 100%;
   height: auto;
@@ -1001,4 +1000,45 @@ select {
   .sms-disclaimer {
     font-size: 0.6875rem; /* ~11px on very small screens if needed */
   }
+}
+
+.footerStack {
+  display: grid;
+  gap: 12px;
+  text-align: center;
+}
+
+.footerBlock {
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.compliance-note {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.checkboxRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  line-height: 1.5;
+}
+
+.checkboxRow input[type="checkbox"] {
+  margin-top: 4px;
+}
+
+.sms-disclaimer {
+  font-size: 12px;
+  line-height: 1.6;
+  opacity: 0.92;
+}
+
+.sms-disclaimer a {
+  text-decoration: underline;
 }
