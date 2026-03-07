@@ -580,12 +580,19 @@
         display: none;
       }
 
+      @keyframes wcSectionFadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+
       body[data-sec="home"] #sec-home {
         display: block;
+        animation: wcSectionFadeIn 0.3s ease-out;
       }
 
       body[data-sec="chat"] #sec-chat {
         display: block;
+        animation: wcSectionFadeIn 0.3s ease-out;
       }
 
       #sec-chat {
@@ -595,18 +602,22 @@
 
       body[data-sec="menu"] #sec-menu {
         display: block;
+        animation: wcSectionFadeIn 0.3s ease-out;
       }
 
       body[data-sec="schedule"] #sec-schedule {
         display: block;
+        animation: wcSectionFadeIn 0.3s ease-out;
       }
 
       body[data-sec="fanzone"] #sec-fanzone {
         display: block;
+        animation: wcSectionFadeIn 0.3s ease-out;
       }
 
       body[data-sec="vip"] #sec-vip {
         display: block;
+        animation: wcSectionFadeIn 0.3s ease-out;
       }
 
       /* === CHAT (iOS premium) === */
@@ -7297,6 +7308,13 @@
           chatAppend("bot", reply);
           // Save reservation to localStorage if it's a confirmation (survives refresh/restart)
           saveLastReservation(reply);
+
+          // Menu redirect: show message, then smoothly navigate to Menu tab after a short delay
+          if (data.navigate_to === "menu") {
+            setTimeout(() => {
+              setSection("menu");
+            }, 1400);
+          }
         } catch (e) {
           chatAppend("bot", "Network issue — please try again.");
         } finally {
