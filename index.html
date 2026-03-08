@@ -1087,6 +1087,13 @@
         letter-spacing: 0.02em;
       }
 
+      .modalSubtitle {
+        font-size: 0.875rem;
+        color: rgba(255, 255, 255, 0.65);
+        margin: 6px 0 16px;
+        line-height: 1.4;
+      }
+
       /* 4. Close Button */
       .iconBtn {
         background: rgba(255, 255, 255, 0.05);
@@ -1271,6 +1278,99 @@
         color: rgba(255, 255, 255, 0.5);
         text-align: center;
         margin-top: 12px;
+      }
+
+      /* Intake modal: vibe chips (VIP path) */
+      .vibeChips.hidden {
+        display: none;
+      }
+      .vibeChips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+      }
+      .vibeChip {
+        padding: 10px 16px;
+        min-height: 44px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background: rgba(0, 0, 0, 0.3);
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 0.85rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .vibeChip:hover {
+        border-color: rgba(212, 175, 55, 0.5);
+        background: rgba(212, 175, 55, 0.15);
+      }
+      .vibeChip.selected {
+        border-color: rgba(212, 175, 55, 0.8);
+        background: rgba(212, 175, 55, 0.25);
+        color: #fff;
+      }
+
+      /* Intake fields container: children participate in modal grid */
+      .intakeFields {
+        display: contents;
+      }
+
+      @media (min-width: 900px) {
+        #addMoreDetails,
+        #submitGroup {
+          grid-column: 1 / -1;
+        }
+      }
+
+      /* Add more details collapsible (Table for 4) */
+      .addMoreDetails {
+        margin-top: 12px;
+      }
+
+      .addMoreDetails.hidden {
+        display: none;
+      }
+      .addMoreToggle {
+        width: 100%;
+        padding: 12px 16px;
+        min-height: 44px;
+        border-radius: 10px;
+        border: 1px dashed rgba(255, 255, 255, 0.25);
+        background: transparent;
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-align: left;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .addMoreToggle:hover {
+        border-color: rgba(255, 255, 255, 0.4);
+        color: rgba(255, 255, 255, 0.9);
+      }
+      .addMoreContent {
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+      }
+      .addMoreContent.collapsed {
+        max-height: 0;
+        opacity: 0;
+        pointer-events: none;
+      }
+      .addMoreContent.expanded {
+        max-height: 500px;
+        opacity: 1;
+      }
+      .addMoreContent .fieldGroup {
+        margin-top: 12px;
+      }
+
+      .fieldHelper {
+        font-size: 0.75rem;
+        color: rgba(255, 255, 255, 0.45);
+        margin-top: 4px;
       }
 
       /* ===== HERO COUNTDOWN (ULTRA-TRANSPARENT GLASS) ===== */
@@ -6497,7 +6597,7 @@
 
     <div id="toast" class="toast hidden" aria-live="polite"></div>
 
-    <!-- Intake modal (used by "Build my matchday") -->
+    <!-- Intake modal: dynamic copy/order per entry_point -->
     <div
       id="intakeModal"
       class="modal hidden"
@@ -6507,7 +6607,7 @@
     >
       <div class="modalCard" role="document">
         <div class="modalHead">
-          <h3>Matchday request</h3>
+          <h3 id="intakeModalTitle">Reserve Now</h3>
           <button
             class="iconBtn"
             id="closeModal"
@@ -6518,75 +6618,63 @@
             ✕
           </button>
         </div>
-        <div class="modalBody">
-          <div class="fieldGroup fieldGroup--full">
-            <label for="iCity">Business context (optional)</label>
-            <input
-              id="iCity"
-              placeholder="e.g., client name, suite name, or event context (optional)"
-            />
+        <p class="modalSubtitle" id="intakeModalSubtitle">Share the essentials and we'll confirm availability for your reservation request.</p>
+        <div class="modalBody" id="modalBody">
+          <div id="intakeFields" class="intakeFields">
+            <div class="fieldGroup" data-field="business_context">
+              <label for="iCity"></label>
+              <input id="iCity" />
+            </div>
+            <div class="fieldGroup" data-field="name">
+              <label for="iName"></label>
+              <input id="iName" />
+            </div>
+            <div class="fieldGroup" data-field="contact">
+              <label for="iContact"></label>
+              <input id="iContact" />
+            </div>
+            <div class="fieldGroup" data-field="date">
+              <label for="iDate"></label>
+              <input id="iDate" type="date" />
+            </div>
+            <div class="fieldGroup" data-field="time">
+              <label for="iTime"></label>
+              <input id="iTime" />
+            </div>
+            <div class="fieldGroup" data-field="party_size">
+              <label for="iGroup"></label>
+              <input id="iGroup" inputmode="numeric" />
+              <span class="fieldHelper" id="iGroupHelper"></span>
+            </div>
+            <div class="fieldGroup fieldGroup--full" data-field="vibe">
+              <label for="iVibe"></label>
+              <div id="vibeChipsWrap" class="vibeChips hidden"></div>
+              <input id="iVibe" />
+            </div>
+            <div class="fieldGroup" data-field="budget">
+              <label for="iBudget"></label>
+              <input id="iBudget" />
+            </div>
+            <div class="fieldGroup fieldGroup--full" data-field="notes">
+              <label for="iNotes"></label>
+              <textarea id="iNotes" rows="3"></textarea>
+            </div>
           </div>
-
-          <div class="fieldGroup">
-            <label class="required" for="iName">Name</label>
-            <input id="iName" placeholder="Guest name" />
+          <div id="addMoreDetails" class="addMoreDetails hidden">
+            <button type="button" class="addMoreToggle" id="addMoreToggle">Add more details</button>
+            <div class="addMoreContent collapsed" id="addMoreContent"></div>
           </div>
-
-          <div class="fieldGroup">
-            <label class="required" for="iContact">Contact</label>
-            <input id="iContact" placeholder="Phone or email" />
-          </div>
-
-          <div class="fieldGroup">
-            <label class="required" for="iDate">Date</label>
-            <input id="iDate" type="date" />
-          </div>
-
-          <div class="fieldGroup">
-            <label class="required" for="iTime">Time window</label>
-            <input id="iTime" placeholder="e.g., 7–9pm" />
-          </div>
-
-          <div class="fieldGroup">
-            <label class="required" for="iGroup">Party size</label>
-            <input id="iGroup" inputmode="numeric" placeholder="e.g., 4" />
-          </div>
-
-          <div class="fieldGroup">
-            <label for="iVibe">Experience / vibe (optional)</label>
-            <input
-              id="iVibe"
-              placeholder="e.g., VIP, quiet lounge, lively, premium"
-            />
-          </div>
-
-          <div class="fieldGroup">
-            <label for="iBudget">Budget (optional)</label>
-            <input id="iBudget" placeholder="e.g., $200–$400" />
-          </div>
-
-          <div class="fieldGroup fieldGroup--full">
-            <label for="iNotes">Notes (optional)</label>
-            <textarea
-              id="iNotes"
-              rows="3"
-              placeholder="Any preferences, constraints, or special requests"
-            ></textarea>
-          </div>
-
-          <div class="fieldGroup fieldGroup--full">
+          <div class="fieldGroup fieldGroup--full" id="submitGroup">
             <button
               class="ctaBtn"
               id="submitIntake"
               type="button"
               onclick="submitIntake()"
             >
-              Submit request
+              Request Reservation
             </button>
-
-            <div class="hint" style="margin-top: 10px">
-              Saved to your Admin Leads list. You can confirm details and follow
-              up from there.
+            <div class="hint" id="intakeHelperText" style="margin-top: 10px">
+              A team member will review your request and follow up on availability.
             </div>
           </div>
         </div>
@@ -8263,11 +8351,233 @@
       }
 
       // ---------- intake modal ----------
+      const VIP_VIBE_OPTIONS = ["VIP", "Premium", "Lively", "Quiet", "Bottle service", "Best screen view", "Celebration", "Client hosting"];
+
+      const INTAKE_CONFIG = {
+        reserve_now: {
+          title: "Reserve Now",
+          subtitle: "Share the essentials and we'll confirm availability for your reservation request.",
+          cta: "Request Reservation",
+          helper: "A team member will review your request and follow up on availability.",
+          fieldOrder: ["name", "date", "party_size", "time", "vibe", "notes", "budget", "contact"],
+          addMoreFields: [],
+          vibeType: "input",
+          fields: {
+            business_context: { show: false },
+            name: { label: "Name", placeholder: "Full name", required: true },
+            date: { label: "Date", placeholder: "Select date", required: true },
+            time: { label: "Preferred time", placeholder: "e.g. 7:30 PM", required: true },
+            party_size: { label: "Party size", placeholder: "e.g. 2, 4, 6", required: true, helper: "" },
+            vibe: { label: "Experience preference", placeholder: "e.g. lively, relaxed, premium, casual" },
+            budget: { label: "Budget", placeholder: "Optional" },
+            notes: { label: "Notes", placeholder: "Anything else we should know?" },
+            contact: { label: "Phone or email", placeholder: "Best way to reach you", required: true },
+          },
+          prefill: {},
+        },
+        match_day: {
+          title: "Build Your Match Day",
+          subtitle: "Tell us your match-day plan, group size, timing, and preferred atmosphere. We'll help shape the best setup for your night.",
+          cta: "Start My Match-Day Plan",
+          helper: "We'll review your request and follow up with the best fit for your group and match-day goals.",
+          fieldOrder: ["business_context", "name", "date", "party_size", "time", "vibe", "notes", "budget", "contact"],
+          addMoreFields: [],
+          vibeType: "input",
+          fields: {
+            business_context: { label: "Match or occasion", placeholder: "e.g. Arsenal match, birthday watch party, client outing" },
+            name: { label: "Your name", placeholder: "Full name", required: true },
+            date: { label: "Preferred date", placeholder: "Select date", required: true },
+            time: { label: "Arrival / kickoff timing", placeholder: "e.g. Arrive 1 hour before kickoff, 7–9 PM", required: true },
+            party_size: { label: "Group size", placeholder: "e.g. 6", required: true, helper: "" },
+            vibe: { label: "Preferred atmosphere", placeholder: "e.g. high energy, premium seating, relaxed lounge, best screen view" },
+            notes: { label: "What matters most for your match day?", placeholder: "Tell us what matters most — best screen view, celebration, quieter space, premium service, bottle service, host preferences, etc." },
+            budget: { label: "Estimated budget", placeholder: "e.g. $300–$500" },
+            contact: { label: "Best contact", placeholder: "Phone or email", required: true },
+          },
+          prefill: { notes: "Planning full match-day experience" },
+        },
+        table_for_4: {
+          title: "Table for 4",
+          subtitle: "We've prefilled your group size. Just add your date, time, and contact details to request a table for four.",
+          cta: "Request Table for 4",
+          helper: "Quick request for a standard group of four. We'll confirm availability as soon as possible.",
+          fieldOrder: ["name", "date", "party_size", "time", "vibe", "notes", "contact"],
+          addMoreFields: ["budget", "business_context"],
+          vibeType: "input",
+          fields: {
+            business_context: { label: "Additional context", placeholder: "Optional" },
+            name: { label: "Name", placeholder: "Full name", required: true },
+            date: { label: "Date", placeholder: "Select date", required: true },
+            time: { label: "Preferred time", placeholder: "e.g. 8:00 PM", required: true },
+            party_size: { label: "Party size", placeholder: "", required: true, helper: "Preset for 4 guests" },
+            vibe: { label: "Seating preference", placeholder: "e.g. near the main screen, quieter corner, high-energy area" },
+            budget: { label: "Budget", placeholder: "Optional" },
+            notes: { label: "Notes", placeholder: "Optional details for your table" },
+            contact: { label: "Phone or email", placeholder: "Best way to reach you", required: true },
+          },
+          prefill: { party_size: "4" },
+        },
+        vip_vibe: {
+          title: "VIP Vibe Request",
+          subtitle: "For premium seating, elevated service, and curated match-day experiences. Share your preferences and our team will review your request directly.",
+          cta: "Request VIP Experience",
+          helper: "VIP requests are reviewed with priority handling based on your requested experience and availability.",
+          fieldOrder: ["name", "date", "party_size", "time", "vibe", "budget", "notes", "business_context", "contact"],
+          addMoreFields: [],
+          vibeType: "chips",
+          fields: {
+            business_context: { label: "Occasion or hosting context", placeholder: "e.g. birthday, client entertainment, special celebration" },
+            name: { label: "Host name", placeholder: "Full name", required: true },
+            date: { label: "Date", placeholder: "Select date", required: true },
+            time: { label: "Preferred arrival time", placeholder: "e.g. 7:00 PM", required: true },
+            party_size: { label: "Group size", placeholder: "e.g. 4, 6, 8", required: true, helper: "" },
+            vibe: { label: "Desired VIP experience", placeholder: "e.g. premium table, bottle service, celebration, client hosting" },
+            budget: { label: "Estimated spend", placeholder: "e.g. $500+, $1,000+, open budget" },
+            notes: { label: "VIP details", placeholder: "Tell us what you're looking for — bottle service, privacy, celebration, best placement, hosted guests, premium service, etc." },
+            contact: { label: "Best contact", placeholder: "Phone or email", required: true },
+          },
+          prefill: { vibe: "VIP", notes: "VIP reservation" },
+        },
+      };
+
+      function applyModalConfig(entryPoint) {
+        const ep = entryPoint || currentEntryPoint || "reserve_now";
+        const cfg = INTAKE_CONFIG[ep] || INTAKE_CONFIG.reserve_now;
+
+        $("intakeModalTitle").textContent = cfg.title;
+        $("intakeModalSubtitle").textContent = cfg.subtitle;
+        $("intakeModalSubtitle").style.display = cfg.subtitle ? "block" : "none";
+        $("submitIntake").textContent = cfg.cta;
+        $("intakeHelperText").textContent = cfg.helper;
+
+        const intakeFields = $("intakeFields");
+        const addMoreContent = $("addMoreContent");
+        const addMoreDetails = $("addMoreDetails");
+        const modal = $("intakeModal");
+        const budgetGrp = modal.querySelector('[data-field="budget"]');
+        const businessGrp = modal.querySelector('[data-field="business_context"]');
+
+        addMoreDetails.classList.add("hidden");
+        $("addMoreToggle").textContent = "Add more details";
+        addMoreContent.classList.add("collapsed");
+        addMoreContent.classList.remove("expanded");
+
+        if (cfg.addMoreFields && cfg.addMoreFields.length > 0) {
+          addMoreDetails.classList.remove("hidden");
+          if (budgetGrp && budgetGrp.parentNode !== addMoreContent) {
+            budgetGrp.remove();
+            addMoreContent.appendChild(budgetGrp);
+          }
+          if (businessGrp && businessGrp.parentNode !== addMoreContent) {
+            businessGrp.remove();
+            addMoreContent.appendChild(businessGrp);
+          }
+        } else {
+          if (budgetGrp && budgetGrp.parentNode === addMoreContent) {
+            addMoreContent.removeChild(budgetGrp);
+            intakeFields.appendChild(budgetGrp);
+          }
+          if (businessGrp && businessGrp.parentNode === addMoreContent) {
+            addMoreContent.removeChild(businessGrp);
+            intakeFields.appendChild(businessGrp);
+          }
+        }
+
+        const mainOrder = cfg.fieldOrder.filter((f) => !cfg.addMoreFields || !cfg.addMoreFields.includes(f));
+        mainOrder.forEach((fieldId) => {
+          const grp = modal.querySelector('[data-field="' + fieldId + '"]');
+          if (grp && grp.parentNode === intakeFields) intakeFields.appendChild(grp);
+        });
+
+        const fieldMap = {
+          business_context: { input: "iCity", helper: null },
+          name: { input: "iName", helper: null },
+          date: { input: "iDate", helper: null },
+          time: { input: "iTime", helper: null },
+          party_size: { input: "iGroup", helper: "iGroupHelper" },
+          vibe: { input: "iVibe", helper: null },
+          budget: { input: "iBudget", helper: null },
+          notes: { input: "iNotes", helper: null },
+          contact: { input: "iContact", helper: null },
+        };
+
+        modal.querySelectorAll("[data-field]").forEach((grp) => {
+          const fieldId = grp.dataset.field;
+          if (fieldId === "budget_addmore" || fieldId === "business_context_addmore") return;
+          const fc = cfg.fields[fieldId];
+          const map = fieldMap[fieldId];
+          if (!fc || !map) return;
+          const lab = grp.querySelector("label");
+          const inp = $(map.input);
+          const help = map.helper ? $(map.helper) : null;
+          if (fc.show === false) {
+            grp.style.display = "none";
+            return;
+          }
+          grp.style.display = "";
+          grp.classList.toggle("fieldGroup--full", ["business_context", "notes", "vibe"].includes(fieldId));
+          if (lab) {
+            lab.textContent = fc.label;
+            lab.classList.toggle("required", !!fc.required);
+          }
+          if (inp) inp.placeholder = fc.placeholder || "";
+          if (help) help.textContent = fc.helper || "";
+        });
+
+        const vibeWrap = $("vibeChipsWrap");
+        if (cfg.vibeType === "chips") {
+          vibeWrap.classList.remove("hidden");
+          vibeWrap.innerHTML = VIP_VIBE_OPTIONS.map(
+            (v) => '<button type="button" class="vibeChip" data-value="' + v.replace(/"/g, "&quot;") + '">' + v + "</button>"
+          ).join("");
+          vibeWrap.querySelectorAll(".vibeChip").forEach((ch) => {
+            ch.addEventListener("click", function () {
+              vibeWrap.querySelectorAll(".vibeChip").forEach((c) => c.classList.remove("selected"));
+              ch.classList.add("selected");
+              $("iVibe").value = ch.dataset.value;
+            });
+          });
+          $("iVibe").style.display = "none";
+          const prefillVibe = (cfg.prefill || {}).vibe;
+          if (prefillVibe) {
+            const sel = vibeWrap.querySelector('[data-value="' + prefillVibe + '"]');
+            if (sel) {
+              sel.classList.add("selected");
+              $("iVibe").value = prefillVibe;
+            }
+          }
+        } else {
+          vibeWrap.classList.add("hidden");
+          vibeWrap.innerHTML = "";
+          $("iVibe").style.display = "";
+        }
+
+        Object.keys(cfg.prefill || {}).forEach((key) => {
+          if (key === "vibe" && cfg.vibeType === "chips") return;
+          const val = cfg.prefill[key];
+          const map = fieldMap[key];
+          const inpId = map && map.input;
+          if (inpId && $(inpId)) $(inpId).value = val;
+        });
+      }
+
+      function applyIntakePrefills(entryPoint) {
+        const ep = entryPoint || currentEntryPoint || "reserve_now";
+        const cfg = INTAKE_CONFIG[ep] || INTAKE_CONFIG.reserve_now;
+        Object.keys(cfg.prefill || {}).forEach((key) => {
+          const val = cfg.prefill[key];
+          const map = { party_size: "iGroup", vibe: "iVibe", notes: "iNotes" }[key];
+          if (map && $(map)) $(map).value = key === "notes" && $(map).value ? ($(map).value + " | " + val) : val;
+        });
+      }
+
       let currentEntryPoint = "reserve_now";
       function openModal(entryPoint) {
         currentEntryPoint = entryPoint || currentEntryPoint || "reserve_now";
         const m = $("intakeModal");
         if (!m) return;
+        applyModalConfig(currentEntryPoint);
+        applyIntakePrefills(currentEntryPoint);
         m.classList.remove("hidden");
         document.body.classList.add("modalOpen");
         setTimeout(() => {
@@ -8275,8 +8585,8 @@
             $("iName")?.focus({ preventScroll: true });
           } catch (e) {
             try {
-              $("iName")?.focus();
-            } catch (e) {}
+            $("iName")?.focus();
+            } catch (e2) {}
           }
         }, 60);
       }
@@ -8313,11 +8623,11 @@
         // 3. Validation
         if (!iName || !iDate || !iGroup || !iTime || !iContact) {
           showHotToast("warning", "Please fill in all required fields.");
-
           window.__intakeSubmitting = false;
           if (btn) {
             btn.removeAttribute("disabled");
-            btn.textContent = "Submit request";
+            const cfg = INTAKE_CONFIG[currentEntryPoint || "reserve_now"];
+            btn.textContent = (cfg && cfg.cta) || "Submit request";
           }
           return;
         }
@@ -8356,6 +8666,13 @@
               "#intakeModal input, #intakeModal textarea",
             );
             modalInputs.forEach((input) => (input.value = ""));
+            // Reset add more section
+            const addMore = $("addMoreContent");
+            if (addMore) {
+              addMore.classList.add("collapsed");
+              addMore.classList.remove("expanded");
+              $("addMoreToggle").textContent = "Add more details";
+            }
           } else {
             // 7. ERROR HANDLING
             let errorMsg = data.error || "Unknown issue";
@@ -8378,7 +8695,8 @@
           window.__intakeSubmitting = false;
           if (btn) {
             btn.removeAttribute("disabled");
-            btn.textContent = "Submit request";
+            const cfg = INTAKE_CONFIG[currentEntryPoint || "reserve_now"];
+            btn.textContent = (cfg && cfg.cta) || "Submit request";
           }
         }
       }
@@ -8408,7 +8726,9 @@
             const n = $("iNotes");
             if (n) {
               const cur = (n.value || "").trim();
-              n.value = cur ? cur + " | VIP reservation" : "VIP reservation";
+              if (!cur || !cur.includes("VIP reservation")) {
+                n.value = cur ? cur + " | VIP reservation" : "VIP reservation";
+              }
             }
           }
         }
@@ -8475,7 +8795,16 @@
           if (e.target && e.target.id === "intakeModal") closeModal();
         });
         document.addEventListener("keydown", (e) => {
-          if (e.key === "Escape") closeModal();
+          const modal = $("intakeModal");
+          if (e.key === "Escape" && modal && !modal.classList.contains("hidden")) closeModal();
+        });
+        $("addMoreToggle")?.addEventListener("click", () => {
+          const c = $("addMoreContent");
+          if (!c) return;
+          const isCollapsed = c.classList.contains("collapsed");
+          c.classList.toggle("collapsed", !isCollapsed);
+          c.classList.toggle("expanded", isCollapsed);
+          $("addMoreToggle").textContent = isCollapsed ? "Show less" : "Add more details";
         });
       }
 
