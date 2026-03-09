@@ -4118,10 +4118,16 @@ def header_map(header: List[str]) -> Dict[str, int]:
     return m
 
 
-def append_lead_to_sheet(lead: Dict[str, Any]):
-    # Write leads into the current venue's worksheet, with an explicit venue_id column
-    # so multi-venue deployments remain isolated even when sharing a spreadsheet.
-    vid = _venue_id()
+def append_lead_to_sheet(lead: Dict[str, Any], venue_id: Optional[str] = None) -> None:
+    """
+    Append a lead into the correct venue worksheet, tagging it with venue_id.
+
+    - venue_id (optional): when provided, it is treated as the source of truth
+      for which venue owns this lead; otherwise we fall back to the current
+      request context via _venue_id().
+    """
+    # Resolve effective venue (explicit > request context)
+    vid = _slugify_venue_id(venue_id or _venue_id())
     ws = get_sheet(venue_id=vid)
 
     header = ensure_sheet_schema(ws)
@@ -12190,8 +12196,11 @@ async function replayAI(){
 def api_intake():
     payload = request.get_json(silent=True) or {}
     # Venue deactivation: block fan intake when the venue is inactive.
-    vid = _venue_id()
-    if not _venue_is_active(vid):
+    raw_payload_venue = (payload.get("venue_id") or "").strip()
+    effective_vid = _slugify_venue_id(raw_payload_venue) if raw_payload_venue else _venue_id()
+
+    # Venue deactivation: block fan intake when the venue is inactive.
+    if not _venue_is_active(effective_vid):
         return jsonify({"ok": False, "error": "Venue is inactive"}), 403
 
 
@@ -12236,7 +12245,7 @@ def api_intake():
     }
 
     try:
-        append_lead_to_sheet(lead)
+        append_lead_to_sheet(lead, venue_id=effective_vid)
         _audit("intake.new", {"entry_point": entry_point, "tier": tier})
         return jsonify({"ok": True, "tier": tier})
     except Exception as e:
@@ -16271,76 +16280,6 @@ def header_map(header: List[str]) -> Dict[str, int]:
     for i, h in enumerate(header):
         m[_normalize_header(h)] = i + 1
     return m
-
-
-def append_lead_to_sheet(lead: Dict[str, Any]):
-    gc = get_gspread_client()
-    ws = _open_default_spreadsheet(gc).sheet1
-
-    header = ensure_sheet_schema(ws)
-    hmap = header_map(header)
-
-    # Defaults
-    status = (lead.get("status") or "New").strip() or "New"
-    vip = "Yes" if str(lead.get("vip") or "").strip().lower() in ["1", "true", "yes", "y"] else "No"
-
-    row = [""] * len(header)
-
-    def setv(key: str, val: Any):
-        k = _normalize_header(key)
-        if k in hmap:
-            row[hmap[k] - 1] = val
-
-    setv("timestamp", datetime.now().isoformat(timespec="seconds"))
-    setv("reservation_id", (lead.get("reservation_id") or "").strip())
-    setv("name", lead.get("name", ""))
-    setv("phone", lead.get("phone", ""))
-    setv("date", lead.get("date", ""))
-    setv("time", lead.get("time", ""))
-    setv("party_size", int(lead.get("party_size") or 0))
-    setv("language", lead.get("language", "en"))
-    setv("status", status)
-    setv("vip", vip)
-    setv("entry_point", lead.get("entry_point",""))
-    setv("tier", lead.get("tier",""))
-    setv("queue", lead.get("queue",""))
-    setv("business_context", lead.get("business_context",""))
-    setv("budget", lead.get("budget",""))
-    setv("notes", lead.get("notes",""))
-    setv("vibe", lead.get("vibe",""))
-
-    # Append at bottom (keeps headers at the top)
-    ws.append_row(row, value_input_option="USER_ENTERED")
-
-
-# Small per-venue read cache to avoid Sheets 429s
-_LEADS_CACHE_BY_VENUE: Dict[str, Dict[str, Any]] = {}
-
-def read_leads(limit: int = 200, venue_id: Optional[str] = None) -> List[List[str]]:
-    """Read leads from the venue's Google Sheet tab (best-effort, cached).
-
-    Returns rows including header row (row 1) as rows[0].
-    """
-    vid = _slugify_venue_id(venue_id or _venue_id())
-    now = time.time()
-
-    cache = _LEADS_CACHE_BY_VENUE.get(vid) or {}
-    rows_cached = cache.get("rows")
-    if isinstance(rows_cached, list) and (now - float(cache.get("ts") or 0.0) < 9.0):
-        return rows_cached[:limit] if limit else rows_cached
-
-    try:
-        ws = get_sheet(venue_id=vid)  # uses venue sheet_name when present
-        rows = ws.get_all_values() or []
-        # cache regardless; even empty is useful to avoid hammering
-        _LEADS_CACHE_BY_VENUE[vid] = {"ts": now, "rows": rows}
-        return rows[:limit] if limit else rows
-    except Exception:
-        # fallback to cached rows on error
-        rows = rows_cached if isinstance(rows_cached, list) else []
-        if rows:
-            return rows[:limit] if limit else rows
-        return []
 
 def get_session_id() -> str:
     """
