@@ -6301,6 +6301,19 @@ def update_reservation_by_id(reservation_id: str, updates: Dict[str, Any]) -> Op
         if "phone" in updates and updates["phone"] is not None and str(updates["phone"]).strip() and hmap.get("phone"):
             ws.update_cell(row_num, hmap["phone"], str(updates["phone"]).strip())
             updated += 1
+        # NEW: Handle VIP status updates + sync with tier/segment column
+        if "vip" in updates and updates["vip"] is not None:
+            vip_val = str(updates["vip"]).strip()
+            if vip_val in ["Yes", "No"]:
+                col = hmap.get("vip")
+                if col:
+                    ws.update_cell(row_num, col, vip_val)
+                    updated += 1
+                # Also update tier column to keep Segment display in sync
+                tier_val = "VIP" if vip_val == "Yes" else "Regular"
+                tier_col = hmap.get("tier")
+                if tier_col:
+                    ws.update_cell(row_num, tier_col, tier_val)
         if updated == 0:
             return _get_reservation_by_id(reservation_id)
         try:
@@ -6345,54 +6358,68 @@ def _want_modify_reservation(msg: str) -> bool:
 
 
 def _extract_modification_name(msg: str) -> Optional[str]:
-    """Extract new name from an update message. Handles many phrasings: name to X, change name to X, set name as X, call me X, etc."""
+    """Extract new name from an update message. Handles many phrasings: name to X, change name to X, set name as X, call me X, etc.
+    FILTERS OUT: 'vip', 'reservation', 'reserve', etc. to prevent trigger words being treated as names.
+    """
     raw = (msg or "").strip()
     if not raw:
         return None
-    t = raw
+    t = raw.lower()
+    # IMPORTANT: don't treat VIP or other trigger words as names
+    if t.strip() in ["vip", "reservation", "reserva", "réservation", "reserve"]:
+        return None
+    # If message is ALL trigger words + VIP, don't extract a name
+    if "vip" in t and not re.search(r"[a-z][a-z]{3,}", t.replace("vip", "")):
+        return None
+    # If message is clearly "make it vip" or "set it vip", don't extract a name
+    if re.search(r"\b(?:make|set|mark)\s+(?:it|this)\s+(?:to\s+)?vip\b", t):
+        return None
+    
     # Stop name at " and ", ",", digits, or end so "name to Ahmad and time to 9 pm" -> "Ahmad"
     end_look = r"(?=\s+and\s+|\s*,\s*|\d|$)"
     # (the|my)? name (to|is|as|=|:) X
-    m = re.search(r"(?:the\s+|my\s+)?name\s+(?:to|is|as|=|:)\s*([A-Za-z][A-Za-z\s\-']*?)" + end_look, t, re.IGNORECASE)
+    m = re.search(r"(?:the\s+|my\s+)?name\s+(?:to|is|as|=|:)\s*([A-Za-z][A-Za-z\s\-']*?)" + end_look, raw, re.IGNORECASE)
     if m:
         name = m.group(1).strip()
-        if 1 <= len(name) <= 40:
+        if 1 <= len(name) <= 40 and name.lower() not in ["vip"]:
             return name
     # (update|change|modify|edit|set|fix) (the)? name to X
-    m = re.search(r"(?:update|change|modify|edit|set|fix)\s+(?:the\s+|my\s+)?name\s+to\s+([A-Za-z][A-Za-z\s\-']*?)" + end_look, t, re.IGNORECASE)
+    m = re.search(r"(?:update|change|modify|edit|set|fix)\s+(?:the\s+|my\s+)?name\s+to\s+([A-Za-z][A-Za-z\s\-']*?)" + end_look, raw, re.IGNORECASE)
     if m:
         name = m.group(1).strip()
-        if 1 <= len(name) <= 40:
+        if 1 <= len(name) <= 40 and name.lower() not in ["vip"]:
             return name
     # set name as X, change name as X
-    m = re.search(r"(?:set|change|update)\s+(?:the\s+)?name\s+as\s+([A-Za-z][A-Za-z\s\-']*?)" + end_look, t, re.IGNORECASE)
+    m = re.search(r"(?:set|change|update)\s+(?:the\s+)?name\s+as\s+([A-Za-z][A-Za-z\s\-']*?)" + end_look, raw, re.IGNORECASE)
     if m:
         name = m.group(1).strip()
-        if 1 <= len(name) <= 40:
+        if 1 <= len(name) <= 40 and name.lower() not in ["vip"]:
             return name
     # "call me X", "under the name X", "under X" (when X looks like a name)
-    m = re.search(r"call\s+me\s+([A-Za-z][A-Za-z\s\-']*?)" + end_look, t, re.IGNORECASE)
+    m = re.search(r"call\s+me\s+([A-Za-z][A-Za-z\s\-']*?)" + end_look, raw, re.IGNORECASE)
     if m:
         name = m.group(1).strip()
-        if 1 <= len(name) <= 40:
+        if 1 <= len(name) <= 40 and name.lower() not in ["vip"]:
             return name
-    m = re.search(r"under\s+(?:the\s+name\s+)?([A-Za-z][A-Za-z\s\-']*?)" + end_look, t, re.IGNORECASE)
+    m = re.search(r"under\s+(?:the\s+name\s+)?([A-Za-z][A-Za-z\s\-']*?)" + end_look, raw, re.IGNORECASE)
     if m:
         name = m.group(1).strip()
-        if 1 <= len(name) <= 40:
+        if 1 <= len(name) <= 40 and name.lower() not in ["vip"]:
             return name
     # "make it X" or "set it to X" when message is mostly a single name (no time/date pattern)
-    if re.search(r"\b(?:make|set)\s+it\s+(?:to\s+)?([A-Za-z][A-Za-z\s\-']+)\s*$", t, re.IGNORECASE) and not re.search(r"\d{1,2}\s*(?:am|pm|\d)", t):
-        m = re.search(r"\b(?:make|set)\s+it\s+(?:to\s+)?([A-Za-z][A-Za-z\s\-']+)\s*$", t, re.IGNORECASE)
-        if m:
-            name = m.group(1).strip()
-            if 1 <= len(name) <= 40:
-                return name
+    # BUT: skip if it's "make it vip" (that's a VIP modifier, not a name)
+    if not re.search(r"\b(?:make|set|mark)\s+(?:it|this)\s+(?:to\s+)?vip\b", t):
+        if re.search(r"\b(?:make|set)\s+it\s+(?:to\s+)?([A-Za-z][A-Za-z\s\-']+)\s*$", raw, re.IGNORECASE) and not re.search(r"\d{1,2}\s*(?:am|pm|\d)", t):
+            m = re.search(r"\b(?:make|set)\s+it\s+(?:to\s+)?([A-Za-z][A-Za-z\s\-']+)\s*$", raw, re.IGNORECASE)
+            if m:
+                name = m.group(1).strip()
+                if 1 <= len(name) <= 40 and name.lower() not in ["vip"]:
+                    return name
     # "new name X", "name should be X"
-    m = re.search(r"(?:new\s+)?name\s+(?:should\s+be\s+)?([A-Za-z][A-Za-z\s\-']*?)" + end_look, t, re.IGNORECASE)
+    m = re.search(r"(?:new\s+)?name\s+(?:should\s+be\s+)?([A-Za-z][A-Za-z\s\-']*?)" + end_look, raw, re.IGNORECASE)
     if m:
         name = m.group(1).strip()
-        if 1 <= len(name) <= 40:
+        if 1 <= len(name) <= 40 and name.lower() not in ["vip"]:
             return name
     return None
 
@@ -6427,7 +6454,7 @@ def _modify_awaiting_prompt(field: str) -> str:
 
 
 def _extract_modification(msg: str) -> Dict[str, Any]:
-    """Extract requested reservation changes from message. Returns dict with date, time, party_size, name, phone (only set if parsed)."""
+    """Extract requested reservation changes from message. Returns dict with date, time, party_size, name, phone, vip (only set if parsed)."""
     out = {}
     t = extract_time(msg)
     if t:
@@ -6444,6 +6471,9 @@ def _extract_modification(msg: str) -> Dict[str, Any]:
     ph = extract_phone(msg)
     if ph:
         out["phone"] = ph
+    # NEW: Extract VIP status from modification request
+    if re.search(r"\bvip\b", msg.lower()):
+        out["vip"] = "Yes"
     return out
 
 
@@ -6609,6 +6639,17 @@ def chat():
                 sess["recalled_reservation_id"] = rid
                 sess["recalled_reservation"] = row
                 sess["last_entered_reservation_id"] = rid
+                
+                # SPECIAL: Handle "make it vip" explicitly for recalled reservations
+                if re.search(r"\b(?:make|mark|set|upgrade)\s+(?:it|this)\s+(?:to\s+)?vip\b", msg.lower()):
+                    updated_row = update_reservation_by_id(rid, {"vip": "Yes"})
+                    if updated_row:
+                        sess["recalled_reservation"] = updated_row
+                        reply = "✅ Reservation upgraded to VIP!\n\n" + format_reservation_row(updated_row)
+                    else:
+                        reply = "I couldn't upgrade that reservation to VIP. Please try again or contact the venue."
+                    return jsonify({"reply": reply, "rate_limit_remaining": remaining})
+                
                 mod = _extract_modification(msg)
                 if mod:
                     updated_row = update_reservation_by_id(rid, mod)
@@ -6626,6 +6667,17 @@ def chat():
             return jsonify({"reply": reply, "rate_limit_remaining": remaining})
         if want_recall(msg, lang) and not rid:
             reply = "To recall a reservation, type **recall** followed by your reservation ID (e.g. **recall WC-XXXX**), or paste your ID (e.g. WC-BAC819C0) and I'll look it up."
+            return jsonify({"reply": reply, "rate_limit_remaining": remaining})
+
+        # NEW: Handle "make it vip" specifically when a reservation is recalled
+        if sess.get("recalled_reservation_id") and re.search(r"\b(?:make|mark|set|upgrade)\s+(?:it|this)\s+(?:to\s+)?vip\b", msg.lower()):
+            rid = sess["recalled_reservation_id"]
+            updated_row = update_reservation_by_id(rid, {"vip": "Yes"})
+            if updated_row:
+                sess["recalled_reservation"] = updated_row
+                reply = "✅ Reservation upgraded to VIP!\n\n" + format_reservation_row(updated_row)
+            else:
+                reply = "I couldn't upgrade that reservation to VIP. Please try **recall " + rid + "** again, or contact the venue."
             return jsonify({"reply": reply, "rate_limit_remaining": remaining})
 
         # Modify existing (recalled) reservation: keep context, don't reset to new flow (BUG-CHAT-001)
