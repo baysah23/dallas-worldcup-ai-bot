@@ -1002,35 +1002,53 @@ def get_sheet(tab: Optional[str] = None, venue_id: Optional[str] = None):
 def _check_sheet_id(sheet_id: str) -> Dict[str, Any]:
     """Best-effort Google Sheet validation for onboarding.
 
+    Retries once on transient errors (auth, network, rate limits).
     Never raises. Returns:
       { ok: bool, sheet_id, title, error, checked_at, details? }
     """
-    sid = str(sheet_id or "").strip()
-    chk: Dict[str, Any] = {
-        "ok": False,
-        "sheet_id": sid,
-        "title": "",
-        "error": "",
-        "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-    }
-    if not sid:
-        chk["error"] = "missing sheet_id"
-        return chk
-    try:
-        gc = get_gspread_client()
-        sh = gc.open_by_key(sid)
-        chk["title"] = str(getattr(sh, "title", "") or "")
-        chk["ok"] = True
+    def _try_check(sid: str) -> Dict[str, Any]:
+        chk: Dict[str, Any] = {
+            "ok": False,
+            "sheet_id": sid,
+            "title": "",
+            "error": "",
+            "checked_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+        if not sid:
+            chk["error"] = "missing sheet_id"
+            return chk
         try:
-            ws = sh.sheet1
-            header = ws.row_values(1) or []
-            chk["details"] = {"header": header[:64]}
-        except Exception:
-            pass
-    except Exception as e:
-        chk["ok"] = False
-        chk["error"] = str(e)
-    return chk
+            gc = get_gspread_client()
+            sh = gc.open_by_key(sid)
+            chk["title"] = str(getattr(sh, "title", "") or "")
+            chk["ok"] = True
+            try:
+                ws = sh.sheet1
+                header = ws.row_values(1) or []
+                chk["details"] = {"header": header[:64]}
+            except Exception:
+                pass
+        except Exception as e:
+            chk["ok"] = False
+            chk["error"] = str(e)
+        return chk
+    
+    sid = str(sheet_id or "").strip()
+    
+    # First attempt
+    result = _try_check(sid)
+    if result["ok"]:
+        return result
+    
+    # Retry once after brief delay for transient failures
+    # (gspread client init, auth token refresh, rate limit recovery)
+    try:
+        time.sleep(0.5)
+        result = _try_check(sid)
+    except Exception:
+        pass
+    
+    return result
 
 
 SCOPES = [
@@ -2046,13 +2064,27 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
             if not allow.get("vip_tag", True):
                 return {"ok": False, "error": "vip_tag not allowed"}
             vip = str(payload.get("vip") or "").strip()
-            if vip not in ("VIP", "Regular"):
+            # Normalize VIP values: accept both "VIP"/"Regular" (AI) and "Yes"/"No" (admin)
+            vip_normalized = "Yes"
+            if vip.lower() in ("vip", "yes", "true", "y", "1"):
+                vip_normalized = "Yes"
+            elif vip.lower() in ("regular", "no", "false", "n", "0"):
+                vip_normalized = "No"
+            else:
                 return {"ok": False, "error": "Invalid vip"}
+            
             col = hmap.get("vip")
             if not col:
                 return {"ok": False, "error": "VIP column not found"}
-            ws.update_cell(row_num, col, vip)
-            _audit("ai.vip_tag.apply", {"row": row_num, "vip": vip})
+            ws.update_cell(row_num, col, vip_normalized)
+            
+            # Also update tier column to keep Segment display in sync
+            tier_val = "VIP" if vip_normalized == "Yes" else "Regular"
+            tier_col = hmap.get("tier")
+            if tier_col:
+                ws.update_cell(row_num, tier_col, tier_val)
+            
+            _audit("ai.vip_tag.apply", {"row": row_num, "vip": vip_normalized})
             return {"ok": True, "applied": "vip_tag"}
 
         if typ == "status_update":
@@ -4691,35 +4723,49 @@ FANZONE_ADMIN_HTML = r"""
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Fan Zone Admin</title>
   <style>
+    *,*::before,*::after{box-sizing:border-box}
     :root{--bg:#0b1220;--card:rgba(255,255,255,.06);--stroke:rgba(255,255,255,.14);--text:#eef2ff;--muted:rgba(238,242,255,.68);--line:rgba(255,255,255,.14);}
     html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto;}
     .wrap{max-width:1100px;margin:0 auto;padding:16px}
-    .card{background:var(--card);border:1px solid var(--stroke);border-radius:16px;padding:14px}
+    .card{background:var(--card);border:1px solid var(--stroke);border-radius:16px;padding:18px}
     .btn{padding:10px 14px;border-radius:12px;border:1px solid var(--stroke);background:rgba(255,255,255,.12);color:var(--text);cursor:pointer}
     .btn2{padding:10px 14px;border-radius:12px;border:1px solid var(--stroke);background:rgba(255,255,255,.06);color:var(--text);cursor:pointer}
-    .inp,select{width:100%;border-radius:12px;border:1px solid var(--stroke);background:rgba(0,0,0,.25);color:var(--text);padding:10px}
-    .sub{color:var(--muted);font-size:12px}
+    .inp,select,input[type="text"],input[type="number"]{
+      width:100%;box-sizing:border-box;
+      border-radius:12px;border:1px solid var(--stroke);
+      background:rgba(0,0,0,.25);color:var(--text);padding:10px;
+      font-size:13px;outline:none;min-width:0;
+    }
+    .inp::placeholder,input[type="text"]::placeholder,input[type="number"]::placeholder{
+      color:rgba(238,242,255,.4);
+    }
+    select option{
+      background:#0b1220;
+      color:#eef2ff;
+    }
+    .sub{color:var(--muted);font-size:12px;margin-top:4px}
     .small{color:var(--muted);font-size:12px}
     .row{display:flex;justify-content:space-between;gap:10px;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:12px;background:rgba(255,255,255,.05)}
     .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace}
     .h2{font-weight:800;font-size:18px}
-   .controls{
-  display:grid;
-  grid-template-columns:1fr;
-  gap:14px;
-  align-items:start;
-}
-
-.controls > div{
-  min-width:0;
-}
-
-@media(min-width:980px){
-  .controls{
-    grid-template-columns: minmax(360px, 420px) 1fr;
-  }
-}
-
+    .field{display:flex;flex-direction:column;gap:10px;min-width:0;overflow:visible}
+    .sub + .inp,.sub + select,.sub + input{margin-top:4px}
+    .sub{word-break:break-word;overflow-wrap:break-word}
+    .controls{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:18px;
+      align-items:start;
+      width:100%;
+      overflow:visible;
+    }
+    .controls > *{min-width:0;width:100%}
+    @media(min-width:900px){
+      .controls{grid-template-columns:1fr 1fr;gap:20px}
+    }
+    .pair{display:grid;grid-template-columns:1fr 1fr;gap:14px;width:100%;min-width:0}
+    .pair > div{display:flex;flex-direction:column;gap:6px;min-width:0;width:100%}
+    .pair input{width:100%;min-width:0}
     #toast{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.18);color:#eef2ff;padding:10px 12px;border-radius:12px;opacity:0;pointer-events:none;transition:opacity .18s}
     #toast.show{opacity:1}
   </style>
@@ -4739,37 +4785,41 @@ FANZONE_ADMIN_HTML = r"""
         </div>
       </div>
 
-      <div class="controls" style="margin:12px 0 0 0">
-        <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
+      <div class="controls" style="margin-top:14px">
+        <!-- Left column -->
+        <div class="field">
           <div class="sub">Sponsor label (“Presented by …”)</div>
           <input class="inp" id="pollSponsorText" placeholder="Fan Pick presented by …" />
           <div class="small">Saved into config and shown in Fan Zone.</div>
+
+          <div class="sub" style="margin-top:12px">Poll lock</div>
+          <select id="pollLockMode" class="inp">
+            <option value="auto">Auto (lock at kickoff)</option>
+            <option value="unlocked">Force Unlocked</option>
+            <option value="locked">Force Locked</option>
+          </select>
+          <div class="small">If you need to reopen voting after kickoff, choose Force Unlocked.</div>
         </div>
 
-        <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
+        <!-- Right column -->
+        <div class="field">
           <div class="sub">Match of the Day</div>
-          <select id="motdSelect"></select>
+          <select id="motdSelect" class="inp"></select>
 
-          <div class="sub" style="margin-top:8px">Manual override (optional):</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
-            <div><div class="sub">Home team</div><input class="inp" id="motdHome" placeholder="Home team"/></div>
-            <div><div class="sub">Away team</div><input class="inp" id="motdAway" placeholder="Away team"/></div>
+          <div class="sub" style="margin-top:6px">Manual override (optional):</div>
+          <div class="pair">
+            <div>
+              <div class="sub">Home team</div>
+              <input class="inp" id="motdHome" placeholder="Home team"/>
+            </div>
+            <div>
+              <div class="sub">Away team</div>
+              <input class="inp" id="motdAway" placeholder="Away team"/>
+            </div>
           </div>
 
-          <div style="margin-top:10px">
-            <div class="sub">Kickoff (UTC ISO, e.g. 2026-06-11T19:00:00Z)</div>
-            <input class="inp" id="motdKickoff" placeholder="2026-06-11T19:00:00Z"/>
-          </div>
-
-          <div style="margin-top:10px">
-            <div class="sub">Poll lock</div>
-            <select id="pollLockMode" class="inp">
-              <option value="auto">Auto (lock at kickoff)</option>
-              <option value="unlocked">Force Unlocked</option>
-              <option value="locked">Force Locked</option>
-            </select>
-            <div class="small">If you need to reopen voting after kickoff, choose Force Unlocked.</div>
-          </div>
+          <div class="sub" style="margin-top:6px">Kickoff (UTC ISO, e.g. 2026-06-11T19:00:00Z)</div>
+          <input class="inp" id="motdKickoff" placeholder="2026-06-11T19:00:00Z"/>
         </div>
       </div>
 
@@ -8867,6 +8917,12 @@ def admin_update_lead():
         if col:
             ws.update_cell(row_num, col, vip)
             updates += 1
+        # Also update tier column to keep Segment display in sync
+        tier_val = "VIP" if vip == "Yes" else "Regular"
+        tier_col = hmap.get("tier")
+        if tier_col:
+            ws.update_cell(row_num, tier_col, tier_val)
+            updates += 1
     _audit("lead.handled", {"row": row_num}) if (status == "Handled") else _audit("lead.update", {"row": row_num})
     return jsonify({"ok": True, "updated": updates})
 
@@ -9067,7 +9123,7 @@ body{
 .wrap{max-width:1200px;margin:0 auto;padding:18px;}
 .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;}
 .h1{font-size:18px;font-weight:800;letter-spacing:.3px}
-.sub{color:var(--muted);font-size:12px;margin-top:4px}
+.sub{color:var(--muted);font-size:12px;margin-top:4px;word-break:break-word;overflow-wrap:break-word}
 
 .pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .pill{
@@ -9075,7 +9131,8 @@ body{
   background:rgba(255,255,255,.03);
   padding:8px 10px;
   border-radius:999px;
-  font-size:12px
+  font-size:12px;
+  color:var(--text)
 }
 .pillbtn{cursor:pointer}
 
@@ -9083,7 +9140,7 @@ body{
 select{
   border:1px solid var(--line);
   background:rgba(255,255,255,.03);
-  color:var(--menu-text);
+  color:#eaf0ff;
   padding:8px 10px;
   border-radius:999px;
   font-size:12px;
@@ -9093,8 +9150,8 @@ select{
 
 .pillselect option,
 select option{
-  background:var(--menu-bg) !important;
-  color:var(--menu-text) !important;
+  background:#0f1b33 !important;
+  color:#eaf0ff !important;
 }
 
 .pillselect option:hover,
@@ -9156,7 +9213,7 @@ select option:hover{
   background:rgba(255,255,255,.04);
   border:1px solid var(--line);
   border-radius:14px;
-  padding:12px 12px;
+  padding:16px;
   margin:10px 0;
   overflow:visible;
 }
@@ -9189,7 +9246,8 @@ th{
   border-radius:999px;
   border:1px solid var(--line);
   background:rgba(255,255,255,.03);
-  font-size:11px
+  font-size:11px;
+  color:var(--text)
 }
 .badge.good{border-color:rgba(46,160,67,.35)}
 .badge.warn{border-color:rgba(255,204,102,.35)}
@@ -9200,12 +9258,52 @@ th{
   box-sizing:border-box;
   background:rgba(255,255,255,.04);
   border:1px solid var(--line);
-  color:var(--menu-text);
+  color:#eaf0ff;
   padding:10px;
   border-radius:12px;
   font-size:13px;
   outline:none
 }
+.inp::placeholder,
+textarea::placeholder{
+  color:rgba(234,240,255,.5);
+}
+.inp::-webkit-input-placeholder,
+textarea::-webkit-input-placeholder{
+  color:rgba(234,240,255,.5);
+}
+.inp:-moz-placeholder,
+textarea:-moz-placeholder{
+  color:rgba(234,240,255,.5);
+}
+.card .inp + .inp,
+.grid2 .inp + .inp{
+  margin-top:8px;
+}
+
+/* label / helper sitting right above an input — breathing room */
+label.small + .inp,
+label.small + select,
+label.small + textarea,
+.small + .inp,
+.small + select,
+.small + textarea{
+  margin-top:8px;
+}
+
+/* two-column form grid (alerts, policies, etc.) */
+.grid2{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:16px 20px;
+}
+.grid2 > div{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.grid2 > div > label.small{margin-bottom:0}
+@media(max-width:900px){.grid2{grid-template-columns:1fr}}
 
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(max-width:900px){.row{grid-template-columns:1fr}}
@@ -9443,54 +9541,54 @@ th{
     <div class="h2">Alerts Settings</div>
     <div class="small">Configure monitoring alerts (Slack/Email/SMS). Alerts are rate-limited and best-effort (never crash the app).</div>
 
-    <div class="grid2" style="margin-top:12px">
-      <div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px 20px;margin-top:14px">
+      <div style="display:flex;flex-direction:column;gap:0">
         <label class="small" style="display:flex;gap:8px;align-items:center">
           <input id="al-enabled" type="checkbox"/>
           <span>Enable alerts</span>
         </label>
-        <div class="small" style="opacity:.8;margin-top:6px">When enabled, <b>Run checks</b> can emit alerts on failures (rate-limited).</div>
+        <div class="small" style="opacity:.8;margin-top:8px">When enabled, <b>Run checks</b> can emit alerts on failures (rate-limited).</div>
       </div>
-      <div>
-        <label class="small">Rate limit (seconds)</label>
+      <div style="display:flex;flex-direction:column;gap:0">
+        <label class="small" style="display:block;margin-bottom:8px">Rate limit (seconds)</label>
         <input id="al-rate" class="inp" type="number" min="60" step="60" placeholder="600"/>
       </div>
     </div>
 
-    <div class="grid2" style="margin-top:12px">
-      <div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px 20px;margin-top:14px">
+      <div style="display:flex;flex-direction:column;gap:0">
         <label class="small" style="display:flex;gap:8px;align-items:center">
           <input id="al-slack-en" type="checkbox"/>
           <span>Slack</span>
         </label>
-        <input id="al-slack-url" class="inp" placeholder="Slack webhook URL"/>
+        <input id="al-slack-url" class="inp" placeholder="Slack webhook URL" style="margin-top:8px"/>
       </div>
-      <div>
+      <div style="display:flex;flex-direction:column;gap:0">
         <label class="small" style="display:flex;gap:8px;align-items:center">
           <input id="al-email-en" type="checkbox"/>
           <span>Email</span>
         </label>
-        <input id="al-email-to" class="inp" placeholder="Alert email TO"/>
-        <input id="al-email-from" class="inp" placeholder="Alert email FROM (optional)"/>
+        <input id="al-email-to" class="inp" placeholder="Alert email TO" style="margin-top:8px"/>
+        <input id="al-email-from" class="inp" placeholder="Alert email FROM (optional)" style="margin-top:10px"/>
       </div>
     </div>
 
-    <div class="grid2" style="margin-top:12px">
-      <div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px 20px;margin-top:14px">
+      <div style="display:flex;flex-direction:column;gap:0">
         <label class="small" style="display:flex;gap:8px;align-items:center">
           <input id="al-sms-en" type="checkbox"/>
           <span>SMS (critical only)</span>
         </label>
-        <input id="al-sms-to" class="inp" placeholder="Alert SMS TO (E.164)"/>
-        <div class="small" style="opacity:.75;margin-top:6px">SMS only sends on <b>error</b> severity alerts (to prevent spam).</div>
+        <input id="al-sms-to" class="inp" placeholder="Alert SMS TO (E.164)" style="margin-top:8px"/>
+        <div class="small" style="opacity:.75;margin-top:8px">SMS only sends on <b>error</b> severity alerts (to prevent spam).</div>
       </div>
-      <div>
-        <label class="small">Fixtures stale threshold (seconds)</label>
+      <div style="display:flex;flex-direction:column;gap:0">
+        <label class="small" style="display:block;margin-bottom:8px">Fixtures stale threshold (seconds)</label>
         <input id="al-fixtures-stale" class="inp" type="number" min="3600" step="3600" placeholder="86400"/>
       </div>
     </div>
 
-    <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <button type="button" class="btn2" onclick="loadAlerts()">Load</button>
       <button type="button" class="btn" data-min-role="owner" onclick="saveAlerts()">Save</button>
       <button type="button" class="btn2" data-min-role="owner" onclick="testAlert()">Send test alert</button>
@@ -11849,27 +11947,52 @@ body{
 .wrap{max-width:1200px;margin:0 auto;padding:18px;}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
 .h1{font-size:18px;font-weight:800;letter-spacing:.3px}
-.sub{color:var(--muted);font-size:12px}
+.sub{color:var(--muted);font-size:12px;word-break:break-word;overflow-wrap:break-word}
 
 .pills{display:flex;gap:8px;flex-wrap:wrap}
-.pill{border:1px solid var(--line);background:rgba(255,255,255,.03);padding:8px 10px;border-radius:999px;font-size:12px}
+.pill{border:1px solid var(--line);background:rgba(255,255,255,.03);padding:8px 10px;border-radius:999px;font-size:12px;color:var(--text)}
 .pill b{color:var(--gold)}
 
-.controls{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0 14px}
+.controls{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:18px;
+  align-items:start;
+  margin:12px 0 14px;
+  width:100%;
+  overflow:visible;
+}
+.controls > *{min-width:0;width:100%}
+@media(min-width:900px){
+  .controls{grid-template-columns:1fr 1fr;gap:20px}
+}
+.field{display:flex;flex-direction:column;gap:10px;min-width:0;overflow:visible}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:14px;width:100%;min-width:0}
+.pair > div{display:flex;flex-direction:column;gap:6px;min-width:0;width:100%}
+.pair input{width:100%;min-width:0}
+.sub + .inp, .sub + select, .sub + input{margin-top:4px}
 
-.inp, select{
+*,*::before,*::after{box-sizing:border-box}
+.inp, select, input[type="text"], input[type="number"]{
+  width:100%;
+  box-sizing:border-box;
   background:rgba(255,255,255,.04);
   border:1px solid var(--line);
-  color:var(--menu-text);
+  color:#f8fafc;
   border-radius:10px;
   padding:9px 10px;
   font-size:12px;
   outline:none;
 }
+.inp::placeholder,
+input[type="text"]::placeholder,
+input[type="number"]::placeholder{
+  color:rgba(248,250,252,.45);
+}
 
 select option{
-  background:var(--menu-bg);
-  color:var(--menu-text);
+  background:#0f172a;
+  color:#f8fafc;
 }
 
 .tablewrap,.card,.panel{overflow:visible;}
@@ -11920,32 +12043,39 @@ select option{
     <button type="button" class="btn" id="btnSaveConfig">Save settings</button>
   </div>
 
-  <div class="controls" style="margin:12px 0 0 0">
-    <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
+  <div class="controls" style="margin-top:14px">
+    <div class="field">
       <div class="sub">Sponsor label (“Presented by …”)</div>
       <input class="inp" id="pollSponsorText" placeholder="Fan Pick presented by …" />
+      <div class="small">Saved into config and shown in Fan Zone.</div>
+
+      <div class="sub" style="margin-top:12px">Poll lock</div>
+      <select id="pollLockMode" class="inp">
+        <option value="auto">Auto (lock at kickoff)</option>
+        <option value="unlocked">Force Unlocked (admin override)</option>
+        <option value="locked">Force Locked</option>
+      </select>
+      <div class="small">If you need to reopen voting after kickoff, set <b>Force Unlocked</b>.</div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:6px;min-width:320px;flex:1">
+
+    <div class="field">
       <div class="sub">Match of the Day</div>
-      <select id="motdSelect"></select>
-      <div class="sub" style="margin-top:8px">If schedule options don’t load (or you want to override), set Match of the Day manually:</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
-        <div><div class="sub">Home team</div><input id="motdHome" placeholder="Home team"/></div>
-        <div><div class="sub">Away team</div><input id="motdAway" placeholder="Away team"/></div>
+      <select id="motdSelect" class="inp"></select>
+
+      <div class="sub" style="margin-top:6px">Manual override (optional):</div>
+      <div class="pair">
+        <div>
+          <div class="sub">Home team</div>
+          <input class="inp" id="motdHome" placeholder="Home team"/>
+        </div>
+        <div>
+          <div class="sub">Away team</div>
+          <input class="inp" id="motdAway" placeholder="Away team"/>
+        </div>
       </div>
-      <div style="margin-top:10px">
-        <div class="sub">Kickoff (UTC, ISO 8601, e.g. 2026-06-11T19:00:00Z) — used to lock poll at kickoff</div>
-        <input id="motdKickoff" placeholder="2026-06-11T19:00:00Z"/>
-      </div>
-      <div style="margin-top:10px">
-        <div class="sub">Poll lock</div>
-        <select id="pollLockMode" class="inp">
-          <option value="auto">Auto (lock at kickoff)</option>
-          <option value="unlocked">Force Unlocked (admin override)</option>
-          <option value="locked">Force Locked</option>
-        </select>
-        <div class="small">If you need to reopen voting after kickoff, set <b>Force Unlocked</b>.</div>
-      </div>
+
+      <div class="sub" style="margin-top:6px">Kickoff (UTC ISO, e.g. 2026-06-11T19:00:00Z)</div>
+      <input class="inp" id="motdKickoff" placeholder="2026-06-11T19:00:00Z"/>
     </div>
   </div>
 
@@ -12714,14 +12844,14 @@ th{color:var(--muted);font-weight:600}
 select{
   background:rgba(255,255,255,.04);
   border:1px solid var(--line);
-  color:var(--menu-text);
+  color:#eaf0ff;
 }
 select option{
-  background:var(--menu-bg) !important;
-  color:var(--menu-text) !important;
+  background:#0f1b33 !important;
+  color:#eaf0ff !important;
 }
 select option:hover{
-  background:var(--menu-hover) !important;
+  background:#1a2847 !important;
 }
 </style>
 </head>
@@ -13601,17 +13731,20 @@ a{color:#a7c7ff}
 input,select{
   background:rgba(0,0,0,.28);
   border:1px solid var(--stroke);
-  color:var(--menu-text);
+  color:#eaf0ff;
   border-radius:10px;
   padding:8px 10px;
   font-size:13px;
 }
+input::placeholder{
+  color:rgba(234,240,255,.45);
+}
 select option{
-  background:var(--menu-bg) !important;
-  color:var(--menu-text) !important;
+  background:#0f1b33 !important;
+  color:#eaf0ff !important;
 }
 select option:hover{
-  background:var(--menu-hover) !important;
+  background:#1a2847 !important;
 }
 
 .rail{display:flex;flex-direction:column;gap:10px;}
@@ -13941,10 +14074,14 @@ th{
   }
   function venueFlags(v){
     const active = (typeof v.active==='boolean') ? v.active : true;
-    const sheet_ok = !!(v.sheet && v.sheet.ok);
-    const ready = !!(v.ready);
-    const needs = active && (!sheet_ok || !ready);
-    return {active, sheet_ok, ready, needs};
+    const sid = (v && v.sheet && v.sheet.sheet_id) ? String(v.sheet.sheet_id) : '';
+    const okRaw = (v && v.sheet) ? v.sheet.ok : null; // can be true | false | null/undefined
+    const sheet_ok = (okRaw === true) ? true : (okRaw === false ? false : null);
+    const ready = (typeof v.ready === 'boolean') ? v.ready : !!v.ready;
+    // sheet_state: missing | unknown | ok | fail
+    const sheet_state = (!sid) ? 'missing' : (sheet_ok === true ? 'ok' : (sheet_ok === false ? 'fail' : 'unknown'));
+    const needs = active && (sheet_state !== 'ok' || !ready);
+    return {active, sheet_ok, ready, needs, sheet_state, sid};
   }
   function computeCounts(){
     const vs=state.venues||[]; let all=vs.length, active=0, inactive=0, sheetfail=0, notready=0, needs=0;
@@ -13990,9 +14127,11 @@ th{
     } else {
       filtered.forEach(v=>{
         const f=venueFlags(v);
+        const sheetBadgeTxt = (f.sheet_state==='missing') ? 'SHEET NOT SET' : (f.sheet_state==='unknown' ? 'SHEET UNCHECKED' : (f.sheet_state==='ok' ? 'SHEET OK' : 'SHEET FAIL'));
+        const sheetBadgeCls = (f.sheet_state==='ok') ? 'good' : (f.sheet_state==='missing' || f.sheet_state==='unknown') ? 'warn' : 'bad';
         const badges=[
           '<span class="badge '+(f.active?'good':'warn')+'">'+(f.active?'ACTIVE':'INACTIVE')+'</span>',
-          '<span class="badge '+(f.sheet_ok?'good':'bad')+'">'+(f.sheet_ok?'SHEET OK':'SHEET FAIL')+'</span>',
+          '<span class="badge '+sheetBadgeCls+'">'+sheetBadgeTxt+'</span>',
           '<span class="badge '+(f.ready?'good':'warn')+'">'+(f.ready?'READY':'NOT READY')+'</span>'
         ];
         const el=document.createElement('div');
@@ -14011,7 +14150,7 @@ th{
         const f=venueFlags(v);
         const sheet=v.sheet||{};
         const sheetTxt = sheet && sheet.sheet_id ? (String(sheet.sheet_id).slice(0,8)+'…') : '—';
-        const sheetBadge='<span class="badge '+(f.sheet_ok?'good':'bad')+'">'+(f.sheet_ok?'OK':'FAIL')+'</span>';
+        const sheetBadge='<span class="badge '+((f.sheet_state==='ok')?'good':((f.sheet_state==='missing'||f.sheet_state==='unknown')?'warn':'bad'))+'">'+((f.sheet_state==='ok')?'OK':((f.sheet_state==='missing')?'NOT SET':((f.sheet_state==='unknown')?'UNCHECKED':'FAIL')))+'</span>';
         const actBadge='<span class="badge '+(f.active?'good':'warn')+'">'+(f.active?'ACTIVE':'INACTIVE')+'</span>';
         const readyBadge='<span class="badge '+(f.ready?'good':'warn')+'">'+(f.ready?'READY':'NOT READY')+'</span>';
         const actions='<button class="btn" data-act="check" data-vid="'+hesc(v.venue_id||'')+'">Re-check</button> '+
@@ -14052,7 +14191,7 @@ th{
 
     '<div style="margin-top:8px; display:flex; gap:6px; flex-wrap:wrap">'+
       '<span class="badge '+(f.active?'good':'warn')+'">'+(f.active?'ACTIVE':'INACTIVE')+'</span>'+
-      '<span class="badge '+(f.sheet_ok?'good':'bad')+'">'+(f.sheet_ok?'SHEET OK':'SHEET FAIL')+'</span>'+
+      '<span class="badge '+((f.sheet_state==='ok')?'good':((f.sheet_state==='missing'||f.sheet_state==='unknown')?'warn':'bad'))+'">'+((f.sheet_state==='ok')?'SHEET OK':((f.sheet_state==='missing')?'SHEET NOT SET':((f.sheet_state==='unknown')?'SHEET UNCHECKED':'SHEET FAIL')))+'</span>'+
       '<span class="badge '+(f.ready?'good':'warn')+'">'+(f.ready?'READY':'NOT READY')+'</span>'+
     '</div>'+
 
@@ -14108,6 +14247,13 @@ th{
       if(!j.ok){ setDiag(JSON.stringify(j||{}, null, 2)); alert('Action failed: '+(j.error||r.status)); }
       else { setDiag(JSON.stringify(j||{}, null, 2)); }
       await loadVenues();
+      
+      // Auto-verify after set_sheet to ensure state is consistent
+      // (transient gspread issues may cause false negatives on first check)
+      if(act==='set_sheet'){
+        await new Promise(r => setTimeout(r, 800));
+        await doVenueAction('check', vid);
+      }
     }catch(e){
       alert('Action failed: '+(e.message||e));
     }
@@ -14408,7 +14554,16 @@ def super_api_diag():
 
 @app.route("/super/api/venues/set_sheet", methods=["POST", "OPTIONS"])
 def super_api_venues_set_sheet():
-    """Attach or update Google Sheet ID for venue. Does NOT validate sheet."""
+    """Attach or update Google Sheet ID for venue.
+
+    Deterministic behavior:
+    - Persist `data.google_sheet_id`
+    - Immediately validate the sheet (best-effort) and persist:
+      - sheet_ok (bool)
+      - ready (bool)
+      - last_checked (timestamp)
+    This avoids the UI looking "stochastic" (SHEET FAIL until manual re-check).
+    """
     if request.method == "OPTIONS":
         return ("", 204)
 
@@ -14436,10 +14591,26 @@ def super_api_venues_set_sheet():
     cfg["data"]["google_sheet_id"] = sheet_id
     cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
+    # Best-effort: validate immediately so operators see stable status.
+    chk = _check_sheet_id(sheet_id)
+    try:
+        cfg["sheet_ok"] = bool(chk.get("ok"))
+        cfg["ready"] = bool(cfg["sheet_ok"] and cfg.get("active", True))
+        cfg["last_checked"] = chk.get("checked_at")
+    except Exception:
+        pass
+
     wrote, write_path, err = _write_venue_config(venue_id, cfg)
     _invalidate_venues_cache()
 
-    return jsonify({"ok": True, "venue_id": venue_id, "google_sheet_id": sheet_id, "persisted": wrote, "error": err})
+    return jsonify({
+        "ok": True,
+        "venue_id": venue_id,
+        "google_sheet_id": sheet_id,
+        "persisted": wrote,
+        "error": err,
+        "check": chk,
+    })
 
 @app.route("/super/api/venues/check_sheet", methods=["POST", "OPTIONS"])
 def super_api_venues_check_sheet():
@@ -14523,6 +14694,9 @@ def super_api_venues_create():
             "google_sheet_id": sheet_id,
             "redis_namespace": f"{_REDIS_NS}:{venue_id}",
         },
+        # Track sheet validation state: None=not checked, True=valid, False=invalid
+        "sheet_ok": None if sheet_id else None,
+        "ready": False,
         "features": body.get("features")
         if isinstance(body.get("features"), dict)
         else {
@@ -14534,6 +14708,12 @@ def super_api_venues_create():
             .isoformat()
             .replace("+00:00", "Z"),
     }
+    
+    # If sheet_id provided, validate it immediately
+    if sheet_id:
+        chk = _check_sheet_id(sheet_id)
+        pack["sheet_ok"] = bool(chk.get("ok"))
+        pack["last_checked"] = chk.get("checked_at")
 
     wrote, write_path, err = _write_venue_config(venue_id, pack)
     if not wrote:
