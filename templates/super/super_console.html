@@ -189,7 +189,10 @@
     leadErrEl.textContent = "";
     leadRowsEl.innerHTML = "<tr><td colspan=\"8\">Loading…</td></tr>";
     const limit = (limitEl && limitEl.value) ? limitEl.value : "500";
-    const url = "/admin/api/leads_all?key="+encodeURIComponent(super_key)+"&super_key="+encodeURIComponent(super_key)+"&limit="+encodeURIComponent(limit);
+    const url = "/admin/api/leads_all?key=" + encodeURIComponent(super_key) +
+                "&super_key=" + encodeURIComponent(super_key) +
+                "&limit=" + encodeURIComponent(limit) +
+                "&venue=" + encodeURIComponent(VENUE);
     try{
       const r = await fetch(url, {headers});
       const j = await r.json();
