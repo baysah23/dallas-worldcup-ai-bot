@@ -9236,7 +9236,7 @@ body{
   color:var(--text);
 }
 
-.wrap{max-width:1200px;margin:0 auto;padding:18px;}
+.wrap{max-width:1600px;margin:0 auto;padding:18px;}
 .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;}
 .h1{font-size:18px;font-weight:800;letter-spacing:.3px}
 .sub{color:var(--muted);font-size:12px;margin-top:4px;word-break:break-word;overflow-wrap:break-word}
@@ -9356,39 +9356,50 @@ th{
   text-align:left
 }
 
-/* Leads table: Status and VIP columns must show dropdown text; table stays in container */
+/* Leads table: fit in container, no horizontal scroll — % widths, ellipsis for long text */
+.leads-tablewrap{
+  border-radius:12px;
+  border:1px solid var(--line);
+  margin-top:8px;
+  overflow:hidden;
+}
 #leadsTable{
   table-layout:fixed;
   width:100%;
+  border-collapse:collapse;
+  font-size:12px;
 }
-#leadsTable th:nth-child(14),
-#leadsTable td:nth-child(14){
-  min-width:100px;
-  width:10%;
-}
-#leadsTable th:nth-child(15),
-#leadsTable td:nth-child(15){
-  min-width:56px;
-  width:5%;
-}
-#leadsTable td:nth-child(14) select,
-#leadsTable td:nth-child(15) select{
-  min-width:0;
-  width:100%;
+#leadsTable th,
+#leadsTable td{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  vertical-align:middle;
   box-sizing:border-box;
 }
-/* Context and Notes can shrink so Status/VIP get space without table overflow */
-#leadsTable th:nth-child(12),
-#leadsTable td:nth-child(12){
-  max-width:110px;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-#leadsTable th:nth-child(13),
-#leadsTable td:nth-child(13){
-  max-width:130px;
-  overflow:hidden;
-  text-overflow:ellipsis;
+#leadsTable th{ position:sticky; top:0; background:rgba(10,16,32,.95); z-index:1; }
+#leadsTable th:nth-child(1),#leadsTable td:nth-child(1){ width:3%; }
+#leadsTable th:nth-child(2),#leadsTable td:nth-child(2){ width:11%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(3),#leadsTable td:nth-child(3){ width:7%; overflow:hidden; text-overflow:ellipsis; }
+#leadsTable th:nth-child(4),#leadsTable td:nth-child(4){ width:9%; overflow:hidden; text-overflow:ellipsis; }
+#leadsTable th:nth-child(5),#leadsTable td:nth-child(5){ width:5%; }
+#leadsTable th:nth-child(6),#leadsTable td:nth-child(6){ width:5%; }
+#leadsTable th:nth-child(7),#leadsTable td:nth-child(7){ width:4%; text-align:center; }
+#leadsTable th:nth-child(8),#leadsTable td:nth-child(8){ width:5%; overflow:hidden; text-overflow:ellipsis; }
+#leadsTable th:nth-child(9),#leadsTable td:nth-child(9){ width:6%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(10),#leadsTable td:nth-child(10){ width:5%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(11),#leadsTable td:nth-child(11){ width:5%; }
+#leadsTable th:nth-child(12),#leadsTable td:nth-child(12){ width:7%; overflow:hidden; text-overflow:ellipsis; }
+#leadsTable th:nth-child(13),#leadsTable td:nth-child(13){ width:9%; overflow:hidden; text-overflow:ellipsis; }
+#leadsTable th:nth-child(14),#leadsTable td:nth-child(14){ width:9%; }
+#leadsTable th:nth-child(15),#leadsTable td:nth-child(15){ width:5%; }
+#leadsTable th:nth-child(16),#leadsTable td:nth-child(16){ width:5%; white-space:nowrap; }
+#leadsTable td:nth-child(16) .btn2{ margin-right:4px; }
+#leadsTable td:nth-child(14) select,
+#leadsTable td:nth-child(15) select{
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
+  font-size:12px;
 }
 
 .badge{
@@ -9757,9 +9768,21 @@ label.small + textarea,
     elif not body:
         html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>No leads yet.</div></div>")
     else:
-        html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>Newest first. Update Status/VIP and save.</div><div style='display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center'><div class='pills' style='margin:0'><button class='btn2' id='flt-all' type='button'>All</button><button class='btn2' id='flt-vip' type='button'>VIP</button><button class='btn2' id='flt-reg' type='button'>Regular</button></div><div style='display:flex;gap:8px;align-items:center'><span class='small' style='white-space:nowrap'>Entry:</span><select class='inp' id='flt-entry' style='min-width:180px'></select><span id='leadsCount' class='small' style='margin-left:8px'>0 shown</span></div></div></div>")
-        html.append("<div class='tablewrap'><table id='leadsTable'>")
-        html.append("<thead><tr>"                    "<th>Row</th><th>Timestamp</th><th>Name</th><th>Contact</th>"                    "<th>Date</th><th>Time</th><th>Party</th>"                    "<th>Segment</th><th>Entry</th><th>Queue</th><th>Budget</th>"                    "<th>Context</th><th>Notes</th>"                    "<th>Status</th><th>VIP</th><th>Save</th>"                    "</tr></thead><tbody>")
+        html.append("""<div class='card'><div class='h2'>Leads</div><div class='small'>Newest first. Update Status/VIP and save.</div>
+<div class='leads-filters-section' style='margin-top:16px;padding:14px;background:var(--card-bg, #f8f9fa);border-radius:8px;border:1px solid var(--border,#e0e0e0)'>
+  <div class='small' style='font-weight:700;margin-bottom:12px;color:var(--text,#333)'>Filter leads</div>
+  <div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;align-items:end'>
+    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Status</label><div class='small' style='opacity:.75;margin-bottom:4px'>Pipeline stage</div><select class='inp' id='flt-status' multiple style='min-height:72px'><option value='new'>New</option><option value='contacted'>Contacted</option><option value='reserved'>Reserved</option><option value='seated'>Seated</option><option value='completed'>Completed</option><option value='no-show'>No-Show</option><option value='cancelled'>Cancelled</option></select><div class='small' style='opacity:.7;margin-top:2px'>Ctrl+click for multiple</div></div>
+    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Tier (category)</label><div class='small' style='opacity:.75;margin-bottom:4px'>Segment: tier or entry type</div><select class='inp' id='flt-tier' multiple style='min-height:72px'><option value='regular'>Regular</option><option value='entry'>Entry</option><option value='reserve now'>Reserve now</option><option value='vip'>VIP</option><option value='vip vibe'>VIP vibe</option><option value='premium'>Premium</option></select><div class='small' style='opacity:.7;margin-top:2px'>Ctrl+click for multiple</div></div>
+    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Time range</label><div class='small' style='opacity:.75;margin-bottom:4px'>When lead was added</div><select class='inp' id='flt-time'><option value=''>All time</option><option value='30'>Last 30 min</option><option value='60'>Last 1 hour</option><option value='120'>Last 2 hours</option><option value='1440'>Last 24 hours</option><option value='10080'>Last 7 days</option></select></div>
+    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Source (entry point)</label><div class='small' style='opacity:.75;margin-bottom:4px'>Form or channel they used</div><select class='inp' id='flt-entry' style='min-width:140px'><option value='all'>All</option><option value='reserve_now'>Reserve now</option><option value='vip_vibe'>VIP vibe</option><option value='entry'>Entry</option></select></div>
+    <div style='display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end'><button class='btn' id='btn-leads-apply' type='button'>Apply filters</button><button class='btn2' id='btn-leads-reset' type='button'>Reset</button></div>
+  </div>
+  <div style='margin-top:10px'><span id='leadsCount' class='small'>0 shown</span></div>
+</div>
+</div>""")
+        html.append("<div class='tablewrap leads-tablewrap'><table id='leadsTable'>")
+        html.append("<thead><tr>"                    "<th>Row</th><th>Timestamp</th><th>Name</th><th>Contact</th>"                    "<th>Date</th><th>Time</th><th>Party</th>"                    "<th>Segment</th><th>Entry</th><th>Queue</th><th>Budget</th>"                    "<th>Context</th><th>Notes</th>"                    "<th>Status</th><th>VIP</th><th>Save</th>"                    "</tr></thead><tbody id='leadsTableBody'>")
         for sheet_row, r in numbered:
             ts = colval(r, i_ts, "")
             nm = colval(r, i_name, "")
@@ -10245,6 +10268,11 @@ window.showTab = function(tab){
     // switch tab panes
     try{ setActive(tab); }catch(e){}
 
+    // Leads tab: always load table from filter API (real params, sheet-backed) so we never show stale server-rendered rows
+    if(tab === 'leads'){
+      try{ if(typeof applyLeadsFiltersServer === 'function') applyLeadsFiltersServer(); }catch(e){}
+    }
+
     // If your rules tab needs loads, keep this behavior
     if(tab === 'rules'){
       try{ loadPartnerList(); loadPartnerPolicy(); }catch(e){}
@@ -10465,50 +10493,100 @@ function applyLeadFilters(){
   if(hint) hint.textContent = shown + " shown";
 }
 
+function _he(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c)); }
+function _leadRowFromItem(it){
+  const row = (it.sheet_row||it.row||0);
+  const ts = _he(it.timestamp||'');
+  const nm = _he(it.name||'');
+  const ph = _he(it.phone||'');
+  const d = _he(it.date||'');
+  const t = _he(it.time||'');
+  const ps = _he(it.party_size||'');
+  const tier = (it.tier||'').toString().toLowerCase(); const vip = (it.vip||'').toString().toLowerCase();
+  const tierKey = (tier==='vip' || /^(yes|true|1|y|vip)$/.test(vip)) ? 'vip' : 'regular';
+  const seg = tierKey==='vip' ? '⭐ VIP' : 'Regular';
+  const segCls = seg.indexOf('⭐')>=0 ? 'badge warn' : 'badge';
+  const ep = _he((it.entry_point||'').replace(/_/g,' '));
+  const queue = _he(it.queue||'');
+  const budget = _he(it.budget||'');
+  const ctx = _he((it.business_context||it.context||'').substring(0,34));
+  const notes = _he((it.notes||'').substring(0,40));
+  const st = (it.status||'New').toString().trim();
+  const stLow = st.toLowerCase();
+  const vipVal = /^(yes|true|1|y|vip)$/.test(vip) ? 'Yes' : 'No';
+  const stSel = '<select class=\\'inp\\' id=\\'status-'+row+'\\'><option'+(stLow==='new'?' selected':'')+'>New</option><option'+(stLow==='confirmed'?' selected':'')+'>Confirmed</option><option'+(stLow==='seated'?' selected':'')+'>Seated</option><option'+(stLow==='no-show'?' selected':'')+'>No-Show</option><option'+(stLow==='handled'?' selected':'')+'>Handled</option></select>';
+  const vipSel = '<select class=\\'inp\\' id=\\'vip-'+row+'\\'><option'+(vipVal==='Yes'?' selected':'')+'>Yes</option><option'+(vipVal==='No'?' selected':'')+'>No</option></select>';
+  return '<tr data-tier="'+tierKey+'" data-entry="'+_he(it.entry_point||'')+'"><td class=\\'code\\'>'+row+'</td><td>'+ts+'</td><td>'+nm+'</td><td>'+ph+'</td><td>'+d+'</td><td>'+t+'</td><td>'+ps+'</td><td><span class=\\"'+segCls+'\\">'+seg+'</span></td><td><span class=\\"pill\\">'+ep+'</span></td><td><span class=\\"badge good\\">'+queue+'</span></td><td>'+budget+'</td><td><span class=\\"small\\">'+ctx+(ctx.length>=34?'…':'')+'</span></td><td><span class=\\"small\\">'+notes+(notes.length>=40?'…':'')+'</span></td><td>'+stSel+'</td><td>'+vipSel+'</td><td><button class=\\"btn2\\' onclick=\\"saveLead('+row+')\\">Save</button><button class=\\"btnTiny\\' title=\\"Mark handled\\" onclick=\\"markHandled('+row+')\\">✅</button></td></tr>';
+}
+async function applyLeadsFiltersServer(){
+  const statusEl = qs('#flt-status'); const tierEl = qs('#flt-tier'); const timeEl = qs('#flt-time'); const entryEl = qs('#flt-entry');
+  const statuses = statusEl ? Array.from(statusEl.selectedOptions || []).map(o=>o.value).filter(Boolean) : [];
+  const tiers = tierEl ? Array.from(tierEl.selectedOptions || []).map(o=>o.value).filter(Boolean) : [];
+  const timeVal = (timeEl && timeEl.value) ? timeEl.value : '';
+  const entryVal = (entryEl && entryEl.value && entryEl.value !== 'all') ? entryEl.value : '';
+  const params = new URLSearchParams();
+  if(typeof KEY!=='undefined') params.set('key', KEY);
+  if(typeof VENUE!=='undefined' && VENUE) params.set('venue', VENUE);
+  params.set('limit','500');
+  statuses.forEach(s=>params.append('status',s));
+  tiers.forEach(t=>params.append('tier',t));
+  if(timeVal) params.set('time', timeVal);
+  if(entryVal) params.set('entry', entryVal);
+  const btn = qs('#btn-leads-apply'); if(btn){ btn.disabled=true; btn.textContent='Loading…'; }
+  const hint = qs('#leadsCount'); if(hint) hint.textContent = 'Loading…';
+  try {
+    const r = await fetch('/admin/api/leads/filter?'+params.toString(), { cache: 'no-store' });
+    const j = await r.json().catch(()=>null);
+    if(btn){ btn.disabled=false; btn.textContent='Apply filters'; }
+    if(!j || !j.ok){ if(hint) hint.textContent = 'Error'; if(typeof toast==='function') toast(j&&j.error ? j.error : 'Filter failed'); return; }
+    const items = j.items || [];
+    const tbody = qs('#leadsTableBody');
+    if(tbody) tbody.innerHTML = items.map(_leadRowFromItem).join('');
+    if(hint) hint.textContent = items.length + ' shown';
+    _populateLeadsEntryDropdown(items);
+  } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Apply filters'; } if(hint) hint.textContent='Error'; }
+}
+function _populateLeadsEntryDropdown(items){
+  const entries = new Set(['reserve_now','vip_vibe','entry']);
+  (items||[]).forEach(it=>{ const ep = (it.entry_point||'').toString().trim(); if(ep) entries.add(ep); });
+  const sel = qs('#flt-entry');
+  if(!sel) return;
+  const currentVal = sel.value;
+  sel.innerHTML = '';
+  const all = document.createElement('option'); all.value = 'all'; all.textContent = 'All'; sel.appendChild(all);
+  Array.from(entries).sort().forEach(ep=>{ const o = document.createElement('option'); o.value = ep; o.textContent = ep.replace(/_/g,' '); sel.appendChild(o); });
+  if(sel.querySelector('option[value="'+currentVal+'"]')) sel.value = currentVal; else sel.value = 'all';
+}
+function resetLeadsFiltersServer(){
+  const statusEl = qs('#flt-status'); const tierEl = qs('#flt-tier'); const timeEl = qs('#flt-time'); const entryEl = qs('#flt-entry');
+  if(statusEl) statusEl.selectedIndex = -1;
+  if(tierEl) tierEl.selectedIndex = -1;
+  if(timeEl) timeEl.value = '';
+  if(entryEl) entryEl.value = 'all';
+  applyLeadsFiltersServer();
+}
 function setupLeadFilters(){
   const tbl = qs('#leadsTable');
   if(!tbl) return;
-
-  // Build entry dropdown
+  const tbody = qs('#leadsTableBody') || tbl.querySelector('tbody');
   const entries = new Set();
-  document.querySelectorAll('#leadsTable tbody tr').forEach(tr=>{
+  (tbody ? tbody.querySelectorAll('tr') : []).forEach(tr=>{
     const ep = norm(tr.getAttribute('data-entry')||"");
     if(ep) entries.add(ep);
   });
-
   const sel = qs('#flt-entry');
   if(sel){
     sel.innerHTML = "";
-    const all = document.createElement('option');
-    all.value = "all"; all.textContent = "All";
-    sel.appendChild(all);
+    const all = document.createElement('option'); all.value = "all"; all.textContent = "All"; sel.appendChild(all);
     Array.from(entries).sort().forEach(ep=>{
-      const o = document.createElement('option');
-      o.value = ep; o.textContent = ep.replace(/_/g,' ');
+      const o = document.createElement('option'); o.value = ep; o.textContent = ep.replace(/_/g,' ');
       sel.appendChild(o);
     });
-    sel.addEventListener('change', ()=>{
-      leadEntryFilter = norm(sel.value||"all") || "all";
-      applyLeadFilters();
-    });
   }
-
-  function setBtn(activeId){
-    ['flt-all','flt-vip','flt-reg'].forEach(id=>{
-      const b = qs('#'+id);
-      if(!b) return;
-      b.style.borderColor = (id===activeId) ? 'rgba(212,175,55,.65)' : 'rgba(255,255,255,.12)';
-      b.style.background = (id===activeId) ? 'rgba(212,175,55,.12)' : 'rgba(255,255,255,.03)';
-      b.style.color = (id===activeId) ? '#fff' : 'rgba(234,240,255,.92)';
-    });
-  }
-
-  qs('#flt-all')?.addEventListener('click', ()=>{ leadTierFilter="all"; setBtn('flt-all'); applyLeadFilters(); });
-  qs('#flt-vip')?.addEventListener('click', ()=>{ leadTierFilter="vip"; setBtn('flt-vip'); applyLeadFilters(); });
-  qs('#flt-reg')?.addEventListener('click', ()=>{ leadTierFilter="regular"; setBtn('flt-reg'); applyLeadFilters(); });
-
-  setBtn('flt-all');
-  applyLeadFilters();
+  const rowCount = tbody ? tbody.querySelectorAll('tr').length : 0;
+  const hint = qs('#leadsCount'); if(hint) hint.textContent = rowCount + " shown";
+  qs('#btn-leads-apply')?.addEventListener('click', applyLeadsFiltersServer);
+  qs('#btn-leads-reset')?.addEventListener('click', resetLeadsFiltersServer);
 }
 
 
@@ -12096,7 +12174,7 @@ body{
   color:var(--text);
 }
 
-.wrap{max-width:1200px;margin:0 auto;padding:18px;}
+.wrap{max-width:1600px;margin:0 auto;padding:18px;}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
 .h1{font-size:18px;font-weight:800;letter-spacing:.3px}
 .sub{color:var(--muted);font-size:12px;word-break:break-word;overflow-wrap:break-word}
@@ -15810,6 +15888,7 @@ def _parse_time_range_minutes(time_str: str) -> Optional[int]:
         "7days": 10080,
         "1week": 10080,
         "1_week": 10080,
+        "10080": 10080,
         "604800": 10080,
     }
     
@@ -15843,38 +15922,59 @@ def _timestamp_to_datetime(ts: str) -> Optional[datetime]:
 def _apply_leads_filters(items: List[Dict[str, Any]], 
                         statuses: Optional[List[str]] = None,
                         tiers: Optional[List[str]] = None,
-                        time_minutes: Optional[int] = None) -> List[Dict[str, Any]]:
-    """Apply status, tier, and time filters to leads. Returns filtered list."""
+                        time_minutes: Optional[int] = None,
+                        entry_points: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    """Apply status, tier, time, and entry_point filters to leads. Returns filtered list."""
     result = items[:]
     now = datetime.now(timezone.utc)
     
-    # Filter by status
+    # Filter by entry_point (normalize so "reserve now" matches "reserve_now" in sheet)
+    if entry_points:
+        entry_lower = [e.lower().strip() for e in entry_points if e]
+        if entry_lower:
+            def _norm_ep(s):
+                return (s or "").replace(" ", "_").strip()
+            def entry_matches(item):
+                ep_raw = (item.get("entry_point") or "").lower().strip()
+                ep_underscore = _norm_ep(ep_raw)
+                ep_space = ep_raw.replace("_", " ")
+                for e in entry_lower:
+                    e_und = _norm_ep(e)
+                    e_sp = e.replace("_", " ")
+                    if e_und == ep_underscore or e_sp == ep_space or e_und in ep_underscore or e_sp in ep_space or ep_underscore in e_und or ep_space in e_sp:
+                        return True
+                return False
+            result = [item for item in result if entry_matches(item)]
+    
+    # Filter by status (normalize hyphen/space so "no-show" matches "No Show" in sheet)
     if statuses:
         statuses_lower = [s.lower().strip() for s in statuses if s]
         if statuses_lower:
+            def _norm_status(s):
+                return (s or "").replace("-", " ").strip()
             def status_matches(item):
-                item_status = (item.get("status") or "").lower().strip()
+                item_status = _norm_status((item.get("status") or "").lower())
                 item_vibe = (item.get("vibe") or "").lower().strip()
-                
-                # Check if any status filter matches
                 for s_filter in statuses_lower:
-                    if s_filter in item_status or s_filter in item_vibe:
+                    s_norm = _norm_status(s_filter)
+                    if s_norm in item_status or s_filter in item_status or s_norm in item_vibe or s_filter in item_vibe:
                         return True
                 return False
             
             result = [item for item in result if status_matches(item)]
     
-    # Filter by tier
+    # Filter by tier (normalize space/underscore so "vip vibe" matches "vip_vibe" in sheet)
     if tiers:
         tiers_lower = [t.lower().strip() for t in tiers if t]
         if tiers_lower:
+            def _norm(s):
+                return (s or "").replace("_", " ").strip()
             def tier_matches(item):
-                item_tier = (item.get("tier") or "").lower().strip()
-                item_entry = (item.get("entry_point") or "").lower().strip()
-                
-                # Check if any tier filter matches
+                item_tier = _norm((item.get("tier") or "").lower())
+                item_entry = _norm((item.get("entry_point") or "").lower())
                 for t_filter in tiers_lower:
-                    if t_filter in item_tier or t_filter in item_entry:
+                    t_norm = _norm(t_filter)
+                    if t_norm in item_tier or t_norm in item_entry or item_tier in t_norm or item_entry in t_norm:
                         return True
                 return False
             
@@ -15908,11 +16008,14 @@ def admin_api_leads_filter():
     - Otherwise, filters ONLY the current venue context (_venue_id())
     
     Query params:
-    - status: comma-separated list or repeated param (e.g., ?status=new&status=reserved)
-    - tier: comma-separated list or repeated param (e.g., ?tier=vip&tier=regular)
-    - time: time range in minutes or shorthand (30, 60, 1440, 30min, 1h, 24h, 7day, etc.)
-    - venue_id: filter by specific venue (optional; defaults to current venue)
+    - status: comma-separated or repeated (e.g. ?status=new&status=reserved)
+    - tier: comma-separated or repeated (e.g. ?tier=vip&tier=reserve now)
+    - entry: entry_point / source (e.g. ?entry=reserve_now)
+    - time: time range in minutes or shorthand (30, 60, 1440, 10080, 7day, etc.)
+    - venue or venue_id: target venue (optional; defaults to current request context)
     - limit: max results (default 500, max 2000)
+    
+    All filters are applied server-side against leads read from the Google Sheet.
     
     Returns: {"ok": true, "items": [...], "count": N, "filters_applied": {...}}
     """
@@ -15955,6 +16058,14 @@ def admin_api_leads_filter():
         tiers.extend([t.strip() for t in tiers_list if t.strip()])
     tiers = list(set(t.lower().strip() for t in tiers if t))
     
+    # Get entry_point filter (e.g. "reserve now")
+    entry_param = request.args.get("entry", "").strip()
+    entry_points = []
+    if entry_param:
+        entry_points = [e.strip() for e in entry_param.split(",") if e.strip()] if "," in entry_param else [entry_param]
+    entry_points.extend([e.strip() for e in request.args.getlist("entry") if e.strip()])
+    entry_points = list(set(e.strip() for e in entry_points if e))
+    
     # Get time range
     time_param = request.args.get("time", "").strip()
     time_minutes = _parse_time_range_minutes(time_param) if time_param else None
@@ -15968,17 +16079,14 @@ def admin_api_leads_filter():
         except:
             time_minutes = None
     
-    # VENUE ISOLATION: Use provided venue_id or default to current venue context
-    # This ensures NO cross-venue data bleed
-    target_venue_id = (request.args.get("venue_id", "").strip() or "").lower()
+    # VENUE: Use explicit venue/venue_id from request so filter always matches page (no stale cookie-only context)
+    target_venue_id = (request.args.get("venue_id") or request.args.get("venue") or "").strip()
     if not target_venue_id:
-        # No explicit venue provided; use current venue context
         try:
             target_venue_id = _slugify_venue_id(_venue_id()).lower()
         except Exception:
             target_venue_id = DEFAULT_VENUE_ID.lower()
     else:
-        # Explicit venue provided; normalize it
         target_venue_id = _slugify_venue_id(target_venue_id).lower()
     
     # Load leads ONLY from the target venue
@@ -16047,11 +16155,12 @@ def admin_api_leads_filter():
     
     items.sort(key=_ts, reverse=True)
     
-    # Apply filters (status, tier, and time)
+    # Apply filters (status, tier, entry_point, and time)
     filtered_items = _apply_leads_filters(items, 
                                          statuses=statuses or None, 
                                          tiers=tiers or None,
-                                         time_minutes=time_minutes)
+                                         time_minutes=time_minutes,
+                                         entry_points=entry_points or None)
     
     # Limit results
     if len(filtered_items) > limit:
@@ -16064,6 +16173,7 @@ def admin_api_leads_filter():
         "filters_applied": {
             "statuses": statuses,
             "tiers": tiers,
+            "entry_points": entry_points,
             "time_minutes": time_minutes,
             "venue_id": target_venue_id,
         },
