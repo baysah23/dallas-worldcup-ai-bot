@@ -4258,6 +4258,10 @@ def append_lead_to_sheet(lead: Dict[str, Any], venue_id: Optional[str] = None) -
 
     # Append at bottom (keeps headers at the top)
     ws.append_row(row, value_input_option="USER_ENTERED")
+    try:
+        _LEADS_CACHE_BY_VENUE.pop(_slugify_venue_id(vid), None)
+    except Exception:
+        pass
 
 
 # Small per-venue read cache to avoid Sheets 429s
@@ -4267,6 +4271,8 @@ def read_leads(limit: int = 200, venue_id: Optional[str] = None) -> List[List[st
     """Read leads from the venue's Google Sheet tab (best-effort, cached).
 
     Returns rows including header row (row 1) as rows[0].
+    Always ensures header includes venue_id, then returns only rows for this venue
+    (shared spreadsheet + per-row venue_id is required for multi-tenant isolation).
     """
     vid = _slugify_venue_id(venue_id or _venue_id())
     now = time.time()
@@ -4274,34 +4280,48 @@ def read_leads(limit: int = 200, venue_id: Optional[str] = None) -> List[List[st
     cache = _LEADS_CACHE_BY_VENUE.get(vid) or {}
     rows_cached = cache.get("rows")
     if isinstance(rows_cached, list) and (now - float(cache.get("ts") or 0.0) < 9.0):
-        return rows_cached[:limit] if limit else rows_cached
+        out = rows_cached[:limit] if limit else rows_cached
+        return out
 
     try:
         ws = get_sheet(venue_id=vid)  # uses venue sheet_name when present
+        # Must persist venue_id column so writes tag rows; reads filter by it.
+        ensure_sheet_schema(ws)
         rows = ws.get_all_values() or []
 
-        # Optional per-row venue isolation when sharing a sheet:
-        # if a "venue_id" column exists, keep only rows matching the current venue.
-        if rows and len(rows) > 1:
-            header = rows[0]
-            hmap = header_map(header)
-            vcol = hmap.get("venue_id")
-            if vcol:
-                body = rows[1:]
-                kept = []
-                for r in body:
-                    if not isinstance(r, list) or len(r) < vcol:
-                        continue
-                    row_vid = _slugify_venue_id(str(r[vcol - 1] or DEFAULT_VENUE_ID))
-                    if row_vid == vid:
-                        kept.append(r)
-                rows = [header] + kept
+        # Per-row venue isolation (required when multiple venues share one workbook/tab).
+        if not rows or len(rows) < 2:
+            _LEADS_CACHE_BY_VENUE[vid] = {"ts": now, "rows": rows or [[]], "body_sheet_rows": []}
+            return rows[:limit] if limit else rows
+
+        header = rows[0]
+        hmap = header_map(header)
+        vcol = hmap.get("venue_id")
+        if not vcol:
+            # Fail closed: do not show other venues' rows if schema is broken.
+            _LEADS_CACHE_BY_VENUE[vid] = {"ts": now, "rows": [header], "body_sheet_rows": []}
+            return [header]
+
+        body = rows[1:]
+        kept = []
+        body_sheet_rows: List[int] = []
+        for i, r in enumerate(rows[1:], start=2):
+            if not isinstance(r, list):
+                continue
+            pad = vcol - len(r)
+            if pad > 0:
+                r = r + [""] * pad
+            row_vid = _slugify_venue_id(str((r[vcol - 1] if len(r) >= vcol else "") or DEFAULT_VENUE_ID))
+            if row_vid == vid:
+                kept.append(r)
+                body_sheet_rows.append(i)
+        rows = [header] + kept
 
         # cache regardless; even empty is useful to avoid hammering
-        _LEADS_CACHE_BY_VENUE[vid] = {"ts": now, "rows": rows}
+        _LEADS_CACHE_BY_VENUE[vid] = {"ts": now, "rows": rows, "body_sheet_rows": body_sheet_rows}
         return rows[:limit] if limit else rows
     except Exception:
-        # fallback to cached rows on error
+        # fallback to cached rows on error (may be missing body_sheet_rows on stale cache)
         rows = rows_cached if isinstance(rows_cached, list) else []
         if rows:
             return rows[:limit] if limit else rows
@@ -6246,25 +6266,40 @@ def _menu_redirect_reply(lang: str) -> str:
     return replies.get(lang, replies["en"])
 
 
-def _find_sheet_row_by_reservation_id(reservation_id: str) -> Optional[Tuple[int, Dict[str, int], List[str]]]:
-    """Find sheet row number (1-based) for the given reservation_id in current venue. Returns (row_num, header_map, header) or None."""
+def _find_sheet_row_by_reservation_id(reservation_id: str, venue_id: Optional[str] = None) -> Optional[Tuple[int, Dict[str, int], List[str]]]:
+    """Find actual Google Sheet row (1-based) for reservation_id within this venue only."""
     rid = (reservation_id or "").strip().upper()
-    if not rid or not rid.startswith("WC-"):
-        rid = "WC-" + rid if rid else ""
     if not rid:
         return None
+    if not rid.startswith("WC-"):
+        rid = "WC-" + rid
+    vid = _slugify_venue_id(venue_id or _venue_id())
     try:
-        rows = read_leads(limit=2000)
+        ws = get_sheet(venue_id=vid)
+        ensure_sheet_schema(ws)
+        rows = ws.get_all_values() or []
         if not rows or len(rows) < 2:
             return None
         header = rows[0]
         hmap = header_map(header)
         if "reservation_id" not in hmap:
             return None
-        col = hmap["reservation_id"]
+        rcol = hmap["reservation_id"]
+        vcol = hmap.get("venue_id")
         for i, r in enumerate(rows[1:], start=2):
-            if isinstance(r, list) and len(r) >= col and (r[col - 1] or "").strip().upper() == rid:
-                return (i, hmap, header)
+            if not isinstance(r, list) or len(r) < rcol:
+                continue
+            if (r[rcol - 1] or "").strip().upper() != rid:
+                continue
+            if vcol:
+                if len(r) < vcol:
+                    continue
+                row_vid = _slugify_venue_id(str(r[vcol - 1] or DEFAULT_VENUE_ID))
+                if row_vid != vid:
+                    continue
+            else:
+                continue
+            return (i, hmap, header)
     except Exception:
         pass
     return None
@@ -6332,7 +6367,7 @@ def _update_reservation_local(reservation_id: str, updates: Dict[str, Any]) -> O
 
 def update_reservation_by_id(reservation_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Update an existing reservation by ID (date, time, party_size, name, phone). Writes to sheet or local JSONL; returns updated row dict or None."""
-    found = _find_sheet_row_by_reservation_id(reservation_id)
+    found = _find_sheet_row_by_reservation_id(reservation_id, venue_id=_venue_id())
     if found:
         row_num, hmap, header = found
         try:
@@ -9358,6 +9393,25 @@ th{
 
 /* Leads filter area: same dark theme as rest of admin (inherits .card background) */
 .leads-filters-section{ background:transparent; }
+.leads-dd-wrap{ position:relative; min-width:140px; }
+button.inp.leads-dd-btn{ text-align:left; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.leads-dd-panel{
+  position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:80;
+  background:linear-gradient(180deg,rgba(15,26,51,.98),rgba(11,18,32,.99));
+  border:1px solid var(--line); border-radius:12px; padding:8px 6px; max-height:240px; overflow-y:auto;
+  box-shadow:0 12px 40px rgba(0,0,0,.55);
+}
+.leads-dd-panel.hidden{ display:none !important; }
+.leads-dd-panel label{ display:flex; align-items:center; gap:8px; padding:8px 10px; cursor:pointer; border-radius:8px; font-size:13px; color:var(--text); margin:0; }
+.leads-dd-panel label:hover{ background:rgba(255,255,255,.07); }
+.leads-dd-panel input{ accent-color:#d4af37; width:16px; height:16px; }
+#leadsHoverTip{
+  position:fixed; z-index:9999; max-width:min(420px,90vw); padding:12px 14px;
+  background:linear-gradient(180deg,rgba(15,26,51,.99),rgba(11,18,32,.99));
+  border:1px solid var(--line); border-radius:12px; color:var(--text); font-size:13px; line-height:1.45;
+  box-shadow:0 12px 40px rgba(0,0,0,.6); pointer-events:none; white-space:pre-wrap; word-break:break-word;
+  display:none;
+}
 
 /* Leads table: wide enough to show all columns; horizontal scroll when needed; tooltips on truncated cells */
 .leads-tablewrap{
@@ -9779,10 +9833,14 @@ label.small + textarea,
 <div class='leads-filters-section' style='margin-top:16px;padding:14px;border-radius:8px;border:1px solid var(--line)'>
   <div class='small' style='font-weight:700;margin-bottom:12px;color:var(--text)'>Filter leads</div>
   <div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;align-items:end'>
-    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Status</label><select class='inp' id='flt-status' multiple size='5' style='min-width:140px;height:88px' title='Hold Ctrl/Cmd to select multiple'><option value='new'>New</option><option value='contacted'>Contacted</option><option value='reserved'>Reserved</option><option value='seated'>Seated</option><option value='completed'>Completed</option><option value='no-show'>No-Show</option><option value='cancelled'>Cancelled</option></select><div class='small' style='opacity:.7;margin-top:2px'>Ctrl+click for multiple</div></div>
-    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Tier</label><select class='inp' id='flt-tier' multiple size='5' style='min-width:140px;height:88px' title='Hold Ctrl/Cmd to select multiple'><option value='regular'>Regular</option><option value='entry'>Entry</option><option value='reserve now'>Reserve now</option><option value='vip'>VIP</option><option value='vip vibe'>VIP vibe</option><option value='premium'>Premium</option></select><div class='small' style='opacity:.7;margin-top:2px'>Ctrl+click for multiple</div></div>
+    <div class='leads-dd-wrap'><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Status</label><button type='button' class='inp leads-dd-btn' id='flt-status-btn' aria-expanded='false'>All statuses <span style='opacity:.6'>▾</span></button><div class='leads-dd-panel hidden' id='flt-status-panel'>
+<label><input type='checkbox' value='new'> New</label><label><input type='checkbox' value='contacted'> Contacted</label><label><input type='checkbox' value='reserved'> Reserved</label><label><input type='checkbox' value='seated'> Seated</label><label><input type='checkbox' value='completed'> Completed</label><label><input type='checkbox' value='no-show'> No-Show</label><label><input type='checkbox' value='cancelled'> Cancelled</label><label><input type='checkbox' value='waitlist'> Waitlist</label><label><input type='checkbox' value='confirmed'> Confirmed</label><label><input type='checkbox' value='handled'> Handled</label>
+</div></div>
+    <div class='leads-dd-wrap'><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Tier</label><button type='button' class='inp leads-dd-btn' id='flt-tier-btn' aria-expanded='false'>All tiers <span style='opacity:.6'>▾</span></button><div class='leads-dd-panel hidden' id='flt-tier-panel'>
+<label><input type='checkbox' value='regular'> Regular</label><label><input type='checkbox' value='entry'> Entry</label><label><input type='checkbox' value='reserve now'> Reserve now</label><label><input type='checkbox' value='vip'> VIP</label><label><input type='checkbox' value='vip vibe'> VIP vibe</label><label><input type='checkbox' value='premium'> Premium</label>
+</div></div>
     <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Time range</label><select class='inp' id='flt-time' style='min-width:140px'><option value=''>All time</option><option value='30'>Last 30 min</option><option value='60'>Last 1 hour</option><option value='120'>Last 2 hours</option><option value='1440'>Last 24 hours</option><option value='10080'>Last 7 days</option></select></div>
-    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Source</label><select class='inp' id='flt-entry' style='min-width:140px'><option value='all'>All</option><option value='reserve_now'>Reserve now</option><option value='vip_vibe'>VIP vibe</option><option value='entry'>Entry</option></select></div>
+    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Source</label><select class='inp' id='flt-entry' style='min-width:140px'><option value='all'>All sources</option></select></div>
     <div style='display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end'><button class='btn' id='btn-leads-apply' type='button'>Apply</button><button class='btn2' id='btn-leads-reset' type='button'>Reset</button></div>
   </div>
   <div style='margin-top:10px'><span id='leadsCount' class='small'>0 shown</span></div>
@@ -9790,6 +9848,12 @@ label.small + textarea,
 </div>""")
         html.append("<div class='tablewrap leads-tablewrap'><table id='leadsTable'>")
         html.append("<thead><tr>"                    "<th>Row</th><th>Timestamp</th><th>Name</th><th>Contact</th>"                    "<th>Date</th><th>Time</th><th>Party</th>"                    "<th>Segment</th><th>Entry</th><th>Queue</th><th>Budget</th>"                    "<th>Context</th><th>Notes</th>"                    "<th>Status</th><th>VIP</th><th>Save</th>"                    "</tr></thead><tbody id='leadsTableBody'>")
+        from urllib.parse import quote as _urlq
+        def _tip_td(txt, short_min=8):
+            t = (txt or "").strip()
+            if len(t) < short_min:
+                return ""
+            return ' class="leads-cell-tip" data-tip="' + _urlq(t, safe="") + '"'
         for sheet_row, r in numbered:
             ts = colval(r, i_ts, "")
             nm = colval(r, i_name, "")
@@ -9825,10 +9889,9 @@ label.small + textarea,
             # Segment badge (VIP vs Regular)
             seg = "⭐ VIP" if tier_key == "vip" else "Regular"
             seg_cls = "badge warn" if seg.startswith("⭐") else "badge"
-            html.append(f"<td><span class='{seg_cls}'>{_hesc(seg)}</span></td>")
-            _ep_attr = " title=\"" + _hesc(ep).replace('"', "&quot;") + "\"" if ep else ""
-            html.append("<td" + _ep_attr + "><span class='pill'>" + _hesc(ep) + "</span></td>")
-            html.append("<td><span class='badge good'>" + _hesc(queue) + "</span></td>")
+            html.append("<td" + _tip_td(seg, 4) + "><span class='" + seg_cls + "'>" + _hesc(seg) + "</span></td>")
+            html.append("<td" + _tip_td(ep, 1) + "><span class='pill'>" + _hesc(ep or "—") + "</span></td>")
+            html.append("<td" + _tip_td(queue, 4) + "><span class='badge good'>" + _hesc(queue or "—") + "</span></td>")
             html.append(f"<td>{_hesc(budget)}</td>")
             # Context + Notes (compact); title on td for hover tooltip when truncated
             ctx_txt = (bctx or "").strip()
@@ -9840,10 +9903,10 @@ label.small + textarea,
                     return "<span class='small'>—</span>"
                 short = txt if len(txt) <= 34 else (txt[:34] + "…")
                 return "<details><summary class='small'>" + _hesc(short) + "</summary><div style='margin-top:6px;white-space:pre-wrap' class='small'>" + _hesc(txt) + "</div></details>"
-            _ctx_attr = " title=\"" + _hesc(ctx_txt).replace('"', "&quot;") + "\"" if ctx_txt else ""
-            _note_attr = " title=\"" + _hesc(note_txt).replace('"', "&quot;") + "\"" if note_txt else ""
-            html.append("<td" + _ctx_attr + ">" + _cell_details("context", ctx_txt) + "</td>")
-            html.append("<td" + _note_attr + ">" + _cell_details("notes", note_txt) + "</td>")
+            _ctx_tip = _tip_td(ctx_txt, 1) if ctx_txt else ""
+            _note_tip = _tip_td(note_txt, 1) if note_txt else ""
+            html.append("<td" + _ctx_tip + ">" + _cell_details("context", ctx_txt) + "</td>")
+            html.append("<td" + _note_tip + ">" + _cell_details("notes", note_txt) + "</td>")
 
 
             html.append("<td>")
@@ -10503,6 +10566,7 @@ function applyLeadFilters(){
 }
 
 function _he(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c)); }
+function _tipAttr(txt){ if(!txt||String(txt).length<12) return ''; try{ return ' class=\\"leads-cell-tip\\" data-tip=\\"'+encodeURIComponent(String(txt))+'\\"'; }catch(e){ return ''; } }
 function _leadRowFromItem(it){
   const row = (it.sheet_row||it.row||0);
   const ts = _he(it.timestamp||'');
@@ -10528,17 +10592,40 @@ function _leadRowFromItem(it){
   const vipVal = /^(yes|true|1|y|vip)$/.test(vip) ? 'Yes' : 'No';
   const stSel = '<select class=\\'inp\\' id=\\'status-'+row+'\\'><option'+(stLow==='new'?' selected':'')+'>New</option><option'+(stLow==='confirmed'?' selected':'')+'>Confirmed</option><option'+(stLow==='seated'?' selected':'')+'>Seated</option><option'+(stLow==='no-show'?' selected':'')+'>No-Show</option><option'+(stLow==='handled'?' selected':'')+'>Handled</option></select>';
   const vipSel = '<select class=\\'inp\\' id=\\'vip-'+row+'\\'><option'+(vipVal==='Yes'?' selected':'')+'>Yes</option><option'+(vipVal==='No'?' selected':'')+'>No</option></select>';
-  const tEp = fullEp ? ' title="'+_he(fullEp).replace(/"/g,'&quot;')+'"' : '';
-  const tCtx = fullCtx ? ' title="'+_he(fullCtx).replace(/"/g,'&quot;')+'"' : '';
-  const tNotes = fullNotes ? ' title="'+_he(fullNotes).replace(/"/g,'&quot;')+'"' : '';
-  const tNm = (it.name||'') ? ' title="'+_he(it.name||'').replace(/"/g,'&quot;')+'"' : '';
-  const tPh = (it.phone||'') ? ' title="'+_he(it.phone||'').replace(/"/g,'&quot;')+'"' : '';
-  return '<tr data-tier="'+tierKey+'" data-entry="'+_he(it.entry_point||'')+'"><td class=\\'code\\'>'+row+'</td><td>'+ts+'</td><td'+tNm+'>'+nm+'</td><td'+tPh+'>'+ph+'</td><td>'+d+'</td><td>'+t+'</td><td>'+ps+'</td><td><span class=\\"'+segCls+'\\">'+seg+'</span></td><td'+tEp+'><span class=\\"pill\\">'+ep+'</span></td><td><span class=\\"badge good\\">'+queue+'</span></td><td>'+budget+'</td><td'+tCtx+'><span class=\\"small\\">'+ctx+(ctx.length>=34?'…':'')+'</span></td><td'+tNotes+'><span class=\\"small\\">'+notes+(notes.length>=40?'…':'')+'</span></td><td>'+stSel+'</td><td>'+vipSel+'</td><td><button class=\\"btn2\\' onclick=\\"saveLead('+row+')\\">Save</button><button class=\\"btnTiny\\' title=\\"Mark handled\\" onclick=\\"markHandled('+row+')\\">✅</button></td></tr>';
+  const tipEp = fullEp ? _tipAttr(fullEp) : '';
+  const tipCtx = fullCtx.length>=28 ? _tipAttr(fullCtx) : '';
+  const tipNotes = fullNotes.length>=28 ? _tipAttr(fullNotes) : '';
+  const tipNm = (it.name||'').length>=12 ? _tipAttr(it.name||'') : '';
+  const tipPh = (it.phone||'').length>=12 ? _tipAttr(it.phone||'') : '';
+  return '<tr data-tier="'+tierKey+'" data-entry="'+_he(it.entry_point||'')+'"><td class=\\'code\\'>'+row+'</td><td>'+ts+'</td><td'+tipNm+'>'+nm+'</td><td'+tipPh+'>'+ph+'</td><td>'+d+'</td><td>'+t+'</td><td>'+ps+'</td><td'+_tipAttr(seg)+'><span class=\\"'+segCls+'\\">'+seg+'</span></td><td'+tipEp+'><span class=\\"pill\\">'+ep+'</span></td><td'+_tipAttr(queue)+'><span class=\\"badge good\\">'+queue+'</span></td><td>'+budget+'</td><td'+tipCtx+'><span class=\\"small\\">'+ctx+(ctx.length>=34?'…':'')+'</span></td><td'+tipNotes+'><span class=\\"small\\">'+notes+(notes.length>=40?'…':'')+'</span></td><td>'+stSel+'</td><td>'+vipSel+'</td><td><button class=\\"btn2\\' onclick=\\"saveLead('+row+')\\">Save</button><button class=\\"btnTiny\\' title=\\"Mark handled\\" onclick=\\"markHandled('+row+')\\">✅</button></td></tr>';
+}
+function _leadsDdLabel(panelId, allLabel){
+  const panel = qs('#'+panelId); if(!panel) return allLabel;
+  const chk = panel.querySelectorAll('input[type=checkbox]:checked');
+  if(!chk.length) return allLabel;
+  const labs = Array.from(chk).map(c=>{ const lab = c.closest('label'); return lab ? lab.textContent.replace(/\\s+/g,' ').trim() : c.value; });
+  return labs.length>2 ? (labs.length+' selected') : labs.join(', ');
+}
+function _closeAllLeadsDd(){ qsa('.leads-dd-panel').forEach(p=>p.classList.add('hidden')); qsa('.leads-dd-btn').forEach(b=>{ b.setAttribute('aria-expanded','false'); }); }
+function _toggleLeadsDd(btnId, panelId, allLabel){
+  const btn = qs('#'+btnId), panel = qs('#'+panelId);
+  if(!btn||!panel) return;
+  const open = panel.classList.contains('hidden');
+  _closeAllLeadsDd();
+  if(open){ panel.classList.remove('hidden'); btn.setAttribute('aria-expanded','true'); btn.innerHTML = _leadsDdLabel(panelId, allLabel)+' <span style="opacity:.6">▾</span>'; }
+  else { btn.innerHTML = allLabel+' <span style="opacity:.6">▾</span>'; }
+}
+function _syncDdButtons(){
+  const sb = qs('#flt-status-btn'); const sp = qs('#flt-status-panel');
+  if(sb&&sp) sb.innerHTML = _leadsDdLabel('flt-status-panel','All statuses')+' <span style="opacity:.6">▾</span>';
+  const tb = qs('#flt-tier-btn'); const tp = qs('#flt-tier-panel');
+  if(tb&&tp) tb.innerHTML = _leadsDdLabel('flt-tier-panel','All tiers')+' <span style="opacity:.6">▾</span>';
 }
 async function applyLeadsFiltersServer(){
-  const statusEl = qs('#flt-status'); const tierEl = qs('#flt-tier'); const timeEl = qs('#flt-time'); const entryEl = qs('#flt-entry');
-  const statuses = statusEl ? Array.from(statusEl.selectedOptions || []).map(o=>o.value).filter(Boolean) : [];
-  const tiers = tierEl ? Array.from(tierEl.selectedOptions || []).map(o=>o.value).filter(Boolean) : [];
+  _closeAllLeadsDd();
+  const timeEl = qs('#flt-time'); const entryEl = qs('#flt-entry');
+  const statuses = qsa('#flt-status-panel input[type=checkbox]:checked').map(c=>c.value);
+  const tiers = qsa('#flt-tier-panel input[type=checkbox]:checked').map(c=>c.value);
   const timeVal = (timeEl && timeEl.value) ? timeEl.value : '';
   const entryVal = (entryEl && entryEl.value && entryEl.value !== 'all') ? entryEl.value : '';
   const params = new URLSearchParams();
@@ -10554,32 +10641,35 @@ async function applyLeadsFiltersServer(){
   try {
     const r = await fetch('/admin/api/leads/filter?'+params.toString(), { cache: 'no-store' });
     const j = await r.json().catch(()=>null);
-    if(btn){ btn.disabled=false; btn.textContent='Apply filters'; }
+    if(btn){ btn.disabled=false; btn.textContent='Apply'; }
     if(!j || !j.ok){ if(hint) hint.textContent = 'Error'; if(typeof toast==='function') toast(j&&j.error ? j.error : 'Filter failed'); return; }
     const items = j.items || [];
     const tbody = qs('#leadsTableBody');
     if(tbody) tbody.innerHTML = items.map(_leadRowFromItem).join('');
     if(hint) hint.textContent = items.length + ' shown';
-    _populateLeadsEntryDropdown(items);
-  } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Apply filters'; } if(hint) hint.textContent='Error'; }
+    _populateLeadsEntryDropdown(j.entry_point_values || [], items);
+    _syncDdButtons();
+  } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Apply'; } if(hint) hint.textContent='Error'; }
 }
-function _populateLeadsEntryDropdown(items){
-  const entries = new Set(['reserve_now','vip_vibe','entry']);
+function _populateLeadsEntryDropdown(entry_point_values, items){
+  const entries = new Set(entry_point_values || []);
   (items||[]).forEach(it=>{ const ep = (it.entry_point||'').toString().trim(); if(ep) entries.add(ep); });
   const sel = qs('#flt-entry');
   if(!sel) return;
   const currentVal = sel.value;
   sel.innerHTML = '';
-  const all = document.createElement('option'); all.value = 'all'; all.textContent = 'All'; sel.appendChild(all);
-  Array.from(entries).sort().forEach(ep=>{ const o = document.createElement('option'); o.value = ep; o.textContent = ep.replace(/_/g,' '); sel.appendChild(o); });
-  if(sel.querySelector('option[value="'+currentVal+'"]')) sel.value = currentVal; else sel.value = 'all';
+  const all = document.createElement('option'); all.value = 'all'; all.textContent = 'All sources'; sel.appendChild(all);
+  Array.from(entries).sort((a,b)=>a.localeCompare(b)).forEach(ep=>{ const o = document.createElement('option'); o.value = ep; o.textContent = ep.replace(/_/g,' '); sel.appendChild(o); });
+  let ok = false; Array.from(sel.options).forEach(o=>{ if(o.value===currentVal) ok=true; });
+  sel.value = ok ? currentVal : 'all';
 }
 function resetLeadsFiltersServer(){
-  const statusEl = qs('#flt-status'); const tierEl = qs('#flt-tier'); const timeEl = qs('#flt-time'); const entryEl = qs('#flt-entry');
-  if(statusEl) Array.from(statusEl.options).forEach(o=>o.selected=false);
-  if(tierEl) Array.from(tierEl.options).forEach(o=>o.selected=false);
+  qsa('#flt-status-panel input[type=checkbox]').forEach(c=>c.checked=false);
+  qsa('#flt-tier-panel input[type=checkbox]').forEach(c=>c.checked=false);
+  const timeEl = qs('#flt-time'); const entryEl = qs('#flt-entry');
   if(timeEl) timeEl.value = '';
   if(entryEl) entryEl.value = 'all';
+  _syncDdButtons();
   applyLeadsFiltersServer();
 }
 function setupLeadFilters(){
@@ -10590,6 +10680,25 @@ function setupLeadFilters(){
   const hint = qs('#leadsCount'); if(hint) hint.textContent = rowCount + " shown";
   qs('#btn-leads-apply')?.addEventListener('click', applyLeadsFiltersServer);
   qs('#btn-leads-reset')?.addEventListener('click', resetLeadsFiltersServer);
+  qs('#flt-status-btn')?.addEventListener('click', function(e){ e.stopPropagation(); const p = qs('#flt-status-panel'); const o = p&&p.classList.contains('hidden'); _closeAllLeadsDd(); if(o){ p.classList.remove('hidden'); this.setAttribute('aria-expanded','true'); } });
+  qs('#flt-tier-btn')?.addEventListener('click', function(e){ e.stopPropagation(); const p = qs('#flt-tier-panel'); const o = p&&p.classList.contains('hidden'); _closeAllLeadsDd(); if(o){ p.classList.remove('hidden'); this.setAttribute('aria-expanded','true'); } });
+  qsa('#flt-status-panel input,#flt-tier-panel input').forEach(i=>i.addEventListener('change', _syncDdButtons));
+  document.addEventListener('click', function(){ _closeAllLeadsDd(); _syncDdButtons(); });
+  qsa('.leads-dd-panel').forEach(p=>p.addEventListener('click', function(e){ e.stopPropagation(); }));
+  const tip = document.createElement('div'); tip.id = 'leadsHoverTip'; document.body.appendChild(tip);
+  const tipEl = ()=>qs('#leadsHoverTip');
+  tbl.addEventListener('mousemove', function(e){
+    const el = e.target.closest('.leads-cell-tip[data-tip]');
+    const node = tipEl();
+    if(!node) return;
+    if(!el){ node.style.display='none'; return; }
+    const txt = el.getAttribute('data-tip'); if(!txt) return;
+    try{ node.textContent = decodeURIComponent(txt); }catch(_){ node.textContent = txt; }
+    node.style.display='block';
+    node.style.left = Math.min(e.clientX+14, window.innerWidth - node.offsetWidth - 12)+'px';
+    node.style.top = (e.clientY+12)+'px';
+  });
+  tbl.addEventListener('mouseleave', function(){ const n=tipEl(); if(n) n.style.display='none'; });
 }
 
 
@@ -15730,13 +15839,14 @@ def admin_api_leads_all():
             v = r[i]
             return "" if v is None else str(v)
 
-        # keep correct sheet row numbers: header is row 1, data starts row 2
+        bsr = (_LEADS_CACHE_BY_VENUE.get(_slugify_venue_id(venue_id)) or {}).get("body_sheet_rows") or []
         for off, r in enumerate(body):
             if not isinstance(r, list):
                 continue
+            sr = bsr[off] if isinstance(bsr, list) and off < len(bsr) else off + 2
             obj = {
                 "_venue_id": venue_id,
-                "sheet_row": off + 2,
+                "sheet_row": sr,
                 "timestamp": get_cell(r, "timestamp"),
                 "name": get_cell(r, "name"),
                 "phone": get_cell(r, "phone"),
@@ -15938,13 +16048,18 @@ def _apply_leads_filters(items: List[Dict[str, Any]],
             def _norm_ep(s):
                 return (s or "").replace(" ", "_").strip()
             def entry_matches(item):
-                ep_raw = (item.get("entry_point") or "").lower().strip()
-                ep_underscore = _norm_ep(ep_raw)
-                ep_space = ep_raw.replace("_", " ")
+                ep_raw = (item.get("entry_point") or "").strip()
+                if not ep_raw:
+                    return False  # empty entry_point must not match (was matching all rows: "" in "vip_vibe" is True in Python)
+                ep_lo = ep_raw.lower()
+                ep_underscore = _norm_ep(ep_lo)
+                ep_space = ep_lo.replace("_", " ")
                 for e in entry_lower:
                     e_und = _norm_ep(e)
-                    e_sp = e.replace("_", " ")
-                    if e_und == ep_underscore or e_sp == ep_space or e_und in ep_underscore or e_sp in ep_space or ep_underscore in e_und or ep_space in e_sp:
+                    e_sp = (e or "").replace("_", " ").strip().lower()
+                    if e_und == ep_underscore or e_sp == ep_space:
+                        return True
+                    if e_und and ep_underscore and (e_und in ep_underscore or ep_underscore in e_und):
                         return True
                 return False
             result = [item for item in result if entry_matches(item)]
@@ -16096,7 +16211,7 @@ def admin_api_leads_filter():
     errors: List[Dict[str, Any]] = []
     items: List[Dict[str, Any]] = []
     
-    def rows_to_items(rows: List[List[str]], vid: str) -> None:
+    def rows_to_items(rows: List[List[str]], vid: str, body_sheet_rows: Optional[List[int]] = None) -> None:
         if not rows or len(rows) < 2:
             return
         header = rows[0] or []
@@ -16119,9 +16234,11 @@ def admin_api_leads_filter():
         for off, r in enumerate(body):
             if not isinstance(r, list):
                 continue
+            cell_vid = (get_cell(r, "venue_id") or "").strip()
+            sr = (body_sheet_rows[off] if body_sheet_rows and off < len(body_sheet_rows) else off + 2)
             obj = {
-                "_venue_id": vid,
-                "sheet_row": off + 2,
+                "_venue_id": _slugify_venue_id(cell_vid) if cell_vid else vid,
+                "sheet_row": sr,
                 "timestamp": get_cell(r, "timestamp"),
                 "name": get_cell(r, "name"),
                 "phone": get_cell(r, "phone"),
@@ -16144,7 +16261,8 @@ def admin_api_leads_filter():
     # Read leads ONLY from the target venue (NO cross-venue data leakage)
     try:
         rows = read_leads(limit=limit + 100, venue_id=target_venue_id) or []
-        rows_to_items(rows, target_venue_id)
+        bsr = (_LEADS_CACHE_BY_VENUE.get(_slugify_venue_id(target_venue_id)) or {}).get("body_sheet_rows") or []
+        rows_to_items(rows, target_venue_id, body_sheet_rows=bsr if isinstance(bsr, list) else None)
     except Exception as e:
         errors.append({"venue_id": target_venue_id, "error": str(e)})
     
@@ -16157,6 +16275,12 @@ def admin_api_leads_filter():
         return ""
     
     items.sort(key=_ts, reverse=True)
+    
+    # Distinct entry_point values in sheet (for Source dropdown — always full list for venue)
+    entry_point_values = sorted(set(
+        (it.get("entry_point") or "").strip()
+        for it in items if (it.get("entry_point") or "").strip()
+    ), key=lambda x: x.lower())
     
     # Apply filters (status, tier, entry_point, and time)
     filtered_items = _apply_leads_filters(items, 
@@ -16173,6 +16297,7 @@ def admin_api_leads_filter():
         "ok": True,
         "count": len(filtered_items),
         "items": filtered_items,
+        "entry_point_values": entry_point_values,
         "filters_applied": {
             "statuses": statuses,
             "tiers": tiers,
@@ -17150,51 +17275,6 @@ def get_gspread_client():
 
     raise RuntimeError("Google credentials not found. Set GOOGLE_CREDS_JSON or provide google_creds.json locally.")
 
-
-
-def _normalize_header(h: str) -> str:
-    return (h or "").strip().lower().replace(" ", "_")
-
-
-def ensure_sheet_schema(ws) -> List[str]:
-    """
-    Make sure row 1 is the header and includes the CRM columns we need.
-    Returns the final header list (as stored in the sheet).
-    """
-    desired = ["timestamp", "reservation_id", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier", "queue", "business_context", "budget", "notes", "vibe"]
-
-    existing = ws.row_values(1) or []
-    existing_norm = [_normalize_header(x) for x in existing]
-
-    # If sheet is empty, write the full header
-    if not any(x.strip() for x in existing):
-        ws.update("A1", [desired])
-        return desired
-
-    # If the existing header doesn't even contain "timestamp" (common sign row1 isn't a header),
-    # don't try to reshuffle rows automatically—just ensure required columns exist at the end.
-    header = existing[:]  # keep original display names
-    header_norm = existing_norm[:]
-
-    # Append missing columns
-    for col in desired:
-        if col not in header_norm:
-            header.append(col)
-            header_norm.append(col)
-
-    # If we changed anything, write header back (row 1)
-    if header != existing:
-        ws.update("A1", [header])
-
-    return header
-
-
-def header_map(header: List[str]) -> Dict[str, int]:
-    """Return {normalized_header: 1-based column_index}"""
-    m = {}
-    for i, h in enumerate(header):
-        m[_normalize_header(h)] = i + 1
-    return m
 
 def get_session_id() -> str:
     """
