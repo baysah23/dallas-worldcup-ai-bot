@@ -481,7 +481,11 @@ def privacy_policy():
 
       <p>We do not send marketing or promotional SMS messages, and we do not sell or share personal information with third parties for marketing purposes.</p>
 
-      <p>For questions about this policy, contact: <a href="mailto:admin@worldcupconcierge.app">admin@worldcupconcierge.app</a></p>
+      <p>
+        This website-owned number is used for World Cup Concierge communications only
+        and is not presented as a shared messaging number for multiple independent businesses.
+        </p>
+      <p>For questions about this policy, contact: <a href="mailto:support@worldcupconcierge.app">support@worldcupconcierge.app</a></p>
 
       <p class="muted">World Cup Concierge is a product operated by NYLA AI Solutions, LLC.</p>
 
@@ -530,8 +534,11 @@ hr{border:0;border-top:1px solid rgba(255,255,255,.12);margin:14px 0;}
 <p><strong>World Cup Concierge</strong> is operated by <strong>NYLA AI Solutions, LLC</strong>. By accessing or using our website, applications, or services, you agree to these Terms & Conditions.</p>
 
 <h2>1. Service Description</h2>
-<p>World Cup Concierge provides reservation coordination, VIP access management, waitlist handling, and operational messaging tools for venues and event operators.</p>
-
+<p>
+  World Cup Concierge provides hospitality operations tools, guest inquiry
+  workflows, demo access, and support communication tools for venues and event
+  operators.
+</p>
 <h2>2. User Responsibilities</h2>
 <ul>
 <li>You agree to provide accurate information when submitting reservation or contact forms.</li>
@@ -540,10 +547,31 @@ hr{border:0;border-top:1px solid rgba(255,255,255,.12);margin:14px 0;}
 </ul>
 
 <h2>3. SMS Communications</h2>
-<p>By submitting your phone number through our website or applications, you consent to receive transactional SMS messages related to reservations, VIP status updates, waitlist notifications, and operational alerts.</p>
-<p>Message frequency varies. Message and data rates may apply. Consent is not a condition of purchase.</p>
-<p>You may opt out at any time by replying <strong>STOP</strong>. For help, reply <strong>HELP</strong>.</p>
-<p>We do not send marketing or promotional SMS messages.</p>
+<p>
+  By submitting your phone number through our website or applications, you
+  consent to receive transactional SMS messages from World Cup Concierge related
+  to demo requests, direct inquiries, and support responses.
+</p>
+
+<p>
+  Message frequency varies. Message and data rates may apply. Consent is not a
+  condition of purchase.
+</p>
+
+<p>
+  You may opt out at any time by replying STOP. For help, reply HELP.
+</p>
+
+<p>
+  We do not send marketing or promotional SMS messages from this website-owned
+  number.
+</p>
+
+<p>
+  SMS communications from this website-owned number are limited to World Cup
+  Concierge platform communications and are not used for unsolicited marketing
+  or shared multi-business promotional messaging.
+</p>
 
 <h2>4. Reservation Disclaimer</h2>
 <p>Submission of a reservation request does not guarantee confirmation. Final approval is subject to venue availability and venue policies.</p>
@@ -565,11 +593,16 @@ hr{border:0;border-top:1px solid rgba(255,255,255,.12);margin:14px 0;}
 <p>These Terms are governed by the laws of the State of Texas, United States.</p>
 
 <h2>10. Contact</h2>
-<p>For questions regarding these Terms, contact:
-<a href="mailto:support@worldcupconcierge.app">support@worldcupconcierge.app</a></p>
+<p>
+  For questions regarding these Terms, contact:
+  <a href="mailto:support@worldcupconcierge.app">support@worldcupconcierge.app</a>
+</p>
 
-<p class="muted">World Cup Concierge is a product operated by NYLA AI Solutions, LLC.</p>
-<div class="muted">Last updated: January 2026</div>
+<p>
+  World Cup Concierge is a product operated by NYLA AI Solutions, LLC.
+</p>
+
+<p>Last updated: January 2026</p>
 
 </div>
 </div>
