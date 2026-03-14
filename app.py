@@ -242,6 +242,8 @@ def _append_reservation_local(lead: dict, reservation_id: Optional[str] = None) 
         path = os.path.join(_BASE_DIR, RESERVATIONS_LOCAL_PATH)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         rid = (reservation_id or lead.get("reservation_id") or "").strip()
+        
+        # Enhanced reservation structure with tier/category and other metadata
         row = {
             "reservation_id": rid,
             "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -254,7 +256,11 @@ def _append_reservation_local(lead: dict, reservation_id: Optional[str] = None) 
             "party_size": lead.get("party_size", 0),
             "language": lead.get("language", "en"),
             "status": (lead.get("status") or "New").strip() or "New",
+            "tier": (lead.get("tier") or "regular").strip().lower() or "regular",  # New: tier/category field
             "vip": "Yes" if str(lead.get("vip") or "").strip().lower() in ("1", "true", "yes", "y") else "No",
+            "budget": lead.get("budget", ""),
+            "notes": lead.get("notes", ""),
+            "vibe": lead.get("vibe", ""),  # e.g., "VIP Vibe", "Premium", "Standard"
         }
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -568,8 +574,9 @@ hr{border:0;border-top:1px solid rgba(255,255,255,.12);margin:14px 0;}
 </p>
 
 <p>
-  This website-owned number is used for World Cup Concierge communications only
-  and is not presented as a shared messaging number for multiple independent businesses.
+  SMS communications from this website-owned number are limited to World Cup
+  Concierge platform communications and are not used for unsolicited marketing
+  or shared multi-business promotional messaging.
 </p>
 
 <h2>4. Reservation Disclaimer</h2>
@@ -1809,8 +1816,10 @@ def _outbound_send_email(to_email: str, subject: str, body_text: str) -> Tuple[b
 def _outbound_send_twilio(channel: str, to_number_or_id: str, body_text: str) -> Tuple[bool, str]:
     """
     Send SMS/WhatsApp via Twilio.
-    - SMS uses TWILIO_FROM
-    - WhatsApp uses TWILIO_WHATSAPP_FROM or TWILIO_FROM prefixed with 'whatsapp:' if already provided
+    - SMS: TWILIO_FROM (your Twilio SMS number).
+    - WhatsApp: TWILIO_WHATSAPP_FROM (must be a WhatsApp-enabled sender in Twilio — sandbox or
+      approved WhatsApp Business number). Your SMS number is not automatically WhatsApp-enabled;
+      set TWILIO_WHATSAPP_FROM to a number registered for WhatsApp in Twilio Console.
     """
     sid = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
     token = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
@@ -1830,7 +1839,10 @@ def _outbound_send_twilio(channel: str, to_number_or_id: str, body_text: str) ->
     elif ch == "whatsapp":
         frm = os.environ.get("TWILIO_WHATSAPP_FROM", "").strip() or os.environ.get("TWILIO_FROM", "").strip()
         if not frm:
-            return False, "WhatsApp not configured (missing TWILIO_WHATSAPP_FROM or TWILIO_FROM)"
+            return False, (
+                "WhatsApp not configured. Set TWILIO_WHATSAPP_FROM to a WhatsApp-enabled sender in Twilio "
+                "(Console → Messaging → Senders → WhatsApp). Your SMS number is not automatically WhatsApp-enabled."
+            )
         if not frm.startswith("whatsapp:"):
             frm = "whatsapp:" + frm
         if not to.startswith("whatsapp:"):
@@ -1844,7 +1856,18 @@ def _outbound_send_twilio(channel: str, to_number_or_id: str, body_text: str) ->
         r = requests.post(url, data=data, auth=(sid, token), timeout=12)
         if 200 <= r.status_code < 300:
             return True, "Message sent"
-        return False, f"Twilio error {r.status_code}"
+        err_msg = f"Twilio error {r.status_code}"
+        try:
+            j = r.json() if r.text else {}
+            code = j.get("code") or j.get("error_code")
+            msg = (j.get("message") or j.get("error_message") or "").strip()
+            if code is not None or msg:
+                err_msg = f"Twilio {code or r.status_code}: {msg or err_msg}"
+            if ch == "whatsapp" and (r.status_code == 400 or code in (21608, 21212)):
+                err_msg += " — Use a WhatsApp-enabled sender (set TWILIO_WHATSAPP_FROM; see Twilio Console → WhatsApp Senders)."
+        except Exception:
+            pass
+        return False, err_msg
     except Exception as e:
         return False, f"Twilio send failed: {e}"
 
@@ -1970,13 +1993,19 @@ def _health_check_outbound() -> Dict[str, Any]:
     try:
         # We only validate readiness (env vars). Sending is still human-triggered.
         sg_ok = bool(os.environ.get("SENDGRID_API_KEY")) and bool(os.environ.get("SENDGRID_FROM"))
-        tw_ok = bool(os.environ.get("TWILIO_ACCOUNT_SID")) and bool(os.environ.get("TWILIO_AUTH_TOKEN")) and bool(os.environ.get("TWILIO_FROM"))
-        if not sg_ok and not tw_ok:
+        tw_sid = bool(os.environ.get("TWILIO_ACCOUNT_SID")) and bool(os.environ.get("TWILIO_AUTH_TOKEN"))
+        sms_ok = tw_sid and bool(os.environ.get("TWILIO_FROM"))
+        whatsapp_ok = tw_sid and bool(os.environ.get("TWILIO_WHATSAPP_FROM", "").strip())
+        if not sg_ok and not sms_ok:
             return {"name": "outbound", "ok": True, "severity": "warn", "message": "Outbound providers not configured (send disabled until configured)."}
         parts = []
         parts.append("SendGrid OK" if sg_ok else "SendGrid missing")
-        parts.append("Twilio OK" if tw_ok else "Twilio missing")
-        return {"name": "outbound", "ok": True, "severity": "ok" if (sg_ok or tw_ok) else "warn", "message": ", ".join(parts)}
+        parts.append("SMS OK" if sms_ok else "SMS missing (TWILIO_FROM)")
+        if tw_sid:
+            parts.append("WhatsApp OK" if whatsapp_ok else "WhatsApp: set TWILIO_WHATSAPP_FROM (must be a WhatsApp-enabled sender in Twilio Console)")
+        else:
+            parts.append("WhatsApp missing (Twilio not configured)")
+        return {"name": "outbound", "ok": True, "severity": "ok" if (sg_ok or sms_ok) else "warn", "message": ", ".join(parts)}
     except Exception as e:
         return {"name": "outbound", "ok": False, "severity": "warn", "message": f"Outbound readiness check failed: {e}"}
 
@@ -4229,6 +4258,10 @@ def append_lead_to_sheet(lead: Dict[str, Any], venue_id: Optional[str] = None) -
 
     # Append at bottom (keeps headers at the top)
     ws.append_row(row, value_input_option="USER_ENTERED")
+    try:
+        _LEADS_CACHE_BY_VENUE.pop(_slugify_venue_id(vid), None)
+    except Exception:
+        pass
 
 
 # Small per-venue read cache to avoid Sheets 429s
@@ -4238,6 +4271,8 @@ def read_leads(limit: int = 200, venue_id: Optional[str] = None) -> List[List[st
     """Read leads from the venue's Google Sheet tab (best-effort, cached).
 
     Returns rows including header row (row 1) as rows[0].
+    Always ensures header includes venue_id, then returns only rows for this venue
+    (shared spreadsheet + per-row venue_id is required for multi-tenant isolation).
     """
     vid = _slugify_venue_id(venue_id or _venue_id())
     now = time.time()
@@ -4245,34 +4280,48 @@ def read_leads(limit: int = 200, venue_id: Optional[str] = None) -> List[List[st
     cache = _LEADS_CACHE_BY_VENUE.get(vid) or {}
     rows_cached = cache.get("rows")
     if isinstance(rows_cached, list) and (now - float(cache.get("ts") or 0.0) < 9.0):
-        return rows_cached[:limit] if limit else rows_cached
+        out = rows_cached[:limit] if limit else rows_cached
+        return out
 
     try:
         ws = get_sheet(venue_id=vid)  # uses venue sheet_name when present
+        # Must persist venue_id column so writes tag rows; reads filter by it.
+        ensure_sheet_schema(ws)
         rows = ws.get_all_values() or []
 
-        # Optional per-row venue isolation when sharing a sheet:
-        # if a "venue_id" column exists, keep only rows matching the current venue.
-        if rows and len(rows) > 1:
-            header = rows[0]
-            hmap = header_map(header)
-            vcol = hmap.get("venue_id")
-            if vcol:
-                body = rows[1:]
-                kept = []
-                for r in body:
-                    if not isinstance(r, list) or len(r) < vcol:
-                        continue
-                    row_vid = _slugify_venue_id(str(r[vcol - 1] or DEFAULT_VENUE_ID))
-                    if row_vid == vid:
-                        kept.append(r)
-                rows = [header] + kept
+        # Per-row venue isolation (required when multiple venues share one workbook/tab).
+        if not rows or len(rows) < 2:
+            _LEADS_CACHE_BY_VENUE[vid] = {"ts": now, "rows": rows or [[]], "body_sheet_rows": []}
+            return rows[:limit] if limit else rows
+
+        header = rows[0]
+        hmap = header_map(header)
+        vcol = hmap.get("venue_id")
+        if not vcol:
+            # Fail closed: do not show other venues' rows if schema is broken.
+            _LEADS_CACHE_BY_VENUE[vid] = {"ts": now, "rows": [header], "body_sheet_rows": []}
+            return [header]
+
+        body = rows[1:]
+        kept = []
+        body_sheet_rows: List[int] = []
+        for i, r in enumerate(rows[1:], start=2):
+            if not isinstance(r, list):
+                continue
+            pad = vcol - len(r)
+            if pad > 0:
+                r = r + [""] * pad
+            row_vid = _slugify_venue_id(str((r[vcol - 1] if len(r) >= vcol else "") or DEFAULT_VENUE_ID))
+            if row_vid == vid:
+                kept.append(r)
+                body_sheet_rows.append(i)
+        rows = [header] + kept
 
         # cache regardless; even empty is useful to avoid hammering
-        _LEADS_CACHE_BY_VENUE[vid] = {"ts": now, "rows": rows}
+        _LEADS_CACHE_BY_VENUE[vid] = {"ts": now, "rows": rows, "body_sheet_rows": body_sheet_rows}
         return rows[:limit] if limit else rows
     except Exception:
-        # fallback to cached rows on error
+        # fallback to cached rows on error (may be missing body_sheet_rows on stale cache)
         rows = rows_cached if isinstance(rows_cached, list) else []
         if rows:
             return rows[:limit] if limit else rows
@@ -6217,25 +6266,40 @@ def _menu_redirect_reply(lang: str) -> str:
     return replies.get(lang, replies["en"])
 
 
-def _find_sheet_row_by_reservation_id(reservation_id: str) -> Optional[Tuple[int, Dict[str, int], List[str]]]:
-    """Find sheet row number (1-based) for the given reservation_id in current venue. Returns (row_num, header_map, header) or None."""
+def _find_sheet_row_by_reservation_id(reservation_id: str, venue_id: Optional[str] = None) -> Optional[Tuple[int, Dict[str, int], List[str]]]:
+    """Find actual Google Sheet row (1-based) for reservation_id within this venue only."""
     rid = (reservation_id or "").strip().upper()
-    if not rid or not rid.startswith("WC-"):
-        rid = "WC-" + rid if rid else ""
     if not rid:
         return None
+    if not rid.startswith("WC-"):
+        rid = "WC-" + rid
+    vid = _slugify_venue_id(venue_id or _venue_id())
     try:
-        rows = read_leads(limit=2000)
+        ws = get_sheet(venue_id=vid)
+        ensure_sheet_schema(ws)
+        rows = ws.get_all_values() or []
         if not rows or len(rows) < 2:
             return None
         header = rows[0]
         hmap = header_map(header)
         if "reservation_id" not in hmap:
             return None
-        col = hmap["reservation_id"]
+        rcol = hmap["reservation_id"]
+        vcol = hmap.get("venue_id")
         for i, r in enumerate(rows[1:], start=2):
-            if isinstance(r, list) and len(r) >= col and (r[col - 1] or "").strip().upper() == rid:
-                return (i, hmap, header)
+            if not isinstance(r, list) or len(r) < rcol:
+                continue
+            if (r[rcol - 1] or "").strip().upper() != rid:
+                continue
+            if vcol:
+                if len(r) < vcol:
+                    continue
+                row_vid = _slugify_venue_id(str(r[vcol - 1] or DEFAULT_VENUE_ID))
+                if row_vid != vid:
+                    continue
+            else:
+                continue
+            return (i, hmap, header)
     except Exception:
         pass
     return None
@@ -6303,7 +6367,7 @@ def _update_reservation_local(reservation_id: str, updates: Dict[str, Any]) -> O
 
 def update_reservation_by_id(reservation_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """Update an existing reservation by ID (date, time, party_size, name, phone). Writes to sheet or local JSONL; returns updated row dict or None."""
-    found = _find_sheet_row_by_reservation_id(reservation_id)
+    found = _find_sheet_row_by_reservation_id(reservation_id, venue_id=_venue_id())
     if found:
         row_num, hmap, header = found
         try:
@@ -8561,7 +8625,10 @@ def admin_api_ai_queue_send(qid: str):
 
     _audit("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": ok_send, "by": actor})
     _notify("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": ok_send, "by": actor, "role": role}, targets=["owner","manager"])
-    return jsonify({"ok": True, "result": res})
+    if ok_send:
+        return jsonify({"ok": True, "result": res})
+    err = res.get("message") or res.get("error") or "Send failed"
+    return jsonify({"ok": False, "result": res, "error": err})
 
 
 @app.route("/admin/api/ai/queue/<qid>/override", methods=["POST"])
@@ -9204,7 +9271,7 @@ body{
   color:var(--text);
 }
 
-.wrap{max-width:1200px;margin:0 auto;padding:18px;}
+.wrap{max-width:1600px;margin:0 auto;padding:18px;}
 .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px;}
 .h1{font-size:18px;font-weight:800;letter-spacing:.3px}
 .sub{color:var(--muted);font-size:12px;margin-top:4px;word-break:break-word;overflow-wrap:break-word}
@@ -9322,6 +9389,78 @@ th{
   top:0;
   background:rgba(10,16,32,.9);
   text-align:left
+}
+
+/* Leads filter area: same dark theme as rest of admin (inherits .card background) */
+.leads-filters-section{ background:transparent; }
+.leads-dd-wrap{ position:relative; min-width:140px; }
+button.inp.leads-dd-btn{ text-align:left; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.leads-dd-panel{
+  position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:80;
+  background:linear-gradient(180deg,rgba(15,26,51,.98),rgba(11,18,32,.99));
+  border:1px solid var(--line); border-radius:12px; padding:8px 6px; max-height:240px; overflow-y:auto;
+  box-shadow:0 12px 40px rgba(0,0,0,.55);
+}
+.leads-dd-panel.hidden{ display:none !important; }
+.leads-dd-panel label{ display:flex; align-items:center; gap:8px; padding:8px 10px; cursor:pointer; border-radius:8px; font-size:13px; color:var(--text); margin:0; }
+.leads-dd-panel label:hover{ background:rgba(255,255,255,.07); }
+.leads-dd-panel input{ accent-color:#d4af37; width:16px; height:16px; }
+#leadsHoverTip{
+  position:fixed; z-index:9999; max-width:min(420px,90vw); padding:12px 14px;
+  background:linear-gradient(180deg,rgba(15,26,51,.99),rgba(11,18,32,.99));
+  border:1px solid var(--line); border-radius:12px; color:var(--text); font-size:13px; line-height:1.45;
+  box-shadow:0 12px 40px rgba(0,0,0,.6); pointer-events:none; white-space:pre-wrap; word-break:break-word;
+  display:none;
+}
+
+/* Leads table: wide enough to show all columns; horizontal scroll when needed; tooltips on truncated cells */
+.leads-tablewrap{
+  border-radius:12px;
+  border:1px solid var(--line);
+  margin-top:8px;
+  overflow-x:auto;
+  overflow-y:visible;
+  min-width:100%;
+}
+#leadsTable{
+  table-layout:fixed;
+  min-width:1400px;
+  width:100%;
+  border-collapse:collapse;
+  font-size:12px;
+}
+#leadsTable th,
+#leadsTable td{
+  padding:8px 10px;
+  border-bottom:1px solid rgba(255,255,255,.08);
+  vertical-align:middle;
+  box-sizing:border-box;
+}
+#leadsTable th{ position:sticky; top:0; background:rgba(10,16,32,.95); z-index:1; }
+#leadsTable th:nth-child(1),#leadsTable td:nth-child(1){ width:3%; min-width:36px; }
+#leadsTable th:nth-child(2),#leadsTable td:nth-child(2){ width:10%; min-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(3),#leadsTable td:nth-child(3){ width:7%; min-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(4),#leadsTable td:nth-child(4){ width:9%; min-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(5),#leadsTable td:nth-child(5){ width:5%; min-width:64px; }
+#leadsTable th:nth-child(6),#leadsTable td:nth-child(6){ width:5%; min-width:56px; }
+#leadsTable th:nth-child(7),#leadsTable td:nth-child(7){ width:4%; min-width:48px; text-align:center; }
+#leadsTable th:nth-child(8),#leadsTable td:nth-child(8){ width:5%; min-width:64px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(9),#leadsTable td:nth-child(9){ width:6%; min-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(10),#leadsTable td:nth-child(10){ width:5%; min-width:64px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(11),#leadsTable td:nth-child(11){ width:5%; min-width:56px; }
+#leadsTable th:nth-child(12),#leadsTable td:nth-child(12){ width:8%; min-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(13),#leadsTable td:nth-child(13){ width:9%; min-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(14),#leadsTable td:nth-child(14){ width:9%; min-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(15),#leadsTable td:nth-child(15){ width:5%; min-width:64px; }
+#leadsTable th:nth-child(16),#leadsTable td:nth-child(16){ width:6%; min-width:100px; white-space:nowrap; }
+#leadsTable td:nth-child(16) .btn2{ margin-right:4px; }
+#leadsTable td[title]{ cursor:help; }
+#leadsTable td:nth-child(14) select,
+#leadsTable td:nth-child(15) select{
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
+  font-size:12px;
 }
 
 .badge{
@@ -9690,9 +9829,31 @@ label.small + textarea,
     elif not body:
         html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>No leads yet.</div></div>")
     else:
-        html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>Newest first. Update Status/VIP and save.</div><div style='display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;align-items:center'><div class='pills' style='margin:0'><button class='btn2' id='flt-all' type='button'>All</button><button class='btn2' id='flt-vip' type='button'>VIP</button><button class='btn2' id='flt-reg' type='button'>Regular</button></div><div style='display:flex;gap:8px;align-items:center'><span class='small' style='white-space:nowrap'>Entry:</span><select class='inp' id='flt-entry' style='min-width:180px'></select><span id='leadsCount' class='small' style='margin-left:8px'>0 shown</span></div></div></div>")
-        html.append("<div class='tablewrap'><table id='leadsTable'>")
-        html.append("<thead><tr>"                    "<th>Row</th><th>Timestamp</th><th>Name</th><th>Contact</th>"                    "<th>Date</th><th>Time</th><th>Party</th>"                    "<th>Segment</th><th>Entry</th><th>Queue</th><th>Budget</th>"                    "<th>Context</th><th>Notes</th>"                    "<th>Status</th><th>VIP</th><th>Save</th>"                    "</tr></thead><tbody>")
+        html.append("""<div class='card'><div class='h2'>Leads</div><div class='small'>Newest first. Update Status/VIP and save.</div>
+<div class='leads-filters-section' style='margin-top:16px;padding:14px;border-radius:8px;border:1px solid var(--line)'>
+  <div class='small' style='font-weight:700;margin-bottom:12px;color:var(--text)'>Filter leads</div>
+  <div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;align-items:end'>
+    <div class='leads-dd-wrap'><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Status</label><button type='button' class='inp leads-dd-btn' id='flt-status-btn' aria-expanded='false'>All statuses <span style='opacity:.6'>▾</span></button><div class='leads-dd-panel hidden' id='flt-status-panel'>
+<label><input type='checkbox' value='new'> New</label><label><input type='checkbox' value='contacted'> Contacted</label><label><input type='checkbox' value='reserved'> Reserved</label><label><input type='checkbox' value='seated'> Seated</label><label><input type='checkbox' value='completed'> Completed</label><label><input type='checkbox' value='no-show'> No-Show</label><label><input type='checkbox' value='cancelled'> Cancelled</label><label><input type='checkbox' value='waitlist'> Waitlist</label><label><input type='checkbox' value='confirmed'> Confirmed</label><label><input type='checkbox' value='handled'> Handled</label>
+</div></div>
+    <div class='leads-dd-wrap'><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Tier</label><button type='button' class='inp leads-dd-btn' id='flt-tier-btn' aria-expanded='false'>All tiers <span style='opacity:.6'>▾</span></button><div class='leads-dd-panel hidden' id='flt-tier-panel'>
+<label><input type='checkbox' value='regular'> Regular</label><label><input type='checkbox' value='entry'> Entry</label><label><input type='checkbox' value='reserve now'> Reserve now</label><label><input type='checkbox' value='vip'> VIP</label><label><input type='checkbox' value='vip vibe'> VIP vibe</label><label><input type='checkbox' value='premium'> Premium</label>
+</div></div>
+    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Time range</label><select class='inp' id='flt-time' style='min-width:140px'><option value=''>All time</option><option value='30'>Last 30 min</option><option value='60'>Last 1 hour</option><option value='120'>Last 2 hours</option><option value='1440'>Last 24 hours</option><option value='10080'>Last 7 days</option></select></div>
+    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Source</label><select class='inp' id='flt-entry' style='min-width:140px'><option value='all'>All sources</option></select></div>
+    <div style='display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end'><button class='btn' id='btn-leads-apply' type='button'>Apply</button><button class='btn2' id='btn-leads-reset' type='button'>Reset</button></div>
+  </div>
+  <div style='margin-top:10px'><span id='leadsCount' class='small'>0 shown</span></div>
+</div>
+</div>""")
+        html.append("<div class='tablewrap leads-tablewrap'><table id='leadsTable'>")
+        html.append("<thead><tr>"                    "<th>Row</th><th>Timestamp</th><th>Name</th><th>Contact</th>"                    "<th>Date</th><th>Time</th><th>Party</th>"                    "<th>Segment</th><th>Entry</th><th>Queue</th><th>Budget</th>"                    "<th>Context</th><th>Notes</th>"                    "<th>Status</th><th>VIP</th><th>Save</th>"                    "</tr></thead><tbody id='leadsTableBody'>")
+        from urllib.parse import quote as _urlq
+        def _tip_td(txt, short_min=8):
+            t = (txt or "").strip()
+            if len(t) < short_min:
+                return ""
+            return ' class="leads-cell-tip" data-tip="' + _urlq(t, safe="") + '"'
         for sheet_row, r in numbered:
             ts = colval(r, i_ts, "")
             nm = colval(r, i_name, "")
@@ -9728,23 +9889,24 @@ label.small + textarea,
             # Segment badge (VIP vs Regular)
             seg = "⭐ VIP" if tier_key == "vip" else "Regular"
             seg_cls = "badge warn" if seg.startswith("⭐") else "badge"
-            html.append(f"<td><span class='{seg_cls}'>{_hesc(seg)}</span></td>")
-            html.append("<td><span class='pill'>" + _hesc(ep) + "</span></td>")
-            html.append("<td><span class='badge good'>" + _hesc(queue) + "</span></td>")
+            html.append("<td" + _tip_td(seg, 4) + "><span class='" + seg_cls + "'>" + _hesc(seg) + "</span></td>")
+            html.append("<td" + _tip_td(ep, 1) + "><span class='pill'>" + _hesc(ep or "—") + "</span></td>")
+            html.append("<td" + _tip_td(queue, 4) + "><span class='badge good'>" + _hesc(queue or "—") + "</span></td>")
             html.append(f"<td>{_hesc(budget)}</td>")
-            # Context + Notes (compact)
+            # Context + Notes (compact); title on td for hover tooltip when truncated
             ctx_txt = (bctx or "").strip()
             note_txt = (notes or "").strip()
             if vibe and vibe.strip():
-                # Keep vibe visible without cluttering budget/notes columns
                 note_txt = (note_txt + (" | " if note_txt else "") + f"vibe: {vibe.strip()}").strip()
             def _cell_details(label, txt):
                 if not txt:
                     return "<span class='small'>—</span>"
                 short = txt if len(txt) <= 34 else (txt[:34] + "…")
                 return "<details><summary class='small'>" + _hesc(short) + "</summary><div style='margin-top:6px;white-space:pre-wrap' class='small'>" + _hesc(txt) + "</div></details>"
-            html.append("<td>" + _cell_details("context", ctx_txt) + "</td>")
-            html.append("<td>" + _cell_details("notes", note_txt) + "</td>")
+            _ctx_tip = _tip_td(ctx_txt, 1) if ctx_txt else ""
+            _note_tip = _tip_td(note_txt, 1) if note_txt else ""
+            html.append("<td" + _ctx_tip + ">" + _cell_details("context", ctx_txt) + "</td>")
+            html.append("<td" + _note_tip + ">" + _cell_details("notes", note_txt) + "</td>")
 
 
             html.append("<td>")
@@ -10178,6 +10340,11 @@ window.showTab = function(tab){
     // switch tab panes
     try{ setActive(tab); }catch(e){}
 
+    // Leads tab: always load table from filter API (real params, sheet-backed) so we never show stale server-rendered rows
+    if(tab === 'leads'){
+      try{ if(typeof applyLeadsFiltersServer === 'function') applyLeadsFiltersServer(); }catch(e){}
+    }
+
     // If your rules tab needs loads, keep this behavior
     if(tab === 'rules'){
       try{ loadPartnerList(); loadPartnerPolicy(); }catch(e){}
@@ -10398,50 +10565,140 @@ function applyLeadFilters(){
   if(hint) hint.textContent = shown + " shown";
 }
 
+function _he(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c)); }
+function _tipAttr(txt){ if(!txt||String(txt).length<12) return ''; try{ return ' class=\\"leads-cell-tip\\" data-tip=\\"'+encodeURIComponent(String(txt))+'\\"'; }catch(e){ return ''; } }
+function _leadRowFromItem(it){
+  const row = (it.sheet_row||it.row||0);
+  const ts = _he(it.timestamp||'');
+  const nm = _he(it.name||'');
+  const ph = _he(it.phone||'');
+  const d = _he(it.date||'');
+  const t = _he(it.time||'');
+  const ps = _he(it.party_size||'');
+  const tier = (it.tier||'').toString().toLowerCase(); const vip = (it.vip||'').toString().toLowerCase();
+  const tierKey = (tier==='vip' || /^(yes|true|1|y|vip)$/.test(vip)) ? 'vip' : 'regular';
+  const seg = tierKey==='vip' ? '⭐ VIP' : 'Regular';
+  const segCls = seg.indexOf('⭐')>=0 ? 'badge warn' : 'badge';
+  const ep = _he((it.entry_point||'').replace(/_/g,' '));
+  const fullEp = (it.entry_point||'').replace(/_/g,' ');
+  const fullCtx = (it.business_context||it.context||'');
+  const fullNotes = (it.notes||'');
+  const queue = _he(it.queue||'');
+  const budget = _he(it.budget||'');
+  const ctx = _he((fullCtx+'').substring(0,34));
+  const notes = _he((fullNotes+'').substring(0,40));
+  const st = (it.status||'New').toString().trim();
+  const stLow = st.toLowerCase();
+  const vipVal = /^(yes|true|1|y|vip)$/.test(vip) ? 'Yes' : 'No';
+  const stSel = '<select class=\\'inp\\' id=\\'status-'+row+'\\'><option'+(stLow==='new'?' selected':'')+'>New</option><option'+(stLow==='confirmed'?' selected':'')+'>Confirmed</option><option'+(stLow==='seated'?' selected':'')+'>Seated</option><option'+(stLow==='no-show'?' selected':'')+'>No-Show</option><option'+(stLow==='handled'?' selected':'')+'>Handled</option></select>';
+  const vipSel = '<select class=\\'inp\\' id=\\'vip-'+row+'\\'><option'+(vipVal==='Yes'?' selected':'')+'>Yes</option><option'+(vipVal==='No'?' selected':'')+'>No</option></select>';
+  const tipEp = fullEp ? _tipAttr(fullEp) : '';
+  const tipCtx = fullCtx.length>=28 ? _tipAttr(fullCtx) : '';
+  const tipNotes = fullNotes.length>=28 ? _tipAttr(fullNotes) : '';
+  const tipNm = (it.name||'').length>=12 ? _tipAttr(it.name||'') : '';
+  const tipPh = (it.phone||'').length>=12 ? _tipAttr(it.phone||'') : '';
+  return '<tr data-tier="'+tierKey+'" data-entry="'+_he(it.entry_point||'')+'"><td class=\\'code\\'>'+row+'</td><td>'+ts+'</td><td'+tipNm+'>'+nm+'</td><td'+tipPh+'>'+ph+'</td><td>'+d+'</td><td>'+t+'</td><td>'+ps+'</td><td'+_tipAttr(seg)+'><span class=\\"'+segCls+'\\">'+seg+'</span></td><td'+tipEp+'><span class=\\"pill\\">'+ep+'</span></td><td'+_tipAttr(queue)+'><span class=\\"badge good\\">'+queue+'</span></td><td>'+budget+'</td><td'+tipCtx+'><span class=\\"small\\">'+ctx+(ctx.length>=34?'…':'')+'</span></td><td'+tipNotes+'><span class=\\"small\\">'+notes+(notes.length>=40?'…':'')+'</span></td><td>'+stSel+'</td><td>'+vipSel+'</td><td><button class=\\"btn2\\' onclick=\\"saveLead('+row+')\\">Save</button><button class=\\"btnTiny\\' title=\\"Mark handled\\" onclick=\\"markHandled('+row+')\\">✅</button></td></tr>';
+}
+function _leadsDdLabel(panelId, allLabel){
+  const panel = qs('#'+panelId); if(!panel) return allLabel;
+  const chk = panel.querySelectorAll('input[type=checkbox]:checked');
+  if(!chk.length) return allLabel;
+  const labs = Array.from(chk).map(c=>{ const lab = c.closest('label'); return lab ? lab.textContent.replace(/\\s+/g,' ').trim() : c.value; });
+  return labs.length>2 ? (labs.length+' selected') : labs.join(', ');
+}
+function _closeAllLeadsDd(){ qsa('.leads-dd-panel').forEach(p=>p.classList.add('hidden')); qsa('.leads-dd-btn').forEach(b=>{ b.setAttribute('aria-expanded','false'); }); }
+function _toggleLeadsDd(btnId, panelId, allLabel){
+  const btn = qs('#'+btnId), panel = qs('#'+panelId);
+  if(!btn||!panel) return;
+  const open = panel.classList.contains('hidden');
+  _closeAllLeadsDd();
+  if(open){ panel.classList.remove('hidden'); btn.setAttribute('aria-expanded','true'); btn.innerHTML = _leadsDdLabel(panelId, allLabel)+' <span style="opacity:.6">▾</span>'; }
+  else { btn.innerHTML = allLabel+' <span style="opacity:.6">▾</span>'; }
+}
+function _syncDdButtons(){
+  const sb = qs('#flt-status-btn'); const sp = qs('#flt-status-panel');
+  if(sb&&sp) sb.innerHTML = _leadsDdLabel('flt-status-panel','All statuses')+' <span style="opacity:.6">▾</span>';
+  const tb = qs('#flt-tier-btn'); const tp = qs('#flt-tier-panel');
+  if(tb&&tp) tb.innerHTML = _leadsDdLabel('flt-tier-panel','All tiers')+' <span style="opacity:.6">▾</span>';
+}
+async function applyLeadsFiltersServer(){
+  _closeAllLeadsDd();
+  const timeEl = qs('#flt-time'); const entryEl = qs('#flt-entry');
+  const statuses = qsa('#flt-status-panel input[type=checkbox]:checked').map(c=>c.value);
+  const tiers = qsa('#flt-tier-panel input[type=checkbox]:checked').map(c=>c.value);
+  const timeVal = (timeEl && timeEl.value) ? timeEl.value : '';
+  const entryVal = (entryEl && entryEl.value && entryEl.value !== 'all') ? entryEl.value : '';
+  const params = new URLSearchParams();
+  if(typeof KEY!=='undefined') params.set('key', KEY);
+  if(typeof VENUE!=='undefined' && VENUE) params.set('venue', VENUE);
+  params.set('limit','500');
+  statuses.forEach(s=>params.append('status', s));
+  tiers.forEach(t=>params.append('tier', t));
+  if(timeVal) params.set('time', timeVal);
+  if(entryVal) params.set('entry', entryVal);
+  const btn = qs('#btn-leads-apply'); if(btn){ btn.disabled=true; btn.textContent='Loading…'; }
+  const hint = qs('#leadsCount'); if(hint) hint.textContent = 'Loading…';
+  try {
+    const r = await fetch('/admin/api/leads/filter?'+params.toString(), { cache: 'no-store' });
+    const j = await r.json().catch(()=>null);
+    if(btn){ btn.disabled=false; btn.textContent='Apply'; }
+    if(!j || !j.ok){ if(hint) hint.textContent = 'Error'; if(typeof toast==='function') toast(j&&j.error ? j.error : 'Filter failed'); return; }
+    const items = j.items || [];
+    const tbody = qs('#leadsTableBody');
+    if(tbody) tbody.innerHTML = items.map(_leadRowFromItem).join('');
+    if(hint) hint.textContent = items.length + ' shown';
+    _populateLeadsEntryDropdown(j.entry_point_values || [], items);
+    _syncDdButtons();
+  } catch(e){ if(btn){ btn.disabled=false; btn.textContent='Apply'; } if(hint) hint.textContent='Error'; }
+}
+function _populateLeadsEntryDropdown(entry_point_values, items){
+  const entries = new Set(entry_point_values || []);
+  (items||[]).forEach(it=>{ const ep = (it.entry_point||'').toString().trim(); if(ep) entries.add(ep); });
+  const sel = qs('#flt-entry');
+  if(!sel) return;
+  const currentVal = sel.value;
+  sel.innerHTML = '';
+  const all = document.createElement('option'); all.value = 'all'; all.textContent = 'All sources'; sel.appendChild(all);
+  Array.from(entries).sort((a,b)=>a.localeCompare(b)).forEach(ep=>{ const o = document.createElement('option'); o.value = ep; o.textContent = ep.replace(/_/g,' '); sel.appendChild(o); });
+  let ok = false; Array.from(sel.options).forEach(o=>{ if(o.value===currentVal) ok=true; });
+  sel.value = ok ? currentVal : 'all';
+}
+function resetLeadsFiltersServer(){
+  qsa('#flt-status-panel input[type=checkbox]').forEach(c=>c.checked=false);
+  qsa('#flt-tier-panel input[type=checkbox]').forEach(c=>c.checked=false);
+  const timeEl = qs('#flt-time'); const entryEl = qs('#flt-entry');
+  if(timeEl) timeEl.value = '';
+  if(entryEl) entryEl.value = 'all';
+  _syncDdButtons();
+  applyLeadsFiltersServer();
+}
 function setupLeadFilters(){
   const tbl = qs('#leadsTable');
   if(!tbl) return;
-
-  // Build entry dropdown
-  const entries = new Set();
-  document.querySelectorAll('#leadsTable tbody tr').forEach(tr=>{
-    const ep = norm(tr.getAttribute('data-entry')||"");
-    if(ep) entries.add(ep);
+  const tbody = qs('#leadsTableBody') || tbl.querySelector('tbody');
+  const rowCount = tbody ? tbody.querySelectorAll('tr').length : 0;
+  const hint = qs('#leadsCount'); if(hint) hint.textContent = rowCount + " shown";
+  qs('#btn-leads-apply')?.addEventListener('click', applyLeadsFiltersServer);
+  qs('#btn-leads-reset')?.addEventListener('click', resetLeadsFiltersServer);
+  qs('#flt-status-btn')?.addEventListener('click', function(e){ e.stopPropagation(); const p = qs('#flt-status-panel'); const o = p&&p.classList.contains('hidden'); _closeAllLeadsDd(); if(o){ p.classList.remove('hidden'); this.setAttribute('aria-expanded','true'); } });
+  qs('#flt-tier-btn')?.addEventListener('click', function(e){ e.stopPropagation(); const p = qs('#flt-tier-panel'); const o = p&&p.classList.contains('hidden'); _closeAllLeadsDd(); if(o){ p.classList.remove('hidden'); this.setAttribute('aria-expanded','true'); } });
+  qsa('#flt-status-panel input,#flt-tier-panel input').forEach(i=>i.addEventListener('change', _syncDdButtons));
+  document.addEventListener('click', function(){ _closeAllLeadsDd(); _syncDdButtons(); });
+  qsa('.leads-dd-panel').forEach(p=>p.addEventListener('click', function(e){ e.stopPropagation(); }));
+  const tip = document.createElement('div'); tip.id = 'leadsHoverTip'; document.body.appendChild(tip);
+  const tipEl = ()=>qs('#leadsHoverTip');
+  tbl.addEventListener('mousemove', function(e){
+    const el = e.target.closest('.leads-cell-tip[data-tip]');
+    const node = tipEl();
+    if(!node) return;
+    if(!el){ node.style.display='none'; return; }
+    const txt = el.getAttribute('data-tip'); if(!txt) return;
+    try{ node.textContent = decodeURIComponent(txt); }catch(_){ node.textContent = txt; }
+    node.style.display='block';
+    node.style.left = Math.min(e.clientX+14, window.innerWidth - node.offsetWidth - 12)+'px';
+    node.style.top = (e.clientY+12)+'px';
   });
-
-  const sel = qs('#flt-entry');
-  if(sel){
-    sel.innerHTML = "";
-    const all = document.createElement('option');
-    all.value = "all"; all.textContent = "All";
-    sel.appendChild(all);
-    Array.from(entries).sort().forEach(ep=>{
-      const o = document.createElement('option');
-      o.value = ep; o.textContent = ep.replace(/_/g,' ');
-      sel.appendChild(o);
-    });
-    sel.addEventListener('change', ()=>{
-      leadEntryFilter = norm(sel.value||"all") || "all";
-      applyLeadFilters();
-    });
-  }
-
-  function setBtn(activeId){
-    ['flt-all','flt-vip','flt-reg'].forEach(id=>{
-      const b = qs('#'+id);
-      if(!b) return;
-      b.style.borderColor = (id===activeId) ? 'rgba(212,175,55,.65)' : 'rgba(255,255,255,.12)';
-      b.style.background = (id===activeId) ? 'rgba(212,175,55,.12)' : 'rgba(255,255,255,.03)';
-      b.style.color = (id===activeId) ? '#fff' : 'rgba(234,240,255,.92)';
-    });
-  }
-
-  qs('#flt-all')?.addEventListener('click', ()=>{ leadTierFilter="all"; setBtn('flt-all'); applyLeadFilters(); });
-  qs('#flt-vip')?.addEventListener('click', ()=>{ leadTierFilter="vip"; setBtn('flt-vip'); applyLeadFilters(); });
-  qs('#flt-reg')?.addEventListener('click', ()=>{ leadTierFilter="regular"; setBtn('flt-reg'); applyLeadFilters(); });
-
-  setBtn('flt-all');
-  applyLeadFilters();
+  tbl.addEventListener('mouseleave', function(){ const n=tipEl(); if(n) n.style.display='none'; });
 }
 
 
@@ -11234,7 +11491,8 @@ async function aiqSend(id, btn){
   }else{
     if(msg) msg.textContent='Send failed';
     if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Send'); }
-    alert('Send failed: '+(j && j.error ? j.error : r.status));
+    var errText = (j && (j.error || (j.result && (j.result.message || j.result.error)))) ? (j.error || j.result.message || j.result.error) : r.status;
+    alert('Send failed: '+errText);
   }
 }
 
@@ -12028,7 +12286,7 @@ body{
   color:var(--text);
 }
 
-.wrap{max-width:1200px;margin:0 auto;padding:18px;}
+.wrap{max-width:1600px;margin:0 auto;padding:18px;}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;}
 .h1{font-size:18px;font-weight:800;letter-spacing:.3px}
 .sub{color:var(--muted);font-size:12px;word-break:break-word;overflow-wrap:break-word}
@@ -15581,13 +15839,14 @@ def admin_api_leads_all():
             v = r[i]
             return "" if v is None else str(v)
 
-        # keep correct sheet row numbers: header is row 1, data starts row 2
+        bsr = (_LEADS_CACHE_BY_VENUE.get(_slugify_venue_id(venue_id)) or {}).get("body_sheet_rows") or []
         for off, r in enumerate(body):
             if not isinstance(r, list):
                 continue
+            sr = bsr[off] if isinstance(bsr, list) and off < len(bsr) else off + 2
             obj = {
                 "_venue_id": venue_id,
-                "sheet_row": off + 2,
+                "sheet_row": sr,
                 "timestamp": get_cell(r, "timestamp"),
                 "name": get_cell(r, "name"),
                 "phone": get_cell(r, "phone"),
@@ -15706,6 +15965,523 @@ def admin_api_leads_all():
         "items": page_items,
         "errors": errors
     })
+
+# ============================================================
+# LEADS FILTER API (with status + time filtering)
+# ============================================================
+
+def _parse_time_range_minutes(time_str: str) -> Optional[int]:
+    """Parse time range string to minutes. Returns None if invalid."""
+    if not time_str:
+        return None
+    time_str = time_str.lower().strip()
+    
+    # Map common time ranges to minutes
+    time_maps = {
+        "30min": 30,
+        "30mins": 30,
+        "30_min": 30,
+        "30": 30,
+        "1h": 60,
+        "1hour": 60,
+        "1_hour": 60,
+        "60": 60,
+        "2h": 120,
+        "2hour": 120,
+        "2_hour": 120,
+        "120": 120,
+        "24h": 1440,
+        "24hour": 1440,
+        "24_hour": 1440,
+        "1day": 1440,
+        "1_day": 1440,
+        "1440": 1440,
+        "7day": 10080,
+        "7_day": 10080,
+        "7days": 10080,
+        "1week": 10080,
+        "1_week": 10080,
+        "10080": 10080,
+        "604800": 10080,
+    }
+    
+    return time_maps.get(time_str)
+
+def _timestamp_to_datetime(ts: str) -> Optional[datetime]:
+    """Convert timestamp string to datetime. Handles various formats."""
+    if not ts:
+        return None
+    try:
+        # Try ISO format first
+        if 'T' in ts:
+            return datetime.fromisoformat(ts.replace('Z', '+00:00'))
+        # Try common datetime string formats
+        for fmt in [
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+            "%m/%d/%Y %H:%M:%S",
+            "%m/%d/%Y %H:%M",
+            "%d/%m/%Y %H:%M:%S",
+            "%d/%m/%Y %H:%M",
+        ]:
+            try:
+                return datetime.strptime(ts[:19], fmt)
+            except:
+                pass
+    except:
+        pass
+    return None
+
+def _apply_leads_filters(items: List[Dict[str, Any]], 
+                        statuses: Optional[List[str]] = None,
+                        tiers: Optional[List[str]] = None,
+                        time_minutes: Optional[int] = None,
+                        entry_points: Optional[List[str]] = None) -> List[Dict[str, Any]]:
+    """Apply status, tier, time, and entry_point filters to leads. Returns filtered list."""
+    result = items[:]
+    now = datetime.now(timezone.utc)
+    
+    # Filter by entry_point (normalize so "reserve now" matches "reserve_now" in sheet)
+    if entry_points:
+        entry_lower = [e.lower().strip() for e in entry_points if e]
+        if entry_lower:
+            def _norm_ep(s):
+                return (s or "").replace(" ", "_").strip()
+            def entry_matches(item):
+                ep_raw = (item.get("entry_point") or "").strip()
+                if not ep_raw:
+                    return False  # empty entry_point must not match (was matching all rows: "" in "vip_vibe" is True in Python)
+                ep_lo = ep_raw.lower()
+                ep_underscore = _norm_ep(ep_lo)
+                ep_space = ep_lo.replace("_", " ")
+                for e in entry_lower:
+                    e_und = _norm_ep(e)
+                    e_sp = (e or "").replace("_", " ").strip().lower()
+                    if e_und == ep_underscore or e_sp == ep_space:
+                        return True
+                    if e_und and ep_underscore and (e_und in ep_underscore or ep_underscore in e_und):
+                        return True
+                return False
+            result = [item for item in result if entry_matches(item)]
+    
+    # Filter by status (normalize hyphen/space so "no-show" matches "No Show" in sheet)
+    if statuses:
+        statuses_lower = [s.lower().strip() for s in statuses if s]
+        if statuses_lower:
+            def _norm_status(s):
+                return (s or "").replace("-", " ").strip()
+            def status_matches(item):
+                item_status = _norm_status((item.get("status") or "").lower())
+                item_vibe = (item.get("vibe") or "").lower().strip()
+                for s_filter in statuses_lower:
+                    s_norm = _norm_status(s_filter)
+                    if s_norm in item_status or s_filter in item_status or s_norm in item_vibe or s_filter in item_vibe:
+                        return True
+                return False
+            
+            result = [item for item in result if status_matches(item)]
+    
+    # Filter by tier (normalize space/underscore so "vip vibe" matches "vip_vibe" in sheet)
+    if tiers:
+        tiers_lower = [t.lower().strip() for t in tiers if t]
+        if tiers_lower:
+            def _norm(s):
+                return (s or "").replace("_", " ").strip()
+            def tier_matches(item):
+                item_tier = _norm((item.get("tier") or "").lower())
+                item_entry = _norm((item.get("entry_point") or "").lower())
+                for t_filter in tiers_lower:
+                    t_norm = _norm(t_filter)
+                    if t_norm in item_tier or t_norm in item_entry or item_tier in t_norm or item_entry in t_norm:
+                        return True
+                return False
+            
+            result = [item for item in result if tier_matches(item)]
+    
+    # Filter by time range
+    if time_minutes and time_minutes > 0:
+        cutoff = now - timedelta(minutes=time_minutes)
+        def within_timerange(item):
+            ts_str = item.get("timestamp") or ""
+            dt = _timestamp_to_datetime(ts_str)
+            if dt:
+                # Handle both naive and aware datetimes
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt >= cutoff
+            return True  # Keep items with missing timestamps
+        
+        result = [item for item in result if within_timerange(item)]
+    
+    return result
+
+@app.get("/admin/api/leads/filter")
+def admin_api_leads_filter():
+    """
+    Filter leads by status, tier, time range, and optionally by venue.
+    Reads from Google Sheets (works on staging/production).
+    
+    IMPORTANT: Respects venue isolation - no cross-venue data bleed.
+    - If venue_id param is provided, filters that specific venue
+    - Otherwise, filters ONLY the current venue context (_venue_id())
+    
+    Query params:
+    - status: comma-separated or repeated (e.g. ?status=new&status=reserved)
+    - tier: comma-separated or repeated (e.g. ?tier=vip&tier=reserve now)
+    - entry: entry_point / source (e.g. ?entry=reserve_now)
+    - time: time range in minutes or shorthand (30, 60, 1440, 10080, 7day, etc.)
+    - venue or venue_id: target venue (optional; defaults to current request context)
+    - limit: max results (default 500, max 2000)
+    
+    All filters are applied server-side against leads read from the Google Sheet.
+    
+    Returns: {"ok": true, "items": [...], "count": N, "filters_applied": {...}}
+    """
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    
+    try:
+        limit = int(request.args.get("limit") or 500)
+        limit = max(1, min(2000, limit))
+    except:
+        limit = 500
+    
+    # Get status filters (handle both comma-separated and repeated params)
+    status_param = request.args.get("status", "").strip()
+    statuses = []
+    if status_param:
+        # Handle comma-separated values
+        if "," in status_param:
+            statuses = [s.strip() for s in status_param.split(",") if s.strip()]
+        else:
+            statuses = [status_param]
+    # Also check for repeated params (status=value&status=value)
+    statuses_list = request.args.getlist("status")
+    if statuses_list:
+        statuses.extend([s.strip() for s in statuses_list if s.strip()])
+    # Deduplicate
+    statuses = list(set(s.lower().strip() for s in statuses if s))
+    
+    # Get tier filters (NEW: separate tier filtering)
+    tier_param = request.args.get("tier", "").strip()
+    tiers = []
+    if tier_param:
+        if "," in tier_param:
+            tiers = [t.strip() for t in tier_param.split(",") if t.strip()]
+        else:
+            tiers = [tier_param]
+    tiers_list = request.args.getlist("tier")
+    if tiers_list:
+        tiers.extend([t.strip() for t in tiers_list if t.strip()])
+    tiers = list(set(t.lower().strip() for t in tiers if t))
+    
+    # Get entry_point filter (e.g. "reserve now")
+    entry_param = request.args.get("entry", "").strip()
+    entry_points = []
+    if entry_param:
+        entry_points = [e.strip() for e in entry_param.split(",") if e.strip()] if "," in entry_param else [entry_param]
+    entry_points.extend([e.strip() for e in request.args.getlist("entry") if e.strip()])
+    entry_points = list(set(e.strip() for e in entry_points if e))
+    
+    # Get time range
+    time_param = request.args.get("time", "").strip()
+    time_minutes = _parse_time_range_minutes(time_param) if time_param else None
+    
+    # Try to parse as integer minutes if not recognized
+    if time_minutes is None and time_param:
+        try:
+            time_minutes = int(time_param)
+            if time_minutes <= 0:
+                time_minutes = None
+        except:
+            time_minutes = None
+    
+    # VENUE: Use explicit venue/venue_id from request so filter always matches page (no stale cookie-only context)
+    target_venue_id = (request.args.get("venue_id") or request.args.get("venue") or "").strip()
+    if not target_venue_id:
+        try:
+            target_venue_id = _slugify_venue_id(_venue_id()).lower()
+        except Exception:
+            target_venue_id = DEFAULT_VENUE_ID.lower()
+    else:
+        target_venue_id = _slugify_venue_id(target_venue_id).lower()
+    
+    # Load leads ONLY from the target venue
+    errors: List[Dict[str, Any]] = []
+    items: List[Dict[str, Any]] = []
+    
+    def rows_to_items(rows: List[List[str]], vid: str, body_sheet_rows: Optional[List[int]] = None) -> None:
+        if not rows or len(rows) < 2:
+            return
+        header = rows[0] or []
+        body = rows[1:] or []
+        
+        hmap: Dict[str, int] = {}
+        for i, h in enumerate(header):
+            try:
+                hmap[_normalize_header(h)] = i
+            except:
+                pass
+        
+        def get_cell(r: List[str], key: str) -> str:
+            i = hmap.get(_normalize_header(key), -1)
+            if i < 0 or i >= len(r):
+                return ""
+            v = r[i]
+            return "" if v is None else str(v)
+        
+        for off, r in enumerate(body):
+            if not isinstance(r, list):
+                continue
+            cell_vid = (get_cell(r, "venue_id") or "").strip()
+            sr = (body_sheet_rows[off] if body_sheet_rows and off < len(body_sheet_rows) else off + 2)
+            obj = {
+                "_venue_id": _slugify_venue_id(cell_vid) if cell_vid else vid,
+                "sheet_row": sr,
+                "timestamp": get_cell(r, "timestamp"),
+                "name": get_cell(r, "name"),
+                "phone": get_cell(r, "phone"),
+                "date": get_cell(r, "date"),
+                "time": get_cell(r, "time"),
+                "party_size": get_cell(r, "party_size"),
+                "language": get_cell(r, "language"),
+                "status": get_cell(r, "status"),
+                "vip": get_cell(r, "vip"),
+                "entry_point": get_cell(r, "entry_point"),
+                "tier": get_cell(r, "tier"),
+                "queue": get_cell(r, "queue"),
+                "business_context": get_cell(r, "business_context"),
+                "budget": get_cell(r, "budget"),
+                "notes": get_cell(r, "notes"),
+                "vibe": get_cell(r, "vibe"),
+            }
+            items.append(obj)
+    
+    # Read leads ONLY from the target venue (NO cross-venue data leakage)
+    try:
+        rows = read_leads(limit=limit + 100, venue_id=target_venue_id) or []
+        bsr = (_LEADS_CACHE_BY_VENUE.get(_slugify_venue_id(target_venue_id)) or {}).get("body_sheet_rows") or []
+        rows_to_items(rows, target_venue_id, body_sheet_rows=bsr if isinstance(bsr, list) else None)
+    except Exception as e:
+        errors.append({"venue_id": target_venue_id, "error": str(e)})
+    
+    # Sort by timestamp (newest first)
+    def _ts(o: Dict[str, Any]) -> str:
+        for k in ("timestamp", "created_at", "created", "ts"):
+            v = o.get(k)
+            if v:
+                return str(v)
+        return ""
+    
+    items.sort(key=_ts, reverse=True)
+    
+    # Distinct entry_point values in sheet (for Source dropdown — always full list for venue)
+    entry_point_values = sorted(set(
+        (it.get("entry_point") or "").strip()
+        for it in items if (it.get("entry_point") or "").strip()
+    ), key=lambda x: x.lower())
+    
+    # Apply filters (status, tier, entry_point, and time)
+    filtered_items = _apply_leads_filters(items, 
+                                         statuses=statuses or None, 
+                                         tiers=tiers or None,
+                                         time_minutes=time_minutes,
+                                         entry_points=entry_points or None)
+    
+    # Limit results
+    if len(filtered_items) > limit:
+        filtered_items = filtered_items[:limit]
+    
+    return jsonify({
+        "ok": True,
+        "count": len(filtered_items),
+        "items": filtered_items,
+        "entry_point_values": entry_point_values,
+        "filters_applied": {
+            "statuses": statuses,
+            "tiers": tiers,
+            "entry_points": entry_points,
+            "time_minutes": time_minutes,
+            "venue_id": target_venue_id,
+        },
+        "errors": errors,
+    })
+
+
+@app.get("/admin/api/leads/filter-local")
+def admin_api_leads_filter_local():
+    """
+    Filter LOCAL reservations (reservations.jsonl) by status, tier, time range, and venue.
+    This endpoint reads from the JSONL file instead of Google Sheets.
+    
+    IMPORTANT: Respects venue isolation - no cross-venue data bleed.
+    - If venue_id param is provided, filters that specific venue
+    - Otherwise, filters ONLY the current venue context (_venue_id())
+    
+    Query params:
+    - status: comma-separated list or repeated param (e.g., ?status=new&status=reserved)
+    - tier: comma-separated list (regular, reserve now, vip, vip vibe, entry, premium)
+    - time: time range in minutes or shorthand (30, 60, 1440, 30min, 1h, 24h, 7day, etc.)
+    - venue_id: filter by specific venue (optional; defaults to current venue)
+    - limit: max results (default 500, max 2000)
+    
+    Returns: {"ok": true, "items": [...], "count": N, "filters_applied": {...}}
+    """
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    
+    try:
+        limit = int(request.args.get("limit") or 500)
+        limit = max(1, min(2000, limit))
+    except:
+        limit = 500
+    
+    # Get status filters (handle both comma-separated and repeated params)
+    status_param = request.args.get("status", "").strip()
+    statuses = []
+    if status_param:
+        if "," in status_param:
+            statuses = [s.strip() for s in status_param.split(",") if s.strip()]
+        else:
+            statuses = [status_param]
+    # Also check for repeated params
+    statuses_list = request.args.getlist("status")
+    if statuses_list:
+        statuses.extend([s.strip() for s in statuses_list if s.strip()])
+    statuses = list(set(s.lower().strip() for s in statuses if s))
+    
+    # Get tier filters (new field)
+    tier_param = request.args.get("tier", "").strip()
+    tiers = []
+    if tier_param:
+        if "," in tier_param:
+            tiers = [t.strip() for t in tier_param.split(",") if t.strip()]
+        else:
+            tiers = [tier_param]
+    tiers_list = request.args.getlist("tier")
+    if tiers_list:
+        tiers.extend([t.strip() for t in tiers_list if t.strip()])
+    tiers = list(set(t.lower().strip() for t in tiers if t))
+    
+    # Get time range
+    time_param = request.args.get("time", "").strip()
+    time_minutes = _parse_time_range_minutes(time_param) if time_param else None
+    
+    # Try to parse as integer minutes if not recognized
+    if time_minutes is None and time_param:
+        try:
+            time_minutes = int(time_param)
+            if time_minutes <= 0:
+                time_minutes = None
+        except:
+            time_minutes = None
+    
+    # VENUE ISOLATION: Use provided venue_id or default to current venue context
+    # This ensures NO cross-venue data bleed
+    target_venue_id = (request.args.get("venue_id", "").strip() or "").lower()
+    if not target_venue_id:
+        # No explicit venue provided; use current venue context
+        try:
+            target_venue_id = _slugify_venue_id(_venue_id()).lower()
+        except Exception:
+            target_venue_id = DEFAULT_VENUE_ID.lower()
+    else:
+        # Explicit venue provided; normalize it
+        target_venue_id = _slugify_venue_id(target_venue_id).lower()
+    
+    # Load from local reservations.jsonl (ONLY target venue)
+    items = []
+    try:
+        path = os.path.join(_BASE_DIR, RESERVATIONS_LOCAL_PATH)
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        obj = json.loads(line)
+                        # VENUE ISOLATION: Only include items from target venue
+                        obj_venue = _slugify_venue_id(str((obj or {}).get("venue_id") or "")).lower()
+                        if obj_venue != target_venue_id:
+                            continue  # Skip - different venue
+                        items.append(obj)
+                    except json.JSONDecodeError:
+                        pass
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "error": f"Failed to read reservations: {str(e)}",
+            "items": [],
+            "count": 0,
+        }), 400
+    
+    # Sort by timestamp (newest first)
+    def _ts(o: Dict[str, Any]) -> str:
+        return str(o.get("timestamp") or "")
+    
+    items.sort(key=_ts, reverse=True)
+    
+    # Apply filters
+    now = datetime.now(timezone.utc)
+    if statuses or tiers or time_minutes:
+        filtered = []
+        for item in items:
+            # Check status filter
+            if statuses:
+                item_status = (item.get("status") or "").lower().strip()
+                item_vibe = (item.get("vibe") or "").lower().strip()
+                status_match = False
+                for s_filter in statuses:
+                    if s_filter in item_status or s_filter in item_vibe:
+                        status_match = True
+                        break
+                if not status_match:
+                    continue
+            
+            # Check tier filter
+            if tiers:
+                item_tier = (item.get("tier") or "regular").lower().strip()
+                tier_match = False
+                for t_filter in tiers:
+                    if t_filter in item_tier:
+                        tier_match = True
+                        break
+                if not tier_match:
+                    continue
+            
+            # Check time range filter
+            if time_minutes and time_minutes > 0:
+                ts_str = item.get("timestamp") or ""
+                dt = _timestamp_to_datetime(ts_str)
+                if dt:
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    cutoff = now - timedelta(minutes=time_minutes)
+                    if dt < cutoff:
+                        continue
+            
+            filtered.append(item)
+        
+        items = filtered
+    
+    # Limit results
+    if len(items) > limit:
+        items = items[:limit]
+    
+    return jsonify({
+        "ok": True,
+        "count": len(items),
+        "items": items,
+        "filters_applied": {
+            "statuses": statuses,
+            "tiers": tiers,
+            "time_minutes": time_minutes,
+            "venue_id": target_venue_id,
+        },
+    })
+
 # ============================================================
 # Owner / Manager HARDENING (server-side)
 # Safe shim using existing _require_admin(min_role=...)
@@ -16499,51 +17275,6 @@ def get_gspread_client():
 
     raise RuntimeError("Google credentials not found. Set GOOGLE_CREDS_JSON or provide google_creds.json locally.")
 
-
-
-def _normalize_header(h: str) -> str:
-    return (h or "").strip().lower().replace(" ", "_")
-
-
-def ensure_sheet_schema(ws) -> List[str]:
-    """
-    Make sure row 1 is the header and includes the CRM columns we need.
-    Returns the final header list (as stored in the sheet).
-    """
-    desired = ["timestamp", "reservation_id", "name", "phone", "date", "time", "party_size", "language", "status", "vip", "entry_point", "tier", "queue", "business_context", "budget", "notes", "vibe"]
-
-    existing = ws.row_values(1) or []
-    existing_norm = [_normalize_header(x) for x in existing]
-
-    # If sheet is empty, write the full header
-    if not any(x.strip() for x in existing):
-        ws.update("A1", [desired])
-        return desired
-
-    # If the existing header doesn't even contain "timestamp" (common sign row1 isn't a header),
-    # don't try to reshuffle rows automatically—just ensure required columns exist at the end.
-    header = existing[:]  # keep original display names
-    header_norm = existing_norm[:]
-
-    # Append missing columns
-    for col in desired:
-        if col not in header_norm:
-            header.append(col)
-            header_norm.append(col)
-
-    # If we changed anything, write header back (row 1)
-    if header != existing:
-        ws.update("A1", [header])
-
-    return header
-
-
-def header_map(header: List[str]) -> Dict[str, int]:
-    """Return {normalized_header: 1-based column_index}"""
-    m = {}
-    for i, h in enumerate(header):
-        m[_normalize_header(h)] = i + 1
-    return m
 
 def get_session_id() -> str:
     """
