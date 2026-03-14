@@ -9356,15 +9356,21 @@ th{
   text-align:left
 }
 
-/* Leads table: fit in container, no horizontal scroll — % widths, ellipsis for long text */
+/* Leads filter area: same dark theme as rest of admin (inherits .card background) */
+.leads-filters-section{ background:transparent; }
+
+/* Leads table: wide enough to show all columns; horizontal scroll when needed; tooltips on truncated cells */
 .leads-tablewrap{
   border-radius:12px;
   border:1px solid var(--line);
   margin-top:8px;
-  overflow:hidden;
+  overflow-x:auto;
+  overflow-y:visible;
+  min-width:100%;
 }
 #leadsTable{
   table-layout:fixed;
+  min-width:1400px;
   width:100%;
   border-collapse:collapse;
   font-size:12px;
@@ -9377,23 +9383,24 @@ th{
   box-sizing:border-box;
 }
 #leadsTable th{ position:sticky; top:0; background:rgba(10,16,32,.95); z-index:1; }
-#leadsTable th:nth-child(1),#leadsTable td:nth-child(1){ width:3%; }
-#leadsTable th:nth-child(2),#leadsTable td:nth-child(2){ width:11%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#leadsTable th:nth-child(3),#leadsTable td:nth-child(3){ width:7%; overflow:hidden; text-overflow:ellipsis; }
-#leadsTable th:nth-child(4),#leadsTable td:nth-child(4){ width:9%; overflow:hidden; text-overflow:ellipsis; }
-#leadsTable th:nth-child(5),#leadsTable td:nth-child(5){ width:5%; }
-#leadsTable th:nth-child(6),#leadsTable td:nth-child(6){ width:5%; }
-#leadsTable th:nth-child(7),#leadsTable td:nth-child(7){ width:4%; text-align:center; }
-#leadsTable th:nth-child(8),#leadsTable td:nth-child(8){ width:5%; overflow:hidden; text-overflow:ellipsis; }
-#leadsTable th:nth-child(9),#leadsTable td:nth-child(9){ width:6%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#leadsTable th:nth-child(10),#leadsTable td:nth-child(10){ width:5%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-#leadsTable th:nth-child(11),#leadsTable td:nth-child(11){ width:5%; }
-#leadsTable th:nth-child(12),#leadsTable td:nth-child(12){ width:7%; overflow:hidden; text-overflow:ellipsis; }
-#leadsTable th:nth-child(13),#leadsTable td:nth-child(13){ width:9%; overflow:hidden; text-overflow:ellipsis; }
-#leadsTable th:nth-child(14),#leadsTable td:nth-child(14){ width:9%; }
-#leadsTable th:nth-child(15),#leadsTable td:nth-child(15){ width:5%; }
-#leadsTable th:nth-child(16),#leadsTable td:nth-child(16){ width:5%; white-space:nowrap; }
+#leadsTable th:nth-child(1),#leadsTable td:nth-child(1){ width:3%; min-width:36px; }
+#leadsTable th:nth-child(2),#leadsTable td:nth-child(2){ width:10%; min-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(3),#leadsTable td:nth-child(3){ width:7%; min-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(4),#leadsTable td:nth-child(4){ width:9%; min-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(5),#leadsTable td:nth-child(5){ width:5%; min-width:64px; }
+#leadsTable th:nth-child(6),#leadsTable td:nth-child(6){ width:5%; min-width:56px; }
+#leadsTable th:nth-child(7),#leadsTable td:nth-child(7){ width:4%; min-width:48px; text-align:center; }
+#leadsTable th:nth-child(8),#leadsTable td:nth-child(8){ width:5%; min-width:64px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(9),#leadsTable td:nth-child(9){ width:6%; min-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(10),#leadsTable td:nth-child(10){ width:5%; min-width:64px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(11),#leadsTable td:nth-child(11){ width:5%; min-width:56px; }
+#leadsTable th:nth-child(12),#leadsTable td:nth-child(12){ width:8%; min-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(13),#leadsTable td:nth-child(13){ width:9%; min-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(14),#leadsTable td:nth-child(14){ width:9%; min-width:90px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#leadsTable th:nth-child(15),#leadsTable td:nth-child(15){ width:5%; min-width:64px; }
+#leadsTable th:nth-child(16),#leadsTable td:nth-child(16){ width:6%; min-width:100px; white-space:nowrap; }
 #leadsTable td:nth-child(16) .btn2{ margin-right:4px; }
+#leadsTable td[title]{ cursor:help; }
 #leadsTable td:nth-child(14) select,
 #leadsTable td:nth-child(15) select{
   width:100%;
@@ -9769,14 +9776,14 @@ label.small + textarea,
         html.append("<div class='card'><div class='h2'>Leads</div><div class='small'>No leads yet.</div></div>")
     else:
         html.append("""<div class='card'><div class='h2'>Leads</div><div class='small'>Newest first. Update Status/VIP and save.</div>
-<div class='leads-filters-section' style='margin-top:16px;padding:14px;background:var(--card-bg, #f8f9fa);border-radius:8px;border:1px solid var(--border,#e0e0e0)'>
-  <div class='small' style='font-weight:700;margin-bottom:12px;color:var(--text,#333)'>Filter leads</div>
-  <div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;align-items:end'>
-    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Status</label><div class='small' style='opacity:.75;margin-bottom:4px'>Pipeline stage</div><select class='inp' id='flt-status' multiple style='min-height:72px'><option value='new'>New</option><option value='contacted'>Contacted</option><option value='reserved'>Reserved</option><option value='seated'>Seated</option><option value='completed'>Completed</option><option value='no-show'>No-Show</option><option value='cancelled'>Cancelled</option></select><div class='small' style='opacity:.7;margin-top:2px'>Ctrl+click for multiple</div></div>
-    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Tier (category)</label><div class='small' style='opacity:.75;margin-bottom:4px'>Segment: tier or entry type</div><select class='inp' id='flt-tier' multiple style='min-height:72px'><option value='regular'>Regular</option><option value='entry'>Entry</option><option value='reserve now'>Reserve now</option><option value='vip'>VIP</option><option value='vip vibe'>VIP vibe</option><option value='premium'>Premium</option></select><div class='small' style='opacity:.7;margin-top:2px'>Ctrl+click for multiple</div></div>
-    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Time range</label><div class='small' style='opacity:.75;margin-bottom:4px'>When lead was added</div><select class='inp' id='flt-time'><option value=''>All time</option><option value='30'>Last 30 min</option><option value='60'>Last 1 hour</option><option value='120'>Last 2 hours</option><option value='1440'>Last 24 hours</option><option value='10080'>Last 7 days</option></select></div>
-    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Source (entry point)</label><div class='small' style='opacity:.75;margin-bottom:4px'>Form or channel they used</div><select class='inp' id='flt-entry' style='min-width:140px'><option value='all'>All</option><option value='reserve_now'>Reserve now</option><option value='vip_vibe'>VIP vibe</option><option value='entry'>Entry</option></select></div>
-    <div style='display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end'><button class='btn' id='btn-leads-apply' type='button'>Apply filters</button><button class='btn2' id='btn-leads-reset' type='button'>Reset</button></div>
+<div class='leads-filters-section' style='margin-top:16px;padding:14px;border-radius:8px;border:1px solid var(--line)'>
+  <div class='small' style='font-weight:700;margin-bottom:12px;color:var(--text)'>Filter leads</div>
+  <div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;align-items:end'>
+    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Status</label><select class='inp' id='flt-status' multiple size='5' style='min-width:140px;height:88px' title='Hold Ctrl/Cmd to select multiple'><option value='new'>New</option><option value='contacted'>Contacted</option><option value='reserved'>Reserved</option><option value='seated'>Seated</option><option value='completed'>Completed</option><option value='no-show'>No-Show</option><option value='cancelled'>Cancelled</option></select><div class='small' style='opacity:.7;margin-top:2px'>Ctrl+click for multiple</div></div>
+    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Tier</label><select class='inp' id='flt-tier' multiple size='5' style='min-width:140px;height:88px' title='Hold Ctrl/Cmd to select multiple'><option value='regular'>Regular</option><option value='entry'>Entry</option><option value='reserve now'>Reserve now</option><option value='vip'>VIP</option><option value='vip vibe'>VIP vibe</option><option value='premium'>Premium</option></select><div class='small' style='opacity:.7;margin-top:2px'>Ctrl+click for multiple</div></div>
+    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Time range</label><select class='inp' id='flt-time' style='min-width:140px'><option value=''>All time</option><option value='30'>Last 30 min</option><option value='60'>Last 1 hour</option><option value='120'>Last 2 hours</option><option value='1440'>Last 24 hours</option><option value='10080'>Last 7 days</option></select></div>
+    <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Source</label><select class='inp' id='flt-entry' style='min-width:140px'><option value='all'>All</option><option value='reserve_now'>Reserve now</option><option value='vip_vibe'>VIP vibe</option><option value='entry'>Entry</option></select></div>
+    <div style='display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end'><button class='btn' id='btn-leads-apply' type='button'>Apply</button><button class='btn2' id='btn-leads-reset' type='button'>Reset</button></div>
   </div>
   <div style='margin-top:10px'><span id='leadsCount' class='small'>0 shown</span></div>
 </div>
@@ -9819,22 +9826,24 @@ label.small + textarea,
             seg = "⭐ VIP" if tier_key == "vip" else "Regular"
             seg_cls = "badge warn" if seg.startswith("⭐") else "badge"
             html.append(f"<td><span class='{seg_cls}'>{_hesc(seg)}</span></td>")
-            html.append("<td><span class='pill'>" + _hesc(ep) + "</span></td>")
+            _ep_attr = " title=\"" + _hesc(ep).replace('"', "&quot;") + "\"" if ep else ""
+            html.append("<td" + _ep_attr + "><span class='pill'>" + _hesc(ep) + "</span></td>")
             html.append("<td><span class='badge good'>" + _hesc(queue) + "</span></td>")
             html.append(f"<td>{_hesc(budget)}</td>")
-            # Context + Notes (compact)
+            # Context + Notes (compact); title on td for hover tooltip when truncated
             ctx_txt = (bctx or "").strip()
             note_txt = (notes or "").strip()
             if vibe and vibe.strip():
-                # Keep vibe visible without cluttering budget/notes columns
                 note_txt = (note_txt + (" | " if note_txt else "") + f"vibe: {vibe.strip()}").strip()
             def _cell_details(label, txt):
                 if not txt:
                     return "<span class='small'>—</span>"
                 short = txt if len(txt) <= 34 else (txt[:34] + "…")
                 return "<details><summary class='small'>" + _hesc(short) + "</summary><div style='margin-top:6px;white-space:pre-wrap' class='small'>" + _hesc(txt) + "</div></details>"
-            html.append("<td>" + _cell_details("context", ctx_txt) + "</td>")
-            html.append("<td>" + _cell_details("notes", note_txt) + "</td>")
+            _ctx_attr = " title=\"" + _hesc(ctx_txt).replace('"', "&quot;") + "\"" if ctx_txt else ""
+            _note_attr = " title=\"" + _hesc(note_txt).replace('"', "&quot;") + "\"" if note_txt else ""
+            html.append("<td" + _ctx_attr + ">" + _cell_details("context", ctx_txt) + "</td>")
+            html.append("<td" + _note_attr + ">" + _cell_details("notes", note_txt) + "</td>")
 
 
             html.append("<td>")
@@ -10507,16 +10516,24 @@ function _leadRowFromItem(it){
   const seg = tierKey==='vip' ? '⭐ VIP' : 'Regular';
   const segCls = seg.indexOf('⭐')>=0 ? 'badge warn' : 'badge';
   const ep = _he((it.entry_point||'').replace(/_/g,' '));
+  const fullEp = (it.entry_point||'').replace(/_/g,' ');
+  const fullCtx = (it.business_context||it.context||'');
+  const fullNotes = (it.notes||'');
   const queue = _he(it.queue||'');
   const budget = _he(it.budget||'');
-  const ctx = _he((it.business_context||it.context||'').substring(0,34));
-  const notes = _he((it.notes||'').substring(0,40));
+  const ctx = _he((fullCtx+'').substring(0,34));
+  const notes = _he((fullNotes+'').substring(0,40));
   const st = (it.status||'New').toString().trim();
   const stLow = st.toLowerCase();
   const vipVal = /^(yes|true|1|y|vip)$/.test(vip) ? 'Yes' : 'No';
   const stSel = '<select class=\\'inp\\' id=\\'status-'+row+'\\'><option'+(stLow==='new'?' selected':'')+'>New</option><option'+(stLow==='confirmed'?' selected':'')+'>Confirmed</option><option'+(stLow==='seated'?' selected':'')+'>Seated</option><option'+(stLow==='no-show'?' selected':'')+'>No-Show</option><option'+(stLow==='handled'?' selected':'')+'>Handled</option></select>';
   const vipSel = '<select class=\\'inp\\' id=\\'vip-'+row+'\\'><option'+(vipVal==='Yes'?' selected':'')+'>Yes</option><option'+(vipVal==='No'?' selected':'')+'>No</option></select>';
-  return '<tr data-tier="'+tierKey+'" data-entry="'+_he(it.entry_point||'')+'"><td class=\\'code\\'>'+row+'</td><td>'+ts+'</td><td>'+nm+'</td><td>'+ph+'</td><td>'+d+'</td><td>'+t+'</td><td>'+ps+'</td><td><span class=\\"'+segCls+'\\">'+seg+'</span></td><td><span class=\\"pill\\">'+ep+'</span></td><td><span class=\\"badge good\\">'+queue+'</span></td><td>'+budget+'</td><td><span class=\\"small\\">'+ctx+(ctx.length>=34?'…':'')+'</span></td><td><span class=\\"small\\">'+notes+(notes.length>=40?'…':'')+'</span></td><td>'+stSel+'</td><td>'+vipSel+'</td><td><button class=\\"btn2\\' onclick=\\"saveLead('+row+')\\">Save</button><button class=\\"btnTiny\\' title=\\"Mark handled\\" onclick=\\"markHandled('+row+')\\">✅</button></td></tr>';
+  const tEp = fullEp ? ' title="'+_he(fullEp).replace(/"/g,'&quot;')+'"' : '';
+  const tCtx = fullCtx ? ' title="'+_he(fullCtx).replace(/"/g,'&quot;')+'"' : '';
+  const tNotes = fullNotes ? ' title="'+_he(fullNotes).replace(/"/g,'&quot;')+'"' : '';
+  const tNm = (it.name||'') ? ' title="'+_he(it.name||'').replace(/"/g,'&quot;')+'"' : '';
+  const tPh = (it.phone||'') ? ' title="'+_he(it.phone||'').replace(/"/g,'&quot;')+'"' : '';
+  return '<tr data-tier="'+tierKey+'" data-entry="'+_he(it.entry_point||'')+'"><td class=\\'code\\'>'+row+'</td><td>'+ts+'</td><td'+tNm+'>'+nm+'</td><td'+tPh+'>'+ph+'</td><td>'+d+'</td><td>'+t+'</td><td>'+ps+'</td><td><span class=\\"'+segCls+'\\">'+seg+'</span></td><td'+tEp+'><span class=\\"pill\\">'+ep+'</span></td><td><span class=\\"badge good\\">'+queue+'</span></td><td>'+budget+'</td><td'+tCtx+'><span class=\\"small\\">'+ctx+(ctx.length>=34?'…':'')+'</span></td><td'+tNotes+'><span class=\\"small\\">'+notes+(notes.length>=40?'…':'')+'</span></td><td>'+stSel+'</td><td>'+vipSel+'</td><td><button class=\\"btn2\\' onclick=\\"saveLead('+row+')\\">Save</button><button class=\\"btnTiny\\' title=\\"Mark handled\\" onclick=\\"markHandled('+row+')\\">✅</button></td></tr>';
 }
 async function applyLeadsFiltersServer(){
   const statusEl = qs('#flt-status'); const tierEl = qs('#flt-tier'); const timeEl = qs('#flt-time'); const entryEl = qs('#flt-entry');
@@ -10528,8 +10545,8 @@ async function applyLeadsFiltersServer(){
   if(typeof KEY!=='undefined') params.set('key', KEY);
   if(typeof VENUE!=='undefined' && VENUE) params.set('venue', VENUE);
   params.set('limit','500');
-  statuses.forEach(s=>params.append('status',s));
-  tiers.forEach(t=>params.append('tier',t));
+  statuses.forEach(s=>params.append('status', s));
+  tiers.forEach(t=>params.append('tier', t));
   if(timeVal) params.set('time', timeVal);
   if(entryVal) params.set('entry', entryVal);
   const btn = qs('#btn-leads-apply'); if(btn){ btn.disabled=true; btn.textContent='Loading…'; }
@@ -10559,8 +10576,8 @@ function _populateLeadsEntryDropdown(items){
 }
 function resetLeadsFiltersServer(){
   const statusEl = qs('#flt-status'); const tierEl = qs('#flt-tier'); const timeEl = qs('#flt-time'); const entryEl = qs('#flt-entry');
-  if(statusEl) statusEl.selectedIndex = -1;
-  if(tierEl) tierEl.selectedIndex = -1;
+  if(statusEl) Array.from(statusEl.options).forEach(o=>o.selected=false);
+  if(tierEl) Array.from(tierEl.options).forEach(o=>o.selected=false);
   if(timeEl) timeEl.value = '';
   if(entryEl) entryEl.value = 'all';
   applyLeadsFiltersServer();
@@ -10569,20 +10586,6 @@ function setupLeadFilters(){
   const tbl = qs('#leadsTable');
   if(!tbl) return;
   const tbody = qs('#leadsTableBody') || tbl.querySelector('tbody');
-  const entries = new Set();
-  (tbody ? tbody.querySelectorAll('tr') : []).forEach(tr=>{
-    const ep = norm(tr.getAttribute('data-entry')||"");
-    if(ep) entries.add(ep);
-  });
-  const sel = qs('#flt-entry');
-  if(sel){
-    sel.innerHTML = "";
-    const all = document.createElement('option'); all.value = "all"; all.textContent = "All"; sel.appendChild(all);
-    Array.from(entries).sort().forEach(ep=>{
-      const o = document.createElement('option'); o.value = ep; o.textContent = ep.replace(/_/g,' ');
-      sel.appendChild(o);
-    });
-  }
   const rowCount = tbody ? tbody.querySelectorAll('tr').length : 0;
   const hint = qs('#leadsCount'); if(hint) hint.textContent = rowCount + " shown";
   qs('#btn-leads-apply')?.addEventListener('click', applyLeadsFiltersServer);
