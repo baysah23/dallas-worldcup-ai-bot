@@ -242,6 +242,8 @@ def _append_reservation_local(lead: dict, reservation_id: Optional[str] = None) 
         path = os.path.join(_BASE_DIR, RESERVATIONS_LOCAL_PATH)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         rid = (reservation_id or lead.get("reservation_id") or "").strip()
+        
+        # Enhanced reservation structure with tier/category and other metadata
         row = {
             "reservation_id": rid,
             "timestamp": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -254,7 +256,11 @@ def _append_reservation_local(lead: dict, reservation_id: Optional[str] = None) 
             "party_size": lead.get("party_size", 0),
             "language": lead.get("language", "en"),
             "status": (lead.get("status") or "New").strip() or "New",
+            "tier": (lead.get("tier") or "regular").strip().lower() or "regular",  # New: tier/category field
             "vip": "Yes" if str(lead.get("vip") or "").strip().lower() in ("1", "true", "yes", "y") else "No",
+            "budget": lead.get("budget", ""),
+            "notes": lead.get("notes", ""),
+            "vibe": lead.get("vibe", ""),  # e.g., "VIP Vibe", "Premium", "Standard"
         }
         with open(path, "a", encoding="utf-8") as f:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -1810,8 +1816,10 @@ def _outbound_send_email(to_email: str, subject: str, body_text: str) -> Tuple[b
 def _outbound_send_twilio(channel: str, to_number_or_id: str, body_text: str) -> Tuple[bool, str]:
     """
     Send SMS/WhatsApp via Twilio.
-    - SMS uses TWILIO_FROM
-    - WhatsApp uses TWILIO_WHATSAPP_FROM or TWILIO_FROM prefixed with 'whatsapp:' if already provided
+    - SMS: TWILIO_FROM (your Twilio SMS number).
+    - WhatsApp: TWILIO_WHATSAPP_FROM (must be a WhatsApp-enabled sender in Twilio — sandbox or
+      approved WhatsApp Business number). Your SMS number is not automatically WhatsApp-enabled;
+      set TWILIO_WHATSAPP_FROM to a number registered for WhatsApp in Twilio Console.
     """
     sid = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
     token = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
@@ -1831,7 +1839,10 @@ def _outbound_send_twilio(channel: str, to_number_or_id: str, body_text: str) ->
     elif ch == "whatsapp":
         frm = os.environ.get("TWILIO_WHATSAPP_FROM", "").strip() or os.environ.get("TWILIO_FROM", "").strip()
         if not frm:
-            return False, "WhatsApp not configured (missing TWILIO_WHATSAPP_FROM or TWILIO_FROM)"
+            return False, (
+                "WhatsApp not configured. Set TWILIO_WHATSAPP_FROM to a WhatsApp-enabled sender in Twilio "
+                "(Console → Messaging → Senders → WhatsApp). Your SMS number is not automatically WhatsApp-enabled."
+            )
         if not frm.startswith("whatsapp:"):
             frm = "whatsapp:" + frm
         if not to.startswith("whatsapp:"):
@@ -1845,7 +1856,18 @@ def _outbound_send_twilio(channel: str, to_number_or_id: str, body_text: str) ->
         r = requests.post(url, data=data, auth=(sid, token), timeout=12)
         if 200 <= r.status_code < 300:
             return True, "Message sent"
-        return False, f"Twilio error {r.status_code}"
+        err_msg = f"Twilio error {r.status_code}"
+        try:
+            j = r.json() if r.text else {}
+            code = j.get("code") or j.get("error_code")
+            msg = (j.get("message") or j.get("error_message") or "").strip()
+            if code is not None or msg:
+                err_msg = f"Twilio {code or r.status_code}: {msg or err_msg}"
+            if ch == "whatsapp" and (r.status_code == 400 or code in (21608, 21212)):
+                err_msg += " — Use a WhatsApp-enabled sender (set TWILIO_WHATSAPP_FROM; see Twilio Console → WhatsApp Senders)."
+        except Exception:
+            pass
+        return False, err_msg
     except Exception as e:
         return False, f"Twilio send failed: {e}"
 
@@ -1971,13 +1993,19 @@ def _health_check_outbound() -> Dict[str, Any]:
     try:
         # We only validate readiness (env vars). Sending is still human-triggered.
         sg_ok = bool(os.environ.get("SENDGRID_API_KEY")) and bool(os.environ.get("SENDGRID_FROM"))
-        tw_ok = bool(os.environ.get("TWILIO_ACCOUNT_SID")) and bool(os.environ.get("TWILIO_AUTH_TOKEN")) and bool(os.environ.get("TWILIO_FROM"))
-        if not sg_ok and not tw_ok:
+        tw_sid = bool(os.environ.get("TWILIO_ACCOUNT_SID")) and bool(os.environ.get("TWILIO_AUTH_TOKEN"))
+        sms_ok = tw_sid and bool(os.environ.get("TWILIO_FROM"))
+        whatsapp_ok = tw_sid and bool(os.environ.get("TWILIO_WHATSAPP_FROM", "").strip())
+        if not sg_ok and not sms_ok:
             return {"name": "outbound", "ok": True, "severity": "warn", "message": "Outbound providers not configured (send disabled until configured)."}
         parts = []
         parts.append("SendGrid OK" if sg_ok else "SendGrid missing")
-        parts.append("Twilio OK" if tw_ok else "Twilio missing")
-        return {"name": "outbound", "ok": True, "severity": "ok" if (sg_ok or tw_ok) else "warn", "message": ", ".join(parts)}
+        parts.append("SMS OK" if sms_ok else "SMS missing (TWILIO_FROM)")
+        if tw_sid:
+            parts.append("WhatsApp OK" if whatsapp_ok else "WhatsApp: set TWILIO_WHATSAPP_FROM (must be a WhatsApp-enabled sender in Twilio Console)")
+        else:
+            parts.append("WhatsApp missing (Twilio not configured)")
+        return {"name": "outbound", "ok": True, "severity": "ok" if (sg_ok or sms_ok) else "warn", "message": ", ".join(parts)}
     except Exception as e:
         return {"name": "outbound", "ok": False, "severity": "warn", "message": f"Outbound readiness check failed: {e}"}
 
@@ -8562,7 +8590,10 @@ def admin_api_ai_queue_send(qid: str):
 
     _audit("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": ok_send, "by": actor})
     _notify("outbound.send", {"id": qid, "partner": partner, "type": it_type, "ok": ok_send, "by": actor, "role": role}, targets=["owner","manager"])
-    return jsonify({"ok": True, "result": res})
+    if ok_send:
+        return jsonify({"ok": True, "result": res})
+    err = res.get("message") or res.get("error") or "Send failed"
+    return jsonify({"ok": False, "result": res, "error": err})
 
 
 @app.route("/admin/api/ai/queue/<qid>/override", methods=["POST"])
@@ -9323,6 +9354,41 @@ th{
   top:0;
   background:rgba(10,16,32,.9);
   text-align:left
+}
+
+/* Leads table: Status and VIP columns must show dropdown text; table stays in container */
+#leadsTable{
+  table-layout:fixed;
+  width:100%;
+}
+#leadsTable th:nth-child(14),
+#leadsTable td:nth-child(14){
+  min-width:100px;
+  width:10%;
+}
+#leadsTable th:nth-child(15),
+#leadsTable td:nth-child(15){
+  min-width:56px;
+  width:5%;
+}
+#leadsTable td:nth-child(14) select,
+#leadsTable td:nth-child(15) select{
+  min-width:0;
+  width:100%;
+  box-sizing:border-box;
+}
+/* Context and Notes can shrink so Status/VIP get space without table overflow */
+#leadsTable th:nth-child(12),
+#leadsTable td:nth-child(12){
+  max-width:110px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+#leadsTable th:nth-child(13),
+#leadsTable td:nth-child(13){
+  max-width:130px;
+  overflow:hidden;
+  text-overflow:ellipsis;
 }
 
 .badge{
@@ -11235,7 +11301,8 @@ async function aiqSend(id, btn){
   }else{
     if(msg) msg.textContent='Send failed';
     if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Send'); }
-    alert('Send failed: '+(j && j.error ? j.error : r.status));
+    var errText = (j && (j.error || (j.result && (j.result.message || j.result.error)))) ? (j.error || j.result.message || j.result.error) : r.status;
+    alert('Send failed: '+errText);
   }
 }
 
@@ -15707,6 +15774,476 @@ def admin_api_leads_all():
         "items": page_items,
         "errors": errors
     })
+
+# ============================================================
+# LEADS FILTER API (with status + time filtering)
+# ============================================================
+
+def _parse_time_range_minutes(time_str: str) -> Optional[int]:
+    """Parse time range string to minutes. Returns None if invalid."""
+    if not time_str:
+        return None
+    time_str = time_str.lower().strip()
+    
+    # Map common time ranges to minutes
+    time_maps = {
+        "30min": 30,
+        "30mins": 30,
+        "30_min": 30,
+        "30": 30,
+        "1h": 60,
+        "1hour": 60,
+        "1_hour": 60,
+        "60": 60,
+        "2h": 120,
+        "2hour": 120,
+        "2_hour": 120,
+        "120": 120,
+        "24h": 1440,
+        "24hour": 1440,
+        "24_hour": 1440,
+        "1day": 1440,
+        "1_day": 1440,
+        "1440": 1440,
+        "7day": 10080,
+        "7_day": 10080,
+        "7days": 10080,
+        "1week": 10080,
+        "1_week": 10080,
+        "604800": 10080,
+    }
+    
+    return time_maps.get(time_str)
+
+def _timestamp_to_datetime(ts: str) -> Optional[datetime]:
+    """Convert timestamp string to datetime. Handles various formats."""
+    if not ts:
+        return None
+    try:
+        # Try ISO format first
+        if 'T' in ts:
+            return datetime.fromisoformat(ts.replace('Z', '+00:00'))
+        # Try common datetime string formats
+        for fmt in [
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+            "%m/%d/%Y %H:%M:%S",
+            "%m/%d/%Y %H:%M",
+            "%d/%m/%Y %H:%M:%S",
+            "%d/%m/%Y %H:%M",
+        ]:
+            try:
+                return datetime.strptime(ts[:19], fmt)
+            except:
+                pass
+    except:
+        pass
+    return None
+
+def _apply_leads_filters(items: List[Dict[str, Any]], 
+                        statuses: Optional[List[str]] = None,
+                        tiers: Optional[List[str]] = None,
+                        time_minutes: Optional[int] = None) -> List[Dict[str, Any]]:
+    """Apply status, tier, and time filters to leads. Returns filtered list."""
+    result = items[:]
+    now = datetime.now(timezone.utc)
+    
+    # Filter by status
+    if statuses:
+        statuses_lower = [s.lower().strip() for s in statuses if s]
+        if statuses_lower:
+            def status_matches(item):
+                item_status = (item.get("status") or "").lower().strip()
+                item_vibe = (item.get("vibe") or "").lower().strip()
+                
+                # Check if any status filter matches
+                for s_filter in statuses_lower:
+                    if s_filter in item_status or s_filter in item_vibe:
+                        return True
+                return False
+            
+            result = [item for item in result if status_matches(item)]
+    
+    # Filter by tier
+    if tiers:
+        tiers_lower = [t.lower().strip() for t in tiers if t]
+        if tiers_lower:
+            def tier_matches(item):
+                item_tier = (item.get("tier") or "").lower().strip()
+                item_entry = (item.get("entry_point") or "").lower().strip()
+                
+                # Check if any tier filter matches
+                for t_filter in tiers_lower:
+                    if t_filter in item_tier or t_filter in item_entry:
+                        return True
+                return False
+            
+            result = [item for item in result if tier_matches(item)]
+    
+    # Filter by time range
+    if time_minutes and time_minutes > 0:
+        cutoff = now - timedelta(minutes=time_minutes)
+        def within_timerange(item):
+            ts_str = item.get("timestamp") or ""
+            dt = _timestamp_to_datetime(ts_str)
+            if dt:
+                # Handle both naive and aware datetimes
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt >= cutoff
+            return True  # Keep items with missing timestamps
+        
+        result = [item for item in result if within_timerange(item)]
+    
+    return result
+
+@app.get("/admin/api/leads/filter")
+def admin_api_leads_filter():
+    """
+    Filter leads by status, tier, time range, and optionally by venue.
+    Reads from Google Sheets (works on staging/production).
+    
+    IMPORTANT: Respects venue isolation - no cross-venue data bleed.
+    - If venue_id param is provided, filters that specific venue
+    - Otherwise, filters ONLY the current venue context (_venue_id())
+    
+    Query params:
+    - status: comma-separated list or repeated param (e.g., ?status=new&status=reserved)
+    - tier: comma-separated list or repeated param (e.g., ?tier=vip&tier=regular)
+    - time: time range in minutes or shorthand (30, 60, 1440, 30min, 1h, 24h, 7day, etc.)
+    - venue_id: filter by specific venue (optional; defaults to current venue)
+    - limit: max results (default 500, max 2000)
+    
+    Returns: {"ok": true, "items": [...], "count": N, "filters_applied": {...}}
+    """
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    
+    try:
+        limit = int(request.args.get("limit") or 500)
+        limit = max(1, min(2000, limit))
+    except:
+        limit = 500
+    
+    # Get status filters (handle both comma-separated and repeated params)
+    status_param = request.args.get("status", "").strip()
+    statuses = []
+    if status_param:
+        # Handle comma-separated values
+        if "," in status_param:
+            statuses = [s.strip() for s in status_param.split(",") if s.strip()]
+        else:
+            statuses = [status_param]
+    # Also check for repeated params (status=value&status=value)
+    statuses_list = request.args.getlist("status")
+    if statuses_list:
+        statuses.extend([s.strip() for s in statuses_list if s.strip()])
+    # Deduplicate
+    statuses = list(set(s.lower().strip() for s in statuses if s))
+    
+    # Get tier filters (NEW: separate tier filtering)
+    tier_param = request.args.get("tier", "").strip()
+    tiers = []
+    if tier_param:
+        if "," in tier_param:
+            tiers = [t.strip() for t in tier_param.split(",") if t.strip()]
+        else:
+            tiers = [tier_param]
+    tiers_list = request.args.getlist("tier")
+    if tiers_list:
+        tiers.extend([t.strip() for t in tiers_list if t.strip()])
+    tiers = list(set(t.lower().strip() for t in tiers if t))
+    
+    # Get time range
+    time_param = request.args.get("time", "").strip()
+    time_minutes = _parse_time_range_minutes(time_param) if time_param else None
+    
+    # Try to parse as integer minutes if not recognized
+    if time_minutes is None and time_param:
+        try:
+            time_minutes = int(time_param)
+            if time_minutes <= 0:
+                time_minutes = None
+        except:
+            time_minutes = None
+    
+    # VENUE ISOLATION: Use provided venue_id or default to current venue context
+    # This ensures NO cross-venue data bleed
+    target_venue_id = (request.args.get("venue_id", "").strip() or "").lower()
+    if not target_venue_id:
+        # No explicit venue provided; use current venue context
+        try:
+            target_venue_id = _slugify_venue_id(_venue_id()).lower()
+        except Exception:
+            target_venue_id = DEFAULT_VENUE_ID.lower()
+    else:
+        # Explicit venue provided; normalize it
+        target_venue_id = _slugify_venue_id(target_venue_id).lower()
+    
+    # Load leads ONLY from the target venue
+    errors: List[Dict[str, Any]] = []
+    items: List[Dict[str, Any]] = []
+    
+    def rows_to_items(rows: List[List[str]], vid: str) -> None:
+        if not rows or len(rows) < 2:
+            return
+        header = rows[0] or []
+        body = rows[1:] or []
+        
+        hmap: Dict[str, int] = {}
+        for i, h in enumerate(header):
+            try:
+                hmap[_normalize_header(h)] = i
+            except:
+                pass
+        
+        def get_cell(r: List[str], key: str) -> str:
+            i = hmap.get(_normalize_header(key), -1)
+            if i < 0 or i >= len(r):
+                return ""
+            v = r[i]
+            return "" if v is None else str(v)
+        
+        for off, r in enumerate(body):
+            if not isinstance(r, list):
+                continue
+            obj = {
+                "_venue_id": vid,
+                "sheet_row": off + 2,
+                "timestamp": get_cell(r, "timestamp"),
+                "name": get_cell(r, "name"),
+                "phone": get_cell(r, "phone"),
+                "date": get_cell(r, "date"),
+                "time": get_cell(r, "time"),
+                "party_size": get_cell(r, "party_size"),
+                "language": get_cell(r, "language"),
+                "status": get_cell(r, "status"),
+                "vip": get_cell(r, "vip"),
+                "entry_point": get_cell(r, "entry_point"),
+                "tier": get_cell(r, "tier"),
+                "queue": get_cell(r, "queue"),
+                "business_context": get_cell(r, "business_context"),
+                "budget": get_cell(r, "budget"),
+                "notes": get_cell(r, "notes"),
+                "vibe": get_cell(r, "vibe"),
+            }
+            items.append(obj)
+    
+    # Read leads ONLY from the target venue (NO cross-venue data leakage)
+    try:
+        rows = read_leads(limit=limit + 100, venue_id=target_venue_id) or []
+        rows_to_items(rows, target_venue_id)
+    except Exception as e:
+        errors.append({"venue_id": target_venue_id, "error": str(e)})
+    
+    # Sort by timestamp (newest first)
+    def _ts(o: Dict[str, Any]) -> str:
+        for k in ("timestamp", "created_at", "created", "ts"):
+            v = o.get(k)
+            if v:
+                return str(v)
+        return ""
+    
+    items.sort(key=_ts, reverse=True)
+    
+    # Apply filters (status, tier, and time)
+    filtered_items = _apply_leads_filters(items, 
+                                         statuses=statuses or None, 
+                                         tiers=tiers or None,
+                                         time_minutes=time_minutes)
+    
+    # Limit results
+    if len(filtered_items) > limit:
+        filtered_items = filtered_items[:limit]
+    
+    return jsonify({
+        "ok": True,
+        "count": len(filtered_items),
+        "items": filtered_items,
+        "filters_applied": {
+            "statuses": statuses,
+            "tiers": tiers,
+            "time_minutes": time_minutes,
+            "venue_id": target_venue_id,
+        },
+        "errors": errors,
+    })
+
+
+@app.get("/admin/api/leads/filter-local")
+def admin_api_leads_filter_local():
+    """
+    Filter LOCAL reservations (reservations.jsonl) by status, tier, time range, and venue.
+    This endpoint reads from the JSONL file instead of Google Sheets.
+    
+    IMPORTANT: Respects venue isolation - no cross-venue data bleed.
+    - If venue_id param is provided, filters that specific venue
+    - Otherwise, filters ONLY the current venue context (_venue_id())
+    
+    Query params:
+    - status: comma-separated list or repeated param (e.g., ?status=new&status=reserved)
+    - tier: comma-separated list (regular, reserve now, vip, vip vibe, entry, premium)
+    - time: time range in minutes or shorthand (30, 60, 1440, 30min, 1h, 24h, 7day, etc.)
+    - venue_id: filter by specific venue (optional; defaults to current venue)
+    - limit: max results (default 500, max 2000)
+    
+    Returns: {"ok": true, "items": [...], "count": N, "filters_applied": {...}}
+    """
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    
+    try:
+        limit = int(request.args.get("limit") or 500)
+        limit = max(1, min(2000, limit))
+    except:
+        limit = 500
+    
+    # Get status filters (handle both comma-separated and repeated params)
+    status_param = request.args.get("status", "").strip()
+    statuses = []
+    if status_param:
+        if "," in status_param:
+            statuses = [s.strip() for s in status_param.split(",") if s.strip()]
+        else:
+            statuses = [status_param]
+    # Also check for repeated params
+    statuses_list = request.args.getlist("status")
+    if statuses_list:
+        statuses.extend([s.strip() for s in statuses_list if s.strip()])
+    statuses = list(set(s.lower().strip() for s in statuses if s))
+    
+    # Get tier filters (new field)
+    tier_param = request.args.get("tier", "").strip()
+    tiers = []
+    if tier_param:
+        if "," in tier_param:
+            tiers = [t.strip() for t in tier_param.split(",") if t.strip()]
+        else:
+            tiers = [tier_param]
+    tiers_list = request.args.getlist("tier")
+    if tiers_list:
+        tiers.extend([t.strip() for t in tiers_list if t.strip()])
+    tiers = list(set(t.lower().strip() for t in tiers if t))
+    
+    # Get time range
+    time_param = request.args.get("time", "").strip()
+    time_minutes = _parse_time_range_minutes(time_param) if time_param else None
+    
+    # Try to parse as integer minutes if not recognized
+    if time_minutes is None and time_param:
+        try:
+            time_minutes = int(time_param)
+            if time_minutes <= 0:
+                time_minutes = None
+        except:
+            time_minutes = None
+    
+    # VENUE ISOLATION: Use provided venue_id or default to current venue context
+    # This ensures NO cross-venue data bleed
+    target_venue_id = (request.args.get("venue_id", "").strip() or "").lower()
+    if not target_venue_id:
+        # No explicit venue provided; use current venue context
+        try:
+            target_venue_id = _slugify_venue_id(_venue_id()).lower()
+        except Exception:
+            target_venue_id = DEFAULT_VENUE_ID.lower()
+    else:
+        # Explicit venue provided; normalize it
+        target_venue_id = _slugify_venue_id(target_venue_id).lower()
+    
+    # Load from local reservations.jsonl (ONLY target venue)
+    items = []
+    try:
+        path = os.path.join(_BASE_DIR, RESERVATIONS_LOCAL_PATH)
+        if os.path.exists(path):
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip():
+                        continue
+                    try:
+                        obj = json.loads(line)
+                        # VENUE ISOLATION: Only include items from target venue
+                        obj_venue = _slugify_venue_id(str((obj or {}).get("venue_id") or "")).lower()
+                        if obj_venue != target_venue_id:
+                            continue  # Skip - different venue
+                        items.append(obj)
+                    except json.JSONDecodeError:
+                        pass
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "error": f"Failed to read reservations: {str(e)}",
+            "items": [],
+            "count": 0,
+        }), 400
+    
+    # Sort by timestamp (newest first)
+    def _ts(o: Dict[str, Any]) -> str:
+        return str(o.get("timestamp") or "")
+    
+    items.sort(key=_ts, reverse=True)
+    
+    # Apply filters
+    now = datetime.now(timezone.utc)
+    if statuses or tiers or time_minutes:
+        filtered = []
+        for item in items:
+            # Check status filter
+            if statuses:
+                item_status = (item.get("status") or "").lower().strip()
+                item_vibe = (item.get("vibe") or "").lower().strip()
+                status_match = False
+                for s_filter in statuses:
+                    if s_filter in item_status or s_filter in item_vibe:
+                        status_match = True
+                        break
+                if not status_match:
+                    continue
+            
+            # Check tier filter
+            if tiers:
+                item_tier = (item.get("tier") or "regular").lower().strip()
+                tier_match = False
+                for t_filter in tiers:
+                    if t_filter in item_tier:
+                        tier_match = True
+                        break
+                if not tier_match:
+                    continue
+            
+            # Check time range filter
+            if time_minutes and time_minutes > 0:
+                ts_str = item.get("timestamp") or ""
+                dt = _timestamp_to_datetime(ts_str)
+                if dt:
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    cutoff = now - timedelta(minutes=time_minutes)
+                    if dt < cutoff:
+                        continue
+            
+            filtered.append(item)
+        
+        items = filtered
+    
+    # Limit results
+    if len(items) > limit:
+        items = items[:limit]
+    
+    return jsonify({
+        "ok": True,
+        "count": len(items),
+        "items": items,
+        "filters_applied": {
+            "statuses": statuses,
+            "tiers": tiers,
+            "time_minutes": time_minutes,
+            "venue_id": target_venue_id,
+        },
+    })
+
 # ============================================================
 # Owner / Manager HARDENING (server-side)
 # Safe shim using existing _require_admin(min_role=...)

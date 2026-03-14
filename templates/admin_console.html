@@ -21,15 +21,30 @@
   .pane.active{display:block}
   .muted{color:var(--muted);font-size:12px}
   .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px;table-layout:fixed;overflow-x:auto}
+  table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12px;table-layout:fixed}
   th,td{border-bottom:1px solid rgba(255,255,255,.08);padding:6px 4px;text-align:left;vertical-align:top;word-wrap:break-word}
   th{color:var(--muted);font-weight:700}
-  /* Status column (6th) */
-  th:nth-child(6), td:nth-child(6) { width: 80px; }
-  /* VIP column (7th) */
-  th:nth-child(7), td:nth-child(7) { width: 70px; }
+  /* Leads table (pane-leads): Status = 4th col, VIP = 6th — ensure values visible, no main overflow */
+  #leads-table{table-layout:fixed;width:100%}
+  #leads-table th:nth-child(4),#leads-table td:nth-child(4){min-width:100px;width:10%}
+  #leads-table th:nth-child(6),#leads-table td:nth-child(6){min-width:56px;width:5%}
+  #leads-table th:nth-child(10),#leads-table td:nth-child(10){max-width:140px;overflow:hidden;text-overflow:ellipsis}
   /* Select dropdowns */
   select { padding: 4px 3px; font-size: 11px; }
+  /* Multiple select styling */
+  select[multiple] {
+    padding: 6px;
+    font-size: 11px;
+    background: rgba(255, 255, 255, .06);
+  }
+  select[multiple] option {
+    background: var(--panel);
+    color: var(--text);
+    padding: 4px;
+  }
+  select[multiple] option:checked {
+    background: rgba(212, 175, 55, .3);
+  }
   .badge{display:inline-block;padding:2px 8px;border:1px solid rgba(255,255,255,.12);border-radius:999px;margin-left:6px}
   .toast{position:fixed;right:14px;bottom:14px;background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.12);padding:10px 12px;border-radius:12px;z-index:9999}
   select,input{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);color:var(--text);padding:9px 10px;border-radius:12px}
@@ -60,11 +75,104 @@
   </div>
 
   <div class="pane" id="pane-leads">
-    <div class="row">
-      <button class="btn" onclick="loadLeads()">Refresh</button>
-      <span class="muted" id="leads-status"></span>
+    <!-- Filter Controls -->
+    <div style="background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px;margin-bottom:14px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+        <!-- Status Filter -->
+        <div>
+          <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Reservation Status</label>
+          <select id="leads-filter-status" multiple style="width:100%;min-height:44px;">
+            <option value="">-- Status --</option>
+            <option value="new">New</option>
+            <option value="contacted">Contacted</option>
+            <option value="reserved">Reserved</option>
+            <option value="seated">Seated</option>
+            <option value="completed">Completed</option>
+            <option value="no-show">No-Show</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+          <div style="font-size:9px;color:var(--muted);margin-top:4px;">Hold Ctrl/Cmd to select multiple</div>
+        </div>
+        
+        <!-- Tier/Category Filter -->
+        <div>
+          <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Customer Tier</label>
+          <select id="leads-filter-tier" multiple style="width:100%;min-height:44px;">
+            <option value="">-- Tier --</option>
+            <option value="regular">Regular</option>
+            <option value="entry">Entry</option>
+            <option value="reserve now">Reserve Now</option>
+            <option value="vip">VIP</option>
+            <option value="vip vibe">VIP Vibe</option>
+            <option value="premium">Premium</option>
+          </select>
+          <div style="font-size:9px;color:var(--muted);margin-top:4px;">Hold Ctrl/Cmd to select multiple</div>
+        </div>
+        
+        <!-- Time Filter -->
+        <div>
+          <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Time Range</label>
+          <select id="leads-filter-time" style="width:100%;padding:10px;">
+            <option value="">All Time</option>
+            <option value="30">Last 30 Minutes</option>
+            <option value="60">Last 1 Hour</option>
+            <option value="120">Last 2 Hours</option>
+            <option value="1440">Last 24 Hours</option>
+            <option value="10080">Last 7 Days</option>
+          </select>
+        </div>
+        
+        <!-- Venue Filter (if multi-venue) -->
+        <div>
+          <label style="display:block;font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">Venue</label>
+          <select id="leads-filter-venue" style="width:100%;padding:10px;">
+            <option value="">All Venues</option>
+          </select>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div style="display:flex;flex-direction:column;justify-content:flex-end;gap:8px;">
+          <button class="btn" onclick="applyLeadsFilters()" style="background:rgba(212,175,55,.15);border:1px solid rgba(212,175,55,.3);flex:1;font-weight:700;">Apply Filters</button>
+          <button class="btn" onclick="resetLeadsFilters()" style="flex:1;">Reset</button>
+        </div>
+      </div>
     </div>
-    <div id="leads-out" class="muted" style="margin-top:10px;"></div>
+    
+    <!-- Results Section -->
+    <div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <span style="font-size:12px;color:var(--muted);">
+          <span id="leads-count">0</span> results 
+          <span id="leads-filters-badge" style="display:none;margin-left:12px;padding:2px 8px;background:rgba(212,175,55,.15);border-radius:12px;border:1px solid rgba(212,175,55,.3);font-size:11px;"></span>
+        </span>
+        <span class="muted" id="leads-status">Ready</span>
+      </div>
+      
+      <!-- Results Table: scroll only inside wrapper so main container never floats -->
+      <div class="leads-tablewrap" style="overflow-x:auto;overflow-y:visible;">
+        <table id="leads-table" style="font-size:11px;">
+          <thead>
+            <tr>
+              <th style="width:120px;">Timestamp</th>
+              <th style="width:140px;">Name</th>
+              <th style="width:120px;">Phone</th>
+              <th style="width:100px;">Status</th>
+              <th style="width:80px;">Tier</th>
+              <th style="width:80px;">VIP</th>
+              <th style="width:120px;">Date/Time</th>
+              <th style="width:60px;">Party</th>
+              <th style="width:100px;">Budget</th>
+              <th style="width:150px;">Notes</th>
+            </tr>
+          </thead>
+          <tbody id="leads-body">
+            <tr>
+              <td colspan="10" style="text-align:center;padding:20px;color:var(--muted);">Click "Apply Filters" to load leads</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <div class="pane" id="pane-allleads">
@@ -185,27 +293,140 @@ function escapeHtml(s){
   return String(s??"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-async function loadLeads(){
-  const st = document.getElementById('leads-status');
-  const out = document.getElementById('leads-out');
-  st.textContent = 'Loading...';
+// ============================================================
+// LEADS FILTER FUNCTIONS (new improved UI)
+// ============================================================
+
+function getFilterBadgeText(){
+  const statusEl = document.getElementById('leads-filter-status');
+  const tierEl = document.getElementById('leads-filter-tier');
+  const timeEl = document.getElementById('leads-filter-time');
+  const status = Array.from(statusEl.selectedOptions).map(o => o.value).filter(v => v);
+  const tier = tierEl ? Array.from(tierEl.selectedOptions).map(o => o.value).filter(v => v) : [];
+  const time = timeEl.value;
+  
+  const parts = [];
+  if(status.length > 0) parts.push(`Status: ${status.length}`);
+  if(tier.length > 0) parts.push(`Tier: ${tier.length}`);
+  if(time) parts.push(`Time: ${timeEl.options[timeEl.selectedIndex].text}`);
+  
+  return parts.join(' • ');
+}
+
+function renderLeadsTable(items){
+  const body = document.getElementById('leads-body');
+  const countEl = document.getElementById('leads-count');
+  const badgeEl = document.getElementById('leads-filters-badge');
+  
+  countEl.textContent = items.length;
+  
+  const badgeText = getFilterBadgeText();
+  if(badgeText){
+    badgeEl.textContent = badgeText;
+    badgeEl.style.display = 'inline-block';
+  } else {
+    badgeEl.style.display = 'none';
+  }
+  
+  if(!items || items.length === 0){
+    body.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--muted);">No leads found matching your filters.</td></tr>`;
+    return;
+  }
+  
+  body.innerHTML = items.map(x => {
+    const dt = ((x.date||'') + (x.time ? ' ' + x.time : '')).trim();
+    const ts = (x.timestamp||'').substring(0, 16);
+    return `<tr>
+      <td style="font-size:10px">${escapeHtml(ts)}</td>
+      <td>${escapeHtml(x.name||'')}</td>
+      <td>${escapeHtml(x.phone||'')}</td>
+      <td title="${escapeHtml(x.status||'')}" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml((x.status||'').substring(0, 20))}</td>
+      <td>${escapeHtml(x.tier||'')}</td>
+      <td>${escapeHtml(x.vip||'')}</td>
+      <td style="font-size:10px">${escapeHtml(dt)}</td>
+      <td style="text-align:center">${escapeHtml(x.party_size||'')}</td>
+      <td>${escapeHtml(x.budget||'')}</td>
+      <td title="${escapeHtml(x.notes||'')}" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px">${escapeHtml((x.notes||'').substring(0, 40))}</td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--muted);">No leads found.</td></tr>`;
+}
+
+async function applyLeadsFilters(){
+  const statusEl = document.getElementById('leads-filter-status');
+  const tierEl = document.getElementById('leads-filter-tier');
+  const timeEl = document.getElementById('leads-filter-time');
+  const venueEl = document.getElementById('leads-filter-venue');
+  const statusEl2 = document.getElementById('leads-status');
+  
+  const statusValues = Array.from(statusEl.selectedOptions).map(o => o.value).filter(v => v);
+  const tierValues = tierEl ? Array.from(tierEl.selectedOptions).map(o => o.value).filter(v => v) : [];
+  const timeValue = timeEl.value;
+  const venueValue = venueEl.value;
+  
+  statusEl2.textContent = 'Loading...';
+  
   try{
+    const params = new URLSearchParams();
+    params.set('key', KEY||'');
+    params.set('venue', VENUE||'');
+    params.set('limit', '500');
+    
+    if(statusValues.length > 0){
+      statusValues.forEach(s => params.append('status', s));
+    }
+    if(tierValues.length > 0){
+      tierValues.forEach(t => params.append('tier', t));
+    }
+    if(timeValue){
+      params.set('time', timeValue);
+    }
+    if(venueValue){
+      params.set('venue_id', venueValue);
+    }
+    
+    // Use the filter endpoint that reads from Google Sheets (works on staging/production)
     const r = await fetch(
-      `/admin/api/leads?key=${encodeURIComponent(KEY||'')}&venue=${encodeURIComponent(VENUE||'')}`,
+      `/admin/api/leads/filter?${params.toString()}`,
       { cache: 'no-store' }
     );
     const j = await r.json();
+    
     if(!j || !j.ok){
-      st.textContent = 'Failed';
-      out.textContent = JSON.stringify(j||{});
+      statusEl2.textContent = 'Failed';
+      toast('Error: ' + (j.error || 'Unknown error'));
+      console.error(j);
       return;
     }
-    const items = j.items || j.leads || [];
-    st.textContent = `OK (${items.length})`;
-    out.innerHTML = items.slice(0,50)
-      .map(x => `<div>• ${escapeHtml(x.name||x.contact||'')} — ${escapeHtml(x.status||'')}</div>`)
-      .join('') || '<div class="muted">No leads.</div>';
-  }catch(e){}
+    
+    const items = j.items || [];
+    statusEl2.textContent = `Loaded ${items.length}`;
+    setTimeout(() => { statusEl2.textContent = 'Ready'; }, 2000);
+    
+    renderLeadsTable(items);
+  }catch(e){
+    statusEl2.textContent = 'Failed';
+    toast('Error: ' + String(e));
+    console.error(e);
+  }
+}
+
+function resetLeadsFilters(){
+  document.getElementById('leads-filter-status').value = '';
+  const tierEl = document.getElementById('leads-filter-tier');
+  if(tierEl) tierEl.value = '';
+  document.getElementById('leads-filter-time').value = '';
+  document.getElementById('leads-filter-venue').value = '';
+  document.getElementById('leads-count').textContent = '0';
+  document.getElementById('leads-filters-badge').style.display = 'none';
+  document.getElementById('leads-body').innerHTML = `
+    <tr><td colspan="10" style="text-align:center;padding:20px;color:var(--muted);">Click "Apply Filters" to load leads</td></tr>
+  `;
+  document.getElementById('leads-status').textContent = 'Ready';
+}
+
+// Legacy function for compatibility
+async function loadLeads(){
+  applyLeadsFilters();
 }
 
 function renderAllLeads(items){
