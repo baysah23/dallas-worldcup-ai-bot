@@ -28,7 +28,10 @@ jobs:
 
       # Optional: run quick smoke tests (keep minimal)
       - name: Python import smoke
+        env:
+          PYTHONPATH: ${{ github.workspace }}/.python_packages/lib/site-packages
         run: |
+          python -c "import dotenv; print('dotenv ok')"
           python -c "import app; print('import ok')"
 
       - name: Deploy to Azure Web App
