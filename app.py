@@ -9136,13 +9136,18 @@ def admin_api_audit():
 
     entries: List[Dict[str, Any]] = []
 
+    # Resolve venue once so both Redis and file-backed logs are consistently scoped
+    try:
+        vid = _venue_id()
+    except Exception:
+        vid = "default"
+
     # ------------------------------------------------------------
     # 1) Redis-first (ONLY return if Redis actually has entries)
     # ------------------------------------------------------------
     try:
         _redis_init_if_needed()
         if globals().get("_REDIS_ENABLED") and globals().get("_REDIS"):
-            vid = _venue_id()
             rkey = f"{_REDIS_NS}:{vid}:audit_log"
             raw = _REDIS.lrange(rkey, 0, limit - 1)  # newest first
             for item in raw or []:
