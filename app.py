@@ -18739,55 +18739,6 @@ def _notify(event: str, details: Optional[Dict[str, Any]] = None, targets: Optio
     except Exception:
         pass
 
-def _read_notifications(limit: int = 50, role: str = "manager") -> List[Dict[str, Any]]:
-    """
-    Read newest notifications first; filter by role.
-    Managers see entries targeted to manager/all; Owners see everything.
-    """
-    try:
-        if not os.path.exists(NOTIFICATIONS_FILE):
-            return []
-        items: List[Dict[str, Any]] = []
-        with open(NOTIFICATIONS_FILE, "rb") as f:
-            f.seek(0, os.SEEK_END)
-            size = f.tell()
-            buf = b""
-            step = 4096
-            while size > 0 and len(items) < limit * 3:
-                read_size = step if size >= step else size
-                size -= read_size
-                f.seek(size)
-                buf = f.read(read_size) + buf
-                lines = buf.splitlines()
-                if size > 0 and buf and not buf.startswith(b"\n"):
-                    buf = lines[0]
-                    lines = lines[1:]
-                else:
-                    buf = b""
-                for ln in reversed(lines):
-                    if not ln.strip():
-                        continue
-                    try:
-                        it = json.loads(ln.decode("utf-8"))
-                        items.append(it)
-                    except Exception:
-                        continue
-                    if len(items) >= limit * 3:
-                        break
-        out: List[Dict[str, Any]] = []
-        for it in items:
-            t = it.get("targets") or []
-            if role == "owner":
-                out.append(it)
-            else:
-                if "all" in t or "manager" in t:
-                    out.append(it)
-            if len(out) >= limit:
-                break
-        return out
-    except Exception:
-        return []
-
 def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
     """Append a single-line JSON audit entry (best-effort, non-blocking).
     Writes to Redis (per-venue) and falls back to local file.
