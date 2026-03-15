@@ -1915,8 +1915,26 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
 # ============================================================
 AI_QUEUE_FILE = os.environ.get("AI_QUEUE_FILE", "/tmp/wc26_{venue}_ai_queue.json")
 
+def _ai_queue_path_for_current_venue() -> str:
+    """
+    Resolve the on-disk queue file for the current venue.
+    - If AI_QUEUE_FILE contains '{venue}', format it with _venue_id().
+    - Otherwise, use it as-is (single-venue / legacy behavior).
+    """
+    base = AI_QUEUE_FILE
+    if "{venue}" in base:
+        try:
+            vid = _venue_id()
+        except Exception:
+            vid = "default"
+        try:
+            return base.format(venue=vid)
+        except Exception:
+            return base
+    return base
+
 def _load_ai_queue() -> List[Dict[str, Any]]:
-    q = _safe_read_json_file(AI_QUEUE_FILE, default=[])
+    q = _safe_read_json_file(_ai_queue_path_for_current_venue(), default=[])
     if isinstance(q, list):
         # newest first
         q.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
@@ -1924,7 +1942,7 @@ def _load_ai_queue() -> List[Dict[str, Any]]:
     return []
 
 def _save_ai_queue(queue: List[Dict[str, Any]]) -> None:
-    _safe_write_json_file(AI_QUEUE_FILE, queue or [])
+    _safe_write_json_file(_ai_queue_path_for_current_venue(), queue or [])
 
 
 # ============================================================
@@ -2753,6 +2771,57 @@ def super_api_venues_set_identity():
         "venue_id": venue_id,
         "show_location_line": bool(cfg.get("show_location_line")),
         "location_line": str(cfg.get("location_line") or ""),
+        "persisted": wrote,
+        "path": write_path,
+        "error": err,
+    })
+
+
+@app.post("/super/api/venues/delete")
+def super_api_venues_delete():
+    """
+    Soft-delete a venue from the Super Admin console.
+    - Marks the venue as inactive + deleted in its JSON config
+    - Removes it from the in-memory venues cache
+    - Does NOT touch historical Sheets data or leads
+    """
+    ok, resp = _require_super_admin()
+    if not ok:
+        return resp
+
+    body = request.get_json(silent=True) or {}
+    venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
+    if not venue_id:
+        return jsonify({"ok": False, "error": "Missing venue_id"}), 400
+
+    venues = _load_venues_from_disk() or {}
+    cfg = venues.get(venue_id) if isinstance(venues, dict) else None
+    if not isinstance(cfg, dict):
+        return jsonify({"ok": False, "error": "Venue not found"}), 404
+
+    # Soft-delete: keep config on disk but mark deleted + inactive so UI and intake stop using it.
+    cfg["active"] = False
+    cfg["status"] = "deleted"
+    cfg["deleted"] = True
+    cfg["updated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+    wrote, write_path, err = _write_venue_config(venue_id, cfg)
+
+    try:
+        _invalidate_venues_cache()
+    except Exception:
+        pass
+
+    # Best-effort audit for traceability
+    try:
+        _audit("venue.delete", {"venue_id": venue_id})
+    except Exception:
+        pass
+
+    return jsonify({
+        "ok": True,
+        "venue_id": venue_id,
+        "deleted": True,
         "persisted": wrote,
         "path": write_path,
         "error": err,
@@ -7003,11 +7072,21 @@ def _notify(event: str, details: Optional[Dict[str, Any]] = None, targets: Optio
     Lightweight notifications (Step 8)
     - Stored locally in an append-only JSONL file
     - Optionally POSTs to a webhook (best-effort) if NOTIFY_WEBHOOK_URL is set
+    - Now tagged with venue_id so multi-venue read/clear never bleed across venues
     Targets: ["owner"], ["manager"], or ["owner","manager"], or ["all"]
     """
     try:
         if not targets:
             targets = ["owner", "manager"]
+
+        # Best-effort venue scoping for multi-venue installs
+        venue_id = None
+        try:
+            if "_venue_id" in globals():
+                venue_id = _venue_id()
+        except Exception:
+            venue_id = None
+
         entry = {
             "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
             "event": str(event),
@@ -7015,6 +7094,9 @@ def _notify(event: str, details: Optional[Dict[str, Any]] = None, targets: Optio
             "targets": targets,
             "details": details or {},
         }
+        if venue_id:
+            entry["venue_id"] = venue_id
+
         os.makedirs(os.path.dirname(NOTIFICATIONS_FILE), exist_ok=True)
         with open(NOTIFICATIONS_FILE, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -7033,7 +7115,7 @@ def _notify(event: str, details: Optional[Dict[str, Any]] = None, targets: Optio
     except Exception:
         pass
 
-def _read_notifications(limit: int = 50, role: str = "manager") -> List[Dict[str, Any]]:
+def _read_notifications(limit: int = 50, role: str = "manager", venue_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Read newest notifications first; filter by role.
     Managers see entries targeted to manager/all; Owners see everything.
@@ -7071,6 +7153,15 @@ def _read_notifications(limit: int = 50, role: str = "manager") -> List[Dict[str
         out: List[Dict[str, Any]] = []
         for it in items:
             t = it.get("targets") or []
+            v = (it.get("venue_id") or "").strip()
+
+            # Venue scoping (strict):
+            # - If venue_id is provided, only show items whose venue_id exactly matches.
+            # - Legacy notifications without venue_id are ignored to avoid cross-venue bleed.
+            if venue_id:
+                if v != venue_id:
+                    continue
+
             if role == "owner":
                 out.append(it)
             else:
@@ -7089,6 +7180,9 @@ def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
     try:
         ctx = _admin_ctx() if "_admin_ctx" in globals() else {}
 
+        # Resolve venue id once so both Redis and file-backed logs are per-venue.
+        vid = _venue_id() if "_venue_id" in globals() else "default"
+
         entry = {
             "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
             "event": str(event),
@@ -7097,10 +7191,8 @@ def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
             "ip": client_ip() if request else "",
             "path": getattr(request, "path", ""),
             "details": details or {},
+            "venue_id": vid,
         }
-
-        # --- Resolve venue consistently (NO request/body fallback) ---
-        vid = _venue_id() if "_venue_id" in globals() else "default"
 
         # --- 1) Redis write (per-venue) ---
         try:
@@ -8337,6 +8429,30 @@ def admin_api_ai_queue_list():
     return jsonify({"ok": True, "role": role, "queue": queue[:500]})
 
 
+@app.route("/admin/api/ai/queue/clear", methods=["POST"])
+def admin_api_ai_queue_clear():
+    """
+    Clear all AI queue items for the current venue.
+    - Manager+ only
+    - Empties the per-venue AI_QUEUE_FILE
+    """
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    try:
+        queue = _load_ai_queue()
+        cleared = len(queue)
+        _save_ai_queue([])
+        try:
+            _audit("ai.queue.clear", {"cleared": cleared})
+        except Exception:
+            pass
+        return jsonify({"ok": True, "cleared": cleared})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 
 @app.route("/admin/api/outbound/propose", methods=["POST"])
 def admin_api_outbound_propose():
@@ -8527,6 +8643,30 @@ def admin_api_ai_queue_deny(qid: str):
     _notify("ai.queue.deny", {"id": qid, "type": it.get("type"), "by": actor, "role": role}, targets=["owner","manager"])
     return jsonify({"ok": True})
 
+
+@app.route("/admin/api/ai/queue/<qid>/delete", methods=["POST"])
+def admin_api_ai_queue_delete(qid: str):
+    """
+    Hard-remove a queue item, regardless of status.
+    - Manager+ only
+    - Does not apply or deny the action; simply drops it from the queue
+    """
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    queue = _load_ai_queue()
+    it = _queue_find(queue, qid)
+    if not it:
+        return jsonify({"ok": False, "error": "Not found"}), 404
+
+    queue = [q for q in queue if str(q.get("id")) != str(qid)]
+    _save_ai_queue(queue)
+    try:
+        _audit("ai.queue.delete", {"id": qid, "type": it.get("type"), "status": it.get("status")})
+    except Exception:
+        pass
+    return jsonify({"ok": True})
 
 @app.route("/admin/api/ai/queue/<qid>/approve", methods=["POST"])
 def admin_api_ai_queue_approve(qid: str):
@@ -8793,42 +8933,136 @@ def admin_api_notifications():
     if not ok:
         return resp
     try:
-       ctx = _admin_ctx() or {}
+        ctx = _admin_ctx() or {}
     except Exception:
-       ctx = {}
+        ctx = {}
     role = ctx.get("role", "manager")
 
-
-    # Role-based branding (visual only)
-    is_owner = (role == "owner")
-    page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
-    page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
-
-    # Role-based branding (visual only)
-    is_owner = (role == "owner")
-    page_title = ("Owner Admin Console" if is_owner else "Manager Ops Console")
-    page_sub = ("Full control — Admin key" if is_owner else "Operations control — Manager key")
+    # Resolve venue for scoping notifications
+    try:
+        vid = _venue_id()
+    except Exception:
+        vid = ""
 
     try:
         limit = int(request.args.get("limit", 50) or 50)
     except Exception:
         limit = 50
     limit = max(1, min(200, limit))
-    items = _read_notifications(limit=limit, role=role)
-    return jsonify({"ok": True, "role": role, "items": items})
+    items = _read_notifications(limit=limit, role=role, venue_id=(vid or None))
+    return jsonify({"ok": True, "role": role, "venue_id": vid, "items": items})
 
 @app.route("/admin/api/notifications/clear", methods=["POST"])
 def admin_api_notifications_clear():
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
+    # Scope clear to current venue only; never clear other venues' notifications
     try:
-        with open(NOTIFICATIONS_FILE, "w", encoding="utf-8") as f:
-            f.write("")
+        vid = _venue_id()
     except Exception:
-        pass
-    _audit("notifications.clear", {})
-    return jsonify({"ok": True})
+        vid = ""
+
+    try:
+        if not os.path.exists(NOTIFICATIONS_FILE):
+            _audit("notifications.clear", {"venue_id": vid, "cleared": 0})
+            return jsonify({"ok": True})
+
+        kept_lines: List[str] = []
+        cleared = 0
+        with open(NOTIFICATIONS_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                ln = (line or "").strip()
+                if not ln:
+                    continue
+                try:
+                    obj = json.loads(ln)
+                except Exception:
+                    kept_lines.append(line)
+                    continue
+                v = (obj.get("venue_id") or "").strip()
+                # If this entry is for the current venue, drop it; otherwise keep
+                if vid and v == vid:
+                    cleared += 1
+                    continue
+                kept_lines.append(line)
+
+        with open(NOTIFICATIONS_FILE, "w", encoding="utf-8") as f:
+            for line in kept_lines:
+                f.write(line if line.endswith("\n") else (line + "\n"))
+
+        _audit("notifications.clear", {"venue_id": vid, "cleared": cleared})
+        return jsonify({"ok": True, "cleared": cleared})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/admin/api/notifications/clear-one", methods=["POST"])
+def admin_api_notifications_clear_one():
+    """
+    Clear a single notification by timestamp.
+    - Used by Owner/Manager UI "Clear" button per notification
+    - Immediate effect; next poll will not return the cleared entry
+    """
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    payload = request.get_json(silent=True) or {}
+    ts = str(payload.get("ts") or "").strip()
+    if not ts:
+        return jsonify({"ok": False, "error": "Missing ts"}), 400
+
+    try:
+        try:
+            vid = _venue_id()
+        except Exception:
+            vid = ""
+
+        if not os.path.exists(NOTIFICATIONS_FILE):
+            return jsonify({"ok": True, "cleared": 0})
+
+        kept_lines: List[str] = []
+        cleared = 0
+        with open(NOTIFICATIONS_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                ln = (line or "").strip()
+                if not ln:
+                    continue
+                try:
+                    obj = json.loads(ln)
+                except Exception:
+                    kept_lines.append(line)
+                    continue
+
+                obj_ts = str(obj.get("ts") or "").strip()
+                obj_vid = (obj.get("venue_id") or "").strip()
+
+                # Only clear the first matching entry whose venue_id exactly matches.
+                # Legacy entries without venue_id are never cleared here to avoid cross-venue effects.
+                if (
+                    cleared == 0
+                    and obj_ts == ts
+                    and vid
+                    and obj_vid == vid
+                ):
+                    cleared += 1
+                    continue
+
+                kept_lines.append(line)
+
+        with open(NOTIFICATIONS_FILE, "w", encoding="utf-8") as f:
+            for line in kept_lines:
+                f.write(line if line.endswith("\n") else (line + "\n"))
+
+        try:
+            _audit("notifications.clear_one", {"ts": ts, "venue_id": vid, "cleared": cleared})
+        except Exception:
+            pass
+
+        return jsonify({"ok": True, "cleared": cleared})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/admin/api/presets", methods=["GET"])
@@ -8913,9 +9147,14 @@ def admin_api_audit():
             raw = _REDIS.lrange(rkey, 0, limit - 1)  # newest first
             for item in raw or []:
                 try:
-                    entries.append(json.loads(item))
+                    obj = json.loads(item)
                 except Exception:
                     continue
+                # Extra guard: only accept entries for this venue (if tagged)
+                v = (obj.get("venue_id") or "").strip()
+                if v and v != vid:
+                    continue
+                entries.append(obj)
             if entries:  # 🔑 do NOT short-circuit on empty Redis
                 return jsonify({"ok": True, "entries": entries, "source": "redis"})
     except Exception:
@@ -8933,9 +9172,14 @@ def admin_api_audit():
                 if not ln:
                     continue
                 try:
-                    entries.append(json.loads(ln))
+                    obj = json.loads(ln)
                 except Exception:
                     continue
+                v = (obj.get("venue_id") or "").strip()
+                # For file-backed logs, strictly scope by venue_id when present.
+                if v and v != vid:
+                    continue
+                entries.append(obj)
     except Exception:
         pass
 
@@ -8946,6 +9190,173 @@ def admin_api_audit():
         pass
 
     return jsonify({"ok": True, "entries": entries, "source": "file"})
+
+
+@app.route("/admin/api/audit/clear", methods=["POST"])
+def admin_api_audit_clear():
+    """
+    Clear all audit entries for the current venue.
+    - Owner-only (audits are sensitive)
+    - Clears both Redis-backed list and local file fallback
+    """
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+
+    cleared = 0
+    vid = _venue_id()
+
+    # Redis: delete per-venue audit list
+    try:
+        _redis_init_if_needed()
+        if globals().get("_REDIS_ENABLED") and globals().get("_REDIS"):
+            rkey = f"{_REDIS_NS}:{vid}:audit_log"
+            try:
+                existing = _REDIS.lrange(rkey, 0, -1) or []
+                cleared += len(existing)
+            except Exception:
+                pass
+            try:
+                _REDIS.delete(rkey)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # File fallback: remove only this venue's entries, keep others
+    try:
+        if os.path.exists(AUDIT_LOG_FILE):
+            kept_lines: list[str] = []
+            with open(AUDIT_LOG_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    ln = (line or "").strip()
+                    if not ln:
+                        continue
+                    try:
+                        obj = json.loads(ln)
+                    except Exception:
+                        kept_lines.append(line)
+                        continue
+                    v = (obj.get("venue_id") or "").strip()
+                    # Only drop entries for this venue; keep all others
+                    if v and v == vid:
+                        cleared += 1
+                        continue
+                    kept_lines.append(line)
+
+            with open(AUDIT_LOG_FILE, "w", encoding="utf-8") as f:
+                for line in kept_lines:
+                    f.write(line if line.endswith("\n") else (line + "\n"))
+    except Exception:
+        pass
+
+    try:
+        _audit("audit.clear_all", {"cleared": cleared})
+    except Exception:
+        pass
+
+    return jsonify({"ok": True, "cleared": cleared})
+
+
+@app.route("/admin/api/audit/clear_one", methods=["POST"])
+def admin_api_audit_clear_one():
+    """
+    Clear a single audit entry by (ts, event, actor).
+    - Owner-only
+    - Updates both Redis list and file fallback where possible
+    """
+    ok, resp = _require_admin(min_role="owner")
+    if not ok:
+        return resp
+
+    payload = request.get_json(silent=True) or {}
+    ts = str(payload.get("ts") or "").strip()
+    event = str(payload.get("event") or "").strip()
+    actor = str(payload.get("actor") or "").strip()
+    if not ts or not event:
+        return jsonify({"ok": False, "error": "Missing ts or event"}), 400
+
+    vid = _venue_id()
+    cleared = 0
+
+    # Redis: rebuild list without the matching entry for this venue
+    try:
+        _redis_init_if_needed()
+        if globals().get("_REDIS_ENABLED") and globals().get("_REDIS"):
+            rkey = f"{_REDIS_NS}:{vid}:audit_log"
+            raw = _REDIS.lrange(rkey, 0, -1) or []
+            kept: list = []
+            for blob in raw:
+                try:
+                    obj = json.loads(blob)
+                except Exception:
+                    kept.append(blob)
+                    continue
+                v = (obj.get("venue_id") or "").strip()
+                if v and v != vid:
+                    kept.append(blob)
+                    continue
+                if (
+                    cleared == 0
+                    and str(obj.get("ts") or "").strip() == ts
+                    and str(obj.get("event") or "").strip() == event
+                    and (not actor or str(obj.get("actor") or "").strip() == actor)
+                ):
+                    cleared += 1
+                    continue
+                kept.append(blob)
+            try:
+                _REDIS.delete(rkey)
+            except Exception:
+                pass
+            if kept:
+                try:
+                    # Preserve original order: newest first
+                    _REDIS.rpush(rkey, *kept)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    # File fallback: rewrite without the matching entry for this venue
+    try:
+        if os.path.exists(AUDIT_LOG_FILE):
+            new_lines: list[str] = []
+            with open(AUDIT_LOG_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    ln = (line or "").strip()
+                    if not ln:
+                        continue
+                    try:
+                        obj = json.loads(ln)
+                    except Exception:
+                        new_lines.append(line)
+                        continue
+                    v = (obj.get("venue_id") or "").strip()
+                    if v and v != vid:
+                        new_lines.append(line)
+                        continue
+                    if (
+                        cleared == 0
+                        and str(obj.get("ts") or "").strip() == ts
+                        and str(obj.get("event") or "").strip() == event
+                        and (not actor or str(obj.get("actor") or "").strip() == actor)
+                    ):
+                        cleared += 1
+                        continue
+                    new_lines.append(line)
+            with open(AUDIT_LOG_FILE, "w", encoding="utf-8") as f:
+                for line in new_lines:
+                    f.write(line if line.endswith("\n") else (line + "\n"))
+    except Exception:
+        pass
+
+    try:
+        _audit("audit.clear_one", {"ts": ts, "event": event, "actor": actor, "cleared": cleared})
+    except Exception:
+        pass
+
+    return jsonify({"ok": True, "cleared": cleared})
 
 # ============================================================
 # Partner / Venue Policies API (Hard rules)
@@ -9731,7 +10142,10 @@ label.small + textarea,
   </div>
 
   <div class="card" id="notifCard">
-    <div class="h2">Notifications</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div class="h2" style="margin:0">Notifications</div>
+      <button type="button" class="btn2" style="margin-left:auto" onclick="clearAllNotifs()">Clear all</button>
+    </div>
     <div id="notifBody" class="small" style="margin-top:8px"></div>
     <div id="notif-msg" class="note" style="margin-top:8px"></div>
   </div>
@@ -9875,8 +10289,8 @@ label.small + textarea,
             vibe = colval(r, i_vibe, "")
 
             def opt(selected, label):
-                sel = "selected" if selected else ""
-                return f"<option {sel}>{label}</option>"
+                sel = " selected" if selected else ""
+                return f"<option value=\"{_hesc(label)}\"{sel}>{_hesc(label)}</option>"
 
             html.append(f"<tr data-tier='{_hesc(tier_key)}' data-entry='{_hesc(ep)}'>")
             html.append(f"<td class='code'>{sheet_row}</td>")
@@ -9923,7 +10337,7 @@ label.small + textarea,
 
 
             html.append("<td>")
-            html.append(f"<button class='btn2' onclick='saveLead({sheet_row})'>Save</button><button class='btnTiny' title='Mark handled' onclick='markHandled({sheet_row})'>✅</button>")
+            html.append(f"<button class='btn primary' type='button' onclick='saveLead({sheet_row})'>Save</button> <button class='btnTiny' type='button' title='Set status to Handled' onclick='markHandled({sheet_row})'>Handled</button>")
             html.append("</td>")
 
             html.append("</tr>")
@@ -10019,8 +10433,13 @@ label.small + textarea,
 
 <div id="tab-aiq" class="tabpane hidden">
   <div class="card">
-    <div class="h2">AI Approval Queue</div>
-    <div class="small">Proposed AI actions wait here for <b>Approve</b>, <b>Deny</b>, or <b>Owner Override</b>. This keeps automation powerful but controlled.</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div>
+        <div class="h2" style="margin:0">AI Approval Queue</div>
+        <div class="small">Proposed AI actions wait here for <b>Approve</b>, <b>Deny</b>, or <b>Owner Override</b>. This keeps automation powerful but controlled.</div>
+      </div>
+      <button class="btn2" type="button" onclick="clearAIQueue()" style="margin-left:auto">Clear queue</button>
+    </div>
     <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <button class="btn2" onclick="loadAIQueue()">Refresh</button>
       <span class="note" style="opacity:.6">|</span>
@@ -10028,6 +10447,7 @@ label.small + textarea,
       <button class="btn2" onclick="runAINew()">Run AI (New)</button>
       <input id="ai-run-row" class="inp" type="number" min="2" step="1" placeholder="Row #" style="max-width:110px" title="Run AI for a specific Google Sheet row number" />
       <button class="btn2" onclick="runAIRow()">Run AI (Row)</button>
+      <span class="note" style="font-size:11px">Tip: model often proposes 0 actions for Handled or non-New leads.</span>
 
       <select id="aiq-filter" class="inp" style="max-width:180px" onchange="loadAIQueue()">
         <option value="">All</option>
@@ -10224,8 +10644,13 @@ label.small + textarea,
 
 <div id="tab-audit" class="tabpane hidden">
   <div class="card">
-    <div class="h2">Audit Log</div>
-    <div class="small">Shows who changed ops/rules/menu and when.</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div>
+        <div class="h2" style="margin:0">Audit Log</div>
+        <div class="small">Shows who changed ops/rules/menu and when.</div>
+      </div>
+      <button class="btn2" type="button" data-min-role="owner" onclick="clearAuditAll()" style="margin-left:auto">Clear all</button>
+    </div>
     <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <input class="inp" id="audit-limit" type="number" min="10" max="500" value="200" style="width:120px" />
       <select class="inp" id="audit-filter" style="width:220px">
@@ -10590,14 +11015,14 @@ function _leadRowFromItem(it){
   const st = (it.status||'New').toString().trim();
   const stLow = st.toLowerCase();
   const vipVal = /^(yes|true|1|y|vip)$/.test(vip) ? 'Yes' : 'No';
-  const stSel = '<select class=\\'inp\\' id=\\'status-'+row+'\\'><option'+(stLow==='new'?' selected':'')+'>New</option><option'+(stLow==='confirmed'?' selected':'')+'>Confirmed</option><option'+(stLow==='seated'?' selected':'')+'>Seated</option><option'+(stLow==='no-show'?' selected':'')+'>No-Show</option><option'+(stLow==='handled'?' selected':'')+'>Handled</option></select>';
-  const vipSel = '<select class=\\'inp\\' id=\\'vip-'+row+'\\'><option'+(vipVal==='Yes'?' selected':'')+'>Yes</option><option'+(vipVal==='No'?' selected':'')+'>No</option></select>';
+  const stSel = '<select class=\\'inp\\' id=\\'status-'+row+'\\'><option value=\\"New\\"'+(stLow==='new'?' selected':'')+'>New</option><option value=\\"Confirmed\\"'+(stLow==='confirmed'?' selected':'')+'>Confirmed</option><option value=\\"Seated\\"'+(stLow==='seated'?' selected':'')+'>Seated</option><option value=\\"No-Show\\"'+(stLow==='no-show'?' selected':'')+'>No-Show</option><option value=\\"Handled\\"'+(stLow==='handled'?' selected':'')+'>Handled</option></select>';
+  const vipSel = '<select class=\\'inp\\' id=\\'vip-'+row+'\\'><option value=\\"Yes\\"'+(vipVal==='Yes'?' selected':'')+'>Yes</option><option value=\\"No\\"'+(vipVal==='No'?' selected':'')+'>No</option></select>';
   const tipEp = fullEp ? _tipAttr(fullEp) : '';
   const tipCtx = fullCtx.length>=28 ? _tipAttr(fullCtx) : '';
   const tipNotes = fullNotes.length>=28 ? _tipAttr(fullNotes) : '';
   const tipNm = (it.name||'').length>=12 ? _tipAttr(it.name||'') : '';
   const tipPh = (it.phone||'').length>=12 ? _tipAttr(it.phone||'') : '';
-  return '<tr data-tier="'+tierKey+'" data-entry="'+_he(it.entry_point||'')+'"><td class=\\'code\\'>'+row+'</td><td>'+ts+'</td><td'+tipNm+'>'+nm+'</td><td'+tipPh+'>'+ph+'</td><td>'+d+'</td><td>'+t+'</td><td>'+ps+'</td><td'+_tipAttr(seg)+'><span class=\\"'+segCls+'\\">'+seg+'</span></td><td'+tipEp+'><span class=\\"pill\\">'+ep+'</span></td><td'+_tipAttr(queue)+'><span class=\\"badge good\\">'+queue+'</span></td><td>'+budget+'</td><td'+tipCtx+'><span class=\\"small\\">'+ctx+(ctx.length>=34?'…':'')+'</span></td><td'+tipNotes+'><span class=\\"small\\">'+notes+(notes.length>=40?'…':'')+'</span></td><td>'+stSel+'</td><td>'+vipSel+'</td><td><button class=\\"btn2\\' onclick=\\"saveLead('+row+')\\">Save</button><button class=\\"btnTiny\\' title=\\"Mark handled\\" onclick=\\"markHandled('+row+')\\">✅</button></td></tr>';
+  return '<tr data-tier="'+tierKey+'" data-entry="'+_he(it.entry_point||'')+'"><td class=\\'code\\'>'+row+'</td><td>'+ts+'</td><td'+tipNm+'>'+nm+'</td><td'+tipPh+'>'+ph+'</td><td>'+d+'</td><td>'+t+'</td><td>'+ps+'</td><td'+_tipAttr(seg)+'><span class=\\"'+segCls+'\\">'+seg+'</span></td><td'+tipEp+'><span class=\\"pill\\">'+ep+'</span></td><td'+_tipAttr(queue)+'><span class=\\"badge good\\">'+queue+'</span></td><td>'+budget+'</td><td'+tipCtx+'><span class=\\"small\\">'+ctx+(ctx.length>=34?'…':'')+'</span></td><td'+tipNotes+'><span class=\\"small\\">'+notes+(notes.length>=40?'…':'')+'</span></td><td>'+stSel+'</td><td>'+vipSel+'</td><td><button type=\\"button\\" class=\\"btn primary\\" onclick=\\"saveLead('+row+')\\">Save</button><button type=\\"button\\" class=\\"btnTiny\\" title=\\"Set status to Handled\\" onclick=\\"markHandled('+row+')\\">✅</button></td></tr>';
 }
 function _leadsDdLabel(panelId, allLabel){
   const panel = qs('#'+panelId); if(!panel) return allLabel;
@@ -11426,6 +11851,7 @@ function renderAIQueue(items){
     const approveBtn = `<button type="button" class="btn" ${canAct ? '' : 'disabled'} onclick="aiqApprove('${id}', this)">Approve</button>`;
     const denyBtn    = `<button type="button" class="btn2" ${canAct ? '' : 'disabled'} onclick="aiqDeny('${id}', this)">Deny</button>`;
     const overrideBtn = `<button type="button" class="btn" onclick="aiqOverride('${id}', this)">Owner Override</button>`;
+    const removeBtn = `<button type="button" class="btnTiny" onclick="aiqRemove('${id}', this)">Remove from queue</button>`;
 
     return `
       <div class="card" style="margin-bottom:10px">
@@ -11447,12 +11873,57 @@ function renderAIQueue(items){
           ${denyBtn}
           ${sendBtn}
           ${overrideBtn}
+          ${removeBtn}
         </div>
       </div>
     `;
   });
 
   list.innerHTML = rows.join('');
+}
+
+async function clearAIQueue(){
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Clearing queue…';
+  try{
+    const r = await fetch(`/admin/api/ai/queue/clear?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({})
+    });
+    const j = await r.json().catch(()=>null);
+    if(!j || !j.ok){
+      throw new Error((j && j.error) || 'Failed to clear');
+    }
+    if(msg) msg.textContent = 'Queue cleared';
+    await loadAIQueue();
+  }catch(e){
+    if(msg) msg.textContent = 'Clear failed';
+  }
+}
+
+async function aiqRemove(id, btn){
+  if(!id) return;
+  if(!confirm('Remove this item from the queue?')) return;
+  const _btn = btn;
+  if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Removing…'; }
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Removing…';
+  try{
+    const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/delete?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({})
+    });
+    const j = await r.json().catch(()=>null);
+    if(!j || !j.ok){
+      throw new Error((j && j.error) || 'Failed');
+    }
+    if(msg) msg.textContent = 'Removed';
+    await loadAIQueue();
+  }catch(e){
+    if(msg) msg.textContent = 'Remove failed';
+  }finally{
+    if(_btn){ _btn.disabled = false; _btn.textContent = _btn.dataset.prevText || 'Remove from queue'; }
+  }
 }
 
 async function aiqApprove(id, btn){
@@ -11618,18 +12089,27 @@ async function loadAudit(){
       shown.forEach(e=>{
         const details = (e.details || {});
         const copyPayload = JSON.stringify(e, null, 2);
+        const ts = String(e.ts || '');
+        const ev = String(e.event || '');
+        const actor = String(e.actor || '');
         const tr = document.createElement('tr');
+        tr.dataset.ts = ts;
+        tr.dataset.event = ev;
+        tr.dataset.actor = actor;
         tr.innerHTML =
-          '<td>'+esc(e.ts||'')+'</td>' +
-          '<td><span class="code">'+esc(e.actor||'')+'</span></td>' +
+          '<td>'+esc(ts)+'</td>' +
+          '<td><span class="code">'+esc(actor)+'</span></td>' +
           '<td>'+esc(e.role||'')+'</td>' +
-          '<td>'+esc(e.event||'')+'</td>' +
+          '<td>'+esc(ev)+'</td>' +
           '<td><span class="code">'+esc(JSON.stringify(details))+'</span></td>' +
-          '<td><button class="btn2" type="button">Copy</button></td>';
+          '<td style="white-space:nowrap;display:flex;gap:6px;flex-wrap:wrap">' +
+            '<button class="btn2" type="button" data-act="copy">Copy</button>' +
+            '<button class="btnTiny" type="button" data-act="clear">Clear</button>' +
+          '</td>';
 
-        const btn = tr.querySelector('button');
-        if(btn){
-          btn.addEventListener('click', async ()=>{
+        const copyBtn = tr.querySelector('button[data-act="copy"]');
+        if(copyBtn){
+          copyBtn.addEventListener('click', async ()=>{
             try{
               if(navigator?.clipboard?.writeText){
                 await navigator.clipboard.writeText(copyPayload);
@@ -11653,12 +12133,80 @@ async function loadAudit(){
             }
           });
         }
+
+        const clearBtn = tr.querySelector('button[data-act="clear"]');
+        if(clearBtn){
+          clearBtn.addEventListener('click', ()=>{
+            clearAuditOne(ts, ev, actor);
+          });
+        }
+
         body.appendChild(tr);
       });
     }
   }
 
   if(msg) msg.textContent='';
+}
+
+async function clearAuditAll(){
+  if(typeof hasRole === 'function' && !hasRole('owner')){
+    alert('Owner-only: clearing the audit log is locked for managers.');
+    return;
+  }
+  if(!confirm('Clear all audit entries for this venue? This cannot be undone.')) return;
+  const msg = qs('#audit-msg'); if(msg) msg.textContent='Clearing…';
+  try{
+    const venueVal =
+      (typeof VENUE !== 'undefined' && VENUE) ? VENUE :
+      (window.VENUE ? window.VENUE : '');
+    const url =
+      '/admin/api/audit/clear?key=' + encodeURIComponent(KEY) +
+      '&venue=' + encodeURIComponent(venueVal);
+    const res = await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({})
+    });
+    const j = await res.json().catch(()=>null);
+    if(!j || !j.ok){
+      throw new Error((j && j.error) || 'Failed');
+    }
+    if(msg) msg.textContent='Cleared';
+    await loadAudit();
+  }catch(e){
+    if(msg) msg.textContent='Clear failed';
+  }
+}
+
+async function clearAuditOne(ts, eventName, actor){
+  if(typeof hasRole === 'function' && !hasRole('owner')){
+    alert('Owner-only: clearing audit entries is locked for managers.');
+    return;
+  }
+  if(!ts || !eventName) return;
+  const msg = qs('#audit-msg'); if(msg) msg.textContent='Clearing…';
+  try{
+    const venueVal =
+      (typeof VENUE !== 'undefined' && VENUE) ? VENUE :
+      (window.VENUE ? window.VENUE : '');
+    const url =
+      '/admin/api/audit/clear_one?key=' + encodeURIComponent(KEY) +
+      '&venue=' + encodeURIComponent(venueVal);
+    const res = await fetch(url, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ts, event: eventName, actor})
+    });
+    const j = await res.json().catch(()=>null);
+    if(!j || !j.ok){
+      throw new Error((j && j.error) || 'Failed');
+    }
+    if(msg) msg.textContent='Cleared';
+    await loadAudit();
+  }catch(e){
+    if(msg) msg.textContent='Clear failed';
+  }
 }
 
 
@@ -11707,15 +12255,28 @@ async function loadNotifs(){
             }
           }
 
+          const ts = String(it.ts || '');
+
           row.innerHTML =
             '<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">' +
-              '<div class="note">'+esc(it.ts || '')+'</div>' +
-              '<div><span class="code">'+esc(it.event || '')+'</span></div>' +
+              '<div class="note">'+esc(ts)+'</div>' +
+              '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">' +
+                '<span class="code">'+esc(it.event || '')+'</span>' +
+                '<button type="button" class="btnTiny" data-ts="'+esc(ts)+'">Clear</button>' +
+              '</div>' +
             '</div>' +
             '<div class="note" style="margin-top:6px">Details</div>' +
             '<pre style="margin-top:6px;padding:10px;border-radius:10px;background:rgba(255,255,255,.08);color:#eef2ff;white-space:pre-wrap;word-break:break-word;font-size:12px;line-height:1.45">' +
               esc(text) +
             '</pre>';
+
+          const btn = row.querySelector('button[data-ts]');
+          if(btn){
+            btn.addEventListener('click', ()=>{
+              const tsVal = btn.getAttribute('data-ts') || '';
+              clearNotif(tsVal);
+            });
+          }
 
           body.appendChild(row);
         });
@@ -11725,6 +12286,50 @@ async function loadNotifs(){
     if(msg) msg.textContent = '';
   }catch(e){
     if(msg) msg.textContent = 'Load failed';
+  }
+}
+
+async function clearAllNotifs(){
+  const msg = qs('#notif-msg');
+  if(msg) msg.textContent = 'Clearing…';
+  try{
+    const r = await fetch(`/admin/api/notifications/clear?key=${encodeURIComponent(KEY||'')}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'}
+    });
+    const j = await r.json().catch(()=>null);
+    if(!j || !j.ok){
+      throw new Error((j && j.error) || 'Failed to clear');
+    }
+    if(msg) msg.textContent = 'Cleared';
+    try{
+      await loadNotifs();
+    }catch(e){}
+  }catch(e){
+    if(msg) msg.textContent = 'Clear failed';
+  }
+}
+
+async function clearNotif(ts){
+  if(!ts) return;
+  const msg = qs('#notif-msg');
+  if(msg) msg.textContent = 'Clearing…';
+  try{
+    const r = await fetch(`/admin/api/notifications/clear-one?key=${encodeURIComponent(KEY||'')}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ts})
+    });
+    const j = await r.json().catch(()=>null);
+    if(!j || !j.ok){
+      throw new Error((j && j.error) || 'Failed to clear');
+    }
+    if(msg) msg.textContent = 'Cleared';
+    try{
+      await loadNotifs();
+    }catch(e){}
+  }catch(e){
+    if(msg) msg.textContent = 'Clear failed';
   }
 }
 
@@ -14426,7 +15031,7 @@ th{
     return {active, sheet_ok, ready, needs, sheet_state, sid};
   }
   function computeCounts(){
-    const vs=state.venues||[]; let all=vs.length, active=0, inactive=0, sheetfail=0, notready=0, needs=0;
+    const vs=(state.venues||[]).filter(v=>!v.deleted); let all=vs.length, active=0, inactive=0, sheetfail=0, notready=0, needs=0;
     vs.forEach(v=>{const f=venueFlags(v); if(f.active) active++; else inactive++; if(!f.sheet_ok) sheetfail++; if(!f.ready) notready++; if(f.needs) needs++;});
     document.getElementById('c_all').textContent=String(all);
     document.getElementById('c_active').textContent=String(active);
@@ -14453,7 +15058,7 @@ th{
   function renderVenues(){
     const list=document.getElementById('venuesRail');
     const tbody=document.getElementById('venuesTbody');
-    const filtered=(state.venues||[]).filter(v=>matchesFilter(v)&&matchesSearch(v));
+    const filtered=(state.venues||[]).filter(v=>!v.deleted && matchesFilter(v) && matchesSearch(v));
 
     filtered.sort((a,b)=>{
       const fa=venueFlags(a), fb=venueFlags(b);
@@ -14497,7 +15102,8 @@ th{
         const readyBadge='<span class="badge '+(f.ready?'good':'warn')+'">'+(f.ready?'READY':'NOT READY')+'</span>';
         const actions='<button class="btn" data-act="check" data-vid="'+hesc(v.venue_id||'')+'">Re-check</button> '+
                       '<button class="btn" data-act="rotate" data-vid="'+hesc(v.venue_id||'')+'">Rotate Keys</button> '+
-                      '<a href="'+buildAdminUrl(v)+'" target="_blank">Open</a>';
+                      '<a href="'+buildAdminUrl(v)+'" target="_blank">Open</a> '+
+                      '<button class="btnTiny" data-act="delete" data-vid="'+hesc(v.venue_id||'')+'" title="Delete venue">🗑</button>';
         const tr=document.createElement('tr');
         tr.innerHTML='<td><div><div style="font-weight:700">'+hesc(v.name||v.venue_name||v.venue_id)+'</div><div class="muted">'+hesc(v.venue_id||'')+'</div></div></td>'+
                      '<td>'+hesc(v.plan||'standard')+'</td>'+
@@ -14510,7 +15116,7 @@ th{
 
     const sel=document.getElementById('leadsVenueId');
     const cur=sel.value;
-    sel.innerHTML='<option value="">All venues</option>'+(state.venues||[]).map(v=>'<option value="'+hesc(v.venue_id||'')+'">'+hesc(v.name||v.venue_id)+'</option>').join('');
+    sel.innerHTML='<option value="">All venues</option>'+(state.venues||[]).filter(v=>!v.deleted).map(v=>'<option value="'+hesc(v.venue_id||'')+'">'+hesc(v.name||v.venue_id)+'</option>').join('');
     if([].slice.call(sel.options).some(o=>o.value===cur)) sel.value=cur;
 
     computeCounts();
@@ -14552,6 +15158,7 @@ th{
       '<button class="btn" id="vdCheck">Re-check Sheet</button>'+
       '<button class="btn" id="vdRotate">Rotate Keys</button>'+
       '<button class="btn" id="vdSetSheet">Set Sheet…</button>'+
+      '<button class="btn" id="vdDelete" style="margin-left:auto;background:rgba(248,113,113,.12);border-color:rgba(248,113,113,.6)">Delete venue</button>'+
       '<a class="btn" style="text-decoration:none" href="'+buildAdminUrl(v)+'" target="_blank">Open Admin</a>'+
     '</div>';
 
@@ -14564,6 +15171,15 @@ th{
 
   const _vdD = document.getElementById('vdDemo');
   if(_vdD) _vdD.onclick = () => toggleDemoMode();
+
+  const _vdDel = document.getElementById('vdDelete');
+  if(_vdDel){
+    _vdDel.onclick = async () => {
+      const name = v.name || v.venue_id || '';
+      if(!confirm('Delete venue "'+name+'" from Super Admin? This will disable intake and hide it from the console.')) return;
+      await doVenueAction('delete', v.venue_id);
+    };
+  }
 
   document.getElementById('vdSetSheet').onclick = async () => {
     const sid = prompt('Paste Google Sheet ID for '+(v.venue_id||''), (sheet.sheet_id||''));
@@ -14582,6 +15198,7 @@ th{
     if(act==='rotate') url='/super/api/venues/rotate_keys';
     if(act==='set_sheet') url='/super/api/venues/set_sheet';
     if(act==='set_active') url='/super/api/venues/set_active';
+    if(act==='delete') url='/super/api/venues/delete';
     if(!url) return;
     try{
       const r=await fetch(url+'?super_key='+encodeURIComponent(super_key), {method:'POST', headers: hdrs(), body: JSON.stringify(payload)});
@@ -18121,55 +18738,6 @@ def _notify(event: str, details: Optional[Dict[str, Any]] = None, targets: Optio
                 pass
     except Exception:
         pass
-
-def _read_notifications(limit: int = 50, role: str = "manager") -> List[Dict[str, Any]]:
-    """
-    Read newest notifications first; filter by role.
-    Managers see entries targeted to manager/all; Owners see everything.
-    """
-    try:
-        if not os.path.exists(NOTIFICATIONS_FILE):
-            return []
-        items: List[Dict[str, Any]] = []
-        with open(NOTIFICATIONS_FILE, "rb") as f:
-            f.seek(0, os.SEEK_END)
-            size = f.tell()
-            buf = b""
-            step = 4096
-            while size > 0 and len(items) < limit * 3:
-                read_size = step if size >= step else size
-                size -= read_size
-                f.seek(size)
-                buf = f.read(read_size) + buf
-                lines = buf.splitlines()
-                if size > 0 and buf and not buf.startswith(b"\n"):
-                    buf = lines[0]
-                    lines = lines[1:]
-                else:
-                    buf = b""
-                for ln in reversed(lines):
-                    if not ln.strip():
-                        continue
-                    try:
-                        it = json.loads(ln.decode("utf-8"))
-                        items.append(it)
-                    except Exception:
-                        continue
-                    if len(items) >= limit * 3:
-                        break
-        out: List[Dict[str, Any]] = []
-        for it in items:
-            t = it.get("targets") or []
-            if role == "owner":
-                out.append(it)
-            else:
-                if "all" in t or "manager" in t:
-                    out.append(it)
-            if len(out) >= limit:
-                break
-        return out
-    except Exception:
-        return []
 
 def _audit(event: str, details: Optional[Dict[str, Any]] = None) -> None:
     """Append a single-line JSON audit entry (best-effort, non-blocking).
