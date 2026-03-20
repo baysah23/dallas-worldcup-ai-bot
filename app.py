@@ -2209,7 +2209,9 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[s
 
     # Build allowed action schema based on settings
     allow = settings.get("allow_actions") or {}
-    allowed_types = [k for k,v in allow.items() if v]
+    # reply_draft requires draft text in payload, which this lead-intake
+    # workflow does not generate. Proactive drafts are handled elsewhere.
+    allowed_types = [k for k, v in allow.items() if v and k != "reply_draft"]
     if not allowed_types:
         return {"ok": False, "error": "No actions allowed"}
 
@@ -2321,34 +2323,48 @@ def _ai_enqueue_or_apply_for_new_lead(lead: Dict[str, Any], sheet_row: int) -> N
         if not actions:
             return
 
-        # Build queue entry
-        entry = {
-            "id": _queue_new_id(),
-            "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "created_by": "system",
-            "created_role": "system",
-            "status": "pending",
-            "source": "lead_intake",
-            "confidence": confidence,
-            "notes": sug.get("notes") or "",
-            "actions": actions,
-            "lead": {  # small snapshot for reviewers
-                "intent": lead.get("intent",""),
-                "contact": lead.get("contact",""),
-                "budget": lead.get("budget",""),
-                "party_size": lead.get("party_size",""),
-                "datetime": lead.get("datetime",""),
-            }
+        # Small lead context for reviewers (safe extra fields in payload).
+        lead_ctx = {
+            "intent": lead.get("intent", ""),
+            "contact": lead.get("contact") or lead.get("phone") or "",
+            "budget": lead.get("budget", ""),
+            "party_size": lead.get("party_size", ""),
+            "datetime": lead.get("datetime", ""),
+            "notes": lead.get("notes", ""),
+            "language": lead.get("lang", lead.get("language", "")),
         }
 
-        # Default: always queue unless explicitly safe to auto-apply
+        # Default: queue actions for approval unless explicitly safe to auto-apply
         if mode != "auto" or require_approval or confidence < min_conf:
-            _queue_add(entry)
-            _audit("ai.queue.created", {"id": entry["id"], "source": "lead_intake", "confidence": confidence})
-            _notify("ai.queue.created", {"id": entry["id"], "source": "lead_intake", "confidence": confidence, "lead": entry.get("lead")}, targets=["owner","manager"])
+            for a in actions:
+                a_type = a.get("type")
+                a_payload = a.get("payload") or {}
+                if not isinstance(a_payload, dict):
+                    a_payload = {}
+                # Attach context for easier staff triage in the UI.
+                a_payload["lead"] = lead_ctx
+
+                entry = {
+                    "id": _queue_new_id(),
+                    "type": str(a_type or "").strip(),
+                    "payload": a_payload,
+                    "confidence": confidence,
+                    "rationale": str(a.get("reason") or sug.get("notes") or "")[:1500],
+                    "status": "pending",
+                    "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "created_by": "system",
+                    "created_role": "system",
+                    "reviewed_at": None,
+                    "reviewed_by": None,
+                    "reviewed_role": None,
+                    "applied_result": None,
+                }
+                _queue_add(entry)
+                _audit("ai.queue.created", {"id": entry["id"], "source": "lead_intake", "type": entry.get("type"), "confidence": confidence})
+                _notify("ai.queue.created", {"id": entry["id"], "source": "lead_intake", "type": entry.get("type"), "confidence": confidence, "lead": lead_ctx}, targets=["owner","manager"])
             return
 
-        # Auto-apply each action (still audited)
+        # Auto-apply each action (still audited). Keep queue clean when all succeed.
         ctx = {"role": "owner", "actor": "system"}  # system executes as owner for apply, but it's audited
         applied = []
         errors = []
@@ -2358,11 +2374,29 @@ def _ai_enqueue_or_apply_for_new_lead(lead: Dict[str, Any], sheet_row: int) -> N
                 applied.append(res.get("applied") or a.get("type"))
             else:
                 errors.append(res.get("error") or "unknown")
-        entry["status"] = "applied" if applied else "error"
-        entry["applied"] = applied
-        entry["errors"] = errors
-        _queue_add(entry)
-        _audit("ai.queue.auto_applied", {"id": entry["id"], "applied": applied, "errors": errors, "confidence": confidence})
+                # Enqueue failed actions so staff can inspect/override.
+                a_type = a.get("type")
+                a_payload = a.get("payload") or {}
+                if not isinstance(a_payload, dict):
+                    a_payload = {}
+                a_payload["lead"] = lead_ctx
+                entry = {
+                    "id": _queue_new_id(),
+                    "type": str(a_type or "").strip(),
+                    "payload": a_payload,
+                    "confidence": confidence,
+                    "rationale": str(a.get("reason") or sug.get("notes") or res.get("error") or "")[:1500],
+                    "status": "pending",
+                    "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "created_by": "system",
+                    "created_role": "system",
+                    "reviewed_at": None,
+                    "reviewed_by": None,
+                    "reviewed_role": None,
+                    "applied_result": res,
+                }
+                _queue_add(entry)
+        _audit("ai.queue.auto_applied", {"source": "lead_intake", "applied": applied, "errors": errors, "confidence": confidence})
     except Exception:
         return
 
@@ -6213,6 +6247,13 @@ def _handle_reservation_turn(sess: Dict[str, Any], msg: str, lang: str, remainin
         except Exception:
             return {"reply": "⚠️ Could not save reservation.", "rate_limit_remaining": remaining}
 
+        # Proactive AI: suggest a reply draft as soon as the reservation lands.
+        # Best-effort only; never block the chat flow if AI generation fails.
+        try:
+            _auto_suggest_reply_draft_for_reservation(lead)
+        except Exception:
+            pass
+
         sess["mode"] = "idle"
         saved_msg = ("✅ Added to waitlist!" if str(lead.get("status", "")).strip().lower() == "waitlist" else LANG[lang]["saved"])
         confirm = (
@@ -7115,21 +7156,32 @@ def _notify(event: str, details: Optional[Dict[str, Any]] = None, targets: Optio
     except Exception:
         pass
 
-def _read_notifications(limit: int = 50, role: str = "manager", venue_id: Optional[str] = None) -> List[Dict[str, Any]]:
+def _read_notifications(
+    limit: int = 50,
+    role: str = "manager",
+    venue_id: Optional[str] = None,
+    cutoff: Optional[datetime] = None,
+) -> List[Dict[str, Any]]:
     """
     Read newest notifications first; filter by role.
+    Optionally filter by `cutoff` (UTC datetime): only notifications with
+    `ts >= cutoff` are included.
     Managers see entries targeted to manager/all; Owners see everything.
     """
     try:
         if not os.path.exists(NOTIFICATIONS_FILE):
             return []
         items: List[Dict[str, Any]] = []
+        # When time filtering is active, we may need to read more candidates
+        # because we might skip a bunch outside the cutoff.
+        read_multiplier = 10 if cutoff else 3
         with open(NOTIFICATIONS_FILE, "rb") as f:
             f.seek(0, os.SEEK_END)
             size = f.tell()
             buf = b""
             step = 4096
-            while size > 0 and len(items) < limit * 3:
+            cutoff_reached = False
+            while size > 0 and (not cutoff_reached) and len(items) < limit * read_multiplier:
                 read_size = step if size >= step else size
                 size -= read_size
                 f.seek(size)
@@ -7145,10 +7197,22 @@ def _read_notifications(limit: int = 50, role: str = "manager", venue_id: Option
                         continue
                     try:
                         it = json.loads(ln.decode("utf-8"))
+                        if cutoff:
+                            # Early-stop optimization: we scan newest -> oldest.
+                            # Once we hit timestamps older than cutoff, no future
+                            # (older) entries can match time-filter.
+                            ts_str = str(it.get("ts") or "").strip()
+                            dt = _timestamp_to_datetime(ts_str)
+                            if dt is not None:
+                                if dt.tzinfo is None:
+                                    dt = dt.replace(tzinfo=timezone.utc)
+                                if dt < cutoff:
+                                    cutoff_reached = True
+                                    break
                         items.append(it)
                     except Exception:
                         continue
-                    if len(items) >= limit * 3:
+                    if len(items) >= limit * read_multiplier:
                         break
         out: List[Dict[str, Any]] = []
         for it in items:
@@ -7163,12 +7227,24 @@ def _read_notifications(limit: int = 50, role: str = "manager", venue_id: Option
                     continue
 
             if role == "owner":
-                out.append(it)
+                pass_to_out = True
             else:
-                if "all" in t or "manager" in t:
-                    out.append(it)
-            if len(out) >= limit:
-                break
+                pass_to_out = ("all" in t or "manager" in t)
+
+            if pass_to_out:
+                # Apply cutoff based on `ts` (UTC ISO timestamp).
+                if cutoff:
+                    ts_str = str(it.get("ts") or "").strip()
+                    dt = _timestamp_to_datetime(ts_str)
+                    if dt is None:
+                        continue
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    if dt < cutoff:
+                        continue
+                out.append(it)
+                if len(out) >= limit:
+                    break
         return out
     except Exception:
         return []
@@ -8426,6 +8502,102 @@ def admin_api_ai_queue_list():
     status = (request.args.get("status") or "").strip().lower()
     if status:
         queue = [q for q in queue if str(q.get("status") or "").lower() == status]
+
+    # optional time filter (server-side): created_at within last N minutes
+    time_param = (request.args.get("time") or "").strip()
+    time_minutes = _parse_time_range_minutes(time_param) if time_param else None
+    if time_minutes is None and time_param:
+        try:
+            time_minutes = int(time_param)
+        except Exception:
+            time_minutes = None
+    if time_minutes and time_minutes > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=time_minutes)
+        def _parse_created_at(s: Any) -> Optional[datetime]:
+            try:
+                if s is None:
+                    return None
+                ts = str(s).strip()
+                if not ts:
+                    return None
+                # Normalize Z -> +00:00 for fromisoformat
+                ts = ts.replace("Z", "+00:00")
+                dt = datetime.fromisoformat(ts)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt.astimezone(timezone.utc)
+            except Exception:
+                return None
+        queue = [
+            q for q in queue
+            if (_parse_created_at(q.get("created_at")) or cutoff) >= cutoff
+        ]
+
+    # optional type filter
+    type_param = (request.args.get("type") or "").strip().lower()
+    if type_param:
+        queue = [
+            q for q in queue
+            if str(q.get("type") or "").strip().lower() == type_param
+        ]
+
+    # optional min confidence filter
+    conf_param = (request.args.get("conf") or "").strip()
+    if conf_param:
+        try:
+            min_conf = float(conf_param)
+        except Exception:
+            min_conf = None
+        if min_conf is not None:
+            queue = [
+                q for q in queue
+                if float(q.get("confidence") or 0.0) >= min_conf
+            ]
+
+    # Always return newest first (so recent-time UX is consistent)
+    def _parse_created_at(s: Any) -> Optional[datetime]:
+        try:
+            if s is None:
+                return None
+            ts = str(s).strip()
+            if not ts:
+                return None
+            ts = ts.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(ts)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        except Exception:
+            return None
+    queue.sort(key=lambda q: _parse_created_at(q.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+
+    # optional search across queue item + payload fields
+    q_param = (request.args.get("q") or "").strip().lower()
+    if q_param:
+        # Keep this lightweight and safe: build a small search blob per item.
+        def _payload_blob(it: Dict[str, Any]) -> str:
+            try:
+                p = it.get("payload") or {}
+                if not isinstance(p, dict):
+                    p = {}
+                parts = [
+                    str(it.get("type") or ""),
+                    str(it.get("status") or ""),
+                    str(it.get("rationale") or ""),
+                    str(it.get("created_at") or ""),
+                    str(it.get("confidence") or ""),
+                ]
+                # Common fields for our queue item types
+                for k in ("reservation_id", "row", "sheet_row", "draft", "to", "subject", "message", "phone", "email"):
+                    if k in p:
+                        parts.append(str(p.get(k) or ""))
+                # Fallback: include full payload JSON
+                parts.append(json.dumps(p, ensure_ascii=False))
+                return " ".join(parts).lower()
+            except Exception:
+                return str(it).lower()
+
+        queue = [it for it in queue if q_param in _payload_blob(it)]
     return jsonify({"ok": True, "role": role, "queue": queue[:500]})
 
 
@@ -8949,7 +9121,28 @@ def admin_api_notifications():
     except Exception:
         limit = 50
     limit = max(1, min(200, limit))
-    items = _read_notifications(limit=limit, role=role, venue_id=(vid or None))
+
+    # Optional time-range filter (minutes shorthand or raw minutes).
+    time_param = str(request.args.get("time", "") or "").strip()
+    time_minutes = _parse_time_range_minutes(time_param) if time_param else None
+    if time_minutes is None and time_param:
+        try:
+            time_minutes = int(time_param)
+            if time_minutes <= 0:
+                time_minutes = None
+        except Exception:
+            time_minutes = None
+
+    cutoff: Optional[datetime] = None
+    if time_minutes and time_minutes > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=time_minutes)
+
+    items = _read_notifications(
+        limit=limit,
+        role=role,
+        venue_id=(vid or None),
+        cutoff=cutoff,
+    )
     return jsonify({"ok": True, "role": role, "venue_id": vid, "items": items})
 
 @app.route("/admin/api/notifications/clear", methods=["POST"])
@@ -9134,6 +9327,32 @@ def admin_api_audit():
     except Exception:
         limit = 200
 
+    # Optional time-range filter (minutes shorthand or raw minutes).
+    time_param = str(request.args.get("time", "") or "").strip()
+    time_minutes = _parse_time_range_minutes(time_param) if time_param else None
+    if time_minutes is None and time_param:
+        try:
+            time_minutes = int(time_param)
+            if time_minutes <= 0:
+                time_minutes = None
+        except Exception:
+            time_minutes = None
+
+    cutoff: Optional[datetime] = None
+    if time_minutes and time_minutes > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=time_minutes)
+
+    def within_timerange(entry: Dict[str, Any]) -> bool:
+        if not cutoff:
+            return True
+        ts_str = str(entry.get("ts") or "").strip()
+        dt = _timestamp_to_datetime(ts_str)
+        if dt is None:
+            return False
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt >= cutoff
+
     entries: List[Dict[str, Any]] = []
 
     # ------------------------------------------------------------
@@ -9144,7 +9363,14 @@ def admin_api_audit():
         if globals().get("_REDIS_ENABLED") and globals().get("_REDIS"):
             vid = _venue_id()
             rkey = f"{_REDIS_NS}:{vid}:audit_log"
-            raw = _REDIS.lrange(rkey, 0, limit - 1)  # newest first
+            read_n = limit
+            # For correctness with time filtering, fetch more than `limit`
+            # so the cutoff filter doesn't accidentally exclude everything.
+            if cutoff:
+                read_n = min(max(limit * 8, 500), 2000)
+            raw = _REDIS.lrange(rkey, 0, read_n - 1)  # newest first
+
+            unfiltered_entries: List[Dict[str, Any]] = []
             for item in raw or []:
                 try:
                     obj = json.loads(item)
@@ -9154,8 +9380,16 @@ def admin_api_audit():
                 v = (obj.get("venue_id") or "").strip()
                 if v and v != vid:
                     continue
-                entries.append(obj)
-            if entries:  # 🔑 do NOT short-circuit on empty Redis
+                unfiltered_entries.append(obj)
+
+            had_any = bool(unfiltered_entries)
+            if cutoff:
+                entries = [e for e in unfiltered_entries if within_timerange(e)]
+            else:
+                entries = unfiltered_entries
+
+            entries = entries[:limit]
+            if had_any:  # 🔑 do NOT short-circuit on empty Redis (no data at all)
                 return jsonify({"ok": True, "entries": entries, "source": "redis"})
     except Exception:
         pass
@@ -9166,7 +9400,10 @@ def admin_api_audit():
     try:
         if os.path.exists(AUDIT_LOG_FILE):
             with open(AUDIT_LOG_FILE, "r", encoding="utf-8") as f:
-                lines = f.readlines()[-limit:]
+                # If time filtering is active, read more than `limit` so we
+                # don't accidentally exclude matching entries just because of slicing.
+                read_n = limit if not cutoff else max(limit * 5, 2000)
+                lines = f.readlines()[-read_n:]
             for ln in lines:
                 ln = (ln or "").strip()
                 if not ln:
@@ -9178,6 +9415,8 @@ def admin_api_audit():
                 v = (obj.get("venue_id") or "").strip()
                 # For file-backed logs, strictly scope by venue_id when present.
                 if v and v != vid:
+                    continue
+                if cutoff and not within_timerange(obj):
                     continue
                 entries.append(obj)
     except Exception:
@@ -10146,6 +10385,17 @@ label.small + textarea,
       <div class="h2" style="margin:0">Notifications</div>
       <button type="button" class="btn2" style="margin-left:auto" onclick="clearAllNotifs()">Clear all</button>
     </div>
+    <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <span class="small">Time range</span>
+      <select class="inp" id="notif-time" style="width:220px">
+        <option value="">All time</option>
+        <option value="30">Last 30 minutes</option>
+        <option value="60">Last 1 hour</option>
+        <option value="120">Last 2 hours</option>
+        <option value="1440">Last 24 hours</option>
+        <option value="10080">Last 7 days</option>
+      </select>
+    </div>
     <div id="notifBody" class="small" style="margin-top:8px"></div>
     <div id="notif-msg" class="note" style="margin-top:8px"></div>
   </div>
@@ -10454,6 +10704,31 @@ label.small + textarea,
         <option value="pending">Pending</option>
         <option value="approved">Approved</option>
       </select>
+      <select id="aiq-time" class="inp" style="max-width:190px" onchange="loadAIQueue()">
+        <option value="">All time</option>
+        <option value="30">Last 30 minutes</option>
+        <option value="60">Last 1 hour</option>
+        <option value="120">Last 2 hours</option>
+        <option value="1440">Last 24 hours</option>
+        <option value="10080">Last 7 days</option>
+      </select>
+      <select id="aiq-type" class="inp" style="max-width:190px" onchange="loadAIQueue()">
+        <option value="">All types</option>
+        <option value="reply_draft">Reply drafts</option>
+        <option value="vip_tag">VIP tagging</option>
+        <option value="status_update">Status updates</option>
+        <option value="send_sms">Send SMS</option>
+        <option value="send_email">Send Email</option>
+        <option value="send_whatsapp">Send WhatsApp</option>
+      </select>
+      <select id="aiq-conf" class="inp" style="max-width:200px" onchange="loadAIQueue()">
+        <option value="">Any confidence</option>
+        <option value="0.50">Min 0.50</option>
+        <option value="0.70">Min 0.70</option>
+        <option value="0.80">Min 0.80</option>
+      </select>
+      <input id="aiq-search" class="inp" style="min-width:220px" placeholder="Search: phone, reservation_id, draft…" oninput="aiqSearchDebounced()" />
+      <button class="btn2" type="button" onclick="clearAIQueueFilters()" title="Reset all AI queue filters">Clear filters</button>
       <span id="aiq-msg" class="note"></span>
     </div>
   </div>
@@ -10655,6 +10930,14 @@ label.small + textarea,
       <input class="inp" id="audit-limit" type="number" min="10" max="500" value="200" style="width:120px" />
       <select class="inp" id="audit-filter" style="width:220px">
         <option value="all">All events</option>
+      </select>
+      <select class="inp" id="audit-time" style="width:220px">
+        <option value="">All time</option>
+        <option value="30">Last 30 minutes</option>
+        <option value="60">Last 1 hour</option>
+        <option value="120">Last 2 hours</option>
+        <option value="1440">Last 24 hours</option>
+        <option value="10080">Last 7 days</option>
       </select>
       <button class="btn2" onclick="loadAudit()">Refresh</button>
       <span id="audit-msg" class="note"></span>
@@ -11153,7 +11436,14 @@ qsa('.tabbtn').forEach(btn=>{
     });
 
     if(t==='ai') loadAI();
-    if(t==='aiq') loadAIQueue();
+    if(t==='aiq'){
+      // UX: default AI Queue view to Pending (if user hasn't picked a status yet)
+      try{
+        const f = qs('#aiq-filter');
+        if(f && (!f.value || !String(f.value).trim())) f.value = 'pending';
+      }catch(e){}
+      loadAIQueue();
+    }
     if(t==='rules') loadRules();
     if(t==='menu') loadMenu();
     if(t==='drafts') loadDrafts();
@@ -11739,18 +12029,49 @@ async function saveDrafts(){
 }
 
 // ===== AI Approval Queue =====
+let aiqSearchT = null;
+let aiqFetchSeq = 0;
+
+function clearAIQueueFilters(){
+  const ids = ['aiq-filter','aiq-time','aiq-type','aiq-conf','aiq-search'];
+  ids.forEach(id=>{
+    const el = qs('#'+id);
+    if(el) el.value = '';
+  });
+  loadAIQueue();
+}
+
+function aiqSearchDebounced(){
+  if(aiqSearchT) clearTimeout(aiqSearchT);
+  aiqSearchT = setTimeout(()=>loadAIQueue(), 260);
+}
+
 async function loadAIQueue(){
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Loading…';
   const list = qs('#aiq-list'); if(list) list.innerHTML = 'Loading…';
+  const seq = ++aiqFetchSeq;
   try{
     const filt = (qs('#aiq-filter')?.value || '').trim();
-    const url = `/admin/api/ai/queue?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}` + (filt ? `&status=${encodeURIComponent(filt)}` : '');
+    const timeVal = (qs('#aiq-time')?.value || '').trim();
+    const typeVal = (qs('#aiq-type')?.value || '').trim();
+    const confVal = (qs('#aiq-conf')?.value || '').trim();
+    const qVal = (qs('#aiq-search')?.value || '').trim();
+    const hasAny = !!(filt || timeVal || typeVal || confVal);
+    const urlBase = `/admin/api/ai/queue?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`;
+    const url = urlBase
+      + (filt ? `&status=${encodeURIComponent(filt)}` : '')
+      + (timeVal ? `&time=${encodeURIComponent(timeVal)}` : '')
+      + (typeVal ? `&type=${encodeURIComponent(typeVal)}` : '')
+      + (confVal ? `&conf=${encodeURIComponent(confVal)}` : '')
+      + (qVal ? `&q=${encodeURIComponent(qVal)}` : '');
     const r = await fetch(url, {cache:'no-store'});
     const data = await r.json();
+    if(seq !== aiqFetchSeq) return; // ignore out-of-order responses
     if(!data.ok) throw new Error(data.error || 'Failed');
     const q = data.queue || [];
     renderAIQueue(q);
-    if(msg) msg.textContent = q.length ? (`${q.length} item(s)`) : 'No items';
+    const hasSearch = !!qVal;
+    if(msg) msg.textContent = q.length ? (`${q.length} item(s)${(hasAny || hasSearch) ? ' matched' : ''}`) : 'No items';
     }catch(e){
       if(msg) msg.textContent = 'No items';
       renderAIQueue([]); // explicit empty state for CI
@@ -12025,6 +12346,8 @@ async function loadAudit(){
   const lim = parseInt((qs('#audit-limit') && qs('#audit-limit').value) || '200', 10) || 200;
   const filterEl = qs('#audit-filter');
   const selected = (filterEl && filterEl.value) ? filterEl.value : 'all';
+  const timeEl = qs('#audit-time');
+  const timeVal = (timeEl && timeEl.value) ? timeEl.value : '';
 
   // ✅ Always pass venue explicitly (never rely on cookie)
   const venueVal =
@@ -12034,7 +12357,8 @@ async function loadAudit(){
   const url =
     '/admin/api/audit?key=' + encodeURIComponent(KEY) +
     '&venue=' + encodeURIComponent(venueVal) +
-    '&limit=' + encodeURIComponent(lim);
+    '&limit=' + encodeURIComponent(lim) +
+    (timeVal ? '&time=' + encodeURIComponent(timeVal) : '');
 
   const res = await fetch(url, { cache: 'no-store' });
   const j = await res.json().catch(()=>null);
@@ -12071,6 +12395,9 @@ async function loadAudit(){
     filterEl.innerHTML = html;
     filterEl.value = (events.includes(keep) ? keep : 'all');
     filterEl.onchange = ()=>loadAudit();
+  }
+  if(timeEl){
+    timeEl.onchange = ()=>loadAudit();
   }
 
   const activeFilter = (filterEl && filterEl.value) ? filterEl.value : selected;
@@ -12218,7 +12545,11 @@ async function loadNotifs(){
     const m = document.cookie.match(/(?:^|;\s*)venue_id=([^;]+)/);
     const VENUE = ((new URLSearchParams(location.search).get('venue') || '').trim()) || (m ? decodeURIComponent(m[1]) : '');
 
-    const r = await fetch(`/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}`, {
+    const timeEl = qs('#notif-time');
+    const timeVal = (timeEl && timeEl.value) ? timeEl.value : '';
+    const url = `/admin/api/notifications?limit=50&key=${encodeURIComponent(KEY||'')}` + (timeVal ? `&time=${encodeURIComponent(timeVal)}` : '');
+
+    const r = await fetch(url, {
     cache: 'no-store',
     headers: { 'X-Venue-Id': VENUE }
     });
@@ -12431,6 +12762,14 @@ function openNotifications(){
 }
 // Poll notifications lightly
 setInterval(()=>{ try{ loadNotifs(); }catch(e){} }, 15000);
+
+// Reload notifications when time-range changes (server-side).
+try{
+  const notifTimeEl = qs('#notif-time');
+  if(notifTimeEl){
+    notifTimeEl.onchange = ()=>loadNotifs();
+  }
+}catch(e){}
 
 
 // --- Refresh controls (visual-only; calls existing loaders safely) ---
@@ -12655,28 +12994,28 @@ def admin_api_ai_draft_reply():
             "business_context": g("business_context"),
         }
 
-        if not AI_SETTINGS.get("enabled"):
+        settings = _get_ai_settings()
+        if not settings.get("enabled"):
             return jsonify({"ok": False, "error": "AI disabled"}), 409
-        if not (AI_SETTINGS.get("allow_actions") or {}).get("reply_draft", True):
+        if not (settings.get("allow_actions") or {}).get("reply_draft", True):
             return jsonify({"ok": False, "error": "reply_draft not allowed"}), 409
-        if not _ai_feature_allows("reply_draft"):
+        if not _ai_feature_allows("reply_draft", settings=settings):
             return jsonify({"ok": False, "error": "reply_draft disabled by feature flag"}), 409
-
-        system_msg = (AI_SETTINGS.get("system_prompt") or "").strip()
-        user_msg = (
-            "Draft a short, premium, action-oriented reply to this lead. "
-            "Do NOT mention internal systems. Ask for any missing required details.\n\n"
-            f"Name: {lead.get('name')}\nPhone: {lead.get('phone')}\nDate: {lead.get('date')}\nTime: {lead.get('time')}\n"
-            f"Party: {lead.get('party_size')}\nBudget: {lead.get('budget')}\nNotes: {lead.get('notes')}\nLanguage: {lead.get('language')}\n"
-            "\nReturn plain text only."
-        )
 
         draft_text = ""
         try:
+            system_msg = (settings.get("system_prompt") or "").strip()
+            user_msg = (
+                "Draft a short, premium, action-oriented reply to this lead. "
+                "Do NOT mention internal systems. Ask for any missing required details.\n\n"
+                f"Name: {lead.get('name')}\nPhone: {lead.get('phone')}\nDate: {lead.get('date')}\nTime: {lead.get('time')}\n"
+                f"Party: {lead.get('party_size')}\nBudget: {lead.get('budget')}\nNotes: {lead.get('notes')}\nLanguage: {lead.get('language')}\n"
+                "\nReturn plain text only."
+            )
             if not _OPENAI_AVAILABLE or client is None:
                 raise RuntimeError("OpenAI SDK missing")
             resp2 = client.responses.create(
-                model=AI_SETTINGS.get("model") or os.environ.get("CHAT_MODEL","gpt-4o-mini"),
+                model=settings.get("model") or os.environ.get("CHAT_MODEL","gpt-4o-mini"),
                 input=[
                     {"role":"system","content":system_msg},
                     {"role":"user","content":user_msg},
@@ -12691,29 +13030,148 @@ def admin_api_ai_draft_reply():
 
         entry = {
             "id": _queue_new_id(),
+            "type": "reply_draft",
+            "payload": {"row": row_num, "draft": draft_text[:2000]},
+            "confidence": 0.6,
+            "rationale": "Owner-requested reply draft",
+            "status": "pending",
             "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             "created_by": actor,
             "created_role": role,
-            "status": "pending",
-            "source": "reply_draft",
-            "confidence": 0.6,
-            "notes": "Owner-requested reply draft",
-            "actions": [
-                {"type":"reply_draft","payload":{"row": row_num, "draft": draft_text[:2000]}, "reason":"Draft reply for staff review"}
-            ],
-            "lead": {
-                "intent": lead.get("entry_point",""),
-                "contact": (lead.get("name","") + " " + lead.get("phone","")).strip(),
-                "budget": lead.get("budget",""),
-                "party_size": lead.get("party_size",""),
-                "datetime": (lead.get("date","") + " " + lead.get("time","")).strip(),
-            }
+            "reviewed_at": None,
+            "reviewed_by": None,
+            "reviewed_role": None,
+            "applied_result": None,
         }
         _queue_add(entry)
-        _audit("ai.queue.created", {"id": entry["id"], "source": "reply_draft", "row": row_num})
+        _audit("ai.queue.created", {"id": entry["id"], "type": entry["type"], "source": "reply_draft", "row": row_num})
         return jsonify({"ok": True, "queued": entry})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+def _generate_reply_draft_text(lead: Dict[str, Any]) -> str:
+    """Generate a plain-text reply draft (best-effort; falls back to a template)."""
+    settings = _get_ai_settings()
+    system_msg = (settings.get("system_prompt") or "").strip()
+    user_msg = (
+        "Draft a short, premium, action-oriented reply to this lead. "
+        "Do NOT mention internal systems. Ask for any missing required details.\n\n"
+        f"Name: {lead.get('name')}\nPhone: {lead.get('phone')}\nDate: {lead.get('date')}\nTime: {lead.get('time')}\n"
+        f"Party: {lead.get('party_size')}\nBudget: {lead.get('budget')}\nNotes: {lead.get('notes')}\nLanguage: {lead.get('language')}\n"
+        "\nReturn plain text only."
+    )
+    try:
+        if not _OPENAI_AVAILABLE or client is None:
+            raise RuntimeError("OpenAI SDK missing")
+        resp2 = client.responses.create(
+            model=settings.get("model") or os.environ.get("CHAT_MODEL","gpt-4o-mini"),
+            input=[
+                {"role":"system","content":system_msg},
+                {"role":"user","content":user_msg},
+            ],
+        )
+        return (resp2.output_text or "").strip()
+    except Exception:
+        return (
+            f"Hi {lead.get('name') or 'there'}, thanks for reaching out. "
+            "Confirm your party size and preferred time, and we’ll reserve the best available option for match day."
+        )
+
+
+def _auto_suggest_reply_draft_for_reservation(lead: Dict[str, Any]) -> None:
+    """
+    Proactive reply draft suggestion for staff review.
+    Triggered when a new reservation is appended to local store.
+    """
+    try:
+        settings = _get_ai_settings()
+        if not settings.get("enabled"):
+            return
+        if not (settings.get("allow_actions") or {}).get("reply_draft", True):
+            return
+        if not _ai_feature_allows("reply_draft", settings=settings):
+            return
+
+        rid = str(lead.get("reservation_id") or "").strip()
+        found_row = 0
+        try:
+            found = _find_sheet_row_by_reservation_id(rid, venue_id=_venue_id())
+            if found:
+                found_row = int(found[0] or 0)
+        except Exception:
+            found_row = 0
+        # Best-effort idempotency so we don't spam queue items on retries.
+        try:
+            _redis_init_if_needed()
+            if globals().get("_REDIS_ENABLED") and globals().get("_REDIS"):
+                vid = _venue_id() if "_venue_id" in globals() else "default"
+                fp_raw = "|".join([
+                    vid,
+                    rid,
+                    str(lead.get("phone") or "").strip(),
+                    str(lead.get("date") or "").strip(),
+                    str(lead.get("time") or "").strip(),
+                ])[:800]
+                fp = hashlib.sha256(fp_raw.encode("utf-8")).hexdigest()
+                dk = f"{_REDIS_NS}:{vid}:auto_reply_draft_dedupe:{fp}"
+                if not _REDIS.set(dk, "1", nx=True, ex=600):
+                    return
+        except Exception:
+            pass
+
+        draft_lead = {
+            "name": str(lead.get("name") or "").strip(),
+            "phone": str(lead.get("phone") or "").strip(),
+            "date": str(lead.get("date") or "").strip(),
+            "time": str(lead.get("time") or "").strip(),
+            "party_size": str(lead.get("party_size") or "").strip(),
+            "budget": str(lead.get("budget") or "").strip(),
+            "notes": str(lead.get("notes") or "").strip(),
+            "language": str(lead.get("language") or lead.get("lang") or "en").strip() or "en",
+        }
+        draft_text = _generate_reply_draft_text(draft_lead).strip()
+        if not draft_text:
+            return
+
+        entry = {
+            "id": _queue_new_id(),
+            "type": "reply_draft",
+            "payload": {
+                "row": found_row or 0,
+                "sheet_row": found_row or 0,
+                "draft": draft_text[:2000],
+                "reservation_id": rid,
+            },
+            "confidence": 0.6,
+            "rationale": "Auto-suggested reply draft",
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "created_by": "system",
+            "created_role": "system",
+            "reviewed_at": None,
+            "reviewed_by": None,
+            "reviewed_role": None,
+            "applied_result": None,
+        }
+        _queue_add(entry)
+        _audit(
+            "ai.queue.created",
+            {"id": entry["id"], "type": entry["type"], "source": "reply_draft.auto", "row": 0, "reservation_id": rid},
+        )
+        _notify(
+            "ai.queue.created",
+            {
+                "id": entry["id"],
+                "type": entry["type"],
+                "source": "reply_draft.auto",
+                "row": found_row or None,
+                "reservation_id": rid,
+            },
+            targets=["owner", "manager"],
+        )
+    except Exception:
+        return
 
 
 @app.route("/admin/api/analytics/load-forecast", methods=["GET"])
