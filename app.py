@@ -29,6 +29,8 @@ import json
 import csv
 import io
 import hashlib
+import hmac
+import base64
 import secrets
 import re
 import time
@@ -1813,6 +1815,140 @@ def _outbound_send_email(to_email: str, subject: str, body_text: str) -> Tuple[b
     except Exception as e:
         return False, f"Email send failed: {e}"
 
+SMS_SUBSCRIPTIONS_FILE = os.environ.get("SMS_SUBSCRIPTIONS_FILE", "/tmp/wc26_sms_subscriptions.json")
+SMS_EVENTS_FILE = os.environ.get("SMS_EVENTS_FILE", "/tmp/wc26_sms_events.jsonl")
+TWILIO_REQUIRE_SIGNATURE = str(os.environ.get("REQUIRE_TWILIO_SIGNATURE", "true")).strip().lower() == "true"
+PUBLIC_BASE_URL = (os.environ.get("PUBLIC_BASE_URL", "") or "").strip().rstrip("/")
+_STOP_KEYWORDS = {"STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"}
+_START_KEYWORDS = {"START", "UNSTOP", "YES"}
+_HELP_KEYWORDS = {"HELP", "INFO"}
+
+def _normalize_phone_e164(number: str, default_country_code: str = "+1") -> Optional[str]:
+    """
+    Normalize user/staff-entered phone numbers to E.164.
+    Rules:
+    - strip spaces, dashes, parentheses, dots
+    - keep numbers already starting with '+'
+    - if exactly 10 digits, default to US/CA (+1)
+    - otherwise prefix '+' and keep provided country code digits
+    """
+    raw = (number or "").strip()
+    if not raw:
+        return None
+    if raw.lower().startswith("whatsapp:"):
+        raw = raw.split(":", 1)[1].strip()
+    cleaned = re.sub(r"[^\d+]", "", raw)
+    if not cleaned:
+        return None
+    if cleaned.startswith("+"):
+        digits = re.sub(r"\D", "", cleaned[1:])
+        if not digits:
+            return None
+        out = "+" + digits
+    else:
+        digits = re.sub(r"\D", "", cleaned).lstrip("0")
+        if not digits:
+            return None
+        if len(digits) == 10:
+            out = default_country_code + digits
+        else:
+            out = "+" + digits
+    d = re.sub(r"\D", "", out)
+    if len(d) < 8 or len(d) > 15:
+        return None
+    return out
+
+def _sms_read_subscriptions() -> Dict[str, Any]:
+    try:
+        if not os.path.exists(SMS_SUBSCRIPTIONS_FILE):
+            return {}
+        with open(SMS_SUBSCRIPTIONS_FILE, "r", encoding="utf-8") as f:
+            obj = json.load(f)
+        return obj if isinstance(obj, dict) else {}
+    except Exception:
+        return {}
+
+def _sms_write_subscriptions(data: Dict[str, Any]) -> None:
+    try:
+        os.makedirs(os.path.dirname(SMS_SUBSCRIPTIONS_FILE), exist_ok=True)
+        with open(SMS_SUBSCRIPTIONS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data or {}, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+def _sms_set_subscribed(phone_e164: str, is_subscribed: bool, reason: str) -> None:
+    try:
+        key = (phone_e164 or "").strip()
+        if not key:
+            return
+        d = _sms_read_subscriptions()
+        d[key] = {
+            "is_subscribed": bool(is_subscribed),
+            "reason": str(reason or ""),
+            "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+        _sms_write_subscriptions(d)
+    except Exception:
+        pass
+
+def _sms_can_send_to(phone_e164: str) -> bool:
+    try:
+        row = (_sms_read_subscriptions() or {}).get((phone_e164 or "").strip()) or {}
+        return bool(row.get("is_subscribed", True))
+    except Exception:
+        return True
+
+def _sms_log_event(kind: str, payload: Dict[str, Any]) -> None:
+    try:
+        os.makedirs(os.path.dirname(SMS_EVENTS_FILE), exist_ok=True)
+        obj = {
+            "ts": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "kind": str(kind or ""),
+            "payload": payload or {},
+        }
+        with open(SMS_EVENTS_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(obj, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+def _twilio_public_url_for_request(req) -> str:
+    if PUBLIC_BASE_URL:
+        return f"{PUBLIC_BASE_URL}{req.path}"
+    return req.url
+
+def _twilio_validate_signature(req, form_data: Dict[str, Any]) -> bool:
+    token = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
+    sig = (req.headers.get("X-Twilio-Signature") or "").strip()
+    if not token:
+        return False
+    if not sig:
+        return False
+    try:
+        url = _twilio_public_url_for_request(req)
+        s = url
+        for k in sorted(form_data.keys()):
+            v = form_data.get(k)
+            if isinstance(v, list):
+                for vv in v:
+                    s += k + str(vv)
+            else:
+                s += k + str(v)
+        digest = hmac.new(token.encode("utf-8"), s.encode("utf-8"), hashlib.sha1).digest()
+        expected = base64.b64encode(digest).decode("utf-8")
+        return hmac.compare_digest(expected, sig)
+    except Exception:
+        return False
+
+def _twiml_response(message_text: Optional[str] = None):
+    body = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Response>"
+    if message_text:
+        msg = str(message_text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        body += f"<Message>{msg}</Message>"
+    body += "</Response>"
+    out = make_response(body, 200)
+    out.headers["Content-Type"] = "application/xml; charset=utf-8"
+    return out
+
 def _outbound_send_twilio(channel: str, to_number_or_id: str, body_text: str) -> Tuple[bool, str]:
     """
     Send SMS/WhatsApp via Twilio.
@@ -1831,11 +1967,17 @@ def _outbound_send_twilio(channel: str, to_number_or_id: str, body_text: str) ->
     ch = (channel or "").strip().lower()
     frm = ""
     to = (to_number_or_id or "").strip()
+    to_e164 = _normalize_phone_e164(to)
+    if not to_e164:
+        return False, "Invalid recipient number (must be valid international/E.164 format)"
+    if not _sms_can_send_to(to_e164):
+        return False, "Recipient opted out (STOP)."
 
     if ch == "sms":
+        msg_service_sid = os.environ.get("TWILIO_MESSAGING_SERVICE_SID", "").strip()
         frm = os.environ.get("TWILIO_FROM", "").strip()
-        if not frm:
-            return False, "SMS not configured (missing TWILIO_FROM)"
+        if not msg_service_sid and not frm:
+            return False, "SMS not configured (set TWILIO_MESSAGING_SERVICE_SID or TWILIO_FROM)"
     elif ch == "whatsapp":
         frm = os.environ.get("TWILIO_WHATSAPP_FROM", "").strip() or os.environ.get("TWILIO_FROM", "").strip()
         if not frm:
@@ -1843,32 +1985,50 @@ def _outbound_send_twilio(channel: str, to_number_or_id: str, body_text: str) ->
                 "WhatsApp not configured. Set TWILIO_WHATSAPP_FROM to a WhatsApp-enabled sender in Twilio "
                 "(Console → Messaging → Senders → WhatsApp). Your SMS number is not automatically WhatsApp-enabled."
             )
-        if not frm.startswith("whatsapp:"):
-            frm = "whatsapp:" + frm
-        if not to.startswith("whatsapp:"):
-            to = "whatsapp:" + to
+        frm_num = _normalize_phone_e164(frm)
+        if not frm_num:
+            return False, "WhatsApp sender invalid (must be E.164 in TWILIO_WHATSAPP_FROM/TWILIO_FROM)"
+        frm = "whatsapp:" + frm_num
+        to = "whatsapp:" + to_e164
     else:
         return False, "Unsupported Twilio channel"
 
     try:
         url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
-        data = {"From": frm, "To": to, "Body": body_text or ""}
+        data = {"To": to if ch == "whatsapp" else to_e164, "Body": body_text or ""}
+        if ch == "sms":
+            msg_service_sid = os.environ.get("TWILIO_MESSAGING_SERVICE_SID", "").strip()
+            if msg_service_sid:
+                data["MessagingServiceSid"] = msg_service_sid
+            else:
+                frm_num = _normalize_phone_e164(frm)
+                if not frm_num:
+                    return False, "SMS sender invalid (TWILIO_FROM must be valid E.164)"
+                data["From"] = frm_num
+        else:
+            data["From"] = frm
         r = requests.post(url, data=data, auth=(sid, token), timeout=12)
+        try:
+            rj = r.json() if r.text else {}
+        except Exception:
+            rj = {}
         if 200 <= r.status_code < 300:
+            _sms_log_event("outbound.sent", {"channel": ch, "to": to_e164, "sid": rj.get("sid"), "status": rj.get("status")})
             return True, "Message sent"
         err_msg = f"Twilio error {r.status_code}"
         try:
-            j = r.json() if r.text else {}
-            code = j.get("code") or j.get("error_code")
-            msg = (j.get("message") or j.get("error_message") or "").strip()
+            code = rj.get("code") or rj.get("error_code")
+            msg = (rj.get("message") or rj.get("error_message") or "").strip()
             if code is not None or msg:
                 err_msg = f"Twilio {code or r.status_code}: {msg or err_msg}"
             if ch == "whatsapp" and (r.status_code == 400 or code in (21608, 21212)):
                 err_msg += " — Use a WhatsApp-enabled sender (set TWILIO_WHATSAPP_FROM; see Twilio Console → WhatsApp Senders)."
         except Exception:
             pass
+        _sms_log_event("outbound.failed", {"channel": ch, "to": to_e164, "status_code": r.status_code, "error": err_msg})
         return False, err_msg
     except Exception as e:
+        _sms_log_event("outbound.exception", {"channel": ch, "to": to_e164, "error": str(e)})
         return False, f"Twilio send failed: {e}"
 
 def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -1906,6 +2066,68 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         ok, msg = _outbound_send_twilio(ch, to_num, body)
         return {"ok": ok, "message": msg}
     return {"ok": False, "error": "Unsupported outbound action"}
+
+@app.route("/sms/inbound", methods=["POST"])
+def sms_inbound_webhook():
+    """
+    Twilio inbound SMS webhook:
+    - validates signature (optional env gate)
+    - handles STOP/START/HELP keywords
+    - logs inbound events
+    """
+    form = request.form.to_dict(flat=True) if request.form else {}
+    sig_ok = _twilio_validate_signature(request, form)
+    if TWILIO_REQUIRE_SIGNATURE and not sig_ok:
+        return jsonify({"ok": False, "error": "Invalid Twilio signature"}), 403
+
+    from_raw = str(form.get("From") or "").strip()
+    body = str(form.get("Body") or "").strip()
+    kw = body.strip().upper()
+    from_e164 = _normalize_phone_e164(from_raw) or from_raw
+    _sms_log_event("inbound.received", {"from": from_raw, "from_e164": from_e164, "body": body, "signature_valid": sig_ok})
+
+    if kw in _STOP_KEYWORDS:
+        if from_e164 and from_e164.startswith("+"):
+            _sms_set_subscribed(from_e164, False, "stop_keyword")
+        _sms_log_event("inbound.optout", {"from": from_e164, "keyword": kw})
+        return _twiml_response("You have been unsubscribed. Reply START to resubscribe.")
+
+    if kw in _START_KEYWORDS:
+        if from_e164 and from_e164.startswith("+"):
+            _sms_set_subscribed(from_e164, True, "start_keyword")
+        _sms_log_event("inbound.optin", {"from": from_e164, "keyword": kw})
+        return _twiml_response("You have been resubscribed to messages.")
+
+    if kw in _HELP_KEYWORDS:
+        return _twiml_response("World Cup Concierge support: support@worldcupconcierge.app. Reply STOP to opt out.")
+
+    # For regular replies, acknowledge without auto-reply text (avoids loops).
+    return _twiml_response()
+
+@app.route("/sms/status", methods=["POST"])
+def sms_status_webhook():
+    """
+    Twilio delivery status callback webhook.
+    Logs status updates for operational visibility.
+    """
+    form = request.form.to_dict(flat=True) if request.form else {}
+    sig_ok = _twilio_validate_signature(request, form)
+    if TWILIO_REQUIRE_SIGNATURE and not sig_ok:
+        return jsonify({"ok": False, "error": "Invalid Twilio signature"}), 403
+
+    _sms_log_event(
+        "status.callback",
+        {
+            "message_sid": form.get("MessageSid") or form.get("SmsSid"),
+            "status": form.get("MessageStatus") or form.get("SmsStatus"),
+            "to": form.get("To"),
+            "from": form.get("From"),
+            "error_code": form.get("ErrorCode"),
+            "error_message": form.get("ErrorMessage"),
+            "signature_valid": sig_ok,
+        },
+    )
+    return jsonify({"ok": True})
 # ============================================================
 # AI Action Queue (Approval / Deny / Override)
 # - Queue stores proposed AI actions (e.g., tag VIP, update status, draft reply)
@@ -2142,12 +2364,16 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
         if typ == "vip_tag":
             if not allow.get("vip_tag", True):
                 return {"ok": False, "error": "vip_tag not allowed"}
-            vip = str(payload.get("vip") or "").strip()
+            vip_raw = str(payload.get("vip") or "").strip()
+            # Deterministic default for vip_tag actions:
+            # if model omitted explicit vip value, this action means "set VIP".
+            if not vip_raw:
+                vip_raw = "VIP"
             # Normalize VIP values: accept both "VIP"/"Regular" (AI) and "Yes"/"No" (admin)
             vip_normalized = "Yes"
-            if vip.lower() in ("vip", "yes", "true", "y", "1"):
+            if vip_raw.lower() in ("vip", "yes", "true", "y", "1"):
                 vip_normalized = "Yes"
-            elif vip.lower() in ("regular", "no", "false", "n", "0"):
+            elif vip_raw.lower() in ("regular", "no", "false", "n", "0"):
                 vip_normalized = "No"
             else:
                 return {"ok": False, "error": "Invalid vip"}
@@ -2282,9 +2508,18 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[s
         payload = a.get("payload") or {}
         if not isinstance(payload, dict):
             payload = {}
+        # Production contract: vip_tag payload should always be explicit.
+        if typ == "vip_tag" and not str(payload.get("vip") or "").strip():
+            payload["vip"] = "VIP"
         # Always enforce row linkage to prevent "random actions"
         if sheet_row:
             payload["row"] = int(sheet_row)
+        # Row-required actions must never enter queue without a valid sheet row.
+        # (send_* can work without row because they can target explicit contact payloads.)
+        if typ in ("vip_tag", "status_update"):
+            row_num = int(payload.get("row") or payload.get("sheet_row") or 0)
+            if row_num < 2:
+                continue
         # Partner policy filter (keeps bad suggestions out of the queue)
         try:
             partner_id = _derive_partner_id(lead=lead, payload=payload)
@@ -8446,6 +8681,8 @@ def admin_api_ai_run():
         for a in actions:
             typ = str(a.get("type") or "").strip()
             payload = dict(a.get("payload") or {})
+            if typ == "vip_tag" and not str(payload.get("vip") or "").strip():
+                payload["vip"] = "VIP"
             # Always attach sheet_row for safe apply handlers
             if "sheet_row" not in payload:
                 payload["sheet_row"] = sheet_row
@@ -9706,6 +9943,16 @@ def admin_update_lead():
     header = ensure_sheet_schema(ws)
     hmap = header_map(header)
 
+    # Deterministic safety: ensure the target row exists and belongs to current venue.
+    row_vals = ws.row_values(row_num) or []
+    if not row_vals:
+        return jsonify({"ok": False, "error": "Row not found"}), 404
+    vcol = hmap.get("venue_id")
+    if vcol:
+        row_vid = _slugify_venue_id(str((row_vals[vcol - 1] if len(row_vals) >= vcol else "") or DEFAULT_VENUE_ID))
+        if row_vid != _slugify_venue_id(vid):
+            return jsonify({"ok": False, "error": "Row does not belong to current venue"}), 403
+
     updates = 0
     if status:
         col = hmap.get("status")
@@ -9724,6 +9971,11 @@ def admin_update_lead():
         if tier_col:
             ws.update_cell(row_num, tier_col, tier_val)
             updates += 1
+    # Keep leads view in sync: invalidate venue leads cache after write.
+    try:
+        _LEADS_CACHE_BY_VENUE.pop(_slugify_venue_id(vid), None)
+    except Exception:
+        pass
     _audit("lead.handled", {"row": row_num}) if (status == "Handled") else _audit("lead.update", {"row": row_num})
     return jsonify({"ok": True, "updated": updates})
 
@@ -10530,8 +10782,11 @@ label.small + textarea,
             vip = colval(r, i_vip, "No") or "No"
             ep = colval(r, i_entry, "")
             tier = colval(r, i_tier, "")
-            # Canonical tier used for filtering (prevents VIP entries leaking into Regular when tier column is blank)
-            tier_key = "vip" if (str(tier or "").strip().lower() == "vip" or str(vip or "").strip().lower() in ["yes","true","1","y","vip"]) else "regular"
+            # Canonical VIP detection (tier and vip must stay in sync for UI)
+            tier_s = str(tier or "").strip().lower()
+            vip_s = str(vip or "").strip().lower()
+            is_vip = (("vip" in tier_s) or (vip_s in ["yes","true","1","y","vip"]))
+            tier_key = "vip" if is_vip else "regular"
             queue = colval(r, i_queue, "")
             bctx = colval(r, i_ctx, "")
             budget = colval(r, i_budget, "")
@@ -10581,7 +10836,7 @@ label.small + textarea,
 
             html.append("<td>")
             html.append(f"<select class='inp' id='vip-{sheet_row}'>"
-                        f"{opt(vip.lower() in ['yes','true','1','y'], 'Yes')}{opt(vip.lower() in ['no','false','0','n',''], 'No')}"
+                        f"{opt(is_vip, 'Yes')}{opt(not is_vip, 'No')}"
                         "</select>")
             html.append("</td>")
 
@@ -11284,7 +11539,8 @@ function _leadRowFromItem(it){
   const t = _he(it.time||'');
   const ps = _he(it.party_size||'');
   const tier = (it.tier||'').toString().toLowerCase(); const vip = (it.vip||'').toString().toLowerCase();
-  const tierKey = (tier==='vip' || /^(yes|true|1|y|vip)$/.test(vip)) ? 'vip' : 'regular';
+  const isVip = (tier.includes('vip') || /^(yes|true|1|y|vip)$/.test(vip));
+  const tierKey = isVip ? 'vip' : 'regular';
   const seg = tierKey==='vip' ? '⭐ VIP' : 'Regular';
   const segCls = seg.indexOf('⭐')>=0 ? 'badge warn' : 'badge';
   const ep = _he((it.entry_point||'').replace(/_/g,' '));
@@ -11297,7 +11553,7 @@ function _leadRowFromItem(it){
   const notes = _he((fullNotes+'').substring(0,40));
   const st = (it.status||'New').toString().trim();
   const stLow = st.toLowerCase();
-  const vipVal = /^(yes|true|1|y|vip)$/.test(vip) ? 'Yes' : 'No';
+  const vipVal = isVip ? 'Yes' : 'No';
   const stSel = '<select class=\\'inp\\' id=\\'status-'+row+'\\'><option value=\\"New\\"'+(stLow==='new'?' selected':'')+'>New</option><option value=\\"Confirmed\\"'+(stLow==='confirmed'?' selected':'')+'>Confirmed</option><option value=\\"Seated\\"'+(stLow==='seated'?' selected':'')+'>Seated</option><option value=\\"No-Show\\"'+(stLow==='no-show'?' selected':'')+'>No-Show</option><option value=\\"Handled\\"'+(stLow==='handled'?' selected':'')+'>Handled</option></select>';
   const vipSel = '<select class=\\'inp\\' id=\\'vip-'+row+'\\'><option value=\\"Yes\\"'+(vipVal==='Yes'?' selected':'')+'>Yes</option><option value=\\"No\\"'+(vipVal==='No'?' selected':'')+'>No</option></select>';
   const tipEp = fullEp ? _tipAttr(fullEp) : '';
@@ -11464,8 +11720,14 @@ async function saveLead(sheetRow){
     body: JSON.stringify({row: sheetRow, status, vip})
   });
   const j = await res.json().catch(()=>{});
-  if(j && j.ok) alert('Saved');
-  else alert('Save failed: ' + (j.error||res.status));
+  if(j && j.ok){
+    // Refresh from server to keep Segment/VIP/status fully in sync with sheet.
+    try{ await applyLeadsFiltersServer(); }catch(e){}
+    if(typeof toast==='function') toast('Lead updated', 'ok');
+  } else {
+    if(typeof toast==='function') toast('Save failed: ' + ((j && j.error) || res.status), 'err');
+    else alert('Save failed: ' + ((j && j.error) || res.status));
+  }
 }
 
 async function markHandled(sheetRow){
@@ -13986,6 +14248,28 @@ def _append_lead_google_sheet(row: dict) -> tuple[bool, int]:
             sheet_row = _extract_row_num_from_updated_range(updated_range)
         except Exception:
             sheet_row = 0
+        # Fallback: some gspread versions return no updatedRange for append_row.
+        # Resolve row by scanning recent rows for the appended lead fingerprint.
+        if int(sheet_row or 0) < 2:
+            try:
+                rows = ws.get_all_values() or []
+                ts = str(row.get("ts") or "").strip()
+                contact = str(row.get("contact") or "").strip()
+                dt = str(row.get("datetime") or "").strip()
+                # Scan newest -> oldest; cap to last ~300 rows for speed.
+                start_i = max(1, len(rows) - 300)
+                for i in range(len(rows) - 1, start_i - 1, -1):
+                    rr = rows[i] if i < len(rows) else []
+                    if not isinstance(rr, list):
+                        continue
+                    r_ts = (rr[0] if len(rr) > 0 else "").strip()
+                    r_contact = (rr[3] if len(rr) > 3 else "").strip()
+                    r_dt = (rr[6] if len(rr) > 6 else "").strip()
+                    if ts and contact and dt and r_ts == ts and r_contact == contact and r_dt == dt:
+                        sheet_row = i + 1  # rows is 0-based, sheet rows are 1-based
+                        break
+            except Exception:
+                pass
         return True, int(sheet_row or 0)
     except Exception:
         return False, 0
