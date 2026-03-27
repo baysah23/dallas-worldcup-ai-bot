@@ -1708,8 +1708,11 @@ def _policy_check_action(partner: str, action_type: str, payload: Dict[str, Any]
                 return False, f"Blocked by partner policy: VIP requires budget ≥ {int(min_budget)}"
 
     # Outbound sending (reserved for next phase)
-    if at in ("send_sms", "send_email", "send_whatsapp"):
-        ch = at.replace("send_", "")
+    if at in ("send_sms", "send_email", "send_whatsapp", "send_confirmation", "send_reservation_received", "send_update", "send_vip_update"):
+        if at in ("send_confirmation", "send_reservation_received", "send_update", "send_vip_update"):
+            ch = "sms"
+        else:
+            ch = at.replace("send_", "")
         allowed = (pol.get("outbound_allowed") or {})
         if isinstance(allowed, dict) and not bool(allowed.get(ch, False)):
             return False, f"Blocked by partner policy: outbound {ch} disabled"
@@ -2031,6 +2034,168 @@ def _outbound_send_twilio(channel: str, to_number_or_id: str, body_text: str) ->
         _sms_log_event("outbound.exception", {"channel": ch, "to": to_e164, "error": str(e)})
         return False, f"Twilio send failed: {e}"
 
+def _outbound_send_whatsapp_template(to_number_or_id: str, template_sid: str, variables: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Send WhatsApp via approved Twilio Content Template (production-safe for business-initiated sends).
+    """
+    sid = os.environ.get("TWILIO_ACCOUNT_SID", "").strip()
+    token = os.environ.get("TWILIO_AUTH_TOKEN", "").strip()
+    frm = os.environ.get("TWILIO_WHATSAPP_FROM", "").strip()
+    if not sid or not token:
+        return False, "Twilio not configured (missing TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN)"
+    if requests is None:
+        return False, "Twilio not available (missing requests library)"
+    if not frm:
+        return False, "WhatsApp not configured (missing TWILIO_WHATSAPP_FROM)"
+    if not template_sid:
+        return False, "WhatsApp template SID missing"
+
+    to = (to_number_or_id or "").strip()
+    to_e164 = _normalize_phone_e164(to)
+    if not to_e164:
+        return False, "Invalid recipient number (must be valid international/E.164 format)"
+    frm_e164 = _normalize_phone_e164(frm)
+    if not frm_e164:
+        return False, "WhatsApp sender invalid (must be E.164 in TWILIO_WHATSAPP_FROM)"
+    if not _sms_can_send_to(to_e164):
+        return False, "Recipient opted out (STOP)."
+
+    try:
+        url = f"https://api.twilio.com/2010-04-01/Accounts/{sid}/Messages.json"
+        data = {
+            "From": "whatsapp:" + frm_e164,
+            "To": "whatsapp:" + to_e164,
+            "ContentSid": template_sid,
+            "ContentVariables": json.dumps(variables or {}, ensure_ascii=False),
+        }
+        r = requests.post(url, data=data, auth=(sid, token), timeout=12)
+        try:
+            rj = r.json() if r.text else {}
+        except Exception:
+            rj = {}
+        if 200 <= r.status_code < 300:
+            _sms_log_event("whatsapp_template.sent", {
+                "to": to_e164,
+                "sid": rj.get("sid"),
+                "status": rj.get("status"),
+                "template_sid": template_sid,
+                "variables": variables or {},
+            })
+            return True, "WhatsApp template sent"
+        err_msg = f"Twilio error {r.status_code}"
+        try:
+            code = rj.get("code") or rj.get("error_code")
+            msg = (rj.get("message") or rj.get("error_message") or "").strip()
+            if code is not None or msg:
+                err_msg = f"Twilio {code or r.status_code}: {msg or err_msg}"
+        except Exception:
+            pass
+        _sms_log_event("whatsapp_template.failed", {
+            "to": to_e164,
+            "status_code": r.status_code,
+            "template_sid": template_sid,
+            "variables": variables or {},
+            "error": err_msg,
+        })
+        return False, err_msg
+    except Exception as e:
+        _sms_log_event("whatsapp_template.exception", {
+            "to": to_e164,
+            "template_sid": template_sid,
+            "variables": variables or {},
+            "error": str(e),
+        })
+        return False, f"WhatsApp template send failed: {e}"
+
+def _get_whatsapp_template_sid(kind: str) -> str:
+    k = (kind or "").strip().lower()
+    mapping = {
+        "reservation_received": os.environ.get("WA_TEMPLATE_RESERVATION_RECEIVED", "").strip(),
+        "reservation_confirmed": os.environ.get("WA_TEMPLATE_RESERVATION_CONFIRMED", "").strip(),
+        "reservation_update": os.environ.get("WA_TEMPLATE_RESERVATION_UPDATE", "").strip(),
+        "vip_update": os.environ.get("WA_TEMPLATE_VIP_UPDATE", "").strip(),
+    }
+    return mapping.get(k, "")
+
+def _send_notification_bundle(kind: str, to_number_or_id: str, sms_body: str, wa_variables: Dict[str, Any]) -> Dict[str, Any]:
+    result: Dict[str, Any] = {"ok": True, "sms": None, "whatsapp": None}
+    sms_ok, sms_msg = _outbound_send_twilio("sms", to_number_or_id, sms_body)
+    result["sms"] = {"ok": sms_ok, "message": sms_msg}
+    wa_template_sid = _get_whatsapp_template_sid(kind)
+    if wa_template_sid:
+        wa_ok, wa_msg = _outbound_send_whatsapp_template(to_number_or_id, wa_template_sid, wa_variables or {})
+        result["whatsapp"] = {"ok": wa_ok, "message": wa_msg}
+    else:
+        result["whatsapp"] = {"ok": False, "message": f"Missing WhatsApp template SID for kind={kind}"}
+    result["ok"] = bool(result["sms"]["ok"] or result["whatsapp"]["ok"])
+    result["message"] = f"SMS: {result['sms']['message']} | WhatsApp: {result['whatsapp']['message']}"
+    return result
+
+def _build_notification_bundle_spec(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build deterministic SMS + WhatsApp-template spec for bundled outbound actions.
+    Returns:
+      {ok, kind, to_number, sms_body, wa_variables} or {ok:False, error}
+    """
+    at = (action_type or "").strip().lower()
+    pl = payload or {}
+    to_number = str(pl.get("to") or pl.get("phone") or "").strip()
+    venue_name = str(pl.get("venue_name") or "the venue").strip()
+    match_label = str(pl.get("match_label") or "").strip()
+    update_text = str(pl.get("message") or pl.get("body") or "").strip()
+    if not to_number:
+        return {"ok": False, "error": "Missing recipient number"}
+
+    if at == "send_confirmation":
+        sms_body = f"{venue_name} has confirmed your reservation."
+        if match_label:
+            sms_body += f" Match: {match_label}."
+        return {
+            "ok": True,
+            "kind": "reservation_confirmed",
+            "to_number": to_number,
+            "sms_body": sms_body,
+            "wa_variables": {"1": venue_name, "2": match_label or "your requested time"},
+        }
+
+    if at == "send_reservation_received":
+        sms_body = f"Your reservation request for {venue_name} has been received."
+        if match_label:
+            sms_body += f" Match: {match_label}."
+        return {
+            "ok": True,
+            "kind": "reservation_received",
+            "to_number": to_number,
+            "sms_body": sms_body,
+            "wa_variables": {"1": venue_name, "2": match_label or ""},
+        }
+
+    if at == "send_update":
+        if not update_text:
+            return {"ok": False, "error": "Missing update text"}
+        sms_body = f"{venue_name}: {update_text}"
+        return {
+            "ok": True,
+            "kind": "reservation_update",
+            "to_number": to_number,
+            "sms_body": sms_body,
+            "wa_variables": {"1": venue_name, "2": update_text},
+        }
+
+    if at == "send_vip_update":
+        if not update_text:
+            return {"ok": False, "error": "Missing update text"}
+        sms_body = f"{venue_name}: {update_text}"
+        return {
+            "ok": True,
+            "kind": "vip_update",
+            "to_number": to_number,
+            "sms_body": sms_body,
+            "wa_variables": {"1": venue_name, "2": update_text},
+        }
+
+    return {"ok": False, "error": "Unsupported bundled notification type"}
+
 def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     """Execute outbound send (human-triggered). Never called automatically.
     Payload can contain 'message' or 'body' (both supported for compatibility).
@@ -2065,7 +2230,47 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
             return {"ok": False, "error": "Missing recipient number"}
         ok, msg = _outbound_send_twilio(ch, to_num, body)
         return {"ok": ok, "message": msg}
+    if at in ("send_confirmation", "send_reservation_received", "send_update", "send_vip_update"):
+        spec = _build_notification_bundle_spec(at, pl)
+        if not spec.get("ok"):
+            return {"ok": False, "error": spec.get("error") or "Invalid notification payload"}
+        return _send_notification_bundle(
+            kind=str(spec.get("kind") or ""),
+            to_number_or_id=str(spec.get("to_number") or ""),
+            sms_body=str(spec.get("sms_body") or ""),
+            wa_variables=(spec.get("wa_variables") or {}),
+        )
     return {"ok": False, "error": "Unsupported outbound action"}
+
+@app.route("/admin/api/outbound/template-preview", methods=["POST"])
+def admin_api_outbound_template_preview():
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    data = request.get_json(silent=True) or {}
+    at = str(data.get("type") or data.get("action_type") or "").strip().lower()
+    pl = data.get("payload") or {}
+    if not isinstance(pl, dict):
+        pl = {}
+    if at not in ("send_confirmation", "send_reservation_received", "send_update", "send_vip_update"):
+        return jsonify({"ok": False, "error": "Template preview supported only for bundled notification actions"}), 400
+    spec = _build_notification_bundle_spec(at, pl)
+    if not spec.get("ok"):
+        return jsonify({"ok": False, "error": spec.get("error") or "Invalid payload"}), 400
+    kind = str(spec.get("kind") or "")
+    to_number = str(spec.get("to_number") or "")
+    to_e164 = _normalize_phone_e164(to_number)
+    wa_sid = _get_whatsapp_template_sid(kind)
+    preview = {
+        "kind": kind,
+        "to_input": to_number,
+        "to_e164": to_e164 or "",
+        "sms_body": str(spec.get("sms_body") or ""),
+        "wa_template_sid": wa_sid,
+        "wa_template_configured": bool(wa_sid),
+        "wa_variables": spec.get("wa_variables") or {},
+    }
+    return jsonify({"ok": True, "preview": preview})
 
 @app.route("/sms/inbound", methods=["POST"])
 def sms_inbound_webhook():
@@ -2234,15 +2439,27 @@ def _health_check_outbound() -> Dict[str, Any]:
         # We only validate readiness (env vars). Sending is still human-triggered.
         sg_ok = bool(os.environ.get("SENDGRID_API_KEY")) and bool(os.environ.get("SENDGRID_FROM"))
         tw_sid = bool(os.environ.get("TWILIO_ACCOUNT_SID")) and bool(os.environ.get("TWILIO_AUTH_TOKEN"))
-        sms_ok = tw_sid and bool(os.environ.get("TWILIO_FROM"))
-        whatsapp_ok = tw_sid and bool(os.environ.get("TWILIO_WHATSAPP_FROM", "").strip())
+        sms_ok = tw_sid and bool(os.environ.get("TWILIO_MESSAGING_SERVICE_SID", "").strip() or os.environ.get("TWILIO_FROM", "").strip())
+        whatsapp_sender_ok = tw_sid and bool(os.environ.get("TWILIO_WHATSAPP_FROM", "").strip())
+        wa_templates_ok = all([
+            os.environ.get("WA_TEMPLATE_RESERVATION_RECEIVED", "").strip(),
+            os.environ.get("WA_TEMPLATE_RESERVATION_CONFIRMED", "").strip(),
+            os.environ.get("WA_TEMPLATE_RESERVATION_UPDATE", "").strip(),
+            os.environ.get("WA_TEMPLATE_VIP_UPDATE", "").strip(),
+        ])
+        whatsapp_ok = whatsapp_sender_ok and wa_templates_ok
         if not sg_ok and not sms_ok:
             return {"name": "outbound", "ok": True, "severity": "warn", "message": "Outbound providers not configured (send disabled until configured)."}
         parts = []
         parts.append("SendGrid OK" if sg_ok else "SendGrid missing")
-        parts.append("SMS OK" if sms_ok else "SMS missing (TWILIO_FROM)")
+        parts.append("SMS OK" if sms_ok else "SMS missing (set TWILIO_MESSAGING_SERVICE_SID or TWILIO_FROM)")
         if tw_sid:
-            parts.append("WhatsApp OK" if whatsapp_ok else "WhatsApp: set TWILIO_WHATSAPP_FROM (must be a WhatsApp-enabled sender in Twilio Console)")
+            if whatsapp_ok:
+                parts.append("WhatsApp OK")
+            elif whatsapp_sender_ok:
+                parts.append("WhatsApp sender OK, templates missing")
+            else:
+                parts.append("WhatsApp: set TWILIO_WHATSAPP_FROM (must be a WhatsApp-enabled sender in Twilio Console)")
         else:
             parts.append("WhatsApp missing (Twilio not configured)")
         return {"name": "outbound", "ok": True, "severity": "ok" if (sg_ok or sms_ok) else "warn", "message": ", ".join(parts)}
@@ -9097,7 +9314,7 @@ def admin_api_ai_queue_approve(qid: str):
 
     # Outbound sends are NEVER executed on approval. Approval only unlocks a human "Send Now" click.
     applied = None
-    if it_type in ("send_email", "send_sms", "send_whatsapp"):
+    if it_type in ("send_email", "send_sms", "send_whatsapp", "send_confirmation", "send_reservation_received", "send_update", "send_vip_update"):
         applied = {"ok": True, "note": "Approved — ready to send (human click required)"}
         # Keep item in queue; just mark as approved/reviewed.
         it["status"] = "approved"
@@ -9142,7 +9359,7 @@ def admin_api_ai_queue_send(qid: str):
         return jsonify({"ok": False, "error": "Not found"}), 404
 
     it_type = str(it.get("type") or "").strip().lower()
-    if it_type not in ("send_email", "send_sms", "send_whatsapp"):
+    if it_type not in ("send_email", "send_sms", "send_whatsapp", "send_confirmation", "send_reservation_received", "send_update", "send_vip_update"):
         return jsonify({"ok": False, "error": "Not an outbound item"}), 400
 
     if str(it.get("status")) != "approved":
@@ -9201,7 +9418,7 @@ def admin_api_ai_queue_override(qid: str):
     # override payload/type (owner-only)
     if "type" in data:
         typ = str(data.get("type") or "").strip()
-        if typ not in ("vip_tag", "status_update", "reply_draft", "send_email", "send_sms", "send_whatsapp"):
+        if typ not in ("vip_tag", "status_update", "reply_draft", "send_email", "send_sms", "send_whatsapp", "send_confirmation", "send_reservation_received", "send_update", "send_vip_update"):
             return jsonify({"ok": False, "error": "Invalid type"}), 400
         it["type"] = typ
     if "payload" in data and isinstance(data.get("payload"), dict):
@@ -10975,6 +11192,10 @@ label.small + textarea,
         <option value="send_sms">Send SMS</option>
         <option value="send_email">Send Email</option>
         <option value="send_whatsapp">Send WhatsApp</option>
+        <option value="send_confirmation">Send confirmation</option>
+        <option value="send_reservation_received">Send reservation received</option>
+        <option value="send_update">Send update</option>
+        <option value="send_vip_update">Send VIP update</option>
       </select>
       <select id="aiq-conf" class="inp" style="max-width:200px" onchange="loadAIQueue()">
         <option value="">Any confidence</option>
@@ -11220,6 +11441,19 @@ label.small + textarea,
       <span id="drafts-modal-msg" class="note"></span>
     </div>
     <textarea id="drafts-modal-json" class="inp" style="width:100%;min-height:420px;font-family:monospace;font-size:13px;box-sizing:border-box" spellcheck="false"></textarea>
+  </div>
+</div>
+
+<!-- AI Queue Template Preview Modal -->
+<div id="aiq-template-modal" class="modal-overlay" onclick="if(event.target===this)closeAiqTemplateModal()">
+  <div class="modal-box" style="max-width:760px">
+    <div class="modal-header">
+      <div class="modal-title">Notification Template Preview</div>
+      <button type="button" class="modal-close" onclick="closeAiqTemplateModal()">Close</button>
+    </div>
+    <div class="small" style="margin-bottom:10px">Review the exact bundled SMS + WhatsApp-template payload before approval or send.</div>
+    <div id="aiq-template-modal-msg" class="note" style="margin-bottom:10px"></div>
+    <div id="aiq-template-modal-body" class="small" style="white-space:normal"></div>
   </div>
 </div>
 """)
@@ -12293,6 +12527,51 @@ async function saveDrafts(){
 // ===== AI Approval Queue =====
 let aiqSearchT = null;
 let aiqFetchSeq = 0;
+let aiqItemsById = {};
+
+function showAiqTemplateModal(){
+  const m = qs('#aiq-template-modal');
+  if(m) m.classList.add('show');
+}
+function closeAiqTemplateModal(){
+  const m = qs('#aiq-template-modal');
+  if(m) m.classList.remove('show');
+}
+async function aiqViewTemplate(id){
+  const item = aiqItemsById[id];
+  if(!item) return;
+  const msg = qs('#aiq-template-modal-msg');
+  const body = qs('#aiq-template-modal-body');
+  if(msg) msg.textContent = 'Loading preview…';
+  if(body) body.innerHTML = '';
+  showAiqTemplateModal();
+  try{
+    const r = await fetch(`/admin/api/outbound/template-preview?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ type: item.type, payload: item.payload || {} })
+    });
+    const j = await r.json().catch(()=>null);
+    if(!j || !j.ok) throw new Error((j && j.error) || 'Preview failed');
+    const p = j.preview || {};
+    if(msg) msg.textContent = p.wa_template_configured ? 'Template configured' : 'Template SID missing on server';
+    const varsTxt = esc(JSON.stringify(p.wa_variables || {}, null, 2));
+    if(body){
+      body.innerHTML = `
+        <div style="display:grid;grid-template-columns:150px 1fr;gap:8px 12px;align-items:start">
+          <div class="note">Kind</div><div><b>${esc(p.kind || '')}</b></div>
+          <div class="note">To (input)</div><div>${esc(p.to_input || '')}</div>
+          <div class="note">To (E.164)</div><div>${esc(p.to_e164 || '')}</div>
+          <div class="note">WA Template SID</div><div>${esc(p.wa_template_sid || '(missing)')}</div>
+          <div class="note">SMS Body</div><div><pre style="margin:0;white-space:pre-wrap">${esc(p.sms_body || '')}</pre></div>
+          <div class="note">WA Variables</div><div><pre style="margin:0;white-space:pre-wrap">${varsTxt}</pre></div>
+        </div>
+      `;
+    }
+  }catch(e){
+    if(msg) msg.textContent = `Preview failed: ${e.message || e}`;
+  }
+}
 
 function clearAIQueueFilters(){
   const ids = ['aiq-filter','aiq-time','aiq-type','aiq-conf','aiq-search'];
@@ -12409,6 +12688,7 @@ function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;
 function renderAIQueue(items){
   const list = qs('#aiq-list');
   if(!list) return;
+  aiqItemsById = {};
 
   // Explicit empty state for CI tests + clarity
   if(!items || !items.length){
@@ -12417,6 +12697,7 @@ function renderAIQueue(items){
   }
 
   const rows = (items || []).map((it)=>{
+    aiqItemsById[String(it.id || '')] = it;
     const id = esc(it.id || '');
     const typ = esc(it.type || '');
     const st  = esc(it.status || '');
@@ -12426,10 +12707,23 @@ function renderAIQueue(items){
     const payload = esc(JSON.stringify(it.payload || {}));
 
     const canAct = (st === 'pending');
-    const isOutbound = (typ === 'send_email' || typ === 'send_sms' || typ === 'send_whatsapp');
+    const isOutbound = (
+      typ === 'send_email' || typ === 'send_sms' || typ === 'send_whatsapp' ||
+      typ === 'send_confirmation' || typ === 'send_reservation_received' || typ === 'send_update' || typ === 'send_vip_update'
+    );
     const canSend = isOutbound && (st === 'approved') && !it.sent_at;
-    const sendLabel = (typ === 'send_sms') ? 'Send SMS' : (typ === 'send_whatsapp') ? 'Send WhatsApp' : (typ === 'send_email') ? 'Send Email' : 'Send';
+    const sendLabel =
+      (typ === 'send_sms') ? 'Send SMS' :
+      (typ === 'send_whatsapp') ? 'Send WhatsApp' :
+      (typ === 'send_email') ? 'Send Email' :
+      (typ === 'send_confirmation') ? 'Send Confirmation' :
+      (typ === 'send_reservation_received') ? 'Send Received' :
+      (typ === 'send_update') ? 'Send Update' :
+      (typ === 'send_vip_update') ? 'Send VIP Update' :
+      'Send';
     const sendBtn = isOutbound ? `<button type="button" class="btn" ${canSend ? '' : 'disabled'} onclick="aiqSend('${id}', this)">${sendLabel}</button>` : '';
+    const isBundledTemplate = (typ === 'send_confirmation' || typ === 'send_reservation_received' || typ === 'send_update' || typ === 'send_vip_update');
+    const viewTplBtn = isBundledTemplate ? `<button type="button" class="btn2" onclick="aiqViewTemplate('${id}')">View Template</button>` : '';
 
     const approveBtn = `<button type="button" class="btn" ${canAct ? '' : 'disabled'} onclick="aiqApprove('${id}', this)">Approve</button>`;
     const denyBtn    = `<button type="button" class="btn2" ${canAct ? '' : 'disabled'} onclick="aiqDeny('${id}', this)">Deny</button>`;
@@ -12454,6 +12748,7 @@ function renderAIQueue(items){
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           ${approveBtn}
           ${denyBtn}
+          ${viewTplBtn}
           ${sendBtn}
           ${overrideBtn}
           ${removeBtn}
@@ -12575,7 +12870,7 @@ async function aiqOverride(id, btn){
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Overriding…'; }
 
   // Owner-only: allow quick edit of payload/type before applying
-  const typ = prompt('Override action type (vip_tag, status_update, reply_draft, send_email, send_sms, send_whatsapp):', 'vip_tag');
+  const typ = prompt('Override action type (vip_tag, status_update, reply_draft, send_email, send_sms, send_whatsapp, send_confirmation, send_reservation_received, send_update, send_vip_update):', 'vip_tag');
   if(!typ){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } return; }
   let payloadTxt = prompt('Override payload JSON (must be valid JSON object):', '{"row":2,"vip":"VIP"}');
   if(payloadTxt === null){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } return; }
