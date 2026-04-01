@@ -10511,11 +10511,13 @@ th{
 }
 
 /* Leads filter area: same dark theme as rest of admin (inherits .card background) */
-.leads-filters-section{ background:transparent; }
-.leads-dd-wrap{ position:relative; min-width:140px; }
+/* Stack filters above the leads table so open dropdowns are not covered by the table
+   (global select{z-index:9999} would otherwise steal clicks on overlapping rows). */
+.leads-filters-section{ position:relative; z-index:20; background:transparent; }
+.leads-dd-wrap{ position:relative; min-width:140px; z-index:1; }
 button.inp.leads-dd-btn{ text-align:left; cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px; }
 .leads-dd-panel{
-  position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:80;
+  position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:10050;
   background:linear-gradient(180deg,rgba(15,26,51,.98),rgba(11,18,32,.99));
   border:1px solid var(--line); border-radius:12px; padding:8px 6px; max-height:240px; overflow-y:auto;
   box-shadow:0 12px 40px rgba(0,0,0,.55);
@@ -10534,6 +10536,8 @@ button.inp.leads-dd-btn{ text-align:left; cursor:pointer; display:flex; align-it
 
 /* Leads table: wide enough to show all columns; horizontal scroll when needed; tooltips on truncated cells */
 .leads-tablewrap{
+  position:relative;
+  z-index:1;
   border-radius:12px;
   border:1px solid var(--line);
   margin-top:8px;
@@ -17691,7 +17695,15 @@ def _apply_leads_filters(items: List[Dict[str, Any]],
                         tiers: Optional[List[str]] = None,
                         time_minutes: Optional[int] = None,
                         entry_points: Optional[List[str]] = None) -> List[Dict[str, Any]]:
-    """Apply status, tier, time, and entry_point filters to leads. Returns filtered list."""
+    """Apply status, tier, time, and entry_point filters to leads. Returns filtered list.
+
+    Semantics (all AND together, order: entry → status → tier → time):
+    - entry: OR across selected values; empty sheet cell never matches.
+    - status: OR across selected values; token-based (avoids e.g. "new" matching "renewed").
+    - tier: OR across selected values; token-based on tier + entry_point columns; blank tier+entry
+      uses VIP column only for generic ``vip`` vs ``regular`` (not ``vip vibe`` / other labels).
+    - time: rows with unparseable/missing timestamp are kept (avoid hiding bad data).
+    """
     result = items[:]
     now = datetime.now(timezone.utc)
     
@@ -17701,38 +17713,70 @@ def _apply_leads_filters(items: List[Dict[str, Any]],
         if entry_lower:
             def _norm_ep(s):
                 return (s or "").replace(" ", "_").strip()
+
             def entry_matches(item):
                 ep_raw = (item.get("entry_point") or "").strip()
                 if not ep_raw:
-                    return False  # empty entry_point must not match (was matching all rows: "" in "vip_vibe" is True in Python)
+                    return False  # empty entry_point must not match
                 ep_lo = ep_raw.lower()
                 ep_underscore = _norm_ep(ep_lo)
                 ep_space = ep_lo.replace("_", " ")
+                ep_tokens = [t for t in re.split(r"[^\w]+", ep_space) if t]
                 for e in entry_lower:
                     e_und = _norm_ep(e)
                     e_sp = (e or "").replace("_", " ").strip().lower()
                     if e_und == ep_underscore or e_sp == ep_space:
                         return True
-                    if e_und and ep_underscore and (e_und in ep_underscore or ep_underscore in e_und):
+                    need = [t for t in re.split(r"[^\w]+", e_sp) if t]
+                    if need and ep_tokens and all(t in ep_tokens for t in need):
+                        return True
+                    if len(need) > 1 and e_sp and e_sp in ep_space:
                         return True
                 return False
+
             result = [item for item in result if entry_matches(item)]
     
-    # Filter by status (normalize hyphen/space so "no-show" matches "No Show" in sheet)
+    # Filter by status (normalize hyphen/space so "no-show" matches "No Show" in sheet).
+    # Use whole-token matching so "new" does not match "renewed" (substring bug).
     if statuses:
         statuses_lower = [s.lower().strip() for s in statuses if s]
         if statuses_lower:
             def _norm_status(s):
                 return (s or "").replace("-", " ").strip()
+
+            def _status_tokens(s: str) -> List[str]:
+                t = _norm_status((s or "").lower())
+                return [w for w in re.split(r"[^\w]+", t) if w]
+
+            def _status_filter_matches(raw_status: str, raw_vibe: str, s_filter: str) -> bool:
+                s_norm = _norm_status(s_filter).lower()
+                if not s_norm:
+                    return False
+                st = _norm_status((raw_status or "").lower())
+                vb = (raw_vibe or "").lower().strip()
+                need = _status_tokens(s_filter)
+                if not need:
+                    return False
+                if st == s_norm or vb == s_norm:
+                    return True
+                st_tok = _status_tokens(raw_status or "")
+                vb_tok = _status_tokens(raw_vibe or "")
+                if all(t in st_tok for t in need):
+                    return True
+                if all(t in vb_tok for t in need):
+                    return True
+                return False
+
             def status_matches(item):
-                item_status = _norm_status((item.get("status") or "").lower())
-                item_vibe = (item.get("vibe") or "").lower().strip()
                 for s_filter in statuses_lower:
-                    s_norm = _norm_status(s_filter)
-                    if s_norm in item_status or s_filter in item_status or s_norm in item_vibe or s_filter in item_vibe:
+                    if _status_filter_matches(
+                        str(item.get("status") or ""),
+                        str(item.get("vibe") or ""),
+                        s_filter,
+                    ):
                         return True
                 return False
-            
+
             result = [item for item in result if status_matches(item)]
     
     # Filter by tier (normalize space/underscore so "vip vibe" matches "vip_vibe" in sheet)
@@ -17741,18 +17785,55 @@ def _apply_leads_filters(items: List[Dict[str, Any]],
         if tiers_lower:
             def _norm(s):
                 return (s or "").replace("_", " ").strip()
+
+            def _crm_vip_yes(item: Dict[str, Any]) -> bool:
+                v = (item.get("vip") or "").strip().lower()
+                return v in ("yes", "y", "true", "1", "vip")
+
+            def _tier_tokens(s: str) -> List[str]:
+                n = _norm((s or "").lower())
+                return [t for t in re.split(r"[^\w]+", n) if t]
+
             def tier_matches(item):
-                item_tier = _norm((item.get("tier") or "").lower())
-                item_entry = _norm((item.get("entry_point") or "").lower())
+                raw_tier = item.get("tier") or ""
+                raw_entry = item.get("entry_point") or ""
+                item_tier = _norm(raw_tier.lower())
+                item_entry = _norm(raw_entry.lower())
+                vip_yes = _crm_vip_yes(item)
+                tier_toks = _tier_tokens(raw_tier)
+                entry_toks = _tier_tokens(raw_entry)
+
                 for t_filter in tiers_lower:
                     t_norm = _norm(t_filter)
-                    if t_norm in item_tier or t_norm in item_entry or item_tier in t_norm or item_entry in t_norm:
-                        return True
+                    if not t_norm:
+                        continue
+                    need = _tier_tokens(t_filter)
+                    if not need:
+                        continue
+
+                    if item_tier or item_entry:
+                        if tier_toks and all(t in tier_toks for t in need):
+                            return True
+                        if entry_toks and all(t in entry_toks for t in need):
+                            return True
+                        if len(need) > 1:
+                            if item_tier and t_norm in item_tier:
+                                return True
+                            if item_entry and t_norm in item_entry:
+                                return True
+
+                    if not item_tier and not item_entry:
+                        # Only generic `vip` (not `vip vibe` / `premium`) — avoid matching
+                        # "vip" inside "vipvibe" and wrongly including all VIP=yes rows for tier=vip vibe.
+                        if need == ["vip"] and vip_yes:
+                            return True
+                        if t_norm == "regular" and not vip_yes:
+                            return True
                 return False
-            
+
             result = [item for item in result if tier_matches(item)]
     
-    # Filter by time range
+    # Filter by time range (missing/unparseable timestamp: keep row — do not hide bad data)
     if time_minutes and time_minutes > 0:
         cutoff = now - timedelta(minutes=time_minutes)
         def within_timerange(item):
@@ -17763,8 +17844,8 @@ def _apply_leads_filters(items: List[Dict[str, Any]],
                 if dt.tzinfo is None:
                     dt = dt.replace(tzinfo=timezone.utc)
                 return dt >= cutoff
-            return True  # Keep items with missing timestamps
-        
+            return True
+
         result = [item for item in result if within_timerange(item)]
     
     return result
