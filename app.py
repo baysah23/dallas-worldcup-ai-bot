@@ -1708,8 +1708,27 @@ def _policy_check_action(partner: str, action_type: str, payload: Dict[str, Any]
                 return False, f"Blocked by partner policy: VIP requires budget ≥ {int(min_budget)}"
 
     # Outbound sending (reserved for next phase)
-    if at in ("send_sms", "send_email", "send_whatsapp", "send_confirmation", "send_reservation_received", "send_update", "send_vip_update"):
-        if at in ("send_confirmation", "send_reservation_received", "send_update", "send_vip_update"):
+    if at in (
+        "send_sms",
+        "send_email",
+        "send_whatsapp",
+        "send_confirmation",
+        "send_reservation_received",
+        "send_reservation_confirmed",
+        "send_reservation_denied",
+        "send_reservation_reminder",
+        "send_update",
+        "send_vip_update",
+    ):
+        if at in (
+            "send_confirmation",
+            "send_reservation_received",
+            "send_reservation_confirmed",
+            "send_reservation_denied",
+            "send_reservation_reminder",
+            "send_update",
+            "send_vip_update",
+        ):
             ch = "sms"
         else:
             ch = at.replace("send_", "")
@@ -2034,7 +2053,7 @@ def _outbound_send_twilio(channel: str, to_number_or_id: str, body_text: str) ->
         _sms_log_event("outbound.exception", {"channel": ch, "to": to_e164, "error": str(e)})
         return False, f"Twilio send failed: {e}"
 
-def _outbound_send_whatsapp_template(to_number_or_id: str, template_sid: str, variables: Dict[str, Any]) -> Tuple[bool, str]:
+def _outbound_send_whatsapp_template(template_sid: str, to_number_or_id: str, variables: Dict[str, Any]) -> Tuple[bool, str]:
     """
     Send WhatsApp via approved Twilio Content Template (production-safe for business-initiated sends).
     """
@@ -2110,10 +2129,10 @@ def _outbound_send_whatsapp_template(to_number_or_id: str, template_sid: str, va
 def _get_whatsapp_template_sid(kind: str) -> str:
     k = (kind or "").strip().lower()
     mapping = {
-        "reservation_received": os.environ.get("WA_TEMPLATE_RESERVATION_RECEIVED", "").strip(),
-        "reservation_confirmed": os.environ.get("WA_TEMPLATE_RESERVATION_CONFIRMED", "").strip(),
-        "reservation_update": os.environ.get("WA_TEMPLATE_RESERVATION_UPDATE", "").strip(),
-        "vip_update": os.environ.get("WA_TEMPLATE_VIP_UPDATE", "").strip(),
+        "reservation_received": os.environ.get("WHATSAPP_TEMPLATE_RESERVATION_RECEIVED", "").strip(),
+        "reservation_confirmed": os.environ.get("WHATSAPP_TEMPLATE_RESERVATION_CONFIRMED", "").strip(),
+        "reservation_denied": os.environ.get("WHATSAPP_TEMPLATE_RESERVATION_DENIED", "").strip(),
+        "reservation_reminder": os.environ.get("WHATSAPP_TEMPLATE_RESERVATION_REMINDER", "").strip(),
     }
     return mapping.get(k, "")
 
@@ -2123,10 +2142,45 @@ def _send_notification_bundle(kind: str, to_number_or_id: str, sms_body: str, wa
     result["sms"] = {"ok": sms_ok, "message": sms_msg}
     wa_template_sid = _get_whatsapp_template_sid(kind)
     if wa_template_sid:
-        wa_ok, wa_msg = _outbound_send_whatsapp_template(to_number_or_id, wa_template_sid, wa_variables or {})
+        wa_ok, wa_msg = _outbound_send_whatsapp_template(wa_template_sid, to_number_or_id, wa_variables or {})
         result["whatsapp"] = {"ok": wa_ok, "message": wa_msg}
     else:
         result["whatsapp"] = {"ok": False, "message": f"Missing WhatsApp template SID for kind={kind}"}
+    result["ok"] = bool(result["sms"]["ok"] or result["whatsapp"]["ok"])
+    result["message"] = f"SMS: {result['sms']['message']} | WhatsApp: {result['whatsapp']['message']}"
+    return result
+
+def _send_reservation_notification_bundle(kind: str, to_number: str, venue_name: str, reservation_details: str) -> Dict[str, Any]:
+    """
+    Send one reservation notification across both channels:
+    - SMS (always attempted)
+    - WhatsApp template (attempted if template SID exists)
+    """
+    result: Dict[str, Any] = {"ok": True, "sms": None, "whatsapp": None}
+
+    sms_body_map = {
+        "reservation_received": f"World Cup Concierge: Your reservation request for {reservation_details} at {venue_name} has been received. We will send you an update shortly.",
+        "reservation_confirmed": f"World Cup Concierge: Your reservation at {venue_name} for {reservation_details} has been confirmed. We look forward to hosting you.",
+        "reservation_denied": f"World Cup Concierge: Unfortunately, your reservation at {venue_name} for {reservation_details} could not be accommodated. Please try another time or contact the venue directly.",
+        "reservation_reminder": f"World Cup Concierge: Reminder — your reservation at {venue_name} for {reservation_details} is coming up soon. We look forward to seeing you.",
+    }
+
+    sms_ok, sms_msg = _outbound_send_twilio("sms", to_number, sms_body_map.get((kind or "").strip().lower(), ""))
+    result["sms"] = {"ok": sms_ok, "message": sms_msg}
+
+    wa_template_sid = _get_whatsapp_template_sid(kind)
+    wa_vars = {
+        "reservation_received": {"1": reservation_details, "2": venue_name},
+        "reservation_confirmed": {"1": venue_name, "2": reservation_details},
+        "reservation_denied": {"1": venue_name, "2": reservation_details},
+        "reservation_reminder": {"1": venue_name, "2": reservation_details},
+    }
+    if wa_template_sid:
+        wa_ok, wa_msg = _outbound_send_whatsapp_template(wa_template_sid, to_number, wa_vars.get((kind or "").strip().lower(), {}))
+        result["whatsapp"] = {"ok": wa_ok, "message": wa_msg}
+    else:
+        result["whatsapp"] = {"ok": False, "message": f"Missing WhatsApp template SID for kind={kind}"}
+
     result["ok"] = bool(result["sms"]["ok"] or result["whatsapp"]["ok"])
     result["message"] = f"SMS: {result['sms']['message']} | WhatsApp: {result['whatsapp']['message']}"
     return result
@@ -2143,8 +2197,38 @@ def _build_notification_bundle_spec(action_type: str, payload: Dict[str, Any]) -
     venue_name = str(pl.get("venue_name") or "the venue").strip()
     match_label = str(pl.get("match_label") or "").strip()
     update_text = str(pl.get("message") or pl.get("body") or "").strip()
+    reservation_details = str(pl.get("reservation_details") or pl.get("message") or pl.get("body") or "").strip()
     if not to_number:
         return {"ok": False, "error": "Missing recipient number"}
+
+    if at in ("send_reservation_received", "send_reservation_confirmed", "send_reservation_denied", "send_reservation_reminder"):
+        if not reservation_details:
+            return {"ok": False, "error": "Missing reservation details"}
+        kind = {
+            "send_reservation_received": "reservation_received",
+            "send_reservation_confirmed": "reservation_confirmed",
+            "send_reservation_denied": "reservation_denied",
+            "send_reservation_reminder": "reservation_reminder",
+        }.get(at, "")
+        sms_body_map = {
+            "reservation_received": f"World Cup Concierge: Your reservation request for {reservation_details} at {venue_name} has been received. We will send you an update shortly.",
+            "reservation_confirmed": f"World Cup Concierge: Your reservation at {venue_name} for {reservation_details} has been confirmed. We look forward to hosting you.",
+            "reservation_denied": f"World Cup Concierge: Unfortunately, your reservation at {venue_name} for {reservation_details} could not be accommodated. Please try another time or contact the venue directly.",
+            "reservation_reminder": f"World Cup Concierge: Reminder — your reservation at {venue_name} for {reservation_details} is coming up soon. We look forward to seeing you.",
+        }
+        wa_vars = {
+            "reservation_received": {"1": reservation_details, "2": venue_name},
+            "reservation_confirmed": {"1": venue_name, "2": reservation_details},
+            "reservation_denied": {"1": venue_name, "2": reservation_details},
+            "reservation_reminder": {"1": venue_name, "2": reservation_details},
+        }
+        return {
+            "ok": True,
+            "kind": kind,
+            "to_number": to_number,
+            "sms_body": sms_body_map.get(kind, ""),
+            "wa_variables": wa_vars.get(kind, {}),
+        }
 
     if at == "send_confirmation":
         sms_body = f"{venue_name} has confirmed your reservation."
@@ -2156,18 +2240,6 @@ def _build_notification_bundle_spec(action_type: str, payload: Dict[str, Any]) -
             "to_number": to_number,
             "sms_body": sms_body,
             "wa_variables": {"1": venue_name, "2": match_label or "your requested time"},
-        }
-
-    if at == "send_reservation_received":
-        sms_body = f"Your reservation request for {venue_name} has been received."
-        if match_label:
-            sms_body += f" Match: {match_label}."
-        return {
-            "ok": True,
-            "kind": "reservation_received",
-            "to_number": to_number,
-            "sms_body": sms_body,
-            "wa_variables": {"1": venue_name, "2": match_label or ""},
         }
 
     if at == "send_update":
@@ -2230,7 +2302,24 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
             return {"ok": False, "error": "Missing recipient number"}
         ok, msg = _outbound_send_twilio(ch, to_num, body)
         return {"ok": ok, "message": msg}
-    if at in ("send_confirmation", "send_reservation_received", "send_update", "send_vip_update"):
+    if at in ("send_reservation_received", "send_reservation_confirmed", "send_reservation_denied", "send_reservation_reminder"):
+        to_num = str(pl.get("to") or pl.get("phone") or "").strip()
+        venue_name = str(pl.get("venue_name") or "").strip()
+        reservation_details = str(pl.get("reservation_details") or pl.get("message") or pl.get("body") or "").strip()
+        if not to_num:
+            return {"ok": False, "error": "Missing recipient number"}
+        return _send_reservation_notification_bundle(
+            {
+                "send_reservation_received": "reservation_received",
+                "send_reservation_confirmed": "reservation_confirmed",
+                "send_reservation_denied": "reservation_denied",
+                "send_reservation_reminder": "reservation_reminder",
+            }.get(at, ""),
+            to_num,
+            venue_name,
+            reservation_details,
+        )
+    if at in ("send_confirmation", "send_update", "send_vip_update"):
         spec = _build_notification_bundle_spec(at, pl)
         if not spec.get("ok"):
             return {"ok": False, "error": spec.get("error") or "Invalid notification payload"}
@@ -2252,7 +2341,15 @@ def admin_api_outbound_template_preview():
     pl = data.get("payload") or {}
     if not isinstance(pl, dict):
         pl = {}
-    if at not in ("send_confirmation", "send_reservation_received", "send_update", "send_vip_update"):
+    if at not in (
+        "send_confirmation",
+        "send_reservation_received",
+        "send_reservation_confirmed",
+        "send_reservation_denied",
+        "send_reservation_reminder",
+        "send_update",
+        "send_vip_update",
+    ):
         return jsonify({"ok": False, "error": "Template preview supported only for bundled notification actions"}), 400
     spec = _build_notification_bundle_spec(at, pl)
     if not spec.get("ok"):
@@ -2442,10 +2539,10 @@ def _health_check_outbound() -> Dict[str, Any]:
         sms_ok = tw_sid and bool(os.environ.get("TWILIO_MESSAGING_SERVICE_SID", "").strip() or os.environ.get("TWILIO_FROM", "").strip())
         whatsapp_sender_ok = tw_sid and bool(os.environ.get("TWILIO_WHATSAPP_FROM", "").strip())
         wa_templates_ok = all([
-            os.environ.get("WA_TEMPLATE_RESERVATION_RECEIVED", "").strip(),
-            os.environ.get("WA_TEMPLATE_RESERVATION_CONFIRMED", "").strip(),
-            os.environ.get("WA_TEMPLATE_RESERVATION_UPDATE", "").strip(),
-            os.environ.get("WA_TEMPLATE_VIP_UPDATE", "").strip(),
+            os.environ.get("WHATSAPP_TEMPLATE_RESERVATION_RECEIVED", "").strip(),
+            os.environ.get("WHATSAPP_TEMPLATE_RESERVATION_CONFIRMED", "").strip(),
+            os.environ.get("WHATSAPP_TEMPLATE_RESERVATION_DENIED", "").strip(),
+            os.environ.get("WHATSAPP_TEMPLATE_RESERVATION_REMINDER", "").strip(),
         ])
         whatsapp_ok = whatsapp_sender_ok and wa_templates_ok
         if not sg_ok and not sms_ok:
@@ -9314,7 +9411,18 @@ def admin_api_ai_queue_approve(qid: str):
 
     # Outbound sends are NEVER executed on approval. Approval only unlocks a human "Send Now" click.
     applied = None
-    if it_type in ("send_email", "send_sms", "send_whatsapp", "send_confirmation", "send_reservation_received", "send_update", "send_vip_update"):
+    if it_type in (
+        "send_email",
+        "send_sms",
+        "send_whatsapp",
+        "send_confirmation",
+        "send_reservation_received",
+        "send_reservation_confirmed",
+        "send_reservation_denied",
+        "send_reservation_reminder",
+        "send_update",
+        "send_vip_update",
+    ):
         applied = {"ok": True, "note": "Approved — ready to send (human click required)"}
         # Keep item in queue; just mark as approved/reviewed.
         it["status"] = "approved"
@@ -9359,7 +9467,18 @@ def admin_api_ai_queue_send(qid: str):
         return jsonify({"ok": False, "error": "Not found"}), 404
 
     it_type = str(it.get("type") or "").strip().lower()
-    if it_type not in ("send_email", "send_sms", "send_whatsapp", "send_confirmation", "send_reservation_received", "send_update", "send_vip_update"):
+    if it_type not in (
+        "send_email",
+        "send_sms",
+        "send_whatsapp",
+        "send_confirmation",
+        "send_reservation_received",
+        "send_reservation_confirmed",
+        "send_reservation_denied",
+        "send_reservation_reminder",
+        "send_update",
+        "send_vip_update",
+    ):
         return jsonify({"ok": False, "error": "Not an outbound item"}), 400
 
     if str(it.get("status")) != "approved":
@@ -9418,7 +9537,21 @@ def admin_api_ai_queue_override(qid: str):
     # override payload/type (owner-only)
     if "type" in data:
         typ = str(data.get("type") or "").strip()
-        if typ not in ("vip_tag", "status_update", "reply_draft", "send_email", "send_sms", "send_whatsapp", "send_confirmation", "send_reservation_received", "send_update", "send_vip_update"):
+        if typ not in (
+            "vip_tag",
+            "status_update",
+            "reply_draft",
+            "send_email",
+            "send_sms",
+            "send_whatsapp",
+            "send_confirmation",
+            "send_reservation_received",
+            "send_reservation_confirmed",
+            "send_reservation_denied",
+            "send_reservation_reminder",
+            "send_update",
+            "send_vip_update",
+        ):
             return jsonify({"ok": False, "error": "Invalid type"}), 400
         it["type"] = typ
     if "payload" in data and isinstance(data.get("payload"), dict):
@@ -11198,6 +11331,9 @@ label.small + textarea,
         <option value="send_whatsapp">Send WhatsApp</option>
         <option value="send_confirmation">Send confirmation</option>
         <option value="send_reservation_received">Send reservation received</option>
+        <option value="send_reservation_confirmed">Send reservation confirmed</option>
+        <option value="send_reservation_denied">Send reservation denied</option>
+        <option value="send_reservation_reminder">Send reservation reminder</option>
         <option value="send_update">Send update</option>
         <option value="send_vip_update">Send VIP update</option>
       </select>
@@ -12713,7 +12849,7 @@ function renderAIQueue(items){
     const canAct = (st === 'pending');
     const isOutbound = (
       typ === 'send_email' || typ === 'send_sms' || typ === 'send_whatsapp' ||
-      typ === 'send_confirmation' || typ === 'send_reservation_received' || typ === 'send_update' || typ === 'send_vip_update'
+      typ === 'send_confirmation' || typ === 'send_reservation_received' || typ === 'send_reservation_confirmed' || typ === 'send_reservation_denied' || typ === 'send_reservation_reminder' || typ === 'send_update' || typ === 'send_vip_update'
     );
     const canSend = isOutbound && (st === 'approved') && !it.sent_at;
     const sendLabel =
@@ -12723,10 +12859,13 @@ function renderAIQueue(items){
       (typ === 'send_confirmation') ? 'Send Confirmation' :
       (typ === 'send_reservation_received') ? 'Send Received' :
       (typ === 'send_update') ? 'Send Update' :
+      (typ === 'send_reservation_confirmed') ? 'Send Reservation Confirmed' :
+      (typ === 'send_reservation_denied') ? 'Send Reservation Denied' :
+      (typ === 'send_reservation_reminder') ? 'Send Reservation Reminder' :
       (typ === 'send_vip_update') ? 'Send VIP Update' :
       'Send';
     const sendBtn = isOutbound ? `<button type="button" class="btn" ${canSend ? '' : 'disabled'} onclick="aiqSend('${id}', this)">${sendLabel}</button>` : '';
-    const isBundledTemplate = (typ === 'send_confirmation' || typ === 'send_reservation_received' || typ === 'send_update' || typ === 'send_vip_update');
+    const isBundledTemplate = (typ === 'send_confirmation' || typ === 'send_reservation_received' || typ === 'send_reservation_confirmed' || typ === 'send_reservation_denied' || typ === 'send_reservation_reminder' || typ === 'send_update' || typ === 'send_vip_update');
     const viewTplBtn = isBundledTemplate ? `<button type="button" class="btn2" onclick="aiqViewTemplate('${id}')">View Template</button>` : '';
 
     const approveBtn = `<button type="button" class="btn" ${canAct ? '' : 'disabled'} onclick="aiqApprove('${id}', this)">Approve</button>`;
@@ -12874,7 +13013,7 @@ async function aiqOverride(id, btn){
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Overriding…'; }
 
   // Owner-only: allow quick edit of payload/type before applying
-  const typ = prompt('Override action type (vip_tag, status_update, reply_draft, send_email, send_sms, send_whatsapp, send_confirmation, send_reservation_received, send_update, send_vip_update):', 'vip_tag');
+  const typ = prompt('Override action type (vip_tag, status_update, reply_draft, send_email, send_sms, send_whatsapp, send_confirmation, send_reservation_received, send_reservation_confirmed, send_reservation_denied, send_reservation_reminder, send_update, send_vip_update):', 'vip_tag');
   if(!typ){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } return; }
   let payloadTxt = prompt('Override payload JSON (must be valid JSON object):', '{"row":2,"vip":"VIP"}');
   if(payloadTxt === null){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } return; }
