@@ -9184,7 +9184,7 @@ def admin_api_outbound_propose():
     Human approval + explicit send click required.
     Body: {
       "partner": "VENUE_ABC" (optional),
-      "channel": "email|sms|whatsapp",
+      "channel": "email|sms|whatsapp|reservation_received|reservation_confirmed|reservation_denied|reservation_reminder",
       "to": "...",
       "subject": "..." (email only),
       "message": "..." (optional - will use draft if not provided and draft_key/row provided),
@@ -9202,49 +9202,77 @@ def admin_api_outbound_propose():
 
     data = request.get_json(silent=True) or {}
     channel = str(data.get("channel") or "").strip().lower()
-    if channel not in ("email", "sms", "whatsapp"):
-        return jsonify({"ok": False, "error": "Invalid channel"}), 400
-    action_type = f"send_{channel}"
-    
-    # Load lead data if row provided (for template replacement)
-    lead_data = {}
-    row_num = data.get("row")
-    if row_num:
-        try:
-            lead_data = _load_lead_from_sheet_row(int(row_num))
-        except Exception:
-            pass
-    
-    # Determine message body and subject
-    message = data.get("message") or ""
-    subject = data.get("subject") or ""
-    draft_key = data.get("draft_key")
-    
-    # If no message provided, try to use draft
-    if not message.strip():
-        if not draft_key:
-            # Auto-select draft based on channel and context
-            context = data.get("context", "confirm")
-            draft_key = _select_draft_for_channel(channel, context)
-        
-        if draft_key:
-            draft_body, draft_subject = _get_draft_content(draft_key, lead_data)
-            if draft_body:
-                message = draft_body
-                if draft_subject and not subject:
-                    subject = draft_subject
-                # Store draft_key in payload for reference
-                payload = {
-                    "partner": data.get("partner"),
-                    "row": row_num,
-                    "to": data.get("to"),
-                    "subject": subject,
-                    "message": message,
-                    "body": message,  # UI uses 'body'
-                    "draft_key": draft_key,  # Track which draft was used
-                }
+
+    _RESERVATION_TYPES = {
+        "reservation_received": "send_reservation_received",
+        "reservation_confirmed": "send_reservation_confirmed",
+        "reservation_denied": "send_reservation_denied",
+        "reservation_reminder": "send_reservation_reminder",
+    }
+
+    if channel in _RESERVATION_TYPES:
+        action_type = _RESERVATION_TYPES[channel]
+        to_val = str(data.get("to") or "").strip()
+        venue_name = str(data.get("venue_name") or "").strip()
+        reservation_details = str(data.get("reservation_details") or "").strip()
+        if not to_val:
+            return jsonify({"ok": False, "error": "Phone number is required"}), 400
+        if not venue_name:
+            return jsonify({"ok": False, "error": "Venue name is required"}), 400
+        if not reservation_details:
+            return jsonify({"ok": False, "error": "Reservation details are required"}), 400
+        payload = {
+            "partner": data.get("partner"),
+            "to": to_val,
+            "venue_name": venue_name,
+            "reservation_details": reservation_details,
+        }
+        draft_key = None
+    elif channel in ("email", "sms", "whatsapp"):
+        action_type = f"send_{channel}"
+
+        lead_data = {}
+        row_num = data.get("row")
+        if row_num:
+            try:
+                lead_data = _load_lead_from_sheet_row(int(row_num))
+            except Exception:
+                pass
+
+        message = data.get("message") or ""
+        subject = data.get("subject") or ""
+        draft_key = data.get("draft_key")
+
+        if not message.strip():
+            if not draft_key:
+                context = data.get("context", "confirm")
+                draft_key = _select_draft_for_channel(channel, context)
+
+            if draft_key:
+                draft_body, draft_subject = _get_draft_content(draft_key, lead_data)
+                if draft_body:
+                    message = draft_body
+                    if draft_subject and not subject:
+                        subject = draft_subject
+                    payload = {
+                        "partner": data.get("partner"),
+                        "row": row_num,
+                        "to": data.get("to"),
+                        "subject": subject,
+                        "message": message,
+                        "body": message,
+                        "draft_key": draft_key,
+                    }
+                else:
+                    payload = {
+                        "partner": data.get("partner"),
+                        "row": row_num,
+                        "to": data.get("to"),
+                        "subject": subject,
+                        "message": message,
+                        "body": message,
+                    }
             else:
-                # Draft not found or empty
                 payload = {
                     "partner": data.get("partner"),
                     "row": row_num,
@@ -9254,7 +9282,8 @@ def admin_api_outbound_propose():
                     "body": message,
                 }
         else:
-            # No draft available
+            if lead_data and ("{" in message):
+                message = _format_draft_template(message, lead_data)
             payload = {
                 "partner": data.get("partner"),
                 "row": row_num,
@@ -9264,17 +9293,7 @@ def admin_api_outbound_propose():
                 "body": message,
             }
     else:
-        # Message provided explicitly - format it if it has placeholders and we have lead data
-        if lead_data and ("{" in message):
-            message = _format_draft_template(message, lead_data)
-        payload = {
-            "partner": data.get("partner"),
-            "row": row_num,
-            "to": data.get("to"),
-            "subject": subject,
-            "message": message,
-            "body": message,
-        }
+        return jsonify({"ok": False, "error": "Invalid channel"}), 400
     
     # Best-effort partner id for policy gating
     partner = _derive_partner_id(payload=payload)
@@ -11350,15 +11369,47 @@ label.small + textarea,
   </div>
 
   <div class="card">
-    <div class="h2" style="margin-bottom:8px">Compose message (queue outbound)</div>
-    <div class="small" style="margin-bottom:10px">Add an SMS, Email, or WhatsApp message to the queue. Leave message empty to use draft template (set Row to fill placeholders from the sheet).</div>
+    <div class="h2" style="margin-bottom:4px">Send Reservation Notification</div>
+    <div class="small" style="margin-bottom:10px">Queue a reservation notification — sends <b>both SMS + WhatsApp template</b> in one action. Approve then Send.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div>
+        <label class="small">Notification type</label>
+        <select id="rn-type" class="inp" style="min-width:190px">
+          <option value="reservation_received">Reservation Received</option>
+          <option value="reservation_confirmed">Reservation Confirmed</option>
+          <option value="reservation_denied">Reservation Denied</option>
+          <option value="reservation_reminder">Reservation Reminder</option>
+        </select>
+      </div>
+      <div>
+        <label class="small">Phone (guest)</label>
+        <input id="rn-to" class="inp" placeholder="+1... or local" style="min-width:150px" />
+      </div>
+      <div>
+        <label class="small">Venue name</label>
+        <input id="rn-venue" class="inp" placeholder="e.g. Nyla B Lounge" style="min-width:160px" />
+      </div>
+      <div style="flex:1;min-width:200px">
+        <label class="small">Reservation details</label>
+        <input id="rn-details" class="inp" placeholder="e.g. Apr 20, 8:00 PM, party of 4" style="width:100%" />
+      </div>
+      <div>
+        <button type="button" class="btn" onclick="composeReservationNotification(this)">Queue Notification</button>
+      </div>
+    </div>
+    <span id="rn-msg" class="note" style="display:block;margin-top:8px"></span>
+  </div>
+
+  <div class="card">
+    <div class="h2" style="margin-bottom:8px">Compose custom message (queue outbound)</div>
+    <div class="small" style="margin-bottom:10px">Manual SMS, Email, or free-text WhatsApp. For reservation notifications, use the section above instead.</div>
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
       <div>
         <label class="small">Channel</label>
         <select id="ob-channel" class="inp" style="min-width:100px" onchange="var w=document.getElementById('ob-subject-wrap');var v=document.getElementById('ob-channel').value;if(w)w.classList.toggle('hidden',v!=='email');">
           <option value="sms">SMS</option>
           <option value="email">Email</option>
-          <option value="whatsapp">WhatsApp</option>
+          <option value="whatsapp">WhatsApp (free-text)</option>
         </select>
       </div>
       <div>
@@ -12797,6 +12848,35 @@ async function runAIRow(){
   }catch(e){
     if(msg) msg.textContent = 'Run failed: ' + (e.message || e);
   }
+}
+
+async function composeReservationNotification(btn){
+  const msg = qs('#rn-msg'); if(msg) msg.textContent = '';
+  if(btn) btn.disabled = true;
+  const notifType = (qs('#rn-type')?.value || '').trim();
+  const to = (qs('#rn-to')?.value || '').trim();
+  const venueName = (qs('#rn-venue')?.value || '').trim();
+  const details = (qs('#rn-details')?.value || '').trim();
+  if(!to){ if(msg) msg.textContent = 'Enter guest phone number.'; if(btn) btn.disabled = false; return; }
+  if(!venueName){ if(msg) msg.textContent = 'Enter venue name.'; if(btn) btn.disabled = false; return; }
+  if(!details){ if(msg) msg.textContent = 'Enter reservation details.'; if(btn) btn.disabled = false; return; }
+  try{
+    const r = await fetch(`/admin/api/outbound/propose?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ channel: notifType, to, venue_name: venueName, reservation_details: details })
+    });
+    const j = await r.json().catch(()=>null);
+    if(j && j.ok){
+      if(msg) msg.textContent = 'Queued — Approve then Send.';
+      qs('#rn-to').value = '';
+      qs('#rn-details').value = '';
+      await loadAIQueue();
+    } else {
+      if(msg) msg.textContent = (j && j.error) ? j.error : 'Queue failed';
+    }
+  }catch(e){ if(msg) msg.textContent = 'Error: ' + (e.message || e); }
+  if(btn) btn.disabled = false;
 }
 
 async function composeOutbound(btn){
