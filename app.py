@@ -2331,6 +2331,48 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         )
     return {"ok": False, "error": "Unsupported outbound action"}
 
+@app.route("/admin/api/lead-row", methods=["GET"])
+def admin_api_lead_row():
+    """Return lead data for a given sheet row number (for reservation notification composer)."""
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    row_num = request.args.get("row", "").strip()
+    if not row_num:
+        return jsonify({"ok": False, "error": "Missing row parameter"}), 400
+    try:
+        row_int = int(row_num)
+    except Exception:
+        return jsonify({"ok": False, "error": "Row must be a number"}), 400
+    if row_int < 2:
+        return jsonify({"ok": False, "error": "Row must be >= 2"}), 400
+    lead = _load_lead_from_sheet_row(row_int)
+    if not lead:
+        return jsonify({"ok": False, "error": f"No lead found at row {row_int}"}), 404
+    phone = str(lead.get("phone") or lead.get("email") or "").strip()
+    name = str(lead.get("name") or "").strip()
+    date_val = str(lead.get("date") or "").strip()
+    time_val = str(lead.get("time") or "").strip()
+    party = str(lead.get("party_size") or "").strip()
+    details_parts = []
+    if date_val:
+        details_parts.append(date_val)
+    if time_val:
+        details_parts.append(time_val)
+    if party:
+        details_parts.append(f"party of {party}")
+    if name:
+        details_parts.append(f"for {name}")
+    reservation_details = ", ".join(details_parts) if details_parts else ""
+    return jsonify({
+        "ok": True,
+        "row": row_int,
+        "lead": lead,
+        "to": phone,
+        "name": name,
+        "reservation_details": reservation_details,
+    })
+
 @app.route("/admin/api/outbound/template-preview", methods=["POST"])
 def admin_api_outbound_template_preview():
     ok, resp = _require_admin(min_role="manager")
@@ -9215,18 +9257,43 @@ def admin_api_outbound_propose():
         to_val = str(data.get("to") or "").strip()
         venue_name = str(data.get("venue_name") or "").strip()
         reservation_details = str(data.get("reservation_details") or "").strip()
+        row_num = data.get("row")
+        lead_data = {}
+        if row_num:
+            try:
+                lead_data = _load_lead_from_sheet_row(int(row_num))
+            except Exception:
+                pass
+        if lead_data:
+            if not to_val:
+                to_val = str(lead_data.get("phone") or lead_data.get("email") or "").strip()
+            if not reservation_details:
+                parts = []
+                if lead_data.get("date"):
+                    parts.append(str(lead_data["date"]))
+                if lead_data.get("time"):
+                    parts.append(str(lead_data["time"]))
+                if lead_data.get("party_size"):
+                    parts.append(f"party of {lead_data['party_size']}")
+                if lead_data.get("name"):
+                    parts.append(f"for {lead_data['name']}")
+                reservation_details = ", ".join(parts) if parts else ""
         if not to_val:
-            return jsonify({"ok": False, "error": "Phone number is required"}), 400
+            return jsonify({"ok": False, "error": "Phone number is required (enter manually or provide a valid Row #)"}), 400
         if not venue_name:
             return jsonify({"ok": False, "error": "Venue name is required"}), 400
         if not reservation_details:
-            return jsonify({"ok": False, "error": "Reservation details are required"}), 400
+            return jsonify({"ok": False, "error": "Reservation details are required (enter manually or provide a valid Row #)"}), 400
         payload = {
             "partner": data.get("partner"),
             "to": to_val,
             "venue_name": venue_name,
             "reservation_details": reservation_details,
         }
+        if row_num:
+            payload["row"] = row_num
+        if lead_data:
+            payload["lead_snapshot"] = {k: str(lead_data.get(k) or "").strip() for k in ["name", "date", "time", "party_size", "phone", "email"]}
         draft_key = None
     elif channel in ("email", "sms", "whatsapp"):
         action_type = f"send_{channel}"
@@ -11370,8 +11437,15 @@ label.small + textarea,
 
   <div class="card">
     <div class="h2" style="margin-bottom:4px">Send Reservation Notification</div>
-    <div class="small" style="margin-bottom:10px">Queue a reservation notification — sends <b>both SMS + WhatsApp template</b> in one action. Approve then Send.</div>
+    <div class="small" style="margin-bottom:10px">Queue a reservation notification — sends <b>both SMS + WhatsApp template</b> in one action. Enter <b>Row #</b> from Leads table to auto-fill, or enter details manually. Approve then Send.</div>
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+      <div>
+        <label class="small">Row # (from Leads)</label>
+        <div style="display:flex;gap:4px">
+          <input id="rn-row" class="inp" type="number" min="2" placeholder="e.g. 35" style="max-width:80px" />
+          <button type="button" class="btn2" onclick="rnLoadRow()" title="Load phone + details from this lead row">Load</button>
+        </div>
+      </div>
       <div>
         <label class="small">Notification type</label>
         <select id="rn-type" class="inp" style="min-width:190px">
@@ -12850,6 +12924,22 @@ async function runAIRow(){
   }
 }
 
+async function rnLoadRow(){
+  const msg = qs('#rn-msg');
+  const rowEl = qs('#rn-row');
+  const row = parseInt(rowEl?.value || '0', 10);
+  if(!row || row < 2){ if(msg) msg.textContent = 'Enter a valid Row # (>= 2) from Leads table.'; return; }
+  if(msg) msg.textContent = 'Loading row ' + row + '…';
+  try{
+    const r = await fetch(`/admin/api/lead-row?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}&row=${row}`);
+    const j = await r.json().catch(()=>null);
+    if(!j || !j.ok){ if(msg) msg.textContent = (j && j.error) ? j.error : 'Row not found'; return; }
+    if(j.to) qs('#rn-to').value = j.to;
+    if(j.reservation_details) qs('#rn-details').value = j.reservation_details;
+    if(msg) msg.textContent = 'Loaded row ' + row + (j.name ? ' (' + j.name + ')' : '') + ' — review and edit fields, then Queue.';
+  }catch(e){ if(msg) msg.textContent = 'Load failed: ' + (e.message || e); }
+}
+
 async function composeReservationNotification(btn){
   const msg = qs('#rn-msg'); if(msg) msg.textContent = '';
   if(btn) btn.disabled = true;
@@ -12857,20 +12947,24 @@ async function composeReservationNotification(btn){
   const to = (qs('#rn-to')?.value || '').trim();
   const venueName = (qs('#rn-venue')?.value || '').trim();
   const details = (qs('#rn-details')?.value || '').trim();
-  if(!to){ if(msg) msg.textContent = 'Enter guest phone number.'; if(btn) btn.disabled = false; return; }
+  const rowVal = qs('#rn-row')?.value;
+  const row = (rowVal && parseInt(rowVal,10) >= 2) ? parseInt(rowVal,10) : null;
+  if(!to && !row){ if(msg) msg.textContent = 'Enter guest phone or a Row # to load from.'; if(btn) btn.disabled = false; return; }
   if(!venueName){ if(msg) msg.textContent = 'Enter venue name.'; if(btn) btn.disabled = false; return; }
-  if(!details){ if(msg) msg.textContent = 'Enter reservation details.'; if(btn) btn.disabled = false; return; }
   try{
+    const payload = { channel: notifType, to, venue_name: venueName, reservation_details: details };
+    if(row) payload.row = row;
     const r = await fetch(`/admin/api/outbound/propose?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ channel: notifType, to, venue_name: venueName, reservation_details: details })
+      body: JSON.stringify(payload)
     });
     const j = await r.json().catch(()=>null);
     if(j && j.ok){
       if(msg) msg.textContent = 'Queued — Approve then Send.';
       qs('#rn-to').value = '';
       qs('#rn-details').value = '';
+      qs('#rn-row').value = '';
       await loadAIQueue();
     } else {
       if(msg) msg.textContent = (j && j.error) ? j.error : 'Queue failed';
