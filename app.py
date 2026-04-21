@@ -936,6 +936,16 @@ def _venue_cfg(venue_id: Optional[str] = None) -> Dict[str, Any]:
     return cfg if isinstance(cfg, dict) else {"venue_id": vid, "status": "implicit"}
 
 
+def _venue_display_name(venue_id: Optional[str] = None) -> str:
+    cfg = _venue_cfg(venue_id)
+    for k in ("display_name", "name", "title", "venue_name"):
+        v = str(cfg.get(k) or "").strip()
+        if v:
+            return v
+    vid = str(cfg.get("venue_id") or "").strip()
+    return vid or "the venue"
+
+
 def _venue_sheet_id(venue_id: Optional[str] = None) -> str:
     cfg = _venue_cfg(venue_id)
     data = cfg.get("data") if isinstance(cfg.get("data"), dict) else {}
@@ -1341,6 +1351,27 @@ def _default_ai_settings() -> Dict[str, Any]:
             "auto_vip_tag": True,
             "auto_status_update": False,
             "auto_reply_draft": True,
+        },
+        "focus_mode": "all",
+        "focus_filters": {
+            "vip_only": False,
+            "reminders_only": False,
+            "upgrades_only": False,
+            "reply_drafts_only": False,
+            "suggest_email": True,
+            "suggest_sms": True,
+            "suggest_whatsapp": True,
+            "allow_vip_tagging": True,
+            "allow_reply_drafts": True,
+            "allow_reminder_suggestions": True,
+            "allow_upgrade_suggestions": True,
+        },
+        "channel_preferences": {
+            "prefer_email_for_confirmations": True,
+            "prefer_sms_for_urgent": True,
+            "prefer_whatsapp_when_available": False,
+            "rank_all_available_channels": True,
+            "auto_detect_best_channel": True,
         },
         "updated_at": None,
         "updated_by": None,  # actor hash
@@ -2136,6 +2167,261 @@ def _get_whatsapp_template_sid(kind: str) -> str:
     }
     return mapping.get(k, "")
 
+
+# --- AI suggestion taxonomy, queue buckets, channel intelligence (operator UX) ---
+
+SUGGESTION_PRESETS: Dict[str, Dict[str, Any]] = {
+    "vip": {"types": ["vip_tag"]},
+    "reminders": {"types": ["send_reservation_reminder", "send_confirmation"]},
+    "upgrades": {"types": ["send_upgrade_message", "send_vip_followup"]},
+    "reply_drafts": {"types": ["reply_draft"]},
+    "all": {"types": ["*"]},
+}
+
+_LEGACY_RESERVATION_ACTION_TO_TEMPLATE: Dict[str, str] = {
+    "send_reservation_received": "reservation_received",
+    "send_reservation_confirmed": "reservation_confirmed",
+    "send_reservation_denied": "reservation_denied",
+    "send_reservation_reminder": "reservation_reminder",
+}
+
+
+def _normalize_ai_action_type(action_type: str) -> str:
+    """Canonical type for filtering; maps legacy reservation sends to send_whatsapp."""
+    at = (action_type or "").strip().lower()
+    if at in _LEGACY_RESERVATION_ACTION_TO_TEMPLATE:
+        return "send_whatsapp"
+    return at
+
+
+def _queue_item_template_key(item: Dict[str, Any]) -> str:
+    pl = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+    tk = str((pl or {}).get("template_key") or "").strip().lower()
+    if tk:
+        return tk
+    t = str(item.get("type") or "").strip().lower()
+    return str(_LEGACY_RESERVATION_ACTION_TO_TEMPLATE.get(t) or "").strip().lower()
+
+
+def _queue_item_channels(item: Dict[str, Any]) -> set:
+    """Channels touched by this queue item (for filters). Non-outbound → empty set."""
+    t = str(item.get("type") or "").strip().lower()
+    if t == "send_email":
+        return {"email"}
+    if t == "send_sms":
+        return {"sms"}
+    if t == "send_whatsapp":
+        return {"whatsapp"}
+    if t in _LEGACY_RESERVATION_ACTION_TO_TEMPLATE:
+        return {"sms", "whatsapp"}
+    if t in ("send_confirmation", "send_update", "send_vip_update"):
+        return {"sms", "whatsapp"}
+    return set()
+
+
+def _queue_item_matches_view_bucket(item: Dict[str, Any], bucket: str) -> bool:
+    b = (bucket or "all").strip().lower()
+    if b in ("", "all"):
+        return True
+    t = str(item.get("type") or "").strip().lower()
+    nt = _normalize_ai_action_type(t)
+    tk = _queue_item_template_key(item)
+
+    if b == "vip":
+        return t == "vip_tag"
+    if b == "drafts":
+        return t == "reply_draft"
+    if b == "reminders":
+        if t in ("send_reservation_reminder", "send_confirmation"):
+            return True
+        return nt == "send_whatsapp" and tk == "reservation_reminder"
+    if b == "upgrades":
+        return t in ("send_upgrade_message", "send_vip_followup")
+    if b == "email":
+        return "email" in _queue_item_channels(item)
+    if b == "sms":
+        return "sms" in _queue_item_channels(item)
+    if b == "whatsapp":
+        return "whatsapp" in _queue_item_channels(item)
+    return True
+
+
+def _ai_queue_bucket_counts(items: List[Dict[str, Any]]) -> Dict[str, int]:
+    keys = ("all", "vip", "reminders", "upgrades", "email", "sms", "whatsapp", "drafts")
+    out = {k: 0 for k in keys}
+    out["all"] = len(items)
+    for it in items:
+        for k in keys:
+            if k == "all":
+                continue
+            if _queue_item_matches_view_bucket(it, k):
+                out[k] += 1
+    return out
+
+
+def _whatsapp_variables_for_template_key(
+    template_key: str,
+    venue_name: str,
+    reservation_details: str,
+) -> Dict[str, Any]:
+    k = (template_key or "").strip().lower()
+    wa_vars = {
+        "reservation_received": {"1": reservation_details, "2": venue_name},
+        "reservation_confirmed": {"1": venue_name, "2": reservation_details},
+        "reservation_denied": {"1": venue_name, "2": reservation_details},
+        "reservation_reminder": {"1": venue_name, "2": reservation_details},
+    }
+    return dict(wa_vars.get(k, {}))
+
+
+def _infer_whatsapp_template_key(lead: Dict[str, Any]) -> str:
+    """Pick a template from lead status / timing when AI proposes send_whatsapp."""
+    st = str(lead.get("status") or "").strip().lower()
+    if any(x in st for x in ("deny", "denied", "reject", "cancel", "no-show")):
+        return "reservation_denied"
+    if any(x in st for x in ("confirm", "reserved", "seated", "complete")):
+        return "reservation_confirmed"
+    # Upcoming reservation window → reminder
+    dt_s = " ".join(
+        part for part in [(lead.get("date") or "").strip(), (lead.get("time") or "").strip()] if part
+    ).strip()
+    if dt_s:
+        try:
+            # best-effort parse; if reservation is within ~36h, suggest reminder
+            dt = datetime.fromisoformat(dt_s.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            delta = (dt - now).total_seconds()
+            if 0 < delta < 36 * 3600:
+                return "reservation_reminder"
+        except Exception:
+            pass
+    if st in ("new", "", "contacted", "waitlist"):
+        return "reservation_received"
+    return "reservation_received"
+
+
+def _recommend_channel(lead: Dict[str, Any], suggestion_kind: str, settings: Dict[str, Any]) -> Dict[str, Any]:
+    """Deliberate channel ranking for outbound suggestions (stored on queue payload)."""
+    s = settings or {}
+    pref = s.get("channel_preferences") if isinstance(s.get("channel_preferences"), dict) else {}
+    prefer_email_conf = bool(pref.get("prefer_email_for_confirmations", True))
+    prefer_sms_urgent = bool(pref.get("prefer_sms_for_urgent", True))
+    prefer_wa = bool(pref.get("prefer_whatsapp_when_available", False))
+    rank_all = bool(pref.get("rank_all_available_channels", True))
+
+    email = str(lead.get("email") or "").strip()
+    phone = str(lead.get("phone") or "").strip()
+    kind = (suggestion_kind or "").strip().lower()
+
+    wa_enabled = bool(_venue_features().get("whatsapp_outbound") or _venue_features().get("whatsapp"))
+    # If feature flags absent, infer from Twilio WA env
+    if not wa_enabled:
+        wa_enabled = bool(os.environ.get("TWILIO_WHATSAPP_FROM", "").strip())
+
+    ranked: List[str] = []
+    reason = ""
+
+    is_reminder = kind in ("reminder", "send_reservation_reminder", "reservation_reminder") or "remind" in kind
+    is_confirm = kind in ("confirm", "confirmation", "send_confirmation", "reservation_confirmed", "formal")
+
+    if prefer_sms_urgent and is_reminder and phone:
+        ranked.append("sms")
+        reason = "Urgent / time-bound reminder — SMS first when phone is available"
+    elif prefer_email_conf and is_confirm and email:
+        ranked.append("email")
+        reason = "Formal confirmation — email first when available"
+    elif prefer_wa and wa_enabled and phone:
+        ranked.append("whatsapp")
+        reason = "Venue prefers WhatsApp for this guest"
+    elif email:
+        ranked.append("email")
+    if phone and "sms" not in ranked:
+        ranked.append("sms")
+    if wa_enabled and phone and "whatsapp" not in ranked:
+        ranked.append("whatsapp")
+    if email and "email" not in ranked:
+        ranked.append("email")
+
+    # Dedupe preserving order
+    seen: set = set()
+    deduped: List[str] = []
+    for x in ranked:
+        if x not in seen:
+            seen.add(x)
+            deduped.append(x)
+    ranked = deduped
+
+    if not rank_all and ranked:
+        ranked = ranked[:1]
+
+    best = ranked[0] if ranked else ("email" if email else ("sms" if phone else "email"))
+    if not reason:
+        reason = "Ranked from available contact channels and venue preferences"
+
+    return {
+        "channel": best,
+        "ranked": ranked or [best],
+        "reason": reason,
+    }
+
+
+def _queue_item_matches_focus_param(item: Dict[str, Any], focus: str) -> bool:
+    f = (focus or "").strip().lower()
+    if f in ("", "all"):
+        return True
+    preset = SUGGESTION_PRESETS.get(f)
+    if not preset:
+        return True
+    types = preset.get("types") or []
+    if "*" in types:
+        return True
+    t = str(item.get("type") or "").strip().lower()
+    tk = _queue_item_template_key(item)
+    if t in types:
+        return True
+    if _normalize_ai_action_type(t) == "send_whatsapp" and tk:
+        if f == "reminders" and tk == "reservation_reminder":
+            return True
+    return False
+
+
+def _ai_run_action_passes_filters(
+    action_type: str,
+    payload: Optional[Dict[str, Any]],
+    focus_mode: str,
+    channel_mode: str,
+) -> bool:
+    """Filter AI run output by focus_mode and channel before enqueue."""
+    pl = payload if isinstance(payload, dict) else {}
+    typ = (action_type or "").strip().lower()
+    fm = (focus_mode or "all").strip().lower()
+    cm = (channel_mode or "any").strip().lower()
+
+    if fm and fm != "all":
+        if not _queue_item_matches_focus_param({"type": typ, "payload": pl}, fm):
+            return False
+
+    if cm and cm not in ("any", "all", ""):
+        chans: set = set()
+        if typ == "send_email":
+            chans.add("email")
+        elif typ == "send_sms":
+            chans.add("sms")
+        elif typ == "send_whatsapp" or typ.startswith("send_reservation_"):
+            chans.add("whatsapp")
+        elif typ in ("send_confirmation", "send_update", "send_vip_update"):
+            chans.update({"sms", "whatsapp"})
+        if cm == "email":
+            return "email" in chans
+        if cm == "sms":
+            return bool(chans & {"sms"})
+        if cm == "whatsapp":
+            return "whatsapp" in chans
+    return True
+
+
 def _send_notification_bundle(kind: str, to_number_or_id: str, sms_body: str, wa_variables: Dict[str, Any]) -> Dict[str, Any]:
     result: Dict[str, Any] = {"ok": True, "sms": None, "whatsapp": None}
     sms_ok, sms_msg = _outbound_send_twilio("sms", to_number_or_id, sms_body)
@@ -2294,13 +2580,36 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
             return {"ok": False, "error": "Missing recipient email"}
         ok, msg = _outbound_send_email(to_email, subject, body)
         return {"ok": ok, "message": msg}
-    if at in ("send_sms", "send_whatsapp"):
-        ch = at.replace("send_", "")
+    if at == "send_whatsapp":
+        to_num = str(pl.get("to") or pl.get("phone") or "").strip()
+        tk = str(pl.get("template_key") or "").strip().lower()
+        venue_name = str(pl.get("venue_name") or _venue_display_name() or "the venue").strip()
+        reservation_details = str(
+            pl.get("reservation_details") or pl.get("message") or pl.get("body") or ""
+        ).strip()
+        if tk in ("reservation_received", "reservation_confirmed", "reservation_denied", "reservation_reminder"):
+            if not to_num:
+                return {"ok": False, "error": "Missing recipient number"}
+            if not reservation_details:
+                return {"ok": False, "error": "Missing reservation details for WhatsApp template"}
+            wa_sid = _get_whatsapp_template_sid(tk)
+            if not wa_sid:
+                return {"ok": False, "error": f"Missing WhatsApp template SID for {tk}"}
+            wa_vars = _whatsapp_variables_for_template_key(tk, venue_name, reservation_details)
+            ok_wa, msg_wa = _outbound_send_whatsapp_template(wa_sid, to_num, wa_vars)
+            return {"ok": ok_wa, "message": msg_wa}
+        # Legacy / manual: free-text WhatsApp (no template_key)
+        body = message
+        if not to_num:
+            return {"ok": False, "error": "Missing recipient number"}
+        ok, msg = _outbound_send_twilio("whatsapp", to_num, body)
+        return {"ok": ok, "message": msg}
+    if at == "send_sms":
         to_num = str(pl.get("to") or pl.get("phone") or "").strip()
         body = message
         if not to_num:
             return {"ok": False, "error": "Missing recipient number"}
-        ok, msg = _outbound_send_twilio(ch, to_num, body)
+        ok, msg = _outbound_send_twilio("sms", to_num, body)
         return {"ok": ok, "message": msg}
     if at in ("send_reservation_received", "send_reservation_confirmed", "send_reservation_denied", "send_reservation_reminder"):
         to_num = str(pl.get("to") or pl.get("phone") or "").strip()
@@ -2383,6 +2692,26 @@ def admin_api_outbound_template_preview():
     pl = data.get("payload") or {}
     if not isinstance(pl, dict):
         pl = {}
+    if at == "send_whatsapp":
+        tk = str(pl.get("template_key") or "").strip().lower()
+        if tk not in ("reservation_received", "reservation_confirmed", "reservation_denied", "reservation_reminder"):
+            return jsonify({"ok": False, "error": "send_whatsapp preview requires payload.template_key"}), 400
+        to_number = str(pl.get("to") or pl.get("phone") or "").strip()
+        venue_name = str(pl.get("venue_name") or "the venue").strip()
+        reservation_details = str(pl.get("reservation_details") or pl.get("message") or pl.get("body") or "").strip()
+        if not to_number:
+            return jsonify({"ok": False, "error": "Missing recipient number"}), 400
+        wa_sid = _get_whatsapp_template_sid(tk)
+        preview = {
+            "kind": tk,
+            "to_input": to_number,
+            "to_e164": _normalize_phone_e164(to_number) or "",
+            "sms_body": "",
+            "wa_template_sid": wa_sid,
+            "wa_template_configured": bool(wa_sid),
+            "wa_variables": _whatsapp_variables_for_template_key(tk, venue_name, reservation_details),
+        }
+        return jsonify({"ok": True, "preview": preview})
     if at not in (
         "send_confirmation",
         "send_reservation_received",
@@ -8818,6 +9147,54 @@ def admin_api_ai_settings():
         mc = max(0.0, min(1.0, mc))
         patch["min_confidence"] = mc
 
+    if "focus_mode" in data:
+        fm = str(data.get("focus_mode") or "all").strip().lower()
+        if fm not in ("all", "vip", "reminders", "upgrades", "reply_drafts"):
+            return jsonify({"ok": False, "error": "Invalid focus_mode"}), 400
+        patch["focus_mode"] = fm
+
+    if "focus_filters" in data and isinstance(data.get("focus_filters"), dict):
+        ff_in = data.get("focus_filters") or {}
+        ff_patch: Dict[str, Any] = {}
+        for k in (
+            "vip_only",
+            "reminders_only",
+            "upgrades_only",
+            "reply_drafts_only",
+            "suggest_email",
+            "suggest_sms",
+            "suggest_whatsapp",
+            "allow_vip_tagging",
+            "allow_reply_drafts",
+            "allow_reminder_suggestions",
+            "allow_upgrade_suggestions",
+        ):
+            if k in ff_in:
+                ff_patch[k] = bool(as_bool(ff_in.get(k)))
+        if ff_patch:
+            patch["focus_filters"] = _deep_merge(
+                current.get("focus_filters") or _default_ai_settings().get("focus_filters") or {},
+                ff_patch,
+            )
+
+    if "channel_preferences" in data and isinstance(data.get("channel_preferences"), dict):
+        cp_in = data.get("channel_preferences") or {}
+        cp_patch: Dict[str, Any] = {}
+        for k in (
+            "prefer_email_for_confirmations",
+            "prefer_sms_for_urgent",
+            "prefer_whatsapp_when_available",
+            "rank_all_available_channels",
+            "auto_detect_best_channel",
+        ):
+            if k in cp_in:
+                cp_patch[k] = bool(as_bool(cp_in.get(k)))
+        if cp_patch:
+            patch["channel_preferences"] = _deep_merge(
+                current.get("channel_preferences") or _default_ai_settings().get("channel_preferences") or {},
+                cp_patch,
+            )
+
     # Feature flags (manager-safe). These do NOT grant new powers; they only further restrict actions.
     feats_in = data.get("features")
     if isinstance(feats_in, dict):
@@ -8905,6 +9282,13 @@ def admin_api_ai_run():
 
     # Per-venue AI settings (used for selecting which statuses count as "new")
     ai_settings = _get_ai_settings()
+    focus_mode = str(data.get("focus_mode") or ai_settings.get("focus_mode") or "all").strip().lower()
+    if focus_mode not in ("all", "vip", "reminders", "upgrades", "reply_drafts"):
+        focus_mode = "all"
+    channel_mode = str(data.get("channel") or "any").strip().lower()
+    if channel_mode not in ("any", "all", "", "email", "sms", "whatsapp"):
+        channel_mode = "any"
+
     raw_new_statuses = ai_settings.get("new_status_values")
     if isinstance(raw_new_statuses, list) and raw_new_statuses:
         new_status_values = {
@@ -9044,7 +9428,32 @@ def admin_api_ai_run():
                 payload["sheet_row"] = sheet_row
             payload["row"] = sheet_row  # outbound/send also uses "row"
             # Enrich outbound payload from drafts + lead when body/to missing
-            if typ in ("send_sms", "send_email", "send_whatsapp"):
+            if typ == "send_whatsapp":
+                if not str(payload.get("template_key") or "").strip():
+                    payload["template_key"] = _infer_whatsapp_template_key(lead)
+                payload.setdefault("venue_name", _venue_display_name())
+                if not str(payload.get("reservation_details") or "").strip():
+                    det_parts = []
+                    if lead.get("date"):
+                        det_parts.append(str(lead.get("date")))
+                    if lead.get("time"):
+                        det_parts.append(str(lead.get("time")))
+                    if lead.get("party_size"):
+                        det_parts.append(f"party of {lead.get('party_size')}")
+                    if lead.get("name"):
+                        det_parts.append(f"for {lead.get('name')}")
+                    payload["reservation_details"] = ", ".join(det_parts) if det_parts else str(lead.get("datetime") or "").strip()
+                if not payload.get("to"):
+                    payload["to"] = str(lead.get("phone") or "").strip()
+                rc = _recommend_channel(
+                    lead,
+                    f'{str(payload.get("template_key") or "")}:send_whatsapp',
+                    ai_settings,
+                )
+                payload["recommended_channel"] = rc.get("channel")
+                payload["channel_ranked"] = rc.get("ranked")
+                payload["channel_reason"] = rc.get("reason")
+            elif typ in ("send_sms", "send_email"):
                 lead_data = {k: str(lead.get(k) or "").strip() for k in ["name", "date", "time", "party_size", "phone", "email"]}
                 if not payload.get("to"):
                     payload["to"] = lead_data.get("email") if typ == "send_email" else lead_data.get("phone")
@@ -9056,6 +9465,12 @@ def admin_api_ai_run():
                         payload["body"] = payload["message"] = body
                     if subj and typ == "send_email":
                         payload["subject"] = subj
+                rc2 = _recommend_channel(lead, typ, ai_settings)
+                payload["recommended_channel"] = rc2.get("channel")
+                payload["channel_ranked"] = rc2.get("ranked")
+                payload["channel_reason"] = rc2.get("reason")
+            if not _ai_run_action_passes_filters(typ, payload, focus_mode, channel_mode):
+                continue
             rationale = str(a.get("reason") or out.get("notes") or "")[:1500]
             entry = {
                 "id": _queue_new_id(),
@@ -9091,48 +9506,76 @@ def admin_api_ai_queue_list():
         ctx = {}
     role = ctx.get("role", "")
     queue = _load_ai_queue()
+
+    def _parse_created_at_q(s: Any) -> Optional[datetime]:
+        try:
+            if s is None:
+                return None
+            ts = str(s).strip()
+            if not ts:
+                return None
+            ts = ts.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(ts)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        except Exception:
+            return None
+
     # optional status filter
     status = (request.args.get("status") or "").strip().lower()
     if status:
         queue = [q for q in queue if str(q.get("status") or "").lower() == status]
 
-    # optional time filter (server-side): created_at within last N minutes
+    # optional time filter (server-side): created_at within last N minutes, or calendar "today" (UTC)
     time_param = (request.args.get("time") or "").strip()
-    time_minutes = _parse_time_range_minutes(time_param) if time_param else None
-    if time_minutes is None and time_param:
-        try:
-            time_minutes = int(time_param)
-        except Exception:
-            time_minutes = None
-    if time_minutes and time_minutes > 0:
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=time_minutes)
-        def _parse_created_at(s: Any) -> Optional[datetime]:
-            try:
-                if s is None:
-                    return None
-                ts = str(s).strip()
-                if not ts:
-                    return None
-                # Normalize Z -> +00:00 for fromisoformat
-                ts = ts.replace("Z", "+00:00")
-                dt = datetime.fromisoformat(ts)
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-                return dt.astimezone(timezone.utc)
-            except Exception:
-                return None
-        queue = [
-            q for q in queue
-            if (_parse_created_at(q.get("created_at")) or cutoff) >= cutoff
-        ]
+    if time_param.lower() == "today":
+        today_d = datetime.now(timezone.utc).date()
 
-    # optional type filter
+        def _is_today_entry(q: Dict[str, Any]) -> bool:
+            dt = _parse_created_at_q(q.get("created_at"))
+            return dt is not None and dt.date() == today_d
+
+        queue = [q for q in queue if _is_today_entry(q)]
+    else:
+        time_minutes = _parse_time_range_minutes(time_param) if time_param else None
+        if time_minutes is None and time_param:
+            try:
+                time_minutes = int(time_param)
+            except Exception:
+                time_minutes = None
+        if time_minutes and time_minutes > 0:
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=time_minutes)
+            queue = [
+                q for q in queue
+                if (_parse_created_at_q(q.get("created_at")) or cutoff) >= cutoff
+            ]
+
+    counts = _ai_queue_bucket_counts(queue[:500])
+
+    # optional focus preset (vip|reminders|upgrades|reply_drafts|all)
+    focus_param = (request.args.get("focus") or "").strip().lower()
+    if focus_param:
+        queue = [q for q in queue if _queue_item_matches_focus_param(q, focus_param)]
+
+    # optional channel filter (email|sms|whatsapp)
+    channel_param = (request.args.get("channel") or "").strip().lower()
+    if channel_param in ("email", "sms", "whatsapp"):
+        queue = [q for q in queue if channel_param in _queue_item_channels(q)]
+
+    # optional type filter (canonical send_whatsapp matches legacy reservation types)
     type_param = (request.args.get("type") or "").strip().lower()
     if type_param:
-        queue = [
-            q for q in queue
-            if str(q.get("type") or "").strip().lower() == type_param
-        ]
+        if type_param == "send_whatsapp":
+            queue = [
+                q for q in queue
+                if _normalize_ai_action_type(str(q.get("type") or "")) == "send_whatsapp"
+            ]
+        else:
+            queue = [
+                q for q in queue
+                if str(q.get("type") or "").strip().lower() == type_param
+            ]
 
     # optional min confidence filter
     conf_param = (request.args.get("conf") or "").strip()
@@ -9147,27 +9590,14 @@ def admin_api_ai_queue_list():
                 if float(q.get("confidence") or 0.0) >= min_conf
             ]
 
-    # Always return newest first (so recent-time UX is consistent)
-    def _parse_created_at(s: Any) -> Optional[datetime]:
-        try:
-            if s is None:
-                return None
-            ts = str(s).strip()
-            if not ts:
-                return None
-            ts = ts.replace("Z", "+00:00")
-            dt = datetime.fromisoformat(ts)
-            if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
-            return dt.astimezone(timezone.utc)
-        except Exception:
-            return None
-    queue.sort(key=lambda q: _parse_created_at(q.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    queue.sort(
+        key=lambda q: _parse_created_at_q(q.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )
 
     # optional search across queue item + payload fields
     q_param = (request.args.get("q") or "").strip().lower()
     if q_param:
-        # Keep this lightweight and safe: build a small search blob per item.
         def _payload_blob(it: Dict[str, Any]) -> str:
             try:
                 p = it.get("payload") or {}
@@ -9180,18 +9610,69 @@ def admin_api_ai_queue_list():
                     str(it.get("created_at") or ""),
                     str(it.get("confidence") or ""),
                 ]
-                # Common fields for our queue item types
-                for k in ("reservation_id", "row", "sheet_row", "draft", "to", "subject", "message", "phone", "email"):
+                for k in (
+                    "reservation_id",
+                    "row",
+                    "sheet_row",
+                    "draft",
+                    "to",
+                    "subject",
+                    "message",
+                    "phone",
+                    "email",
+                    "template_key",
+                    "venue_name",
+                    "reservation_details",
+                ):
                     if k in p:
                         parts.append(str(p.get(k) or ""))
-                # Fallback: include full payload JSON
                 parts.append(json.dumps(p, ensure_ascii=False))
                 return " ".join(parts).lower()
             except Exception:
                 return str(it).lower()
 
         queue = [it for it in queue if q_param in _payload_blob(it)]
-    return jsonify({"ok": True, "role": role, "queue": queue[:500]})
+    return jsonify({"ok": True, "role": role, "queue": queue[:500], "counts": counts})
+
+
+@app.route("/admin/api/ai/queue/summary", methods=["GET"])
+def admin_api_ai_queue_summary():
+    """Fast bucket + pending counts for AI Queue operator UI."""
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    queue = _load_ai_queue()
+    pending = sum(1 for q in queue if str(q.get("status") or "").lower() == "pending")
+    outbound_types = {
+        "send_email",
+        "send_sms",
+        "send_whatsapp",
+        "send_confirmation",
+        "send_reservation_received",
+        "send_reservation_confirmed",
+        "send_reservation_denied",
+        "send_reservation_reminder",
+        "send_update",
+        "send_vip_update",
+    }
+    approved_ready = 0
+    for q in queue:
+        if str(q.get("status") or "").lower() != "approved":
+            continue
+        if str(q.get("type") or "").strip().lower() not in outbound_types:
+            continue
+        if q.get("sent_at"):
+            continue
+        approved_ready += 1
+    counts = _ai_queue_bucket_counts(queue[:500])
+    return jsonify(
+        {
+            "ok": True,
+            "total_pending": pending,
+            "approved_outbound_ready": approved_ready,
+            "counts": counts,
+        }
+    )
 
 
 @app.route("/admin/api/ai/queue/clear", methods=["POST"])
@@ -9246,14 +9727,15 @@ def admin_api_outbound_propose():
     channel = str(data.get("channel") or "").strip().lower()
 
     _RESERVATION_TYPES = {
-        "reservation_received": "send_reservation_received",
-        "reservation_confirmed": "send_reservation_confirmed",
-        "reservation_denied": "send_reservation_denied",
-        "reservation_reminder": "send_reservation_reminder",
+        "reservation_received": "reservation_received",
+        "reservation_confirmed": "reservation_confirmed",
+        "reservation_denied": "reservation_denied",
+        "reservation_reminder": "reservation_reminder",
     }
 
     if channel in _RESERVATION_TYPES:
-        action_type = _RESERVATION_TYPES[channel]
+        action_type = "send_whatsapp"
+        template_key = _RESERVATION_TYPES[channel]
         to_val = str(data.get("to") or "").strip()
         venue_name = str(data.get("venue_name") or "").strip()
         reservation_details = str(data.get("reservation_details") or "").strip()
@@ -9289,6 +9771,7 @@ def admin_api_outbound_propose():
             "to": to_val,
             "venue_name": venue_name,
             "reservation_details": reservation_details,
+            "template_key": template_key,
         }
         if row_num:
             payload["row"] = row_num
@@ -10950,6 +11433,124 @@ label.small + textarea,
 .modal-close:hover{background:rgba(255,255,255,.12)}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes aiqDrawerIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+
+.aiq-top-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:14px;
+  margin-bottom:14px;
+  align-items:stretch
+}
+@media(max-width:1100px){
+  .aiq-top-grid{grid-template-columns:1fr}
+}
+@media(min-width:1101px) and (max-width:1400px){
+  .aiq-top-grid{grid-template-columns:1fr 1fr;grid-auto-rows:auto}
+  .aiq-top-grid .card:last-child{grid-column:1 / -1}
+}
+.aiq-card-title{font-size:15px;font-weight:800;margin:0 0 10px;letter-spacing:.02em}
+.aiq-seg{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.aiq-seg button{
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.05);
+  color:var(--text);
+  border-radius:999px;
+  padding:6px 12px;
+  font-size:12px;
+  font-weight:700;
+  cursor:pointer;
+  transition:background .15s,border-color .15s,transform .12s
+}
+.aiq-seg button:hover{background:rgba(255,255,255,.09)}
+.aiq-seg button.active{
+  background:linear-gradient(135deg,rgba(88,166,255,.25),rgba(138,92,246,.18));
+  border-color:rgba(88,166,255,.45)
+}
+.aiq-run-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.aiq-run-grid button{padding:12px 10px;font-weight:800;border-radius:12px}
+@media(max-width:480px){
+  .aiq-run-grid{grid-template-columns:1fr}
+}
+.aiq-filters-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.aiq-filters-row .inp{flex:1 1 140px;min-width:0;max-width:100%;box-sizing:border-box}
+.aiq-pills{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.aiq-pill{
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border-radius:999px;
+  padding:5px 11px;
+  font-size:11px;
+  font-weight:800;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.04);
+  transition:all .15s
+}
+.aiq-pill-lbl{line-height:1.2}
+.aiq-pill-n{
+  font-size:10px;font-weight:900;padding:2px 7px;border-radius:999px;
+  background:rgba(255,255,255,.1);min-width:1.25em;text-align:center;line-height:1.2
+}
+.aiq-stat-strip{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center}
+.aiq-stat-badge{
+  font-size:12px;padding:6px 12px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:var(--text)
+}
+.aiq-stat-badge b{font-weight:900;margin-left:4px}
+.aiq-pill:hover{background:rgba(255,255,255,.08)}
+.aiq-pill.on{
+  border-color:rgba(88,166,255,.5);
+  background:rgba(88,166,255,.12)
+}
+.aiq-counts{font-size:11px;opacity:.75;margin-top:6px;line-height:1.35}
+.aiq-table-wrap{overflow:auto;border-radius:12px;border:1px solid rgba(255,255,255,.10);-webkit-overflow-scrolling:touch}
+.aiq-table{width:100%;border-collapse:collapse;font-size:13px;min-width:720px}
+@media(max-width:640px){
+  .aiq-table{font-size:12px;min-width:640px}
+  .aiq-table th,.aiq-table td{padding:8px 6px}
+}
+.aiq-table th,.aiq-table td{padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left;vertical-align:top}
+.aiq-table th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.65;font-weight:800}
+.aiq-table tr{cursor:pointer;transition:background .12s}
+.aiq-table tbody tr:hover{background:rgba(255,255,255,.04)}
+.badge-ch{
+  display:inline-block;font-size:10px;font-weight:900;padding:2px 8px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);text-transform:uppercase;letter-spacing:.04em
+}
+.badge-ch.email{background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.35)}
+.badge-ch.sms{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.35)}
+.badge-ch.whatsapp{background:rgba(37,211,102,.12);border-color:rgba(37,211,102,.4)}
+.aiq-drawer-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;
+  animation:fadeIn .2s ease
+}
+.aiq-drawer-overlay.show{display:block}
+.aiq-drawer-panel{
+  position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);
+  max-width:100vw;
+  background:linear-gradient(200deg,rgba(12,18,36,.98),rgba(8,12,24,.99));
+  border-left:1px solid rgba(255,255,255,.12);
+  box-shadow:-12px 0 48px rgba(0,0,0,.55);
+  z-index:10001;
+  padding:18px 18px 24px;
+  overflow:auto;
+  transform:translateX(100%);
+  animation:aiqDrawerIn .28s ease forwards
+}
+@media(max-width:520px){
+  .aiq-drawer-panel{
+    width:100%;
+    border-left:none;
+    border-top:1px solid rgba(255,255,255,.12);
+    top:auto;height:min(92vh,100%);
+    border-radius:16px 16px 0 0;
+    animation:slideUp .28s ease forwards
+  }
+}
+.aiq-drawer-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:14px}
+.aiq-drawer-h h3{margin:0;font-size:17px;font-weight:900}
 
 .note{margin-top:8px;font-size:12px;color:var(--muted)}
 .hidden{display:none}
@@ -11009,19 +11610,19 @@ label.small + textarea,
 <div class="tabs">
   <div class="tabgroup">
     <span class="tablabel">Operate</span>
-    <button type="button" class="tabbtn active" data-tab="ops" onclick="showTab('ops');return false;">Ops</button>
-    <button type="button" class="tabbtn" data-tab="leads" onclick="showTab('leads');return false;">Leads</button>
-    <button type="button" class="tabbtn" data-tab="aiq" onclick="showTab('aiq');return false;">AI Queue</button>
-    <button type="button" class="tabbtn" data-tab="monitor" onclick="showTab('monitor');return false;">Monitoring</button>
-    <button type="button" class="tabbtn" data-tab="audit" onclick="showTab('audit');return false;">Audit</button>
+    <button type="button" class="tabbtn active" data-tab="ops">Ops</button>
+    <button type="button" class="tabbtn" data-tab="leads">Leads</button>
+    <button type="button" class="tabbtn" data-tab="aiq">AI Queue</button>
+    <button type="button" class="tabbtn" data-tab="monitor">Monitoring</button>
+    <button type="button" class="tabbtn" data-tab="audit">Audit</button>
   </div>
   <div class="tabgroup">
     <span class="tablabel">Configure</span>
-    <button type="button" class="tabbtn" data-tab="ai" data-minrole="owner" onclick="showTab('ai');return false;">AI Settings</button>
-    <button type="button" class="tabbtn" data-tab="rules" data-minrole="owner" onclick="showTab('rules');return false;">Rules</button>
-    <button type="button" class="tabbtn" data-tab="menu" data-minrole="owner" onclick="showTab('menu');return false;">Menu</button>
+    <button type="button" class="tabbtn" data-tab="ai" data-minrole="owner">AI Settings</button>
+    <button type="button" class="tabbtn" data-tab="rules" data-minrole="owner">Rules</button>
+    <button type="button" class="tabbtn" data-tab="menu" data-minrole="owner">Menu</button>
     <button type="button" class="tabbtn" data-minrole="owner" onclick="showDraftsModal();return false;">Drafts</button>
-    <button type="button" class="tabbtn" data-tab="policies" data-minrole="owner" onclick="showTab('policies');return false;">Policies</button>
+    <button type="button" class="tabbtn" data-tab="policies" data-minrole="owner">Policies</button>
   </div>
 </div>
 
@@ -11114,8 +11715,18 @@ label.small + textarea,
     <button class="btn2" type="button" onclick="loadForecast()">Refresh</button>
     <span id="forecast-msg" class="note"></span>
   </div>
-  <div id="forecastBody" class="small" style="margin-top:10px;line-height:1.4"></div>
+  <div id="forecastBody" class="small" style="margin-top:10px;line-height:1.4;white-space:pre-wrap"></div>
 </div>
+  <div class="card" id="dailySummaryCard">
+    <div class="h2">Daily Revenue Summary</div>
+    <div class="small">Guests and demand for the selected day (venue sheet). Fast read — uses parsed budgets when present.</div>
+    <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <input id="daily-summary-date" class="inp" type="date" style="max-width:160px" />
+      <button class="btn2" type="button" onclick="loadDailySummary()">Refresh</button>
+      <span id="daily-summary-msg" class="note"></span>
+    </div>
+    <div id="daily-summary-body" class="small" style="margin-top:12px;line-height:1.45;white-space:pre-wrap"></div>
+  </div>
   <div class="card" id="alertsCard">
     <div class="h2">Alerts Settings</div>
     <div class="small">Configure monitoring alerts (Slack/Email/SMS). Alerts are rate-limited and best-effort (never crash the app).</div>
@@ -11363,7 +11974,26 @@ label.small + textarea,
       <div class="note">Tip: keep actions limited until you trust the workflow.</div>
     </div>
   </div>
-</div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="h2">Channel Intelligence</div>
+    <div class="small">How the copilot ranks outbound channels for suggestions (stored per venue).</div>
+    <div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ai-pref-email-conf"/> Prefer email for confirmations</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ai-pref-sms-urgent"/> Prefer SMS for urgent reminders</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ai-pref-wa"/> Prefer WhatsApp when enabled</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ai-pref-rank-all"/> Rank all available channels</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ai-pref-auto"/> Auto-detect best channel</label>
+    </div>
+    <div class="h2" style="margin-top:18px;font-size:15px">WhatsApp template map</div>
+    <div class="small">AI uses your existing Twilio Content templates (env SIDs). Scenario → template_key on <span class="code">send_whatsapp</span> items.</div>
+    <div style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;font-size:12px;opacity:.9">
+      <div><span class="code">reservation_received</span> · New inquiry</div>
+      <div><span class="code">reservation_confirmed</span> · Approved</div>
+      <div><span class="code">reservation_denied</span> · Denied</div>
+      <div><span class="code">reservation_reminder</span> · Upcoming</div>
+    </div>
+  </div>
 
   <div class="card" style="margin-top:14px">
     <div class="h2">AI Replay (Read-only)</div>
@@ -11375,69 +12005,137 @@ label.small + textarea,
     </div>
     <pre id="replayOut" style="margin-top:10px;white-space:pre-wrap;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:10px;max-height:260px;overflow:auto"></pre>
   </div>
+</div>
 
 <div id="tab-aiq" class="tabpane hidden">
-  <div class="card">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-      <div>
-        <div class="h2" style="margin:0">AI Approval Queue</div>
-        <div class="small">Proposed AI actions wait here for <b>Approve</b>, <b>Deny</b>, or <b>Owner Override</b>. This keeps automation powerful but controlled.</div>
+  <div class="aiq-top-grid">
+    <div class="card" style="margin:0">
+      <div class="aiq-card-title">AI Focus Mode</div>
+      <div class="aiq-seg" id="aiq-focus-mode-seg" role="group" aria-label="Focus mode">
+        <button type="button" data-fm="all" class="active">All</button>
+        <button type="button" data-fm="vip">VIP</button>
+        <button type="button" data-fm="reminders">Reminders</button>
+        <button type="button" data-fm="upgrades">Upgrades</button>
+        <button type="button" data-fm="reply_drafts">Drafts</button>
       </div>
-      <button class="btn2" type="button" onclick="clearAIQueue()" style="margin-left:auto">Clear queue</button>
+      <div class="small" style="opacity:.85;margin-bottom:8px">Saved to AI settings (venue).</div>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="aiq-ff-suggest-email"/> Suggest email</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="aiq-ff-suggest-sms"/> Suggest SMS</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="aiq-ff-suggest-wa"/> Suggest WhatsApp</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="aiq-ff-vip"/> Allow VIP tagging</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="aiq-ff-drafts"/> Allow reply drafts</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="aiq-ff-rem"/> Allow reminder suggestions</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="aiq-ff-upg"/> Allow upgrade suggestions</label>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn" onclick="saveAiqFocusMode()">Save focus mode</button>
+        <button type="button" class="btn2" onclick="resetAiqFocusMode()">Reset to default</button>
+      </div>
     </div>
-    <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <button class="btn2" onclick="loadAIQueue()">Refresh</button>
-      <span class="note" style="opacity:.6">|</span>
-      <input id="ai-run-limit" class="inp" type="number" min="1" max="25" step="1" value="5" style="max-width:90px" title="How many newest New leads to analyze" />
-      <button class="btn2" onclick="runAINew()">Run AI (New)</button>
-      <input id="ai-run-row" class="inp" type="number" min="2" step="1" placeholder="Row #" style="max-width:110px" title="Run AI for a specific Google Sheet row number" />
-      <button class="btn2" onclick="runAIRow()">Run AI (Row)</button>
-      <span class="note" style="font-size:11px">Tip: model often proposes 0 actions for Handled or non-New leads.</span>
-
-      <select id="aiq-filter" class="inp" style="max-width:180px" onchange="loadAIQueue()">
-        <option value="">All</option>
-        <option value="pending">Pending</option>
-        <option value="approved">Approved</option>
-      </select>
-      <select id="aiq-time" class="inp" style="max-width:190px" onchange="loadAIQueue()">
-        <option value="">All time</option>
-        <option value="30">Last 30 minutes</option>
-        <option value="60">Last 1 hour</option>
-        <option value="120">Last 2 hours</option>
-        <option value="1440">Last 24 hours</option>
-        <option value="10080">Last 7 days</option>
-      </select>
-      <select id="aiq-type" class="inp" style="max-width:190px" onchange="loadAIQueue()">
-        <option value="">All types</option>
-        <option value="reply_draft">Reply drafts</option>
-        <option value="vip_tag">VIP tagging</option>
-        <option value="status_update">Status updates</option>
-        <option value="send_sms">Send SMS</option>
-        <option value="send_email">Send Email</option>
-        <option value="send_whatsapp">Send WhatsApp</option>
-        <option value="send_confirmation">Send confirmation</option>
-        <option value="send_reservation_received">Send reservation received</option>
-        <option value="send_reservation_confirmed">Send reservation confirmed</option>
-        <option value="send_reservation_denied">Send reservation denied</option>
-        <option value="send_reservation_reminder">Send reservation reminder</option>
-        <option value="send_update">Send update</option>
-        <option value="send_vip_update">Send VIP update</option>
-      </select>
-      <select id="aiq-conf" class="inp" style="max-width:200px" onchange="loadAIQueue()">
-        <option value="">Any confidence</option>
-        <option value="0.50">Min 0.50</option>
-        <option value="0.70">Min 0.70</option>
-        <option value="0.80">Min 0.80</option>
-      </select>
-      <input id="aiq-search" class="inp" style="min-width:220px" placeholder="Search: phone, reservation_id, draft…" oninput="aiqSearchDebounced()" />
-      <button class="btn2" type="button" onclick="clearAIQueueFilters()" title="Reset all AI queue filters">Clear filters</button>
-      <span id="aiq-msg" class="note"></span>
+    <div class="card" style="margin:0">
+      <div class="aiq-card-title">Run Suggestions</div>
+      <div class="aiq-run-grid">
+        <button type="button" class="btn" onclick="runAIPreset('vip')">Run VIP</button>
+        <button type="button" class="btn" onclick="runAIPreset('reminders')">Run Reminders</button>
+        <button type="button" class="btn" onclick="runAIPreset('upgrades')">Run Upgrades</button>
+        <button type="button" class="btn2" onclick="runAIPreset('all')">Run All AI</button>
+      </div>
+      <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <label class="small">Row #</label>
+        <input id="ai-run-row" class="inp" type="number" min="2" step="1" placeholder="Row" style="max-width:90px" />
+        <label class="small">Limit</label>
+        <input id="ai-run-limit" class="inp" type="number" min="1" max="25" step="1" value="5" style="max-width:70px" />
+        <button type="button" class="btn2" onclick="runAINew()">New leads</button>
+        <button type="button" class="btn2" onclick="runAIRow()">This row</button>
+      </div>
+      <div class="note" style="margin-top:8px">Uses focus + channel filters below. Outbound never auto-sends.</div>
+    </div>
+    <div class="card" style="margin:0">
+      <div class="aiq-card-title">Suggestion Views</div>
+      <div class="aiq-pills" id="aiq-view-pills" aria-label="Suggestion view buckets">
+        <span class="aiq-pill on" data-bucket="all" role="button" tabindex="0"><span class="aiq-pill-lbl">All</span><span class="aiq-pill-n">—</span></span>
+        <span class="aiq-pill" data-bucket="vip" role="button" tabindex="0"><span class="aiq-pill-lbl">VIP</span><span class="aiq-pill-n">—</span></span>
+        <span class="aiq-pill" data-bucket="reminders" role="button" tabindex="0"><span class="aiq-pill-lbl">Reminders</span><span class="aiq-pill-n">—</span></span>
+        <span class="aiq-pill" data-bucket="upgrades" role="button" tabindex="0"><span class="aiq-pill-lbl">Upgrades</span><span class="aiq-pill-n">—</span></span>
+        <span class="aiq-pill" data-bucket="email" role="button" tabindex="0"><span class="aiq-pill-lbl">Email</span><span class="aiq-pill-n">—</span></span>
+        <span class="aiq-pill" data-bucket="sms" role="button" tabindex="0"><span class="aiq-pill-lbl">SMS</span><span class="aiq-pill-n">—</span></span>
+        <span class="aiq-pill" data-bucket="whatsapp" role="button" tabindex="0"><span class="aiq-pill-lbl">WhatsApp</span><span class="aiq-pill-n">—</span></span>
+        <span class="aiq-pill" data-bucket="drafts" role="button" tabindex="0"><span class="aiq-pill-lbl">Drafts</span><span class="aiq-pill-n">—</span></span>
+      </div>
+      <input type="hidden" id="aiq-view-bucket" value="all"/>
+      <div class="aiq-filters-row">
+        <input id="aiq-search" class="inp" style="min-width:160px" placeholder="Keyword search…" oninput="aiqSearchDebounced()" />
+        <select id="aiq-filter" class="inp" style="max-width:150px" onchange="loadAIQueue()">
+          <option value="">All statuses</option>
+          <option value="pending">Pending</option>
+          <option value="approved">Approved</option>
+        </select>
+        <select id="aiq-channel" class="inp" style="max-width:130px" onchange="loadAIQueue()">
+          <option value="">All channels</option>
+          <option value="email">Email</option>
+          <option value="sms">SMS</option>
+          <option value="whatsapp">WhatsApp</option>
+        </select>
+        <select id="aiq-time" class="inp" style="max-width:150px" onchange="loadAIQueue()">
+          <option value="">All time</option>
+          <option value="today">Today</option>
+          <option value="1440">24h</option>
+          <option value="10080">7d</option>
+        </select>
+        <select id="aiq-type" class="inp" style="max-width:170px" onchange="loadAIQueue()">
+          <option value="">All types</option>
+          <option value="reply_draft">Reply drafts</option>
+          <option value="vip_tag">VIP tagging</option>
+          <option value="status_update">Status updates</option>
+          <option value="send_sms">Send SMS</option>
+          <option value="send_email">Send Email</option>
+          <option value="send_whatsapp">Send WhatsApp</option>
+          <option value="send_confirmation">Send confirmation</option>
+          <option value="send_reservation_received">Reservation received (legacy)</option>
+          <option value="send_reservation_confirmed">Reservation confirmed (legacy)</option>
+          <option value="send_reservation_denied">Reservation denied (legacy)</option>
+          <option value="send_reservation_reminder">Reservation reminder (legacy)</option>
+          <option value="send_update">Send update</option>
+          <option value="send_vip_update">Send VIP update</option>
+        </select>
+        <select id="aiq-conf" class="inp" style="max-width:140px" onchange="loadAIQueue()">
+          <option value="">Any conf.</option>
+          <option value="0.50">Min 0.50</option>
+          <option value="0.70">Min 0.70</option>
+          <option value="0.80">Min 0.80</option>
+        </select>
+        <button class="btn2" type="button" onclick="clearAIQueueFilters()">Clear</button>
+        <button class="btn2" type="button" onclick="loadAIQueue()">Refresh</button>
+      </div>
+      <div id="aiq-bucket-counts" class="aiq-counts"></div>
+      <span id="aiq-msg" class="note" style="display:block;margin-top:8px"></span>
     </div>
   </div>
 
   <div class="card">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div>
+        <div class="h2" style="margin:0">Queue</div>
+        <div class="small">Click a row for detail. Approve then <b>Send</b> for outbound — never auto-sends.</div>
+      </div>
+      <button class="btn2" type="button" onclick="clearAIQueue()">Clear queue</button>
+    </div>
+    <div class="aiq-stat-strip" id="aiq-stat-strip" aria-live="polite"></div>
+    <div class="aiq-table-wrap" style="margin-top:12px">
+      <table class="aiq-table" id="aiq-table">
+        <thead>
+          <tr>
+            <th>Type</th><th>Guest</th><th>Channel</th><th>WA template</th><th>Conf.</th><th>Rationale</th><th>Status</th><th>Created</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="aiq-tbody"><tr><td colspan="9" class="small">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div id="aiq-list" class="hidden"></div>
+  </div>
+
+  <div class="card">
     <div class="h2" style="margin-bottom:4px">Send Reservation Notification</div>
-    <div class="small" style="margin-bottom:10px">Queue a reservation notification — sends <b>both SMS + WhatsApp template</b> in one action. Enter <b>Row #</b> from Leads table to auto-fill, or enter details manually. Approve then Send.</div>
+    <div class="small" style="margin-bottom:10px">Queues <b>WhatsApp template</b> (<span class="code">send_whatsapp</span> + <span class="code">template_key</span>) — same approve → send flow as other channels. Row # auto-fills guest phone and details.</div>
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
       <div>
         <label class="small">Row # (from Leads)</label>
@@ -11508,10 +12206,16 @@ label.small + textarea,
     </div>
     <span id="ob-msg" class="note" style="display:block;margin-top:8px"></span>
   </div>
+</div>
 
-  <div class="card">
-    <div id="aiq-list" class="small">Loading…</div>
+<div id="aiq-drawer-overlay" class="aiq-drawer-overlay" onclick="if(event.target===this)closeAiqDrawer()"></div>
+<div id="aiq-drawer-panel" class="aiq-drawer-panel" style="display:none">
+  <div class="aiq-drawer-h">
+    <h3 id="aiq-drawer-title">Suggestion</h3>
+    <button type="button" class="modal-close" onclick="closeAiqDrawer()">Close</button>
   </div>
+  <div id="aiq-drawer-body" class="small" style="line-height:1.5"></div>
+  <div id="aiq-drawer-actions" style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px"></div>
 </div>
 
 <div id="tab-rules" class="tabpane hidden">
@@ -11813,6 +12517,31 @@ window.showTab = function(tab){
       try{ loadRules(); }catch(e){}
     }
 
+    if(tab === 'ai'){
+      try{ if(typeof loadAI === 'function') loadAI(); }catch(e){}
+    }
+    if(tab === 'aiq'){
+      try{ if(typeof loadAI === 'function') loadAI(); }catch(e){}
+      try{
+        const f = document.querySelector('#aiq-filter');
+        if(f && (!f.value || !String(f.value).trim())) f.value = 'pending';
+      }catch(e){}
+      try{ if(typeof loadAIQueue === 'function') loadAIQueue(); }catch(e){}
+    }
+    if(tab === 'monitor'){
+      try{ if(typeof loadForecast === 'function') loadForecast(); }catch(e){}
+      try{ if(typeof loadDailySummary === 'function') loadDailySummary(); }catch(e){}
+    }
+    if(tab === 'menu'){
+      try{ if(typeof loadMenu === 'function') loadMenu(); }catch(e){}
+    }
+    if(tab === 'audit'){
+      try{ if(typeof loadAudit === 'function') loadAudit(); }catch(e){}
+    }
+    if(tab === 'policies'){
+      try{ if(typeof loadPartnerList === 'function') loadPartnerList(); }catch(e){}
+    }
+
     return false;
   };
 
@@ -12053,14 +12782,14 @@ function _leadRowFromItem(it){
   const st = (it.status||'New').toString().trim();
   const stLow = st.toLowerCase();
   const vipVal = isVip ? 'Yes' : 'No';
-  const stSel = '<select class=\\'inp\\' id=\\'status-'+row+'\\'><option value=\\"New\\"'+(stLow==='new'?' selected':'')+'>New</option><option value=\\"Confirmed\\"'+(stLow==='confirmed'?' selected':'')+'>Confirmed</option><option value=\\"Seated\\"'+(stLow==='seated'?' selected':'')+'>Seated</option><option value=\\"No-Show\\"'+(stLow==='no-show'?' selected':'')+'>No-Show</option><option value=\\"Handled\\"'+(stLow==='handled'?' selected':'')+'>Handled</option></select>';
-  const vipSel = '<select class=\\'inp\\' id=\\'vip-'+row+'\\'><option value=\\"Yes\\"'+(vipVal==='Yes'?' selected':'')+'>Yes</option><option value=\\"No\\"'+(vipVal==='No'?' selected':'')+'>No</option></select>';
+  const stSel = '<select class="inp" id="status-'+row+'"><option value="New"'+(stLow==='new'?' selected':'')+'>New</option><option value="Confirmed"'+(stLow==='confirmed'?' selected':'')+'>Confirmed</option><option value="Seated"'+(stLow==='seated'?' selected':'')+'>Seated</option><option value="No-Show"'+(stLow==='no-show'?' selected':'')+'>No-Show</option><option value="Handled"'+(stLow==='handled'?' selected':'')+'>Handled</option></select>';
+  const vipSel = '<select class="inp" id="vip-'+row+'"><option value="Yes"'+(vipVal==='Yes'?' selected':'')+'>Yes</option><option value="No"'+(vipVal==='No'?' selected':'')+'>No</option></select>';
   const tipEp = fullEp ? _tipAttr(fullEp) : '';
   const tipCtx = fullCtx.length>=28 ? _tipAttr(fullCtx) : '';
   const tipNotes = fullNotes.length>=28 ? _tipAttr(fullNotes) : '';
   const tipNm = (it.name||'').length>=12 ? _tipAttr(it.name||'') : '';
   const tipPh = (it.phone||'').length>=12 ? _tipAttr(it.phone||'') : '';
-  return '<tr data-tier="'+tierKey+'" data-entry="'+_he(it.entry_point||'')+'"><td class=\\'code\\'>'+row+'</td><td>'+ts+'</td><td'+tipNm+'>'+nm+'</td><td'+tipPh+'>'+ph+'</td><td>'+d+'</td><td>'+t+'</td><td>'+ps+'</td><td'+_tipAttr(seg)+'><span class=\\"'+segCls+'\\">'+seg+'</span></td><td'+tipEp+'><span class=\\"pill\\">'+ep+'</span></td><td'+_tipAttr(queue)+'><span class=\\"badge good\\">'+queue+'</span></td><td>'+budget+'</td><td'+tipCtx+'><span class=\\"small\\">'+ctx+(ctx.length>=34?'…':'')+'</span></td><td'+tipNotes+'><span class=\\"small\\">'+notes+(notes.length>=40?'…':'')+'</span></td><td>'+stSel+'</td><td>'+vipSel+'</td><td><button type=\\"button\\" class=\\"btn primary\\" onclick=\\"saveLead('+row+')\\">Save</button><button type=\\"button\\" class=\\"btnTiny\\" title=\\"Set status to Handled\\" onclick=\\"markHandled('+row+')\\">✅</button></td></tr>';
+  return '<tr data-tier="'+tierKey+'" data-entry="'+_he(it.entry_point||'')+'"><td class="code">'+row+'</td><td>'+ts+'</td><td'+tipNm+'>'+nm+'</td><td'+tipPh+'>'+ph+'</td><td>'+d+'</td><td>'+t+'</td><td>'+ps+'</td><td'+_tipAttr(seg)+'><span class="'+segCls+'">'+seg+'</span></td><td'+tipEp+'><span class="pill">'+ep+'</span></td><td'+_tipAttr(queue)+'><span class="badge good">'+queue+'</span></td><td>'+budget+'</td><td'+tipCtx+'><span class="small">'+ctx+(ctx.length>=34?'…':'')+'</span></td><td'+tipNotes+'><span class="small">'+notes+(notes.length>=40?'…':'')+'</span></td><td>'+stSel+'</td><td>'+vipSel+'</td><td><button type="button" class="btn primary" onclick="saveLead('+row+')">Save</button><button type="button" class="btnTiny" title="Set status to Handled" onclick="markHandled('+row+')">✅</button></td></tr>';
 }
 function _leadsDdLabel(panelId, allLabel){
   const panel = qs('#'+panelId); if(!panel) return allLabel;
@@ -12167,44 +12896,6 @@ function setupLeadFilters(){
 
 function qs(sel){return document.querySelector(sel);}
 function qsa(sel){return Array.from(document.querySelectorAll(sel));}
-                
-qsa('.tabbtn').forEach(btn=>{
-  btn.addEventListener('click', (e)=>{
-    try{ e.preventDefault(); }catch(_){}
-
-    const t = btn.dataset.tab || btn.getAttribute('data-tab') || btn.getAttribute('data-tabbtn') || '';
-
-    // Always route through showTab so special tabs (like fanzone) can redirect
-    if(typeof window.showTab === 'function'){
-      window.showTab(t);
-      return;
-    }
-
-    // Fallback (should rarely be needed)
-    qsa('.tabbtn').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-
-    ['ops','leads','ai','aiq','rules','menu','drafts','policies','audit','monitor'].forEach(x=>{
-      const pane = document.getElementById('tab-'+x);
-      if(!pane) return;
-      pane.classList.toggle('hidden', x!==t);
-    });
-
-    if(t==='ai') loadAI();
-    if(t==='aiq'){
-      // UX: default AI Queue view to Pending (if user hasn't picked a status yet)
-      try{
-        const f = qs('#aiq-filter');
-        if(f && (!f.value || !String(f.value).trim())) f.value = 'pending';
-      }catch(e){}
-      loadAIQueue();
-    }
-    if(t==='rules') loadRules();
-    if(t==='menu') loadMenu();
-    if(t==='drafts') loadDrafts();
-    if(t==='audit') loadAudit();
-  });
-});
 
 async function saveLead(sheetRow){
   const status = qs('#status-'+sheetRow).value;
@@ -12626,7 +13317,7 @@ async function saveOps(){
 async function loadAI(){
   const msg = qs('#ai-msg'); if(msg) msg.textContent = '';
   try{
-    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}`, {cache:'no-store'});
+    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {cache:'no-store'});
     const data = await r.json();
     if(!data.ok) throw new Error(data.error || 'Failed');
     const s = data.settings || {};
@@ -12649,13 +13340,40 @@ async function loadAI(){
     if(qs('#ai-act-email')) qs('#ai-act-email').checked = !!allow.send_email;
     if(qs('#ai-act-whatsapp')) qs('#ai-act-whatsapp').checked = !!allow.send_whatsapp;
 
+    const cp = s.channel_preferences || {};
+    if(qs('#ai-pref-email-conf')) qs('#ai-pref-email-conf').checked = (cp.prefer_email_for_confirmations !== false);
+    if(qs('#ai-pref-sms-urgent')) qs('#ai-pref-sms-urgent').checked = (cp.prefer_sms_for_urgent !== false);
+    if(qs('#ai-pref-wa')) qs('#ai-pref-wa').checked = !!cp.prefer_whatsapp_when_available;
+    if(qs('#ai-pref-rank-all')) qs('#ai-pref-rank-all').checked = (cp.rank_all_available_channels !== false);
+    if(qs('#ai-pref-auto')) qs('#ai-pref-auto').checked = (cp.auto_detect_best_channel !== false);
+
+    const fm = (s.focus_mode || 'all').toString();
+    const seg = qs('#aiq-focus-mode-seg');
+    if(seg){
+      seg.querySelectorAll('button[data-fm]').forEach(b=>{
+        b.classList.toggle('active', (b.getAttribute('data-fm')||'') === fm);
+      });
+    }
+    const ff = s.focus_filters || {};
+    const ffmap = [
+      ['aiq-ff-suggest-email','suggest_email'],
+      ['aiq-ff-suggest-sms','suggest_sms'],
+      ['aiq-ff-suggest-wa','suggest_whatsapp'],
+      ['aiq-ff-vip','allow_vip_tagging'],
+      ['aiq-ff-drafts','allow_reply_drafts'],
+      ['aiq-ff-rem','allow_reminder_suggestions'],
+      ['aiq-ff-upg','allow_upgrade_suggestions']
+    ];
+    ffmap.forEach(([id,k])=>{ const el = qs('#'+id); if(el) el.checked = (ff[k] !== false); });
+
     const feat = s.features || {};
     if(qs('#ai-feat-vip')) qs('#ai-feat-vip').checked = (feat.auto_vip_tag !== false);
     if(qs('#ai-feat-status')) qs('#ai-feat-status').checked = !!feat.auto_status_update;
     if(qs('#ai-feat-draft')) qs('#ai-feat-draft').checked = (feat.auto_reply_draft !== false);
 
     // lock owner-only fields for managers
-    ['ai-model','ai-prompt','ai-act-vip','ai-act-status','ai-act-draft','ai-act-sms','ai-act-email','ai-act-whatsapp'].forEach(id=>{
+    ['ai-model','ai-prompt','ai-act-vip','ai-act-status','ai-act-draft','ai-act-sms','ai-act-email','ai-act-whatsapp',
+     'ai-pref-email-conf','ai-pref-sms-urgent','ai-pref-wa','ai-pref-rank-all','ai-pref-auto'].forEach(id=>{
       const el = qs('#'+id); if(!el) return;
       el.disabled = !isOwner;
       el.style.opacity = isOwner ? '1' : '.55';
@@ -12686,12 +13404,19 @@ async function saveAI(){
       send_email: qs('#ai-act-email')?.checked ? true : false,
       send_whatsapp: qs('#ai-act-whatsapp')?.checked ? true : false,
     };
+    payload.channel_preferences = {
+      prefer_email_for_confirmations: qs('#ai-pref-email-conf')?.checked ? true : false,
+      prefer_sms_for_urgent: qs('#ai-pref-sms-urgent')?.checked ? true : false,
+      prefer_whatsapp_when_available: qs('#ai-pref-wa')?.checked ? true : false,
+      rank_all_available_channels: qs('#ai-pref-rank-all')?.checked ? true : false,
+      auto_detect_best_channel: qs('#ai-pref-auto')?.checked ? true : false,
+    };
   }
 
   try{
-    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}`, {
+    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
       body: JSON.stringify(payload)
     });
     const data = await r.json();
@@ -12793,6 +13518,283 @@ async function saveDrafts(){
 let aiqSearchT = null;
 let aiqFetchSeq = 0;
 let aiqItemsById = {};
+window.__aiqUxInit = false;
+
+const AI_TYPE_LABELS = {
+  vip_tag:'VIP Suggestion',
+  status_update:'Status update',
+  reply_draft:'Draft reply',
+  send_sms:'SMS',
+  send_email:'Email',
+  send_whatsapp:'WhatsApp',
+  send_confirmation:'Confirmation',
+  send_reservation_received:'Reservation received',
+  send_reservation_confirmed:'Reservation confirmed',
+  send_reservation_denied:'Reservation denied',
+  send_reservation_reminder:'Reservation reminder',
+  send_update:'Update',
+  send_vip_update:'VIP update'
+};
+
+function initAiqUx(){
+  if(window.__aiqUxInit) return;
+  window.__aiqUxInit = true;
+  const seg = qs('#aiq-focus-mode-seg');
+  if(seg){
+    seg.addEventListener('click', (e)=>{
+      const btn = e.target && e.target.closest ? e.target.closest('button[data-fm]') : null;
+      if(!btn) return;
+      seg.querySelectorAll('button[data-fm]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  }
+  function _selectAiqPill(pills, pill){
+    if(!pills || !pill) return;
+    pills.querySelectorAll('.aiq-pill').forEach(x=>x.classList.remove('on'));
+    pill.classList.add('on');
+    const hid = qs('#aiq-view-bucket');
+    if(hid) hid.value = pill.getAttribute('data-bucket') || 'all';
+    loadAIQueue();
+  }
+  const pills = qs('#aiq-view-pills');
+  if(pills){
+    pills.addEventListener('click', (e)=>{
+      const p = e.target && e.target.closest ? e.target.closest('.aiq-pill') : null;
+      if(!p || !pills.contains(p)) return;
+      _selectAiqPill(pills, p);
+    });
+    pills.addEventListener('keydown', (e)=>{
+      if(e.key !== 'Enter' && e.key !== ' ') return;
+      const p = e.target && e.target.closest ? e.target.closest('.aiq-pill') : null;
+      if(!p || !pills.contains(p)) return;
+      e.preventDefault();
+      _selectAiqPill(pills, p);
+    });
+  }
+  document.addEventListener('keydown', function aiqGlobalEsc(e){
+    if(e.key !== 'Escape') return;
+    const ov = qs('#aiq-drawer-overlay');
+    if(ov && ov.classList.contains('show')) closeAiqDrawer();
+  });
+}
+
+function applyAiqSummary(sum){
+  if(!sum || !sum.ok) return;
+  const c = sum.counts || {};
+  const keys = ['all','vip','reminders','upgrades','email','sms','whatsapp','drafts'];
+  const wrap = qs('#aiq-view-pills');
+  if(wrap){
+    keys.forEach(k=>{
+      const pill = wrap.querySelector('.aiq-pill[data-bucket="'+k+'"] .aiq-pill-n');
+      if(pill) pill.textContent = String(c[k] != null ? c[k] : 0);
+    });
+  }
+  const strip = qs('#aiq-stat-strip');
+  if(strip){
+    const p = sum.total_pending != null ? sum.total_pending : 0;
+    const r = sum.approved_outbound_ready != null ? sum.approved_outbound_ready : 0;
+    strip.innerHTML =
+      '<span class="aiq-stat-badge">Pending <b>'+p+'</b></span>'+
+      '<span class="aiq-stat-badge">Ready to send <b>'+r+'</b></span>'+
+      '<span class="aiq-stat-badge note" style="opacity:.85;border-style:dashed">Buckets use last '+String(c.all != null ? c.all : 0)+' items</span>';
+  }
+}
+
+async function loadAIQueueSummary(){
+  try{
+    const r = await fetch(`/admin/api/ai/queue/summary?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {cache:'no-store'});
+    const sum = await r.json();
+    applyAiqSummary(sum);
+  }catch(e){ /* ignore */ }
+}
+
+function aiFriendlyType(it){
+  const raw = (it && it.type) ? String(it.type) : '';
+  const p = (it && it.payload && typeof it.payload === 'object') ? it.payload : {};
+  if(raw === 'send_whatsapp' && p.template_key){
+    const m = {reservation_received:'Received',reservation_confirmed:'Confirmed',reservation_denied:'Denied',reservation_reminder:'Reminder'};
+    const k = String(p.template_key||'');
+    return 'WhatsApp · ' + (m[k] || k);
+  }
+  return AI_TYPE_LABELS[raw] || raw || '—';
+}
+
+function aiBestChannel(it){
+  const p = (it && it.payload && typeof it.payload === 'object') ? it.payload : {};
+  if(p.recommended_channel) return String(p.recommended_channel);
+  const t = String(it.type||'');
+  if(t === 'send_email') return 'email';
+  if(t === 'send_sms') return 'sms';
+  if(t === 'send_whatsapp' || t.indexOf('send_reservation_')===0) return 'whatsapp';
+  if(t === 'send_confirmation' || t === 'send_update' || t === 'send_vip_update') return 'sms+wa';
+  return '—';
+}
+
+function aiGuestLine(it){
+  const p = (it && it.payload && typeof it.payload === 'object') ? it.payload : {};
+  const lead = (p.lead && typeof p.lead === 'object') ? p.lead : {};
+  const name = lead.contact || lead.name || (p.lead_snapshot && p.lead_snapshot.name) || '';
+  const ps = lead.party_size || (p.lead_snapshot && p.lead_snapshot.party_size) || '';
+  const dt = lead.datetime || '';
+  const bits = [name, dt, ps ? ('party '+ps) : ''].filter(Boolean);
+  return bits.join(' · ') || '—';
+}
+
+function aiWaTemplateLabel(it){
+  const p = (it && it.payload && typeof it.payload === 'object') ? it.payload : {};
+  if(String(it.type||'') === 'send_whatsapp' && p.template_key){
+    const m = {reservation_received:'Received',reservation_confirmed:'Confirmed',reservation_denied:'Denied',reservation_reminder:'Reminder'};
+    return m[String(p.template_key)] || String(p.template_key);
+  }
+  if(String(it.type||'').indexOf('send_reservation_')===0){
+    return 'Bundled';
+  }
+  return '—';
+}
+
+function closeAiqDrawer(){
+  const o = qs('#aiq-drawer-overlay');
+  const p = qs('#aiq-drawer-panel');
+  if(o) o.classList.remove('show');
+  if(p) p.style.display = 'none';
+  try{ document.body.style.overflow = ''; }catch(e){}
+}
+
+function openAiqDrawer(id){
+  const it = aiqItemsById[String(id||'')] || null;
+  if(!it) return;
+  const title = qs('#aiq-drawer-title');
+  const body = qs('#aiq-drawer-body');
+  const act = qs('#aiq-drawer-actions');
+  if(title) title.textContent = aiFriendlyType(it);
+  const p = it.payload || {};
+  const why = esc(it.rationale || '');
+  const conf = (typeof it.confidence === 'number') ? it.confidence.toFixed(2) : '';
+  const ch = esc(aiBestChannel(it));
+  const rk = Array.isArray(p.channel_ranked) ? p.channel_ranked.join(', ') : '';
+  const rsn = esc(p.channel_reason || '');
+  const tmpl = esc(aiWaTemplateLabel(it));
+  const subj = esc(p.subject || '');
+  const msg = esc(p.message || p.body || '');
+  if(body){
+    body.innerHTML = `
+      <div style="font-weight:800;margin-bottom:8px;opacity:.85">Summary</div>
+      <div class="note">Confidence ${conf || '—'}</div>
+      <div style="margin-top:10px">${why || '—'}</div>
+      <div style="margin-top:14px;font-weight:800;opacity:.85">Customer context</div>
+      <div class="note">Name / contact: ${esc(aiGuestLine(it))}</div>
+      <div class="note">To: ${esc(p.to||'')}</div>
+      <div style="margin-top:14px;font-weight:800;opacity:.85">Channel</div>
+      <div class="note">Best: <b>${ch}</b></div>
+      ${rk ? `<div class="note">Ranked: ${esc(rk)}</div>` : ''}
+      ${rsn ? `<div class="note">${rsn}</div>` : ''}
+      <div style="margin-top:14px;font-weight:800;opacity:.85">Message preview</div>
+      ${subj ? `<div class="note">Subject: ${subj}</div>` : ''}
+      <pre style="white-space:pre-wrap;margin:8px 0 0;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);font-size:12px">${msg || '—'}</pre>
+      <div class="note" style="margin-top:8px">WA template: ${tmpl}</div>
+    `;
+  }
+  const stRaw = String(it.status||'');
+  const canAct = (stRaw === 'pending');
+  const typ = String(it.type||'');
+  const isOutbound = (
+    typ === 'send_email' || typ === 'send_sms' || typ === 'send_whatsapp' ||
+    typ === 'send_confirmation' || typ === 'send_reservation_received' || typ === 'send_reservation_confirmed' || typ === 'send_reservation_denied' || typ === 'send_reservation_reminder' || typ === 'send_update' || typ === 'send_vip_update'
+  );
+  const canSend = isOutbound && (stRaw === 'approved') && !it.sent_at;
+  const sendLabel = (typ === 'send_whatsapp') ? 'Send WhatsApp' : (typ === 'send_email' ? 'Send Email' : (typ === 'send_sms' ? 'Send SMS' : 'Send'));
+  const viewTpl = (typ === 'send_whatsapp' && p.template_key) || (typ.indexOf('send_reservation_')===0) || typ === 'send_confirmation' || typ === 'send_update' || typ === 'send_vip_update';
+  const sid = String(it.id||'');
+  if(act){
+    act.innerHTML = `
+      <button type="button" class="btn" ${canAct?'':'disabled'} onclick="aiqApprove('${sid}', this)">Approve</button>
+      <button type="button" class="btn2" ${canAct?'':'disabled'} onclick="aiqDeny('${sid}', this)">Deny</button>
+      ${viewTpl ? `<button type="button" class="btn2" onclick="aiqViewTemplate('${sid}')">Preview</button>` : ''}
+      ${isOutbound ? `<button type="button" class="btn" ${canSend?'':'disabled'} onclick="aiqSend('${sid}', this)">${sendLabel}</button>` : ''}
+      <button type="button" class="btn" onclick="aiqOverride('${sid}', this)">Override</button>
+    `;
+  }
+  const o = qs('#aiq-drawer-overlay');
+  const pan = qs('#aiq-drawer-panel');
+  if(o) o.classList.add('show');
+  if(pan) pan.style.display = 'block';
+  try{ document.body.style.overflow = 'hidden'; }catch(e){}
+}
+
+async function saveAiqFocusMode(){
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Saving…';
+  const active = qs('#aiq-focus-mode-seg button.active');
+  const fm = active ? (active.getAttribute('data-fm') || 'all') : 'all';
+  const payload = {
+    focus_mode: fm,
+    focus_filters: {
+      suggest_email: !!(qs('#aiq-ff-suggest-email') && qs('#aiq-ff-suggest-email').checked),
+      suggest_sms: !!(qs('#aiq-ff-suggest-sms') && qs('#aiq-ff-suggest-sms').checked),
+      suggest_whatsapp: !!(qs('#aiq-ff-suggest-wa') && qs('#aiq-ff-suggest-wa').checked),
+      allow_vip_tagging: !!(qs('#aiq-ff-vip') && qs('#aiq-ff-vip').checked),
+      allow_reply_drafts: !!(qs('#aiq-ff-drafts') && qs('#aiq-ff-drafts').checked),
+      allow_reminder_suggestions: !!(qs('#aiq-ff-rem') && qs('#aiq-ff-rem').checked),
+      allow_upgrade_suggestions: !!(qs('#aiq-ff-upg') && qs('#aiq-ff-upg').checked)
+    }
+  };
+  try{
+    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.error || 'Failed');
+    if(msg) msg.textContent = 'Focus saved ✔';
+    loadAI();
+  }catch(e){
+    if(msg) msg.textContent = 'Save failed';
+  }
+}
+
+async function resetAiqFocusMode(){
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Resetting…';
+  try{
+    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
+      body: JSON.stringify({
+        focus_mode:'all',
+        focus_filters:{
+          vip_only:false, reminders_only:false, upgrades_only:false, reply_drafts_only:false,
+          suggest_email:true, suggest_sms:true, suggest_whatsapp:true,
+          allow_vip_tagging:true, allow_reply_drafts:true, allow_reminder_suggestions:true, allow_upgrade_suggestions:true
+        }
+      })
+    });
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.error || 'Failed');
+    if(msg) msg.textContent = 'Reset ✔';
+    loadAI();
+  }catch(e){
+    if(msg) msg.textContent = 'Reset failed';
+  }
+}
+
+async function runAIPreset(preset){
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running…';
+  const lim = parseInt(qs('#ai-run-limit')?.value || '5', 10);
+  const ch = (qs('#aiq-channel')?.value || '').trim();
+  const fm = preset === 'all' ? 'all' : preset;
+  try{
+    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
+      body: JSON.stringify({mode:'new', limit: isNaN(lim)?5:lim, focus_mode: fm, channel: ch || 'any'})
+    });
+    const data = await r.json();
+    if(!data.ok) throw new Error(data.error || 'Failed');
+    if(msg) msg.textContent = `Ran ${data.ran||0}. Proposed ${data.proposed||0}.`;
+    await loadAIQueue();
+  }catch(e){
+    if(msg) msg.textContent = 'Run failed: ' + (e.message || e);
+  }
+}
 
 function showAiqTemplateModal(){
   const m = qs('#aiq-template-modal');
@@ -12839,11 +13841,19 @@ async function aiqViewTemplate(id){
 }
 
 function clearAIQueueFilters(){
-  const ids = ['aiq-filter','aiq-time','aiq-type','aiq-conf','aiq-search'];
+  const ids = ['aiq-filter','aiq-time','aiq-type','aiq-conf','aiq-search','aiq-channel'];
   ids.forEach(id=>{
     const el = qs('#'+id);
     if(el) el.value = '';
   });
+  const hid = qs('#aiq-view-bucket');
+  if(hid) hid.value = 'all';
+  const pills = qs('#aiq-view-pills');
+  if(pills){
+    pills.querySelectorAll('.aiq-pill').forEach(x=>x.classList.remove('on'));
+    const a = pills.querySelector('.aiq-pill[data-bucket="all"]');
+    if(a) a.classList.add('on');
+  }
   loadAIQueue();
 }
 
@@ -12853,8 +13863,10 @@ function aiqSearchDebounced(){
 }
 
 async function loadAIQueue(){
+  initAiqUx();
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Loading…';
   const list = qs('#aiq-list'); if(list) list.innerHTML = 'Loading…';
+  const tbody = qs('#aiq-tbody'); if(tbody) tbody.innerHTML = '<tr><td colspan="9" class="small">Loading…</td></tr>';
   const seq = ++aiqFetchSeq;
   try{
     const filt = (qs('#aiq-filter')?.value || '').trim();
@@ -12862,36 +13874,64 @@ async function loadAIQueue(){
     const typeVal = (qs('#aiq-type')?.value || '').trim();
     const confVal = (qs('#aiq-conf')?.value || '').trim();
     const qVal = (qs('#aiq-search')?.value || '').trim();
-    const hasAny = !!(filt || timeVal || typeVal || confVal);
+    const chExtra = (qs('#aiq-channel')?.value || '').trim();
+    const bucket = (qs('#aiq-view-bucket')?.value || 'all').trim();
+    let focusQ = '';
+    let channelQ = chExtra;
+    if(bucket === 'vip') focusQ = 'vip';
+    else if(bucket === 'reminders') focusQ = 'reminders';
+    else if(bucket === 'upgrades') focusQ = 'upgrades';
+    else if(bucket === 'drafts') focusQ = 'reply_drafts';
+    else if(bucket === 'email') channelQ = 'email';
+    else if(bucket === 'sms') channelQ = 'sms';
+    else if(bucket === 'whatsapp') channelQ = 'whatsapp';
+    const hasAny = !!(filt || timeVal || typeVal || confVal || focusQ || channelQ);
     const urlBase = `/admin/api/ai/queue?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`;
     const url = urlBase
       + (filt ? `&status=${encodeURIComponent(filt)}` : '')
       + (timeVal ? `&time=${encodeURIComponent(timeVal)}` : '')
       + (typeVal ? `&type=${encodeURIComponent(typeVal)}` : '')
       + (confVal ? `&conf=${encodeURIComponent(confVal)}` : '')
+      + (focusQ ? `&focus=${encodeURIComponent(focusQ)}` : '')
+      + (channelQ ? `&channel=${encodeURIComponent(channelQ)}` : '')
       + (qVal ? `&q=${encodeURIComponent(qVal)}` : '');
-    const r = await fetch(url, {cache:'no-store'});
-    const data = await r.json();
-    if(seq !== aiqFetchSeq) return; // ignore out-of-order responses
+    const sumUrl = `/admin/api/ai/queue/summary?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`;
+    const [resQ, resS] = await Promise.all([
+      fetch(url, {cache:'no-store'}),
+      fetch(sumUrl, {cache:'no-store'})
+    ]);
+    const data = await resQ.json();
+    let sum = {ok:false};
+    try{ sum = await resS.json(); }catch(e2){}
+    if(seq !== aiqFetchSeq) return;
     if(!data.ok) throw new Error(data.error || 'Failed');
+    applyAiqSummary(sum);
     const q = data.queue || [];
+    const bc = qs('#aiq-bucket-counts');
+    if(bc){
+      bc.textContent = 'Table: '+q.length+' row(s) with current filters · pill counts = full venue queue (summary API)';
+    }
     renderAIQueue(q);
     const hasSearch = !!qVal;
-    if(msg) msg.textContent = q.length ? (`${q.length} item(s)${(hasAny || hasSearch) ? ' matched' : ''}`) : 'No items';
-    }catch(e){
-      if(msg) msg.textContent = 'No items';
-      renderAIQueue([]); // explicit empty state for CI
+    if(msg) msg.textContent = q.length ? (`${q.length} item(s)${(hasAny || hasSearch) ? ' in table' : ''}`) : 'No items in this view';
+  }catch(e){
+    if(msg) msg.textContent = 'No items';
+    renderAIQueue([]);
+    try{ await loadAIQueueSummary(); }catch(e2){}
   }
 }
 
 async function runAINew(){
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running AI…';
   const lim = parseInt(qs('#ai-run-limit')?.value || '5', 10);
+  const ch = (qs('#aiq-channel')?.value || '').trim();
+  const active = qs('#aiq-focus-mode-seg button.active');
+  const fm = active ? (active.getAttribute('data-fm') || 'all') : 'all';
   try{
     const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({mode:'new', limit: isNaN(lim)?5:lim})
+      headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
+      body: JSON.stringify({mode:'new', limit: isNaN(lim)?5:lim, focus_mode: fm, channel: ch || 'any'})
     });
     const data = await r.json();
     if(!data.ok) throw new Error(data.error || 'Failed');
@@ -12909,11 +13949,14 @@ async function runAIRow(){
     if(msg) msg.textContent = 'Enter a valid sheet Row # (>= 2).';
     return;
   }
+  const ch = (qs('#aiq-channel')?.value || '').trim();
+  const active = qs('#aiq-focus-mode-seg button.active');
+  const fm = active ? (active.getAttribute('data-fm') || 'all') : 'all';
   try{
     const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({row})
+      headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
+      body: JSON.stringify({row, focus_mode: fm, channel: ch || 'any'})
     });
     const data = await r.json();
     if(!data.ok) throw new Error(data.error || 'Failed');
@@ -13001,67 +14044,69 @@ function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;
 
 function renderAIQueue(items){
   const list = qs('#aiq-list');
-  if(!list) return;
+  const tbody = qs('#aiq-tbody');
   aiqItemsById = {};
-
-  // Explicit empty state for CI tests + clarity
+  const htmlCards = [];
   if(!items || !items.length){
-    list.innerHTML = '<div class="note">AI Queue empty — no queued actions.</div>';
+    if(list) list.innerHTML = '<div class="note">AI Queue empty — no queued actions.</div>';
+    if(tbody) tbody.innerHTML = '<tr><td colspan="9" class="note">No items match filters.</td></tr>';
     return;
   }
+  if(tbody) tbody.innerHTML = '';
 
-  const rows = (items || []).map((it)=>{
-    aiqItemsById[String(it.id || '')] = it;
-    const id = esc(it.id || '');
-    const typ = esc(it.type || '');
-    const st  = esc(it.status || '');
+  (items || []).forEach((it)=>{
+    const sid = String(it.id || '');
+    aiqItemsById[sid] = it;
+    const typRaw = String(it.type || '');
+    const typ = esc(typRaw);
+    const friendly = esc(aiFriendlyType(it));
+    const stRaw = String(it.status || '');
+    const st  = esc(stRaw);
     const conf = (typeof it.confidence === 'number') ? it.confidence.toFixed(2) : '';
     const when = esc(it.created_at || '');
-    const why  = esc(it.rationale || it.why || it.reason || '');
-    const payload = esc(JSON.stringify(it.payload || {}));
-
-    const canAct = (st === 'pending');
+    const why  = esc((it.rationale || it.why || it.reason || '').slice(0, 220));
+    const guest = esc(aiGuestLine(it));
+    const ch = aiBestChannel(it);
+    const chEsc = esc(ch);
+    let badgeCls = '';
+    if(ch.indexOf('email') >= 0 && ch.indexOf('sms') < 0 && ch.indexOf('wa') < 0) badgeCls = 'email';
+    else if(ch.indexOf('whatsapp') >= 0 || ch.indexOf('wa') >= 0) badgeCls = 'whatsapp';
+    else if(ch.indexOf('sms') >= 0) badgeCls = 'sms';
+    const waLab = esc(aiWaTemplateLabel(it));
+    const canAct = (stRaw === 'pending');
     const isOutbound = (
-      typ === 'send_email' || typ === 'send_sms' || typ === 'send_whatsapp' ||
-      typ === 'send_confirmation' || typ === 'send_reservation_received' || typ === 'send_reservation_confirmed' || typ === 'send_reservation_denied' || typ === 'send_reservation_reminder' || typ === 'send_update' || typ === 'send_vip_update'
+      typRaw === 'send_email' || typRaw === 'send_sms' || typRaw === 'send_whatsapp' ||
+      typRaw === 'send_confirmation' || typRaw === 'send_reservation_received' || typRaw === 'send_reservation_confirmed' || typRaw === 'send_reservation_denied' || typRaw === 'send_reservation_reminder' || typRaw === 'send_update' || typRaw === 'send_vip_update'
     );
-    const canSend = isOutbound && (st === 'approved') && !it.sent_at;
+    const canSend = isOutbound && (stRaw === 'approved') && !it.sent_at;
     const sendLabel =
-      (typ === 'send_sms') ? 'Send SMS' :
-      (typ === 'send_whatsapp') ? 'Send WhatsApp' :
-      (typ === 'send_email') ? 'Send Email' :
-      (typ === 'send_confirmation') ? 'Send Confirmation' :
-      (typ === 'send_reservation_received') ? 'Send Received' :
-      (typ === 'send_update') ? 'Send Update' :
-      (typ === 'send_reservation_confirmed') ? 'Send Reservation Confirmed' :
-      (typ === 'send_reservation_denied') ? 'Send Reservation Denied' :
-      (typ === 'send_reservation_reminder') ? 'Send Reservation Reminder' :
-      (typ === 'send_vip_update') ? 'Send VIP Update' :
+      (typRaw === 'send_sms') ? 'Send SMS' :
+      (typRaw === 'send_whatsapp') ? 'Send WhatsApp' :
+      (typRaw === 'send_email') ? 'Send Email' :
       'Send';
-    const sendBtn = isOutbound ? `<button type="button" class="btn" ${canSend ? '' : 'disabled'} onclick="aiqSend('${id}', this)">${sendLabel}</button>` : '';
-    const isBundledTemplate = (typ === 'send_confirmation' || typ === 'send_reservation_received' || typ === 'send_reservation_confirmed' || typ === 'send_reservation_denied' || typ === 'send_reservation_reminder' || typ === 'send_update' || typ === 'send_vip_update');
-    const viewTplBtn = isBundledTemplate ? `<button type="button" class="btn2" onclick="aiqViewTemplate('${id}')">View Template</button>` : '';
+    const isBundledTemplate = (
+      typRaw === 'send_confirmation' || typRaw.indexOf('send_reservation_') === 0 || typRaw === 'send_update' || typRaw === 'send_vip_update' ||
+      (typRaw === 'send_whatsapp' && it.payload && it.payload.template_key)
+    );
+    const viewTplBtn = isBundledTemplate ? `<button type="button" class="btn2" onclick="event.stopPropagation();aiqViewTemplate('${sid}')">Preview</button>` : '';
+    const approveBtn = `<button type="button" class="btn" ${canAct ? '' : 'disabled'} onclick="event.stopPropagation();aiqApprove('${sid}', this)">Approve</button>`;
+    const denyBtn    = `<button type="button" class="btn2" ${canAct ? '' : 'disabled'} onclick="event.stopPropagation();aiqDeny('${sid}', this)">Deny</button>`;
+    const sendBtn = isOutbound ? `<button type="button" class="btn" ${canSend ? '' : 'disabled'} onclick="event.stopPropagation();aiqSend('${sid}', this)">${sendLabel}</button>` : '';
+    const overrideBtn = `<button type="button" class="btnTiny" onclick="event.stopPropagation();aiqOverride('${sid}', this)">Override</button>`;
+    const removeBtn = `<button type="button" class="btnTiny" onclick="event.stopPropagation();aiqRemove('${sid}', this)">Remove</button>`;
 
-    const approveBtn = `<button type="button" class="btn" ${canAct ? '' : 'disabled'} onclick="aiqApprove('${id}', this)">Approve</button>`;
-    const denyBtn    = `<button type="button" class="btn2" ${canAct ? '' : 'disabled'} onclick="aiqDeny('${id}', this)">Deny</button>`;
-    const overrideBtn = `<button type="button" class="btn" onclick="aiqOverride('${id}', this)">Owner Override</button>`;
-    const removeBtn = `<button type="button" class="btnTiny" onclick="aiqRemove('${id}', this)">Remove from queue</button>`;
-
-    return `
+    htmlCards.push(`
       <div class="card" style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
           <div>
-            <b>${typ || 'AI item'}</b>
+            <b>${friendly}</b>
             <span class="chip" style="margin-left:8px">${st || 'unknown'}</span>
-            ${conf ? `<span class="note" style="margin-left:8px">conf ${conf}</span>` : ``}
+            ${conf ? `<span class="note" style="margin-left:8px">conf ${esc(conf)}</span>` : ``}
           </div>
           <div class="note">${when}</div>
         </div>
+        <div class="small" style="margin-top:6px;opacity:.88">${guest}</div>
         ${why ? `<div class="small" style="margin-top:8px;opacity:.9">${why}</div>` : ``}
-        <details style="margin-top:8px">
-          <summary class="small">Payload</summary>
-          <pre class="small" style="white-space:pre-wrap;opacity:.9">${payload}</pre>
-        </details>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           ${approveBtn}
           ${denyBtn}
@@ -13071,10 +14116,32 @@ function renderAIQueue(items){
           ${removeBtn}
         </div>
       </div>
-    `;
+    `);
+
+    if(tbody){
+      const tr = document.createElement('tr');
+      tr.onclick = ()=>openAiqDrawer(sid);
+      tr.innerHTML = `
+          <td><div style="font-weight:800">${friendly}</div><div class="note" style="font-size:11px;margin-top:2px">${typ}</div></td>
+          <td class="small">${guest}</td>
+          <td><span class="badge-ch ${badgeCls}">${chEsc}</span></td>
+          <td class="small">${waLab}</td>
+          <td class="small">${esc(conf)}</td>
+          <td class="small" style="max-width:220px">${why || '—'}</td>
+          <td><span class="chip">${st}</span></td>
+          <td class="note" style="font-size:11px">${when}</td>
+          <td style="white-space:nowrap" onclick="event.stopPropagation()">
+            <button type="button" class="btnTiny" ${canAct ? '' : 'disabled'} onclick="event.stopPropagation();aiqApprove('${sid}', this)">OK</button>
+            <button type="button" class="btnTiny" ${canAct ? '' : 'disabled'} onclick="event.stopPropagation();aiqDeny('${sid}', this)">No</button>
+            ${isBundledTemplate ? `<button type="button" class="btnTiny" onclick="event.stopPropagation();aiqViewTemplate('${sid}')">View</button>` : ''}
+            ${isOutbound ? `<button type="button" class="btnTiny" ${canSend ? '' : 'disabled'} onclick="event.stopPropagation();aiqSend('${sid}', this)">${esc(sendLabel)}</button>` : ''}
+          </td>
+      `;
+      tbody.appendChild(tr);
+    }
   });
 
-  list.innerHTML = rows.join('');
+  if(list) list.innerHTML = htmlCards.join('');
 }
 
 async function clearAIQueue(){
@@ -13203,16 +14270,6 @@ async function aiqOverride(id, btn){
   const j = await r.json().catch(()=>null);
   if(j && j.ok){ if(msg) msg.textContent='Override applied ✔'; if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } await loadAIQueue(); }
   else { if(msg) msg.textContent='Override failed'; if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } alert('Override failed: '+(j && j.error ? j.error : r.status)); }
-}
-
-
-function esc(s){
-  return (s==null?'':String(s))
-    .replaceAll('&','&amp;')
-    .replaceAll('<','&lt;')
-    .replaceAll('>','&gt;')
-    .replaceAll('"','&quot;')
-    .replaceAll("'","&#39;");
 }
 
 async function loadAudit(){
@@ -13668,6 +14725,8 @@ function refreshAll(source){
   try{ loadRules(); }catch(e){}
   try{ loadMenu(); }catch(e){}
   try{ loadHealth(); }catch(e){}
+  try{ loadForecast(); }catch(e){}
+  try{ loadDailySummary(); }catch(e){}
 
   // ✅ Refresh audit automatically if user is currently on the Audit tab
   try{
@@ -13697,7 +14756,7 @@ async function loadHealth(){
         const badge = c.ok ? '✅' : (c.severity==='error' ? '🚨' : '⚠️');
         return `${badge} ${c.name}: ${c.message||''}`;
       });
-      body.textContent = lines.join('\\n');
+      body.textContent = lines.join('\n');
     }
   }catch(e){
     if(msg) msg.textContent='Load failed: '+(e.message||e);
@@ -13724,7 +14783,7 @@ async function runHealth(){
         const badge = c.ok ? '✅' : (c.severity==='error' ? '🚨' : '⚠️');
         return `${badge} ${c.name}: ${c.message||''}`;
       });
-      body.textContent = lines.join('\\n');
+      body.textContent = lines.join('\n');
     }
     // also refresh notifications (alerts may have been emitted)
     try{ loadNotifs(); }catch(e){}
@@ -14065,20 +15124,27 @@ def admin_api_load_forecast():
         rows = (all_vals[1:] if len(all_vals) > 1 else [])
         rows = rows[-800:]
 
-        def col(key: str) -> int:
-            return (hmap.get(key) or 0) - 1
+        def _col_idx(*names: str) -> int:
+            for nm in names:
+                k = _normalize_header(nm)
+                if k in hmap:
+                    return hmap[k] - 1
+            return -1
 
-        ts_i = col("timestamp")
-        vip_i = col("vip")
+        ts_i = _col_idx("timestamp", "ts", "created_at", "submitted_at")
+        vip_i = _col_idx("vip", "VIP")
+        tier_i = _col_idx("tier", "segment")
 
         now = datetime.now(timezone.utc)
 
         def parse_ts(r):
-            s = (r[ts_i] if ts_i >= 0 and ts_i < len(r) else "").strip()
+            if ts_i < 0 or ts_i >= len(r):
+                return None
+            s = (r[ts_i] or "").strip()
             if not s:
                 return None
             try:
-                return datetime.fromisoformat(s.replace("Z","+00:00")).astimezone(timezone.utc)
+                return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(timezone.utc)
             except Exception:
                 try:
                     return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
@@ -14086,8 +15152,15 @@ def admin_api_load_forecast():
                     return None
 
         def is_vip(r):
-            s = (r[vip_i] if vip_i >= 0 and vip_i < len(r) else "").strip().lower()
-            return s in ("vip", "yes", "y", "true", "1")
+            if vip_i >= 0 and vip_i < len(r):
+                s = (r[vip_i] or "").strip().lower()
+                if s in ("vip", "yes", "y", "true", "1", "vip."):
+                    return True
+            if tier_i >= 0 and tier_i < len(r):
+                t = (r[tier_i] or "").strip().lower()
+                if "vip" in t:
+                    return True
+            return False
 
         buckets_7 = {}
         buckets_30 = {}
@@ -14125,8 +15198,132 @@ def admin_api_load_forecast():
             "top_days_30": top_k(buckets_30, 7),
             "top_hours_30": top_k(hours, 6),
             "vip_ratio_30": (vip_30/total_30) if total_30 else 0.0,
+            "meta": {
+                "timestamp_column_resolved": ts_i >= 0,
+                "rows_sample": len(rows),
+            },
         }
         return jsonify(out)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/admin/api/analytics/daily-summary", methods=["GET"])
+def admin_api_daily_summary():
+    """Revenue-oriented day snapshot from the venue lead sheet (manager+)."""
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    day_s = (request.args.get("date") or "").strip()
+    if day_s:
+        try:
+            day_date = datetime.strptime(day_s, "%Y-%m-%d").date()
+        except Exception:
+            return jsonify({"ok": False, "error": "Invalid date (use YYYY-MM-DD)"}), 400
+    else:
+        day_date = datetime.now(timezone.utc).date()
+
+    try:
+        gc = get_gspread_client()
+        ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
+        header = ws.row_values(1) or []
+        hmap = header_map(header)
+
+        def _col_idx(*names: str) -> int:
+            for nm in names:
+                k = _normalize_header(nm)
+                if k in hmap:
+                    return hmap[k] - 1
+            return -1
+
+        ts_i = _col_idx("timestamp", "ts", "created_at", "submitted_at")
+        vip_i = _col_idx("vip", "VIP")
+        tier_i = _col_idx("tier", "segment")
+        budget_i = _col_idx("budget", "Budget")
+        ep_i = _col_idx("entry_point", "entry", "source")
+        q_i = _col_idx("queue", "intent", "request_type")
+
+        all_vals = ws.get_all_values() or []
+        rows = all_vals[1:] if len(all_vals) > 1 else []
+
+        def parse_ts_cell(r: list) -> Optional[datetime]:
+            if ts_i < 0 or ts_i >= len(r):
+                return None
+            s = (r[ts_i] or "").strip()
+            if not s:
+                return None
+            try:
+                return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(timezone.utc)
+            except Exception:
+                try:
+                    return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
+                except Exception:
+                    return None
+
+        def row_is_vip(r: list) -> bool:
+            if vip_i >= 0 and vip_i < len(r):
+                s = (r[vip_i] or "").strip().lower()
+                if s in ("vip", "yes", "y", "true", "1"):
+                    return True
+            if tier_i >= 0 and tier_i < len(r):
+                t = (r[tier_i] or "").strip().lower()
+                if "vip" in t:
+                    return True
+            return False
+
+        day_rows: List[list] = []
+        type_counts: Dict[str, int] = {}
+        hour_counts: Dict[str, int] = {}
+        revenue_sum = 0.0
+
+        for r in rows:
+            dt = parse_ts_cell(r)
+            if dt is None:
+                continue
+            if dt.date() != day_date:
+                continue
+            day_rows.append(r)
+            if row_is_vip(r):
+                pass
+            label = ""
+            if ep_i >= 0 and ep_i < len(r) and str(r[ep_i]).strip():
+                label = str(r[ep_i]).strip()
+            elif q_i >= 0 and q_i < len(r) and str(r[q_i]).strip():
+                label = str(r[q_i]).strip()
+            else:
+                label = "(unspecified)"
+            type_counts[label] = type_counts.get(label, 0) + 1
+            hour_counts[dt.strftime("%H:00")] = hour_counts.get(dt.strftime("%H:00"), 0) + 1
+            if budget_i >= 0 and budget_i < len(r):
+                revenue_sum += _parse_budget_to_number(r[budget_i])
+
+        total = len(day_rows)
+        vip_n = sum(1 for r in day_rows if row_is_vip(r))
+        reg_n = max(0, total - vip_n)
+
+        top_types = sorted(type_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_hours = sorted(hour_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+
+        est_revenue = float(revenue_sum)
+        if est_revenue <= 0 and total > 0:
+            est_revenue = float(vip_n * 220 + reg_n * 85)
+
+        return jsonify(
+            {
+                "ok": True,
+                "date": day_date.isoformat(),
+                "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "total_guests": total,
+                "vip_count": vip_n,
+                "regular_count": reg_n,
+                "estimated_revenue": round(est_revenue, 2),
+                "budget_sum_parsed": round(revenue_sum, 2),
+                "top_request_labels": [{"key": a, "count": b} for a, b in top_types],
+                "peak_hours": [{"key": a, "count": b} for a, b in top_hours],
+                "meta": {"timestamp_column_resolved": ts_i >= 0},
+            }
+        )
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -14539,7 +15736,7 @@ async function loadForecast(){
   const msg = qs('#forecast-msg'); if(msg) msg.textContent = 'Loading…';
   const body = qs('#forecastBody'); if(body) body.textContent = '';
   try{
-    const r = await fetch(`/admin/api/analytics/load-forecast?key=${encodeURIComponent(KEY)}`, {cache:'no-store'});
+    const r = await fetch(`/admin/api/analytics/load-forecast?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {cache:'no-store'});
     const d = await r.json();
     if(!d.ok) throw new Error(d.error || 'Failed');
     const lines = [];
@@ -14552,7 +15749,37 @@ async function loadForecast(){
     if(Array.isArray(d.top_days_7) && d.top_days_7.length){
       lines.push(`Top days (7d): ` + d.top_days_7.map(x=>`${x.key} (${x.count})`).join(', '));
     }
-    if(body) body.textContent = lines.join('\\n');
+    if(body) body.textContent = lines.join('\n');
+    if(msg) msg.textContent = 'Updated ✔';
+  }catch(e){
+    if(msg) msg.textContent = 'Failed: ' + (e.message || e);
+  }
+}
+
+async function loadDailySummary(){
+  const msg = qs('#daily-summary-msg');
+  const body = qs('#daily-summary-body');
+  const dIn = qs('#daily-summary-date');
+  if(msg) msg.textContent = 'Loading…';
+  if(body) body.textContent = '';
+  try{
+    const ds = (dIn && dIn.value) ? dIn.value : '';
+    const url = `/admin/api/analytics/daily-summary?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`
+      + (ds ? `&date=${encodeURIComponent(ds)}` : '');
+    const r = await fetch(url, {cache:'no-store'});
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.error || 'Failed');
+    const lines = [];
+    lines.push(`Date: ${d.date || '—'}`);
+    lines.push(`Guests: ${d.total_guests||0}  (VIP ${d.vip_count||0} · Regular ${d.regular_count||0})`);
+    lines.push(`Est. revenue: $${(d.estimated_revenue||0).toFixed ? d.estimated_revenue.toFixed(2) : d.estimated_revenue}  (budget sum parsed: $${(d.budget_sum_parsed||0).toFixed ? d.budget_sum_parsed.toFixed(2) : d.budget_sum_parsed})`);
+    if(Array.isArray(d.top_request_labels) && d.top_request_labels.length){
+      lines.push(`Top request types: ` + d.top_request_labels.map(x=>`${x.key} (${x.count})`).join(', '));
+    }
+    if(Array.isArray(d.peak_hours) && d.peak_hours.length){
+      lines.push(`Peak hours: ` + d.peak_hours.map(x=>`${x.key} (${x.count})`).join(', '));
+    }
+    if(body) body.textContent = lines.join('\n');
     if(msg) msg.textContent = 'Updated ✔';
   }catch(e){
     if(msg) msg.textContent = 'Failed: ' + (e.message || e);
