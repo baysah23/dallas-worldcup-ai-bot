@@ -12027,25 +12027,25 @@ label.small + textarea,
       <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="aiq-ff-rem"/> Allow reminder suggestions</label>
       <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="aiq-ff-upg"/> Allow upgrade suggestions</label>
       <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-        <button type="button" class="btn" onclick="saveAiqFocusMode()">Save focus mode</button>
-        <button type="button" class="btn2" onclick="resetAiqFocusMode()">Reset to default</button>
+        <button type="button" id="aiq-btn-save-focus" class="btn">Save focus mode</button>
+        <button type="button" id="aiq-btn-reset-focus" class="btn2">Reset to default</button>
       </div>
     </div>
     <div class="card" style="margin:0">
       <div class="aiq-card-title">Run Suggestions</div>
       <div class="aiq-run-grid">
-        <button type="button" class="btn" onclick="runAIPreset('vip')">Run VIP</button>
-        <button type="button" class="btn" onclick="runAIPreset('reminders')">Run Reminders</button>
-        <button type="button" class="btn" onclick="runAIPreset('upgrades')">Run Upgrades</button>
-        <button type="button" class="btn2" onclick="runAIPreset('all')">Run All AI</button>
+        <button type="button" id="aiq-btn-run-vip" class="btn">Run VIP</button>
+        <button type="button" id="aiq-btn-run-reminders" class="btn">Run Reminders</button>
+        <button type="button" id="aiq-btn-run-upgrades" class="btn">Run Upgrades</button>
+        <button type="button" id="aiq-btn-run-all" class="btn2">Run All AI</button>
       </div>
       <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
         <label class="small">Row #</label>
         <input id="ai-run-row" class="inp" type="number" min="2" step="1" placeholder="Row" style="max-width:90px" />
         <label class="small">Limit</label>
         <input id="ai-run-limit" class="inp" type="number" min="1" max="25" step="1" value="5" style="max-width:70px" />
-        <button type="button" class="btn2" onclick="runAINew()">New leads</button>
-        <button type="button" class="btn2" onclick="runAIRow()">This row</button>
+        <button type="button" id="aiq-btn-run-new" class="btn2">New leads</button>
+        <button type="button" id="aiq-btn-run-row" class="btn2">This row</button>
       </div>
       <div class="note" style="margin-top:8px">Uses focus + channel filters below. Outbound never auto-sends.</div>
     </div>
@@ -12063,25 +12063,25 @@ label.small + textarea,
       </div>
       <input type="hidden" id="aiq-view-bucket" value="all"/>
       <div class="aiq-filters-row">
-        <input id="aiq-search" class="inp" style="min-width:160px" placeholder="Keyword search…" oninput="aiqSearchDebounced()" />
-        <select id="aiq-filter" class="inp" style="max-width:150px" onchange="loadAIQueue()">
+        <input id="aiq-search" class="inp" style="min-width:160px" placeholder="Keyword search…" />
+        <select id="aiq-filter" class="inp" style="max-width:150px">
           <option value="">All statuses</option>
           <option value="pending">Pending</option>
           <option value="approved">Approved</option>
         </select>
-        <select id="aiq-channel" class="inp" style="max-width:130px" onchange="loadAIQueue()">
+        <select id="aiq-channel" class="inp" style="max-width:130px">
           <option value="">All channels</option>
           <option value="email">Email</option>
           <option value="sms">SMS</option>
           <option value="whatsapp">WhatsApp</option>
         </select>
-        <select id="aiq-time" class="inp" style="max-width:150px" onchange="loadAIQueue()">
+        <select id="aiq-time" class="inp" style="max-width:150px">
           <option value="">All time</option>
           <option value="today">Today</option>
           <option value="1440">24h</option>
           <option value="10080">7d</option>
         </select>
-        <select id="aiq-type" class="inp" style="max-width:170px" onchange="loadAIQueue()">
+        <select id="aiq-type" class="inp" style="max-width:170px">
           <option value="">All types</option>
           <option value="reply_draft">Reply drafts</option>
           <option value="vip_tag">VIP tagging</option>
@@ -12097,14 +12097,15 @@ label.small + textarea,
           <option value="send_update">Send update</option>
           <option value="send_vip_update">Send VIP update</option>
         </select>
-        <select id="aiq-conf" class="inp" style="max-width:140px" onchange="loadAIQueue()">
+        <select id="aiq-conf" class="inp" style="max-width:140px">
           <option value="">Any conf.</option>
           <option value="0.50">Min 0.50</option>
           <option value="0.70">Min 0.70</option>
           <option value="0.80">Min 0.80</option>
         </select>
-        <button class="btn2" type="button" onclick="clearAIQueueFilters()">Clear</button>
-        <button class="btn2" type="button" onclick="loadAIQueue()">Refresh</button>
+        <button class="btn2" id="aiq-btn-clear-filters" type="button">Clear</button>
+        <button class="btn2" id="aiq-btn-refresh" type="button">Refresh</button>
+        <button class="btn" id="aiq-btn-summary" type="button">Summary</button>
       </div>
       <div id="aiq-bucket-counts" class="aiq-counts"></div>
       <span id="aiq-msg" class="note" style="display:block;margin-top:8px"></span>
@@ -12423,6 +12424,18 @@ label.small + textarea,
     <div class="small" style="margin-bottom:10px">Review the exact bundled SMS + WhatsApp-template payload before approval or send.</div>
     <div id="aiq-template-modal-msg" class="note" style="margin-bottom:10px"></div>
     <div id="aiq-template-modal-body" class="small" style="white-space:normal"></div>
+  </div>
+</div>
+
+<!-- AI Queue Summary Modal -->
+<div id="aiq-summary-modal" class="modal-overlay" onclick="if(event.target===this)closeAiqSummaryModal()">
+  <div class="modal-box" style="max-width:820px">
+    <div class="modal-header">
+      <div class="modal-title">AI Queue Summary</div>
+      <button type="button" class="modal-close" onclick="closeAiqSummaryModal()">Close</button>
+    </div>
+    <div id="aiq-summary-msg" class="note" style="margin-bottom:10px"></div>
+    <div id="aiq-summary-body" class="small" style="white-space:normal"></div>
   </div>
 </div>
 """)
@@ -13575,6 +13588,41 @@ function initAiqUx(){
     if(e.key !== 'Escape') return;
     const ov = qs('#aiq-drawer-overlay');
     if(ov && ov.classList.contains('show')) closeAiqDrawer();
+    const sm = qs('#aiq-summary-modal');
+    if(sm && sm.classList.contains('show')) closeAiqSummaryModal();
+  });
+
+  // Hard-wire critical AIQ actions to avoid regressions from inline handler drift.
+  const clickMap = [
+    ['#aiq-btn-save-focus', ()=>saveAiqFocusMode()],
+    ['#aiq-btn-reset-focus', ()=>resetAiqFocusMode()],
+    ['#aiq-btn-run-vip', ()=>runAIPreset('vip')],
+    ['#aiq-btn-run-reminders', ()=>runAIPreset('reminders')],
+    ['#aiq-btn-run-upgrades', ()=>runAIPreset('upgrades')],
+    ['#aiq-btn-run-all', ()=>runAIPreset('all')],
+    ['#aiq-btn-run-new', ()=>runAINew()],
+    ['#aiq-btn-run-row', ()=>runAIRow()],
+    ['#aiq-btn-clear-filters', ()=>clearAIQueueFilters()],
+    ['#aiq-btn-refresh', ()=>loadAIQueue()],
+    ['#aiq-btn-summary', ()=>openAiqSummary()]
+  ];
+  clickMap.forEach(([sel, fn])=>{
+    const el = qs(sel);
+    if(!el) return;
+    el.addEventListener('click', function(e){
+      try{ e.preventDefault(); }catch(_){}
+      try{ fn(); }catch(err){ console.error(err); }
+    });
+  });
+
+  const search = qs('#aiq-search');
+  if(search){
+    search.addEventListener('input', function(){ aiqSearchDebounced(); });
+  }
+  ['#aiq-filter','#aiq-channel','#aiq-time','#aiq-type','#aiq-conf'].forEach(sel=>{
+    const el = qs(sel);
+    if(!el) return;
+    el.addEventListener('change', function(){ loadAIQueue(); });
   });
 }
 
@@ -13606,6 +13654,98 @@ async function loadAIQueueSummary(){
     const sum = await r.json();
     applyAiqSummary(sum);
   }catch(e){ /* ignore */ }
+}
+
+function showAiqSummaryModal(){
+  const m = qs('#aiq-summary-modal');
+  if(m) m.classList.add('show');
+}
+
+function closeAiqSummaryModal(){
+  const m = qs('#aiq-summary-modal');
+  if(m) m.classList.remove('show');
+}
+
+async function openAiqSummary(){
+  initAiqUx();
+  showAiqSummaryModal();
+  const msg = qs('#aiq-summary-msg');
+  const body = qs('#aiq-summary-body');
+  if(msg) msg.textContent = 'Loading summary…';
+  if(body) body.innerHTML = '';
+  try{
+    const q = (qs('#aiq-search')?.value || '').trim();
+    const status = (qs('#aiq-filter')?.value || '').trim();
+    const channel = (qs('#aiq-channel')?.value || '').trim();
+    const time = (qs('#aiq-time')?.value || '').trim();
+    const type = (qs('#aiq-type')?.value || '').trim();
+    const min_conf = (qs('#aiq-conf')?.value || '').trim();
+    const bucket = (qs('#aiq-view-bucket')?.value || 'all').trim();
+
+    const base = `/admin/api/ai/queue?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}&limit=200`;
+    const queueUrl = base
+      + (q ? `&q=${encodeURIComponent(q)}` : '')
+      + (status ? `&status=${encodeURIComponent(status)}` : '')
+      + (channel ? `&channel=${encodeURIComponent(channel)}` : '')
+      + (time ? `&time=${encodeURIComponent(time)}` : '')
+      + (type ? `&type=${encodeURIComponent(type)}` : '')
+      + (min_conf ? `&min_conf=${encodeURIComponent(min_conf)}` : '')
+      + (bucket ? `&view=${encodeURIComponent(bucket)}` : '');
+    const summaryUrl = `/admin/api/ai/queue/summary?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`;
+
+    const [qr, sr] = await Promise.all([
+      fetch(queueUrl, {cache:'no-store'}),
+      fetch(summaryUrl, {cache:'no-store'})
+    ]);
+    const [qj, sj] = await Promise.all([qr.json().catch(()=>null), sr.json().catch(()=>null)]);
+    if(!qj || !qj.ok) throw new Error((qj && qj.error) || 'Queue summary failed');
+    if(!sj || !sj.ok) throw new Error((sj && sj.error) || 'Summary endpoint failed');
+
+    const items = Array.isArray(qj.items) ? qj.items : [];
+    const pending = items.filter(it=>String(it.status||'') === 'pending').length;
+    const approved = items.filter(it=>String(it.status||'') === 'approved').length;
+    const outboundReady = items.filter(it=>{
+      const t = String(it.type || '');
+      const outbound = (
+        t === 'send_email' || t === 'send_sms' || t === 'send_whatsapp' ||
+        t === 'send_confirmation' || t.indexOf('send_reservation_') === 0 ||
+        t === 'send_update' || t === 'send_vip_update'
+      );
+      return outbound && String(it.status||'') === 'approved' && !it.sent_at;
+    }).length;
+    const byType = {};
+    items.forEach(it=>{
+      const t = String(it.type || 'unknown');
+      byType[t] = (byType[t] || 0) + 1;
+    });
+    const topTypes = Object.entries(byType).sort((a,b)=>b[1]-a[1]).slice(0,6);
+
+    if(msg){
+      msg.textContent = `Filtered queue: ${items.length} item(s) · Pending ${pending} · Approved ${approved}`;
+    }
+    if(body){
+      const cards = [
+        ['Pending (filtered)', pending],
+        ['Approved (filtered)', approved],
+        ['Ready to send (filtered)', outboundReady],
+        ['Pending (venue-wide)', sj.total_pending != null ? sj.total_pending : 0],
+        ['Ready to send (venue-wide)', sj.approved_outbound_ready != null ? sj.approved_outbound_ready : 0]
+      ];
+      const top = topTypes.length
+        ? topTypes.map(([k,v])=>`<li><code>${esc(aiFriendlyType({type:k,payload:{}}))}</code> <b>${v}</b></li>`).join('')
+        : '<li>No items in current filter.</li>';
+      body.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:12px">
+          ${cards.map(([label,val])=>`<div class="aiq-stat-badge" style="display:flex;justify-content:space-between;gap:10px"><span>${esc(label)}</span><b>${val}</b></div>`).join('')}
+        </div>
+        <div class="small" style="opacity:.8;margin-bottom:10px">Current filters: view <b>${esc(bucket||'all')}</b>, status <b>${esc(status||'all')}</b>, channel <b>${esc(channel||'all')}</b>, time <b>${esc(time||'all')}</b>.</div>
+        <div style="font-weight:800;margin-bottom:6px">Top suggestion types (current filter)</div>
+        <ul style="margin:0;padding-left:18px;line-height:1.45">${top}</ul>
+      `;
+    }
+  }catch(e){
+    if(msg) msg.textContent = 'Unable to load summary: ' + (e.message || e);
+  }
 }
 
 function aiFriendlyType(it){
@@ -14756,7 +14896,7 @@ async function loadHealth(){
         const badge = c.ok ? '✅' : (c.severity==='error' ? '🚨' : '⚠️');
         return `${badge} ${c.name}: ${c.message||''}`;
       });
-      body.textContent = lines.join('\n');
+      body.textContent = lines.join('\\n');
     }
   }catch(e){
     if(msg) msg.textContent='Load failed: '+(e.message||e);
@@ -14783,7 +14923,7 @@ async function runHealth(){
         const badge = c.ok ? '✅' : (c.severity==='error' ? '🚨' : '⚠️');
         return `${badge} ${c.name}: ${c.message||''}`;
       });
-      body.textContent = lines.join('\n');
+      body.textContent = lines.join('\\n');
     }
     // also refresh notifications (alerts may have been emitted)
     try{ loadNotifs(); }catch(e){}
@@ -15749,7 +15889,7 @@ async function loadForecast(){
     if(Array.isArray(d.top_days_7) && d.top_days_7.length){
       lines.push(`Top days (7d): ` + d.top_days_7.map(x=>`${x.key} (${x.count})`).join(', '));
     }
-    if(body) body.textContent = lines.join('\n');
+    if(body) body.textContent = lines.join('\\n');
     if(msg) msg.textContent = 'Updated ✔';
   }catch(e){
     if(msg) msg.textContent = 'Failed: ' + (e.message || e);
@@ -15779,7 +15919,7 @@ async function loadDailySummary(){
     if(Array.isArray(d.peak_hours) && d.peak_hours.length){
       lines.push(`Peak hours: ` + d.peak_hours.map(x=>`${x.key} (${x.count})`).join(', '));
     }
-    if(body) body.textContent = lines.join('\n');
+    if(body) body.textContent = lines.join('\\n');
     if(msg) msg.textContent = 'Updated ✔';
   }catch(e){
     if(msg) msg.textContent = 'Failed: ' + (e.message || e);
