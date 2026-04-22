@@ -9541,6 +9541,54 @@ def admin_api_ai_run():
         for a in actions:
             typ = str(a.get("type") or "").strip()
             payload = dict(a.get("payload") or {})
+            # Attach stable lead context for UI review cards/table and send-time fallbacks.
+            # This keeps AI Queue entries self-contained (row linkage + guest identity),
+            # including runs triggered from "Run All AI" where operators need traceability.
+            lead_ctx = {
+                "name": str(lead.get("name") or "").strip(),
+                "contact": str(lead.get("contact") or lead.get("name") or "").strip(),
+                "party_size": str(lead.get("party_size") or "").strip(),
+                "datetime": str(lead.get("datetime") or "").strip(),
+                "row": int(sheet_row),
+                "phone": str(lead.get("phone") or "").strip(),
+                "email": str(lead.get("email") or "").strip(),
+            }
+            lead_snapshot = {
+                "row": int(sheet_row),
+                "name": str(lead.get("name") or "").strip(),
+                "phone": str(lead.get("phone") or "").strip(),
+                "email": str(lead.get("email") or "").strip(),
+                "date": str(lead.get("date") or "").strip(),
+                "time": str(lead.get("time") or "").strip(),
+                "party_size": str(lead.get("party_size") or "").strip(),
+                "entry_point": str(lead.get("entry_point") or "").strip(),
+                "tier": str(lead.get("tier") or "").strip(),
+                "queue": str(lead.get("queue") or "").strip(),
+                "budget": str(lead.get("budget") or "").strip(),
+                "notes": str(lead.get("notes") or "").strip(),
+            }
+            if not isinstance(payload.get("lead"), dict):
+                payload["lead"] = lead_ctx
+            else:
+                # Merge, but never lose resolved row linkage.
+                pl = dict(payload.get("lead") or {})
+                pl.setdefault("name", lead_ctx.get("name"))
+                pl.setdefault("contact", lead_ctx.get("contact"))
+                pl.setdefault("party_size", lead_ctx.get("party_size"))
+                pl.setdefault("datetime", lead_ctx.get("datetime"))
+                pl["row"] = int(sheet_row)
+                pl.setdefault("phone", lead_ctx.get("phone"))
+                pl.setdefault("email", lead_ctx.get("email"))
+                payload["lead"] = pl
+            if not isinstance(payload.get("lead_snapshot"), dict):
+                payload["lead_snapshot"] = lead_snapshot
+            else:
+                snap = dict(payload.get("lead_snapshot") or {})
+                for k, v in lead_snapshot.items():
+                    if snap.get(k) in (None, ""):
+                        snap[k] = v
+                snap["row"] = int(sheet_row)
+                payload["lead_snapshot"] = snap
             if typ == "vip_tag" and not str(payload.get("vip") or "").strip():
                 payload["vip"] = "VIP"
             # Always attach sheet_row for safe apply handlers
@@ -12663,10 +12711,10 @@ label.small + textarea,
       <table class="aiq-table" id="aiq-table">
         <thead>
           <tr>
-            <th>Type</th><th>Guest</th><th>Channel</th><th>WA template</th><th>Conf.</th><th>Rationale</th><th>Status</th><th>Created</th><th>Actions</th>
+            <th>Type</th><th>Row #</th><th>Guest</th><th>Channel</th><th>WA template</th><th>Conf.</th><th>Rationale</th><th>Status</th><th>Created</th><th>Actions</th>
           </tr>
         </thead>
-        <tbody id="aiq-tbody"><tr><td colspan="9" class="small">Loading…</td></tr></tbody>
+        <tbody id="aiq-tbody"><tr><td colspan="10" class="small">Loading…</td></tr></tbody>
       </table>
     </div>
     <div id="aiq-list" class="hidden"></div>
@@ -14454,11 +14502,23 @@ function aiBestChannel(it){
 function aiGuestLine(it){
   const p = (it && it.payload && typeof it.payload === 'object') ? it.payload : {};
   const lead = (p.lead && typeof p.lead === 'object') ? p.lead : {};
-  const name = lead.contact || lead.name || (p.lead_snapshot && p.lead_snapshot.name) || '';
-  const ps = lead.party_size || (p.lead_snapshot && p.lead_snapshot.party_size) || '';
-  const dt = lead.datetime || '';
+  const snap = (p.lead_snapshot && typeof p.lead_snapshot === 'object') ? p.lead_snapshot : {};
+  const rowNum =
+    (lead.row != null ? lead.row : (p.row != null ? p.row : (p.sheet_row != null ? p.sheet_row : snap.row)));
+  const name = lead.name || lead.contact || snap.name || (rowNum ? ('Row #' + String(rowNum)) : '');
+  const ps = lead.party_size || snap.party_size || '';
+  const dt = lead.datetime || [snap.date || '', snap.time || ''].filter(Boolean).join(' ') || '';
   const bits = [name, dt, ps ? ('party '+ps) : ''].filter(Boolean);
   return bits.join(' · ') || '—';
+}
+
+function aiRowRef(it){
+  const p = (it && it.payload && typeof it.payload === 'object') ? it.payload : {};
+  const lead = (p.lead && typeof p.lead === 'object') ? p.lead : {};
+  const snap = (p.lead_snapshot && typeof p.lead_snapshot === 'object') ? p.lead_snapshot : {};
+  const rowNum = lead.row ?? p.row ?? p.sheet_row ?? snap.row ?? '';
+  const n = parseInt(String(rowNum || ''), 10);
+  return (Number.isFinite(n) && n >= 2) ? String(n) : '—';
 }
 
 function aiWaTemplateLabel(it){
@@ -14689,7 +14749,7 @@ async function loadAIQueue(){
   initAiqUx();
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Loading…';
   const list = qs('#aiq-list'); if(list) list.innerHTML = 'Loading…';
-  const tbody = qs('#aiq-tbody'); if(tbody) tbody.innerHTML = '<tr><td colspan="9" class="small">Loading…</td></tr>';
+  const tbody = qs('#aiq-tbody'); if(tbody) tbody.innerHTML = '<tr><td colspan="10" class="small">Loading…</td></tr>';
   const seq = ++aiqFetchSeq;
   try{
     const filt = (qs('#aiq-filter')?.value || '').trim();
@@ -14872,7 +14932,7 @@ function renderAIQueue(items){
   const htmlCards = [];
   if(!items || !items.length){
     if(list) list.innerHTML = '<div class="note">AI Queue empty — no queued actions.</div>';
-    if(tbody) tbody.innerHTML = '<tr><td colspan="9" class="note">No items match filters.</td></tr>';
+    if(tbody) tbody.innerHTML = '<tr><td colspan="10" class="note">No items match filters.</td></tr>';
     return;
   }
   if(tbody) tbody.innerHTML = '';
@@ -14888,6 +14948,7 @@ function renderAIQueue(items){
     const conf = (typeof it.confidence === 'number') ? it.confidence.toFixed(2) : '';
     const when = esc(it.created_at || '');
     const why  = esc((it.rationale || it.why || it.reason || '').slice(0, 220));
+    const rowRef = esc(aiRowRef(it));
     const guest = esc(aiGuestLine(it));
     const ch = aiBestChannel(it);
     const chEsc = esc(ch);
@@ -14928,7 +14989,7 @@ function renderAIQueue(items){
           </div>
           <div class="note">${when}</div>
         </div>
-        <div class="small" style="margin-top:6px;opacity:.88">${guest}</div>
+        <div class="small" style="margin-top:6px;opacity:.88"><span class="note">Row #${rowRef}</span> · ${guest}</div>
         ${why ? `<div class="small" style="margin-top:8px;opacity:.9">${why}</div>` : ``}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           ${approveBtn}
@@ -14946,6 +15007,7 @@ function renderAIQueue(items){
       tr.onclick = ()=>openAiqDrawer(sid);
       tr.innerHTML = `
           <td><div style="font-weight:800">${friendly}</div><div class="note" style="font-size:11px;margin-top:2px">${typ}</div></td>
+          <td class="small"><span class="pill">#${rowRef}</span></td>
           <td class="small">${guest}</td>
           <td><span class="badge-ch ${badgeCls}">${chEsc}</span></td>
           <td class="small">${waLab}</td>
