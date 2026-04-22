@@ -13107,7 +13107,6 @@ window.showTab = function(tab){
       try{ if(typeof loadAIQueue === 'function') loadAIQueue(); }catch(e){}
     }
     if(tab === 'monitor'){
-      try{ if(typeof initMonitorUx === 'function') initMonitorUx(); }catch(e){}
       try{ if(typeof loadForecast === 'function') loadForecast(); }catch(e){}
       try{ if(typeof loadDailySummary === 'function') loadDailySummary(); }catch(e){}
     }
@@ -13167,6 +13166,55 @@ window.showTab = function(tab){
 
     // apply initial tab on load (also keeps your earlier behavior)
     try{ setActive(tab); }catch(e){}
+
+    // Monitoring: delegated clicks so Forecast / Daily Revenue Refresh always fire
+    // even if direct addEventListener wiring missed (race, CSP, or DOM swap).
+    try{
+      var mon = document.getElementById('tab-monitor');
+      if(mon && !mon.__wcMonitorDelegated){
+        mon.__wcMonitorDelegated = true;
+        mon.addEventListener('click', function(ev){
+          var t = ev.target;
+          if(!t || !t.closest) return;
+          var fbtn = t.closest('#forecast-refresh-btn');
+          var dbtn = t.closest('#daily-summary-refresh-btn');
+          if(fbtn){
+            try{ ev.preventDefault(); }catch(e){}
+            try{
+              if(typeof window.loadForecast === 'function') window.loadForecast();
+              else { var m = document.querySelector('#forecast-msg'); if(m) m.textContent = 'UI not ready — reload the page'; }
+            }catch(err){
+              console.error(err);
+              var m2 = document.querySelector('#forecast-msg');
+              if(m2) m2.textContent = 'Error: ' + (err && err.message ? err.message : err);
+            }
+            return;
+          }
+          if(dbtn){
+            try{ ev.preventDefault(); }catch(e){}
+            try{
+              if(typeof window.loadDailySummary === 'function') window.loadDailySummary();
+              else { var dm = document.querySelector('#daily-summary-msg'); if(dm) dm.textContent = 'UI not ready — reload the page'; }
+            }catch(err){
+              console.error(err);
+              var dm2 = document.querySelector('#daily-summary-msg');
+              if(dm2) dm2.textContent = 'Error: ' + (err && err.message ? err.message : err);
+            }
+          }
+        });
+        mon.addEventListener('change', function(ev){
+          var t = ev.target;
+          if(!t || t.id !== 'daily-summary-date') return;
+          try{
+            if(typeof window.loadDailySummary === 'function') window.loadDailySummary();
+          }catch(err){
+            console.error(err);
+            var dm = document.querySelector('#daily-summary-msg');
+            if(dm) dm.textContent = 'Error: ' + (err && err.message ? err.message : err);
+          }
+        });
+      }
+    }catch(e){}
   }
 
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
@@ -16583,29 +16631,6 @@ select option{
   });
 })();
 
-
-function initMonitorUx(){
-  if(window.__monitorUxInit) return;
-  const fbtn = qs('#forecast-refresh-btn');
-  if(fbtn){
-    fbtn.addEventListener('click', function(ev){
-      try{ ev.preventDefault(); }catch(_){}
-      try{ loadForecast(); }catch(err){ console.error('loadForecast failed:', err); const m = qs('#forecast-msg'); if(m) m.textContent = 'Error: ' + (err.message || err); }
-    });
-  }
-  const dbtn = qs('#daily-summary-refresh-btn');
-  if(dbtn){
-    dbtn.addEventListener('click', function(ev){
-      try{ ev.preventDefault(); }catch(_){}
-      try{ loadDailySummary(); }catch(err){ console.error('loadDailySummary failed:', err); const m = qs('#daily-summary-msg'); if(m) m.textContent = 'Error: ' + (err.message || err); }
-    });
-  }
-  const dIn = qs('#daily-summary-date');
-  if(dIn){
-    dIn.addEventListener('change', function(){ try{ loadDailySummary(); }catch(_){} });
-  }
-  window.__monitorUxInit = true;
-}
 
 async function loadForecast(){
   const msg = qs('#forecast-msg'); if(msg) msg.textContent = 'Loading…';
