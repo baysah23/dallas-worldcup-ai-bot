@@ -2171,9 +2171,39 @@ def _get_whatsapp_template_sid(kind: str) -> str:
 # --- AI suggestion taxonomy, queue buckets, channel intelligence (operator UX) ---
 
 SUGGESTION_PRESETS: Dict[str, Dict[str, Any]] = {
-    "vip": {"types": ["vip_tag"]},
-    "reminders": {"types": ["send_reservation_reminder", "send_confirmation"]},
-    "upgrades": {"types": ["send_upgrade_message", "send_vip_followup"]},
+    # Focus filters widen to include the generic outbound types a typical AI run
+    # emits (send_sms/send_email/send_whatsapp). Otherwise the narrow filter would
+    # silently discard every AI suggestion that wasn't the exact preset action,
+    # making "Run Reminders" / "Run VIP" / "Run Upgrades" produce nothing.
+    "vip": {
+        "types": [
+            "vip_tag",
+            "send_vip_followup",
+            "send_vip_update",
+            "send_upgrade_message",
+            "send_email",
+            "send_sms",
+            "send_whatsapp",
+        ]
+    },
+    "reminders": {
+        "types": [
+            "send_reservation_reminder",
+            "send_confirmation",
+            "send_email",
+            "send_sms",
+            "send_whatsapp",
+        ]
+    },
+    "upgrades": {
+        "types": [
+            "send_upgrade_message",
+            "send_vip_followup",
+            "send_email",
+            "send_sms",
+            "send_whatsapp",
+        ]
+    },
     "reply_drafts": {"types": ["reply_draft"]},
     "all": {"types": ["*"]},
 }
@@ -2302,8 +2332,34 @@ def _infer_whatsapp_template_key(lead: Dict[str, Any]) -> str:
     return "reservation_received"
 
 
-def _recommend_channel(lead: Dict[str, Any], suggestion_kind: str, settings: Dict[str, Any]) -> Dict[str, Any]:
-    """Deliberate channel ranking for outbound suggestions (stored on queue payload)."""
+def _looks_like_email(s: str) -> bool:
+    s = str(s or "").strip()
+    return bool(s) and ("@" in s) and ("." in s.split("@")[-1])
+
+
+def _looks_like_phone(s: str) -> bool:
+    s = str(s or "").strip()
+    if not s:
+        return False
+    digits = "".join(ch for ch in s if ch.isdigit())
+    return len(digits) >= 7
+
+
+def _recommend_channel(
+    lead: Dict[str, Any],
+    suggestion_kind: str,
+    settings: Dict[str, Any],
+    *,
+    payload_to: str = "",
+    action_type: str = "",
+) -> Dict[str, Any]:
+    """Deliberate channel ranking for outbound suggestions (stored on queue payload).
+
+    The `ranked` list reflects channels the lead can actually receive on (based
+    on email/phone availability and WA feature flag). The `channel` ("best")
+    aligns with the outbound action type when provided, so the drawer/table
+    never claims "best: sms" for a `send_email` row.
+    """
     s = settings or {}
     pref = s.get("channel_preferences") if isinstance(s.get("channel_preferences"), dict) else {}
     prefer_email_conf = bool(pref.get("prefer_email_for_confirmations", True))
@@ -2313,18 +2369,37 @@ def _recommend_channel(lead: Dict[str, Any], suggestion_kind: str, settings: Dic
 
     email = str(lead.get("email") or "").strip()
     phone = str(lead.get("phone") or "").strip()
+
+    # Also honor an explicit to on the payload (e.g. AI copied contact from notes).
+    pt = str(payload_to or "").strip()
+    if pt:
+        if not email and _looks_like_email(pt):
+            email = pt
+        elif not phone and _looks_like_phone(pt):
+            phone = pt
+
     kind = (suggestion_kind or "").strip().lower()
+    atype = (action_type or "").strip().lower()
 
     wa_enabled = bool(_venue_features().get("whatsapp_outbound") or _venue_features().get("whatsapp"))
-    # If feature flags absent, infer from Twilio WA env
     if not wa_enabled:
         wa_enabled = bool(os.environ.get("TWILIO_WHATSAPP_FROM", "").strip())
 
-    ranked: List[str] = []
-    reason = ""
+    available: List[str] = []
+    if email:
+        available.append("email")
+    if phone:
+        available.append("sms")
+    if wa_enabled and phone:
+        available.append("whatsapp")
 
     is_reminder = kind in ("reminder", "send_reservation_reminder", "reservation_reminder") or "remind" in kind
-    is_confirm = kind in ("confirm", "confirmation", "send_confirmation", "reservation_confirmed", "formal")
+    is_confirm = kind in (
+        "confirm", "confirmation", "send_confirmation", "reservation_confirmed", "formal"
+    )
+
+    ranked: List[str] = []
+    reason = ""
 
     if prefer_sms_urgent and is_reminder and phone:
         ranked.append("sms")
@@ -2337,14 +2412,13 @@ def _recommend_channel(lead: Dict[str, Any], suggestion_kind: str, settings: Dic
         reason = "Venue prefers WhatsApp for this guest"
     elif email:
         ranked.append("email")
-    if phone and "sms" not in ranked:
+    elif phone:
         ranked.append("sms")
-    if wa_enabled and phone and "whatsapp" not in ranked:
-        ranked.append("whatsapp")
-    if email and "email" not in ranked:
-        ranked.append("email")
 
-    # Dedupe preserving order
+    for c in available:
+        if c not in ranked:
+            ranked.append(c)
+
     seen: set = set()
     deduped: List[str] = []
     for x in ranked:
@@ -2356,7 +2430,21 @@ def _recommend_channel(lead: Dict[str, Any], suggestion_kind: str, settings: Dic
     if not rank_all and ranked:
         ranked = ranked[:1]
 
-    best = ranked[0] if ranked else ("email" if email else ("sms" if phone else "email"))
+    # Best channel: if the caller passed an explicit action type, prefer the
+    # channel that matches that action (it reflects what will actually be sent).
+    action_channel = ""
+    if atype == "send_email":
+        action_channel = "email"
+    elif atype == "send_sms":
+        action_channel = "sms"
+    elif atype == "send_whatsapp":
+        action_channel = "whatsapp"
+
+    if action_channel and action_channel in (available or ranked):
+        best = action_channel
+    else:
+        best = ranked[0] if ranked else ("email" if email else ("sms" if phone else "email"))
+
     if not reason:
         reason = "Ranked from available contact channels and venue preferences"
 
@@ -2364,6 +2452,7 @@ def _recommend_channel(lead: Dict[str, Any], suggestion_kind: str, settings: Dic
         "channel": best,
         "ranked": ranked or [best],
         "reason": reason,
+        "available": available,
     }
 
 
@@ -3095,21 +3184,52 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
     except Exception as e:
         return {"ok": False, "error": f"Apply failed: {e}"}
 
-def _ai_build_lead_prompt(lead: Dict[str, Any]) -> str:
-    # Keep prompt small + deterministic
-    return (
-        "Lead intake:\n"
-        f"- intent: {lead.get('intent','')}\n"
-        f"- contact: {lead.get('contact','')}\n"
-        f"- budget: {lead.get('budget','')}\n"
-        f"- party_size: {lead.get('party_size','')}\n"
-        f"- datetime: {lead.get('datetime','')}\n"
-        f"- notes: {lead.get('notes','')}\n"
-        f"- lang: {lead.get('lang','')}\n"
-        "\nReturn JSON only."
-    )
+_FOCUS_GUIDANCE: Dict[str, str] = {
+    "vip": (
+        "Focus: VIP. Prioritise vip_tag and outbound messages (send_sms / "
+        "send_email / send_whatsapp) tailored to a high-value guest — warm tone, "
+        "mention upgrades or personal concierge follow-up when relevant."
+    ),
+    "reminders": (
+        "Focus: Reminders. Prioritise reservation reminders — short, polite "
+        "confirmation of the upcoming date/time. Choose SMS/WhatsApp when phone "
+        "is on file; otherwise email. Template keys 'reservation_reminder' or "
+        "'reservation_confirmed' are preferred for WhatsApp."
+    ),
+    "upgrades": (
+        "Focus: Upgrades. Prioritise proactive upsell: send a message that "
+        "offers an upgrade (table, bottle, suite, VIP add-on). Keep it brief and "
+        "value-forward."
+    ),
+    "reply_drafts": (
+        "Focus: Reply Drafts. Produce a reply_draft action with a short, "
+        "on-brand message the operator can edit and send."
+    ),
+    "all": "",
+}
 
-def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[str, Any]:
+
+def _ai_build_lead_prompt(lead: Dict[str, Any], focus_mode: str = "all") -> str:
+    # Keep prompt small + deterministic
+    focus_hint = _FOCUS_GUIDANCE.get((focus_mode or "all").strip().lower(), "")
+    lines = [
+        "Lead intake:",
+        f"- intent: {lead.get('intent','')}",
+        f"- contact: {lead.get('contact','')}",
+        f"- budget: {lead.get('budget','')}",
+        f"- party_size: {lead.get('party_size','')}",
+        f"- datetime: {lead.get('datetime','')}",
+        f"- notes: {lead.get('notes','')}",
+        f"- lang: {lead.get('lang','')}",
+    ]
+    if focus_hint:
+        lines.append("")
+        lines.append(focus_hint)
+    lines.append("")
+    lines.append("Return JSON only.")
+    return "\n".join(lines)
+
+def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int, focus_mode: str = "all") -> Dict[str, Any]:
     """
     Ask the model for suggested workflow actions for a new lead.
     Returns dict: {ok, confidence, actions:[{type,payload,reason}], notes}
@@ -3139,7 +3259,7 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[s
         ],
         "notes": "short string"
     }
-    user_msg = _ai_build_lead_prompt(lead) + "\n\nJSON schema:\n" + json.dumps(contract)
+    user_msg = _ai_build_lead_prompt(lead, focus_mode=focus_mode) + "\n\nJSON schema:\n" + json.dumps(contract)
 
     # Call OpenAI (best-effort). If not configured, return a safe suggestion locally.
     try:
@@ -9409,7 +9529,7 @@ def admin_api_ai_run():
     # Run AI and push proposals into the queue
     for sheet_row, lead in targets:
         ran += 1
-        out = _ai_suggest_actions_for_lead(lead, sheet_row=sheet_row)
+        out = _ai_suggest_actions_for_lead(lead, sheet_row=sheet_row, focus_mode=focus_mode)
         if not out or not out.get("ok"):
             continue
         conf = float(out.get("confidence") or 0.0)
@@ -9449,10 +9569,13 @@ def admin_api_ai_run():
                     lead,
                     f'{str(payload.get("template_key") or "")}:send_whatsapp',
                     ai_settings,
+                    payload_to=str(payload.get("to") or ""),
+                    action_type=typ,
                 )
                 payload["recommended_channel"] = rc.get("channel")
                 payload["channel_ranked"] = rc.get("ranked")
                 payload["channel_reason"] = rc.get("reason")
+                payload["channels_available"] = rc.get("available") or []
             elif typ in ("send_sms", "send_email"):
                 lead_data = {k: str(lead.get(k) or "").strip() for k in ["name", "date", "time", "party_size", "phone", "email"]}
                 if not payload.get("to"):
@@ -9465,10 +9588,71 @@ def admin_api_ai_run():
                         payload["body"] = payload["message"] = body
                     if subj and typ == "send_email":
                         payload["subject"] = subj
-                rc2 = _recommend_channel(lead, typ, ai_settings)
+                rc2 = _recommend_channel(
+                    lead, typ, ai_settings,
+                    payload_to=str(payload.get("to") or ""),
+                    action_type=typ,
+                )
                 payload["recommended_channel"] = rc2.get("channel")
                 payload["channel_ranked"] = rc2.get("ranked")
                 payload["channel_reason"] = rc2.get("reason")
+                payload["channels_available"] = rc2.get("available") or []
+
+            # Channel sanity: don't enqueue an action the lead can't actually receive.
+            # If AI proposed send_email but no email is available → switch to SMS/WA.
+            # If AI proposed send_sms/whatsapp but no phone → switch to email. Drop if nothing works.
+            if typ in ("send_email", "send_sms", "send_whatsapp"):
+                avail = set(payload.get("channels_available") or [])
+                # Recompute available from lead + payload.to when missing.
+                if not avail:
+                    pt = str(payload.get("to") or "")
+                    lead_email = str(lead.get("email") or "").strip() or (pt if _looks_like_email(pt) else "")
+                    lead_phone = str(lead.get("phone") or "").strip() or (pt if _looks_like_phone(pt) else "")
+                    if lead_email:
+                        avail.add("email")
+                    if lead_phone:
+                        avail.add("sms")
+                    wa_on = bool(_venue_features().get("whatsapp_outbound") or _venue_features().get("whatsapp")) or bool(os.environ.get("TWILIO_WHATSAPP_FROM", "").strip())
+                    if wa_on and lead_phone:
+                        avail.add("whatsapp")
+                action_ch = {"send_email": "email", "send_sms": "sms", "send_whatsapp": "whatsapp"}[typ]
+                if action_ch not in avail:
+                    # pick a fallback channel from available, preferring the AI's channel family.
+                    fallback = None
+                    if action_ch == "email":
+                        fallback = "sms" if "sms" in avail else ("whatsapp" if "whatsapp" in avail else None)
+                    else:
+                        fallback = "email" if "email" in avail else None
+                    if not fallback:
+                        # No viable contact channel — skip this outbound action.
+                        continue
+                    new_typ = {"email": "send_email", "sms": "send_sms", "whatsapp": "send_whatsapp"}[fallback]
+                    # Rewrite type and `to`, and re-enrich body for the new channel.
+                    typ = new_typ
+                    if fallback == "email":
+                        payload["to"] = str(lead.get("email") or "").strip() or payload.get("to") or ""
+                    else:
+                        payload["to"] = str(lead.get("phone") or "").strip() or payload.get("to") or ""
+                    if fallback in ("sms", "whatsapp") and not (payload.get("body") or payload.get("message")):
+                        lead_data = {k: str(lead.get(k) or "").strip() for k in ["name", "date", "time", "party_size", "phone", "email"]}
+                        dk = _select_draft_for_channel("sms", "confirm")
+                        b, _ = _get_draft_content(dk, lead_data)
+                        if b:
+                            payload["body"] = payload["message"] = b
+                    if fallback == "email" and not payload.get("body") and not payload.get("message"):
+                        lead_data = {k: str(lead.get(k) or "").strip() for k in ["name", "date", "time", "party_size", "phone", "email"]}
+                        dk = _select_draft_for_channel("email", "confirm")
+                        b, subj2 = _get_draft_content(dk, lead_data)
+                        if b:
+                            payload["body"] = payload["message"] = b
+                        if subj2:
+                            payload["subject"] = subj2
+                    payload["recommended_channel"] = fallback
+                    payload["channel_reason"] = (
+                        f"Switched to {fallback.upper()} — lead has no "
+                        f"{action_ch} contact on file"
+                    )
+
             if not _ai_run_action_passes_filters(typ, payload, focus_mode, channel_mode):
                 continue
             rationale = str(a.get("reason") or out.get("notes") or "")[:1500]
@@ -9489,6 +9673,82 @@ def admin_api_ai_run():
             }
             _queue_add(entry)
             proposed_ids.append(entry["id"])
+
+            # Mirror send_sms as a WhatsApp suggestion when WA is enabled + allowed.
+            # This gives operators a visible WhatsApp option without changing the
+            # original SMS proposal. Skip if the AI already proposed a WA action.
+            try:
+                allow_wa = bool((ai_settings.get("allow_actions") or {}).get("send_whatsapp"))
+                wa_on = bool(
+                    _venue_features().get("whatsapp_outbound")
+                    or _venue_features().get("whatsapp")
+                ) or bool(os.environ.get("TWILIO_WHATSAPP_FROM", "").strip())
+                lead_phone = str(lead.get("phone") or "").strip()
+                already_wa = any(
+                    str(x.get("type") or "").lower() == "send_whatsapp" for x in actions
+                )
+                if (
+                    typ == "send_sms"
+                    and allow_wa
+                    and wa_on
+                    and lead_phone
+                    and not already_wa
+                    and _ai_run_action_passes_filters(
+                        "send_whatsapp", payload, focus_mode, channel_mode
+                    )
+                ):
+                    wa_payload = dict(payload)
+                    wa_payload["to"] = lead_phone
+                    wa_payload["template_key"] = _infer_whatsapp_template_key(lead)
+                    wa_payload.setdefault("venue_name", _venue_display_name())
+                    if not str(wa_payload.get("reservation_details") or "").strip():
+                        det_parts = []
+                        if lead.get("date"):
+                            det_parts.append(str(lead.get("date")))
+                        if lead.get("time"):
+                            det_parts.append(str(lead.get("time")))
+                        if lead.get("party_size"):
+                            det_parts.append(f"party of {lead.get('party_size')}")
+                        if lead.get("name"):
+                            det_parts.append(f"for {lead.get('name')}")
+                        wa_payload["reservation_details"] = (
+                            ", ".join(det_parts)
+                            if det_parts
+                            else str(lead.get("datetime") or "").strip()
+                        )
+                    rc_wa = _recommend_channel(
+                        lead,
+                        f'{wa_payload.get("template_key") or ""}:send_whatsapp',
+                        ai_settings,
+                        payload_to=lead_phone,
+                        action_type="send_whatsapp",
+                    )
+                    wa_payload["recommended_channel"] = rc_wa.get("channel")
+                    wa_payload["channel_ranked"] = rc_wa.get("ranked")
+                    wa_payload["channel_reason"] = (
+                        "Parallel WhatsApp option — richer template + read receipts"
+                    )
+                    wa_payload["channels_available"] = rc_wa.get("available") or []
+                    wa_entry = {
+                        "id": _queue_new_id(),
+                        "type": "send_whatsapp",
+                        "payload": wa_payload,
+                        "confidence": conf,
+                        "rationale": (rationale or "")[:1400]
+                        + (" · Mirrored as WhatsApp template for richer delivery." if rationale else "Mirrored as WhatsApp template for richer delivery."),
+                        "status": "pending",
+                        "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "created_by": actor,
+                        "created_role": role,
+                        "reviewed_at": None,
+                        "reviewed_by": None,
+                        "reviewed_role": None,
+                        "applied_result": None,
+                    }
+                    _queue_add(wa_entry)
+                    proposed_ids.append(wa_entry["id"])
+            except Exception:
+                pass
 
     if proposed_ids:
         _audit("ai.run.manual", {"mode": mode, "row": row_num or None, "ran": ran, "proposed": len(proposed_ids)})
@@ -9522,10 +9782,16 @@ def admin_api_ai_queue_list():
         except Exception:
             return None
 
-    # optional status filter
+    # optional status filter (supports synthetic "active" = pending OR approved)
     status = (request.args.get("status") or "").strip().lower()
     if status:
-        queue = [q for q in queue if str(q.get("status") or "").lower() == status]
+        if status == "active":
+            queue = [
+                q for q in queue
+                if str(q.get("status") or "").lower() in ("pending", "approved")
+            ]
+        else:
+            queue = [q for q in queue if str(q.get("status") or "").lower() == status]
 
     # optional time filter (server-side): created_at within last N minutes, or calendar "today" (UTC)
     time_param = (request.args.get("time") or "").strip()
@@ -9551,7 +9817,7 @@ def admin_api_ai_queue_list():
                 if (_parse_created_at_q(q.get("created_at")) or cutoff) >= cutoff
             ]
 
-    counts = _ai_queue_bucket_counts(queue[:500])
+    counts = _ai_queue_bucket_counts(queue)
 
     # optional focus preset (vip|reminders|upgrades|reply_drafts|all)
     focus_param = (request.args.get("focus") or "").strip().lower()
@@ -9632,17 +9898,136 @@ def admin_api_ai_queue_list():
                 return str(it).lower()
 
         queue = [it for it in queue if q_param in _payload_blob(it)]
-    return jsonify({"ok": True, "role": role, "queue": queue[:500], "counts": counts})
+    return jsonify({"ok": True, "role": role, "queue": queue[:500], "total_matched": len(queue), "counts": counts})
 
 
 @app.route("/admin/api/ai/queue/summary", methods=["GET"])
 def admin_api_ai_queue_summary():
-    """Fast bucket + pending counts for AI Queue operator UI."""
+    """AI Queue stats snapshot (venue-wide or filtered)."""
     ok, resp = _require_admin(min_role="manager")
     if not ok:
         return resp
     queue = _load_ai_queue()
+
+    def _parse_created_at_q(s: Any) -> Optional[datetime]:
+        try:
+            if s is None:
+                return None
+            ts = str(s).strip()
+            if not ts:
+                return None
+            ts = ts.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(ts)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        except Exception:
+            return None
+
+    # Optional filters (same semantics as /admin/api/ai/queue).
+    status = (request.args.get("status") or "").strip().lower()
+    if status:
+        if status == "active":
+            queue = [
+                q for q in queue
+                if str(q.get("status") or "").lower() in ("pending", "approved")
+            ]
+        else:
+            queue = [q for q in queue if str(q.get("status") or "").lower() == status]
+
+    time_param = (request.args.get("time") or "").strip()
+    if time_param.lower() == "today":
+        today_d = datetime.now(timezone.utc).date()
+        def _is_today_entry(q: Dict[str, Any]) -> bool:
+            dt = _parse_created_at_q(q.get("created_at"))
+            return dt is not None and dt.date() == today_d
+        queue = [q for q in queue if _is_today_entry(q)]
+    else:
+        time_minutes = _parse_time_range_minutes(time_param) if time_param else None
+        if time_minutes is None and time_param:
+            try:
+                time_minutes = int(time_param)
+            except Exception:
+                time_minutes = None
+        if time_minutes and time_minutes > 0:
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=time_minutes)
+            queue = [
+                q for q in queue
+                if (_parse_created_at_q(q.get("created_at")) or cutoff) >= cutoff
+            ]
+
+    focus_param = (request.args.get("focus") or "").strip().lower()
+    if focus_param:
+        queue = [q for q in queue if _queue_item_matches_focus_param(q, focus_param)]
+
+    channel_param = (request.args.get("channel") or "").strip().lower()
+    if channel_param in ("email", "sms", "whatsapp"):
+        queue = [q for q in queue if channel_param in _queue_item_channels(q)]
+
+    type_param = (request.args.get("type") or "").strip().lower()
+    if type_param:
+        if type_param == "send_whatsapp":
+            queue = [
+                q for q in queue
+                if _normalize_ai_action_type(str(q.get("type") or "")) == "send_whatsapp"
+            ]
+        else:
+            queue = [
+                q for q in queue
+                if str(q.get("type") or "").strip().lower() == type_param
+            ]
+
+    conf_param = (request.args.get("conf") or "").strip()
+    if conf_param:
+        try:
+            min_conf = float(conf_param)
+        except Exception:
+            min_conf = None
+        if min_conf is not None:
+            queue = [
+                q for q in queue
+                if float(q.get("confidence") or 0.0) >= min_conf
+            ]
+
+    q_param = (request.args.get("q") or "").strip().lower()
+    if q_param:
+        def _payload_blob(it: Dict[str, Any]) -> str:
+            try:
+                p = it.get("payload") or {}
+                if not isinstance(p, dict):
+                    p = {}
+                parts = [
+                    str(it.get("type") or ""),
+                    str(it.get("status") or ""),
+                    str(it.get("rationale") or ""),
+                    str(it.get("created_at") or ""),
+                    str(it.get("confidence") or ""),
+                ]
+                for k in (
+                    "reservation_id",
+                    "row",
+                    "sheet_row",
+                    "draft",
+                    "to",
+                    "subject",
+                    "message",
+                    "phone",
+                    "email",
+                    "template_key",
+                    "venue_name",
+                    "reservation_details",
+                ):
+                    if k in p:
+                        parts.append(str(p.get(k) or ""))
+                parts.append(json.dumps(p, ensure_ascii=False))
+                return " ".join(parts).lower()
+            except Exception:
+                return str(it).lower()
+
+        queue = [it for it in queue if q_param in _payload_blob(it)]
+
     pending = sum(1 for q in queue if str(q.get("status") or "").lower() == "pending")
+    approved = sum(1 for q in queue if str(q.get("status") or "").lower() == "approved")
     outbound_types = {
         "send_email",
         "send_sms",
@@ -9664,13 +10049,22 @@ def admin_api_ai_queue_summary():
         if q.get("sent_at"):
             continue
         approved_ready += 1
-    counts = _ai_queue_bucket_counts(queue[:500])
+    counts = _ai_queue_bucket_counts(queue)
+    by_type: Dict[str, int] = {}
+    for it in queue:
+        t = str(it.get("type") or "unknown").strip().lower() or "unknown"
+        by_type[t] = by_type.get(t, 0) + 1
+    top_types = sorted(by_type.items(), key=lambda kv: kv[1], reverse=True)[:8]
     return jsonify(
         {
             "ok": True,
+            "total_items": len(queue),
             "total_pending": pending,
+            "total_approved": approved,
             "approved_outbound_ready": approved_ready,
             "counts": counts,
+            "top_types": [{"type": t, "count": n} for t, n in top_types],
+            "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         }
     )
 
@@ -10083,6 +10477,148 @@ def admin_api_ai_queue_send(qid: str):
         return jsonify({"ok": True, "result": res})
     err = res.get("message") or res.get("error") or "Send failed"
     return jsonify({"ok": False, "result": res, "error": err})
+
+
+@app.route("/admin/api/ai/queue/<qid>/channel", methods=["POST"])
+def admin_api_ai_queue_channel_override(qid: str):
+    """Switch an outbound queue item to a different channel (manager+).
+
+    Body: { "channel": "email" | "sms" | "whatsapp" }
+
+    Only rewrites the action type + contact fields needed to deliver on the
+    chosen channel. The item remains in its current status (pending/approved).
+    This is the supported UX for "AI picked the wrong channel — change it".
+    """
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    actor = ctx.get("actor", "")
+    role = ctx.get("role", "")
+
+    data = request.get_json(silent=True) or {}
+    channel = str(data.get("channel") or "").strip().lower()
+    if channel not in ("email", "sms", "whatsapp"):
+        return jsonify({"ok": False, "error": "Invalid channel"}), 400
+
+    queue = _load_ai_queue()
+    it = _queue_find(queue, qid)
+    if not it:
+        return jsonify({"ok": False, "error": "Not found"}), 404
+
+    if str(it.get("status")) not in ("pending", "approved"):
+        return jsonify({"ok": False, "error": "Not editable"}), 400
+
+    cur_type = str(it.get("type") or "").strip().lower()
+    outbound_types = {
+        "send_email", "send_sms", "send_whatsapp",
+        "send_confirmation",
+        "send_reservation_received", "send_reservation_confirmed",
+        "send_reservation_denied", "send_reservation_reminder",
+        "send_update", "send_vip_update",
+    }
+    if cur_type not in outbound_types:
+        return jsonify({"ok": False, "error": "Only outbound items can have channel overridden"}), 400
+
+    payload = dict(it.get("payload") or {})
+
+    # Pull lead contact from sheet row when available (best-effort).
+    sheet_row = 0
+    try:
+        sheet_row = int(payload.get("row") or payload.get("sheet_row") or 0)
+    except Exception:
+        sheet_row = 0
+    lead_email = ""
+    lead_phone = ""
+    lead_data_for_draft: Dict[str, str] = {}
+    if sheet_row and sheet_row >= 2:
+        try:
+            gc = get_gspread_client()
+            ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
+            header = ws.row_values(1) or []
+            hmap = header_map(header)
+            row_vals = ws.row_values(sheet_row) or []
+
+            def _cell(name: str) -> str:
+                i = hmap.get(_normalize_header(name))
+                if not i:
+                    return ""
+                ix = i - 1
+                return (row_vals[ix] if ix < len(row_vals) else "") or ""
+
+            lead_email = _cell("email")
+            lead_phone = _cell("phone")
+            lead_data_for_draft = {
+                "name": _cell("name"),
+                "date": _cell("date"),
+                "time": _cell("time"),
+                "party_size": _cell("party_size"),
+                "phone": lead_phone,
+                "email": lead_email,
+            }
+        except Exception:
+            pass
+
+    # Map channel -> action type + required contact + body/subject
+    new_type = {"email": "send_email", "sms": "send_sms", "whatsapp": "send_whatsapp"}[channel]
+    if channel == "email":
+        to = lead_email or (payload.get("to") if _looks_like_email(str(payload.get("to") or "")) else "")
+        if not to:
+            return jsonify({"ok": False, "error": "No email on file for this lead"}), 400
+        payload["to"] = to
+        if not payload.get("body") and not payload.get("message"):
+            dk = _select_draft_for_channel("email", "confirm")
+            b, subj = _get_draft_content(dk, lead_data_for_draft or {"name": ""})
+            if b:
+                payload["body"] = payload["message"] = b
+            if subj:
+                payload["subject"] = subj
+        payload.pop("template_key", None)
+    elif channel == "sms":
+        to = lead_phone or (payload.get("to") if _looks_like_phone(str(payload.get("to") or "")) else "")
+        if not to:
+            return jsonify({"ok": False, "error": "No phone on file for this lead"}), 400
+        payload["to"] = to
+        if not payload.get("body") and not payload.get("message"):
+            dk = _select_draft_for_channel("sms", "confirm")
+            b, _ = _get_draft_content(dk, lead_data_for_draft or {"name": ""})
+            if b:
+                payload["body"] = payload["message"] = b
+        payload.pop("subject", None)
+        payload.pop("template_key", None)
+    else:  # whatsapp
+        to = lead_phone or (payload.get("to") if _looks_like_phone(str(payload.get("to") or "")) else "")
+        if not to:
+            return jsonify({"ok": False, "error": "No phone on file for this lead"}), 400
+        wa_enabled = bool(
+            _venue_features().get("whatsapp_outbound") or _venue_features().get("whatsapp")
+        ) or bool(os.environ.get("TWILIO_WHATSAPP_FROM", "").strip())
+        if not wa_enabled:
+            return jsonify({"ok": False, "error": "WhatsApp is not enabled for this venue"}), 400
+        payload["to"] = to
+        if not str(payload.get("template_key") or "").strip():
+            # infer best-effort from any status-ish field present in payload
+            lead_like = {"status": payload.get("status") or "", "date": lead_data_for_draft.get("date", ""), "time": lead_data_for_draft.get("time", "")}
+            payload["template_key"] = _infer_whatsapp_template_key(lead_like)
+        payload.setdefault("venue_name", _venue_display_name())
+        if not str(payload.get("reservation_details") or "").strip():
+            det_parts = [p for p in [
+                lead_data_for_draft.get("date", ""),
+                lead_data_for_draft.get("time", ""),
+                (f"party of {lead_data_for_draft.get('party_size')}" if lead_data_for_draft.get("party_size") else ""),
+                (f"for {lead_data_for_draft.get('name')}" if lead_data_for_draft.get("name") else ""),
+            ] if p]
+            payload["reservation_details"] = ", ".join(det_parts)
+        payload.pop("subject", None)
+
+    payload["recommended_channel"] = channel
+    payload["channel_reason"] = f"Manually switched to {channel.upper()} by operator ({role or actor})"
+
+    it["type"] = new_type
+    it["payload"] = payload
+    _save_ai_queue(queue)
+    _audit("ai.queue.channel_override", {"id": qid, "channel": channel, "by": actor})
+    return jsonify({"ok": True, "item": it})
 
 
 @app.route("/admin/api/ai/queue/<qid>/override", methods=["POST"])
@@ -11712,7 +12248,7 @@ label.small + textarea,
   <div class="h2">Tonight Forecast</div>
   <div class="small">Read-only load forecast (last 7/30 days). Helps staffing + VIP readiness.</div>
   <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-    <button class="btn2" type="button" onclick="loadForecast()">Refresh</button>
+    <button class="btn2" id="forecast-refresh-btn" type="button">Refresh</button>
     <span id="forecast-msg" class="note"></span>
   </div>
   <div id="forecastBody" class="small" style="margin-top:10px;line-height:1.4;white-space:pre-wrap"></div>
@@ -11722,7 +12258,7 @@ label.small + textarea,
     <div class="small">Guests and demand for the selected day (venue sheet). Fast read — uses parsed budgets when present.</div>
     <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <input id="daily-summary-date" class="inp" type="date" style="max-width:160px" />
-      <button class="btn2" type="button" onclick="loadDailySummary()">Refresh</button>
+      <button class="btn2" id="daily-summary-refresh-btn" type="button">Refresh</button>
       <span id="daily-summary-msg" class="note"></span>
     </div>
     <div id="daily-summary-body" class="small" style="margin-top:12px;line-height:1.45;white-space:pre-wrap"></div>
@@ -12064,10 +12600,12 @@ label.small + textarea,
       <input type="hidden" id="aiq-view-bucket" value="all"/>
       <div class="aiq-filters-row">
         <input id="aiq-search" class="inp" style="min-width:160px" placeholder="Keyword search…" />
-        <select id="aiq-filter" class="inp" style="max-width:150px">
+        <select id="aiq-filter" class="inp" style="max-width:170px">
           <option value="">All statuses</option>
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
+          <option value="active" selected>Pending + Approved</option>
+          <option value="pending">Pending only</option>
+          <option value="approved">Approved only</option>
+          <option value="denied">Denied</option>
         </select>
         <select id="aiq-channel" class="inp" style="max-width:130px">
           <option value="">All channels</option>
@@ -12438,6 +12976,37 @@ label.small + textarea,
     <div id="aiq-summary-body" class="small" style="white-space:normal"></div>
   </div>
 </div>
+
+<!-- AI Queue Channel Override Modal -->
+<div id="aiq-channel-modal" class="modal-overlay" onclick="if(event.target===this)closeAiqChannelModal()">
+  <div class="modal-box" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title">Change channel</div>
+      <button type="button" class="modal-close" onclick="closeAiqChannelModal()">Close</button>
+    </div>
+    <div class="small" style="margin-bottom:10px">Pick the channel you want this outbound to use. We'll rewrite the queue item (type + contact + body) to match. The item stays in its current status; nothing is sent until you click <b>Send</b>.</div>
+    <div id="aiq-channel-modal-current" class="note" style="margin-bottom:10px"></div>
+    <div id="aiq-channel-modal-choices" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+      <label style="display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid rgba(255,255,255,.12);border-radius:10px;cursor:pointer">
+        <input type="radio" name="aiq-ch-pick" value="email"/>
+        <div><div style="font-weight:700">Email</div><div class="note" style="margin:0">Plain subject + body to the lead's email</div></div>
+      </label>
+      <label style="display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid rgba(255,255,255,.12);border-radius:10px;cursor:pointer">
+        <input type="radio" name="aiq-ch-pick" value="sms"/>
+        <div><div style="font-weight:700">SMS</div><div class="note" style="margin:0">Short text to the lead's phone</div></div>
+      </label>
+      <label style="display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid rgba(255,255,255,.12);border-radius:10px;cursor:pointer">
+        <input type="radio" name="aiq-ch-pick" value="whatsapp"/>
+        <div><div style="font-weight:700">WhatsApp</div><div class="note" style="margin:0">Template message with rich formatting (requires venue WA setup)</div></div>
+      </label>
+    </div>
+    <div id="aiq-channel-modal-msg" class="note" style="margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" class="btn2" onclick="closeAiqChannelModal()">Cancel</button>
+      <button type="button" class="btn" id="aiq-channel-modal-apply">Apply change</button>
+    </div>
+  </div>
+</div>
 """)
 
     # Scripts
@@ -12535,13 +13104,10 @@ window.showTab = function(tab){
     }
     if(tab === 'aiq'){
       try{ if(typeof loadAI === 'function') loadAI(); }catch(e){}
-      try{
-        const f = document.querySelector('#aiq-filter');
-        if(f && (!f.value || !String(f.value).trim())) f.value = 'pending';
-      }catch(e){}
       try{ if(typeof loadAIQueue === 'function') loadAIQueue(); }catch(e){}
     }
     if(tab === 'monitor'){
+      try{ if(typeof initMonitorUx === 'function') initMonitorUx(); }catch(e){}
       try{ if(typeof loadForecast === 'function') loadForecast(); }catch(e){}
       try{ if(typeof loadDailySummary === 'function') loadDailySummary(); }catch(e){}
     }
@@ -13590,6 +14156,8 @@ function initAiqUx(){
     if(ov && ov.classList.contains('show')) closeAiqDrawer();
     const sm = qs('#aiq-summary-modal');
     if(sm && sm.classList.contains('show')) closeAiqSummaryModal();
+    const cm = qs('#aiq-channel-modal');
+    if(cm && cm.classList.contains('show')) closeAiqChannelModal();
   });
 
   // Hard-wire critical AIQ actions to avoid regressions from inline handler drift.
@@ -13624,6 +14192,42 @@ function initAiqUx(){
     if(!el) return;
     el.addEventListener('change', function(){ loadAIQueue(); });
   });
+
+  // Delegated safety net: if any dynamically-rendered row/drawer button's inline
+  // onclick ever fails to bind (CSP drift, malformed HTML, etc.), the delegated
+  // handler below keeps every Approve / Deny / Send / Change channel / Override /
+  // Preview / Remove button functional via data-aiq-act attributes.
+  const _aiqDelegatedHandler = function(e){
+    if(e && e.__aiqDelegatedHandled) return;
+    const t = e.target && (e.target.closest ? e.target.closest('[data-aiq-act]') : null);
+    if(!t) return;
+    const act = t.getAttribute('data-aiq-act') || '';
+    const id  = t.getAttribute('data-aiq-id')  || '';
+    if(!act) return;
+    e.__aiqDelegatedHandled = true;
+    try{ e.preventDefault(); }catch(_){ }
+    try{ e.stopPropagation(); }catch(_){ }
+    try{
+      if(act === 'approve')        return aiqApprove(id, t);
+      if(act === 'deny')           return aiqDeny(id, t);
+      if(act === 'send')           return aiqSend(id, t);
+      if(act === 'preview')        return aiqViewTemplate(id);
+      if(act === 'change-channel') return openAiqChannelModal(id);
+      if(act === 'override')       return aiqOverride(id, t);
+      if(act === 'remove')         return aiqRemove(id, t);
+      if(act === 'open-drawer')    return openAiqDrawer(id);
+    }catch(err){ console.error('AIQ delegated action failed:', act, err); }
+  };
+  // Only delegate on the AIQ pane: table-row buttons call stopPropagation in
+  // their inline onclick, so the delegated handler is an inert safety net when
+  // onclick works correctly, and a rescue when it does not. The drawer panel
+  // lives outside #tab-aiq and its inline handlers don't stop propagation, so
+  // we avoid attaching there to prevent double-fires.
+  const aiqPane = qs('#tab-aiq');
+  if(aiqPane && !aiqPane.__aiqDelegated){
+    aiqPane.__aiqDelegated = true;
+    aiqPane.addEventListener('click', _aiqDelegatedHandler);
+  }
 }
 
 function applyAiqSummary(sum){
@@ -13644,7 +14248,7 @@ function applyAiqSummary(sum){
     strip.innerHTML =
       '<span class="aiq-stat-badge">Pending <b>'+p+'</b></span>'+
       '<span class="aiq-stat-badge">Ready to send <b>'+r+'</b></span>'+
-      '<span class="aiq-stat-badge note" style="opacity:.85;border-style:dashed">Buckets use last '+String(c.all != null ? c.all : 0)+' items</span>';
+      '<span class="aiq-stat-badge note" style="opacity:.85;border-style:dashed">Bucket base: '+String(c.all != null ? c.all : 0)+' item(s)</span>';
   }
 }
 
@@ -13661,7 +14265,28 @@ function showAiqSummaryModal(){
   if(m) m.classList.add('show');
 }
 
+let _aiqSummaryTickerId = null;
+let _aiqSummaryRefreshId = null;
+let _aiqSummaryLastFetchAt = 0;
+
+function _aiqStopSummaryTicker(){
+  try{ if(_aiqSummaryTickerId){ clearInterval(_aiqSummaryTickerId); _aiqSummaryTickerId = null; } }catch(_){ }
+  try{ if(_aiqSummaryRefreshId){ clearInterval(_aiqSummaryRefreshId); _aiqSummaryRefreshId = null; } }catch(_){ }
+}
+
+function _aiqUpdateSummaryTicker(){
+  const el = qs('#aiq-summary-ticker');
+  if(!el || !_aiqSummaryLastFetchAt) return;
+  const secs = Math.max(0, Math.floor((Date.now() - _aiqSummaryLastFetchAt)/1000));
+  let label;
+  if(secs < 2) label = 'just now';
+  else if(secs < 60) label = secs + 's ago';
+  else label = Math.floor(secs/60) + 'm ' + (secs%60) + 's ago';
+  el.textContent = 'Updated ' + label;
+}
+
 function closeAiqSummaryModal(){
+  _aiqStopSummaryTicker();
   const m = qs('#aiq-summary-modal');
   if(m) m.classList.remove('show');
 }
@@ -13673,6 +14298,16 @@ async function openAiqSummary(){
   const body = qs('#aiq-summary-body');
   if(msg) msg.textContent = 'Loading summary…';
   if(body) body.innerHTML = '';
+  _aiqStopSummaryTicker();
+  await _aiqFetchAndRenderSummary({firstLoad:true});
+  _aiqSummaryTickerId = setInterval(_aiqUpdateSummaryTicker, 1000);
+  _aiqSummaryRefreshId = setInterval(()=>{ _aiqFetchAndRenderSummary({firstLoad:false}).catch(()=>{}); }, 10000);
+}
+
+async function _aiqFetchAndRenderSummary(opts){
+  const firstLoad = !!(opts && opts.firstLoad);
+  const msg = qs('#aiq-summary-msg');
+  const body = qs('#aiq-summary-body');
   try{
     const q = (qs('#aiq-search')?.value || '').trim();
     const status = (qs('#aiq-filter')?.value || '').trim();
@@ -13681,70 +14316,68 @@ async function openAiqSummary(){
     const type = (qs('#aiq-type')?.value || '').trim();
     const min_conf = (qs('#aiq-conf')?.value || '').trim();
     const bucket = (qs('#aiq-view-bucket')?.value || 'all').trim();
+    let focusQ = '';
+    let channelQ = channel;
+    if(bucket === 'vip') focusQ = 'vip';
+    else if(bucket === 'reminders') focusQ = 'reminders';
+    else if(bucket === 'upgrades') focusQ = 'upgrades';
+    else if(bucket === 'drafts') focusQ = 'reply_drafts';
+    else if(bucket === 'email') channelQ = 'email';
+    else if(bucket === 'sms') channelQ = 'sms';
+    else if(bucket === 'whatsapp') channelQ = 'whatsapp';
 
-    const base = `/admin/api/ai/queue?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}&limit=200`;
-    const queueUrl = base
+    const summaryBase = `/admin/api/ai/queue/summary?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`;
+    const filteredSummaryUrl = summaryBase
       + (q ? `&q=${encodeURIComponent(q)}` : '')
       + (status ? `&status=${encodeURIComponent(status)}` : '')
-      + (channel ? `&channel=${encodeURIComponent(channel)}` : '')
+      + (channelQ ? `&channel=${encodeURIComponent(channelQ)}` : '')
       + (time ? `&time=${encodeURIComponent(time)}` : '')
       + (type ? `&type=${encodeURIComponent(type)}` : '')
-      + (min_conf ? `&min_conf=${encodeURIComponent(min_conf)}` : '')
-      + (bucket ? `&view=${encodeURIComponent(bucket)}` : '');
-    const summaryUrl = `/admin/api/ai/queue/summary?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`;
+      + (min_conf ? `&conf=${encodeURIComponent(min_conf)}` : '')
+      + (focusQ ? `&focus=${encodeURIComponent(focusQ)}` : '');
+    const venueSummaryUrl = summaryBase;
 
-    const [qr, sr] = await Promise.all([
-      fetch(queueUrl, {cache:'no-store'}),
-      fetch(summaryUrl, {cache:'no-store'})
+    const [fsr, vsr] = await Promise.all([
+      fetch(filteredSummaryUrl, {cache:'no-store'}),
+      fetch(venueSummaryUrl, {cache:'no-store'})
     ]);
-    const [qj, sj] = await Promise.all([qr.json().catch(()=>null), sr.json().catch(()=>null)]);
-    if(!qj || !qj.ok) throw new Error((qj && qj.error) || 'Queue summary failed');
-    if(!sj || !sj.ok) throw new Error((sj && sj.error) || 'Summary endpoint failed');
+    const [fs, vs] = await Promise.all([fsr.json().catch(()=>null), vsr.json().catch(()=>null)]);
+    if(!fs || !fs.ok) throw new Error((fs && fs.error) || 'Filtered summary failed');
+    if(!vs || !vs.ok) throw new Error((vs && vs.error) || 'Venue summary failed');
 
-    const items = Array.isArray(qj.items) ? qj.items : [];
-    const pending = items.filter(it=>String(it.status||'') === 'pending').length;
-    const approved = items.filter(it=>String(it.status||'') === 'approved').length;
-    const outboundReady = items.filter(it=>{
-      const t = String(it.type || '');
-      const outbound = (
-        t === 'send_email' || t === 'send_sms' || t === 'send_whatsapp' ||
-        t === 'send_confirmation' || t.indexOf('send_reservation_') === 0 ||
-        t === 'send_update' || t === 'send_vip_update'
-      );
-      return outbound && String(it.status||'') === 'approved' && !it.sent_at;
-    }).length;
-    const byType = {};
-    items.forEach(it=>{
-      const t = String(it.type || 'unknown');
-      byType[t] = (byType[t] || 0) + 1;
-    });
-    const topTypes = Object.entries(byType).sort((a,b)=>b[1]-a[1]).slice(0,6);
+    _aiqSummaryLastFetchAt = Date.now();
 
     if(msg){
-      msg.textContent = `Filtered queue: ${items.length} item(s) · Pending ${pending} · Approved ${approved}`;
+      msg.innerHTML =
+        `Filtered queue: ${fs.total_items || 0} item(s) · Pending ${fs.total_pending || 0} · Approved ${fs.total_approved || 0} ` +
+        `· <span id="aiq-summary-ticker" style="opacity:.8">just now</span>`;
     }
     if(body){
       const cards = [
-        ['Pending (filtered)', pending],
-        ['Approved (filtered)', approved],
-        ['Ready to send (filtered)', outboundReady],
-        ['Pending (venue-wide)', sj.total_pending != null ? sj.total_pending : 0],
-        ['Ready to send (venue-wide)', sj.approved_outbound_ready != null ? sj.approved_outbound_ready : 0]
+        ['Items (filtered)', fs.total_items != null ? fs.total_items : 0],
+        ['Pending (filtered)', fs.total_pending != null ? fs.total_pending : 0],
+        ['Approved (filtered)', fs.total_approved != null ? fs.total_approved : 0],
+        ['Ready to send (filtered)', fs.approved_outbound_ready != null ? fs.approved_outbound_ready : 0],
+        ['Pending (venue-wide)', vs.total_pending != null ? vs.total_pending : 0],
+        ['Ready to send (venue-wide)', vs.approved_outbound_ready != null ? vs.approved_outbound_ready : 0]
       ];
+      const topTypes = Array.isArray(fs.top_types) ? fs.top_types : [];
       const top = topTypes.length
-        ? topTypes.map(([k,v])=>`<li><code>${esc(aiFriendlyType({type:k,payload:{}}))}</code> <b>${v}</b></li>`).join('')
+        ? topTypes.map(x=>`<li><code>${esc(aiFriendlyType({type:(x && x.type) || 'unknown',payload:{}}))}</code> <b>${(x && x.count) || 0}</b></li>`).join('')
         : '<li>No items in current filter.</li>';
       body.innerHTML = `
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:12px">
           ${cards.map(([label,val])=>`<div class="aiq-stat-badge" style="display:flex;justify-content:space-between;gap:10px"><span>${esc(label)}</span><b>${val}</b></div>`).join('')}
         </div>
-        <div class="small" style="opacity:.8;margin-bottom:10px">Current filters: view <b>${esc(bucket||'all')}</b>, status <b>${esc(status||'all')}</b>, channel <b>${esc(channel||'all')}</b>, time <b>${esc(time||'all')}</b>.</div>
+        <div class="small" style="opacity:.8;margin-bottom:10px">Current filters: view <b>${esc(bucket||'all')}</b>, status <b>${esc(status||'all')}</b>, channel <b>${esc(channelQ||'all')}</b>, time <b>${esc(time||'all')}</b>, type <b>${esc(type||'all')}</b>, min conf <b>${esc(min_conf||'none')}</b>.</div>
         <div style="font-weight:800;margin-bottom:6px">Top suggestion types (current filter)</div>
         <ul style="margin:0;padding-left:18px;line-height:1.45">${top}</ul>
+        <div class="small" style="margin-top:10px;opacity:.7">Auto-refreshing every 10s while this modal is open. Backend generated at: <b>${esc(fs.generated_at || 'now')}</b></div>
       `;
     }
+    _aiqUpdateSummaryTicker();
   }catch(e){
-    if(msg) msg.textContent = 'Unable to load summary: ' + (e.message || e);
+    if(firstLoad && msg) msg.textContent = 'Unable to load summary: ' + (e.message || e);
   }
 }
 
@@ -13846,12 +14479,14 @@ function openAiqDrawer(id){
   const viewTpl = (typ === 'send_whatsapp' && p.template_key) || (typ.indexOf('send_reservation_')===0) || typ === 'send_confirmation' || typ === 'send_update' || typ === 'send_vip_update';
   const sid = String(it.id||'');
   if(act){
+    const changeChBtn = isOutbound ? `<button type="button" class="btn2" data-aiq-act="change-channel" data-aiq-id="${sid}" onclick="openAiqChannelModal('${sid}')" title="Switch this outbound to a different channel">Change channel</button>` : '';
     act.innerHTML = `
-      <button type="button" class="btn" ${canAct?'':'disabled'} onclick="aiqApprove('${sid}', this)">Approve</button>
-      <button type="button" class="btn2" ${canAct?'':'disabled'} onclick="aiqDeny('${sid}', this)">Deny</button>
-      ${viewTpl ? `<button type="button" class="btn2" onclick="aiqViewTemplate('${sid}')">Preview</button>` : ''}
-      ${isOutbound ? `<button type="button" class="btn" ${canSend?'':'disabled'} onclick="aiqSend('${sid}', this)">${sendLabel}</button>` : ''}
-      <button type="button" class="btn" onclick="aiqOverride('${sid}', this)">Override</button>
+      <button type="button" class="btn" data-aiq-act="approve" data-aiq-id="${sid}" ${canAct?'':'disabled'} onclick="aiqApprove('${sid}', this)">Approve</button>
+      <button type="button" class="btn2" data-aiq-act="deny" data-aiq-id="${sid}" ${canAct?'':'disabled'} onclick="aiqDeny('${sid}', this)">Deny</button>
+      ${viewTpl ? `<button type="button" class="btn2" data-aiq-act="preview" data-aiq-id="${sid}" onclick="aiqViewTemplate('${sid}')">Preview</button>` : ''}
+      ${isOutbound ? `<button type="button" class="btn" data-aiq-act="send" data-aiq-id="${sid}" ${canSend?'':'disabled'} onclick="aiqSend('${sid}', this)">${sendLabel}</button>` : ''}
+      ${changeChBtn}
+      <button type="button" class="btn2" data-aiq-act="override" data-aiq-id="${sid}" onclick="aiqOverride('${sid}', this)" title="Owner-only: edit raw type + payload">Owner override…</button>
     `;
   }
   const o = qs('#aiq-drawer-overlay');
@@ -14228,12 +14863,12 @@ function renderAIQueue(items){
       typRaw === 'send_confirmation' || typRaw.indexOf('send_reservation_') === 0 || typRaw === 'send_update' || typRaw === 'send_vip_update' ||
       (typRaw === 'send_whatsapp' && it.payload && it.payload.template_key)
     );
-    const viewTplBtn = isBundledTemplate ? `<button type="button" class="btn2" onclick="event.stopPropagation();aiqViewTemplate('${sid}')">Preview</button>` : '';
-    const approveBtn = `<button type="button" class="btn" ${canAct ? '' : 'disabled'} onclick="event.stopPropagation();aiqApprove('${sid}', this)">Approve</button>`;
-    const denyBtn    = `<button type="button" class="btn2" ${canAct ? '' : 'disabled'} onclick="event.stopPropagation();aiqDeny('${sid}', this)">Deny</button>`;
-    const sendBtn = isOutbound ? `<button type="button" class="btn" ${canSend ? '' : 'disabled'} onclick="event.stopPropagation();aiqSend('${sid}', this)">${sendLabel}</button>` : '';
-    const overrideBtn = `<button type="button" class="btnTiny" onclick="event.stopPropagation();aiqOverride('${sid}', this)">Override</button>`;
-    const removeBtn = `<button type="button" class="btnTiny" onclick="event.stopPropagation();aiqRemove('${sid}', this)">Remove</button>`;
+    const viewTplBtn = isBundledTemplate ? `<button type="button" class="btn2" data-aiq-act="preview" data-aiq-id="${sid}" onclick="event.stopPropagation();aiqViewTemplate('${sid}')">Preview</button>` : '';
+    const approveBtn = `<button type="button" class="btn" data-aiq-act="approve" data-aiq-id="${sid}" ${canAct ? '' : 'disabled'} onclick="event.stopPropagation();aiqApprove('${sid}', this)">Approve</button>`;
+    const denyBtn    = `<button type="button" class="btn2" data-aiq-act="deny" data-aiq-id="${sid}" ${canAct ? '' : 'disabled'} onclick="event.stopPropagation();aiqDeny('${sid}', this)">Deny</button>`;
+    const sendBtn = isOutbound ? `<button type="button" class="btn" data-aiq-act="send" data-aiq-id="${sid}" ${canSend ? '' : 'disabled'} onclick="event.stopPropagation();aiqSend('${sid}', this)">${sendLabel}</button>` : '';
+    const overrideBtn = `<button type="button" class="btnTiny" data-aiq-act="override" data-aiq-id="${sid}" onclick="event.stopPropagation();aiqOverride('${sid}', this)">Override</button>`;
+    const removeBtn = `<button type="button" class="btnTiny" data-aiq-act="remove" data-aiq-id="${sid}" onclick="event.stopPropagation();aiqRemove('${sid}', this)">Remove</button>`;
 
     htmlCards.push(`
       <div class="card" style="margin-bottom:10px">
@@ -14271,10 +14906,11 @@ function renderAIQueue(items){
           <td><span class="chip">${st}</span></td>
           <td class="note" style="font-size:11px">${when}</td>
           <td style="white-space:nowrap" onclick="event.stopPropagation()">
-            <button type="button" class="btnTiny" ${canAct ? '' : 'disabled'} onclick="event.stopPropagation();aiqApprove('${sid}', this)">OK</button>
-            <button type="button" class="btnTiny" ${canAct ? '' : 'disabled'} onclick="event.stopPropagation();aiqDeny('${sid}', this)">No</button>
-            ${isBundledTemplate ? `<button type="button" class="btnTiny" onclick="event.stopPropagation();aiqViewTemplate('${sid}')">View</button>` : ''}
-            ${isOutbound ? `<button type="button" class="btnTiny" ${canSend ? '' : 'disabled'} onclick="event.stopPropagation();aiqSend('${sid}', this)">${esc(sendLabel)}</button>` : ''}
+            <button type="button" class="btnTiny" data-aiq-act="approve" data-aiq-id="${sid}" ${canAct ? '' : 'disabled'} onclick="event.stopPropagation();aiqApprove('${sid}', this)">OK</button>
+            <button type="button" class="btnTiny" data-aiq-act="deny" data-aiq-id="${sid}" ${canAct ? '' : 'disabled'} onclick="event.stopPropagation();aiqDeny('${sid}', this)">No</button>
+            ${isBundledTemplate ? `<button type="button" class="btnTiny" data-aiq-act="preview" data-aiq-id="${sid}" onclick="event.stopPropagation();aiqViewTemplate('${sid}')">View</button>` : ''}
+            ${isOutbound ? `<button type="button" class="btnTiny" data-aiq-act="change-channel" data-aiq-id="${sid}" onclick="event.stopPropagation();openAiqChannelModal('${sid}')" title="Change channel">Ch</button>` : ''}
+            ${isOutbound ? `<button type="button" class="btnTiny" data-aiq-act="send" data-aiq-id="${sid}" ${canSend ? '' : 'disabled'} onclick="event.stopPropagation();aiqSend('${sid}', this)">${esc(sendLabel)}</button>` : ''}
           </td>
       `;
       tbody.appendChild(tr);
@@ -14385,9 +15021,85 @@ async function aiqDeny(id, btn){
   else { if(msg) msg.textContent='Deny failed'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Deny'); } alert('Deny failed: '+(j && j.error ? j.error : r.status)); }
 }
 
+let aiqChannelTargetId = '';
+function openAiqChannelModal(id){
+  aiqChannelTargetId = String(id || '');
+  const it = aiqItemsById[aiqChannelTargetId] || null;
+  const cur = qs('#aiq-channel-modal-current');
+  const msg = qs('#aiq-channel-modal-msg');
+  if(msg) msg.textContent = '';
+  const radios = document.querySelectorAll('input[name="aiq-ch-pick"]');
+  radios.forEach(r=>{ r.checked = false; });
+  if(it && cur){
+    const curCh = aiBestChannel(it);
+    const p = it.payload || {};
+    const avail = Array.isArray(p.channels_available) ? p.channels_available : [];
+    const availTxt = avail.length ? ('Available on this lead: ' + avail.map(c=>c.toUpperCase()).join(', ')) : '';
+    cur.innerHTML = `<div>Current channel: <b>${esc(curCh)}</b> · Current type: <span class="code">${esc(String(it.type||''))}</span></div>${availTxt ? ('<div style="margin-top:4px">'+esc(availTxt)+'</div>') : ''}`;
+    // Pre-check the current channel radio for quick re-pick
+    radios.forEach(r=>{ if(r.value === curCh) r.checked = true; });
+    // Disable options not available for this lead
+    radios.forEach(r=>{
+      const wrap = r.closest('label');
+      if(!wrap) return;
+      if(avail.length && avail.indexOf(r.value) < 0){
+        r.disabled = true;
+        wrap.style.opacity = .5;
+        wrap.title = 'No ' + r.value + ' contact on file';
+      } else {
+        r.disabled = false;
+        wrap.style.opacity = 1;
+        wrap.title = '';
+      }
+    });
+  }
+  const m = qs('#aiq-channel-modal');
+  if(m) m.classList.add('show');
+  const applyBtn = qs('#aiq-channel-modal-apply');
+  if(applyBtn){
+    applyBtn.onclick = submitAiqChannelOverride;
+  }
+}
+
+function closeAiqChannelModal(){
+  const m = qs('#aiq-channel-modal');
+  if(m) m.classList.remove('show');
+  aiqChannelTargetId = '';
+}
+
+async function submitAiqChannelOverride(){
+  if(!aiqChannelTargetId) return;
+  const picked = document.querySelector('input[name="aiq-ch-pick"]:checked');
+  const msg = qs('#aiq-channel-modal-msg');
+  if(!picked){ if(msg) msg.textContent = 'Pick a channel first.'; return; }
+  const channel = picked.value;
+  const applyBtn = qs('#aiq-channel-modal-apply');
+  if(applyBtn){ applyBtn.disabled = true; applyBtn.textContent = 'Applying…'; }
+  if(msg) msg.textContent = '';
+  try{
+    const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(aiqChannelTargetId)}/channel?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({channel: channel})
+    });
+    const j = await r.json().catch(()=>null);
+    if(j && j.ok){
+      closeAiqChannelModal();
+      const aqm = qs('#aiq-msg'); if(aqm) aqm.textContent = 'Channel switched to ' + channel.toUpperCase();
+      await loadAIQueue();
+    } else {
+      if(msg) msg.textContent = (j && j.error) ? j.error : ('HTTP '+r.status);
+    }
+  }catch(e){
+    if(msg) msg.textContent = 'Error: ' + (e.message || e);
+  }finally{
+    if(applyBtn){ applyBtn.disabled = false; applyBtn.textContent = 'Apply change'; }
+  }
+}
+
 async function aiqOverride(id, btn){
   if(typeof hasRole === 'function' && !hasRole('owner')){
-    alert('Owner-only: override is locked for managers.');
+    alert('Owner-only: raw override is locked for managers. Use "Change channel" for channel switches.');
     return;
   }
   const _btn = btn;
@@ -15871,6 +16583,29 @@ select option{
   });
 })();
 
+
+function initMonitorUx(){
+  if(window.__monitorUxInit) return;
+  const fbtn = qs('#forecast-refresh-btn');
+  if(fbtn){
+    fbtn.addEventListener('click', function(ev){
+      try{ ev.preventDefault(); }catch(_){}
+      try{ loadForecast(); }catch(err){ console.error('loadForecast failed:', err); const m = qs('#forecast-msg'); if(m) m.textContent = 'Error: ' + (err.message || err); }
+    });
+  }
+  const dbtn = qs('#daily-summary-refresh-btn');
+  if(dbtn){
+    dbtn.addEventListener('click', function(ev){
+      try{ ev.preventDefault(); }catch(_){}
+      try{ loadDailySummary(); }catch(err){ console.error('loadDailySummary failed:', err); const m = qs('#daily-summary-msg'); if(m) m.textContent = 'Error: ' + (err.message || err); }
+    });
+  }
+  const dIn = qs('#daily-summary-date');
+  if(dIn){
+    dIn.addEventListener('change', function(){ try{ loadDailySummary(); }catch(_){} });
+  }
+  window.__monitorUxInit = true;
+}
 
 async function loadForecast(){
   const msg = qs('#forecast-msg'); if(msg) msg.textContent = 'Loading…';
