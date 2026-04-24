@@ -14572,7 +14572,8 @@ function openAiqDrawer(id){
     ].filter(([,v]) => v && String(v).trim());
     const ctxGrid = ctxRows.length
       ? ctxRows.map(([label, val]) =>
-          `<div class="note" style="opacity:.65;white-space:nowrap">${esc(label)}</div><div class="small">${esc(String(val))}</div>`
+          `<div class="note" style="opacity:.65;white-space:nowrap;display:flex;align-items:center;min-height:22px;line-height:1.25">${esc(label)}</div>` +
+          `<div class="small" style="display:flex;align-items:center;min-height:22px;line-height:1.25">${esc(String(val))}</div>`
         ).join('')
       : `<div class="note" style="grid-column:1/-1">No lead context attached yet</div>`;
     body.innerHTML = `
