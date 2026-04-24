@@ -12711,10 +12711,10 @@ label.small + textarea,
       <table class="aiq-table" id="aiq-table">
         <thead>
           <tr>
-            <th>Type</th><th>Row #</th><th>Guest</th><th>Channel</th><th>WA template</th><th>Conf.</th><th>Rationale</th><th>Status</th><th>Created</th><th>Actions</th>
+            <th>Type</th><th>Guest</th><th>Channel</th><th>WA template</th><th>Conf.</th><th>Rationale</th><th>Status</th><th>Created</th><th>Actions</th>
           </tr>
         </thead>
-        <tbody id="aiq-tbody"><tr><td colspan="10" class="small">Loading…</td></tr></tbody>
+        <tbody id="aiq-tbody"><tr><td colspan="9" class="small">Loading…</td></tr></tbody>
       </table>
     </div>
     <div id="aiq-list" class="hidden"></div>
@@ -13228,38 +13228,18 @@ window.showTab = function(tab){
           var dbtn = t.closest('#daily-summary-refresh-btn');
           if(fbtn){
             try{ ev.preventDefault(); }catch(e){}
-            try{
-              if(typeof window.loadForecast === 'function') window.loadForecast();
-              else { var m = document.querySelector('#forecast-msg'); if(m) m.textContent = 'UI not ready — reload the page'; }
-            }catch(err){
-              console.error(err);
-              var m2 = document.querySelector('#forecast-msg');
-              if(m2) m2.textContent = 'Error: ' + (err && err.message ? err.message : err);
-            }
+            try{ if(typeof window.loadForecast === 'function') window.loadForecast(); }catch(err){ console.error(err); }
             return;
           }
           if(dbtn){
             try{ ev.preventDefault(); }catch(e){}
-            try{
-              if(typeof window.loadDailySummary === 'function') window.loadDailySummary();
-              else { var dm = document.querySelector('#daily-summary-msg'); if(dm) dm.textContent = 'UI not ready — reload the page'; }
-            }catch(err){
-              console.error(err);
-              var dm2 = document.querySelector('#daily-summary-msg');
-              if(dm2) dm2.textContent = 'Error: ' + (err && err.message ? err.message : err);
-            }
+            try{ if(typeof window.loadDailySummary === 'function') window.loadDailySummary(); }catch(err){ console.error(err); }
           }
         });
         mon.addEventListener('change', function(ev){
           var t = ev.target;
           if(!t || t.id !== 'daily-summary-date') return;
-          try{
-            if(typeof window.loadDailySummary === 'function') window.loadDailySummary();
-          }catch(err){
-            console.error(err);
-            var dm = document.querySelector('#daily-summary-msg');
-            if(dm) dm.textContent = 'Error: ' + (err && err.message ? err.message : err);
-          }
+          try{ if(typeof window.loadDailySummary === 'function') window.loadDailySummary(); }catch(err){ console.error(err); }
         });
       }
     }catch(e){}
@@ -14499,26 +14479,40 @@ function aiBestChannel(it){
   return '—';
 }
 
-function aiGuestLine(it){
+// --- AI Queue helpers ---
+
+function _aiqLeadData(it){
   const p = (it && it.payload && typeof it.payload === 'object') ? it.payload : {};
   const lead = (p.lead && typeof p.lead === 'object') ? p.lead : {};
   const snap = (p.lead_snapshot && typeof p.lead_snapshot === 'object') ? p.lead_snapshot : {};
-  const rowNum =
-    (lead.row != null ? lead.row : (p.row != null ? p.row : (p.sheet_row != null ? p.sheet_row : snap.row)));
-  const name = lead.name || lead.contact || snap.name || (rowNum ? ('Row #' + String(rowNum)) : '');
-  const ps = lead.party_size || snap.party_size || '';
-  const dt = lead.datetime || [snap.date || '', snap.time || ''].filter(Boolean).join(' ') || '';
-  const bits = [name, dt, ps ? ('party '+ps) : ''].filter(Boolean);
-  return bits.join(' · ') || '—';
+  const rowRaw = lead.row ?? p.row ?? p.sheet_row ?? snap.row ?? null;
+  const rowNum = (rowRaw != null && Number.isFinite(parseInt(String(rowRaw), 10)) && parseInt(String(rowRaw), 10) >= 2)
+    ? parseInt(String(rowRaw), 10) : null;
+  return {
+    rowNum,
+    name:      lead.name  || snap.name  || '',
+    phone:     lead.phone || snap.phone || p.to || '',
+    email:     lead.email || snap.email || (p.to && p.to.indexOf('@') >= 0 ? p.to : '') || '',
+    date:      snap.date  || (lead.datetime ? lead.datetime.split(' ')[0] : '') || '',
+    time:      snap.time  || (lead.datetime ? lead.datetime.split(' ').slice(1).join(' ') : '') || '',
+    partySize: lead.party_size || snap.party_size || '',
+    budget:    snap.budget || lead.budget || '',
+    notes:     snap.notes  || lead.notes  || '',
+    tier:      snap.tier   || lead.tier   || '',
+    entry:     snap.entry_point || lead.entry_point || '',
+    to:        p.to || '',
+  };
 }
 
-function aiRowRef(it){
-  const p = (it && it.payload && typeof it.payload === 'object') ? it.payload : {};
-  const lead = (p.lead && typeof p.lead === 'object') ? p.lead : {};
-  const snap = (p.lead_snapshot && typeof p.lead_snapshot === 'object') ? p.lead_snapshot : {};
-  const rowNum = lead.row ?? p.row ?? p.sheet_row ?? snap.row ?? '';
-  const n = parseInt(String(rowNum || ''), 10);
-  return (Number.isFinite(n) && n >= 2) ? String(n) : '—';
+// Returns just the guest name (or Row #N fallback) — used in the queue table column.
+function aiGuestName(it){
+  const d = _aiqLeadData(it);
+  return d.name || (d.rowNum ? 'Row #' + String(d.rowNum) : '—');
+}
+
+// Kept for back-compat (no longer used for table; used in drawer via _aiqLeadData).
+function aiGuestLine(it){
+  return aiGuestName(it);
 }
 
 function aiWaTemplateLabel(it){
@@ -14558,21 +14552,46 @@ function openAiqDrawer(id){
   const subj = esc(p.subject || '');
   const msg = esc(p.message || p.body || '');
   if(body){
+    const ld = _aiqLeadData(it);
+    const rowBadge = ld.rowNum
+      ? `<span class="pill" style="font-size:12px;font-weight:800;padding:4px 10px;margin-bottom:12px;display:inline-block">Row #${ld.rowNum}</span>`
+      : '';
+    // Build a clean labelled-row grid for every non-empty lead field.
+    const ctxRows = [
+      ['Name',       ld.name],
+      ['Phone',      ld.phone],
+      ['Email',      ld.email],
+      ['Date',       ld.date],
+      ['Time',       ld.time],
+      ['Party size', ld.partySize],
+      ['Budget',     ld.budget],
+      ['Tier',       ld.tier],
+      ['Entry',      ld.entry],
+      ['Notes',      ld.notes],
+      ['Send to',    ld.to && ld.to !== ld.phone && ld.to !== ld.email ? ld.to : ''],
+    ].filter(([,v]) => v && String(v).trim());
+    const ctxGrid = ctxRows.length
+      ? ctxRows.map(([label, val]) =>
+          `<div class="note" style="opacity:.65;white-space:nowrap">${esc(label)}</div><div class="small">${esc(String(val))}</div>`
+        ).join('')
+      : `<div class="note" style="grid-column:1/-1">No lead context attached yet</div>`;
     body.innerHTML = `
-      <div style="font-weight:800;margin-bottom:8px;opacity:.85">Summary</div>
-      <div class="note">Confidence ${conf || '—'}</div>
-      <div style="margin-top:10px">${why || '—'}</div>
-      <div style="margin-top:14px;font-weight:800;opacity:.85">Customer context</div>
-      <div class="note">Name / contact: ${esc(aiGuestLine(it))}</div>
-      <div class="note">To: ${esc(p.to||'')}</div>
-      <div style="margin-top:14px;font-weight:800;opacity:.85">Channel</div>
-      <div class="note">Best: <b>${ch}</b></div>
-      ${rk ? `<div class="note">Ranked: ${esc(rk)}</div>` : ''}
-      ${rsn ? `<div class="note">${rsn}</div>` : ''}
-      <div style="margin-top:14px;font-weight:800;opacity:.85">Message preview</div>
-      ${subj ? `<div class="note">Subject: ${subj}</div>` : ''}
-      <pre style="white-space:pre-wrap;margin:8px 0 0;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);font-size:12px">${msg || '—'}</pre>
-      <div class="note" style="margin-top:8px">WA template: ${tmpl}</div>
+      ${rowBadge}
+      <div style="font-weight:800;margin-bottom:6px;opacity:.85">Suggestion</div>
+      <div class="small" style="margin-bottom:4px;opacity:.75">Confidence: <b>${conf || '—'}</b></div>
+      <div class="small" style="margin-bottom:14px">${why || '—'}</div>
+      <div style="font-weight:800;margin-bottom:10px;opacity:.85">Lead / Guest</div>
+      <div style="display:grid;grid-template-columns:90px 1fr;gap:6px 12px;margin-bottom:16px">
+        ${ctxGrid}
+      </div>
+      <div style="font-weight:800;margin-bottom:6px;opacity:.85">Channel</div>
+      <div class="small" style="margin-bottom:4px">Best: <b>${ch}</b></div>
+      ${rk ? `<div class="note" style="margin-bottom:4px">Ranked: ${esc(rk)}</div>` : ''}
+      ${rsn ? `<div class="note" style="margin-bottom:12px">${rsn}</div>` : '<div style="margin-bottom:12px"></div>'}
+      ${(subj || msg) ? `<div style="font-weight:800;margin-bottom:6px;opacity:.85">Message preview</div>` : ''}
+      ${subj ? `<div class="note" style="margin-bottom:4px">Subject: ${subj}</div>` : ''}
+      ${msg ? `<pre style="white-space:pre-wrap;margin:0 0 10px;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);font-size:12px">${msg}</pre>` : ''}
+      ${tmpl !== '—' ? `<div class="note">WA template: ${tmpl}</div>` : ''}
     `;
   }
   const stRaw = String(it.status||'');
@@ -14749,7 +14768,7 @@ async function loadAIQueue(){
   initAiqUx();
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Loading…';
   const list = qs('#aiq-list'); if(list) list.innerHTML = 'Loading…';
-  const tbody = qs('#aiq-tbody'); if(tbody) tbody.innerHTML = '<tr><td colspan="10" class="small">Loading…</td></tr>';
+  const tbody = qs('#aiq-tbody'); if(tbody) tbody.innerHTML = '<tr><td colspan="9" class="small">Loading…</td></tr>';
   const seq = ++aiqFetchSeq;
   try{
     const filt = (qs('#aiq-filter')?.value || '').trim();
@@ -14932,7 +14951,7 @@ function renderAIQueue(items){
   const htmlCards = [];
   if(!items || !items.length){
     if(list) list.innerHTML = '<div class="note">AI Queue empty — no queued actions.</div>';
-    if(tbody) tbody.innerHTML = '<tr><td colspan="10" class="note">No items match filters.</td></tr>';
+    if(tbody) tbody.innerHTML = '<tr><td colspan="9" class="note">No items match filters.</td></tr>';
     return;
   }
   if(tbody) tbody.innerHTML = '';
@@ -14948,8 +14967,7 @@ function renderAIQueue(items){
     const conf = (typeof it.confidence === 'number') ? it.confidence.toFixed(2) : '';
     const when = esc(it.created_at || '');
     const why  = esc((it.rationale || it.why || it.reason || '').slice(0, 220));
-    const rowRef = esc(aiRowRef(it));
-    const guest = esc(aiGuestLine(it));
+    const guest = esc(aiGuestName(it));
     const ch = aiBestChannel(it);
     const chEsc = esc(ch);
     let badgeCls = '';
@@ -14989,7 +15007,7 @@ function renderAIQueue(items){
           </div>
           <div class="note">${when}</div>
         </div>
-        <div class="small" style="margin-top:6px;opacity:.88"><span class="note">Row #${rowRef}</span> · ${guest}</div>
+        <div class="small" style="margin-top:6px;opacity:.88">${guest}</div>
         ${why ? `<div class="small" style="margin-top:8px;opacity:.9">${why}</div>` : ``}
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           ${approveBtn}
@@ -15007,7 +15025,6 @@ function renderAIQueue(items){
       tr.onclick = ()=>openAiqDrawer(sid);
       tr.innerHTML = `
           <td><div style="font-weight:800">${friendly}</div><div class="note" style="font-size:11px;margin-top:2px">${typ}</div></td>
-          <td class="small"><span class="pill">#${rowRef}</span></td>
           <td class="small">${guest}</td>
           <td><span class="badge-ch ${badgeCls}">${chEsc}</span></td>
           <td class="small">${waLab}</td>
@@ -15821,6 +15838,81 @@ try{ setupTabs(); }catch(e){}
   try{ _initRefreshControls(); }catch(e){}
   try{ refreshAll('boot'); }catch(e){}
 });
+
+// ── Monitoring: Forecast + Daily Revenue ─────────────────────────────────────
+// Defined at the END of the main admin script so they are always in global scope
+// regardless of any IIFE throwing later. Belt-and-suspenders: also wired below
+// with direct addEventListener so clicks work even if the bootstrap delegate missed.
+
+async function loadForecast(){
+  var msg = document.querySelector('#forecast-msg');
+  var body = document.querySelector('#forecastBody');
+  if(msg) msg.textContent = 'Loading\u2026';
+  if(body) body.textContent = '';
+  try{
+    var KEY_  = (new URLSearchParams(location.search).get('key') || '');
+    var VEN_  = (new URLSearchParams(location.search).get('venue') || '');
+    var r = await fetch('/admin/api/analytics/load-forecast?key='+encodeURIComponent(KEY_)+'&venue='+encodeURIComponent(VEN_), {cache:'no-store'});
+    var d = await r.json();
+    if(!d.ok) throw new Error(d.error || 'Failed');
+    var lines = [];
+    lines.push('Last 7 days: '+(d.last_7_days_total||0)+' leads');
+    lines.push('Last 30 days: '+(d.last_30_days_total||0)+' leads');
+    lines.push('VIP ratio (30d): '+Math.round((d.vip_ratio_30||0)*100)+'%');
+    if(Array.isArray(d.top_hours_30) && d.top_hours_30.length)
+      lines.push('Top hours (30d): '+d.top_hours_30.map(function(x){return x.key+' ('+x.count+')'}).join(', '));
+    if(Array.isArray(d.top_days_7) && d.top_days_7.length)
+      lines.push('Top days (7d): '+d.top_days_7.map(function(x){return x.key+' ('+x.count+')'}).join(', '));
+    if(body) body.textContent = lines.join('\\n');
+    if(msg) msg.textContent = 'Updated \u2714';
+  }catch(e){
+    if(msg) msg.textContent = 'Failed: '+(e.message||e);
+  }
+}
+
+async function loadDailySummary(){
+  var msg = document.querySelector('#daily-summary-msg');
+  var body = document.querySelector('#daily-summary-body');
+  var dIn = document.querySelector('#daily-summary-date');
+  if(msg) msg.textContent = 'Loading\u2026';
+  if(body) body.textContent = '';
+  try{
+    var KEY_  = (new URLSearchParams(location.search).get('key') || '');
+    var VEN_  = (new URLSearchParams(location.search).get('venue') || '');
+    var ds = (dIn && dIn.value) ? dIn.value : '';
+    var url = '/admin/api/analytics/daily-summary?key='+encodeURIComponent(KEY_)+'&venue='+encodeURIComponent(VEN_)+(ds ? '&date='+encodeURIComponent(ds) : '');
+    var r = await fetch(url, {cache:'no-store'});
+    var d = await r.json();
+    if(!d.ok) throw new Error(d.error || 'Failed');
+    var lines = [];
+    lines.push('Date: '+(d.date||'\u2014'));
+    lines.push('Guests: '+(d.total_guests||0)+'  (VIP '+(d.vip_count||0)+' \u00b7 Regular '+(d.regular_count||0)+')');
+    var rev = (d.estimated_revenue||0), bud = (d.budget_sum_parsed||0);
+    lines.push('Est. revenue: $'+(rev.toFixed?rev.toFixed(2):rev)+'  (budget sum: $'+(bud.toFixed?bud.toFixed(2):bud)+')');
+    if(Array.isArray(d.top_request_labels) && d.top_request_labels.length)
+      lines.push('Top request types: '+d.top_request_labels.map(function(x){return x.key+' ('+x.count+')'}).join(', '));
+    if(Array.isArray(d.peak_hours) && d.peak_hours.length)
+      lines.push('Peak hours: '+d.peak_hours.map(function(x){return x.key+' ('+x.count+')'}).join(', '));
+    if(body) body.textContent = lines.join('\\n');
+    if(msg) msg.textContent = 'Updated \u2714';
+  }catch(e){
+    if(msg) msg.textContent = 'Failed: '+(e.message||e);
+  }
+}
+
+// Wire the buttons directly — independent of bootstrap delegated handler.
+(function(){
+  function _mw(){
+    var fb = document.getElementById('forecast-refresh-btn');
+    if(fb && !fb.__mw){ fb.__mw=1; fb.addEventListener('click', function(e){ try{e.preventDefault();}catch(_){} loadForecast(); }); }
+    var db = document.getElementById('daily-summary-refresh-btn');
+    if(db && !db.__mw){ db.__mw=1; db.addEventListener('click', function(e){ try{e.preventDefault();}catch(_){} loadDailySummary(); }); }
+    var di = document.getElementById('daily-summary-date');
+    if(di && !di.__mw){ di.__mw=1; di.addEventListener('change', function(){ loadDailySummary(); }); }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_mw); else _mw();
+})();
+
 </script>
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
 
@@ -16693,61 +16785,6 @@ select option{
   });
 })();
 
-
-async function loadForecast(){
-  const msg = qs('#forecast-msg'); if(msg) msg.textContent = 'Loading…';
-  const body = qs('#forecastBody'); if(body) body.textContent = '';
-  try{
-    const r = await fetch(`/admin/api/analytics/load-forecast?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {cache:'no-store'});
-    const d = await r.json();
-    if(!d.ok) throw new Error(d.error || 'Failed');
-    const lines = [];
-    lines.push(`Last 7 days: ${d.last_7_days_total || 0} leads`);
-    lines.push(`Last 30 days: ${d.last_30_days_total || 0} leads`);
-    lines.push(`VIP ratio (30d): ${Math.round((d.vip_ratio_30||0)*100)}%`);
-    if(Array.isArray(d.top_hours_30) && d.top_hours_30.length){
-      lines.push(`Top hours (30d): ` + d.top_hours_30.map(x=>`${x.key} (${x.count})`).join(', '));
-    }
-    if(Array.isArray(d.top_days_7) && d.top_days_7.length){
-      lines.push(`Top days (7d): ` + d.top_days_7.map(x=>`${x.key} (${x.count})`).join(', '));
-    }
-    if(body) body.textContent = lines.join('\\n');
-    if(msg) msg.textContent = 'Updated ✔';
-  }catch(e){
-    if(msg) msg.textContent = 'Failed: ' + (e.message || e);
-  }
-}
-
-async function loadDailySummary(){
-  const msg = qs('#daily-summary-msg');
-  const body = qs('#daily-summary-body');
-  const dIn = qs('#daily-summary-date');
-  if(msg) msg.textContent = 'Loading…';
-  if(body) body.textContent = '';
-  try{
-    const ds = (dIn && dIn.value) ? dIn.value : '';
-    const url = `/admin/api/analytics/daily-summary?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`
-      + (ds ? `&date=${encodeURIComponent(ds)}` : '');
-    const r = await fetch(url, {cache:'no-store'});
-    const d = await r.json();
-    if(!d.ok) throw new Error(d.error || 'Failed');
-    const lines = [];
-    lines.push(`Date: ${d.date || '—'}`);
-    lines.push(`Guests: ${d.total_guests||0}  (VIP ${d.vip_count||0} · Regular ${d.regular_count||0})`);
-    lines.push(`Est. revenue: $${(d.estimated_revenue||0).toFixed ? d.estimated_revenue.toFixed(2) : d.estimated_revenue}  (budget sum parsed: $${(d.budget_sum_parsed||0).toFixed ? d.budget_sum_parsed.toFixed(2) : d.budget_sum_parsed})`);
-    if(Array.isArray(d.top_request_labels) && d.top_request_labels.length){
-      lines.push(`Top request types: ` + d.top_request_labels.map(x=>`${x.key} (${x.count})`).join(', '));
-    }
-    if(Array.isArray(d.peak_hours) && d.peak_hours.length){
-      lines.push(`Peak hours: ` + d.peak_hours.map(x=>`${x.key} (${x.count})`).join(', '));
-    }
-    if(body) body.textContent = lines.join('\\n');
-    if(msg) msg.textContent = 'Updated ✔';
-  }catch(e){
-    if(msg) msg.textContent = 'Failed: ' + (e.message || e);
-  }
-}
-
 async function replayAI(){
   const msg = qs('#replay-msg'); if(msg) msg.textContent = 'Replaying…';
   const out = qs('#replayOut'); if(out) out.textContent = '';
@@ -16767,6 +16804,7 @@ async function replayAI(){
     if(msg) msg.textContent = 'Failed: ' + (e.message || e);
   }
 }
+
 
 </script>
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
