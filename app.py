@@ -15704,8 +15704,9 @@ function refreshAll(source){
   try{ loadRules(); }catch(e){}
   try{ loadMenu(); }catch(e){}
   try{ loadHealth(); }catch(e){}
-  try{ loadForecast(); }catch(e){}
-  try{ loadDailySummary(); }catch(e){}
+  // Monitor analytics are intentionally NOT loaded during global refresh
+  // to keep /admin boot clean in environments where sheets analytics are unavailable.
+  // They load only when Monitor tab is opened or its refresh controls are used.
 
   // ✅ Refresh audit automatically if user is currently on the Audit tab
   try{
