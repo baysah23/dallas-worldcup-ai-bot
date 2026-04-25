@@ -14218,6 +14218,7 @@ async function saveDrafts(){
 let aiqSearchT = null;
 let aiqFetchSeq = 0;
 let aiqItemsById = {};
+let aiqDrawerCurrentId = '';
 window.__aiqUxInit = false;
 
 const AI_TYPE_LABELS = {
@@ -14611,12 +14612,14 @@ function closeAiqDrawer(){
   const p = qs('#aiq-drawer-panel');
   if(o) o.classList.remove('show');
   if(p) p.style.display = 'none';
+  aiqDrawerCurrentId = '';
   try{ document.body.style.overflow = ''; }catch(e){}
 }
 
 function openAiqDrawer(id){
   const it = aiqItemsById[String(id||'')] || null;
   if(!it) return;
+  aiqDrawerCurrentId = String(id || '');
   const title = qs('#aiq-drawer-title');
   const body = qs('#aiq-drawer-body');
   const act = qs('#aiq-drawer-actions');
@@ -14688,12 +14691,12 @@ function openAiqDrawer(id){
   if(act){
     const changeChBtn = isOutbound ? `<button type="button" class="btn2" data-aiq-act="change-channel" data-aiq-id="${sid}" onclick="openAiqChannelModal('${sid}')" title="Switch this outbound to a different channel">Change channel</button>` : '';
     act.innerHTML = `
-      <button type="button" class="btn" data-aiq-act="approve" data-aiq-id="${sid}" ${canAct?'':'disabled'} onclick="aiqApprove('${sid}', this)">Approve</button>
-      <button type="button" class="btn2" data-aiq-act="deny" data-aiq-id="${sid}" ${canAct?'':'disabled'} onclick="aiqDeny('${sid}', this)">Deny</button>
-      ${viewTpl ? `<button type="button" class="btn2" data-aiq-act="preview" data-aiq-id="${sid}" onclick="aiqViewTemplate('${sid}')">Preview</button>` : ''}
-      ${isOutbound ? `<button type="button" class="btn" data-aiq-act="send" data-aiq-id="${sid}" ${canSend?'':'disabled'} onclick="aiqSend('${sid}', this)">${sendLabel}</button>` : ''}
+      <button type="button" class="btn" data-aiq-act="approve" data-aiq-id="${sid}" ${canAct?'':'disabled'} onclick="event.stopPropagation();aiqApprove('${sid}', this)">Approve</button>
+      <button type="button" class="btn2" data-aiq-act="deny" data-aiq-id="${sid}" ${canAct?'':'disabled'} onclick="event.stopPropagation();aiqDeny('${sid}', this)">Deny</button>
+      ${viewTpl ? `<button type="button" class="btn2" data-aiq-act="preview" data-aiq-id="${sid}" onclick="event.stopPropagation();aiqViewTemplate('${sid}')">Preview</button>` : ''}
+      ${isOutbound ? `<button type="button" class="btn" data-aiq-act="send" data-aiq-id="${sid}" ${canSend?'':'disabled'} onclick="event.stopPropagation();aiqSend('${sid}', this)">${sendLabel}</button>` : ''}
       ${changeChBtn}
-      <button type="button" class="btn2" data-aiq-act="override" data-aiq-id="${sid}" onclick="aiqOverride('${sid}', this)" title="Owner-only: edit raw type + payload">Owner override…</button>
+      <button type="button" class="btn2" data-aiq-act="override" data-aiq-id="${sid}" onclick="event.stopPropagation();aiqOverride('${sid}', this)" title="Owner-only: edit raw type + payload">Owner override…</button>
     `;
   }
   const o = qs('#aiq-drawer-overlay');
@@ -15188,6 +15191,12 @@ async function aiqApprove(id, btn){
     if(j && j.ok){
       if(msg) msg.textContent='Approved ✔';
       await loadAIQueue();
+      // Refresh drawer actions immediately (Approve -> Send enabled).
+      try{
+        if(aiqDrawerCurrentId && String(aiqDrawerCurrentId) === String(id) && aiqItemsById[String(id)]){
+          openAiqDrawer(String(id));
+        }
+      }catch(_){}
     }else{
       if(msg) msg.textContent='Approve failed';
       alert('Approve failed: '+(j && j.error ? j.error : r.status));
@@ -15245,6 +15254,12 @@ async function aiqDeny(id, btn){
     if(j && j.ok){
       if(msg) msg.textContent='Denied ✔';
       await loadAIQueue();
+      // Keep drawer in sync with latest queue status.
+      try{
+        if(aiqDrawerCurrentId && String(aiqDrawerCurrentId) === String(id) && aiqItemsById[String(id)]){
+          openAiqDrawer(String(id));
+        }
+      }catch(_){}
     }else{
       if(msg) msg.textContent='Deny failed';
       alert('Deny failed: '+(j && j.error ? j.error : r.status));
