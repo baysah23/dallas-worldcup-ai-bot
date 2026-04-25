@@ -2401,19 +2401,27 @@ def _recommend_channel(
     ranked: List[str] = []
     reason = ""
 
+    wants_whatsapp = (atype == "send_whatsapp") or ("whatsapp" in kind) or kind.startswith("send_reservation_")
+
     if prefer_sms_urgent and is_reminder and phone:
         ranked.append("sms")
         reason = "Urgent / time-bound reminder — SMS first when phone is available"
     elif prefer_email_conf and is_confirm and email:
         ranked.append("email")
         reason = "Formal confirmation — email first when available"
-    elif prefer_wa and wa_enabled and phone:
+    elif prefer_wa and wa_enabled and phone and wants_whatsapp:
         ranked.append("whatsapp")
-        reason = "Venue prefers WhatsApp for this guest"
+        reason = "WhatsApp chosen for template-style/WA-specific action"
     elif email:
+        # Default to email when available unless urgency/action explicitly prefers mobile channels.
         ranked.append("email")
+        reason = "Email available — defaulting to lowest-friction confirmation channel"
     elif phone:
         ranked.append("sms")
+        reason = "Phone available without email — SMS first"
+    elif prefer_wa and wa_enabled and phone:
+        ranked.append("whatsapp")
+        reason = "WhatsApp available fallback"
 
     for c in available:
         if c not in ranked:
@@ -9701,6 +9709,19 @@ def admin_api_ai_run():
                         f"{action_ch} contact on file"
                     )
 
+            # Ensure policy checks (including VIP minimum budget) are evaluated on
+            # the final, normalized action + payload that will be enqueued.
+            if "budget" not in payload and lead.get("budget") is not None:
+                payload["budget"] = lead.get("budget")
+            try:
+                partner_id = _derive_partner_id(lead=lead, payload=payload)
+            except Exception:
+                partner_id = "default"
+            ok_pol, why_pol = _policy_check_action(partner_id, typ, payload, role=role)
+            if not ok_pol:
+                _audit("policy.block", {"partner": partner_id, "type": typ, "reason": why_pol, "row": payload.get("row")})
+                continue
+
             if not _ai_run_action_passes_filters(typ, payload, focus_mode, channel_mode):
                 continue
             rationale = str(a.get("reason") or out.get("notes") or "")[:1500]
@@ -9735,12 +9756,26 @@ def admin_api_ai_run():
                 already_wa = any(
                     str(x.get("type") or "").lower() == "send_whatsapp" for x in actions
                 )
+                pref = (ai_settings.get("channel_preferences") or {}) if isinstance(ai_settings.get("channel_preferences"), dict) else {}
+                prefer_wa = bool(pref.get("prefer_whatsapp_when_available", False))
+                lead_email = str(lead.get("email") or "").strip()
+                reminder_like = (
+                    str(payload.get("template_key") or "").strip().lower() == "reservation_reminder"
+                    or str(focus_mode or "").strip().lower() == "reminders"
+                    or "remind" in str(rationale or "").lower()
+                )
                 if (
                     typ == "send_sms"
                     and allow_wa
                     and wa_on
                     and lead_phone
                     and not already_wa
+                    and (
+                        # If lead has email, mirror to WA only when venue prefers WA
+                        # and the suggestion is reminder-like; otherwise avoid WA spam.
+                        (not lead_email)
+                        or (prefer_wa and reminder_like)
+                    )
                     and _ai_run_action_passes_filters(
                         "send_whatsapp", payload, focus_mode, channel_mode
                     )
@@ -9774,9 +9809,19 @@ def admin_api_ai_run():
                     wa_payload["recommended_channel"] = rc_wa.get("channel")
                     wa_payload["channel_ranked"] = rc_wa.get("ranked")
                     wa_payload["channel_reason"] = (
-                        "Parallel WhatsApp option — richer template + read receipts"
+                        "Parallel WhatsApp option (policy + preference gated)"
                     )
                     wa_payload["channels_available"] = rc_wa.get("available") or []
+                    if "budget" not in wa_payload and lead.get("budget") is not None:
+                        wa_payload["budget"] = lead.get("budget")
+                    try:
+                        wa_partner = _derive_partner_id(lead=lead, payload=wa_payload)
+                    except Exception:
+                        wa_partner = "default"
+                    ok_wa_pol, wa_why_pol = _policy_check_action(wa_partner, "send_whatsapp", wa_payload, role=role)
+                    if not ok_wa_pol:
+                        _audit("policy.block", {"partner": wa_partner, "type": "send_whatsapp", "reason": wa_why_pol, "row": wa_payload.get("row")})
+                        continue
                     wa_entry = {
                         "id": _queue_new_id(),
                         "type": "send_whatsapp",
@@ -12711,7 +12756,7 @@ label.small + textarea,
       <table class="aiq-table" id="aiq-table">
         <thead>
           <tr>
-            <th>Type</th><th>Guest</th><th>Channel</th><th>WA template</th><th>Conf.</th><th>Rationale</th><th>Status</th><th>Created</th><th>Actions</th>
+            <th>Type</th><th>Guest</th><th>Channel</th><th>ROW</th><th>Conf.</th><th>Rationale</th><th>Status</th><th>Created</th><th>Actions</th>
           </tr>
         </thead>
         <tbody id="aiq-tbody"><tr><td colspan="9" class="small">Loading…</td></tr></tbody>
@@ -14504,10 +14549,15 @@ function _aiqLeadData(it){
   };
 }
 
-// Returns just the guest name (or Row #N fallback) — used in the queue table column.
+// Returns just the guest name for AI Queue table rendering.
 function aiGuestName(it){
   const d = _aiqLeadData(it);
-  return d.name || (d.rowNum ? 'Row #' + String(d.rowNum) : '—');
+  return d.name || '—';
+}
+
+function aiRowNumber(it){
+  const d = _aiqLeadData(it);
+  return d.rowNum ? String(d.rowNum) : '—';
 }
 
 // Kept for back-compat (no longer used for table; used in drawer via _aiqLeadData).
@@ -14975,7 +15025,7 @@ function renderAIQueue(items){
     if(ch.indexOf('email') >= 0 && ch.indexOf('sms') < 0 && ch.indexOf('wa') < 0) badgeCls = 'email';
     else if(ch.indexOf('whatsapp') >= 0 || ch.indexOf('wa') >= 0) badgeCls = 'whatsapp';
     else if(ch.indexOf('sms') >= 0) badgeCls = 'sms';
-    const waLab = esc(aiWaTemplateLabel(it));
+    const rowNumTxt = esc(aiRowNumber(it));
     const canAct = (stRaw === 'pending');
     const isOutbound = (
       typRaw === 'send_email' || typRaw === 'send_sms' || typRaw === 'send_whatsapp' ||
@@ -15028,7 +15078,7 @@ function renderAIQueue(items){
           <td><div style="font-weight:800">${friendly}</div><div class="note" style="font-size:11px;margin-top:2px">${typ}</div></td>
           <td class="small">${guest}</td>
           <td><span class="badge-ch ${badgeCls}">${chEsc}</span></td>
-          <td class="small">${waLab}</td>
+          <td class="small">${rowNumTxt}</td>
           <td class="small">${esc(conf)}</td>
           <td class="small" style="max-width:220px">${why || '—'}</td>
           <td><span class="chip">${st}</span></td>
@@ -15099,14 +15149,26 @@ async function aiqApprove(id, btn){
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Approving…'; }
 
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Approving…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/approve?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({})
-  });
-  const j = await r.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Approved ✔'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Approve'); } await loadAIQueue(); }
-  else { if(msg) msg.textContent='Approve failed'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Approve'); } alert('Approve failed: '+(j && j.error ? j.error : r.status)); }
+  try{
+    const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/approve?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({})
+    });
+    const j = await r.json().catch(()=>null);
+    if(j && j.ok){
+      if(msg) msg.textContent='Approved ✔';
+      await loadAIQueue();
+    }else{
+      if(msg) msg.textContent='Approve failed';
+      alert('Approve failed: '+(j && j.error ? j.error : r.status));
+    }
+  }catch(e){
+    if(msg) msg.textContent='Approve failed';
+    alert('Approve failed: ' + (e.message || e));
+  }finally{
+    if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Approve'); }
+  }
 }
 
 
@@ -15115,21 +15177,26 @@ async function aiqSend(id, btn){
   const _btn = btn;
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Sending…'; }
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Sending…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/send?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({})
-  });
-  const j = await r.json().catch(()=>null);
-  if(j && j.ok){
-    if(msg) msg.textContent='Sent ✔';
-    if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Send'); }
-    await loadAIQueue();
-  }else{
+  try{
+    const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/send?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({})
+    });
+    const j = await r.json().catch(()=>null);
+    if(j && j.ok){
+      if(msg) msg.textContent='Sent ✔';
+      await loadAIQueue();
+    }else{
+      if(msg) msg.textContent='Send failed';
+      var errText = (j && (j.error || (j.result && (j.result.message || j.result.error)))) ? (j.error || j.result.message || j.result.error) : r.status;
+      alert('Send failed: '+errText);
+    }
+  }catch(e){
     if(msg) msg.textContent='Send failed';
+    alert('Send failed: ' + (e.message || e));
+  }finally{
     if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Send'); }
-    var errText = (j && (j.error || (j.result && (j.result.message || j.result.error)))) ? (j.error || j.result.message || j.result.error) : r.status;
-    alert('Send failed: '+errText);
   }
 }
 
@@ -15139,14 +15206,26 @@ async function aiqDeny(id, btn){
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Denying…'; }
 
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Denying…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/deny?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({})
-  });
-  const j = await r.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Denied ✔'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Deny'); } await loadAIQueue(); }
-  else { if(msg) msg.textContent='Deny failed'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Deny'); } alert('Deny failed: '+(j && j.error ? j.error : r.status)); }
+  try{
+    const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/deny?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({})
+    });
+    const j = await r.json().catch(()=>null);
+    if(j && j.ok){
+      if(msg) msg.textContent='Denied ✔';
+      await loadAIQueue();
+    }else{
+      if(msg) msg.textContent='Deny failed';
+      alert('Deny failed: '+(j && j.error ? j.error : r.status));
+    }
+  }catch(e){
+    if(msg) msg.textContent='Deny failed';
+    alert('Deny failed: ' + (e.message || e));
+  }finally{
+    if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Deny'); }
+  }
 }
 
 let aiqChannelTargetId = '';
@@ -15242,14 +15321,26 @@ async function aiqOverride(id, btn){
   let payloadObj = null;
   try{ payloadObj = JSON.parse(payloadTxt); }catch(e){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } alert('Invalid JSON'); return; }
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Applying override…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/override?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({type: typ, payload: payloadObj})
-  });
-  const j = await r.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Override applied ✔'; if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } await loadAIQueue(); }
-  else { if(msg) msg.textContent='Override failed'; if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } alert('Override failed: '+(j && j.error ? j.error : r.status)); }
+  try{
+    const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/override?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({type: typ, payload: payloadObj})
+    });
+    const j = await r.json().catch(()=>null);
+    if(j && j.ok){
+      if(msg) msg.textContent='Override applied ✔';
+      await loadAIQueue();
+    } else {
+      if(msg) msg.textContent='Override failed';
+      alert('Override failed: '+(j && j.error ? j.error : r.status));
+    }
+  }catch(e){
+    if(msg) msg.textContent='Override failed';
+    alert('Override failed: ' + (e.message || e));
+  }finally{
+    if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); }
+  }
 }
 
 async function loadAudit(){
@@ -15858,9 +15949,13 @@ async function loadForecast(){
     var d = await r.json();
     if(!d.ok) throw new Error(d.error || 'Failed');
     var lines = [];
-    lines.push('Last 7 days: '+(d.last_7_days_total||0)+' leads');
-    lines.push('Last 30 days: '+(d.last_30_days_total||0)+' leads');
+    lines.push('Busy level: '+(d.busy_level||'—'));
+    lines.push('Last 7 days: '+(d.last_7_days_total||0)+' leads (avg/day '+(d.avg_daily_bookings_7||0)+')');
+    lines.push('Last 30 days: '+(d.last_30_days_total||0)+' leads (avg/day '+(d.avg_daily_bookings_30||0)+')');
     lines.push('VIP ratio (30d): '+Math.round((d.vip_ratio_30||0)*100)+'%');
+    var rev30 = (d.budget_sum_30||0), avgRev = (d.avg_daily_revenue_30||0), ant = (d.anticipated_revenue_next_service||0);
+    lines.push('Budget trend (30d): $'+(rev30.toFixed?rev30.toFixed(2):rev30)+' total · ~$'+(avgRev.toFixed?avgRev.toFixed(2):avgRev)+'/day');
+    lines.push('Anticipated next-service revenue: $'+(ant.toFixed?ant.toFixed(2):ant));
     if(Array.isArray(d.top_hours_30) && d.top_hours_30.length)
       lines.push('Top hours (30d): '+d.top_hours_30.map(function(x){return x.key+' ('+x.count+')'}).join(', '));
     if(Array.isArray(d.top_days_7) && d.top_days_7.length)
@@ -15895,6 +15990,19 @@ async function loadDailySummary(){
       lines.push('Top request types: '+d.top_request_labels.map(function(x){return x.key+' ('+x.count+')'}).join(', '));
     if(Array.isArray(d.peak_hours) && d.peak_hours.length)
       lines.push('Peak hours: '+d.peak_hours.map(function(x){return x.key+' ('+x.count+')'}).join(', '));
+    var f = (d.forecast_summary && typeof d.forecast_summary === 'object') ? d.forecast_summary : null;
+    if(f){
+      lines.push('');
+      lines.push('Forecast prep summary:');
+      lines.push('- Busy level: '+(f.busy_level||'—'));
+      lines.push('- 7d pace: '+(f.last_7_days_total||0)+' leads (avg/day '+(f.avg_daily_bookings_7||0)+')');
+      lines.push('- 30d VIP mix: '+Math.round((f.vip_ratio_30||0)*100)+'%');
+      var fAvg = (f.avg_daily_revenue_30||0), fAnt = (f.anticipated_revenue_next_service||0);
+      lines.push('- Revenue expectation: ~$'+(fAnt.toFixed?fAnt.toFixed(2):fAnt)+' (30d avg/day $'+(fAvg.toFixed?fAvg.toFixed(2):fAvg)+')');
+      if(Array.isArray(f.top_hours_30) && f.top_hours_30.length){
+        lines.push('- Typical peak windows: '+f.top_hours_30.map(function(x){return x.key+' ('+x.count+')'}).join(', '));
+      }
+    }
     if(body) body.textContent = lines.join('\\n');
     if(msg) msg.textContent = 'Updated \u2714';
   }catch(e){
@@ -16190,6 +16298,7 @@ def admin_api_load_forecast():
         ts_i = _col_idx("timestamp", "ts", "created_at", "submitted_at")
         vip_i = _col_idx("vip", "VIP")
         tier_i = _col_idx("tier", "segment")
+        budget_i = _col_idx("budget", "Budget")
 
         now = datetime.now(timezone.utc)
 
@@ -16223,6 +16332,7 @@ def admin_api_load_forecast():
         hours = {}
         vip_30 = 0
         total_30 = 0
+        budget_30 = 0.0
 
         for r in rows:
             dt = parse_ts(r)
@@ -16240,10 +16350,24 @@ def admin_api_load_forecast():
                 if is_vip(r):
                     vip_30 += 1
                 hours[hour_key] = hours.get(hour_key, 0) + 1
+                if budget_i >= 0 and budget_i < len(r):
+                    budget_30 += _parse_budget_to_number(r[budget_i])
 
         def top_k(dct, k=5):
             items = sorted(dct.items(), key=lambda x: x[1], reverse=True)
             return [{"key": a, "count": b} for a,b in items[:k]]
+
+        avg_daily_bookings_7 = (sum(buckets_7.values()) / 7.0) if buckets_7 else 0.0
+        avg_daily_bookings_30 = (sum(buckets_30.values()) / 30.0) if buckets_30 else 0.0
+        avg_daily_revenue_30 = (budget_30 / 30.0) if budget_30 > 0 else 0.0
+        if avg_daily_bookings_7 >= 18:
+            busy_level = "Very high"
+        elif avg_daily_bookings_7 >= 10:
+            busy_level = "High"
+        elif avg_daily_bookings_7 >= 5:
+            busy_level = "Moderate"
+        else:
+            busy_level = "Light"
 
         out = {
             "ok": True,
@@ -16254,6 +16378,12 @@ def admin_api_load_forecast():
             "top_days_30": top_k(buckets_30, 7),
             "top_hours_30": top_k(hours, 6),
             "vip_ratio_30": (vip_30/total_30) if total_30 else 0.0,
+            "avg_daily_bookings_7": round(avg_daily_bookings_7, 2),
+            "avg_daily_bookings_30": round(avg_daily_bookings_30, 2),
+            "budget_sum_30": round(budget_30, 2),
+            "avg_daily_revenue_30": round(avg_daily_revenue_30, 2),
+            "anticipated_revenue_next_service": round(avg_daily_revenue_30, 2),
+            "busy_level": busy_level,
             "meta": {
                 "timestamp_column_resolved": ts_i >= 0,
                 "rows_sample": len(rows),
@@ -16302,6 +16432,7 @@ def admin_api_daily_summary():
 
         all_vals = ws.get_all_values() or []
         rows = all_vals[1:] if len(all_vals) > 1 else []
+        now_utc = datetime.now(timezone.utc)
 
         def parse_ts_cell(r: list) -> Optional[datetime]:
             if ts_i < 0 or ts_i >= len(r):
@@ -16332,11 +16463,31 @@ def admin_api_daily_summary():
         type_counts: Dict[str, int] = {}
         hour_counts: Dict[str, int] = {}
         revenue_sum = 0.0
+        buckets_7: Dict[str, int] = {}
+        buckets_30: Dict[str, int] = {}
+        hours_30: Dict[str, int] = {}
+        budget_30 = 0.0
+        total_30 = 0
+        vip_30 = 0
 
         for r in rows:
             dt = parse_ts_cell(r)
             if dt is None:
                 continue
+            age_days = (now_utc - dt).total_seconds() / 86400.0
+            if age_days <= 7.0:
+                dkey = dt.strftime("%Y-%m-%d")
+                buckets_7[dkey] = buckets_7.get(dkey, 0) + 1
+            if age_days <= 30.0:
+                dkey = dt.strftime("%Y-%m-%d")
+                hkey = dt.strftime("%H:00")
+                buckets_30[dkey] = buckets_30.get(dkey, 0) + 1
+                hours_30[hkey] = hours_30.get(hkey, 0) + 1
+                total_30 += 1
+                if row_is_vip(r):
+                    vip_30 += 1
+                if budget_i >= 0 and budget_i < len(r):
+                    budget_30 += _parse_budget_to_number(r[budget_i])
             if dt.date() != day_date:
                 continue
             day_rows.append(r)
@@ -16365,6 +16516,19 @@ def admin_api_daily_summary():
         if est_revenue <= 0 and total > 0:
             est_revenue = float(vip_n * 220 + reg_n * 85)
 
+        avg_daily_bookings_7 = (sum(buckets_7.values()) / 7.0) if buckets_7 else 0.0
+        avg_daily_revenue_30 = (budget_30 / 30.0) if budget_30 > 0 else 0.0
+        if avg_daily_bookings_7 >= 18:
+            busy_level = "Very high"
+        elif avg_daily_bookings_7 >= 10:
+            busy_level = "High"
+        elif avg_daily_bookings_7 >= 5:
+            busy_level = "Moderate"
+        else:
+            busy_level = "Light"
+        top_hours_30 = sorted(hours_30.items(), key=lambda x: x[1], reverse=True)[:5]
+        anticipated_revenue = est_revenue if total > 0 else avg_daily_revenue_30
+
         return jsonify(
             {
                 "ok": True,
@@ -16377,6 +16541,16 @@ def admin_api_daily_summary():
                 "budget_sum_parsed": round(revenue_sum, 2),
                 "top_request_labels": [{"key": a, "count": b} for a, b in top_types],
                 "peak_hours": [{"key": a, "count": b} for a, b in top_hours],
+                "forecast_summary": {
+                    "busy_level": busy_level,
+                    "last_7_days_total": sum(buckets_7.values()),
+                    "last_30_days_total": sum(buckets_30.values()),
+                    "avg_daily_bookings_7": round(avg_daily_bookings_7, 2),
+                    "vip_ratio_30": round((vip_30 / total_30), 4) if total_30 else 0.0,
+                    "avg_daily_revenue_30": round(avg_daily_revenue_30, 2),
+                    "anticipated_revenue_next_service": round(float(anticipated_revenue), 2),
+                    "top_hours_30": [{"key": a, "count": b} for a, b in top_hours_30],
+                },
                 "meta": {"timestamp_column_resolved": ts_i >= 0},
             }
         )
