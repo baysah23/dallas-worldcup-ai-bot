@@ -14533,11 +14533,16 @@ function _aiqLeadData(it){
   const rowRaw = lead.row ?? p.row ?? p.sheet_row ?? snap.row ?? null;
   const rowNum = (rowRaw != null && Number.isFinite(parseInt(String(rowRaw), 10)) && parseInt(String(rowRaw), 10) >= 2)
     ? parseInt(String(rowRaw), 10) : null;
+  const toRaw = String(p.to || '').trim();
+  const toLooksEmail = !!toRaw && toRaw.indexOf('@') >= 0;
+  const toLooksPhone = !!toRaw && /^[+()\\-\\s\\d]{7,}$/.test(toRaw);
+  const phoneVal = String(lead.phone || snap.phone || (toLooksPhone ? toRaw : '') || '').trim();
+  const emailVal = String(lead.email || snap.email || (toLooksEmail ? toRaw : '') || '').trim();
   return {
     rowNum,
     name:      lead.name  || snap.name  || '',
-    phone:     lead.phone || snap.phone || p.to || '',
-    email:     lead.email || snap.email || (p.to && p.to.indexOf('@') >= 0 ? p.to : '') || '',
+    phone:     phoneVal,
+    email:     emailVal,
     date:      snap.date  || (lead.datetime ? lead.datetime.split(' ')[0] : '') || '',
     time:      snap.time  || (lead.datetime ? lead.datetime.split(' ').slice(1).join(' ') : '') || '',
     partySize: lead.party_size || snap.party_size || '',
@@ -14608,22 +14613,22 @@ function openAiqDrawer(id){
       : '';
     // Build a clean labelled-row grid for every non-empty lead field.
     const ctxRows = [
-      ['Name',       ld.name],
-      ['Phone',      ld.phone],
-      ['Email',      ld.email],
-      ['Date',       ld.date],
-      ['Time',       ld.time],
-      ['Party size', ld.partySize],
-      ['Budget',     ld.budget],
-      ['Tier',       ld.tier],
-      ['Entry',      ld.entry],
-      ['Notes',      ld.notes],
+      ['Name',       ld.name || 'Not available'],
+      ['Phone',      ld.phone || 'Not available'],
+      ['Email',      ld.email || 'Not available'],
+      ['Date',       ld.date || 'Not available'],
+      ['Time',       ld.time || 'Not available'],
+      ['Party size', ld.partySize || 'Not available'],
+      ['Budget',     ld.budget || 'Not available'],
+      ['Tier',       ld.tier || 'Not available'],
+      ['Entry',      ld.entry || 'Not available'],
+      ['Notes',      ld.notes || 'Not available'],
       ['Send to',    ld.to && ld.to !== ld.phone && ld.to !== ld.email ? ld.to : ''],
-    ].filter(([,v]) => v && String(v).trim());
+    ].filter(([k,v]) => (k === 'Send to') ? (v && String(v).trim()) : true);
     const ctxGrid = ctxRows.length
       ? ctxRows.map(([label, val]) =>
-          `<div class="note" style="opacity:.65;white-space:nowrap;display:flex;align-items:center;min-height:22px;line-height:1.25">${esc(label)}</div>` +
-          `<div class="small" style="display:flex;align-items:center;min-height:22px;line-height:1.25">${esc(String(val))}</div>`
+          `<div style="white-space:nowrap;display:flex;align-items:center;min-height:24px;line-height:1.3;font-size:13px;color:rgba(210,220,255,.72)">${esc(label)}</div>` +
+          `<div style="display:flex;align-items:center;min-height:24px;line-height:1.3;font-size:13px;color:#eaf0ff">${esc(String(val))}</div>`
         ).join('')
       : `<div class="note" style="grid-column:1/-1">No lead context attached yet</div>`;
     body.innerHTML = `
