@@ -14533,11 +14533,40 @@ function _aiqLeadData(it){
   const rowRaw = lead.row ?? p.row ?? p.sheet_row ?? snap.row ?? null;
   const rowNum = (rowRaw != null && Number.isFinite(parseInt(String(rowRaw), 10)) && parseInt(String(rowRaw), 10) >= 2)
     ? parseInt(String(rowRaw), 10) : null;
+  const _clean = (v) => String(v || '').trim();
+  const _looksEmail = (v) => {
+    const s = _clean(v);
+    return !!s && s.indexOf('@') >= 0;
+  };
+  const _looksPhone = (v) => {
+    const s = _clean(v);
+    return !!s && /^[+()\\-\\s\\d]{7,}$/.test(s);
+  };
+  const toRaw = _clean(p.to || '');
+  const contactRaw = _clean(lead.contact || snap.contact || '');
+  // Classify candidate values by shape (prevents emails leaking into phone field).
+  const phoneCandidates = [
+    _clean(lead.phone),
+    _clean(snap.phone),
+    _looksPhone(contactRaw) ? contactRaw : '',
+    _looksPhone(toRaw) ? toRaw : '',
+  ].filter(Boolean);
+  const emailCandidates = [
+    _clean(lead.email),
+    _clean(snap.email),
+    _looksEmail(contactRaw) ? contactRaw : '',
+    _looksEmail(toRaw) ? toRaw : '',
+    // Recover when upstream incorrectly stores email in "phone".
+    _looksEmail(lead.phone) ? _clean(lead.phone) : '',
+    _looksEmail(snap.phone) ? _clean(snap.phone) : '',
+  ].filter(Boolean);
+  const phoneVal = phoneCandidates.find(_looksPhone) || '';
+  const emailVal = emailCandidates.find(_looksEmail) || '';
   return {
     rowNum,
     name:      lead.name  || snap.name  || '',
-    phone:     lead.phone || snap.phone || p.to || '',
-    email:     lead.email || snap.email || (p.to && p.to.indexOf('@') >= 0 ? p.to : '') || '',
+    phone:     phoneVal,
+    email:     emailVal,
     date:      snap.date  || (lead.datetime ? lead.datetime.split(' ')[0] : '') || '',
     time:      snap.time  || (lead.datetime ? lead.datetime.split(' ').slice(1).join(' ') : '') || '',
     partySize: lead.party_size || snap.party_size || '',
