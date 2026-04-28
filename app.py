@@ -12202,6 +12202,210 @@ label.small + textarea,
   opacity:0;
   transition:opacity .18s ease;
 }
+
+/* ── Operator dashboard (Forecast + Daily Revenue Summary) ────────────────── */
+#forecastBody,#daily-summary-body{ white-space:normal; }
+.op-view{ display:block; }
+.op-headline{
+  display:block;
+  font-size:17px;
+  font-weight:800;
+  color:var(--text);
+  background:linear-gradient(135deg,rgba(212,175,55,.12),rgba(212,175,55,.03));
+  border:1px solid rgba(212,175,55,.30);
+  border-radius:12px;
+  padding:14px 16px;
+  margin:0 0 14px;
+  line-height:1.35;
+  letter-spacing:.005em;
+}
+.op-headline[data-tone="surge"],
+.op-headline[data-tone="strong"]{
+  background:linear-gradient(135deg,rgba(46,160,67,.16),rgba(46,160,67,.04));
+  border-color:rgba(46,160,67,.40);
+}
+.op-headline[data-tone="high"]{
+  background:linear-gradient(135deg,rgba(46,160,67,.13),rgba(46,160,67,.03));
+  border-color:rgba(46,160,67,.34);
+}
+.op-headline[data-tone="moderate"],
+.op-headline[data-tone="steady"]{
+  background:linear-gradient(135deg,rgba(212,175,55,.13),rgba(212,175,55,.03));
+  border-color:rgba(212,175,55,.32);
+}
+.op-headline[data-tone="low"],
+.op-headline[data-tone="light"],
+.op-headline[data-tone="quiet"]{
+  background:linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
+  border-color:rgba(255,255,255,.16);
+}
+.op-cards{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+  gap:10px;
+  margin-bottom:14px;
+}
+.op-card{
+  position:relative;
+  background:rgba(255,255,255,.04);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:14px 14px 12px;
+  transition:transform .15s ease, border-color .15s ease, background .15s ease;
+  min-width:0;
+}
+.op-card:hover{
+  border-color:rgba(212,175,55,.35);
+  transform:translateY(-1px);
+}
+.op-card-label{
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.10em;
+  color:var(--muted);
+  font-weight:700;
+  margin-bottom:6px;
+}
+.op-card-value{
+  font-size:20px;
+  font-weight:800;
+  color:var(--text);
+  line-height:1.2;
+  word-break:break-word;
+}
+.op-card-sub{
+  font-size:11px;
+  color:var(--muted);
+  margin-top:6px;
+  letter-spacing:.01em;
+}
+.op-card[data-tone="surge"]{
+  border-color:rgba(255,99,99,.40);
+  background:linear-gradient(180deg,rgba(255,99,99,.07),rgba(255,99,99,.02));
+}
+.op-card[data-tone="high"],
+.op-card[data-tone="strong"]{
+  border-color:rgba(46,160,67,.40);
+  background:linear-gradient(180deg,rgba(46,160,67,.08),rgba(46,160,67,.02));
+}
+.op-card[data-tone="moderate"],
+.op-card[data-tone="steady"]{
+  border-color:rgba(212,175,55,.32);
+  background:linear-gradient(180deg,rgba(212,175,55,.08),rgba(212,175,55,.02));
+}
+.op-card[data-tone="low"],
+.op-card[data-tone="light"],
+.op-card[data-tone="quiet"]{
+  border-color:rgba(255,255,255,.10);
+}
+.op-insight{
+  display:flex;
+  gap:12px;
+  align-items:flex-start;
+  background:rgba(212,175,55,.06);
+  border:1px solid rgba(212,175,55,.22);
+  border-left:3px solid var(--gold);
+  border-radius:10px;
+  padding:11px 13px;
+  margin-bottom:12px;
+}
+.op-insight-tag{
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--gold);
+  flex-shrink:0;
+  padding-top:2px;
+  white-space:nowrap;
+}
+.op-insight-text{
+  font-size:13px;
+  line-height:1.5;
+  color:var(--text);
+}
+.op-details{
+  margin-top:8px;
+  border-top:1px solid var(--line);
+  padding-top:10px;
+}
+.op-details > summary{
+  cursor:pointer;
+  font-size:12px;
+  font-weight:700;
+  color:var(--muted);
+  list-style:none;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  user-select:none;
+  padding:4px 2px;
+  border-radius:6px;
+  transition:color .15s ease;
+}
+.op-details > summary::-webkit-details-marker{ display:none; }
+.op-details > summary::before{
+  content:"\25B8";
+  display:inline-block;
+  transition:transform .15s ease;
+  font-size:11px;
+  color:var(--muted);
+}
+.op-details[open] > summary::before{ transform:rotate(90deg); }
+.op-details > summary:hover{ color:var(--text); }
+.op-details-body{
+  margin-top:10px;
+  font-size:12px;
+  color:var(--muted);
+  line-height:1.6;
+  padding:8px 12px;
+  border-left:2px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.015);
+  border-radius:0 8px 8px 0;
+}
+.op-details-body .op-detail-row{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:3px 0;
+  border-bottom:1px dashed rgba(255,255,255,.05);
+}
+.op-details-body .op-detail-row:last-child{ border-bottom:none; }
+.op-details-body .op-detail-key{ color:var(--muted); }
+.op-details-body .op-detail-val{ color:var(--text); font-weight:600; text-align:right; }
+.op-skeleton{
+  height:140px;
+  border-radius:12px;
+  background:linear-gradient(90deg,rgba(255,255,255,.03),rgba(255,255,255,.07),rgba(255,255,255,.03));
+  background-size:200% 100%;
+  animation:opShimmer 1.3s linear infinite;
+}
+@keyframes opShimmer{
+  0%{ background-position:200% 0; }
+  100%{ background-position:-200% 0; }
+}
+.op-empty{
+  font-size:13px;
+  color:var(--muted);
+  padding:14px;
+  text-align:center;
+  border:1px dashed var(--line);
+  border-radius:12px;
+}
+
+@media(max-width:640px){
+  .op-headline{ font-size:15px; padding:12px 14px; }
+  .op-cards{ grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; }
+  .op-card{ padding:12px; }
+  .op-card-value{ font-size:17px; }
+  .op-card-label{ font-size:10px; letter-spacing:.08em; }
+  .op-insight{ padding:10px 12px; gap:10px; }
+  .op-insight-text{ font-size:12.5px; }
+}
+@media(max-width:420px){
+  .op-cards{ grid-template-columns:1fr 1fr; }
+  .op-insight{ flex-direction:column; gap:6px; }
+}
 </style>
 """)
     html.append("</head><body><div class='wrap'>")
@@ -12338,23 +12542,23 @@ label.small + textarea,
     <div id="health-body" class="small" style="margin-top:12px;white-space:pre-wrap"></div>
   </div>
   <div class="card" id="forecastCard">
-  <div class="h2">Tonight Forecast</div>
-  <div class="small">Read-only load forecast (last 7/30 days). Helps staffing + VIP readiness.</div>
-  <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-    <button class="btn2" id="forecast-refresh-btn" type="button">Refresh</button>
-    <span id="forecast-msg" class="note"></span>
+    <div class="h2">Tonight Forecast</div>
+    <div class="small">Operator outlook for the next service. Translates 7/30-day demand into a clear demand level, peak window, and revenue range.</div>
+    <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button class="btn2" id="forecast-refresh-btn" type="button">Refresh</button>
+      <span id="forecast-msg" class="note"></span>
+    </div>
+    <div id="forecastBody" style="margin-top:12px"></div>
   </div>
-  <div id="forecastBody" class="small" style="margin-top:10px;line-height:1.4;white-space:pre-wrap"></div>
-</div>
   <div class="card" id="dailySummaryCard">
     <div class="h2">Daily Revenue Summary</div>
-    <div class="small">Guests and demand for the selected day (venue sheet). Fast read — uses parsed budgets when present.</div>
+    <div class="small">Quick business snapshot for the selected day. Pick a date to see the headline, key cards, and what drove demand.</div>
     <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
       <input id="daily-summary-date" class="inp" type="date" style="max-width:160px" />
       <button class="btn2" id="daily-summary-refresh-btn" type="button">Refresh</button>
       <span id="daily-summary-msg" class="note"></span>
     </div>
-    <div id="daily-summary-body" class="small" style="margin-top:12px;line-height:1.45;white-space:pre-wrap"></div>
+    <div id="daily-summary-body" style="margin-top:12px"></div>
   </div>
   <div class="card" id="alertsCard">
     <div class="h2">Alerts Settings</div>
@@ -15981,33 +16185,96 @@ try{ setupTabs(); }catch(e){}
 // regardless of any IIFE throwing later. Belt-and-suspenders: also wired below
 // with direct addEventListener so clicks work even if the bootstrap delegate missed.
 
+function _opEsc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+  });
+}
+function _opMoneyShort(n){
+  var v = Number(n||0);
+  if(!isFinite(v) || v <= 0) return '$0';
+  if(v >= 1000) return '$' + (v/1000).toFixed(1) + 'K';
+  return '$' + Math.round(v);
+}
+function _opPct(n){ return Math.round((Number(n)||0)*100) + '%'; }
+function _opTopList(arr){
+  if(!Array.isArray(arr) || !arr.length) return '\u2014';
+  return arr.map(function(x){ return (x && x.key ? x.key : '?') + ' ('+(x && x.count!=null?x.count:0)+')'; }).join(', ');
+}
+
+function renderOperatorView(targetEl, ov, detailRows){
+  if(!targetEl) return;
+  if(!ov || typeof ov !== 'object'){
+    targetEl.innerHTML = '<div class="op-empty">No data available.</div>';
+    return;
+  }
+  var tone = String(ov.tone||'').toLowerCase();
+  var cards = (Array.isArray(ov.cards) ? ov.cards : []).map(function(c){
+    var t = c && c.tone ? String(c.tone).toLowerCase() : '';
+    var sub = (c && c.sub) ? '<div class="op-card-sub">'+_opEsc(c.sub)+'</div>' : '';
+    return '<div class="op-card"'+(t?' data-tone="'+_opEsc(t)+'"':'')+'>'+
+      '<div class="op-card-label">'+_opEsc(c && c.label)+'</div>'+
+      '<div class="op-card-value">'+_opEsc(c && c.value)+'</div>'+
+      sub+
+    '</div>';
+  }).join('');
+
+  var insightHtml = ov.insight
+    ? '<div class="op-insight"><span class="op-insight-tag">Insight</span>'+
+      '<div class="op-insight-text">'+_opEsc(ov.insight)+'</div></div>'
+    : '';
+
+  var detailsHtml = '';
+  if(Array.isArray(detailRows) && detailRows.length){
+    var rows = detailRows.filter(Boolean).map(function(row){
+      if(row && typeof row === 'object' && 'k' in row){
+        return '<div class="op-detail-row">'+
+          '<span class="op-detail-key">'+_opEsc(row.k)+'</span>'+
+          '<span class="op-detail-val">'+_opEsc(row.v)+'</span></div>';
+      }
+      return '<div class="op-detail-row"><span class="op-detail-key">'+_opEsc(row)+'</span></div>';
+    }).join('');
+    detailsHtml = '<details class="op-details"><summary>Details</summary>'+
+      '<div class="op-details-body">'+rows+'</div></details>';
+  }
+
+  targetEl.innerHTML =
+    '<div class="op-view">'+
+      '<div class="op-headline"'+(tone?' data-tone="'+_opEsc(tone)+'"':'')+'>'+_opEsc(ov.headline||'')+'</div>'+
+      '<div class="op-cards">'+cards+'</div>'+
+      insightHtml+
+      detailsHtml+
+    '</div>';
+}
+
 async function loadForecast(){
   var msg = document.querySelector('#forecast-msg');
   var body = document.querySelector('#forecastBody');
   if(msg) msg.textContent = 'Loading\u2026';
-  if(body) body.textContent = '';
+  if(body) body.innerHTML = '<div class="op-skeleton"></div>';
   try{
     var KEY_  = (new URLSearchParams(location.search).get('key') || '');
     var VEN_  = (new URLSearchParams(location.search).get('venue') || '');
     var r = await fetch('/admin/api/analytics/load-forecast?key='+encodeURIComponent(KEY_)+'&venue='+encodeURIComponent(VEN_), {cache:'no-store'});
     var d = await r.json();
     if(!d.ok) throw new Error(d.error || 'Failed');
-    var lines = [];
-    lines.push('Busy level: '+(d.busy_level||'—'));
-    lines.push('Last 7 days: '+(d.last_7_days_total||0)+' leads (avg/day '+(d.avg_daily_bookings_7||0)+')');
-    lines.push('Last 30 days: '+(d.last_30_days_total||0)+' leads (avg/day '+(d.avg_daily_bookings_30||0)+')');
-    lines.push('VIP ratio (30d): '+Math.round((d.vip_ratio_30||0)*100)+'%');
-    var rev30 = (d.budget_sum_30||0), avgRev = (d.avg_daily_revenue_30||0), ant = (d.anticipated_revenue_next_service||0);
-    lines.push('Budget trend (30d): $'+(rev30.toFixed?rev30.toFixed(2):rev30)+' total · ~$'+(avgRev.toFixed?avgRev.toFixed(2):avgRev)+'/day');
-    lines.push('Anticipated next-service revenue: $'+(ant.toFixed?ant.toFixed(2):ant));
-    if(Array.isArray(d.top_hours_30) && d.top_hours_30.length)
-      lines.push('Top hours (30d): '+d.top_hours_30.map(function(x){return x.key+' ('+x.count+')'}).join(', '));
-    if(Array.isArray(d.top_days_7) && d.top_days_7.length)
-      lines.push('Top days (7d): '+d.top_days_7.map(function(x){return x.key+' ('+x.count+')'}).join(', '));
-    if(body) body.textContent = lines.join('\\n');
+
+    var detailRows = [
+      { k:'Busy level (raw)', v: d.busy_level || '\u2014' },
+      { k:'Last 7 days', v: (d.last_7_days_total||0)+' leads (avg/day '+(d.avg_daily_bookings_7||0)+')' },
+      { k:'Last 30 days', v: (d.last_30_days_total||0)+' leads (avg/day '+(d.avg_daily_bookings_30||0)+')' },
+      { k:'VIP ratio (30d)', v: _opPct(d.vip_ratio_30) },
+      { k:'Budget trend (30d)', v: _opMoneyShort(d.budget_sum_30)+' total \u00b7 ~'+_opMoneyShort(d.avg_daily_revenue_30)+'/day' },
+      { k:'Anticipated next-service revenue', v: _opMoneyShort(d.anticipated_revenue_next_service) },
+      { k:'Top hours (30d)', v: _opTopList(d.top_hours_30) },
+      { k:'Top days (7d)', v: _opTopList(d.top_days_7) }
+    ];
+
+    renderOperatorView(body, d.operator_view, detailRows);
     if(msg) msg.textContent = 'Updated \u2714';
   }catch(e){
     if(msg) msg.textContent = 'Failed: '+(e.message||e);
+    if(body) body.innerHTML = '<div class="op-empty">Could not load forecast. Try refreshing.</div>';
   }
 }
 
@@ -16016,7 +16283,7 @@ async function loadDailySummary(){
   var body = document.querySelector('#daily-summary-body');
   var dIn = document.querySelector('#daily-summary-date');
   if(msg) msg.textContent = 'Loading\u2026';
-  if(body) body.textContent = '';
+  if(body) body.innerHTML = '<div class="op-skeleton"></div>';
   try{
     var KEY_  = (new URLSearchParams(location.search).get('key') || '');
     var VEN_  = (new URLSearchParams(location.search).get('venue') || '');
@@ -16025,32 +16292,28 @@ async function loadDailySummary(){
     var r = await fetch(url, {cache:'no-store'});
     var d = await r.json();
     if(!d.ok) throw new Error(d.error || 'Failed');
-    var lines = [];
-    lines.push('Date: '+(d.date||'\u2014'));
-    lines.push('Guests: '+(d.total_guests||0)+'  (VIP '+(d.vip_count||0)+' \u00b7 Regular '+(d.regular_count||0)+')');
-    var rev = (d.estimated_revenue||0), bud = (d.budget_sum_parsed||0);
-    lines.push('Est. revenue: $'+(rev.toFixed?rev.toFixed(2):rev)+'  (budget sum: $'+(bud.toFixed?bud.toFixed(2):bud)+')');
-    if(Array.isArray(d.top_request_labels) && d.top_request_labels.length)
-      lines.push('Top request types: '+d.top_request_labels.map(function(x){return x.key+' ('+x.count+')'}).join(', '));
-    if(Array.isArray(d.peak_hours) && d.peak_hours.length)
-      lines.push('Peak hours: '+d.peak_hours.map(function(x){return x.key+' ('+x.count+')'}).join(', '));
-    var f = (d.forecast_summary && typeof d.forecast_summary === 'object') ? d.forecast_summary : null;
-    if(f){
-      lines.push('');
-      lines.push('Forecast prep summary:');
-      lines.push('- Busy level: '+(f.busy_level||'—'));
-      lines.push('- 7d pace: '+(f.last_7_days_total||0)+' leads (avg/day '+(f.avg_daily_bookings_7||0)+')');
-      lines.push('- 30d VIP mix: '+Math.round((f.vip_ratio_30||0)*100)+'%');
-      var fAvg = (f.avg_daily_revenue_30||0), fAnt = (f.anticipated_revenue_next_service||0);
-      lines.push('- Revenue expectation: ~$'+(fAnt.toFixed?fAnt.toFixed(2):fAnt)+' (30d avg/day $'+(fAvg.toFixed?fAvg.toFixed(2):fAvg)+')');
-      if(Array.isArray(f.top_hours_30) && f.top_hours_30.length){
-        lines.push('- Typical peak windows: '+f.top_hours_30.map(function(x){return x.key+' ('+x.count+')'}).join(', '));
-      }
-    }
-    if(body) body.textContent = lines.join('\\n');
+
+    var f = (d.forecast_summary && typeof d.forecast_summary === 'object') ? d.forecast_summary : {};
+    var detailRows = [
+      { k:'Date', v: d.date || '\u2014' },
+      { k:'Guests', v: (d.total_guests||0)+'  (VIP '+(d.vip_count||0)+' \u00b7 Regular '+(d.regular_count||0)+')' },
+      { k:'Estimated revenue', v: _opMoneyShort(d.estimated_revenue) },
+      { k:'Parsed budget sum', v: _opMoneyShort(d.budget_sum_parsed) },
+      { k:'Avg party size', v: (d.avg_party_size!=null ? Number(d.avg_party_size).toFixed(1) : '\u2014') },
+      { k:'Top request types', v: _opTopList(d.top_request_labels) },
+      { k:'Peak hours', v: _opTopList(d.peak_hours) },
+      { k:'30d busy level', v: f.busy_level || '\u2014' },
+      { k:'30d VIP mix', v: _opPct(f.vip_ratio_30) },
+      { k:'30d avg revenue/day', v: _opMoneyShort(f.avg_daily_revenue_30) },
+      { k:'Anticipated next service', v: _opMoneyShort(f.anticipated_revenue_next_service) },
+      { k:'Typical peak windows (30d)', v: _opTopList(f.top_hours_30) }
+    ];
+
+    renderOperatorView(body, d.operator_view, detailRows);
     if(msg) msg.textContent = 'Updated \u2714';
   }catch(e){
     if(msg) msg.textContent = 'Failed: '+(e.message||e);
+    if(body) body.innerHTML = '<div class="op-empty">Could not load summary. Try refreshing.</div>';
   }
 }
 
@@ -16315,6 +16578,262 @@ def _auto_suggest_reply_draft_for_reservation(lead: Dict[str, Any]) -> None:
         return
 
 
+# ── Operator-view helpers (translate raw analytics → owner-friendly summary) ──
+def _format_hour_12h(h: int) -> str:
+    """Format integer hour (0-23) as a compact 12-hour label like '6PM' or '12AM'."""
+    try:
+        h = int(h) % 24
+    except Exception:
+        return ""
+    if h == 0:
+        return "12AM"
+    if h < 12:
+        return f"{h}AM"
+    if h == 12:
+        return "12PM"
+    return f"{h-12}PM"
+
+
+def _peak_window_label(top_hours: list) -> str:
+    """Convert top_hours items (e.g. [{'key':'18:00','count':3}, ...]) into '6PM–10PM'.
+
+    We take the spread of the top hours, then extend by ~2h after the latest peak so the
+    label reads as a service window rather than a single point in time.
+    """
+    if not top_hours:
+        return ""
+    hrs: List[int] = []
+    for it in top_hours[:5]:
+        try:
+            k = str((it or {}).get("key", "")).split(":")[0]
+            hrs.append(int(k))
+        except Exception:
+            continue
+    if not hrs:
+        return ""
+    start = min(hrs)
+    end_hour = (max(hrs) + 2) % 24
+    if start == end_hour:
+        return _format_hour_12h(start)
+    return f"{_format_hour_12h(start)}\u2013{_format_hour_12h(end_hour)}"
+
+
+def _format_money_compact(n: Any) -> str:
+    """Compact human-readable money: $850, $1.9K, $12.4K."""
+    try:
+        v = float(n or 0)
+    except Exception:
+        v = 0.0
+    if v <= 0:
+        return "$0"
+    if v >= 1000:
+        return f"${v/1000:.1f}K"
+    return f"${int(round(v))}"
+
+
+def _money_range_label(low: float, high: float) -> str:
+    """Format a low–high revenue range, collapsing to a single value if they round equal."""
+    lo = _format_money_compact(low)
+    hi = _format_money_compact(high)
+    if lo == hi:
+        return lo
+    return f"{lo}\u2013{hi}"
+
+
+def _build_forecast_operator_view(stats: Dict[str, Any]) -> Dict[str, Any]:
+    """Translate raw forecast analytics into an operator-facing presentation block.
+
+    Inputs come from the load-forecast aggregation (busy_level, vip_ratio_30,
+    avg_daily_bookings_*, anticipated_revenue_next_service, top_hours_30, ...).
+    """
+    busy = str(stats.get("busy_level") or "").lower()
+    avg7 = float(stats.get("avg_daily_bookings_7") or 0)
+    vip_ratio = float(stats.get("vip_ratio_30") or 0)
+    top_hours = stats.get("top_hours_30") or []
+    ant = float(stats.get("anticipated_revenue_next_service") or 0)
+
+    if avg7 >= 18 or "very high" in busy:
+        demand = "Surge"
+    elif avg7 >= 10 or "high" in busy:
+        demand = "High"
+    elif avg7 >= 5 or "moderate" in busy:
+        demand = "Moderate"
+    else:
+        demand = "Low"
+
+    peak = _peak_window_label(top_hours)
+    peak_display = peak or "\u2014"
+
+    if ant > 0:
+        # tighter range when VIP mix is steady; widen when VIP-heavy (more variance upside)
+        spread = 0.18 if vip_ratio < 0.20 else 0.25
+        low = ant * (1 - spread)
+        high = ant * (1 + spread)
+        revenue_label = _money_range_label(low, high)
+    else:
+        revenue_label = "\u2014"
+
+    if peak:
+        headline = f"Tonight Outlook: {demand} Demand \u2014 Peak {peak}"
+    else:
+        headline = f"Tonight Outlook: {demand} Demand"
+
+    if vip_ratio >= 0.30 and demand in ("Moderate", "High", "Surge"):
+        insight = (
+            f"VIP mix is strong (~{int(round(vip_ratio*100))}% of the last 30 days). "
+            "Prioritize premium tables and upgrade offers early."
+        )
+    elif demand == "Surge":
+        insight = "High volume incoming \u2014 confirm staffing and table assignments now."
+    elif demand == "High":
+        insight = "Strong service window approaching \u2014 tighten reservation flow and pre-stage premium service."
+    elif demand == "Low":
+        insight = (
+            "Reservations are light for the next service \u2014 consider pushing a promo or "
+            "direct follow-up to recent inquiries."
+        )
+    else:
+        insight = "Steady demand expected \u2014 keep VIP tables flexible and follow up on pending leads."
+
+    return {
+        "headline": headline,
+        "tone": demand.lower(),
+        "demand_level": demand,
+        "peak_window": peak_display,
+        "expected_revenue": revenue_label,
+        "insight": insight,
+        "cards": [
+            {"label": "Demand", "value": demand, "tone": demand.lower()},
+            {"label": "Peak Window", "value": peak_display},
+            {"label": "Expected Revenue", "value": revenue_label},
+        ],
+    }
+
+
+def _build_summary_operator_view(
+    stats: Dict[str, Any],
+    top_types: List[Dict[str, Any]],
+    top_hours: List[Dict[str, Any]],
+    avg_party_size: float = 0.0,
+    avg_daily_bookings_30: float = 0.0,
+) -> Dict[str, Any]:
+    """Translate the daily revenue summary into a quick business snapshot.
+
+    `stats` carries: total_guests, vip_count, regular_count, estimated_revenue,
+    budget_sum_parsed. `avg_daily_bookings_30` lets us classify "Strong / Steady / Light"
+    relative to the venue's own 30-day baseline rather than absolute thresholds.
+    """
+    total = int(stats.get("total_guests") or 0)
+    vip_n = int(stats.get("vip_count") or 0)
+    reg_n = int(stats.get("regular_count") or 0)
+    rev = float(stats.get("estimated_revenue") or 0)
+    bud_parsed = float(stats.get("budget_sum_parsed") or 0)
+
+    vip_ratio = (vip_n / total) if total else 0.0
+    baseline = float(avg_daily_bookings_30 or 0)
+
+    if total == 0:
+        demand = "Quiet"
+    elif baseline > 0 and total >= max(20.0, baseline * 1.7):
+        demand = "Surge"
+    elif baseline > 0 and total >= max(12.0, baseline * 1.2):
+        demand = "Strong"
+    elif total >= 20:
+        demand = "Surge"
+    elif total >= 12:
+        demand = "Strong"
+    elif total >= 6:
+        demand = "Steady"
+    else:
+        demand = "Light"
+
+    if demand in ("Strong", "Surge"):
+        suffix = ""
+        if vip_ratio >= 0.30:
+            suffix = " \u2014 VIP guests drove demand"
+        elif bud_parsed > 0 and rev >= max(1000.0, bud_parsed * 1.0):
+            suffix = " \u2014 Budgets trending up"
+        headline = f"Today: Strong Revenue Day{suffix}"
+    elif demand == "Steady":
+        headline = "Today: Steady Day"
+    elif demand == "Light":
+        headline = "Today: Light Day \u2014 low reservation volume"
+    else:
+        headline = "Today: Quiet Day \u2014 no reservations yet"
+
+    top_driver = "Reservations"
+    peak_hour: Optional[int] = None
+    if top_hours:
+        try:
+            peak_hour = int(str((top_hours[0] or {}).get("key", "")).split(":")[0])
+        except Exception:
+            peak_hour = None
+
+    label_lower = ""
+    if top_types:
+        label_lower = str((top_types[0] or {}).get("key", "")).lower()
+
+    if vip_ratio >= 0.30 and vip_n > 0:
+        top_driver = "VIP Upgrades"
+    elif "match" in label_lower or "world cup" in label_lower or "fixture" in label_lower or "kickoff" in label_lower:
+        top_driver = "Match-Day Traffic"
+    elif avg_party_size >= 6:
+        top_driver = "Large Groups"
+    elif peak_hour is not None and peak_hour >= 22:
+        top_driver = "Late-Night Demand"
+    elif "vip" in label_lower:
+        top_driver = "VIP Upgrades"
+    elif top_types:
+        # Fall back to a humanized version of the most common request type / entry point
+        raw = str((top_types[0] or {}).get("key", "")).strip()
+        if raw and raw != "(unspecified)":
+            top_driver = raw[:40]
+
+    if total == 0:
+        insight = (
+            "No reservations recorded for this date yet \u2014 confirm sheet sync and check "
+            "active entry points if this looks unexpected."
+        )
+    elif vip_ratio >= 0.25 and vip_n > 0:
+        pct = int(round(vip_ratio * 100))
+        insight = f"VIP guests made up {pct}% of traffic and drove the strongest revenue signal today."
+    elif avg_party_size >= 6:
+        insight = (
+            f"Average party size is {avg_party_size:.1f} \u2014 large groups are the main "
+            "driver, plan table layouts and staffing accordingly."
+        )
+    elif peak_hour is not None and peak_hour >= 19:
+        insight = (
+            f"Most demand came after {_format_hour_12h(peak_hour)} \u2014 late-shift staffing "
+            "is the key takeaway for next time."
+        )
+    elif peak_hour is not None:
+        insight = f"Demand concentrated around {_format_hour_12h(peak_hour)} \u2014 adjust prep and host coverage to that window."
+    else:
+        insight = "Day was steady \u2014 review request types in details for follow-up opportunities."
+
+    revenue_value = _format_money_compact(rev) if rev > 0 else "\u2014"
+    guests_value = str(total)
+    vip_mix_sub = f"{vip_n} VIP \u00b7 {reg_n} Regular" if total else "\u2014"
+
+    return {
+        "headline": headline,
+        "tone": demand.lower(),
+        "demand_level": demand,
+        "top_driver": top_driver,
+        "revenue_label": revenue_value,
+        "guests_label": guests_value,
+        "vip_mix_label": vip_mix_sub,
+        "insight": insight,
+        "cards": [
+            {"label": "Revenue", "value": revenue_value},
+            {"label": "Guests", "value": guests_value, "sub": vip_mix_sub},
+            {"label": "Demand Level", "value": demand, "tone": demand.lower()},
+            {"label": "Top Driver", "value": top_driver},
+        ],
+    }
+
+
 @app.route("/admin/api/analytics/load-forecast", methods=["GET"])
 def admin_api_load_forecast():
     """Step 13: read-only load forecast (manager+)."""
@@ -16433,6 +16952,11 @@ def admin_api_load_forecast():
                 "rows_sample": len(rows),
             },
         }
+        try:
+            out["operator_view"] = _build_forecast_operator_view(out)
+        except Exception:
+            # Operator view is purely presentational — never fail the endpoint over it.
+            out["operator_view"] = None
         return jsonify(out)
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
@@ -16473,6 +16997,7 @@ def admin_api_daily_summary():
         budget_i = _col_idx("budget", "Budget")
         ep_i = _col_idx("entry_point", "entry", "source")
         q_i = _col_idx("queue", "intent", "request_type")
+        party_i = _col_idx("party_size", "party", "guests", "pax")
 
         all_vals = ws.get_all_values() or []
         rows = all_vals[1:] if len(all_vals) > 1 else []
@@ -16513,6 +17038,8 @@ def admin_api_daily_summary():
         budget_30 = 0.0
         total_30 = 0
         vip_30 = 0
+        party_sum = 0.0
+        party_count = 0
 
         for r in rows:
             dt = parse_ts_cell(r)
@@ -16548,6 +17075,14 @@ def admin_api_daily_summary():
             hour_counts[dt.strftime("%H:00")] = hour_counts.get(dt.strftime("%H:00"), 0) + 1
             if budget_i >= 0 and budget_i < len(r):
                 revenue_sum += _parse_budget_to_number(r[budget_i])
+            if party_i >= 0 and party_i < len(r):
+                try:
+                    pm = re.search(r"(\d+)", str(r[party_i] or ""))
+                    if pm:
+                        party_sum += float(pm.group(1))
+                        party_count += 1
+                except Exception:
+                    pass
 
         total = len(day_rows)
         vip_n = sum(1 for r in day_rows if row_is_vip(r))
@@ -16561,6 +17096,7 @@ def admin_api_daily_summary():
             est_revenue = float(vip_n * 220 + reg_n * 85)
 
         avg_daily_bookings_7 = (sum(buckets_7.values()) / 7.0) if buckets_7 else 0.0
+        avg_daily_bookings_30 = (sum(buckets_30.values()) / 30.0) if buckets_30 else 0.0
         avg_daily_revenue_30 = (budget_30 / 30.0) if budget_30 > 0 else 0.0
         if avg_daily_bookings_7 >= 18:
             busy_level = "Very high"
@@ -16572,32 +17108,47 @@ def admin_api_daily_summary():
             busy_level = "Light"
         top_hours_30 = sorted(hours_30.items(), key=lambda x: x[1], reverse=True)[:5]
         anticipated_revenue = est_revenue if total > 0 else avg_daily_revenue_30
+        avg_party_size = (party_sum / party_count) if party_count else 0.0
 
-        return jsonify(
-            {
-                "ok": True,
-                "date": day_date.isoformat(),
-                "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "total_guests": total,
-                "vip_count": vip_n,
-                "regular_count": reg_n,
-                "estimated_revenue": round(est_revenue, 2),
-                "budget_sum_parsed": round(revenue_sum, 2),
-                "top_request_labels": [{"key": a, "count": b} for a, b in top_types],
-                "peak_hours": [{"key": a, "count": b} for a, b in top_hours],
-                "forecast_summary": {
-                    "busy_level": busy_level,
-                    "last_7_days_total": sum(buckets_7.values()),
-                    "last_30_days_total": sum(buckets_30.values()),
-                    "avg_daily_bookings_7": round(avg_daily_bookings_7, 2),
-                    "vip_ratio_30": round((vip_30 / total_30), 4) if total_30 else 0.0,
-                    "avg_daily_revenue_30": round(avg_daily_revenue_30, 2),
-                    "anticipated_revenue_next_service": round(float(anticipated_revenue), 2),
-                    "top_hours_30": [{"key": a, "count": b} for a, b in top_hours_30],
-                },
-                "meta": {"timestamp_column_resolved": ts_i >= 0},
-            }
-        )
+        top_request_labels = [{"key": a, "count": b} for a, b in top_types]
+        peak_hours_list = [{"key": a, "count": b} for a, b in top_hours]
+
+        result: Dict[str, Any] = {
+            "ok": True,
+            "date": day_date.isoformat(),
+            "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "total_guests": total,
+            "vip_count": vip_n,
+            "regular_count": reg_n,
+            "estimated_revenue": round(est_revenue, 2),
+            "budget_sum_parsed": round(revenue_sum, 2),
+            "avg_party_size": round(avg_party_size, 2),
+            "top_request_labels": top_request_labels,
+            "peak_hours": peak_hours_list,
+            "forecast_summary": {
+                "busy_level": busy_level,
+                "last_7_days_total": sum(buckets_7.values()),
+                "last_30_days_total": sum(buckets_30.values()),
+                "avg_daily_bookings_7": round(avg_daily_bookings_7, 2),
+                "avg_daily_bookings_30": round(avg_daily_bookings_30, 2),
+                "vip_ratio_30": round((vip_30 / total_30), 4) if total_30 else 0.0,
+                "avg_daily_revenue_30": round(avg_daily_revenue_30, 2),
+                "anticipated_revenue_next_service": round(float(anticipated_revenue), 2),
+                "top_hours_30": [{"key": a, "count": b} for a, b in top_hours_30],
+            },
+            "meta": {"timestamp_column_resolved": ts_i >= 0},
+        }
+        try:
+            result["operator_view"] = _build_summary_operator_view(
+                result,
+                top_request_labels,
+                peak_hours_list,
+                avg_party_size=avg_party_size,
+                avg_daily_bookings_30=avg_daily_bookings_30,
+            )
+        except Exception:
+            result["operator_view"] = None
+        return jsonify(result)
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
