@@ -3643,7 +3643,9 @@ def _ai_suggest_actions_for_lead(
         if _is_action_already_approved(approved_actions, typ, payload):
             continue
         actions_out.append({"type": typ, "payload": payload, "reason": str(a.get("reason") or "").strip()[:240]})
-    if needs_contact_fix and sheet_row and not _is_action_already_approved(approved_actions, "correct_contact", {"row": int(sheet_row)}):
+    # Only request "Correct Contact" when there is no valid reachable channel at all.
+    # If either email or phone is valid, AI should still suggest viable actions.
+    if needs_contact_fix and (not valid_email and not valid_phone) and sheet_row and not _is_action_already_approved(approved_actions, "correct_contact", {"row": int(sheet_row)}):
         actions_out.append({
             "type": "correct_contact",
             "payload": {"row": int(sheet_row), "sheet_row": int(sheet_row), "issue": "invalid_or_missing_contact"},
@@ -9819,6 +9821,7 @@ def admin_api_ai_run():
             "vibe": get("vibe"),
             "status": get("status"),
             "vip": get("vip"),
+            "venue_id": get("venue_id"),
         }
         lead = _normalize_lead_contact_fields(lead)
         # Normalize vip to bool-ish for downstream policy + prompts
@@ -9876,6 +9879,8 @@ def admin_api_ai_run():
             return jsonify({"ok": True, "ran": 0, "proposed": 0, "queue_ids": []})
 
         status_col = hmap.get("status")  # 1-based, optional
+        venue_col = hmap.get("venue_id")  # 1-based, optional
+        target_vid = _slugify_venue_id(_venue_id())
         # Walk from bottom (newest) upward, collect rows whose status is in the
         # configurable "new_status_values" list. If there is no status column,
         # treat all rows as eligible and rely on limit for bounding.
@@ -9883,6 +9888,14 @@ def admin_api_ai_run():
             if len(targets) >= limit:
                 break
             rv = rows[i]
+            if venue_col:
+                row_vid_raw = ""
+                if (venue_col - 1) < len(rv):
+                    row_vid_raw = (rv[venue_col - 1] or "").strip()
+                row_vid = _slugify_venue_id(row_vid_raw) if row_vid_raw else ""
+                # Strict tenant guard for AI runs: never process another venue's row.
+                if row_vid and row_vid != target_vid:
+                    continue
             if status_col:
                 st = ""
                 if (status_col - 1) < len(rv):
@@ -9915,6 +9928,7 @@ def admin_api_ai_run():
                     "debug": (out or {}).get("debug") if isinstance(out, dict) else {},
                     "lead_has_email": bool(_looks_like_email(str(lead.get("email") or ""))),
                     "lead_has_phone": bool(_looks_like_phone(str(lead.get("phone") or ""))),
+                    "row_venue_id": str(lead.get("venue_id") or ""),
                 })
             except Exception:
                 pass
@@ -10277,6 +10291,7 @@ def admin_api_ai_run():
             "focus_mode": focus_mode,
             "channel_mode": channel_mode,
             "ai_enabled_setting": bool(_get_ai_settings().get("enabled")),
+            "target_venue_id": _slugify_venue_id(_venue_id()),
             "new_status_values": sorted(list(new_status_values)),
             "allow_actions": _get_ai_settings().get("allow_actions") or {},
         }
