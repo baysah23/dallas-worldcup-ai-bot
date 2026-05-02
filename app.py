@@ -3509,6 +3509,15 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int, focus_mod
     # workflow does not generate. Proactive drafts are handled elsewhere.
     allowed_types = [k for k, v in allow.items() if v and k != "reply_draft"]
     if not allowed_types:
+        # region agent log
+        _agent_debug_log(
+            run_id="pre-fix",
+            hypothesis_id="H1",
+            location="app.py:_ai_suggest_actions_for_lead:allowed_types",
+            message="No allowed action types",
+            data={"sheet_row": int(sheet_row or 0), "enabled_actions": list((allow or {}).keys())},
+        )
+        # endregion
         return {"ok": False, "error": "No actions allowed"}
 
     system_msg = (settings.get("system_prompt") or "").strip()
@@ -3562,6 +3571,15 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int, focus_mod
             parsed = None
 
     if not isinstance(parsed, dict):
+        # region agent log
+        _agent_debug_log(
+            run_id="pre-fix",
+            hypothesis_id="H2",
+            location="app.py:_ai_suggest_actions_for_lead:parse",
+            message="AI response not parseable JSON",
+            data={"sheet_row": int(sheet_row or 0), "raw_len": len(str(raw or ""))},
+        )
+        # endregion
         return {"ok": False, "error": "Bad AI JSON"}
 
     confidence = float(parsed.get("confidence") or 0)
@@ -3643,6 +3661,23 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int, focus_mod
                         "payload": {"row": int(sheet_row), "sheet_row": int(sheet_row), "vip": "VIP", "budget": lead.get("budget")},
                         "reason": "Lead appears VIP/high-value from profile and budget.",
                     })
+    # region agent log
+    _agent_debug_log(
+        run_id="pre-fix",
+        hypothesis_id="H3",
+        location="app.py:_ai_suggest_actions_for_lead:final",
+        message="Suggestion result after filtering",
+        data={
+            "sheet_row": int(sheet_row or 0),
+            "actions_in_count": len(actions_in) if isinstance(actions_in, list) else 0,
+            "actions_out_count": len(actions_out),
+            "needs_contact_fix": bool(needs_contact_fix),
+            "valid_email": bool(valid_email),
+            "valid_phone": bool(valid_phone),
+            "actions_out_types": [str(x.get("type") or "") for x in (actions_out or []) if isinstance(x, dict)],
+        },
+    )
+    # endregion
     return {"ok": True, "confidence": confidence, "actions": actions_out, "notes": str(parsed.get("notes") or "").strip()[:240]}
 
 def _ai_enqueue_or_apply_for_new_lead(lead: Dict[str, Any], sheet_row: int) -> None:
@@ -8688,6 +8723,25 @@ def _safe_write_json(path: str, data: dict) -> None:
     except Exception:
         pass
 
+
+def _agent_debug_log(run_id: str, hypothesis_id: str, location: str, message: str, data: Optional[Dict[str, Any]] = None) -> None:
+    try:
+        payload = {
+            "sessionId": "8fe9fc",
+            "runId": str(run_id or ""),
+            "hypothesisId": str(hypothesis_id or ""),
+            "location": str(location or ""),
+            "message": str(message or ""),
+            "data": data or {},
+            "timestamp": int(time.time() * 1000),
+        }
+        # region agent log
+        with open("debug-8fe9fc.log", "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        # endregion
+    except Exception:
+        return
+
 def _ensure_ws(gc, title: str, venue_id: Optional[str] = None):
     sh = _open_default_spreadsheet(gc, venue_id=venue_id)
     try:
@@ -9838,6 +9892,20 @@ def admin_api_ai_run():
     for sheet_row, lead in targets:
         ran += 1
         out = _ai_suggest_actions_for_lead(lead, sheet_row=sheet_row, focus_mode=focus_mode)
+        # region agent log
+        _agent_debug_log(
+            run_id="pre-fix",
+            hypothesis_id="H4",
+            location="app.py:admin_api_ai_run:row_out",
+            message="Per-row AI suggestion output",
+            data={
+                "sheet_row": int(sheet_row or 0),
+                "ok": bool((out or {}).get("ok")),
+                "error": str((out or {}).get("error") or ""),
+                "actions_count": len((out or {}).get("actions") or []),
+            },
+        )
+        # endregion
         if not out or not out.get("ok"):
             try:
                 _audit("ai.run.skip", {"row": int(sheet_row), "reason": str((out or {}).get("error") or "suggestion_failed")[:240]})
@@ -10163,6 +10231,15 @@ def admin_api_ai_run():
         _audit("ai.run.manual", {"mode": mode, "row": row_num or None, "ran": ran, "proposed": len(proposed_ids)})
         _notify("ai.run.manual", {"ran": ran, "proposed": len(proposed_ids), "by": actor, "role": role}, targets=["owner","manager"])
 
+    # region agent log
+    _agent_debug_log(
+        run_id="pre-fix",
+        hypothesis_id="H5",
+        location="app.py:admin_api_ai_run:final",
+        message="AI run aggregate result",
+        data={"mode": str(mode), "ran": int(ran), "proposed": len(proposed_ids), "target_count": len(targets)},
+    )
+    # endregion
     return jsonify({"ok": True, "ran": ran, "proposed": len(proposed_ids), "queue_ids": proposed_ids})
 @app.route("/admin/api/ai/queue", methods=["GET"])
 def admin_api_ai_queue_list():
@@ -15422,17 +15499,25 @@ async function resetAiqFocusMode(){
 }
 
 async function runAIPreset(preset){
+  const _aiqDbg = (label, data) => {
+    try{
+      console.log('[AIQ DEBUG]', label, data || {});
+    }catch(_){}
+  };
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running…';
   const lim = parseInt(qs('#ai-run-limit')?.value || '5', 10);
   const ch = (qs('#aiq-channel')?.value || '').trim();
   const fm = preset === 'all' ? 'all' : preset;
+  const payload = {mode:'new', limit: isNaN(lim)?5:lim, focus_mode: fm, channel: ch || 'any'};
+  _aiqDbg('runAIPreset.request', {preset, payload, venue: VENUE});
   try{
     const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
-      body: JSON.stringify({mode:'new', limit: isNaN(lim)?5:lim, focus_mode: fm, channel: ch || 'any'})
+      body: JSON.stringify(payload)
     });
     const data = await r.json();
+    _aiqDbg('runAIPreset.response', {status:r.status, ok:data && data.ok, ran:data && data.ran, proposed:data && data.proposed, queue_ids:(data && data.queue_ids) || []});
     if(!data.ok) throw new Error(data.error || 'Failed');
     if(msg) msg.textContent = `Ran ${data.ran||0}. Proposed ${data.proposed||0}.`;
     await loadAIQueue();
@@ -15508,6 +15593,11 @@ function aiqSearchDebounced(){
 }
 
 async function loadAIQueue(){
+  const _aiqDbg = (label, data) => {
+    try{
+      console.log('[AIQ DEBUG]', label, data || {});
+    }catch(_){}
+  };
   initAiqUx();
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Loading…';
   const list = qs('#aiq-list'); if(list) list.innerHTML = 'Loading…';
@@ -15552,6 +15642,11 @@ async function loadAIQueue(){
     if(!data.ok) throw new Error(data.error || 'Failed');
     applyAiqSummary(sum);
     const q = data.queue || [];
+    _aiqDbg('loadAIQueue.state', {
+      filters: {status:filt||'all', time:timeVal||'all', type:typeVal||'all', conf:confVal||'any', search:qVal||'', bucket:bucket||'all', focus:focusQ||'all', channel:channelQ||'all'},
+      response: {status:resQ.status, ok:data.ok, total_matched:data.total_matched, queue_rows:q.length},
+      summary: {ok:!!sum.ok, total_items:sum.total_items, total_pending:sum.total_pending, total_approved:sum.total_approved, total_applied:sum.total_applied, total_sent:sum.total_sent, total_denied:sum.total_denied}
+    });
     const bc = qs('#aiq-bucket-counts');
     if(bc){
       bc.textContent = 'Table: '+q.length+' row(s) with current filters · pill counts = full venue queue (summary API)';
@@ -15567,18 +15662,29 @@ async function loadAIQueue(){
 }
 
 async function runAINew(){
+  const _aiqDbg = (label, data) => {
+    try{
+      console.log('[AIQ DEBUG]', label, data || {});
+    }catch(_){}
+  };
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running AI…';
   const lim = parseInt(qs('#ai-run-limit')?.value || '5', 10);
   const ch = (qs('#aiq-channel')?.value || '').trim();
   const active = qs('#aiq-focus-mode-seg button.active');
   const fm = active ? (active.getAttribute('data-fm') || 'all') : 'all';
+  const payload = {mode:'new', limit: isNaN(lim)?5:lim, focus_mode: fm, channel: ch || 'any'};
+  _aiqDbg('runAINew.request', {payload, venue: VENUE});
   try{
     const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
-      body: JSON.stringify({mode:'new', limit: isNaN(lim)?5:lim, focus_mode: fm, channel: ch || 'any'})
+      body: JSON.stringify(payload)
     });
     const data = await r.json();
+    _aiqDbg('runAINew.response', {status:r.status, ok:data && data.ok, ran:data && data.ran, proposed:data && data.proposed, queue_ids:(data && data.queue_ids) || []});
+    if(data && data.ok && Number(data.proposed||0) === 0){
+      _aiqDbg('runAINew.zeroProposed', {hint:'No proposals returned by /admin/api/ai/run', payload});
+    }
     if(!data.ok) throw new Error(data.error || 'Failed');
     if(msg) msg.textContent = `Ran ${data.ran||0}. Proposed ${data.proposed||0}.`;
     await loadAIQueue();
@@ -15588,6 +15694,11 @@ async function runAINew(){
 }
 
 async function runAIRow(){
+  const _aiqDbg = (label, data) => {
+    try{
+      console.log('[AIQ DEBUG]', label, data || {});
+    }catch(_){}
+  };
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running AI…';
   const row = parseInt(qs('#ai-run-row')?.value || '0', 10);
   if(!row || row < 2){
@@ -15597,13 +15708,16 @@ async function runAIRow(){
   const ch = (qs('#aiq-channel')?.value || '').trim();
   const active = qs('#aiq-focus-mode-seg button.active');
   const fm = active ? (active.getAttribute('data-fm') || 'all') : 'all';
+  const payload = {row, focus_mode: fm, channel: ch || 'any'};
+  _aiqDbg('runAIRow.request', {payload, venue: VENUE});
   try{
     const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
       headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
-      body: JSON.stringify({row, focus_mode: fm, channel: ch || 'any'})
+      body: JSON.stringify(payload)
     });
     const data = await r.json();
+    _aiqDbg('runAIRow.response', {status:r.status, ok:data && data.ok, ran:data && data.ran, proposed:data && data.proposed, queue_ids:(data && data.queue_ids) || []});
     if(!data.ok) throw new Error(data.error || 'Failed');
     if(msg) msg.textContent = `Row ${row}: Proposed ${data.proposed||0}.`;
     await loadAIQueue();
