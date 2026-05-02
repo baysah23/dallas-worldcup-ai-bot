@@ -3500,12 +3500,13 @@ def _ai_suggest_actions_for_lead(
     focus_mode: str = "all",
     *,
     manual_run: bool = False,
+    settings_override: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Ask the model for suggested workflow actions for a new lead.
     Returns dict: {ok, confidence, actions:[{type,payload,reason}], notes}
     """
-    settings = _get_ai_settings()
+    settings = settings_override or _get_ai_settings()
     if (not settings.get("enabled")) and (not manual_run):
         return {"ok": False, "error": "AI disabled"}
 
@@ -3637,6 +3638,9 @@ def _ai_suggest_actions_for_lead(
             if not contact_ok:
                 needs_contact_fix = True
                 continue
+        # Guardrail: only suggest Correct Contact when no valid channel exists.
+        if typ == "correct_contact" and (valid_email or valid_phone):
+            continue
         ok_pol, _why_pol = _policy_check_action(partner_id, typ, payload, role="system")
         if not ok_pol:
             continue
@@ -9778,6 +9782,25 @@ def admin_api_ai_run():
     channel_mode = str(data.get("channel") or "any").strip().lower()
     if channel_mode not in ("any", "all", "", "email", "sms", "whatsapp"):
         channel_mode = "any"
+    run_settings = _deep_merge(_default_ai_settings(), ai_settings)
+    # Manual AI runs should honor Focus/Channel controls even if owner-level
+    # outbound allow_actions were left off in settings.
+    allow_run = dict((run_settings.get("allow_actions") or {}))
+    ff = (run_settings.get("focus_filters") or {}) if isinstance(run_settings.get("focus_filters"), dict) else {}
+    if channel_mode in ("any", "all", ""):
+        if bool(ff.get("suggest_email", True)):
+            allow_run["send_email"] = True
+        if bool(ff.get("suggest_sms", True)):
+            allow_run["send_sms"] = True
+        if bool(ff.get("suggest_whatsapp", True)):
+            allow_run["send_whatsapp"] = True
+    elif channel_mode == "email":
+        allow_run["send_email"] = True
+    elif channel_mode == "sms":
+        allow_run["send_sms"] = True
+    elif channel_mode == "whatsapp":
+        allow_run["send_whatsapp"] = True
+    run_settings["allow_actions"] = allow_run
 
     raw_new_statuses = ai_settings.get("new_status_values")
     if isinstance(raw_new_statuses, list) and raw_new_statuses:
@@ -9917,6 +9940,7 @@ def admin_api_ai_run():
             sheet_row=sheet_row,
             focus_mode=focus_mode,
             manual_run=True,
+            settings_override=run_settings,
         )
         if debug_run:
             try:
@@ -10569,7 +10593,14 @@ def admin_api_ai_queue_summary():
 
     pending = sum(1 for q in queue if _norm_status(q.get("status")) == "pending")
     approved = sum(1 for q in queue if _norm_status(q.get("status")) == "approved")
-    applied = sum(1 for q in queue if _norm_status(q.get("status")) == "applied")
+    applied = sum(
+        1
+        for q in queue
+        if (
+            _norm_status(q.get("status")) == "applied"
+            or _norm_status(q.get("applied_state")) == "applied"
+        )
+    )
     sent = sum(1 for q in queue if _norm_status(q.get("status")) == "sent")
     denied = sum(1 for q in queue if _norm_status(q.get("status")) == "denied")
     approved_ready = 0
@@ -10927,18 +10958,21 @@ def admin_api_ai_queue_approve(qid: str):
         it["reviewed_role"] = role
         it["applied_result"] = applied
     else:
-        # Non-outbound: apply and keep row with terminal status.
+        # Non-outbound: apply immediately but keep status as approved so
+        # operators can still see these items in approved filters/summary.
         settings = _get_ai_settings()
         if settings.get("enabled") and (settings.get("mode") in ("auto", "suggest", "off")):
             applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
         it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         it["reviewed_by"] = actor
         it["reviewed_role"] = role
+        it["status"] = "approved"
         if applied and applied.get("ok"):
-            it["status"] = "applied"
+            it["applied_state"] = "applied"
             it["applied_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
             it["applied_result"] = applied
         else:
+            it["applied_state"] = "failed"
             it["applied_result"] = applied
 
     _save_ai_queue(queue)
