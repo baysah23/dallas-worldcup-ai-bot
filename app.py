@@ -3494,13 +3494,19 @@ def _ai_build_lead_prompt(lead: Dict[str, Any], focus_mode: str = "all") -> str:
     lines.append("Return JSON only.")
     return "\n".join(lines)
 
-def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int, focus_mode: str = "all") -> Dict[str, Any]:
+def _ai_suggest_actions_for_lead(
+    lead: Dict[str, Any],
+    sheet_row: int,
+    focus_mode: str = "all",
+    *,
+    manual_run: bool = False,
+) -> Dict[str, Any]:
     """
     Ask the model for suggested workflow actions for a new lead.
     Returns dict: {ok, confidence, actions:[{type,payload,reason}], notes}
     """
     settings = _get_ai_settings()
-    if not settings.get("enabled"):
+    if (not settings.get("enabled")) and (not manual_run):
         return {"ok": False, "error": "AI disabled"}
 
     # Build allowed action schema based on settings
@@ -9893,7 +9899,12 @@ def admin_api_ai_run():
     # Run AI and push proposals into the queue
     for sheet_row, lead in targets:
         ran += 1
-        out = _ai_suggest_actions_for_lead(lead, sheet_row=sheet_row, focus_mode=focus_mode)
+        out = _ai_suggest_actions_for_lead(
+            lead,
+            sheet_row=sheet_row,
+            focus_mode=focus_mode,
+            manual_run=True,
+        )
         if debug_run:
             try:
                 row_debug.append({
@@ -10265,6 +10276,7 @@ def admin_api_ai_run():
             "mode": mode,
             "focus_mode": focus_mode,
             "channel_mode": channel_mode,
+            "ai_enabled_setting": bool(_get_ai_settings().get("enabled")),
             "new_status_values": sorted(list(new_status_values)),
             "allow_actions": _get_ai_settings().get("allow_actions") or {},
         }
@@ -15701,15 +15713,16 @@ async function runAINew(){
   const active = qs('#aiq-focus-mode-seg button.active');
   const fm = active ? (active.getAttribute('data-fm') || 'all') : 'all';
   const payload = {mode:'new', limit: isNaN(lim)?5:lim, focus_mode: fm, channel: ch || 'any'};
-  _aiqDbg('runAINew.request', {payload, venue: VENUE});
+  const reqUrl = `/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}&debug=1`;
+  _aiqDbg('runAINew.request', {payload, venue: VENUE, requestUrl: reqUrl});
   try{
-    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}&debug=1`, {
+    const r = await fetch(reqUrl, {
       method:'POST',
       headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
       body: JSON.stringify(payload)
     });
     const data = await r.json();
-    _aiqDbg('runAINew.response', {status:r.status, ok:data && data.ok, ran:data && data.ran, proposed:data && data.proposed, queue_ids:(data && data.queue_ids) || [], debug_summary:(data && data.debug_summary) || null, debug_rows:(data && data.debug_rows) || []});
+    _aiqDbg('runAINew.response', {status:r.status, ok:data && data.ok, ran:data && data.ran, proposed:data && data.proposed, queue_ids:(data && data.queue_ids) || [], dataKeys:Object.keys(data||{}), debug_summary:(data && data.debug_summary) || null, debug_rows:(data && data.debug_rows) || []});
     if(data && data.ok && Number(data.proposed||0) === 0){
       _aiqDbg('runAINew.zeroProposed', {hint:'No proposals returned by /admin/api/ai/run', payload});
     }
@@ -15737,15 +15750,16 @@ async function runAIRow(){
   const active = qs('#aiq-focus-mode-seg button.active');
   const fm = active ? (active.getAttribute('data-fm') || 'all') : 'all';
   const payload = {row, focus_mode: fm, channel: ch || 'any'};
-  _aiqDbg('runAIRow.request', {payload, venue: VENUE});
+  const reqUrl = `/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}&debug=1`;
+  _aiqDbg('runAIRow.request', {payload, venue: VENUE, requestUrl: reqUrl});
   try{
-    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}&debug=1`, {
+    const r = await fetch(reqUrl, {
       method:'POST',
       headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
       body: JSON.stringify(payload)
     });
     const data = await r.json();
-    _aiqDbg('runAIRow.response', {status:r.status, ok:data && data.ok, ran:data && data.ran, proposed:data && data.proposed, queue_ids:(data && data.queue_ids) || [], debug_summary:(data && data.debug_summary) || null, debug_rows:(data && data.debug_rows) || []});
+    _aiqDbg('runAIRow.response', {status:r.status, ok:data && data.ok, ran:data && data.ran, proposed:data && data.proposed, queue_ids:(data && data.queue_ids) || [], dataKeys:Object.keys(data||{}), debug_summary:(data && data.debug_summary) || null, debug_rows:(data && data.debug_rows) || []});
     if(!data.ok) throw new Error(data.error || 'Failed');
     if(msg) msg.textContent = `Row ${row}: Proposed ${data.proposed||0}.`;
     await loadAIQueue();
