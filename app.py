@@ -1339,6 +1339,7 @@ def _default_ai_settings() -> Dict[str, Any]:
             "vip_tag": True,
             "status_update": False,
             "reply_draft": True,
+            "correct_contact": True,
             "send_sms": False,
             "send_email": False,
             "send_whatsapp": False,
@@ -1476,20 +1477,94 @@ def _default_partner_policy() -> Dict[str, Any]:
     }
 
 _PARTNER_POLICIES: Dict[str, Any] = {"default": _default_partner_policy()}
+_PARTNER_POLICIES_CACHE_TS: Dict[str, float] = {}
+_PARTNER_POLICIES_SHEET_TAB = os.environ.get("PARTNER_POLICIES_SHEET_TAB", "venue_policies")
 
-def _load_partner_policies_from_disk() -> None:
+def _partner_policy_sheet_ws(venue_id: Optional[str] = None):
+    gc = get_gspread_client()
+    return _ensure_ws(gc, _PARTNER_POLICIES_SHEET_TAB, venue_id=venue_id or _venue_id())
+
+
+def _ensure_partner_policy_sheet_schema(ws) -> Dict[str, int]:
+    desired = [
+        "venue_id",
+        "partner",
+        "vip_min_budget",
+        "never_status_update",
+        "allowed_statuses_json",
+        "outbound_allowed_json",
+        "outbound_require_role",
+        "updated_at",
+        "updated_by",
+    ]
+    existing = ws.row_values(1) or []
+    if not any(str(x).strip() for x in existing):
+        ws.update("A1", [desired])
+        return {k: i + 1 for i, k in enumerate(desired)}
+    header = existing[:]
+    norm = [_normalize_header(x) for x in existing]
+    for col in desired:
+        if col not in norm:
+            header.append(col)
+            norm.append(col)
+    if header != existing:
+        ws.update("A1", [header])
+    return {str(_normalize_header(h)): i + 1 for i, h in enumerate(header)}
+
+
+def _load_partner_policies_from_disk(force: bool = False) -> None:
     global _PARTNER_POLICIES
-    payload = _safe_read_json_file(PARTNER_POLICIES_FILE, default=None)
-    if isinstance(payload, dict) and payload:
-        # Merge default policy into each partner so missing keys don't break.
-        out: Dict[str, Any] = {}
-        for k, v in payload.items():
-            if not isinstance(v, dict):
+    vid = _slugify_venue_id(_venue_id())
+    now = time.time()
+    if not force and (now - float(_PARTNER_POLICIES_CACHE_TS.get(vid, 0.0))) < 10.0:
+        return
+    out: Dict[str, Any] = {"default": _default_partner_policy()}
+    try:
+        ws = _partner_policy_sheet_ws(venue_id=vid)
+        hmap = _ensure_partner_policy_sheet_schema(ws)
+        rows = ws.get_all_values() or []
+        for r in rows[1:]:
+            if not isinstance(r, list):
                 continue
-            out[str(k)] = _deep_merge(_default_partner_policy(), v)
-        if "default" not in out:
-            out["default"] = _default_partner_policy()
-        _PARTNER_POLICIES = out
+            venue_cell = (r[hmap["venue_id"] - 1] if len(r) >= hmap["venue_id"] else "").strip()
+            if _slugify_venue_id(venue_cell or vid) != vid:
+                continue
+            partner = (r[hmap["partner"] - 1] if len(r) >= hmap["partner"] else "").strip() or "default"
+            pol = _default_partner_policy()
+            try:
+                pol["vip_min_budget"] = int((r[hmap["vip_min_budget"] - 1] if len(r) >= hmap["vip_min_budget"] else "0") or 0)
+            except Exception:
+                pol["vip_min_budget"] = 0
+            pol["never_status_update"] = str((r[hmap["never_status_update"] - 1] if len(r) >= hmap["never_status_update"] else "true") or "true").strip().lower() in ("1", "true", "yes", "y", "on")
+            try:
+                allowed_statuses = json.loads((r[hmap["allowed_statuses_json"] - 1] if len(r) >= hmap["allowed_statuses_json"] else "[]") or "[]")
+                if isinstance(allowed_statuses, list):
+                    pol["allowed_statuses"] = [str(x) for x in allowed_statuses if str(x).strip()]
+            except Exception:
+                pass
+            try:
+                outbound_allowed = json.loads((r[hmap["outbound_allowed_json"] - 1] if len(r) >= hmap["outbound_allowed_json"] else "{}") or "{}")
+                if isinstance(outbound_allowed, dict):
+                    pol["outbound_allowed"] = {
+                        "email": bool(outbound_allowed.get("email", False)),
+                        "sms": bool(outbound_allowed.get("sms", False)),
+                        "whatsapp": bool(outbound_allowed.get("whatsapp", False)),
+                    }
+            except Exception:
+                pass
+            if len(r) >= hmap["outbound_require_role"]:
+                pol["outbound_require_role"] = str(r[hmap["outbound_require_role"] - 1] or "manager").strip().lower() or "manager"
+            out[str(partner)] = _deep_merge(_default_partner_policy(), pol)
+    except Exception:
+        payload = _safe_read_json_file(PARTNER_POLICIES_FILE, default=None)
+        if isinstance(payload, dict) and payload:
+            for k, v in payload.items():
+                if isinstance(v, dict):
+                    out[str(k)] = _deep_merge(_default_partner_policy(), v)
+    if "default" not in out:
+        out["default"] = _default_partner_policy()
+    _PARTNER_POLICIES = out
+    _PARTNER_POLICIES_CACHE_TS[vid] = now
 
 def _save_partner_policy(partner: str, policy_patch: Dict[str, Any]) -> Dict[str, Any]:
     """Persist a single partner policy (best effort)."""
@@ -1500,7 +1575,46 @@ def _save_partner_policy(partner: str, policy_patch: Dict[str, Any]) -> Dict[str
         cur = _default_partner_policy()
     merged = _deep_merge(cur, policy_patch or {})
     _PARTNER_POLICIES[partner] = merged
-    _safe_write_json_file(PARTNER_POLICIES_FILE, _PARTNER_POLICIES)
+    vid = _slugify_venue_id(_venue_id())
+    wrote_sheet = False
+    try:
+        ws = _partner_policy_sheet_ws(venue_id=vid)
+        hmap = _ensure_partner_policy_sheet_schema(ws)
+        rows = ws.get_all_values() or []
+        target_row = 0
+        for idx, r in enumerate(rows[1:], start=2):
+            if not isinstance(r, list):
+                continue
+            row_vid = (r[hmap["venue_id"] - 1] if len(r) >= hmap["venue_id"] else "").strip()
+            row_partner = (r[hmap["partner"] - 1] if len(r) >= hmap["partner"] else "").strip() or "default"
+            if _slugify_venue_id(row_vid or vid) == vid and row_partner == partner:
+                target_row = idx
+                break
+        row_map = {
+            "venue_id": vid,
+            "partner": partner,
+            "vip_min_budget": str(int(merged.get("vip_min_budget") or 0)),
+            "never_status_update": "true" if bool(merged.get("never_status_update", True)) else "false",
+            "allowed_statuses_json": json.dumps(merged.get("allowed_statuses") or [], ensure_ascii=False),
+            "outbound_allowed_json": json.dumps(merged.get("outbound_allowed") or {}, ensure_ascii=False),
+            "outbound_require_role": str(merged.get("outbound_require_role") or "manager"),
+            "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "updated_by": "admin_api",
+        }
+        row = [""] * len(hmap)
+        for key, value in row_map.items():
+            if key in hmap:
+                row[hmap[key] - 1] = value
+        if target_row >= 2:
+            ws.update(f"A{target_row}", [row])
+        else:
+            ws.append_row(row, value_input_option="RAW")
+        wrote_sheet = True
+    except Exception:
+        wrote_sheet = False
+    if not wrote_sheet:
+        _safe_write_json_file(PARTNER_POLICIES_FILE, _PARTNER_POLICIES)
+    _PARTNER_POLICIES_CACHE_TS[vid] = 0.0
     return merged
 
 
@@ -1674,23 +1788,21 @@ def _get_draft_content(draft_key: str, data: Dict[str, Any]) -> Tuple[Optional[s
 
 
 def _derive_partner_id(lead: Optional[Dict[str, Any]] = None, payload: Optional[Dict[str, Any]] = None) -> str:
-    """Best-effort partner/venue identifier, so policies can apply even if schema varies."""
+    """Resolve policy scope deterministically (partner first, then venue)."""
     lead = lead or {}
     payload = payload or {}
-    for key in ["partner", "venue", "partner_id", "venue_id"]:
+    for key in ["partner", "partner_id", "venue", "venue_id"]:
         v = payload.get(key) or lead.get(key)
         if v:
             return str(v).strip()
-    # fallbacks from common fields
-    for key in ["entry_point", "business_context", "tier", "queue"]:
-        v = payload.get(key) or lead.get(key)
-        if v:
-            s = str(v).strip()
-            # take first token if it looks like "VENUE_XYZ ..."
-            return s.split()[0]
-    return "default"
+    vid = str(_venue_id() or "").strip()
+    return vid or "default"
 
 def _partner_policy(partner: str) -> Dict[str, Any]:
+    try:
+        _load_partner_policies_from_disk(force=False)
+    except Exception:
+        pass
     partner = (partner or "").strip() or "default"
     base = _PARTNER_POLICIES.get("default") if isinstance(_PARTNER_POLICIES, dict) else None
     if not isinstance(base, dict):
@@ -1714,6 +1826,99 @@ def _parse_budget_to_number(val: Any) -> float:
     except Exception:
         return 0.0
 
+
+_OUTBOUND_ACTION_TYPES = {
+    "send_sms",
+    "send_email",
+    "send_whatsapp",
+    "send_confirmation",
+    "send_reservation_received",
+    "send_reservation_confirmed",
+    "send_reservation_denied",
+    "send_reservation_reminder",
+    "send_update",
+    "send_vip_update",
+}
+
+
+def _norm_status(v: Any) -> str:
+    return str(v or "").strip().lower()
+
+
+def _action_fingerprint(action_type: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    p = payload or {}
+    typ = str(action_type or "").strip().lower()
+    out = {"type": typ}
+    if typ == "status_update":
+        out["status"] = str(p.get("status") or "").strip()
+    if typ == "vip_tag":
+        out["vip"] = str(p.get("vip") or "VIP").strip() or "VIP"
+    if typ in _OUTBOUND_ACTION_TYPES:
+        out["channel"] = typ.replace("send_", "")
+        tk = str(p.get("template_key") or "").strip()
+        if tk:
+            out["template_key"] = tk
+    return out
+
+
+def _read_approved_actions_from_row(row_num: int) -> List[Dict[str, Any]]:
+    if int(row_num or 0) < 2:
+        return []
+    try:
+        gc = get_gspread_client()
+        ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
+        header = ensure_sheet_schema(ws)
+        hmap = header_map(header)
+        col = hmap.get("approved_ai_actions_json")
+        if not col:
+            return []
+        cell = str(ws.cell(int(row_num), int(col)).value or "").strip()
+        if not cell:
+            return []
+        raw = json.loads(cell)
+        if not isinstance(raw, list):
+            return []
+        out: List[Dict[str, Any]] = []
+        for it in raw:
+            if isinstance(it, dict) and it.get("type"):
+                out.append(it)
+        return out
+    except Exception:
+        return []
+
+
+def _is_action_already_approved(approved_actions: List[Dict[str, Any]], action_type: str, payload: Optional[Dict[str, Any]] = None) -> bool:
+    fp = _action_fingerprint(action_type, payload)
+    for it in approved_actions or []:
+        if not isinstance(it, dict):
+            continue
+        cand = _action_fingerprint(str(it.get("type") or ""), it)
+        if cand == fp:
+            return True
+    return False
+
+
+def _record_approved_action_for_row(row_num: int, action_type: str, payload: Optional[Dict[str, Any]] = None) -> None:
+    if int(row_num or 0) < 2:
+        return
+    try:
+        gc = get_gspread_client()
+        ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
+        header = ensure_sheet_schema(ws)
+        hmap = header_map(header)
+        col = hmap.get("approved_ai_actions_json")
+        if not col:
+            return
+        existing = _read_approved_actions_from_row(int(row_num))
+        fp = _action_fingerprint(action_type, payload or {})
+        if _is_action_already_approved(existing, action_type, payload or {}):
+            return
+        fp["approved_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        existing.append(fp)
+        ws.update_cell(int(row_num), int(col), json.dumps(existing, ensure_ascii=False))
+    except Exception:
+        return
+
 def _policy_check_action(partner: str, action_type: str, payload: Dict[str, Any], role: str = "") -> Tuple[bool, str]:
     """Return (allowed, reason). Hard blocks only."""
     pol = _partner_policy(partner)
@@ -1730,8 +1935,8 @@ def _policy_check_action(partner: str, action_type: str, payload: Dict[str, Any]
 
     # VIP tagging minimum budget
     if at == "vip_tag":
-        vip = str((payload or {}).get("vip") or "").strip()
-        if vip == "VIP":
+        vip = str((payload or {}).get("vip") or "").strip().lower()
+        if vip in ("vip", "yes", "true", "1", "y"):
             min_budget = float(pol.get("vip_min_budget") or 0)
             # budget may be on payload (preferred) or absent; treat absent as 0
             b = _parse_budget_to_number((payload or {}).get("budget"))
@@ -2333,8 +2538,23 @@ def _infer_whatsapp_template_key(lead: Dict[str, Any]) -> str:
 
 
 def _looks_like_email(s: str) -> bool:
-    s = str(s or "").strip()
-    return bool(s) and ("@" in s) and ("." in s.split("@")[-1])
+    s = str(s or "").strip().lower()
+    if not s:
+        return False
+    if " " in s:
+        return False
+    m = re.match(r"^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$", s)
+    if not m:
+        return False
+    try:
+        local, domain = s.split("@", 1)
+    except Exception:
+        return False
+    if domain in ("example.com", "example.org", "example.net", "test.com", "invalid.com"):
+        return False
+    if local in ("test", "dummy", "na", "none", "unknown"):
+        return False
+    return True
 
 
 def _looks_like_phone(s: str) -> bool:
@@ -2342,7 +2562,11 @@ def _looks_like_phone(s: str) -> bool:
     if not s:
         return False
     digits = "".join(ch for ch in s if ch.isdigit())
-    return len(digits) >= 7
+    if len(digits) < 10 or len(digits) > 15:
+        return False
+    if len(set(digits)) == 1:
+        return False
+    return True
 
 
 def _recommend_channel(
@@ -2369,6 +2593,10 @@ def _recommend_channel(
 
     email = str(lead.get("email") or "").strip()
     phone = str(lead.get("phone") or "").strip()
+    if not _looks_like_email(email):
+        email = ""
+    if not _looks_like_phone(phone):
+        phone = ""
 
     # Also honor an explicit to on the payload (e.g. AI copied contact from notes).
     pt = str(payload_to or "").strip()
@@ -2386,11 +2614,11 @@ def _recommend_channel(
         wa_enabled = bool(os.environ.get("TWILIO_WHATSAPP_FROM", "").strip())
 
     available: List[str] = []
-    if email:
+    if _looks_like_email(email):
         available.append("email")
-    if phone:
+    if _looks_like_phone(phone):
         available.append("sms")
-    if wa_enabled and phone:
+    if wa_enabled and _looks_like_phone(phone):
         available.append("whatsapp")
 
     is_reminder = kind in ("reminder", "send_reservation_reminder", "reservation_reminder") or "remind" in kind
@@ -3132,6 +3360,11 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
         _audit("ai.reply_draft", {"row": row_num or None, "draft": draft[:2000]})
         return {"ok": True, "applied": "reply_draft"}
 
+    if typ == "correct_contact":
+        note = str(payload.get("issue") or "invalid_or_missing_contact").strip() or "invalid_or_missing_contact"
+        _audit("ai.correct_contact", {"row": row_num or None, "issue": note})
+        return {"ok": True, "applied": "correct_contact"}
+
     # VIP / Status require a valid row number
     if row_num < 2:
         return {"ok": False, "error": "Missing/invalid sheet row"}
@@ -3310,6 +3543,8 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int, focus_mod
     confidence = float(parsed.get("confidence") or 0)
     actions_in = parsed.get("actions") or []
     actions_out = []
+    approved_actions = _read_approved_actions_from_row(int(sheet_row or 0)) if int(sheet_row or 0) >= 2 else []
+    needs_contact_fix = False
     for a in actions_in if isinstance(actions_in, list) else []:
         if not isinstance(a, dict):
             continue
@@ -3327,6 +3562,7 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int, focus_mod
         # Always enforce row linkage to prevent "random actions"
         if sheet_row:
             payload["row"] = int(sheet_row)
+        payload.setdefault("venue_id", _venue_id())
         # Row-required actions must never enter queue without a valid sheet row.
         # (send_* can work without row because they can target explicit contact payloads.)
         if typ in ("vip_tag", "status_update"):
@@ -3341,10 +3577,27 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int, focus_mod
         # Provide budget context for VIP min budget policies (best effort)
         if "budget" not in payload and lead.get("budget") is not None:
             payload["budget"] = lead.get("budget")
+        if typ in ("send_email", "send_sms", "send_whatsapp"):
+            contact_ok = False
+            if typ == "send_email":
+                contact_ok = _looks_like_email(str(payload.get("to") or lead.get("email") or ""))
+            else:
+                contact_ok = _looks_like_phone(str(payload.get("to") or lead.get("phone") or ""))
+            if not contact_ok:
+                needs_contact_fix = True
+                continue
         ok_pol, _why_pol = _policy_check_action(partner_id, typ, payload, role="system")
         if not ok_pol:
             continue
+        if _is_action_already_approved(approved_actions, typ, payload):
+            continue
         actions_out.append({"type": typ, "payload": payload, "reason": str(a.get("reason") or "").strip()[:240]})
+    if needs_contact_fix and sheet_row and not _is_action_already_approved(approved_actions, "correct_contact", {"row": int(sheet_row)}):
+        actions_out.append({
+            "type": "correct_contact",
+            "payload": {"row": int(sheet_row), "sheet_row": int(sheet_row), "issue": "invalid_or_missing_contact"},
+            "reason": "Lead contact is invalid/missing for outbound channels. Request corrected phone/email first.",
+        })
     return {"ok": True, "confidence": confidence, "actions": actions_out, "notes": str(parsed.get("notes") or "").strip()[:240]}
 
 def _ai_enqueue_or_apply_for_new_lead(lead: Dict[str, Any], sheet_row: int) -> None:
@@ -5326,6 +5579,7 @@ def ensure_sheet_schema(ws) -> List[str]:
         "budget",
         "notes",
         "vibe",
+        "approved_ai_actions_json",
     ]
 
     existing = ws.row_values(1) or []
@@ -9351,7 +9605,7 @@ def admin_api_ai_settings():
         if "allow_actions" in data and isinstance(data.get("allow_actions"), dict):
             # Only allow known keys (including outbound for AI-suggested messages)
             allow = {}
-            for k in ("vip_tag", "status_update", "reply_draft", "send_sms", "send_email", "send_whatsapp"):
+            for k in ("vip_tag", "status_update", "reply_draft", "correct_contact", "send_sms", "send_email", "send_whatsapp"):
                 if k in data["allow_actions"]:
                     allow[k] = bool(as_bool(data["allow_actions"].get(k)))
             patch["allow_actions"] = _deep_merge(current.get("allow_actions") or {}, allow)
@@ -9540,6 +9794,7 @@ def admin_api_ai_run():
         out = _ai_suggest_actions_for_lead(lead, sheet_row=sheet_row, focus_mode=focus_mode)
         if not out or not out.get("ok"):
             continue
+        approved_actions_for_row = _read_approved_actions_from_row(int(sheet_row))
         conf = float(out.get("confidence") or 0.0)
         try:
             conf = max(0.0, min(1.0, conf))
@@ -9603,6 +9858,7 @@ def admin_api_ai_run():
             if "sheet_row" not in payload:
                 payload["sheet_row"] = sheet_row
             payload["row"] = sheet_row  # outbound/send also uses "row"
+            payload.setdefault("venue_id", _venue_id())
             # Enrich outbound payload from drafts + lead when body/to missing
             if typ == "send_whatsapp":
                 if not str(payload.get("template_key") or "").strip():
@@ -9724,6 +9980,8 @@ def admin_api_ai_run():
 
             if not _ai_run_action_passes_filters(typ, payload, focus_mode, channel_mode):
                 continue
+            if _is_action_already_approved(approved_actions_for_row, typ, payload):
+                continue
             rationale = str(a.get("reason") or out.get("notes") or "")[:1500]
             entry = {
                 "id": _queue_new_id(),
@@ -9784,6 +10042,7 @@ def admin_api_ai_run():
                     wa_payload["to"] = lead_phone
                     wa_payload["template_key"] = _infer_whatsapp_template_key(lead)
                     wa_payload.setdefault("venue_name", _venue_display_name())
+                    wa_payload.setdefault("venue_id", _venue_id())
                     if not str(wa_payload.get("reservation_details") or "").strip():
                         det_parts = []
                         if lead.get("date"):
@@ -9821,6 +10080,8 @@ def admin_api_ai_run():
                     ok_wa_pol, wa_why_pol = _policy_check_action(wa_partner, "send_whatsapp", wa_payload, role=role)
                     if not ok_wa_pol:
                         _audit("policy.block", {"partner": wa_partner, "type": "send_whatsapp", "reason": wa_why_pol, "row": wa_payload.get("row")})
+                        continue
+                    if _is_action_already_approved(approved_actions_for_row, "send_whatsapp", wa_payload):
                         continue
                     wa_entry = {
                         "id": _queue_new_id(),
@@ -9876,15 +10137,15 @@ def admin_api_ai_queue_list():
             return None
 
     # optional status filter (supports synthetic "active" = pending OR approved)
-    status = (request.args.get("status") or "").strip().lower()
+    status = _norm_status(request.args.get("status"))
     if status:
-        if status == "active":
+        if status in ("active", "approved+pending", "pending+approved", "approved_pending"):
             queue = [
                 q for q in queue
-                if str(q.get("status") or "").lower() in ("pending", "approved")
+                if _norm_status(q.get("status")) in ("pending", "approved")
             ]
         else:
-            queue = [q for q in queue if str(q.get("status") or "").lower() == status]
+            queue = [q for q in queue if _norm_status(q.get("status")) == status]
 
     # optional time filter (server-side): created_at within last N minutes, or calendar "today" (UTC)
     time_param = (request.args.get("time") or "").strip()
@@ -10018,15 +10279,15 @@ def admin_api_ai_queue_summary():
             return None
 
     # Optional filters (same semantics as /admin/api/ai/queue).
-    status = (request.args.get("status") or "").strip().lower()
+    status = _norm_status(request.args.get("status"))
     if status:
-        if status == "active":
+        if status in ("active", "approved+pending", "pending+approved", "approved_pending"):
             queue = [
                 q for q in queue
-                if str(q.get("status") or "").lower() in ("pending", "approved")
+                if _norm_status(q.get("status")) in ("pending", "approved")
             ]
         else:
-            queue = [q for q in queue if str(q.get("status") or "").lower() == status]
+            queue = [q for q in queue if _norm_status(q.get("status")) == status]
 
     time_param = (request.args.get("time") or "").strip()
     if time_param.lower() == "today":
@@ -10119,25 +10380,16 @@ def admin_api_ai_queue_summary():
 
         queue = [it for it in queue if q_param in _payload_blob(it)]
 
-    pending = sum(1 for q in queue if str(q.get("status") or "").lower() == "pending")
-    approved = sum(1 for q in queue if str(q.get("status") or "").lower() == "approved")
-    outbound_types = {
-        "send_email",
-        "send_sms",
-        "send_whatsapp",
-        "send_confirmation",
-        "send_reservation_received",
-        "send_reservation_confirmed",
-        "send_reservation_denied",
-        "send_reservation_reminder",
-        "send_update",
-        "send_vip_update",
-    }
+    pending = sum(1 for q in queue if _norm_status(q.get("status")) == "pending")
+    approved = sum(1 for q in queue if _norm_status(q.get("status")) == "approved")
+    applied = sum(1 for q in queue if _norm_status(q.get("status")) == "applied")
+    sent = sum(1 for q in queue if _norm_status(q.get("status")) == "sent")
+    denied = sum(1 for q in queue if _norm_status(q.get("status")) == "denied")
     approved_ready = 0
     for q in queue:
-        if str(q.get("status") or "").lower() != "approved":
+        if _norm_status(q.get("status")) != "approved":
             continue
-        if str(q.get("type") or "").strip().lower() not in outbound_types:
+        if str(q.get("type") or "").strip().lower() not in _OUTBOUND_ACTION_TYPES:
             continue
         if q.get("sent_at"):
             continue
@@ -10154,6 +10406,9 @@ def admin_api_ai_queue_summary():
             "total_items": len(queue),
             "total_pending": pending,
             "total_approved": approved,
+            "total_applied": applied,
+            "total_sent": sent,
+            "total_denied": denied,
             "approved_outbound_ready": approved_ready,
             "counts": counts,
             "top_types": [{"type": t, "count": n} for t, n in top_types],
@@ -10332,6 +10587,8 @@ def admin_api_outbound_propose():
     else:
         return jsonify({"ok": False, "error": "Invalid channel"}), 400
     
+    if isinstance(payload, dict):
+        payload.setdefault("venue_id", _venue_id())
     # Best-effort partner id for policy gating
     partner = _derive_partner_id(payload=payload)
 
@@ -10372,7 +10629,7 @@ def admin_api_ai_queue_propose():
 
     data = request.get_json(silent=True) or {}
     typ = str(data.get("type") or "").strip()
-    if typ not in ("vip_tag", "status_update", "reply_draft"):
+    if typ not in ("vip_tag", "status_update", "reply_draft", "correct_contact"):
         return jsonify({"ok": False, "error": "Invalid type"}), 400
 
     confidence = float(data.get("confidence") or 0.0)
@@ -10393,6 +10650,8 @@ def admin_api_ai_queue_propose():
         "reviewed_role": None,
         "applied_result": None,
     }
+    if isinstance(entry.get("payload"), dict):
+        entry["payload"].setdefault("venue_id", _venue_id())
     _queue_add(entry)
     _audit("ai.queue.propose", {"id": entry["id"], "type": typ, "confidence": confidence})
     return jsonify({"ok": True, "id": entry["id"], "entry": entry})
@@ -10412,11 +10671,13 @@ def admin_api_ai_queue_deny(qid: str):
     if not it:
         return jsonify({"ok": False, "error": "Not found"}), 404
 
-    if str(it.get("status")) != "pending":
+    if _norm_status(it.get("status")) != "pending":
         return jsonify({"ok": False, "error": "Not pending"}), 400
 
-    # Client spec: deny removes item from queue immediately (keeps queue clean), audits + notifies
-    queue = [q for q in queue if str(q.get("id")) != str(qid)]
+    it["status"] = "denied"
+    it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    it["reviewed_by"] = actor
+    it["reviewed_role"] = role
     _save_ai_queue(queue)
     _audit("ai.queue.deny", {"id": qid, "type": it.get("type")})
     _notify("ai.queue.deny", {"id": qid, "type": it.get("type"), "by": actor, "role": role}, targets=["owner","manager"])
@@ -10460,25 +10721,17 @@ def admin_api_ai_queue_approve(qid: str):
     it = _queue_find(queue, qid)
     if not it:
         return jsonify({"ok": False, "error": "Not found"}), 404
-    if str(it.get("status")) != "pending":
+    if _norm_status(it.get("status")) != "pending":
         return jsonify({"ok": False, "error": "Not pending"}), 400
 
     it_type = str(it.get("type") or "").strip().lower()
 
     # Outbound sends are NEVER executed on approval. Approval only unlocks a human "Send Now" click.
     applied = None
-    if it_type in (
-        "send_email",
-        "send_sms",
-        "send_whatsapp",
-        "send_confirmation",
-        "send_reservation_received",
-        "send_reservation_confirmed",
-        "send_reservation_denied",
-        "send_reservation_reminder",
-        "send_update",
-        "send_vip_update",
-    ):
+    row_num = int((it.get("payload") or {}).get("row") or (it.get("payload") or {}).get("sheet_row") or 0)
+    _record_approved_action_for_row(row_num, it_type, it.get("payload") or {})
+
+    if it_type in _OUTBOUND_ACTION_TYPES:
         applied = {"ok": True, "note": "Approved — ready to send (human click required)"}
         # Keep item in queue; just mark as approved/reviewed.
         it["status"] = "approved"
@@ -10487,13 +10740,17 @@ def admin_api_ai_queue_approve(qid: str):
         it["reviewed_role"] = role
         it["applied_result"] = applied
     else:
-        # Non-outbound: apply then remove on success; keep on failure.
+        # Non-outbound: apply and keep row with terminal status.
         settings = _get_ai_settings()
         if settings.get("enabled") and (settings.get("mode") in ("auto", "suggest", "off")):
             applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
-        # Success -> remove from queue; Failure -> keep (pending) with applied_result for debugging.
+        it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        it["reviewed_by"] = actor
+        it["reviewed_role"] = role
         if applied and applied.get("ok"):
-            queue = [q for q in queue if str(q.get("id")) != str(qid)]
+            it["status"] = "applied"
+            it["applied_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            it["applied_result"] = applied
         else:
             it["applied_result"] = applied
 
@@ -10537,7 +10794,7 @@ def admin_api_ai_queue_send(qid: str):
     ):
         return jsonify({"ok": False, "error": "Not an outbound item"}), 400
 
-    if str(it.get("status")) != "approved":
+    if _norm_status(it.get("status")) != "approved":
         return jsonify({"ok": False, "error": "Must be approved first"}), 400
 
     if it.get("sent_at"):
@@ -10556,8 +10813,10 @@ def admin_api_ai_queue_send(qid: str):
 
     ok_send = bool(res.get("ok"))
     if ok_send:
-        # Spec: Send Now (outbound): removes only if send succeeds; keeps failures for retry.
-        queue = [q for q in queue if str(q.get("id")) != str(qid)]
+        it["status"] = "sent"
+        it["sent_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        it["sent_by"] = actor
+        it["send_result"] = res
         _save_ai_queue(queue)
     else:
         # Keep item for retry; optionally attach last error for debugging.
@@ -10599,7 +10858,7 @@ def admin_api_ai_queue_channel_override(qid: str):
     if not it:
         return jsonify({"ok": False, "error": "Not found"}), 404
 
-    if str(it.get("status")) not in ("pending", "approved"):
+    if _norm_status(it.get("status")) not in ("pending", "approved"):
         return jsonify({"ok": False, "error": "Not editable"}), 400
 
     cur_type = str(it.get("type") or "").strip().lower()
@@ -10729,7 +10988,7 @@ def admin_api_ai_queue_override(qid: str):
     if not it:
         return jsonify({"ok": False, "error": "Not found"}), 404
 
-    if str(it.get("status")) not in ("pending", "approved"):
+    if _norm_status(it.get("status")) not in ("pending", "approved"):
         return jsonify({"ok": False, "error": "Not editable"}), 400
 
     # override payload/type (owner-only)
@@ -10739,6 +10998,7 @@ def admin_api_ai_queue_override(qid: str):
             "vip_tag",
             "status_update",
             "reply_draft",
+            "correct_contact",
             "send_email",
             "send_sms",
             "send_whatsapp",
@@ -10759,7 +11019,7 @@ def admin_api_ai_queue_override(qid: str):
     applied = None
     it_type = str(it.get("type") or "").strip().lower()
     settings = _get_ai_settings()
-    if settings.get("enabled") and it_type in ("vip_tag", "status_update", "reply_draft"):
+    if settings.get("enabled") and it_type in ("vip_tag", "status_update", "reply_draft", "correct_contact"):
         applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
 
     it["status"] = "approved"
@@ -11393,7 +11653,7 @@ def admin_api_partner_policies_list():
     if not ok:
         return resp
     try:
-        _load_partner_policies_from_disk()
+        _load_partner_policies_from_disk(force=True)
         partners = sorted([k for k in (_PARTNER_POLICIES or {}).keys() if k and k != "default"])
         return jsonify({"ok": True, "partners": partners, "default": _PARTNER_POLICIES.get("default", _default_partner_policy())})
     except Exception as e:
@@ -11405,7 +11665,7 @@ def admin_api_partner_policies_get():
     if not ok:
         return resp
     try:
-        _load_partner_policies_from_disk()
+        _load_partner_policies_from_disk(force=True)
         partner = (request.args.get("partner") or "").strip() or "default"
         pol = _PARTNER_POLICIES.get(partner) if isinstance(_PARTNER_POLICIES, dict) else None
         if not isinstance(pol, dict):
@@ -11420,7 +11680,7 @@ def admin_api_partner_policies_set():
     if not ok:
         return resp
     try:
-        _load_partner_policies_from_disk()
+        _load_partner_policies_from_disk(force=True)
         body = request.get_json(silent=True) or {}
         partner = (body.get("partner") or "").strip() or "default"
         policy = body.get("policy") or {}
@@ -11445,15 +11705,34 @@ def admin_api_partner_policies_delete():
     if not ok:
         return resp
     try:
-        _load_partner_policies_from_disk()
+        _load_partner_policies_from_disk(force=True)
         body = request.get_json(silent=True) or {}
         partner = (body.get("partner") or "").strip() or "default"
         if partner == "default":
             return jsonify({"ok": False, "error": "Cannot delete default policy"}), 400
         if isinstance(_PARTNER_POLICIES, dict) and partner in _PARTNER_POLICIES:
             _PARTNER_POLICIES.pop(partner, None)
+        deleted_sheet = False
+        try:
+            vid = _slugify_venue_id(_venue_id())
+            ws = _partner_policy_sheet_ws(venue_id=vid)
+            hmap = _ensure_partner_policy_sheet_schema(ws)
+            rows = ws.get_all_values() or []
+            for idx, r in enumerate(rows[1:], start=2):
+                if not isinstance(r, list):
+                    continue
+                row_vid = (r[hmap["venue_id"] - 1] if len(r) >= hmap["venue_id"] else "").strip()
+                row_partner = (r[hmap["partner"] - 1] if len(r) >= hmap["partner"] else "").strip() or "default"
+                if _slugify_venue_id(row_vid or vid) == vid and row_partner == partner:
+                    ws.delete_rows(idx)
+                    deleted_sheet = True
+                    break
+        except Exception:
+            deleted_sheet = False
+        if not deleted_sheet:
             _safe_write_json_file(PARTNER_POLICIES_FILE, _PARTNER_POLICIES)
-            _audit("partner_policy.delete", {"partner": partner})
+        _PARTNER_POLICIES_CACHE_TS[_slugify_venue_id(_venue_id())] = 0.0
+        _audit("partner_policy.delete", {"partner": partner, "sheet": bool(deleted_sheet)})
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
@@ -13633,6 +13912,7 @@ document.addEventListener('click', (e)=>{
 // ===== Leads filters (simple + fast) =====
 let leadTierFilter = "all";   // all | vip | regular
 let leadEntryFilter = "all";  // all | <entry_point>
+const _leadItemsByRow = {};
 
 function norm(s){ return (s||"").toString().trim().toLowerCase(); }
 
@@ -13664,6 +13944,7 @@ function _he(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;',
 function _tipAttr(txt){ if(!txt||String(txt).length<12) return ''; try{ return ' class=\\"leads-cell-tip\\" data-tip=\\"'+encodeURIComponent(String(txt))+'\\"'; }catch(e){ return ''; } }
 function _leadRowFromItem(it){
   const row = (it.sheet_row||it.row||0);
+  if(row){ _leadItemsByRow[String(row)] = it || {}; }
   const ts = _he(it.timestamp||'');
   const nm = _he(it.name||'');
   const ph = _he(it.phone||'');
@@ -13693,7 +13974,78 @@ function _leadRowFromItem(it){
   const tipNotes = fullNotes.length>=28 ? _tipAttr(fullNotes) : '';
   const tipNm = (it.name||'').length>=12 ? _tipAttr(it.name||'') : '';
   const tipPh = (it.phone||'').length>=12 ? _tipAttr(it.phone||'') : '';
-  return '<tr data-tier="'+tierKey+'" data-entry="'+_he(it.entry_point||'')+'"><td class="code">'+row+'</td><td>'+ts+'</td><td'+tipNm+'>'+nm+'</td><td'+tipPh+'>'+ph+'</td><td>'+d+'</td><td>'+t+'</td><td>'+ps+'</td><td'+_tipAttr(seg)+'><span class="'+segCls+'">'+seg+'</span></td><td'+tipEp+'><span class="pill">'+ep+'</span></td><td'+_tipAttr(queue)+'><span class="badge good">'+queue+'</span></td><td>'+budget+'</td><td'+tipCtx+'><span class="small">'+ctx+(ctx.length>=34?'…':'')+'</span></td><td'+tipNotes+'><span class="small">'+notes+(notes.length>=40?'…':'')+'</span></td><td>'+stSel+'</td><td>'+vipSel+'</td><td><button type="button" class="btn primary" onclick="saveLead('+row+')">Save</button><button type="button" class="btnTiny" title="Set status to Handled" onclick="markHandled('+row+')">✅</button></td></tr>';
+  return '<tr data-lead-row="'+row+'" data-tier="'+tierKey+'" data-entry="'+_he(it.entry_point||'')+'"><td class="code">'+row+'</td><td>'+ts+'</td><td'+tipNm+'>'+nm+'</td><td'+tipPh+'>'+ph+'</td><td>'+d+'</td><td>'+t+'</td><td>'+ps+'</td><td'+_tipAttr(seg)+'><span class="'+segCls+'">'+seg+'</span></td><td'+tipEp+'><span class="pill">'+ep+'</span></td><td'+_tipAttr(queue)+'><span class="badge good">'+queue+'</span></td><td>'+budget+'</td><td'+tipCtx+'><span class="small">'+ctx+(ctx.length>=34?'…':'')+'</span></td><td'+tipNotes+'><span class="small">'+notes+(notes.length>=40?'…':'')+'</span></td><td>'+stSel+'</td><td>'+vipSel+'</td><td><button type="button" class="btn primary" onclick="event.stopPropagation();saveLead('+row+')">Save</button><button type="button" class="btnTiny" title="Set status to Handled" onclick="event.stopPropagation();markHandled('+row+')">✅</button></td></tr>';
+}
+
+function _leadDrawerEnsure(){
+  if(qs('#lead-drawer-overlay')) return;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div id="lead-drawer-overlay" class="aiq-drawer-overlay" onclick="if(event.target===this)closeLeadDrawer()">
+      <div id="lead-drawer-panel" class="aiq-drawer-panel" onclick="event.stopPropagation()">
+        <div class="aiq-drawer-h">
+          <div id="lead-drawer-title" style="font-size:16px;font-weight:800">Lead details</div>
+          <button type="button" class="btn2" onclick="closeLeadDrawer()">Close</button>
+        </div>
+        <div id="lead-drawer-body" class="aiq-drawer-body"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap.firstElementChild);
+}
+
+function closeLeadDrawer(){
+  const o = qs('#lead-drawer-overlay');
+  const pan = qs('#lead-drawer-panel');
+  if(o) o.classList.remove('show');
+  if(pan) pan.style.display = 'none';
+  try{ document.body.style.overflow = ''; }catch(e){}
+}
+
+function openLeadDrawer(row){
+  _leadDrawerEnsure();
+  const it = _leadItemsByRow[String(row||'')] || null;
+  if(!it) return;
+  const title = qs('#lead-drawer-title');
+  const body = qs('#lead-drawer-body');
+  if(title) title.textContent = `Lead #${row}`;
+  if(body){
+    const keys = Object.keys(it || {}).filter(k=>!String(k||'').startsWith('_'));
+    const pri = (k)=>_he(String(it[k] ?? '')) || '—';
+    const identity = [
+      ['name','Name'],['phone','Phone'],['email','Email'],['language','Language']
+    ];
+    const reservation = [
+      ['date','Date'],['time','Time'],['party_size','Party size'],['budget','Budget'],['status','Status'],['vip','VIP'],['tier','Tier']
+    ];
+    const context = [
+      ['entry_point','Entry point'],['queue','Queue'],['business_context','Business context'],['notes','Notes'],['vibe','Vibe'],['timestamp','Timestamp']
+    ];
+    const used = new Set();
+    const section = (rows, heading)=>{
+      const inner = rows.map(([k,label])=>{
+        used.add(k);
+        return `<div class="note" style="opacity:.7">${_he(label)}</div><div class="small" style="white-space:pre-wrap;word-break:break-word">${pri(k)}</div>`;
+      }).join('');
+      return `<div style="font-weight:800;margin:10px 0 6px">${heading}</div><div style="display:grid;grid-template-columns:140px 1fr;gap:8px 12px">${inner}</div>`;
+    };
+    const extra = keys.filter(k=>!used.has(k)).sort();
+    const extraHtml = extra.length ? `
+      <div style="font-weight:800;margin:12px 0 6px">Additional Fields</div>
+      <div style="display:grid;grid-template-columns:140px 1fr;gap:8px 12px">
+        ${extra.map((k)=>`<div class="note" style="opacity:.7">${_he(k.replace(/_/g,' '))}</div><div class="small" style="white-space:pre-wrap;word-break:break-word">${pri(k)}</div>`).join('')}
+      </div>` : '';
+    body.innerHTML = `
+      ${section(identity, 'Identity')}
+      ${section(reservation, 'Reservation')}
+      ${section(context, 'Context')}
+      ${extraHtml}
+    `;
+  }
+  const o = qs('#lead-drawer-overlay');
+  const pan = qs('#lead-drawer-panel');
+  if(o) o.classList.add('show');
+  if(pan) pan.style.display = 'block';
+  try{ document.body.style.overflow = 'hidden'; }catch(e){}
 }
 function _leadsDdLabel(panelId, allLabel){
   const panel = qs('#'+panelId); if(!panel) return allLabel;
@@ -13781,6 +14133,18 @@ function setupLeadFilters(){
   qsa('#flt-status-panel input,#flt-tier-panel input').forEach(i=>i.addEventListener('change', _syncDdButtons));
   document.addEventListener('click', function(){ _closeAllLeadsDd(); _syncDdButtons(); });
   qsa('.leads-dd-panel').forEach(p=>p.addEventListener('click', function(e){ e.stopPropagation(); }));
+  _leadDrawerEnsure();
+  const tBody = qs('#leadsTableBody');
+  if(tBody && !tBody.__leadDrawerBound){
+    tBody.__leadDrawerBound = true;
+    tBody.addEventListener('click', function(e){
+      const tr = e.target && e.target.closest ? e.target.closest('tr[data-lead-row]') : null;
+      if(!tr) return;
+      const row = tr.getAttribute('data-lead-row');
+      if(!row) return;
+      openLeadDrawer(row);
+    });
+  }
   const tip = document.createElement('div'); tip.id = 'leadsHoverTip'; document.body.appendChild(tip);
   const tipEl = ()=>qs('#leadsHoverTip');
   tbl.addEventListener('mousemove', function(e){
@@ -14429,6 +14793,7 @@ const AI_TYPE_LABELS = {
   vip_tag:'VIP Suggestion',
   status_update:'Status update',
   reply_draft:'Draft reply',
+  correct_contact:'Correct Contact',
   send_sms:'SMS',
   send_email:'Email',
   send_whatsapp:'WhatsApp',
@@ -14570,9 +14935,15 @@ function applyAiqSummary(sum){
   const strip = qs('#aiq-stat-strip');
   if(strip){
     const p = sum.total_pending != null ? sum.total_pending : 0;
+    const a = sum.total_approved != null ? sum.total_approved : 0;
+    const ap = sum.total_applied != null ? sum.total_applied : 0;
+    const s = sum.total_sent != null ? sum.total_sent : 0;
     const r = sum.approved_outbound_ready != null ? sum.approved_outbound_ready : 0;
     strip.innerHTML =
       '<span class="aiq-stat-badge">Pending <b>'+p+'</b></span>'+
+      '<span class="aiq-stat-badge">Approved <b>'+a+'</b></span>'+
+      '<span class="aiq-stat-badge">Applied <b>'+ap+'</b></span>'+
+      '<span class="aiq-stat-badge">Sent <b>'+s+'</b></span>'+
       '<span class="aiq-stat-badge">Ready to send <b>'+r+'</b></span>'+
       '<span class="aiq-stat-badge note" style="opacity:.85;border-style:dashed">Bucket base: '+String(c.all != null ? c.all : 0)+' item(s)</span>';
   }
@@ -14676,6 +15047,7 @@ async function _aiqFetchAndRenderSummary(opts){
     if(msg){
       msg.innerHTML =
         `Filtered queue: ${fs.total_items || 0} item(s) · Pending ${fs.total_pending || 0} · Approved ${fs.total_approved || 0} ` +
+        `· Applied ${fs.total_applied || 0} · Sent ${fs.total_sent || 0} · Denied ${fs.total_denied || 0} ` +
         `· <span id="aiq-summary-ticker" style="opacity:.8">just now</span>`;
     }
     if(body){
@@ -14683,8 +15055,14 @@ async function _aiqFetchAndRenderSummary(opts){
         ['Items (filtered)', fs.total_items != null ? fs.total_items : 0],
         ['Pending (filtered)', fs.total_pending != null ? fs.total_pending : 0],
         ['Approved (filtered)', fs.total_approved != null ? fs.total_approved : 0],
+        ['Applied (filtered)', fs.total_applied != null ? fs.total_applied : 0],
+        ['Sent (filtered)', fs.total_sent != null ? fs.total_sent : 0],
+        ['Denied (filtered)', fs.total_denied != null ? fs.total_denied : 0],
         ['Ready to send (filtered)', fs.approved_outbound_ready != null ? fs.approved_outbound_ready : 0],
         ['Pending (venue-wide)', vs.total_pending != null ? vs.total_pending : 0],
+        ['Approved (venue-wide)', vs.total_approved != null ? vs.total_approved : 0],
+        ['Applied (venue-wide)', vs.total_applied != null ? vs.total_applied : 0],
+        ['Sent (venue-wide)', vs.total_sent != null ? vs.total_sent : 0],
         ['Ready to send (venue-wide)', vs.approved_outbound_ready != null ? vs.approved_outbound_ready : 0]
       ];
       const topTypes = Array.isArray(fs.top_types) ? fs.top_types : [];
@@ -14882,13 +15260,14 @@ function openAiqDrawer(id){
     `;
   }
   const stRaw = String(it.status||'');
-  const canAct = (stRaw === 'pending');
+  const stNorm = stRaw.trim().toLowerCase();
+  const canAct = (stNorm === 'pending');
   const typ = String(it.type||'');
   const isOutbound = (
     typ === 'send_email' || typ === 'send_sms' || typ === 'send_whatsapp' ||
     typ === 'send_confirmation' || typ === 'send_reservation_received' || typ === 'send_reservation_confirmed' || typ === 'send_reservation_denied' || typ === 'send_reservation_reminder' || typ === 'send_update' || typ === 'send_vip_update'
   );
-  const canSend = isOutbound && (stRaw === 'approved') && !it.sent_at;
+  const canSend = isOutbound && (stNorm === 'approved') && !it.sent_at;
   const sendLabel = (typ === 'send_whatsapp') ? 'Send WhatsApp' : (typ === 'send_email' ? 'Send Email' : (typ === 'send_sms' ? 'Send SMS' : 'Send'));
   const viewTpl = (typ === 'send_whatsapp' && p.template_key) || (typ.indexOf('send_reservation_')===0) || typ === 'send_confirmation' || typ === 'send_update' || typ === 'send_vip_update';
   const sid = String(it.id||'');
@@ -15250,6 +15629,7 @@ function renderAIQueue(items){
     const typ = esc(typRaw);
     const friendly = esc(aiFriendlyType(it));
     const stRaw = String(it.status || '');
+    const stNorm = stRaw.trim().toLowerCase();
     const st  = esc(stRaw);
     const conf = (typeof it.confidence === 'number') ? it.confidence.toFixed(2) : '';
     const when = esc(it.created_at || '');
@@ -15262,12 +15642,12 @@ function renderAIQueue(items){
     else if(ch.indexOf('whatsapp') >= 0 || ch.indexOf('wa') >= 0) badgeCls = 'whatsapp';
     else if(ch.indexOf('sms') >= 0) badgeCls = 'sms';
     const rowNumTxt = esc(aiRowNumber(it));
-    const canAct = (stRaw === 'pending');
+    const canAct = (stNorm === 'pending');
     const isOutbound = (
       typRaw === 'send_email' || typRaw === 'send_sms' || typRaw === 'send_whatsapp' ||
       typRaw === 'send_confirmation' || typRaw === 'send_reservation_received' || typRaw === 'send_reservation_confirmed' || typRaw === 'send_reservation_denied' || typRaw === 'send_reservation_reminder' || typRaw === 'send_update' || typRaw === 'send_vip_update'
     );
-    const canSend = isOutbound && (stRaw === 'approved') && !it.sent_at;
+    const canSend = isOutbound && (stNorm === 'approved') && !it.sent_at;
     const sendLabel =
       (typRaw === 'send_sms') ? 'Send SMS' :
       (typRaw === 'send_whatsapp') ? 'Send WhatsApp' :
@@ -18015,8 +18395,8 @@ def __test_ai_queue_seed():
 
     body = request.get_json(silent=True) or {}
     action_type = str(body.get("type") or body.get("action_type") or "reply_draft").strip().lower()
-    if action_type not in ("vip_tag", "status_update", "reply_draft"):
-        return jsonify({"ok": False, "error": "Invalid type. Use vip_tag | status_update | reply_draft"}), 400
+    if action_type not in ("vip_tag", "status_update", "reply_draft", "correct_contact"):
+        return jsonify({"ok": False, "error": "Invalid type. Use vip_tag | status_update | reply_draft | correct_contact"}), 400
 
     entry = {
         "id": _queue_new_id(),
@@ -21302,6 +21682,15 @@ def admin_api_leads_filter():
                 "notes": get_cell(r, "notes"),
                 "vibe": get_cell(r, "vibe"),
             }
+            for hk, idx in hmap.items():
+                if hk in obj:
+                    continue
+                if idx < 0 or idx >= len(r):
+                    continue
+                val = r[idx]
+                if val is None or str(val).strip() == "":
+                    continue
+                obj[hk] = str(val)
             items.append(obj)
     
     # Read leads ONLY from the target venue (NO cross-venue data leakage)
