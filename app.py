@@ -9750,6 +9750,7 @@ def admin_api_ai_run():
 
     data = request.get_json(silent=True) or {}
     mode = (data.get("mode") or "new").strip().lower()
+    debug_run = bool(str(request.args.get("debug") or data.get("debug") or "").strip().lower() in ("1", "true", "yes", "y", "on"))
     try:
         limit = int(data.get("limit") or 5)
     except Exception:
@@ -9887,11 +9888,25 @@ def admin_api_ai_run():
 
     proposed_ids = []
     ran = 0
+    row_debug: List[Dict[str, Any]] = []
 
     # Run AI and push proposals into the queue
     for sheet_row, lead in targets:
         ran += 1
         out = _ai_suggest_actions_for_lead(lead, sheet_row=sheet_row, focus_mode=focus_mode)
+        if debug_run:
+            try:
+                row_debug.append({
+                    "row": int(sheet_row or 0),
+                    "ok": bool((out or {}).get("ok")),
+                    "error": str((out or {}).get("error") or ""),
+                    "actions_count": len((out or {}).get("actions") or []),
+                    "debug": (out or {}).get("debug") if isinstance(out, dict) else {},
+                    "lead_has_email": bool(_looks_like_email(str(lead.get("email") or ""))),
+                    "lead_has_phone": bool(_looks_like_phone(str(lead.get("phone") or ""))),
+                })
+            except Exception:
+                pass
         # region agent log
         _agent_debug_log(
             run_id="pre-fix",
@@ -10240,7 +10255,20 @@ def admin_api_ai_run():
         data={"mode": str(mode), "ran": int(ran), "proposed": len(proposed_ids), "target_count": len(targets)},
     )
     # endregion
-    return jsonify({"ok": True, "ran": ran, "proposed": len(proposed_ids), "queue_ids": proposed_ids})
+    resp = {"ok": True, "ran": ran, "proposed": len(proposed_ids), "queue_ids": proposed_ids}
+    if debug_run:
+        resp["debug_rows"] = row_debug[:30]
+        resp["debug_summary"] = {
+            "target_count": len(targets),
+            "ran": ran,
+            "proposed": len(proposed_ids),
+            "mode": mode,
+            "focus_mode": focus_mode,
+            "channel_mode": channel_mode,
+            "new_status_values": sorted(list(new_status_values)),
+            "allow_actions": _get_ai_settings().get("allow_actions") or {},
+        }
+    return jsonify(resp)
 @app.route("/admin/api/ai/queue", methods=["GET"])
 def admin_api_ai_queue_list():
     ok, resp = _require_admin(min_role="manager")
@@ -15511,7 +15539,7 @@ async function runAIPreset(preset){
   const payload = {mode:'new', limit: isNaN(lim)?5:lim, focus_mode: fm, channel: ch || 'any'};
   _aiqDbg('runAIPreset.request', {preset, payload, venue: VENUE});
   try{
-    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}&debug=1`, {
       method:'POST',
       headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
       body: JSON.stringify(payload)
@@ -15675,13 +15703,13 @@ async function runAINew(){
   const payload = {mode:'new', limit: isNaN(lim)?5:lim, focus_mode: fm, channel: ch || 'any'};
   _aiqDbg('runAINew.request', {payload, venue: VENUE});
   try{
-    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}&debug=1`, {
       method:'POST',
       headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
       body: JSON.stringify(payload)
     });
     const data = await r.json();
-    _aiqDbg('runAINew.response', {status:r.status, ok:data && data.ok, ran:data && data.ran, proposed:data && data.proposed, queue_ids:(data && data.queue_ids) || []});
+    _aiqDbg('runAINew.response', {status:r.status, ok:data && data.ok, ran:data && data.ran, proposed:data && data.proposed, queue_ids:(data && data.queue_ids) || [], debug_summary:(data && data.debug_summary) || null, debug_rows:(data && data.debug_rows) || []});
     if(data && data.ok && Number(data.proposed||0) === 0){
       _aiqDbg('runAINew.zeroProposed', {hint:'No proposals returned by /admin/api/ai/run', payload});
     }
@@ -15711,13 +15739,13 @@ async function runAIRow(){
   const payload = {row, focus_mode: fm, channel: ch || 'any'};
   _aiqDbg('runAIRow.request', {payload, venue: VENUE});
   try{
-    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}&debug=1`, {
       method:'POST',
       headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
       body: JSON.stringify(payload)
     });
     const data = await r.json();
-    _aiqDbg('runAIRow.response', {status:r.status, ok:data && data.ok, ran:data && data.ran, proposed:data && data.proposed, queue_ids:(data && data.queue_ids) || []});
+    _aiqDbg('runAIRow.response', {status:r.status, ok:data && data.ok, ran:data && data.ran, proposed:data && data.proposed, queue_ids:(data && data.queue_ids) || [], debug_summary:(data && data.debug_summary) || null, debug_rows:(data && data.debug_rows) || []});
     if(!data.ok) throw new Error(data.error || 'Failed');
     if(msg) msg.textContent = `Row ${row}: Proposed ${data.proposed||0}.`;
     await loadAIQueue();
