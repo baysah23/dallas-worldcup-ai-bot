@@ -2569,6 +2569,33 @@ def _looks_like_phone(s: str) -> bool:
     return True
 
 
+def _normalize_lead_contact_fields(lead: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Normalize contact fields and recover swapped email/phone values."""
+    src = dict(lead or {})
+    email = str(src.get("email") or "").strip()
+    phone = str(src.get("phone") or "").strip()
+    contact = str(src.get("contact") or "").strip()
+
+    # Common data-entry swap: email entered in phone field.
+    if _looks_like_email(phone) and not _looks_like_email(email):
+        email = phone
+        phone = ""
+    # Reverse swap: phone entered in email field.
+    if _looks_like_phone(email) and not _looks_like_phone(phone):
+        phone = email
+        email = ""
+
+    # Recover from free-form contact text if explicit fields are invalid.
+    if not _looks_like_email(email) and _looks_like_email(contact):
+        email = contact
+    if not _looks_like_phone(phone) and _looks_like_phone(contact):
+        phone = contact
+
+    src["email"] = email if _looks_like_email(email) else ""
+    src["phone"] = phone if _looks_like_phone(phone) else ""
+    return src
+
+
 def _recommend_channel(
     lead: Dict[str, Any],
     suggestion_kind: str,
@@ -2591,12 +2618,9 @@ def _recommend_channel(
     prefer_wa = bool(pref.get("prefer_whatsapp_when_available", False))
     rank_all = bool(pref.get("rank_all_available_channels", True))
 
-    email = str(lead.get("email") or "").strip()
-    phone = str(lead.get("phone") or "").strip()
-    if not _looks_like_email(email):
-        email = ""
-    if not _looks_like_phone(phone):
-        phone = ""
+    norm_lead = _normalize_lead_contact_fields(lead)
+    email = str(norm_lead.get("email") or "").strip()
+    phone = str(norm_lead.get("phone") or "").strip()
 
     # Also honor an explicit to on the payload (e.g. AI copied contact from notes).
     pt = str(payload_to or "").strip()
@@ -3543,8 +3567,11 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int, focus_mod
     confidence = float(parsed.get("confidence") or 0)
     actions_in = parsed.get("actions") or []
     actions_out = []
+    lead_norm = _normalize_lead_contact_fields(lead)
     approved_actions = _read_approved_actions_from_row(int(sheet_row or 0)) if int(sheet_row or 0) >= 2 else []
     needs_contact_fix = False
+    valid_email = _looks_like_email(str(lead_norm.get("email") or ""))
+    valid_phone = _looks_like_phone(str(lead_norm.get("phone") or ""))
     for a in actions_in if isinstance(actions_in, list) else []:
         if not isinstance(a, dict):
             continue
@@ -3580,9 +3607,9 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int, focus_mod
         if typ in ("send_email", "send_sms", "send_whatsapp"):
             contact_ok = False
             if typ == "send_email":
-                contact_ok = _looks_like_email(str(payload.get("to") or lead.get("email") or ""))
+                contact_ok = _looks_like_email(str(payload.get("to") or lead_norm.get("email") or ""))
             else:
-                contact_ok = _looks_like_phone(str(payload.get("to") or lead.get("phone") or ""))
+                contact_ok = _looks_like_phone(str(payload.get("to") or lead_norm.get("phone") or ""))
             if not contact_ok:
                 needs_contact_fix = True
                 continue
@@ -3598,6 +3625,24 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int, focus_mod
             "payload": {"row": int(sheet_row), "sheet_row": int(sheet_row), "issue": "invalid_or_missing_contact"},
             "reason": "Lead contact is invalid/missing for outbound channels. Request corrected phone/email first.",
         })
+    if not actions_out and int(sheet_row or 0) >= 2:
+        if (not valid_email and not valid_phone) and allow.get("correct_contact", True):
+            if not _is_action_already_approved(approved_actions, "correct_contact", {"row": int(sheet_row)}):
+                actions_out.append({
+                    "type": "correct_contact",
+                    "payload": {"row": int(sheet_row), "sheet_row": int(sheet_row), "issue": "invalid_or_missing_contact"},
+                    "reason": "No valid phone/email found. Correct contact details first.",
+                })
+        if not actions_out and allow.get("vip_tag", False):
+            vip_hint = str(lead.get("vip") or "").strip().lower() in ("yes", "true", "1", "y", "vip")
+            budget_n = _parse_budget_to_number(lead.get("budget"))
+            if vip_hint or budget_n >= 1000:
+                if not _is_action_already_approved(approved_actions, "vip_tag", {"row": int(sheet_row), "vip": "VIP"}):
+                    actions_out.append({
+                        "type": "vip_tag",
+                        "payload": {"row": int(sheet_row), "sheet_row": int(sheet_row), "vip": "VIP", "budget": lead.get("budget")},
+                        "reason": "Lead appears VIP/high-value from profile and budget.",
+                    })
     return {"ok": True, "confidence": confidence, "actions": actions_out, "notes": str(parsed.get("notes") or "").strip()[:240]}
 
 def _ai_enqueue_or_apply_for_new_lead(lead: Dict[str, Any], sheet_row: int) -> None:
@@ -9714,6 +9759,7 @@ def admin_api_ai_run():
             "status": get("status"),
             "vip": get("vip"),
         }
+        lead = _normalize_lead_contact_fields(lead)
         # Normalize vip to bool-ish for downstream policy + prompts
         lead["vip"] = str(lead.get("vip") or "").strip().lower() in ["1", "true", "yes", "y"]
 
@@ -9793,6 +9839,10 @@ def admin_api_ai_run():
         ran += 1
         out = _ai_suggest_actions_for_lead(lead, sheet_row=sheet_row, focus_mode=focus_mode)
         if not out or not out.get("ok"):
+            try:
+                _audit("ai.run.skip", {"row": int(sheet_row), "reason": str((out or {}).get("error") or "suggestion_failed")[:240]})
+            except Exception:
+                pass
             continue
         approved_actions_for_row = _read_approved_actions_from_row(int(sheet_row))
         conf = float(out.get("confidence") or 0.0)
@@ -9801,6 +9851,11 @@ def admin_api_ai_run():
         except Exception:
             conf = 0.0
         actions = out.get("actions") or []
+        if not actions:
+            try:
+                _audit("ai.run.skip", {"row": int(sheet_row), "reason": "no_actions_after_filters"})
+            except Exception:
+                pass
         for a in actions:
             typ = str(a.get("type") or "").strip()
             payload = dict(a.get("payload") or {})
@@ -14009,8 +14064,29 @@ function openLeadDrawer(row){
   const body = qs('#lead-drawer-body');
   if(title) title.textContent = `Lead #${row}`;
   if(body){
+    const _isEmail = (v)=>{
+      const s = String(v||'').trim().toLowerCase();
+      return !!s && /^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$/.test(s);
+    };
+    const _isPhone = (v)=>{
+      const s = String(v||'').trim();
+      const d = s.replace(/\D/g,'');
+      return d.length >= 10 && d.length <= 15 && !(d && /^(\d)\1+$/.test(d));
+    };
+    const _dash = (v)=>{
+      const s = String(v ?? '').trim();
+      return s ? s : '—';
+    };
+    let phoneRaw = String(it.phone ?? '').trim();
+    let emailRaw = String(it.email ?? '').trim();
+    if(_isEmail(phoneRaw) && !_isEmail(emailRaw)){ emailRaw = phoneRaw; phoneRaw = ''; }
+    if(_isPhone(emailRaw) && !_isPhone(phoneRaw)){ phoneRaw = emailRaw; emailRaw = ''; }
+    const display = Object.assign({}, it, {
+      phone: _isPhone(phoneRaw) ? phoneRaw : '',
+      email: _isEmail(emailRaw) ? emailRaw : '',
+    });
     const keys = Object.keys(it || {}).filter(k=>!String(k||'').startsWith('_'));
-    const pri = (k)=>_he(String(it[k] ?? '')) || '—';
+    const pri = (k)=>_he(_dash(display[k]));
     const identity = [
       ['name','Name'],['phone','Phone'],['email','Email'],['language','Language']
     ];
@@ -14028,11 +14104,12 @@ function openLeadDrawer(row){
       }).join('');
       return `<div style="font-weight:800;margin:10px 0 6px">${heading}</div><div style="display:grid;grid-template-columns:140px 1fr;gap:8px 12px">${inner}</div>`;
     };
-    const extra = keys.filter(k=>!used.has(k)).sort();
+    const usedNorm = new Set(Array.from(used).map(k=>String(k||'').trim().toLowerCase()));
+    const extra = keys.filter(k=>!usedNorm.has(String(k||'').trim().toLowerCase())).sort();
     const extraHtml = extra.length ? `
       <div style="font-weight:800;margin:12px 0 6px">Additional Fields</div>
       <div style="display:grid;grid-template-columns:140px 1fr;gap:8px 12px">
-        ${extra.map((k)=>`<div class="note" style="opacity:.7">${_he(k.replace(/_/g,' '))}</div><div class="small" style="white-space:pre-wrap;word-break:break-word">${pri(k)}</div>`).join('')}
+        ${extra.map((k)=>`<div class="note" style="opacity:.7">${_he(k.replace(/_/g,' '))}</div><div class="small" style="white-space:pre-wrap;word-break:break-word">${_he(_dash(display[k]))}</div>`).join('')}
       </div>` : '';
     body.innerHTML = `
       ${section(identity, 'Identity')}
