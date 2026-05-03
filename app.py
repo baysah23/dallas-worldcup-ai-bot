@@ -936,6 +936,16 @@ def _venue_cfg(venue_id: Optional[str] = None) -> Dict[str, Any]:
     return cfg if isinstance(cfg, dict) else {"venue_id": vid, "status": "implicit"}
 
 
+def _venue_display_name(venue_id: Optional[str] = None) -> str:
+    cfg = _venue_cfg(venue_id)
+    for k in ("display_name", "name", "title", "venue_name"):
+        v = str(cfg.get(k) or "").strip()
+        if v:
+            return v
+    vid = str(cfg.get("venue_id") or "").strip()
+    return vid or "the venue"
+
+
 def _venue_sheet_id(venue_id: Optional[str] = None) -> str:
     cfg = _venue_cfg(venue_id)
     data = cfg.get("data") if isinstance(cfg.get("data"), dict) else {}
@@ -1329,6 +1339,7 @@ def _default_ai_settings() -> Dict[str, Any]:
             "vip_tag": True,
             "status_update": False,
             "reply_draft": True,
+            "correct_contact": True,
             "send_sms": False,
             "send_email": False,
             "send_whatsapp": False,
@@ -1341,6 +1352,27 @@ def _default_ai_settings() -> Dict[str, Any]:
             "auto_vip_tag": True,
             "auto_status_update": False,
             "auto_reply_draft": True,
+        },
+        "focus_mode": "all",
+        "focus_filters": {
+            "vip_only": False,
+            "reminders_only": False,
+            "upgrades_only": False,
+            "reply_drafts_only": False,
+            "suggest_email": True,
+            "suggest_sms": True,
+            "suggest_whatsapp": True,
+            "allow_vip_tagging": True,
+            "allow_reply_drafts": True,
+            "allow_reminder_suggestions": True,
+            "allow_upgrade_suggestions": True,
+        },
+        "channel_preferences": {
+            "prefer_email_for_confirmations": True,
+            "prefer_sms_for_urgent": True,
+            "prefer_whatsapp_when_available": False,
+            "rank_all_available_channels": True,
+            "auto_detect_best_channel": True,
         },
         "updated_at": None,
         "updated_by": None,  # actor hash
@@ -1445,20 +1477,94 @@ def _default_partner_policy() -> Dict[str, Any]:
     }
 
 _PARTNER_POLICIES: Dict[str, Any] = {"default": _default_partner_policy()}
+_PARTNER_POLICIES_CACHE_TS: Dict[str, float] = {}
+_PARTNER_POLICIES_SHEET_TAB = os.environ.get("PARTNER_POLICIES_SHEET_TAB", "venue_policies")
 
-def _load_partner_policies_from_disk() -> None:
+def _partner_policy_sheet_ws(venue_id: Optional[str] = None):
+    gc = get_gspread_client()
+    return _ensure_ws(gc, _PARTNER_POLICIES_SHEET_TAB, venue_id=venue_id or _venue_id())
+
+
+def _ensure_partner_policy_sheet_schema(ws) -> Dict[str, int]:
+    desired = [
+        "venue_id",
+        "partner",
+        "vip_min_budget",
+        "never_status_update",
+        "allowed_statuses_json",
+        "outbound_allowed_json",
+        "outbound_require_role",
+        "updated_at",
+        "updated_by",
+    ]
+    existing = ws.row_values(1) or []
+    if not any(str(x).strip() for x in existing):
+        ws.update("A1", [desired])
+        return {k: i + 1 for i, k in enumerate(desired)}
+    header = existing[:]
+    norm = [_normalize_header(x) for x in existing]
+    for col in desired:
+        if col not in norm:
+            header.append(col)
+            norm.append(col)
+    if header != existing:
+        ws.update("A1", [header])
+    return {str(_normalize_header(h)): i + 1 for i, h in enumerate(header)}
+
+
+def _load_partner_policies_from_disk(force: bool = False) -> None:
     global _PARTNER_POLICIES
-    payload = _safe_read_json_file(PARTNER_POLICIES_FILE, default=None)
-    if isinstance(payload, dict) and payload:
-        # Merge default policy into each partner so missing keys don't break.
-        out: Dict[str, Any] = {}
-        for k, v in payload.items():
-            if not isinstance(v, dict):
+    vid = _slugify_venue_id(_venue_id())
+    now = time.time()
+    if not force and (now - float(_PARTNER_POLICIES_CACHE_TS.get(vid, 0.0))) < 10.0:
+        return
+    out: Dict[str, Any] = {"default": _default_partner_policy()}
+    try:
+        ws = _partner_policy_sheet_ws(venue_id=vid)
+        hmap = _ensure_partner_policy_sheet_schema(ws)
+        rows = ws.get_all_values() or []
+        for r in rows[1:]:
+            if not isinstance(r, list):
                 continue
-            out[str(k)] = _deep_merge(_default_partner_policy(), v)
-        if "default" not in out:
-            out["default"] = _default_partner_policy()
-        _PARTNER_POLICIES = out
+            venue_cell = (r[hmap["venue_id"] - 1] if len(r) >= hmap["venue_id"] else "").strip()
+            if _slugify_venue_id(venue_cell or vid) != vid:
+                continue
+            partner = (r[hmap["partner"] - 1] if len(r) >= hmap["partner"] else "").strip() or "default"
+            pol = _default_partner_policy()
+            try:
+                pol["vip_min_budget"] = int((r[hmap["vip_min_budget"] - 1] if len(r) >= hmap["vip_min_budget"] else "0") or 0)
+            except Exception:
+                pol["vip_min_budget"] = 0
+            pol["never_status_update"] = str((r[hmap["never_status_update"] - 1] if len(r) >= hmap["never_status_update"] else "true") or "true").strip().lower() in ("1", "true", "yes", "y", "on")
+            try:
+                allowed_statuses = json.loads((r[hmap["allowed_statuses_json"] - 1] if len(r) >= hmap["allowed_statuses_json"] else "[]") or "[]")
+                if isinstance(allowed_statuses, list):
+                    pol["allowed_statuses"] = [str(x) for x in allowed_statuses if str(x).strip()]
+            except Exception:
+                pass
+            try:
+                outbound_allowed = json.loads((r[hmap["outbound_allowed_json"] - 1] if len(r) >= hmap["outbound_allowed_json"] else "{}") or "{}")
+                if isinstance(outbound_allowed, dict):
+                    pol["outbound_allowed"] = {
+                        "email": bool(outbound_allowed.get("email", False)),
+                        "sms": bool(outbound_allowed.get("sms", False)),
+                        "whatsapp": bool(outbound_allowed.get("whatsapp", False)),
+                    }
+            except Exception:
+                pass
+            if len(r) >= hmap["outbound_require_role"]:
+                pol["outbound_require_role"] = str(r[hmap["outbound_require_role"] - 1] or "manager").strip().lower() or "manager"
+            out[str(partner)] = _deep_merge(_default_partner_policy(), pol)
+    except Exception:
+        payload = _safe_read_json_file(PARTNER_POLICIES_FILE, default=None)
+        if isinstance(payload, dict) and payload:
+            for k, v in payload.items():
+                if isinstance(v, dict):
+                    out[str(k)] = _deep_merge(_default_partner_policy(), v)
+    if "default" not in out:
+        out["default"] = _default_partner_policy()
+    _PARTNER_POLICIES = out
+    _PARTNER_POLICIES_CACHE_TS[vid] = now
 
 def _save_partner_policy(partner: str, policy_patch: Dict[str, Any]) -> Dict[str, Any]:
     """Persist a single partner policy (best effort)."""
@@ -1469,7 +1575,46 @@ def _save_partner_policy(partner: str, policy_patch: Dict[str, Any]) -> Dict[str
         cur = _default_partner_policy()
     merged = _deep_merge(cur, policy_patch or {})
     _PARTNER_POLICIES[partner] = merged
-    _safe_write_json_file(PARTNER_POLICIES_FILE, _PARTNER_POLICIES)
+    vid = _slugify_venue_id(_venue_id())
+    wrote_sheet = False
+    try:
+        ws = _partner_policy_sheet_ws(venue_id=vid)
+        hmap = _ensure_partner_policy_sheet_schema(ws)
+        rows = ws.get_all_values() or []
+        target_row = 0
+        for idx, r in enumerate(rows[1:], start=2):
+            if not isinstance(r, list):
+                continue
+            row_vid = (r[hmap["venue_id"] - 1] if len(r) >= hmap["venue_id"] else "").strip()
+            row_partner = (r[hmap["partner"] - 1] if len(r) >= hmap["partner"] else "").strip() or "default"
+            if _slugify_venue_id(row_vid or vid) == vid and row_partner == partner:
+                target_row = idx
+                break
+        row_map = {
+            "venue_id": vid,
+            "partner": partner,
+            "vip_min_budget": str(int(merged.get("vip_min_budget") or 0)),
+            "never_status_update": "true" if bool(merged.get("never_status_update", True)) else "false",
+            "allowed_statuses_json": json.dumps(merged.get("allowed_statuses") or [], ensure_ascii=False),
+            "outbound_allowed_json": json.dumps(merged.get("outbound_allowed") or {}, ensure_ascii=False),
+            "outbound_require_role": str(merged.get("outbound_require_role") or "manager"),
+            "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "updated_by": "admin_api",
+        }
+        row = [""] * len(hmap)
+        for key, value in row_map.items():
+            if key in hmap:
+                row[hmap[key] - 1] = value
+        if target_row >= 2:
+            ws.update(f"A{target_row}", [row])
+        else:
+            ws.append_row(row, value_input_option="RAW")
+        wrote_sheet = True
+    except Exception:
+        wrote_sheet = False
+    if not wrote_sheet:
+        _safe_write_json_file(PARTNER_POLICIES_FILE, _PARTNER_POLICIES)
+    _PARTNER_POLICIES_CACHE_TS[vid] = 0.0
     return merged
 
 
@@ -1643,23 +1788,21 @@ def _get_draft_content(draft_key: str, data: Dict[str, Any]) -> Tuple[Optional[s
 
 
 def _derive_partner_id(lead: Optional[Dict[str, Any]] = None, payload: Optional[Dict[str, Any]] = None) -> str:
-    """Best-effort partner/venue identifier, so policies can apply even if schema varies."""
+    """Resolve policy scope deterministically (partner first, then venue)."""
     lead = lead or {}
     payload = payload or {}
-    for key in ["partner", "venue", "partner_id", "venue_id"]:
+    for key in ["partner", "partner_id", "venue", "venue_id"]:
         v = payload.get(key) or lead.get(key)
         if v:
             return str(v).strip()
-    # fallbacks from common fields
-    for key in ["entry_point", "business_context", "tier", "queue"]:
-        v = payload.get(key) or lead.get(key)
-        if v:
-            s = str(v).strip()
-            # take first token if it looks like "VENUE_XYZ ..."
-            return s.split()[0]
-    return "default"
+    vid = str(_venue_id() or "").strip()
+    return vid or "default"
 
 def _partner_policy(partner: str) -> Dict[str, Any]:
+    try:
+        _load_partner_policies_from_disk(force=False)
+    except Exception:
+        pass
     partner = (partner or "").strip() or "default"
     base = _PARTNER_POLICIES.get("default") if isinstance(_PARTNER_POLICIES, dict) else None
     if not isinstance(base, dict):
@@ -1683,6 +1826,99 @@ def _parse_budget_to_number(val: Any) -> float:
     except Exception:
         return 0.0
 
+
+_OUTBOUND_ACTION_TYPES = {
+    "send_sms",
+    "send_email",
+    "send_whatsapp",
+    "send_confirmation",
+    "send_reservation_received",
+    "send_reservation_confirmed",
+    "send_reservation_denied",
+    "send_reservation_reminder",
+    "send_update",
+    "send_vip_update",
+}
+
+
+def _norm_status(v: Any) -> str:
+    return str(v or "").strip().lower()
+
+
+def _action_fingerprint(action_type: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    p = payload or {}
+    typ = str(action_type or "").strip().lower()
+    out = {"type": typ}
+    if typ == "status_update":
+        out["status"] = str(p.get("status") or "").strip()
+    if typ == "vip_tag":
+        out["vip"] = str(p.get("vip") or "VIP").strip() or "VIP"
+    if typ in _OUTBOUND_ACTION_TYPES:
+        out["channel"] = typ.replace("send_", "")
+        tk = str(p.get("template_key") or "").strip()
+        if tk:
+            out["template_key"] = tk
+    return out
+
+
+def _read_approved_actions_from_row(row_num: int) -> List[Dict[str, Any]]:
+    if int(row_num or 0) < 2:
+        return []
+    try:
+        gc = get_gspread_client()
+        ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
+        header = ensure_sheet_schema(ws)
+        hmap = header_map(header)
+        col = hmap.get("approved_ai_actions_json")
+        if not col:
+            return []
+        cell = str(ws.cell(int(row_num), int(col)).value or "").strip()
+        if not cell:
+            return []
+        raw = json.loads(cell)
+        if not isinstance(raw, list):
+            return []
+        out: List[Dict[str, Any]] = []
+        for it in raw:
+            if isinstance(it, dict) and it.get("type"):
+                out.append(it)
+        return out
+    except Exception:
+        return []
+
+
+def _is_action_already_approved(approved_actions: List[Dict[str, Any]], action_type: str, payload: Optional[Dict[str, Any]] = None) -> bool:
+    fp = _action_fingerprint(action_type, payload)
+    for it in approved_actions or []:
+        if not isinstance(it, dict):
+            continue
+        cand = _action_fingerprint(str(it.get("type") or ""), it)
+        if cand == fp:
+            return True
+    return False
+
+
+def _record_approved_action_for_row(row_num: int, action_type: str, payload: Optional[Dict[str, Any]] = None) -> None:
+    if int(row_num or 0) < 2:
+        return
+    try:
+        gc = get_gspread_client()
+        ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
+        header = ensure_sheet_schema(ws)
+        hmap = header_map(header)
+        col = hmap.get("approved_ai_actions_json")
+        if not col:
+            return
+        existing = _read_approved_actions_from_row(int(row_num))
+        fp = _action_fingerprint(action_type, payload or {})
+        if _is_action_already_approved(existing, action_type, payload or {}):
+            return
+        fp["approved_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        existing.append(fp)
+        ws.update_cell(int(row_num), int(col), json.dumps(existing, ensure_ascii=False))
+    except Exception:
+        return
+
 def _policy_check_action(partner: str, action_type: str, payload: Dict[str, Any], role: str = "") -> Tuple[bool, str]:
     """Return (allowed, reason). Hard blocks only."""
     pol = _partner_policy(partner)
@@ -1699,8 +1935,8 @@ def _policy_check_action(partner: str, action_type: str, payload: Dict[str, Any]
 
     # VIP tagging minimum budget
     if at == "vip_tag":
-        vip = str((payload or {}).get("vip") or "").strip()
-        if vip == "VIP":
+        vip = str((payload or {}).get("vip") or "").strip().lower()
+        if vip in ("vip", "yes", "true", "1", "y"):
             min_budget = float(pol.get("vip_min_budget") or 0)
             # budget may be on payload (preferred) or absent; treat absent as 0
             b = _parse_budget_to_number((payload or {}).get("budget"))
@@ -2136,6 +2372,405 @@ def _get_whatsapp_template_sid(kind: str) -> str:
     }
     return mapping.get(k, "")
 
+
+# --- AI suggestion taxonomy, queue buckets, channel intelligence (operator UX) ---
+
+SUGGESTION_PRESETS: Dict[str, Dict[str, Any]] = {
+    # Focus filters widen to include the generic outbound types a typical AI run
+    # emits (send_sms/send_email/send_whatsapp). Otherwise the narrow filter would
+    # silently discard every AI suggestion that wasn't the exact preset action,
+    # making "Run Reminders" / "Run VIP" / "Run Upgrades" produce nothing.
+    "vip": {
+        "types": [
+            "vip_tag",
+            "send_vip_followup",
+            "send_vip_update",
+            "send_upgrade_message",
+            "send_email",
+            "send_sms",
+            "send_whatsapp",
+        ]
+    },
+    "reminders": {
+        "types": [
+            "send_reservation_reminder",
+            "send_confirmation",
+            "send_email",
+            "send_sms",
+            "send_whatsapp",
+        ]
+    },
+    "upgrades": {
+        "types": [
+            "send_upgrade_message",
+            "send_vip_followup",
+            "send_email",
+            "send_sms",
+            "send_whatsapp",
+        ]
+    },
+    "reply_drafts": {"types": ["reply_draft"]},
+    "all": {"types": ["*"]},
+}
+
+_LEGACY_RESERVATION_ACTION_TO_TEMPLATE: Dict[str, str] = {
+    "send_reservation_received": "reservation_received",
+    "send_reservation_confirmed": "reservation_confirmed",
+    "send_reservation_denied": "reservation_denied",
+    "send_reservation_reminder": "reservation_reminder",
+}
+
+
+def _normalize_ai_action_type(action_type: str) -> str:
+    """Canonical type for filtering; maps legacy reservation sends to send_whatsapp."""
+    at = (action_type or "").strip().lower()
+    if at in _LEGACY_RESERVATION_ACTION_TO_TEMPLATE:
+        return "send_whatsapp"
+    return at
+
+
+def _queue_item_template_key(item: Dict[str, Any]) -> str:
+    pl = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+    tk = str((pl or {}).get("template_key") or "").strip().lower()
+    if tk:
+        return tk
+    t = str(item.get("type") or "").strip().lower()
+    return str(_LEGACY_RESERVATION_ACTION_TO_TEMPLATE.get(t) or "").strip().lower()
+
+
+def _queue_item_channels(item: Dict[str, Any]) -> set:
+    """Channels touched by this queue item (for filters). Non-outbound → empty set."""
+    t = str(item.get("type") or "").strip().lower()
+    if t == "send_email":
+        return {"email"}
+    if t == "send_sms":
+        return {"sms"}
+    if t == "send_whatsapp":
+        return {"whatsapp"}
+    if t in _LEGACY_RESERVATION_ACTION_TO_TEMPLATE:
+        return {"sms", "whatsapp"}
+    if t in ("send_confirmation", "send_update", "send_vip_update"):
+        return {"sms", "whatsapp"}
+    return set()
+
+
+def _queue_item_matches_view_bucket(item: Dict[str, Any], bucket: str) -> bool:
+    b = (bucket or "all").strip().lower()
+    if b in ("", "all"):
+        return True
+    t = str(item.get("type") or "").strip().lower()
+    nt = _normalize_ai_action_type(t)
+    tk = _queue_item_template_key(item)
+
+    if b == "vip":
+        return t == "vip_tag"
+    if b == "drafts":
+        return t == "reply_draft"
+    if b == "reminders":
+        if t in ("send_reservation_reminder", "send_confirmation"):
+            return True
+        return nt == "send_whatsapp" and tk == "reservation_reminder"
+    if b == "upgrades":
+        return t in ("send_upgrade_message", "send_vip_followup")
+    if b == "email":
+        return "email" in _queue_item_channels(item)
+    if b == "sms":
+        return "sms" in _queue_item_channels(item)
+    if b == "whatsapp":
+        return "whatsapp" in _queue_item_channels(item)
+    return True
+
+
+def _ai_queue_bucket_counts(items: List[Dict[str, Any]]) -> Dict[str, int]:
+    keys = ("all", "vip", "reminders", "upgrades", "email", "sms", "whatsapp", "drafts")
+    out = {k: 0 for k in keys}
+    out["all"] = len(items)
+    for it in items:
+        for k in keys:
+            if k == "all":
+                continue
+            if _queue_item_matches_view_bucket(it, k):
+                out[k] += 1
+    return out
+
+
+def _whatsapp_variables_for_template_key(
+    template_key: str,
+    venue_name: str,
+    reservation_details: str,
+) -> Dict[str, Any]:
+    k = (template_key or "").strip().lower()
+    wa_vars = {
+        "reservation_received": {"1": reservation_details, "2": venue_name},
+        "reservation_confirmed": {"1": venue_name, "2": reservation_details},
+        "reservation_denied": {"1": venue_name, "2": reservation_details},
+        "reservation_reminder": {"1": venue_name, "2": reservation_details},
+    }
+    return dict(wa_vars.get(k, {}))
+
+
+def _infer_whatsapp_template_key(lead: Dict[str, Any]) -> str:
+    """Pick a template from lead status / timing when AI proposes send_whatsapp."""
+    st = str(lead.get("status") or "").strip().lower()
+    if any(x in st for x in ("deny", "denied", "reject", "cancel", "no-show")):
+        return "reservation_denied"
+    if any(x in st for x in ("confirm", "reserved", "seated", "complete")):
+        return "reservation_confirmed"
+    # Upcoming reservation window → reminder
+    dt_s = " ".join(
+        part for part in [(lead.get("date") or "").strip(), (lead.get("time") or "").strip()] if part
+    ).strip()
+    if dt_s:
+        try:
+            # best-effort parse; if reservation is within ~36h, suggest reminder
+            dt = datetime.fromisoformat(dt_s.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            delta = (dt - now).total_seconds()
+            if 0 < delta < 36 * 3600:
+                return "reservation_reminder"
+        except Exception:
+            pass
+    if st in ("new", "", "contacted", "waitlist"):
+        return "reservation_received"
+    return "reservation_received"
+
+
+def _looks_like_email(s: str) -> bool:
+    s = str(s or "").strip().lower()
+    if not s:
+        return False
+    if " " in s:
+        return False
+    m = re.match(r"^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$", s)
+    if not m:
+        return False
+    try:
+        local, domain = s.split("@", 1)
+    except Exception:
+        return False
+    if domain in ("example.com", "example.org", "example.net", "test.com", "invalid.com"):
+        return False
+    if local in ("test", "dummy", "na", "none", "unknown"):
+        return False
+    return True
+
+
+def _looks_like_phone(s: str) -> bool:
+    s = str(s or "").strip()
+    if not s:
+        return False
+    digits = "".join(ch for ch in s if ch.isdigit())
+    if len(digits) < 10 or len(digits) > 15:
+        return False
+    if len(set(digits)) == 1:
+        return False
+    return True
+
+
+def _normalize_lead_contact_fields(lead: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Normalize contact fields and recover swapped email/phone values."""
+    src = dict(lead or {})
+    email = str(src.get("email") or "").strip()
+    phone = str(src.get("phone") or "").strip()
+    contact = str(src.get("contact") or "").strip()
+
+    # Common data-entry swap: email entered in phone field.
+    if _looks_like_email(phone) and not _looks_like_email(email):
+        email = phone
+        phone = ""
+    # Reverse swap: phone entered in email field.
+    if _looks_like_phone(email) and not _looks_like_phone(phone):
+        phone = email
+        email = ""
+
+    # Recover from free-form contact text if explicit fields are invalid.
+    if not _looks_like_email(email) and _looks_like_email(contact):
+        email = contact
+    if not _looks_like_phone(phone) and _looks_like_phone(contact):
+        phone = contact
+
+    src["email"] = email if _looks_like_email(email) else ""
+    src["phone"] = phone if _looks_like_phone(phone) else ""
+    return src
+
+
+def _recommend_channel(
+    lead: Dict[str, Any],
+    suggestion_kind: str,
+    settings: Dict[str, Any],
+    *,
+    payload_to: str = "",
+    action_type: str = "",
+) -> Dict[str, Any]:
+    """Deliberate channel ranking for outbound suggestions (stored on queue payload).
+
+    The `ranked` list reflects channels the lead can actually receive on (based
+    on email/phone availability and WA feature flag). The `channel` ("best")
+    aligns with the outbound action type when provided, so the drawer/table
+    never claims "best: sms" for a `send_email` row.
+    """
+    s = settings or {}
+    pref = s.get("channel_preferences") if isinstance(s.get("channel_preferences"), dict) else {}
+    prefer_email_conf = bool(pref.get("prefer_email_for_confirmations", True))
+    prefer_sms_urgent = bool(pref.get("prefer_sms_for_urgent", True))
+    prefer_wa = bool(pref.get("prefer_whatsapp_when_available", False))
+    rank_all = bool(pref.get("rank_all_available_channels", True))
+
+    norm_lead = _normalize_lead_contact_fields(lead)
+    email = str(norm_lead.get("email") or "").strip()
+    phone = str(norm_lead.get("phone") or "").strip()
+
+    # Also honor an explicit to on the payload (e.g. AI copied contact from notes).
+    pt = str(payload_to or "").strip()
+    if pt:
+        if not email and _looks_like_email(pt):
+            email = pt
+        elif not phone and _looks_like_phone(pt):
+            phone = pt
+
+    kind = (suggestion_kind or "").strip().lower()
+    atype = (action_type or "").strip().lower()
+
+    wa_enabled = bool(_venue_features().get("whatsapp_outbound") or _venue_features().get("whatsapp"))
+    if not wa_enabled:
+        wa_enabled = bool(os.environ.get("TWILIO_WHATSAPP_FROM", "").strip())
+
+    available: List[str] = []
+    if _looks_like_email(email):
+        available.append("email")
+    if _looks_like_phone(phone):
+        available.append("sms")
+    if wa_enabled and _looks_like_phone(phone):
+        available.append("whatsapp")
+
+    is_reminder = kind in ("reminder", "send_reservation_reminder", "reservation_reminder") or "remind" in kind
+    is_confirm = kind in (
+        "confirm", "confirmation", "send_confirmation", "reservation_confirmed", "formal"
+    )
+
+    ranked: List[str] = []
+    reason = ""
+
+    wants_whatsapp = (atype == "send_whatsapp") or ("whatsapp" in kind) or kind.startswith("send_reservation_")
+
+    if prefer_sms_urgent and is_reminder and phone:
+        ranked.append("sms")
+        reason = "Urgent / time-bound reminder — SMS first when phone is available"
+    elif prefer_email_conf and is_confirm and email:
+        ranked.append("email")
+        reason = "Formal confirmation — email first when available"
+    elif prefer_wa and wa_enabled and phone and wants_whatsapp:
+        ranked.append("whatsapp")
+        reason = "WhatsApp chosen for template-style/WA-specific action"
+    elif email:
+        # Default to email when available unless urgency/action explicitly prefers mobile channels.
+        ranked.append("email")
+        reason = "Email available — defaulting to lowest-friction confirmation channel"
+    elif phone:
+        ranked.append("sms")
+        reason = "Phone available without email — SMS first"
+    elif prefer_wa and wa_enabled and phone:
+        ranked.append("whatsapp")
+        reason = "WhatsApp available fallback"
+
+    for c in available:
+        if c not in ranked:
+            ranked.append(c)
+
+    seen: set = set()
+    deduped: List[str] = []
+    for x in ranked:
+        if x not in seen:
+            seen.add(x)
+            deduped.append(x)
+    ranked = deduped
+
+    if not rank_all and ranked:
+        ranked = ranked[:1]
+
+    # Best channel: if the caller passed an explicit action type, prefer the
+    # channel that matches that action (it reflects what will actually be sent).
+    action_channel = ""
+    if atype == "send_email":
+        action_channel = "email"
+    elif atype == "send_sms":
+        action_channel = "sms"
+    elif atype == "send_whatsapp":
+        action_channel = "whatsapp"
+
+    if action_channel and action_channel in (available or ranked):
+        best = action_channel
+    else:
+        best = ranked[0] if ranked else ("email" if email else ("sms" if phone else "email"))
+
+    if not reason:
+        reason = "Ranked from available contact channels and venue preferences"
+
+    return {
+        "channel": best,
+        "ranked": ranked or [best],
+        "reason": reason,
+        "available": available,
+    }
+
+
+def _queue_item_matches_focus_param(item: Dict[str, Any], focus: str) -> bool:
+    f = (focus or "").strip().lower()
+    if f in ("", "all"):
+        return True
+    preset = SUGGESTION_PRESETS.get(f)
+    if not preset:
+        return True
+    types = preset.get("types") or []
+    if "*" in types:
+        return True
+    t = str(item.get("type") or "").strip().lower()
+    tk = _queue_item_template_key(item)
+    if t in types:
+        return True
+    if _normalize_ai_action_type(t) == "send_whatsapp" and tk:
+        if f == "reminders" and tk == "reservation_reminder":
+            return True
+    return False
+
+
+def _ai_run_action_passes_filters(
+    action_type: str,
+    payload: Optional[Dict[str, Any]],
+    focus_mode: str,
+    channel_mode: str,
+) -> bool:
+    """Filter AI run output by focus_mode and channel before enqueue."""
+    pl = payload if isinstance(payload, dict) else {}
+    typ = (action_type or "").strip().lower()
+    fm = (focus_mode or "all").strip().lower()
+    cm = (channel_mode or "any").strip().lower()
+
+    if fm and fm != "all":
+        if not _queue_item_matches_focus_param({"type": typ, "payload": pl}, fm):
+            return False
+
+    if cm and cm not in ("any", "all", ""):
+        chans: set = set()
+        if typ == "send_email":
+            chans.add("email")
+        elif typ == "send_sms":
+            chans.add("sms")
+        elif typ == "send_whatsapp" or typ.startswith("send_reservation_"):
+            chans.add("whatsapp")
+        elif typ in ("send_confirmation", "send_update", "send_vip_update"):
+            chans.update({"sms", "whatsapp"})
+        if cm == "email":
+            return "email" in chans
+        if cm == "sms":
+            return bool(chans & {"sms"})
+        if cm == "whatsapp":
+            return "whatsapp" in chans
+    return True
+
+
 def _send_notification_bundle(kind: str, to_number_or_id: str, sms_body: str, wa_variables: Dict[str, Any]) -> Dict[str, Any]:
     result: Dict[str, Any] = {"ok": True, "sms": None, "whatsapp": None}
     sms_ok, sms_msg = _outbound_send_twilio("sms", to_number_or_id, sms_body)
@@ -2294,13 +2929,36 @@ def _outbound_send(action_type: str, payload: Dict[str, Any]) -> Dict[str, Any]:
             return {"ok": False, "error": "Missing recipient email"}
         ok, msg = _outbound_send_email(to_email, subject, body)
         return {"ok": ok, "message": msg}
-    if at in ("send_sms", "send_whatsapp"):
-        ch = at.replace("send_", "")
+    if at == "send_whatsapp":
+        to_num = str(pl.get("to") or pl.get("phone") or "").strip()
+        tk = str(pl.get("template_key") or "").strip().lower()
+        venue_name = str(pl.get("venue_name") or _venue_display_name() or "the venue").strip()
+        reservation_details = str(
+            pl.get("reservation_details") or pl.get("message") or pl.get("body") or ""
+        ).strip()
+        if tk in ("reservation_received", "reservation_confirmed", "reservation_denied", "reservation_reminder"):
+            if not to_num:
+                return {"ok": False, "error": "Missing recipient number"}
+            if not reservation_details:
+                return {"ok": False, "error": "Missing reservation details for WhatsApp template"}
+            wa_sid = _get_whatsapp_template_sid(tk)
+            if not wa_sid:
+                return {"ok": False, "error": f"Missing WhatsApp template SID for {tk}"}
+            wa_vars = _whatsapp_variables_for_template_key(tk, venue_name, reservation_details)
+            ok_wa, msg_wa = _outbound_send_whatsapp_template(wa_sid, to_num, wa_vars)
+            return {"ok": ok_wa, "message": msg_wa}
+        # Legacy / manual: free-text WhatsApp (no template_key)
+        body = message
+        if not to_num:
+            return {"ok": False, "error": "Missing recipient number"}
+        ok, msg = _outbound_send_twilio("whatsapp", to_num, body)
+        return {"ok": ok, "message": msg}
+    if at == "send_sms":
         to_num = str(pl.get("to") or pl.get("phone") or "").strip()
         body = message
         if not to_num:
             return {"ok": False, "error": "Missing recipient number"}
-        ok, msg = _outbound_send_twilio(ch, to_num, body)
+        ok, msg = _outbound_send_twilio("sms", to_num, body)
         return {"ok": ok, "message": msg}
     if at in ("send_reservation_received", "send_reservation_confirmed", "send_reservation_denied", "send_reservation_reminder"):
         to_num = str(pl.get("to") or pl.get("phone") or "").strip()
@@ -2383,6 +3041,26 @@ def admin_api_outbound_template_preview():
     pl = data.get("payload") or {}
     if not isinstance(pl, dict):
         pl = {}
+    if at == "send_whatsapp":
+        tk = str(pl.get("template_key") or "").strip().lower()
+        if tk not in ("reservation_received", "reservation_confirmed", "reservation_denied", "reservation_reminder"):
+            return jsonify({"ok": False, "error": "send_whatsapp preview requires payload.template_key"}), 400
+        to_number = str(pl.get("to") or pl.get("phone") or "").strip()
+        venue_name = str(pl.get("venue_name") or "the venue").strip()
+        reservation_details = str(pl.get("reservation_details") or pl.get("message") or pl.get("body") or "").strip()
+        if not to_number:
+            return jsonify({"ok": False, "error": "Missing recipient number"}), 400
+        wa_sid = _get_whatsapp_template_sid(tk)
+        preview = {
+            "kind": tk,
+            "to_input": to_number,
+            "to_e164": _normalize_phone_e164(to_number) or "",
+            "sms_body": "",
+            "wa_template_sid": wa_sid,
+            "wa_template_configured": bool(wa_sid),
+            "wa_variables": _whatsapp_variables_for_template_key(tk, venue_name, reservation_details),
+        }
+        return jsonify({"ok": True, "preview": preview})
     if at not in (
         "send_confirmation",
         "send_reservation_received",
@@ -2706,6 +3384,11 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
         _audit("ai.reply_draft", {"row": row_num or None, "draft": draft[:2000]})
         return {"ok": True, "applied": "reply_draft"}
 
+    if typ == "correct_contact":
+        note = str(payload.get("issue") or "invalid_or_missing_contact").strip() or "invalid_or_missing_contact"
+        _audit("ai.correct_contact", {"row": row_num or None, "issue": note})
+        return {"ok": True, "applied": "correct_contact"}
+
     # VIP / Status require a valid row number
     if row_num < 2:
         return {"ok": False, "error": "Missing/invalid sheet row"}
@@ -2766,27 +3449,65 @@ def _queue_apply_action(action: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
     except Exception as e:
         return {"ok": False, "error": f"Apply failed: {e}"}
 
-def _ai_build_lead_prompt(lead: Dict[str, Any]) -> str:
-    # Keep prompt small + deterministic
-    return (
-        "Lead intake:\n"
-        f"- intent: {lead.get('intent','')}\n"
-        f"- contact: {lead.get('contact','')}\n"
-        f"- budget: {lead.get('budget','')}\n"
-        f"- party_size: {lead.get('party_size','')}\n"
-        f"- datetime: {lead.get('datetime','')}\n"
-        f"- notes: {lead.get('notes','')}\n"
-        f"- lang: {lead.get('lang','')}\n"
-        "\nReturn JSON only."
-    )
+_FOCUS_GUIDANCE: Dict[str, str] = {
+    "vip": (
+        "Focus: VIP. Prioritise vip_tag and outbound messages (send_sms / "
+        "send_email / send_whatsapp) tailored to a high-value guest — warm tone, "
+        "mention upgrades or personal concierge follow-up when relevant."
+    ),
+    "reminders": (
+        "Focus: Reminders. Prioritise reservation reminders — short, polite "
+        "confirmation of the upcoming date/time. Choose SMS/WhatsApp when phone "
+        "is on file; otherwise email. Template keys 'reservation_reminder' or "
+        "'reservation_confirmed' are preferred for WhatsApp."
+    ),
+    "upgrades": (
+        "Focus: Upgrades. Prioritise proactive upsell: send a message that "
+        "offers an upgrade (table, bottle, suite, VIP add-on). Keep it brief and "
+        "value-forward."
+    ),
+    "reply_drafts": (
+        "Focus: Reply Drafts. Produce a reply_draft action with a short, "
+        "on-brand message the operator can edit and send."
+    ),
+    "all": "",
+}
 
-def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[str, Any]:
+
+def _ai_build_lead_prompt(lead: Dict[str, Any], focus_mode: str = "all") -> str:
+    # Keep prompt small + deterministic
+    focus_hint = _FOCUS_GUIDANCE.get((focus_mode or "all").strip().lower(), "")
+    lines = [
+        "Lead intake:",
+        f"- intent: {lead.get('intent','')}",
+        f"- contact: {lead.get('contact','')}",
+        f"- budget: {lead.get('budget','')}",
+        f"- party_size: {lead.get('party_size','')}",
+        f"- datetime: {lead.get('datetime','')}",
+        f"- notes: {lead.get('notes','')}",
+        f"- lang: {lead.get('lang','')}",
+    ]
+    if focus_hint:
+        lines.append("")
+        lines.append(focus_hint)
+    lines.append("")
+    lines.append("Return JSON only.")
+    return "\n".join(lines)
+
+def _ai_suggest_actions_for_lead(
+    lead: Dict[str, Any],
+    sheet_row: int,
+    focus_mode: str = "all",
+    *,
+    manual_run: bool = False,
+    settings_override: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     """
     Ask the model for suggested workflow actions for a new lead.
     Returns dict: {ok, confidence, actions:[{type,payload,reason}], notes}
     """
-    settings = _get_ai_settings()
-    if not settings.get("enabled"):
+    settings = settings_override or _get_ai_settings()
+    if (not settings.get("enabled")) and (not manual_run):
         return {"ok": False, "error": "AI disabled"}
 
     # Build allowed action schema based on settings
@@ -2795,6 +3516,15 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[s
     # workflow does not generate. Proactive drafts are handled elsewhere.
     allowed_types = [k for k, v in allow.items() if v and k != "reply_draft"]
     if not allowed_types:
+        # region agent log
+        _agent_debug_log(
+            run_id="pre-fix",
+            hypothesis_id="H1",
+            location="app.py:_ai_suggest_actions_for_lead:allowed_types",
+            message="No allowed action types",
+            data={"sheet_row": int(sheet_row or 0), "enabled_actions": list((allow or {}).keys())},
+        )
+        # endregion
         return {"ok": False, "error": "No actions allowed"}
 
     system_msg = (settings.get("system_prompt") or "").strip()
@@ -2810,7 +3540,7 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[s
         ],
         "notes": "short string"
     }
-    user_msg = _ai_build_lead_prompt(lead) + "\n\nJSON schema:\n" + json.dumps(contract)
+    user_msg = _ai_build_lead_prompt(lead, focus_mode=focus_mode) + "\n\nJSON schema:\n" + json.dumps(contract)
 
     # Call OpenAI (best-effort). If not configured, return a safe suggestion locally.
     try:
@@ -2848,11 +3578,25 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[s
             parsed = None
 
     if not isinstance(parsed, dict):
+        # region agent log
+        _agent_debug_log(
+            run_id="pre-fix",
+            hypothesis_id="H2",
+            location="app.py:_ai_suggest_actions_for_lead:parse",
+            message="AI response not parseable JSON",
+            data={"sheet_row": int(sheet_row or 0), "raw_len": len(str(raw or ""))},
+        )
+        # endregion
         return {"ok": False, "error": "Bad AI JSON"}
 
     confidence = float(parsed.get("confidence") or 0)
     actions_in = parsed.get("actions") or []
     actions_out = []
+    lead_norm = _normalize_lead_contact_fields(lead)
+    approved_actions = _read_approved_actions_from_row(int(sheet_row or 0)) if int(sheet_row or 0) >= 2 else []
+    needs_contact_fix = False
+    valid_email = _looks_like_email(str(lead_norm.get("email") or ""))
+    valid_phone = _looks_like_phone(str(lead_norm.get("phone") or ""))
     for a in actions_in if isinstance(actions_in, list) else []:
         if not isinstance(a, dict):
             continue
@@ -2870,6 +3614,7 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[s
         # Always enforce row linkage to prevent "random actions"
         if sheet_row:
             payload["row"] = int(sheet_row)
+        payload.setdefault("venue_id", _venue_id())
         # Row-required actions must never enter queue without a valid sheet row.
         # (send_* can work without row because they can target explicit contact payloads.)
         if typ in ("vip_tag", "status_update"):
@@ -2884,10 +3629,67 @@ def _ai_suggest_actions_for_lead(lead: Dict[str, Any], sheet_row: int) -> Dict[s
         # Provide budget context for VIP min budget policies (best effort)
         if "budget" not in payload and lead.get("budget") is not None:
             payload["budget"] = lead.get("budget")
+        if typ in ("send_email", "send_sms", "send_whatsapp"):
+            contact_ok = False
+            if typ == "send_email":
+                contact_ok = _looks_like_email(str(payload.get("to") or lead_norm.get("email") or ""))
+            else:
+                contact_ok = _looks_like_phone(str(payload.get("to") or lead_norm.get("phone") or ""))
+            if not contact_ok:
+                needs_contact_fix = True
+                continue
+        # Guardrail: only suggest Correct Contact when no valid channel exists.
+        if typ == "correct_contact" and (valid_email or valid_phone):
+            continue
         ok_pol, _why_pol = _policy_check_action(partner_id, typ, payload, role="system")
         if not ok_pol:
             continue
+        if _is_action_already_approved(approved_actions, typ, payload):
+            continue
         actions_out.append({"type": typ, "payload": payload, "reason": str(a.get("reason") or "").strip()[:240]})
+    # Only request "Correct Contact" when there is no valid reachable channel at all.
+    # If either email or phone is valid, AI should still suggest viable actions.
+    if needs_contact_fix and (not valid_email and not valid_phone) and sheet_row and not _is_action_already_approved(approved_actions, "correct_contact", {"row": int(sheet_row)}):
+        actions_out.append({
+            "type": "correct_contact",
+            "payload": {"row": int(sheet_row), "sheet_row": int(sheet_row), "issue": "invalid_or_missing_contact"},
+            "reason": "Lead contact is invalid/missing for outbound channels. Request corrected phone/email first.",
+        })
+    if not actions_out and int(sheet_row or 0) >= 2:
+        if (not valid_email and not valid_phone) and allow.get("correct_contact", True):
+            if not _is_action_already_approved(approved_actions, "correct_contact", {"row": int(sheet_row)}):
+                actions_out.append({
+                    "type": "correct_contact",
+                    "payload": {"row": int(sheet_row), "sheet_row": int(sheet_row), "issue": "invalid_or_missing_contact"},
+                    "reason": "No valid phone/email found. Correct contact details first.",
+                })
+        if not actions_out and allow.get("vip_tag", False):
+            vip_hint = str(lead.get("vip") or "").strip().lower() in ("yes", "true", "1", "y", "vip")
+            budget_n = _parse_budget_to_number(lead.get("budget"))
+            if vip_hint or budget_n >= 1000:
+                if not _is_action_already_approved(approved_actions, "vip_tag", {"row": int(sheet_row), "vip": "VIP"}):
+                    actions_out.append({
+                        "type": "vip_tag",
+                        "payload": {"row": int(sheet_row), "sheet_row": int(sheet_row), "vip": "VIP", "budget": lead.get("budget")},
+                        "reason": "Lead appears VIP/high-value from profile and budget.",
+                    })
+    # region agent log
+    _agent_debug_log(
+        run_id="pre-fix",
+        hypothesis_id="H3",
+        location="app.py:_ai_suggest_actions_for_lead:final",
+        message="Suggestion result after filtering",
+        data={
+            "sheet_row": int(sheet_row or 0),
+            "actions_in_count": len(actions_in) if isinstance(actions_in, list) else 0,
+            "actions_out_count": len(actions_out),
+            "needs_contact_fix": bool(needs_contact_fix),
+            "valid_email": bool(valid_email),
+            "valid_phone": bool(valid_phone),
+            "actions_out_types": [str(x.get("type") or "") for x in (actions_out or []) if isinstance(x, dict)],
+        },
+    )
+    # endregion
     return {"ok": True, "confidence": confidence, "actions": actions_out, "notes": str(parsed.get("notes") or "").strip()[:240]}
 
 def _ai_enqueue_or_apply_for_new_lead(lead: Dict[str, Any], sheet_row: int) -> None:
@@ -4869,6 +5671,7 @@ def ensure_sheet_schema(ws) -> List[str]:
         "budget",
         "notes",
         "vibe",
+        "approved_ai_actions_json",
     ]
 
     existing = ws.row_values(1) or []
@@ -7932,6 +8735,25 @@ def _safe_write_json(path: str, data: dict) -> None:
     except Exception:
         pass
 
+
+def _agent_debug_log(run_id: str, hypothesis_id: str, location: str, message: str, data: Optional[Dict[str, Any]] = None) -> None:
+    try:
+        payload = {
+            "sessionId": "8fe9fc",
+            "runId": str(run_id or ""),
+            "hypothesisId": str(hypothesis_id or ""),
+            "location": str(location or ""),
+            "message": str(message or ""),
+            "data": data or {},
+            "timestamp": int(time.time() * 1000),
+        }
+        # region agent log
+        with open("debug-8fe9fc.log", "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload, ensure_ascii=False) + "\n")
+        # endregion
+    except Exception:
+        return
+
 def _ensure_ws(gc, title: str, venue_id: Optional[str] = None):
     sh = _open_default_spreadsheet(gc, venue_id=venue_id)
     try:
@@ -8818,6 +9640,54 @@ def admin_api_ai_settings():
         mc = max(0.0, min(1.0, mc))
         patch["min_confidence"] = mc
 
+    if "focus_mode" in data:
+        fm = str(data.get("focus_mode") or "all").strip().lower()
+        if fm not in ("all", "vip", "reminders", "upgrades", "reply_drafts"):
+            return jsonify({"ok": False, "error": "Invalid focus_mode"}), 400
+        patch["focus_mode"] = fm
+
+    if "focus_filters" in data and isinstance(data.get("focus_filters"), dict):
+        ff_in = data.get("focus_filters") or {}
+        ff_patch: Dict[str, Any] = {}
+        for k in (
+            "vip_only",
+            "reminders_only",
+            "upgrades_only",
+            "reply_drafts_only",
+            "suggest_email",
+            "suggest_sms",
+            "suggest_whatsapp",
+            "allow_vip_tagging",
+            "allow_reply_drafts",
+            "allow_reminder_suggestions",
+            "allow_upgrade_suggestions",
+        ):
+            if k in ff_in:
+                ff_patch[k] = bool(as_bool(ff_in.get(k)))
+        if ff_patch:
+            patch["focus_filters"] = _deep_merge(
+                current.get("focus_filters") or _default_ai_settings().get("focus_filters") or {},
+                ff_patch,
+            )
+
+    if "channel_preferences" in data and isinstance(data.get("channel_preferences"), dict):
+        cp_in = data.get("channel_preferences") or {}
+        cp_patch: Dict[str, Any] = {}
+        for k in (
+            "prefer_email_for_confirmations",
+            "prefer_sms_for_urgent",
+            "prefer_whatsapp_when_available",
+            "rank_all_available_channels",
+            "auto_detect_best_channel",
+        ):
+            if k in cp_in:
+                cp_patch[k] = bool(as_bool(cp_in.get(k)))
+        if cp_patch:
+            patch["channel_preferences"] = _deep_merge(
+                current.get("channel_preferences") or _default_ai_settings().get("channel_preferences") or {},
+                cp_patch,
+            )
+
     # Feature flags (manager-safe). These do NOT grant new powers; they only further restrict actions.
     feats_in = data.get("features")
     if isinstance(feats_in, dict):
@@ -8846,7 +9716,7 @@ def admin_api_ai_settings():
         if "allow_actions" in data and isinstance(data.get("allow_actions"), dict):
             # Only allow known keys (including outbound for AI-suggested messages)
             allow = {}
-            for k in ("vip_tag", "status_update", "reply_draft", "send_sms", "send_email", "send_whatsapp"):
+            for k in ("vip_tag", "status_update", "reply_draft", "correct_contact", "send_sms", "send_email", "send_whatsapp"):
                 if k in data["allow_actions"]:
                     allow[k] = bool(as_bool(data["allow_actions"].get(k)))
             patch["allow_actions"] = _deep_merge(current.get("allow_actions") or {}, allow)
@@ -8892,6 +9762,7 @@ def admin_api_ai_run():
 
     data = request.get_json(silent=True) or {}
     mode = (data.get("mode") or "new").strip().lower()
+    debug_run = bool(str(request.args.get("debug") or data.get("debug") or "").strip().lower() in ("1", "true", "yes", "y", "on"))
     try:
         limit = int(data.get("limit") or 5)
     except Exception:
@@ -8905,6 +9776,32 @@ def admin_api_ai_run():
 
     # Per-venue AI settings (used for selecting which statuses count as "new")
     ai_settings = _get_ai_settings()
+    focus_mode = str(data.get("focus_mode") or ai_settings.get("focus_mode") or "all").strip().lower()
+    if focus_mode not in ("all", "vip", "reminders", "upgrades", "reply_drafts"):
+        focus_mode = "all"
+    channel_mode = str(data.get("channel") or "any").strip().lower()
+    if channel_mode not in ("any", "all", "", "email", "sms", "whatsapp"):
+        channel_mode = "any"
+    run_settings = _deep_merge(_default_ai_settings(), ai_settings)
+    # Manual AI runs should honor Focus/Channel controls even if owner-level
+    # outbound allow_actions were left off in settings.
+    allow_run = dict((run_settings.get("allow_actions") or {}))
+    ff = (run_settings.get("focus_filters") or {}) if isinstance(run_settings.get("focus_filters"), dict) else {}
+    if channel_mode in ("any", "all", ""):
+        if bool(ff.get("suggest_email", True)):
+            allow_run["send_email"] = True
+        if bool(ff.get("suggest_sms", True)):
+            allow_run["send_sms"] = True
+        if bool(ff.get("suggest_whatsapp", True)):
+            allow_run["send_whatsapp"] = True
+    elif channel_mode == "email":
+        allow_run["send_email"] = True
+    elif channel_mode == "sms":
+        allow_run["send_sms"] = True
+    elif channel_mode == "whatsapp":
+        allow_run["send_whatsapp"] = True
+    run_settings["allow_actions"] = allow_run
+
     raw_new_statuses = ai_settings.get("new_status_values")
     if isinstance(raw_new_statuses, list) and raw_new_statuses:
         new_status_values = {
@@ -8947,7 +9844,9 @@ def admin_api_ai_run():
             "vibe": get("vibe"),
             "status": get("status"),
             "vip": get("vip"),
+            "venue_id": get("venue_id"),
         }
+        lead = _normalize_lead_contact_fields(lead)
         # Normalize vip to bool-ish for downstream policy + prompts
         lead["vip"] = str(lead.get("vip") or "").strip().lower() in ["1", "true", "yes", "y"]
 
@@ -9003,6 +9902,8 @@ def admin_api_ai_run():
             return jsonify({"ok": True, "ran": 0, "proposed": 0, "queue_ids": []})
 
         status_col = hmap.get("status")  # 1-based, optional
+        venue_col = hmap.get("venue_id")  # 1-based, optional
+        target_vid = _slugify_venue_id(_venue_id())
         # Walk from bottom (newest) upward, collect rows whose status is in the
         # configurable "new_status_values" list. If there is no status column,
         # treat all rows as eligible and rely on limit for bounding.
@@ -9010,6 +9911,14 @@ def admin_api_ai_run():
             if len(targets) >= limit:
                 break
             rv = rows[i]
+            if venue_col:
+                row_vid_raw = ""
+                if (venue_col - 1) < len(rv):
+                    row_vid_raw = (rv[venue_col - 1] or "").strip()
+                row_vid = _slugify_venue_id(row_vid_raw) if row_vid_raw else ""
+                # Strict tenant guard for AI runs: never process another venue's row.
+                if row_vid and row_vid != target_vid:
+                    continue
             if status_col:
                 st = ""
                 if (status_col - 1) < len(rv):
@@ -9021,30 +9930,152 @@ def admin_api_ai_run():
 
     proposed_ids = []
     ran = 0
+    row_debug: List[Dict[str, Any]] = []
 
     # Run AI and push proposals into the queue
     for sheet_row, lead in targets:
         ran += 1
-        out = _ai_suggest_actions_for_lead(lead, sheet_row=sheet_row)
+        out = _ai_suggest_actions_for_lead(
+            lead,
+            sheet_row=sheet_row,
+            focus_mode=focus_mode,
+            manual_run=True,
+            settings_override=run_settings,
+        )
+        if debug_run:
+            try:
+                row_debug.append({
+                    "row": int(sheet_row or 0),
+                    "ok": bool((out or {}).get("ok")),
+                    "error": str((out or {}).get("error") or ""),
+                    "actions_count": len((out or {}).get("actions") or []),
+                    "debug": (out or {}).get("debug") if isinstance(out, dict) else {},
+                    "lead_has_email": bool(_looks_like_email(str(lead.get("email") or ""))),
+                    "lead_has_phone": bool(_looks_like_phone(str(lead.get("phone") or ""))),
+                    "row_venue_id": str(lead.get("venue_id") or ""),
+                })
+            except Exception:
+                pass
+        # region agent log
+        _agent_debug_log(
+            run_id="pre-fix",
+            hypothesis_id="H4",
+            location="app.py:admin_api_ai_run:row_out",
+            message="Per-row AI suggestion output",
+            data={
+                "sheet_row": int(sheet_row or 0),
+                "ok": bool((out or {}).get("ok")),
+                "error": str((out or {}).get("error") or ""),
+                "actions_count": len((out or {}).get("actions") or []),
+            },
+        )
+        # endregion
         if not out or not out.get("ok"):
+            try:
+                _audit("ai.run.skip", {"row": int(sheet_row), "reason": str((out or {}).get("error") or "suggestion_failed")[:240]})
+            except Exception:
+                pass
             continue
+        approved_actions_for_row = _read_approved_actions_from_row(int(sheet_row))
         conf = float(out.get("confidence") or 0.0)
         try:
             conf = max(0.0, min(1.0, conf))
         except Exception:
             conf = 0.0
         actions = out.get("actions") or []
+        if not actions:
+            try:
+                _audit("ai.run.skip", {"row": int(sheet_row), "reason": "no_actions_after_filters"})
+            except Exception:
+                pass
         for a in actions:
             typ = str(a.get("type") or "").strip()
             payload = dict(a.get("payload") or {})
+            # Attach stable lead context for UI review cards/table and send-time fallbacks.
+            # This keeps AI Queue entries self-contained (row linkage + guest identity),
+            # including runs triggered from "Run All AI" where operators need traceability.
+            lead_ctx = {
+                "name": str(lead.get("name") or "").strip(),
+                "contact": str(lead.get("contact") or lead.get("name") or "").strip(),
+                "party_size": str(lead.get("party_size") or "").strip(),
+                "datetime": str(lead.get("datetime") or "").strip(),
+                "row": int(sheet_row),
+                "phone": str(lead.get("phone") or "").strip(),
+                "email": str(lead.get("email") or "").strip(),
+            }
+            lead_snapshot = {
+                "row": int(sheet_row),
+                "name": str(lead.get("name") or "").strip(),
+                "phone": str(lead.get("phone") or "").strip(),
+                "email": str(lead.get("email") or "").strip(),
+                "date": str(lead.get("date") or "").strip(),
+                "time": str(lead.get("time") or "").strip(),
+                "party_size": str(lead.get("party_size") or "").strip(),
+                "entry_point": str(lead.get("entry_point") or "").strip(),
+                "tier": str(lead.get("tier") or "").strip(),
+                "queue": str(lead.get("queue") or "").strip(),
+                "budget": str(lead.get("budget") or "").strip(),
+                "notes": str(lead.get("notes") or "").strip(),
+            }
+            if not isinstance(payload.get("lead"), dict):
+                payload["lead"] = lead_ctx
+            else:
+                # Merge, but never lose resolved row linkage.
+                pl = dict(payload.get("lead") or {})
+                pl.setdefault("name", lead_ctx.get("name"))
+                pl.setdefault("contact", lead_ctx.get("contact"))
+                pl.setdefault("party_size", lead_ctx.get("party_size"))
+                pl.setdefault("datetime", lead_ctx.get("datetime"))
+                pl["row"] = int(sheet_row)
+                pl.setdefault("phone", lead_ctx.get("phone"))
+                pl.setdefault("email", lead_ctx.get("email"))
+                payload["lead"] = pl
+            if not isinstance(payload.get("lead_snapshot"), dict):
+                payload["lead_snapshot"] = lead_snapshot
+            else:
+                snap = dict(payload.get("lead_snapshot") or {})
+                for k, v in lead_snapshot.items():
+                    if snap.get(k) in (None, ""):
+                        snap[k] = v
+                snap["row"] = int(sheet_row)
+                payload["lead_snapshot"] = snap
             if typ == "vip_tag" and not str(payload.get("vip") or "").strip():
                 payload["vip"] = "VIP"
             # Always attach sheet_row for safe apply handlers
             if "sheet_row" not in payload:
                 payload["sheet_row"] = sheet_row
             payload["row"] = sheet_row  # outbound/send also uses "row"
+            payload.setdefault("venue_id", _venue_id())
             # Enrich outbound payload from drafts + lead when body/to missing
-            if typ in ("send_sms", "send_email", "send_whatsapp"):
+            if typ == "send_whatsapp":
+                if not str(payload.get("template_key") or "").strip():
+                    payload["template_key"] = _infer_whatsapp_template_key(lead)
+                payload.setdefault("venue_name", _venue_display_name())
+                if not str(payload.get("reservation_details") or "").strip():
+                    det_parts = []
+                    if lead.get("date"):
+                        det_parts.append(str(lead.get("date")))
+                    if lead.get("time"):
+                        det_parts.append(str(lead.get("time")))
+                    if lead.get("party_size"):
+                        det_parts.append(f"party of {lead.get('party_size')}")
+                    if lead.get("name"):
+                        det_parts.append(f"for {lead.get('name')}")
+                    payload["reservation_details"] = ", ".join(det_parts) if det_parts else str(lead.get("datetime") or "").strip()
+                if not payload.get("to"):
+                    payload["to"] = str(lead.get("phone") or "").strip()
+                rc = _recommend_channel(
+                    lead,
+                    f'{str(payload.get("template_key") or "")}:send_whatsapp',
+                    ai_settings,
+                    payload_to=str(payload.get("to") or ""),
+                    action_type=typ,
+                )
+                payload["recommended_channel"] = rc.get("channel")
+                payload["channel_ranked"] = rc.get("ranked")
+                payload["channel_reason"] = rc.get("reason")
+                payload["channels_available"] = rc.get("available") or []
+            elif typ in ("send_sms", "send_email"):
                 lead_data = {k: str(lead.get(k) or "").strip() for k in ["name", "date", "time", "party_size", "phone", "email"]}
                 if not payload.get("to"):
                     payload["to"] = lead_data.get("email") if typ == "send_email" else lead_data.get("phone")
@@ -9056,6 +10087,88 @@ def admin_api_ai_run():
                         payload["body"] = payload["message"] = body
                     if subj and typ == "send_email":
                         payload["subject"] = subj
+                rc2 = _recommend_channel(
+                    lead, typ, ai_settings,
+                    payload_to=str(payload.get("to") or ""),
+                    action_type=typ,
+                )
+                payload["recommended_channel"] = rc2.get("channel")
+                payload["channel_ranked"] = rc2.get("ranked")
+                payload["channel_reason"] = rc2.get("reason")
+                payload["channels_available"] = rc2.get("available") or []
+
+            # Channel sanity: don't enqueue an action the lead can't actually receive.
+            # If AI proposed send_email but no email is available → switch to SMS/WA.
+            # If AI proposed send_sms/whatsapp but no phone → switch to email. Drop if nothing works.
+            if typ in ("send_email", "send_sms", "send_whatsapp"):
+                avail = set(payload.get("channels_available") or [])
+                # Recompute available from lead + payload.to when missing.
+                if not avail:
+                    pt = str(payload.get("to") or "")
+                    lead_email = str(lead.get("email") or "").strip() or (pt if _looks_like_email(pt) else "")
+                    lead_phone = str(lead.get("phone") or "").strip() or (pt if _looks_like_phone(pt) else "")
+                    if lead_email:
+                        avail.add("email")
+                    if lead_phone:
+                        avail.add("sms")
+                    wa_on = bool(_venue_features().get("whatsapp_outbound") or _venue_features().get("whatsapp")) or bool(os.environ.get("TWILIO_WHATSAPP_FROM", "").strip())
+                    if wa_on and lead_phone:
+                        avail.add("whatsapp")
+                action_ch = {"send_email": "email", "send_sms": "sms", "send_whatsapp": "whatsapp"}[typ]
+                if action_ch not in avail:
+                    # pick a fallback channel from available, preferring the AI's channel family.
+                    fallback = None
+                    if action_ch == "email":
+                        fallback = "sms" if "sms" in avail else ("whatsapp" if "whatsapp" in avail else None)
+                    else:
+                        fallback = "email" if "email" in avail else None
+                    if not fallback:
+                        # No viable contact channel — skip this outbound action.
+                        continue
+                    new_typ = {"email": "send_email", "sms": "send_sms", "whatsapp": "send_whatsapp"}[fallback]
+                    # Rewrite type and `to`, and re-enrich body for the new channel.
+                    typ = new_typ
+                    if fallback == "email":
+                        payload["to"] = str(lead.get("email") or "").strip() or payload.get("to") or ""
+                    else:
+                        payload["to"] = str(lead.get("phone") or "").strip() or payload.get("to") or ""
+                    if fallback in ("sms", "whatsapp") and not (payload.get("body") or payload.get("message")):
+                        lead_data = {k: str(lead.get(k) or "").strip() for k in ["name", "date", "time", "party_size", "phone", "email"]}
+                        dk = _select_draft_for_channel("sms", "confirm")
+                        b, _ = _get_draft_content(dk, lead_data)
+                        if b:
+                            payload["body"] = payload["message"] = b
+                    if fallback == "email" and not payload.get("body") and not payload.get("message"):
+                        lead_data = {k: str(lead.get(k) or "").strip() for k in ["name", "date", "time", "party_size", "phone", "email"]}
+                        dk = _select_draft_for_channel("email", "confirm")
+                        b, subj2 = _get_draft_content(dk, lead_data)
+                        if b:
+                            payload["body"] = payload["message"] = b
+                        if subj2:
+                            payload["subject"] = subj2
+                    payload["recommended_channel"] = fallback
+                    payload["channel_reason"] = (
+                        f"Switched to {fallback.upper()} — lead has no "
+                        f"{action_ch} contact on file"
+                    )
+
+            # Ensure policy checks (including VIP minimum budget) are evaluated on
+            # the final, normalized action + payload that will be enqueued.
+            if "budget" not in payload and lead.get("budget") is not None:
+                payload["budget"] = lead.get("budget")
+            try:
+                partner_id = _derive_partner_id(lead=lead, payload=payload)
+            except Exception:
+                partner_id = "default"
+            ok_pol, why_pol = _policy_check_action(partner_id, typ, payload, role=role)
+            if not ok_pol:
+                _audit("policy.block", {"partner": partner_id, "type": typ, "reason": why_pol, "row": payload.get("row")})
+                continue
+
+            if not _ai_run_action_passes_filters(typ, payload, focus_mode, channel_mode):
+                continue
+            if _is_action_already_approved(approved_actions_for_row, typ, payload):
+                continue
             rationale = str(a.get("reason") or out.get("notes") or "")[:1500]
             entry = {
                 "id": _queue_new_id(),
@@ -9075,11 +10188,138 @@ def admin_api_ai_run():
             _queue_add(entry)
             proposed_ids.append(entry["id"])
 
+            # Mirror send_sms as a WhatsApp suggestion when WA is enabled + allowed.
+            # This gives operators a visible WhatsApp option without changing the
+            # original SMS proposal. Skip if the AI already proposed a WA action.
+            try:
+                allow_wa = bool((ai_settings.get("allow_actions") or {}).get("send_whatsapp"))
+                wa_on = bool(
+                    _venue_features().get("whatsapp_outbound")
+                    or _venue_features().get("whatsapp")
+                ) or bool(os.environ.get("TWILIO_WHATSAPP_FROM", "").strip())
+                lead_phone = str(lead.get("phone") or "").strip()
+                already_wa = any(
+                    str(x.get("type") or "").lower() == "send_whatsapp" for x in actions
+                )
+                pref = (ai_settings.get("channel_preferences") or {}) if isinstance(ai_settings.get("channel_preferences"), dict) else {}
+                prefer_wa = bool(pref.get("prefer_whatsapp_when_available", False))
+                lead_email = str(lead.get("email") or "").strip()
+                reminder_like = (
+                    str(payload.get("template_key") or "").strip().lower() == "reservation_reminder"
+                    or str(focus_mode or "").strip().lower() == "reminders"
+                    or "remind" in str(rationale or "").lower()
+                )
+                if (
+                    typ == "send_sms"
+                    and allow_wa
+                    and wa_on
+                    and lead_phone
+                    and not already_wa
+                    and (
+                        # If lead has email, mirror to WA only when venue prefers WA
+                        # and the suggestion is reminder-like; otherwise avoid WA spam.
+                        (not lead_email)
+                        or (prefer_wa and reminder_like)
+                    )
+                    and _ai_run_action_passes_filters(
+                        "send_whatsapp", payload, focus_mode, channel_mode
+                    )
+                ):
+                    wa_payload = dict(payload)
+                    wa_payload["to"] = lead_phone
+                    wa_payload["template_key"] = _infer_whatsapp_template_key(lead)
+                    wa_payload.setdefault("venue_name", _venue_display_name())
+                    wa_payload.setdefault("venue_id", _venue_id())
+                    if not str(wa_payload.get("reservation_details") or "").strip():
+                        det_parts = []
+                        if lead.get("date"):
+                            det_parts.append(str(lead.get("date")))
+                        if lead.get("time"):
+                            det_parts.append(str(lead.get("time")))
+                        if lead.get("party_size"):
+                            det_parts.append(f"party of {lead.get('party_size')}")
+                        if lead.get("name"):
+                            det_parts.append(f"for {lead.get('name')}")
+                        wa_payload["reservation_details"] = (
+                            ", ".join(det_parts)
+                            if det_parts
+                            else str(lead.get("datetime") or "").strip()
+                        )
+                    rc_wa = _recommend_channel(
+                        lead,
+                        f'{wa_payload.get("template_key") or ""}:send_whatsapp',
+                        ai_settings,
+                        payload_to=lead_phone,
+                        action_type="send_whatsapp",
+                    )
+                    wa_payload["recommended_channel"] = rc_wa.get("channel")
+                    wa_payload["channel_ranked"] = rc_wa.get("ranked")
+                    wa_payload["channel_reason"] = (
+                        "Parallel WhatsApp option (policy + preference gated)"
+                    )
+                    wa_payload["channels_available"] = rc_wa.get("available") or []
+                    if "budget" not in wa_payload and lead.get("budget") is not None:
+                        wa_payload["budget"] = lead.get("budget")
+                    try:
+                        wa_partner = _derive_partner_id(lead=lead, payload=wa_payload)
+                    except Exception:
+                        wa_partner = "default"
+                    ok_wa_pol, wa_why_pol = _policy_check_action(wa_partner, "send_whatsapp", wa_payload, role=role)
+                    if not ok_wa_pol:
+                        _audit("policy.block", {"partner": wa_partner, "type": "send_whatsapp", "reason": wa_why_pol, "row": wa_payload.get("row")})
+                        continue
+                    if _is_action_already_approved(approved_actions_for_row, "send_whatsapp", wa_payload):
+                        continue
+                    wa_entry = {
+                        "id": _queue_new_id(),
+                        "type": "send_whatsapp",
+                        "payload": wa_payload,
+                        "confidence": conf,
+                        "rationale": (rationale or "")[:1400]
+                        + (" · Mirrored as WhatsApp template for richer delivery." if rationale else "Mirrored as WhatsApp template for richer delivery."),
+                        "status": "pending",
+                        "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "created_by": actor,
+                        "created_role": role,
+                        "reviewed_at": None,
+                        "reviewed_by": None,
+                        "reviewed_role": None,
+                        "applied_result": None,
+                    }
+                    _queue_add(wa_entry)
+                    proposed_ids.append(wa_entry["id"])
+            except Exception:
+                pass
+
     if proposed_ids:
         _audit("ai.run.manual", {"mode": mode, "row": row_num or None, "ran": ran, "proposed": len(proposed_ids)})
         _notify("ai.run.manual", {"ran": ran, "proposed": len(proposed_ids), "by": actor, "role": role}, targets=["owner","manager"])
 
-    return jsonify({"ok": True, "ran": ran, "proposed": len(proposed_ids), "queue_ids": proposed_ids})
+    # region agent log
+    _agent_debug_log(
+        run_id="pre-fix",
+        hypothesis_id="H5",
+        location="app.py:admin_api_ai_run:final",
+        message="AI run aggregate result",
+        data={"mode": str(mode), "ran": int(ran), "proposed": len(proposed_ids), "target_count": len(targets)},
+    )
+    # endregion
+    resp = {"ok": True, "ran": ran, "proposed": len(proposed_ids), "queue_ids": proposed_ids}
+    if debug_run:
+        resp["debug_rows"] = row_debug[:30]
+        resp["debug_summary"] = {
+            "target_count": len(targets),
+            "ran": ran,
+            "proposed": len(proposed_ids),
+            "mode": mode,
+            "focus_mode": focus_mode,
+            "channel_mode": channel_mode,
+            "ai_enabled_setting": bool(_get_ai_settings().get("enabled")),
+            "target_venue_id": _slugify_venue_id(_venue_id()),
+            "new_status_values": sorted(list(new_status_values)),
+            "allow_actions": _get_ai_settings().get("allow_actions") or {},
+        }
+    return jsonify(resp)
 @app.route("/admin/api/ai/queue", methods=["GET"])
 def admin_api_ai_queue_list():
     ok, resp = _require_admin(min_role="manager")
@@ -9091,48 +10331,82 @@ def admin_api_ai_queue_list():
         ctx = {}
     role = ctx.get("role", "")
     queue = _load_ai_queue()
-    # optional status filter
-    status = (request.args.get("status") or "").strip().lower()
-    if status:
-        queue = [q for q in queue if str(q.get("status") or "").lower() == status]
 
-    # optional time filter (server-side): created_at within last N minutes
-    time_param = (request.args.get("time") or "").strip()
-    time_minutes = _parse_time_range_minutes(time_param) if time_param else None
-    if time_minutes is None and time_param:
+    def _parse_created_at_q(s: Any) -> Optional[datetime]:
         try:
-            time_minutes = int(time_param)
-        except Exception:
-            time_minutes = None
-    if time_minutes and time_minutes > 0:
-        cutoff = datetime.now(timezone.utc) - timedelta(minutes=time_minutes)
-        def _parse_created_at(s: Any) -> Optional[datetime]:
-            try:
-                if s is None:
-                    return None
-                ts = str(s).strip()
-                if not ts:
-                    return None
-                # Normalize Z -> +00:00 for fromisoformat
-                ts = ts.replace("Z", "+00:00")
-                dt = datetime.fromisoformat(ts)
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-                return dt.astimezone(timezone.utc)
-            except Exception:
+            if s is None:
                 return None
-        queue = [
-            q for q in queue
-            if (_parse_created_at(q.get("created_at")) or cutoff) >= cutoff
-        ]
+            ts = str(s).strip()
+            if not ts:
+                return None
+            ts = ts.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(ts)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        except Exception:
+            return None
 
-    # optional type filter
+    # optional status filter (supports synthetic "active" = pending OR approved)
+    status = _norm_status(request.args.get("status"))
+    if status:
+        if status in ("active", "approved+pending", "pending+approved", "approved_pending"):
+            queue = [
+                q for q in queue
+                if _norm_status(q.get("status")) in ("pending", "approved")
+            ]
+        else:
+            queue = [q for q in queue if _norm_status(q.get("status")) == status]
+
+    # optional time filter (server-side): created_at within last N minutes, or calendar "today" (UTC)
+    time_param = (request.args.get("time") or "").strip()
+    if time_param.lower() == "today":
+        today_d = datetime.now(timezone.utc).date()
+
+        def _is_today_entry(q: Dict[str, Any]) -> bool:
+            dt = _parse_created_at_q(q.get("created_at"))
+            return dt is not None and dt.date() == today_d
+
+        queue = [q for q in queue if _is_today_entry(q)]
+    else:
+        time_minutes = _parse_time_range_minutes(time_param) if time_param else None
+        if time_minutes is None and time_param:
+            try:
+                time_minutes = int(time_param)
+            except Exception:
+                time_minutes = None
+        if time_minutes and time_minutes > 0:
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=time_minutes)
+            queue = [
+                q for q in queue
+                if (_parse_created_at_q(q.get("created_at")) or cutoff) >= cutoff
+            ]
+
+    counts = _ai_queue_bucket_counts(queue)
+
+    # optional focus preset (vip|reminders|upgrades|reply_drafts|all)
+    focus_param = (request.args.get("focus") or "").strip().lower()
+    if focus_param:
+        queue = [q for q in queue if _queue_item_matches_focus_param(q, focus_param)]
+
+    # optional channel filter (email|sms|whatsapp)
+    channel_param = (request.args.get("channel") or "").strip().lower()
+    if channel_param in ("email", "sms", "whatsapp"):
+        queue = [q for q in queue if channel_param in _queue_item_channels(q)]
+
+    # optional type filter (canonical send_whatsapp matches legacy reservation types)
     type_param = (request.args.get("type") or "").strip().lower()
     if type_param:
-        queue = [
-            q for q in queue
-            if str(q.get("type") or "").strip().lower() == type_param
-        ]
+        if type_param == "send_whatsapp":
+            queue = [
+                q for q in queue
+                if _normalize_ai_action_type(str(q.get("type") or "")) == "send_whatsapp"
+            ]
+        else:
+            queue = [
+                q for q in queue
+                if str(q.get("type") or "").strip().lower() == type_param
+            ]
 
     # optional min confidence filter
     conf_param = (request.args.get("conf") or "").strip()
@@ -9147,8 +10421,60 @@ def admin_api_ai_queue_list():
                 if float(q.get("confidence") or 0.0) >= min_conf
             ]
 
-    # Always return newest first (so recent-time UX is consistent)
-    def _parse_created_at(s: Any) -> Optional[datetime]:
+    queue.sort(
+        key=lambda q: _parse_created_at_q(q.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True,
+    )
+
+    # optional search across queue item + payload fields
+    q_param = (request.args.get("q") or "").strip().lower()
+    if q_param:
+        def _payload_blob(it: Dict[str, Any]) -> str:
+            try:
+                p = it.get("payload") or {}
+                if not isinstance(p, dict):
+                    p = {}
+                parts = [
+                    str(it.get("type") or ""),
+                    str(it.get("status") or ""),
+                    str(it.get("rationale") or ""),
+                    str(it.get("created_at") or ""),
+                    str(it.get("confidence") or ""),
+                ]
+                for k in (
+                    "reservation_id",
+                    "row",
+                    "sheet_row",
+                    "draft",
+                    "to",
+                    "subject",
+                    "message",
+                    "phone",
+                    "email",
+                    "template_key",
+                    "venue_name",
+                    "reservation_details",
+                ):
+                    if k in p:
+                        parts.append(str(p.get(k) or ""))
+                parts.append(json.dumps(p, ensure_ascii=False))
+                return " ".join(parts).lower()
+            except Exception:
+                return str(it).lower()
+
+        queue = [it for it in queue if q_param in _payload_blob(it)]
+    return jsonify({"ok": True, "role": role, "queue": queue[:500], "total_matched": len(queue), "counts": counts})
+
+
+@app.route("/admin/api/ai/queue/summary", methods=["GET"])
+def admin_api_ai_queue_summary():
+    """AI Queue stats snapshot (venue-wide or filtered)."""
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    queue = _load_ai_queue()
+
+    def _parse_created_at_q(s: Any) -> Optional[datetime]:
         try:
             if s is None:
                 return None
@@ -9162,12 +10488,74 @@ def admin_api_ai_queue_list():
             return dt.astimezone(timezone.utc)
         except Exception:
             return None
-    queue.sort(key=lambda q: _parse_created_at(q.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
 
-    # optional search across queue item + payload fields
+    # Optional filters (same semantics as /admin/api/ai/queue).
+    status = _norm_status(request.args.get("status"))
+    if status:
+        if status in ("active", "approved+pending", "pending+approved", "approved_pending"):
+            queue = [
+                q for q in queue
+                if _norm_status(q.get("status")) in ("pending", "approved")
+            ]
+        else:
+            queue = [q for q in queue if _norm_status(q.get("status")) == status]
+
+    time_param = (request.args.get("time") or "").strip()
+    if time_param.lower() == "today":
+        today_d = datetime.now(timezone.utc).date()
+        def _is_today_entry(q: Dict[str, Any]) -> bool:
+            dt = _parse_created_at_q(q.get("created_at"))
+            return dt is not None and dt.date() == today_d
+        queue = [q for q in queue if _is_today_entry(q)]
+    else:
+        time_minutes = _parse_time_range_minutes(time_param) if time_param else None
+        if time_minutes is None and time_param:
+            try:
+                time_minutes = int(time_param)
+            except Exception:
+                time_minutes = None
+        if time_minutes and time_minutes > 0:
+            cutoff = datetime.now(timezone.utc) - timedelta(minutes=time_minutes)
+            queue = [
+                q for q in queue
+                if (_parse_created_at_q(q.get("created_at")) or cutoff) >= cutoff
+            ]
+
+    focus_param = (request.args.get("focus") or "").strip().lower()
+    if focus_param:
+        queue = [q for q in queue if _queue_item_matches_focus_param(q, focus_param)]
+
+    channel_param = (request.args.get("channel") or "").strip().lower()
+    if channel_param in ("email", "sms", "whatsapp"):
+        queue = [q for q in queue if channel_param in _queue_item_channels(q)]
+
+    type_param = (request.args.get("type") or "").strip().lower()
+    if type_param:
+        if type_param == "send_whatsapp":
+            queue = [
+                q for q in queue
+                if _normalize_ai_action_type(str(q.get("type") or "")) == "send_whatsapp"
+            ]
+        else:
+            queue = [
+                q for q in queue
+                if str(q.get("type") or "").strip().lower() == type_param
+            ]
+
+    conf_param = (request.args.get("conf") or "").strip()
+    if conf_param:
+        try:
+            min_conf = float(conf_param)
+        except Exception:
+            min_conf = None
+        if min_conf is not None:
+            queue = [
+                q for q in queue
+                if float(q.get("confidence") or 0.0) >= min_conf
+            ]
+
     q_param = (request.args.get("q") or "").strip().lower()
     if q_param:
-        # Keep this lightweight and safe: build a small search blob per item.
         def _payload_blob(it: Dict[str, Any]) -> str:
             try:
                 p = it.get("payload") or {}
@@ -9180,18 +10568,71 @@ def admin_api_ai_queue_list():
                     str(it.get("created_at") or ""),
                     str(it.get("confidence") or ""),
                 ]
-                # Common fields for our queue item types
-                for k in ("reservation_id", "row", "sheet_row", "draft", "to", "subject", "message", "phone", "email"):
+                for k in (
+                    "reservation_id",
+                    "row",
+                    "sheet_row",
+                    "draft",
+                    "to",
+                    "subject",
+                    "message",
+                    "phone",
+                    "email",
+                    "template_key",
+                    "venue_name",
+                    "reservation_details",
+                ):
                     if k in p:
                         parts.append(str(p.get(k) or ""))
-                # Fallback: include full payload JSON
                 parts.append(json.dumps(p, ensure_ascii=False))
                 return " ".join(parts).lower()
             except Exception:
                 return str(it).lower()
 
         queue = [it for it in queue if q_param in _payload_blob(it)]
-    return jsonify({"ok": True, "role": role, "queue": queue[:500]})
+
+    pending = sum(1 for q in queue if _norm_status(q.get("status")) == "pending")
+    approved = sum(1 for q in queue if _norm_status(q.get("status")) == "approved")
+    applied = sum(
+        1
+        for q in queue
+        if (
+            _norm_status(q.get("status")) == "applied"
+            or _norm_status(q.get("applied_state")) == "applied"
+        )
+    )
+    sent = sum(1 for q in queue if _norm_status(q.get("status")) == "sent")
+    denied = sum(1 for q in queue if _norm_status(q.get("status")) == "denied")
+    approved_ready = 0
+    for q in queue:
+        if _norm_status(q.get("status")) != "approved":
+            continue
+        if str(q.get("type") or "").strip().lower() not in _OUTBOUND_ACTION_TYPES:
+            continue
+        if q.get("sent_at"):
+            continue
+        approved_ready += 1
+    counts = _ai_queue_bucket_counts(queue)
+    by_type: Dict[str, int] = {}
+    for it in queue:
+        t = str(it.get("type") or "unknown").strip().lower() or "unknown"
+        by_type[t] = by_type.get(t, 0) + 1
+    top_types = sorted(by_type.items(), key=lambda kv: kv[1], reverse=True)[:8]
+    return jsonify(
+        {
+            "ok": True,
+            "total_items": len(queue),
+            "total_pending": pending,
+            "total_approved": approved,
+            "total_applied": applied,
+            "total_sent": sent,
+            "total_denied": denied,
+            "approved_outbound_ready": approved_ready,
+            "counts": counts,
+            "top_types": [{"type": t, "count": n} for t, n in top_types],
+            "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        }
+    )
 
 
 @app.route("/admin/api/ai/queue/clear", methods=["POST"])
@@ -9246,14 +10687,15 @@ def admin_api_outbound_propose():
     channel = str(data.get("channel") or "").strip().lower()
 
     _RESERVATION_TYPES = {
-        "reservation_received": "send_reservation_received",
-        "reservation_confirmed": "send_reservation_confirmed",
-        "reservation_denied": "send_reservation_denied",
-        "reservation_reminder": "send_reservation_reminder",
+        "reservation_received": "reservation_received",
+        "reservation_confirmed": "reservation_confirmed",
+        "reservation_denied": "reservation_denied",
+        "reservation_reminder": "reservation_reminder",
     }
 
     if channel in _RESERVATION_TYPES:
-        action_type = _RESERVATION_TYPES[channel]
+        action_type = "send_whatsapp"
+        template_key = _RESERVATION_TYPES[channel]
         to_val = str(data.get("to") or "").strip()
         venue_name = str(data.get("venue_name") or "").strip()
         reservation_details = str(data.get("reservation_details") or "").strip()
@@ -9289,6 +10731,7 @@ def admin_api_outbound_propose():
             "to": to_val,
             "venue_name": venue_name,
             "reservation_details": reservation_details,
+            "template_key": template_key,
         }
         if row_num:
             payload["row"] = row_num
@@ -9362,6 +10805,8 @@ def admin_api_outbound_propose():
     else:
         return jsonify({"ok": False, "error": "Invalid channel"}), 400
     
+    if isinstance(payload, dict):
+        payload.setdefault("venue_id", _venue_id())
     # Best-effort partner id for policy gating
     partner = _derive_partner_id(payload=payload)
 
@@ -9402,7 +10847,7 @@ def admin_api_ai_queue_propose():
 
     data = request.get_json(silent=True) or {}
     typ = str(data.get("type") or "").strip()
-    if typ not in ("vip_tag", "status_update", "reply_draft"):
+    if typ not in ("vip_tag", "status_update", "reply_draft", "correct_contact"):
         return jsonify({"ok": False, "error": "Invalid type"}), 400
 
     confidence = float(data.get("confidence") or 0.0)
@@ -9423,6 +10868,8 @@ def admin_api_ai_queue_propose():
         "reviewed_role": None,
         "applied_result": None,
     }
+    if isinstance(entry.get("payload"), dict):
+        entry["payload"].setdefault("venue_id", _venue_id())
     _queue_add(entry)
     _audit("ai.queue.propose", {"id": entry["id"], "type": typ, "confidence": confidence})
     return jsonify({"ok": True, "id": entry["id"], "entry": entry})
@@ -9442,11 +10889,13 @@ def admin_api_ai_queue_deny(qid: str):
     if not it:
         return jsonify({"ok": False, "error": "Not found"}), 404
 
-    if str(it.get("status")) != "pending":
+    if _norm_status(it.get("status")) != "pending":
         return jsonify({"ok": False, "error": "Not pending"}), 400
 
-    # Client spec: deny removes item from queue immediately (keeps queue clean), audits + notifies
-    queue = [q for q in queue if str(q.get("id")) != str(qid)]
+    it["status"] = "denied"
+    it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    it["reviewed_by"] = actor
+    it["reviewed_role"] = role
     _save_ai_queue(queue)
     _audit("ai.queue.deny", {"id": qid, "type": it.get("type")})
     _notify("ai.queue.deny", {"id": qid, "type": it.get("type"), "by": actor, "role": role}, targets=["owner","manager"])
@@ -9490,25 +10939,17 @@ def admin_api_ai_queue_approve(qid: str):
     it = _queue_find(queue, qid)
     if not it:
         return jsonify({"ok": False, "error": "Not found"}), 404
-    if str(it.get("status")) != "pending":
+    if _norm_status(it.get("status")) != "pending":
         return jsonify({"ok": False, "error": "Not pending"}), 400
 
     it_type = str(it.get("type") or "").strip().lower()
 
     # Outbound sends are NEVER executed on approval. Approval only unlocks a human "Send Now" click.
     applied = None
-    if it_type in (
-        "send_email",
-        "send_sms",
-        "send_whatsapp",
-        "send_confirmation",
-        "send_reservation_received",
-        "send_reservation_confirmed",
-        "send_reservation_denied",
-        "send_reservation_reminder",
-        "send_update",
-        "send_vip_update",
-    ):
+    row_num = int((it.get("payload") or {}).get("row") or (it.get("payload") or {}).get("sheet_row") or 0)
+    _record_approved_action_for_row(row_num, it_type, it.get("payload") or {})
+
+    if it_type in _OUTBOUND_ACTION_TYPES:
         applied = {"ok": True, "note": "Approved — ready to send (human click required)"}
         # Keep item in queue; just mark as approved/reviewed.
         it["status"] = "approved"
@@ -9517,14 +10958,21 @@ def admin_api_ai_queue_approve(qid: str):
         it["reviewed_role"] = role
         it["applied_result"] = applied
     else:
-        # Non-outbound: apply then remove on success; keep on failure.
+        # Non-outbound: apply immediately but keep status as approved so
+        # operators can still see these items in approved filters/summary.
         settings = _get_ai_settings()
         if settings.get("enabled") and (settings.get("mode") in ("auto", "suggest", "off")):
             applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
-        # Success -> remove from queue; Failure -> keep (pending) with applied_result for debugging.
+        it["reviewed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        it["reviewed_by"] = actor
+        it["reviewed_role"] = role
+        it["status"] = "approved"
         if applied and applied.get("ok"):
-            queue = [q for q in queue if str(q.get("id")) != str(qid)]
+            it["applied_state"] = "applied"
+            it["applied_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            it["applied_result"] = applied
         else:
+            it["applied_state"] = "failed"
             it["applied_result"] = applied
 
     _save_ai_queue(queue)
@@ -9567,7 +11015,7 @@ def admin_api_ai_queue_send(qid: str):
     ):
         return jsonify({"ok": False, "error": "Not an outbound item"}), 400
 
-    if str(it.get("status")) != "approved":
+    if _norm_status(it.get("status")) != "approved":
         return jsonify({"ok": False, "error": "Must be approved first"}), 400
 
     if it.get("sent_at"):
@@ -9586,8 +11034,10 @@ def admin_api_ai_queue_send(qid: str):
 
     ok_send = bool(res.get("ok"))
     if ok_send:
-        # Spec: Send Now (outbound): removes only if send succeeds; keeps failures for retry.
-        queue = [q for q in queue if str(q.get("id")) != str(qid)]
+        it["status"] = "sent"
+        it["sent_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        it["sent_by"] = actor
+        it["send_result"] = res
         _save_ai_queue(queue)
     else:
         # Keep item for retry; optionally attach last error for debugging.
@@ -9600,6 +11050,148 @@ def admin_api_ai_queue_send(qid: str):
         return jsonify({"ok": True, "result": res})
     err = res.get("message") or res.get("error") or "Send failed"
     return jsonify({"ok": False, "result": res, "error": err})
+
+
+@app.route("/admin/api/ai/queue/<qid>/channel", methods=["POST"])
+def admin_api_ai_queue_channel_override(qid: str):
+    """Switch an outbound queue item to a different channel (manager+).
+
+    Body: { "channel": "email" | "sms" | "whatsapp" }
+
+    Only rewrites the action type + contact fields needed to deliver on the
+    chosen channel. The item remains in its current status (pending/approved).
+    This is the supported UX for "AI picked the wrong channel — change it".
+    """
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    ctx = _admin_ctx()
+    actor = ctx.get("actor", "")
+    role = ctx.get("role", "")
+
+    data = request.get_json(silent=True) or {}
+    channel = str(data.get("channel") or "").strip().lower()
+    if channel not in ("email", "sms", "whatsapp"):
+        return jsonify({"ok": False, "error": "Invalid channel"}), 400
+
+    queue = _load_ai_queue()
+    it = _queue_find(queue, qid)
+    if not it:
+        return jsonify({"ok": False, "error": "Not found"}), 404
+
+    if _norm_status(it.get("status")) not in ("pending", "approved"):
+        return jsonify({"ok": False, "error": "Not editable"}), 400
+
+    cur_type = str(it.get("type") or "").strip().lower()
+    outbound_types = {
+        "send_email", "send_sms", "send_whatsapp",
+        "send_confirmation",
+        "send_reservation_received", "send_reservation_confirmed",
+        "send_reservation_denied", "send_reservation_reminder",
+        "send_update", "send_vip_update",
+    }
+    if cur_type not in outbound_types:
+        return jsonify({"ok": False, "error": "Only outbound items can have channel overridden"}), 400
+
+    payload = dict(it.get("payload") or {})
+
+    # Pull lead contact from sheet row when available (best-effort).
+    sheet_row = 0
+    try:
+        sheet_row = int(payload.get("row") or payload.get("sheet_row") or 0)
+    except Exception:
+        sheet_row = 0
+    lead_email = ""
+    lead_phone = ""
+    lead_data_for_draft: Dict[str, str] = {}
+    if sheet_row and sheet_row >= 2:
+        try:
+            gc = get_gspread_client()
+            ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
+            header = ws.row_values(1) or []
+            hmap = header_map(header)
+            row_vals = ws.row_values(sheet_row) or []
+
+            def _cell(name: str) -> str:
+                i = hmap.get(_normalize_header(name))
+                if not i:
+                    return ""
+                ix = i - 1
+                return (row_vals[ix] if ix < len(row_vals) else "") or ""
+
+            lead_email = _cell("email")
+            lead_phone = _cell("phone")
+            lead_data_for_draft = {
+                "name": _cell("name"),
+                "date": _cell("date"),
+                "time": _cell("time"),
+                "party_size": _cell("party_size"),
+                "phone": lead_phone,
+                "email": lead_email,
+            }
+        except Exception:
+            pass
+
+    # Map channel -> action type + required contact + body/subject
+    new_type = {"email": "send_email", "sms": "send_sms", "whatsapp": "send_whatsapp"}[channel]
+    if channel == "email":
+        to = lead_email or (payload.get("to") if _looks_like_email(str(payload.get("to") or "")) else "")
+        if not to:
+            return jsonify({"ok": False, "error": "No email on file for this lead"}), 400
+        payload["to"] = to
+        if not payload.get("body") and not payload.get("message"):
+            dk = _select_draft_for_channel("email", "confirm")
+            b, subj = _get_draft_content(dk, lead_data_for_draft or {"name": ""})
+            if b:
+                payload["body"] = payload["message"] = b
+            if subj:
+                payload["subject"] = subj
+        payload.pop("template_key", None)
+    elif channel == "sms":
+        to = lead_phone or (payload.get("to") if _looks_like_phone(str(payload.get("to") or "")) else "")
+        if not to:
+            return jsonify({"ok": False, "error": "No phone on file for this lead"}), 400
+        payload["to"] = to
+        if not payload.get("body") and not payload.get("message"):
+            dk = _select_draft_for_channel("sms", "confirm")
+            b, _ = _get_draft_content(dk, lead_data_for_draft or {"name": ""})
+            if b:
+                payload["body"] = payload["message"] = b
+        payload.pop("subject", None)
+        payload.pop("template_key", None)
+    else:  # whatsapp
+        to = lead_phone or (payload.get("to") if _looks_like_phone(str(payload.get("to") or "")) else "")
+        if not to:
+            return jsonify({"ok": False, "error": "No phone on file for this lead"}), 400
+        wa_enabled = bool(
+            _venue_features().get("whatsapp_outbound") or _venue_features().get("whatsapp")
+        ) or bool(os.environ.get("TWILIO_WHATSAPP_FROM", "").strip())
+        if not wa_enabled:
+            return jsonify({"ok": False, "error": "WhatsApp is not enabled for this venue"}), 400
+        payload["to"] = to
+        if not str(payload.get("template_key") or "").strip():
+            # infer best-effort from any status-ish field present in payload
+            lead_like = {"status": payload.get("status") or "", "date": lead_data_for_draft.get("date", ""), "time": lead_data_for_draft.get("time", "")}
+            payload["template_key"] = _infer_whatsapp_template_key(lead_like)
+        payload.setdefault("venue_name", _venue_display_name())
+        if not str(payload.get("reservation_details") or "").strip():
+            det_parts = [p for p in [
+                lead_data_for_draft.get("date", ""),
+                lead_data_for_draft.get("time", ""),
+                (f"party of {lead_data_for_draft.get('party_size')}" if lead_data_for_draft.get("party_size") else ""),
+                (f"for {lead_data_for_draft.get('name')}" if lead_data_for_draft.get("name") else ""),
+            ] if p]
+            payload["reservation_details"] = ", ".join(det_parts)
+        payload.pop("subject", None)
+
+    payload["recommended_channel"] = channel
+    payload["channel_reason"] = f"Manually switched to {channel.upper()} by operator ({role or actor})"
+
+    it["type"] = new_type
+    it["payload"] = payload
+    _save_ai_queue(queue)
+    _audit("ai.queue.channel_override", {"id": qid, "channel": channel, "by": actor})
+    return jsonify({"ok": True, "item": it})
 
 
 @app.route("/admin/api/ai/queue/<qid>/override", methods=["POST"])
@@ -9617,7 +11209,7 @@ def admin_api_ai_queue_override(qid: str):
     if not it:
         return jsonify({"ok": False, "error": "Not found"}), 404
 
-    if str(it.get("status")) not in ("pending", "approved"):
+    if _norm_status(it.get("status")) not in ("pending", "approved"):
         return jsonify({"ok": False, "error": "Not editable"}), 400
 
     # override payload/type (owner-only)
@@ -9627,6 +11219,7 @@ def admin_api_ai_queue_override(qid: str):
             "vip_tag",
             "status_update",
             "reply_draft",
+            "correct_contact",
             "send_email",
             "send_sms",
             "send_whatsapp",
@@ -9647,7 +11240,7 @@ def admin_api_ai_queue_override(qid: str):
     applied = None
     it_type = str(it.get("type") or "").strip().lower()
     settings = _get_ai_settings()
-    if settings.get("enabled") and it_type in ("vip_tag", "status_update", "reply_draft"):
+    if settings.get("enabled") and it_type in ("vip_tag", "status_update", "reply_draft", "correct_contact"):
         applied = _queue_apply_action({"type": it.get("type"), "payload": it.get("payload")}, ctx)
 
     it["status"] = "approved"
@@ -10281,7 +11874,7 @@ def admin_api_partner_policies_list():
     if not ok:
         return resp
     try:
-        _load_partner_policies_from_disk()
+        _load_partner_policies_from_disk(force=True)
         partners = sorted([k for k in (_PARTNER_POLICIES or {}).keys() if k and k != "default"])
         return jsonify({"ok": True, "partners": partners, "default": _PARTNER_POLICIES.get("default", _default_partner_policy())})
     except Exception as e:
@@ -10293,7 +11886,7 @@ def admin_api_partner_policies_get():
     if not ok:
         return resp
     try:
-        _load_partner_policies_from_disk()
+        _load_partner_policies_from_disk(force=True)
         partner = (request.args.get("partner") or "").strip() or "default"
         pol = _PARTNER_POLICIES.get(partner) if isinstance(_PARTNER_POLICIES, dict) else None
         if not isinstance(pol, dict):
@@ -10308,7 +11901,7 @@ def admin_api_partner_policies_set():
     if not ok:
         return resp
     try:
-        _load_partner_policies_from_disk()
+        _load_partner_policies_from_disk(force=True)
         body = request.get_json(silent=True) or {}
         partner = (body.get("partner") or "").strip() or "default"
         policy = body.get("policy") or {}
@@ -10333,15 +11926,34 @@ def admin_api_partner_policies_delete():
     if not ok:
         return resp
     try:
-        _load_partner_policies_from_disk()
+        _load_partner_policies_from_disk(force=True)
         body = request.get_json(silent=True) or {}
         partner = (body.get("partner") or "").strip() or "default"
         if partner == "default":
             return jsonify({"ok": False, "error": "Cannot delete default policy"}), 400
         if isinstance(_PARTNER_POLICIES, dict) and partner in _PARTNER_POLICIES:
             _PARTNER_POLICIES.pop(partner, None)
+        deleted_sheet = False
+        try:
+            vid = _slugify_venue_id(_venue_id())
+            ws = _partner_policy_sheet_ws(venue_id=vid)
+            hmap = _ensure_partner_policy_sheet_schema(ws)
+            rows = ws.get_all_values() or []
+            for idx, r in enumerate(rows[1:], start=2):
+                if not isinstance(r, list):
+                    continue
+                row_vid = (r[hmap["venue_id"] - 1] if len(r) >= hmap["venue_id"] else "").strip()
+                row_partner = (r[hmap["partner"] - 1] if len(r) >= hmap["partner"] else "").strip() or "default"
+                if _slugify_venue_id(row_vid or vid) == vid and row_partner == partner:
+                    ws.delete_rows(idx)
+                    deleted_sheet = True
+                    break
+        except Exception:
+            deleted_sheet = False
+        if not deleted_sheet:
             _safe_write_json_file(PARTNER_POLICIES_FILE, _PARTNER_POLICIES)
-            _audit("partner_policy.delete", {"partner": partner})
+        _PARTNER_POLICIES_CACHE_TS[_slugify_venue_id(_venue_id())] = 0.0
+        _audit("partner_policy.delete", {"partner": partner, "sheet": bool(deleted_sheet)})
         return jsonify({"ok": True})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 400
@@ -10950,6 +12562,124 @@ label.small + textarea,
 .modal-close:hover{background:rgba(255,255,255,.12)}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes aiqDrawerIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+
+.aiq-top-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:14px;
+  margin-bottom:14px;
+  align-items:stretch
+}
+@media(max-width:1100px){
+  .aiq-top-grid{grid-template-columns:1fr}
+}
+@media(min-width:1101px) and (max-width:1400px){
+  .aiq-top-grid{grid-template-columns:1fr 1fr;grid-auto-rows:auto}
+  .aiq-top-grid .card:last-child{grid-column:1 / -1}
+}
+.aiq-card-title{font-size:15px;font-weight:800;margin:0 0 10px;letter-spacing:.02em}
+.aiq-seg{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.aiq-seg button{
+  border:1px solid rgba(255,255,255,.14);
+  background:rgba(255,255,255,.05);
+  color:var(--text);
+  border-radius:999px;
+  padding:6px 12px;
+  font-size:12px;
+  font-weight:700;
+  cursor:pointer;
+  transition:background .15s,border-color .15s,transform .12s
+}
+.aiq-seg button:hover{background:rgba(255,255,255,.09)}
+.aiq-seg button.active{
+  background:linear-gradient(135deg,rgba(88,166,255,.25),rgba(138,92,246,.18));
+  border-color:rgba(88,166,255,.45)
+}
+.aiq-run-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.aiq-run-grid button{padding:12px 10px;font-weight:800;border-radius:12px}
+@media(max-width:480px){
+  .aiq-run-grid{grid-template-columns:1fr}
+}
+.aiq-filters-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.aiq-filters-row .inp{flex:1 1 140px;min-width:0;max-width:100%;box-sizing:border-box}
+.aiq-pills{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.aiq-pill{
+  cursor:pointer;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border-radius:999px;
+  padding:5px 11px;
+  font-size:11px;
+  font-weight:800;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.04);
+  transition:all .15s
+}
+.aiq-pill-lbl{line-height:1.2}
+.aiq-pill-n{
+  font-size:10px;font-weight:900;padding:2px 7px;border-radius:999px;
+  background:rgba(255,255,255,.1);min-width:1.25em;text-align:center;line-height:1.2
+}
+.aiq-stat-strip{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;align-items:center}
+.aiq-stat-badge{
+  font-size:12px;padding:6px 12px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.05);color:var(--text)
+}
+.aiq-stat-badge b{font-weight:900;margin-left:4px}
+.aiq-pill:hover{background:rgba(255,255,255,.08)}
+.aiq-pill.on{
+  border-color:rgba(88,166,255,.5);
+  background:rgba(88,166,255,.12)
+}
+.aiq-counts{font-size:11px;opacity:.75;margin-top:6px;line-height:1.35}
+.aiq-table-wrap{overflow:auto;border-radius:12px;border:1px solid rgba(255,255,255,.10);-webkit-overflow-scrolling:touch}
+.aiq-table{width:100%;border-collapse:collapse;font-size:13px;min-width:720px}
+@media(max-width:640px){
+  .aiq-table{font-size:12px;min-width:640px}
+  .aiq-table th,.aiq-table td{padding:8px 6px}
+}
+.aiq-table th,.aiq-table td{padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.08);text-align:left;vertical-align:top}
+.aiq-table th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.65;font-weight:800}
+.aiq-table tr{cursor:pointer;transition:background .12s}
+.aiq-table tbody tr:hover{background:rgba(255,255,255,.04)}
+.badge-ch{
+  display:inline-block;font-size:10px;font-weight:900;padding:2px 8px;border-radius:999px;
+  border:1px solid rgba(255,255,255,.14);text-transform:uppercase;letter-spacing:.04em
+}
+.badge-ch.email{background:rgba(59,130,246,.15);border-color:rgba(59,130,246,.35)}
+.badge-ch.sms{background:rgba(34,197,94,.12);border-color:rgba(34,197,94,.35)}
+.badge-ch.whatsapp{background:rgba(37,211,102,.12);border-color:rgba(37,211,102,.4)}
+.aiq-drawer-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;
+  animation:fadeIn .2s ease
+}
+.aiq-drawer-overlay.show{display:block}
+.aiq-drawer-panel{
+  position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);
+  max-width:100vw;
+  background:linear-gradient(200deg,rgba(12,18,36,.98),rgba(8,12,24,.99));
+  border-left:1px solid rgba(255,255,255,.12);
+  box-shadow:-12px 0 48px rgba(0,0,0,.55);
+  z-index:10001;
+  padding:18px 18px 24px;
+  overflow:auto;
+  transform:translateX(100%);
+  animation:aiqDrawerIn .28s ease forwards
+}
+@media(max-width:520px){
+  .aiq-drawer-panel{
+    width:100%;
+    border-left:none;
+    border-top:1px solid rgba(255,255,255,.12);
+    top:auto;height:min(92vh,100%);
+    border-radius:16px 16px 0 0;
+    animation:slideUp .28s ease forwards
+  }
+}
+.aiq-drawer-h{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:14px}
+.aiq-drawer-h h3{margin:0;font-size:17px;font-weight:900}
 
 .note{margin-top:8px;font-size:12px;color:var(--muted)}
 .hidden{display:none}
@@ -10971,6 +12701,210 @@ label.small + textarea,
   letter-spacing:.01em;
   opacity:0;
   transition:opacity .18s ease;
+}
+
+/* ── Operator dashboard (Forecast + Daily Revenue Summary) ────────────────── */
+#forecastBody,#daily-summary-body{ white-space:normal; }
+.op-view{ display:block; }
+.op-headline{
+  display:block;
+  font-size:17px;
+  font-weight:800;
+  color:var(--text);
+  background:linear-gradient(135deg,rgba(212,175,55,.12),rgba(212,175,55,.03));
+  border:1px solid rgba(212,175,55,.30);
+  border-radius:12px;
+  padding:14px 16px;
+  margin:0 0 14px;
+  line-height:1.35;
+  letter-spacing:.005em;
+}
+.op-headline[data-tone="surge"],
+.op-headline[data-tone="strong"]{
+  background:linear-gradient(135deg,rgba(46,160,67,.16),rgba(46,160,67,.04));
+  border-color:rgba(46,160,67,.40);
+}
+.op-headline[data-tone="high"]{
+  background:linear-gradient(135deg,rgba(46,160,67,.13),rgba(46,160,67,.03));
+  border-color:rgba(46,160,67,.34);
+}
+.op-headline[data-tone="moderate"],
+.op-headline[data-tone="steady"]{
+  background:linear-gradient(135deg,rgba(212,175,55,.13),rgba(212,175,55,.03));
+  border-color:rgba(212,175,55,.32);
+}
+.op-headline[data-tone="low"],
+.op-headline[data-tone="light"],
+.op-headline[data-tone="quiet"]{
+  background:linear-gradient(135deg,rgba(255,255,255,.05),rgba(255,255,255,.02));
+  border-color:rgba(255,255,255,.16);
+}
+.op-cards{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(170px,1fr));
+  gap:10px;
+  margin-bottom:14px;
+}
+.op-card{
+  position:relative;
+  background:rgba(255,255,255,.04);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:14px 14px 12px;
+  transition:transform .15s ease, border-color .15s ease, background .15s ease;
+  min-width:0;
+}
+.op-card:hover{
+  border-color:rgba(212,175,55,.35);
+  transform:translateY(-1px);
+}
+.op-card-label{
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.10em;
+  color:var(--muted);
+  font-weight:700;
+  margin-bottom:6px;
+}
+.op-card-value{
+  font-size:20px;
+  font-weight:800;
+  color:var(--text);
+  line-height:1.2;
+  word-break:break-word;
+}
+.op-card-sub{
+  font-size:11px;
+  color:var(--muted);
+  margin-top:6px;
+  letter-spacing:.01em;
+}
+.op-card[data-tone="surge"]{
+  border-color:rgba(255,99,99,.40);
+  background:linear-gradient(180deg,rgba(255,99,99,.07),rgba(255,99,99,.02));
+}
+.op-card[data-tone="high"],
+.op-card[data-tone="strong"]{
+  border-color:rgba(46,160,67,.40);
+  background:linear-gradient(180deg,rgba(46,160,67,.08),rgba(46,160,67,.02));
+}
+.op-card[data-tone="moderate"],
+.op-card[data-tone="steady"]{
+  border-color:rgba(212,175,55,.32);
+  background:linear-gradient(180deg,rgba(212,175,55,.08),rgba(212,175,55,.02));
+}
+.op-card[data-tone="low"],
+.op-card[data-tone="light"],
+.op-card[data-tone="quiet"]{
+  border-color:rgba(255,255,255,.10);
+}
+.op-insight{
+  display:flex;
+  gap:12px;
+  align-items:flex-start;
+  background:rgba(212,175,55,.06);
+  border:1px solid rgba(212,175,55,.22);
+  border-left:3px solid var(--gold);
+  border-radius:10px;
+  padding:11px 13px;
+  margin-bottom:12px;
+}
+.op-insight-tag{
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--gold);
+  flex-shrink:0;
+  padding-top:2px;
+  white-space:nowrap;
+}
+.op-insight-text{
+  font-size:13px;
+  line-height:1.5;
+  color:var(--text);
+}
+.op-details{
+  margin-top:8px;
+  border-top:1px solid var(--line);
+  padding-top:10px;
+}
+.op-details > summary{
+  cursor:pointer;
+  font-size:12px;
+  font-weight:700;
+  color:var(--muted);
+  list-style:none;
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  user-select:none;
+  padding:4px 2px;
+  border-radius:6px;
+  transition:color .15s ease;
+}
+.op-details > summary::-webkit-details-marker{ display:none; }
+.op-details > summary::before{
+  content:"\25B8";
+  display:inline-block;
+  transition:transform .15s ease;
+  font-size:11px;
+  color:var(--muted);
+}
+.op-details[open] > summary::before{ transform:rotate(90deg); }
+.op-details > summary:hover{ color:var(--text); }
+.op-details-body{
+  margin-top:10px;
+  font-size:12px;
+  color:var(--muted);
+  line-height:1.6;
+  padding:8px 12px;
+  border-left:2px solid rgba(255,255,255,.08);
+  background:rgba(255,255,255,.015);
+  border-radius:0 8px 8px 0;
+}
+.op-details-body .op-detail-row{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:3px 0;
+  border-bottom:1px dashed rgba(255,255,255,.05);
+}
+.op-details-body .op-detail-row:last-child{ border-bottom:none; }
+.op-details-body .op-detail-key{ color:var(--muted); }
+.op-details-body .op-detail-val{ color:var(--text); font-weight:600; text-align:right; }
+.op-skeleton{
+  height:140px;
+  border-radius:12px;
+  background:linear-gradient(90deg,rgba(255,255,255,.03),rgba(255,255,255,.07),rgba(255,255,255,.03));
+  background-size:200% 100%;
+  animation:opShimmer 1.3s linear infinite;
+}
+@keyframes opShimmer{
+  0%{ background-position:200% 0; }
+  100%{ background-position:-200% 0; }
+}
+.op-empty{
+  font-size:13px;
+  color:var(--muted);
+  padding:14px;
+  text-align:center;
+  border:1px dashed var(--line);
+  border-radius:12px;
+}
+
+@media(max-width:640px){
+  .op-headline{ font-size:15px; padding:12px 14px; }
+  .op-cards{ grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; }
+  .op-card{ padding:12px; }
+  .op-card-value{ font-size:17px; }
+  .op-card-label{ font-size:10px; letter-spacing:.08em; }
+  .op-insight{ padding:10px 12px; gap:10px; }
+  .op-insight-text{ font-size:12.5px; }
+}
+@media(max-width:420px){
+  .op-cards{ grid-template-columns:1fr 1fr; }
+  .op-insight{ flex-direction:column; gap:6px; }
 }
 </style>
 """)
@@ -11009,19 +12943,19 @@ label.small + textarea,
 <div class="tabs">
   <div class="tabgroup">
     <span class="tablabel">Operate</span>
-    <button type="button" class="tabbtn active" data-tab="ops" onclick="showTab('ops');return false;">Ops</button>
-    <button type="button" class="tabbtn" data-tab="leads" onclick="showTab('leads');return false;">Leads</button>
-    <button type="button" class="tabbtn" data-tab="aiq" onclick="showTab('aiq');return false;">AI Queue</button>
-    <button type="button" class="tabbtn" data-tab="monitor" onclick="showTab('monitor');return false;">Monitoring</button>
-    <button type="button" class="tabbtn" data-tab="audit" onclick="showTab('audit');return false;">Audit</button>
+    <button type="button" class="tabbtn active" data-tab="ops">Ops</button>
+    <button type="button" class="tabbtn" data-tab="leads">Leads</button>
+    <button type="button" class="tabbtn" data-tab="aiq">AI Queue</button>
+    <button type="button" class="tabbtn" data-tab="monitor">Monitoring</button>
+    <button type="button" class="tabbtn" data-tab="audit">Audit</button>
   </div>
   <div class="tabgroup">
     <span class="tablabel">Configure</span>
-    <button type="button" class="tabbtn" data-tab="ai" data-minrole="owner" onclick="showTab('ai');return false;">AI Settings</button>
-    <button type="button" class="tabbtn" data-tab="rules" data-minrole="owner" onclick="showTab('rules');return false;">Rules</button>
-    <button type="button" class="tabbtn" data-tab="menu" data-minrole="owner" onclick="showTab('menu');return false;">Menu</button>
+    <button type="button" class="tabbtn" data-tab="ai" data-minrole="owner">AI Settings</button>
+    <button type="button" class="tabbtn" data-tab="rules" data-minrole="owner">Rules</button>
+    <button type="button" class="tabbtn" data-tab="menu" data-minrole="owner">Menu</button>
     <button type="button" class="tabbtn" data-minrole="owner" onclick="showDraftsModal();return false;">Drafts</button>
-    <button type="button" class="tabbtn" data-tab="policies" data-minrole="owner" onclick="showTab('policies');return false;">Policies</button>
+    <button type="button" class="tabbtn" data-tab="policies" data-minrole="owner">Policies</button>
   </div>
 </div>
 
@@ -11108,14 +13042,24 @@ label.small + textarea,
     <div id="health-body" class="small" style="margin-top:12px;white-space:pre-wrap"></div>
   </div>
   <div class="card" id="forecastCard">
-  <div class="h2">Tonight Forecast</div>
-  <div class="small">Read-only load forecast (last 7/30 days). Helps staffing + VIP readiness.</div>
-  <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-    <button class="btn2" type="button" onclick="loadForecast()">Refresh</button>
-    <span id="forecast-msg" class="note"></span>
+    <div class="h2">Tonight Forecast</div>
+    <div class="small">Operator outlook for the next service. Translates 7/30-day demand into a clear demand level, peak window, and revenue range.</div>
+    <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button class="btn2" id="forecast-refresh-btn" type="button">Refresh</button>
+      <span id="forecast-msg" class="note"></span>
+    </div>
+    <div id="forecastBody" style="margin-top:12px"></div>
   </div>
-  <div id="forecastBody" class="small" style="margin-top:10px;line-height:1.4"></div>
-</div>
+  <div class="card" id="dailySummaryCard">
+    <div class="h2">Daily Revenue Summary</div>
+    <div class="small">Quick business snapshot for the selected day. Pick a date to see the headline, key cards, and what drove demand.</div>
+    <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <input id="daily-summary-date" class="inp" type="date" style="max-width:160px" />
+      <button class="btn2" id="daily-summary-refresh-btn" type="button">Refresh</button>
+      <span id="daily-summary-msg" class="note"></span>
+    </div>
+    <div id="daily-summary-body" style="margin-top:12px"></div>
+  </div>
   <div class="card" id="alertsCard">
     <div class="h2">Alerts Settings</div>
     <div class="small">Configure monitoring alerts (Slack/Email/SMS). Alerts are rate-limited and best-effort (never crash the app).</div>
@@ -11363,7 +13307,26 @@ label.small + textarea,
       <div class="note">Tip: keep actions limited until you trust the workflow.</div>
     </div>
   </div>
-</div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="h2">Channel Intelligence</div>
+    <div class="small">How the copilot ranks outbound channels for suggestions (stored per venue).</div>
+    <div style="margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px">
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ai-pref-email-conf"/> Prefer email for confirmations</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ai-pref-sms-urgent"/> Prefer SMS for urgent reminders</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ai-pref-wa"/> Prefer WhatsApp when enabled</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ai-pref-rank-all"/> Rank all available channels</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ai-pref-auto"/> Auto-detect best channel</label>
+    </div>
+    <div class="h2" style="margin-top:18px;font-size:15px">WhatsApp template map</div>
+    <div class="small">AI uses your existing Twilio Content templates (env SIDs). Scenario → template_key on <span class="code">send_whatsapp</span> items.</div>
+    <div style="margin-top:10px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;font-size:12px;opacity:.9">
+      <div><span class="code">reservation_received</span> · New inquiry</div>
+      <div><span class="code">reservation_confirmed</span> · Approved</div>
+      <div><span class="code">reservation_denied</span> · Denied</div>
+      <div><span class="code">reservation_reminder</span> · Upcoming</div>
+    </div>
+  </div>
 
   <div class="card" style="margin-top:14px">
     <div class="h2">AI Replay (Read-only)</div>
@@ -11375,69 +13338,140 @@ label.small + textarea,
     </div>
     <pre id="replayOut" style="margin-top:10px;white-space:pre-wrap;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.10);border-radius:12px;padding:10px;max-height:260px;overflow:auto"></pre>
   </div>
+</div>
 
 <div id="tab-aiq" class="tabpane hidden">
-  <div class="card">
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-      <div>
-        <div class="h2" style="margin:0">AI Approval Queue</div>
-        <div class="small">Proposed AI actions wait here for <b>Approve</b>, <b>Deny</b>, or <b>Owner Override</b>. This keeps automation powerful but controlled.</div>
+  <div class="aiq-top-grid">
+    <div class="card" style="margin:0">
+      <div class="aiq-card-title">AI Focus Mode</div>
+      <div class="aiq-seg" id="aiq-focus-mode-seg" role="group" aria-label="Focus mode">
+        <button type="button" data-fm="all" class="active">All</button>
+        <button type="button" data-fm="vip">VIP</button>
+        <button type="button" data-fm="reminders">Reminders</button>
+        <button type="button" data-fm="upgrades">Upgrades</button>
+        <button type="button" data-fm="reply_drafts">Drafts</button>
       </div>
-      <button class="btn2" type="button" onclick="clearAIQueue()" style="margin-left:auto">Clear queue</button>
+      <div class="small" style="opacity:.85;margin-bottom:8px">Saved to AI settings (venue).</div>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="aiq-ff-suggest-email"/> Suggest email</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="aiq-ff-suggest-sms"/> Suggest SMS</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="aiq-ff-suggest-wa"/> Suggest WhatsApp</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="aiq-ff-vip"/> Allow VIP tagging</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="aiq-ff-drafts"/> Allow reply drafts</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="aiq-ff-rem"/> Allow reminder suggestions</label>
+      <label class="small" style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="aiq-ff-upg"/> Allow upgrade suggestions</label>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" id="aiq-btn-save-focus" class="btn">Save focus mode</button>
+        <button type="button" id="aiq-btn-reset-focus" class="btn2">Reset to default</button>
+      </div>
     </div>
-    <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">
-      <button class="btn2" onclick="loadAIQueue()">Refresh</button>
-      <span class="note" style="opacity:.6">|</span>
-      <input id="ai-run-limit" class="inp" type="number" min="1" max="25" step="1" value="5" style="max-width:90px" title="How many newest New leads to analyze" />
-      <button class="btn2" onclick="runAINew()">Run AI (New)</button>
-      <input id="ai-run-row" class="inp" type="number" min="2" step="1" placeholder="Row #" style="max-width:110px" title="Run AI for a specific Google Sheet row number" />
-      <button class="btn2" onclick="runAIRow()">Run AI (Row)</button>
-      <span class="note" style="font-size:11px">Tip: model often proposes 0 actions for Handled or non-New leads.</span>
-
-      <select id="aiq-filter" class="inp" style="max-width:180px" onchange="loadAIQueue()">
-        <option value="">All</option>
-        <option value="pending">Pending</option>
-        <option value="approved">Approved</option>
-      </select>
-      <select id="aiq-time" class="inp" style="max-width:190px" onchange="loadAIQueue()">
-        <option value="">All time</option>
-        <option value="30">Last 30 minutes</option>
-        <option value="60">Last 1 hour</option>
-        <option value="120">Last 2 hours</option>
-        <option value="1440">Last 24 hours</option>
-        <option value="10080">Last 7 days</option>
-      </select>
-      <select id="aiq-type" class="inp" style="max-width:190px" onchange="loadAIQueue()">
-        <option value="">All types</option>
-        <option value="reply_draft">Reply drafts</option>
-        <option value="vip_tag">VIP tagging</option>
-        <option value="status_update">Status updates</option>
-        <option value="send_sms">Send SMS</option>
-        <option value="send_email">Send Email</option>
-        <option value="send_whatsapp">Send WhatsApp</option>
-        <option value="send_confirmation">Send confirmation</option>
-        <option value="send_reservation_received">Send reservation received</option>
-        <option value="send_reservation_confirmed">Send reservation confirmed</option>
-        <option value="send_reservation_denied">Send reservation denied</option>
-        <option value="send_reservation_reminder">Send reservation reminder</option>
-        <option value="send_update">Send update</option>
-        <option value="send_vip_update">Send VIP update</option>
-      </select>
-      <select id="aiq-conf" class="inp" style="max-width:200px" onchange="loadAIQueue()">
-        <option value="">Any confidence</option>
-        <option value="0.50">Min 0.50</option>
-        <option value="0.70">Min 0.70</option>
-        <option value="0.80">Min 0.80</option>
-      </select>
-      <input id="aiq-search" class="inp" style="min-width:220px" placeholder="Search: phone, reservation_id, draft…" oninput="aiqSearchDebounced()" />
-      <button class="btn2" type="button" onclick="clearAIQueueFilters()" title="Reset all AI queue filters">Clear filters</button>
-      <span id="aiq-msg" class="note"></span>
+    <div class="card" style="margin:0">
+      <div class="aiq-card-title">Run Suggestions</div>
+      <div class="aiq-run-grid">
+        <button type="button" id="aiq-btn-run-vip" class="btn">Run VIP</button>
+        <button type="button" id="aiq-btn-run-reminders" class="btn">Run Reminders</button>
+        <button type="button" id="aiq-btn-run-upgrades" class="btn">Run Upgrades</button>
+        <button type="button" id="aiq-btn-run-all" class="btn2">Run All AI</button>
+      </div>
+      <div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <label class="small">Row #</label>
+        <input id="ai-run-row" class="inp" type="number" min="2" step="1" placeholder="Row" style="max-width:90px" />
+        <label class="small">Limit</label>
+        <input id="ai-run-limit" class="inp" type="number" min="1" max="25" step="1" value="5" style="max-width:70px" />
+        <button type="button" id="aiq-btn-run-new" class="btn2">New leads</button>
+        <button type="button" id="aiq-btn-run-row" class="btn2">This row</button>
+      </div>
+      <div class="note" style="margin-top:8px">Uses focus + channel filters below. Outbound never auto-sends.</div>
+    </div>
+    <div class="card" style="margin:0">
+      <div class="aiq-card-title">Suggestion Views</div>
+      <div class="aiq-pills" id="aiq-view-pills" aria-label="Suggestion view buckets">
+        <span class="aiq-pill on" data-bucket="all" role="button" tabindex="0"><span class="aiq-pill-lbl">All</span><span class="aiq-pill-n">—</span></span>
+        <span class="aiq-pill" data-bucket="vip" role="button" tabindex="0"><span class="aiq-pill-lbl">VIP</span><span class="aiq-pill-n">—</span></span>
+        <span class="aiq-pill" data-bucket="reminders" role="button" tabindex="0"><span class="aiq-pill-lbl">Reminders</span><span class="aiq-pill-n">—</span></span>
+        <span class="aiq-pill" data-bucket="upgrades" role="button" tabindex="0"><span class="aiq-pill-lbl">Upgrades</span><span class="aiq-pill-n">—</span></span>
+        <span class="aiq-pill" data-bucket="email" role="button" tabindex="0"><span class="aiq-pill-lbl">Email</span><span class="aiq-pill-n">—</span></span>
+        <span class="aiq-pill" data-bucket="sms" role="button" tabindex="0"><span class="aiq-pill-lbl">SMS</span><span class="aiq-pill-n">—</span></span>
+        <span class="aiq-pill" data-bucket="whatsapp" role="button" tabindex="0"><span class="aiq-pill-lbl">WhatsApp</span><span class="aiq-pill-n">—</span></span>
+        <span class="aiq-pill" data-bucket="drafts" role="button" tabindex="0"><span class="aiq-pill-lbl">Drafts</span><span class="aiq-pill-n">—</span></span>
+      </div>
+      <input type="hidden" id="aiq-view-bucket" value="all"/>
+      <div class="aiq-filters-row">
+        <input id="aiq-search" class="inp" style="min-width:160px" placeholder="Keyword search…" />
+        <select id="aiq-filter" class="inp" style="max-width:170px">
+          <option value="">All statuses</option>
+          <option value="active" selected>Pending + Approved</option>
+          <option value="pending">Pending only</option>
+          <option value="approved">Approved only</option>
+          <option value="denied">Denied</option>
+        </select>
+        <select id="aiq-channel" class="inp" style="max-width:130px">
+          <option value="">All channels</option>
+          <option value="email">Email</option>
+          <option value="sms">SMS</option>
+          <option value="whatsapp">WhatsApp</option>
+        </select>
+        <select id="aiq-time" class="inp" style="max-width:150px">
+          <option value="">All time</option>
+          <option value="today">Today</option>
+          <option value="1440">24h</option>
+          <option value="10080">7d</option>
+        </select>
+        <select id="aiq-type" class="inp" style="max-width:170px">
+          <option value="">All types</option>
+          <option value="reply_draft">Reply drafts</option>
+          <option value="vip_tag">VIP tagging</option>
+          <option value="status_update">Status updates</option>
+          <option value="send_sms">Send SMS</option>
+          <option value="send_email">Send Email</option>
+          <option value="send_whatsapp">Send WhatsApp</option>
+          <option value="send_confirmation">Send confirmation</option>
+          <option value="send_reservation_received">Reservation received (legacy)</option>
+          <option value="send_reservation_confirmed">Reservation confirmed (legacy)</option>
+          <option value="send_reservation_denied">Reservation denied (legacy)</option>
+          <option value="send_reservation_reminder">Reservation reminder (legacy)</option>
+          <option value="send_update">Send update</option>
+          <option value="send_vip_update">Send VIP update</option>
+        </select>
+        <select id="aiq-conf" class="inp" style="max-width:140px">
+          <option value="">Any conf.</option>
+          <option value="0.50">Min 0.50</option>
+          <option value="0.70">Min 0.70</option>
+          <option value="0.80">Min 0.80</option>
+        </select>
+        <button class="btn2" id="aiq-btn-clear-filters" type="button">Clear</button>
+        <button class="btn2" id="aiq-btn-refresh" type="button">Refresh</button>
+        <button class="btn" id="aiq-btn-summary" type="button">Summary</button>
+      </div>
+      <div id="aiq-bucket-counts" class="aiq-counts"></div>
+      <span id="aiq-msg" class="note" style="display:block;margin-top:8px"></span>
     </div>
   </div>
 
   <div class="card">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div>
+        <div class="h2" style="margin:0">Queue</div>
+        <div class="small">Click a row for detail. Approve then <b>Send</b> for outbound — never auto-sends.</div>
+      </div>
+      <button class="btn2" type="button" onclick="clearAIQueue()">Clear queue</button>
+    </div>
+    <div class="aiq-stat-strip" id="aiq-stat-strip" aria-live="polite"></div>
+    <div class="aiq-table-wrap" style="margin-top:12px">
+      <table class="aiq-table" id="aiq-table">
+        <thead>
+          <tr>
+            <th>Type</th><th>Guest</th><th>Channel</th><th>ROW</th><th>Conf.</th><th>Rationale</th><th>Status</th><th>Created</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="aiq-tbody"><tr><td colspan="9" class="small">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div id="aiq-list" class="hidden"></div>
+  </div>
+
+  <div class="card">
     <div class="h2" style="margin-bottom:4px">Send Reservation Notification</div>
-    <div class="small" style="margin-bottom:10px">Queue a reservation notification — sends <b>both SMS + WhatsApp template</b> in one action. Enter <b>Row #</b> from Leads table to auto-fill, or enter details manually. Approve then Send.</div>
+    <div class="small" style="margin-bottom:10px">Queues <b>WhatsApp template</b> (<span class="code">send_whatsapp</span> + <span class="code">template_key</span>) — same approve → send flow as other channels. Row # auto-fills guest phone and details.</div>
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
       <div>
         <label class="small">Row # (from Leads)</label>
@@ -11508,10 +13542,16 @@ label.small + textarea,
     </div>
     <span id="ob-msg" class="note" style="display:block;margin-top:8px"></span>
   </div>
+</div>
 
-  <div class="card">
-    <div id="aiq-list" class="small">Loading…</div>
+<div id="aiq-drawer-overlay" class="aiq-drawer-overlay" onclick="if(event.target===this)closeAiqDrawer()"></div>
+<div id="aiq-drawer-panel" class="aiq-drawer-panel" style="display:none">
+  <div class="aiq-drawer-h">
+    <h3 id="aiq-drawer-title">Suggestion</h3>
+    <button type="button" class="modal-close" onclick="closeAiqDrawer()">Close</button>
   </div>
+  <div id="aiq-drawer-body" class="small" style="line-height:1.5"></div>
+  <div id="aiq-drawer-actions" style="margin-top:14px;display:flex;flex-wrap:wrap;gap:8px"></div>
 </div>
 
 <div id="tab-rules" class="tabpane hidden">
@@ -11721,6 +13761,49 @@ label.small + textarea,
     <div id="aiq-template-modal-body" class="small" style="white-space:normal"></div>
   </div>
 </div>
+
+<!-- AI Queue Summary Modal -->
+<div id="aiq-summary-modal" class="modal-overlay" onclick="if(event.target===this)closeAiqSummaryModal()">
+  <div class="modal-box" style="max-width:820px">
+    <div class="modal-header">
+      <div class="modal-title">AI Queue Summary</div>
+      <button type="button" class="modal-close" onclick="closeAiqSummaryModal()">Close</button>
+    </div>
+    <div id="aiq-summary-msg" class="note" style="margin-bottom:10px"></div>
+    <div id="aiq-summary-body" class="small" style="white-space:normal"></div>
+  </div>
+</div>
+
+<!-- AI Queue Channel Override Modal -->
+<div id="aiq-channel-modal" class="modal-overlay" onclick="if(event.target===this)closeAiqChannelModal()">
+  <div class="modal-box" style="max-width:520px">
+    <div class="modal-header">
+      <div class="modal-title">Change channel</div>
+      <button type="button" class="modal-close" onclick="closeAiqChannelModal()">Close</button>
+    </div>
+    <div class="small" style="margin-bottom:10px">Pick the channel you want this outbound to use. We'll rewrite the queue item (type + contact + body) to match. The item stays in its current status; nothing is sent until you click <b>Send</b>.</div>
+    <div id="aiq-channel-modal-current" class="note" style="margin-bottom:10px"></div>
+    <div id="aiq-channel-modal-choices" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">
+      <label style="display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid rgba(255,255,255,.12);border-radius:10px;cursor:pointer">
+        <input type="radio" name="aiq-ch-pick" value="email"/>
+        <div><div style="font-weight:700">Email</div><div class="note" style="margin:0">Plain subject + body to the lead's email</div></div>
+      </label>
+      <label style="display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid rgba(255,255,255,.12);border-radius:10px;cursor:pointer">
+        <input type="radio" name="aiq-ch-pick" value="sms"/>
+        <div><div style="font-weight:700">SMS</div><div class="note" style="margin:0">Short text to the lead's phone</div></div>
+      </label>
+      <label style="display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid rgba(255,255,255,.12);border-radius:10px;cursor:pointer">
+        <input type="radio" name="aiq-ch-pick" value="whatsapp"/>
+        <div><div style="font-weight:700">WhatsApp</div><div class="note" style="margin:0">Template message with rich formatting (requires venue WA setup)</div></div>
+      </label>
+    </div>
+    <div id="aiq-channel-modal-msg" class="note" style="margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button type="button" class="btn2" onclick="closeAiqChannelModal()">Cancel</button>
+      <button type="button" class="btn" id="aiq-channel-modal-apply">Apply change</button>
+    </div>
+  </div>
+</div>
 """)
 
     # Scripts
@@ -11813,6 +13896,27 @@ window.showTab = function(tab){
       try{ loadRules(); }catch(e){}
     }
 
+    if(tab === 'ai'){
+      try{ if(typeof loadAI === 'function') loadAI(); }catch(e){}
+    }
+    if(tab === 'aiq'){
+      try{ if(typeof loadAI === 'function') loadAI(); }catch(e){}
+      try{ if(typeof loadAIQueue === 'function') loadAIQueue(); }catch(e){}
+    }
+    if(tab === 'monitor'){
+      try{ if(typeof loadForecast === 'function') loadForecast(); }catch(e){}
+      try{ if(typeof loadDailySummary === 'function') loadDailySummary(); }catch(e){}
+    }
+    if(tab === 'menu'){
+      try{ if(typeof loadMenu === 'function') loadMenu(); }catch(e){}
+    }
+    if(tab === 'audit'){
+      try{ if(typeof loadAudit === 'function') loadAudit(); }catch(e){}
+    }
+    if(tab === 'policies'){
+      try{ if(typeof loadPartnerList === 'function') loadPartnerList(); }catch(e){}
+    }
+
     return false;
   };
 
@@ -11859,6 +13963,35 @@ window.showTab = function(tab){
 
     // apply initial tab on load (also keeps your earlier behavior)
     try{ setActive(tab); }catch(e){}
+
+    // Monitoring: delegated clicks so Forecast / Daily Revenue Refresh always fire
+    // even if direct addEventListener wiring missed (race, CSP, or DOM swap).
+    try{
+      var mon = document.getElementById('tab-monitor');
+      if(mon && !mon.__wcMonitorDelegated){
+        mon.__wcMonitorDelegated = true;
+        mon.addEventListener('click', function(ev){
+          var t = ev.target;
+          if(!t || !t.closest) return;
+          var fbtn = t.closest('#forecast-refresh-btn');
+          var dbtn = t.closest('#daily-summary-refresh-btn');
+          if(fbtn){
+            try{ ev.preventDefault(); }catch(e){}
+            try{ if(typeof window.loadForecast === 'function') window.loadForecast(); }catch(err){ console.error(err); }
+            return;
+          }
+          if(dbtn){
+            try{ ev.preventDefault(); }catch(e){}
+            try{ if(typeof window.loadDailySummary === 'function') window.loadDailySummary(); }catch(err){ console.error(err); }
+          }
+        });
+        mon.addEventListener('change', function(ev){
+          var t = ev.target;
+          if(!t || t.id !== 'daily-summary-date') return;
+          try{ if(typeof window.loadDailySummary === 'function') window.loadDailySummary(); }catch(err){ console.error(err); }
+        });
+      }
+    }catch(e){}
   }
 
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);
@@ -12000,6 +14133,7 @@ document.addEventListener('click', (e)=>{
 // ===== Leads filters (simple + fast) =====
 let leadTierFilter = "all";   // all | vip | regular
 let leadEntryFilter = "all";  // all | <entry_point>
+const _leadItemsByRow = {};
 
 function norm(s){ return (s||"").toString().trim().toLowerCase(); }
 
@@ -12031,6 +14165,7 @@ function _he(s){ return (s||'').toString().replace(/[&<>"']/g, c=>({'&':'&amp;',
 function _tipAttr(txt){ if(!txt||String(txt).length<12) return ''; try{ return ' class=\\"leads-cell-tip\\" data-tip=\\"'+encodeURIComponent(String(txt))+'\\"'; }catch(e){ return ''; } }
 function _leadRowFromItem(it){
   const row = (it.sheet_row||it.row||0);
+  if(row){ _leadItemsByRow[String(row)] = it || {}; }
   const ts = _he(it.timestamp||'');
   const nm = _he(it.name||'');
   const ph = _he(it.phone||'');
@@ -12053,14 +14188,107 @@ function _leadRowFromItem(it){
   const st = (it.status||'New').toString().trim();
   const stLow = st.toLowerCase();
   const vipVal = isVip ? 'Yes' : 'No';
-  const stSel = '<select class=\\'inp\\' id=\\'status-'+row+'\\'><option value=\\"New\\"'+(stLow==='new'?' selected':'')+'>New</option><option value=\\"Confirmed\\"'+(stLow==='confirmed'?' selected':'')+'>Confirmed</option><option value=\\"Seated\\"'+(stLow==='seated'?' selected':'')+'>Seated</option><option value=\\"No-Show\\"'+(stLow==='no-show'?' selected':'')+'>No-Show</option><option value=\\"Handled\\"'+(stLow==='handled'?' selected':'')+'>Handled</option></select>';
-  const vipSel = '<select class=\\'inp\\' id=\\'vip-'+row+'\\'><option value=\\"Yes\\"'+(vipVal==='Yes'?' selected':'')+'>Yes</option><option value=\\"No\\"'+(vipVal==='No'?' selected':'')+'>No</option></select>';
+  const stSel = '<select class="inp" id="status-'+row+'"><option value="New"'+(stLow==='new'?' selected':'')+'>New</option><option value="Confirmed"'+(stLow==='confirmed'?' selected':'')+'>Confirmed</option><option value="Seated"'+(stLow==='seated'?' selected':'')+'>Seated</option><option value="No-Show"'+(stLow==='no-show'?' selected':'')+'>No-Show</option><option value="Handled"'+(stLow==='handled'?' selected':'')+'>Handled</option></select>';
+  const vipSel = '<select class="inp" id="vip-'+row+'"><option value="Yes"'+(vipVal==='Yes'?' selected':'')+'>Yes</option><option value="No"'+(vipVal==='No'?' selected':'')+'>No</option></select>';
   const tipEp = fullEp ? _tipAttr(fullEp) : '';
   const tipCtx = fullCtx.length>=28 ? _tipAttr(fullCtx) : '';
   const tipNotes = fullNotes.length>=28 ? _tipAttr(fullNotes) : '';
   const tipNm = (it.name||'').length>=12 ? _tipAttr(it.name||'') : '';
   const tipPh = (it.phone||'').length>=12 ? _tipAttr(it.phone||'') : '';
-  return '<tr data-tier="'+tierKey+'" data-entry="'+_he(it.entry_point||'')+'"><td class=\\'code\\'>'+row+'</td><td>'+ts+'</td><td'+tipNm+'>'+nm+'</td><td'+tipPh+'>'+ph+'</td><td>'+d+'</td><td>'+t+'</td><td>'+ps+'</td><td'+_tipAttr(seg)+'><span class=\\"'+segCls+'\\">'+seg+'</span></td><td'+tipEp+'><span class=\\"pill\\">'+ep+'</span></td><td'+_tipAttr(queue)+'><span class=\\"badge good\\">'+queue+'</span></td><td>'+budget+'</td><td'+tipCtx+'><span class=\\"small\\">'+ctx+(ctx.length>=34?'…':'')+'</span></td><td'+tipNotes+'><span class=\\"small\\">'+notes+(notes.length>=40?'…':'')+'</span></td><td>'+stSel+'</td><td>'+vipSel+'</td><td><button type=\\"button\\" class=\\"btn primary\\" onclick=\\"saveLead('+row+')\\">Save</button><button type=\\"button\\" class=\\"btnTiny\\" title=\\"Set status to Handled\\" onclick=\\"markHandled('+row+')\\">✅</button></td></tr>';
+  return '<tr data-lead-row="'+row+'" data-tier="'+tierKey+'" data-entry="'+_he(it.entry_point||'')+'"><td class="code">'+row+'</td><td>'+ts+'</td><td'+tipNm+'>'+nm+'</td><td'+tipPh+'>'+ph+'</td><td>'+d+'</td><td>'+t+'</td><td>'+ps+'</td><td'+_tipAttr(seg)+'><span class="'+segCls+'">'+seg+'</span></td><td'+tipEp+'><span class="pill">'+ep+'</span></td><td'+_tipAttr(queue)+'><span class="badge good">'+queue+'</span></td><td>'+budget+'</td><td'+tipCtx+'><span class="small">'+ctx+(ctx.length>=34?'…':'')+'</span></td><td'+tipNotes+'><span class="small">'+notes+(notes.length>=40?'…':'')+'</span></td><td>'+stSel+'</td><td>'+vipSel+'</td><td><button type="button" class="btn primary" onclick="event.stopPropagation();saveLead('+row+')">Save</button><button type="button" class="btnTiny" title="Set status to Handled" onclick="event.stopPropagation();markHandled('+row+')">✅</button></td></tr>';
+}
+
+function _leadDrawerEnsure(){
+  if(qs('#lead-drawer-overlay')) return;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div id="lead-drawer-overlay" class="aiq-drawer-overlay" onclick="if(event.target===this)closeLeadDrawer()">
+      <div id="lead-drawer-panel" class="aiq-drawer-panel" onclick="event.stopPropagation()">
+        <div class="aiq-drawer-h">
+          <div id="lead-drawer-title" style="font-size:16px;font-weight:800">Lead details</div>
+          <button type="button" class="btn2" onclick="closeLeadDrawer()">Close</button>
+        </div>
+        <div id="lead-drawer-body" class="aiq-drawer-body"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap.firstElementChild);
+}
+
+function closeLeadDrawer(){
+  const o = qs('#lead-drawer-overlay');
+  const pan = qs('#lead-drawer-panel');
+  if(o) o.classList.remove('show');
+  if(pan) pan.style.display = 'none';
+  try{ document.body.style.overflow = ''; }catch(e){}
+}
+
+function openLeadDrawer(row){
+  _leadDrawerEnsure();
+  const it = _leadItemsByRow[String(row||'')] || null;
+  if(!it) return;
+  const title = qs('#lead-drawer-title');
+  const body = qs('#lead-drawer-body');
+  if(title) title.textContent = `Lead #${row}`;
+  if(body){
+    const _isEmail = (v)=>{
+      const s = String(v||'').trim().toLowerCase();
+      return !!s && /^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}$/.test(s);
+    };
+    const _isPhone = (v)=>{
+      const s = String(v||'').trim();
+      const d = s.replace(/\D/g,'');
+      return d.length >= 10 && d.length <= 15 && !(d && /^(\d)\1+$/.test(d));
+    };
+    const _dash = (v)=>{
+      const s = String(v ?? '').trim();
+      return s ? s : '—';
+    };
+    let phoneRaw = String(it.phone ?? '').trim();
+    let emailRaw = String(it.email ?? '').trim();
+    if(_isEmail(phoneRaw) && !_isEmail(emailRaw)){ emailRaw = phoneRaw; phoneRaw = ''; }
+    if(_isPhone(emailRaw) && !_isPhone(phoneRaw)){ phoneRaw = emailRaw; emailRaw = ''; }
+    const display = Object.assign({}, it, {
+      phone: _isPhone(phoneRaw) ? phoneRaw : '',
+      email: _isEmail(emailRaw) ? emailRaw : '',
+    });
+    const keys = Object.keys(it || {}).filter(k=>!String(k||'').startsWith('_'));
+    const pri = (k)=>_he(_dash(display[k]));
+    const identity = [
+      ['name','Name'],['phone','Phone'],['email','Email'],['language','Language']
+    ];
+    const reservation = [
+      ['date','Date'],['time','Time'],['party_size','Party size'],['budget','Budget'],['status','Status'],['vip','VIP'],['tier','Tier']
+    ];
+    const context = [
+      ['entry_point','Entry point'],['queue','Queue'],['business_context','Business context'],['notes','Notes'],['vibe','Vibe'],['timestamp','Timestamp']
+    ];
+    const used = new Set();
+    const section = (rows, heading)=>{
+      const inner = rows.map(([k,label])=>{
+        used.add(k);
+        return `<div class="note" style="opacity:.7">${_he(label)}</div><div class="small" style="white-space:pre-wrap;word-break:break-word">${pri(k)}</div>`;
+      }).join('');
+      return `<div style="font-weight:800;margin:10px 0 6px">${heading}</div><div style="display:grid;grid-template-columns:140px 1fr;gap:8px 12px">${inner}</div>`;
+    };
+    const usedNorm = new Set(Array.from(used).map(k=>String(k||'').trim().toLowerCase()));
+    const extra = keys.filter(k=>!usedNorm.has(String(k||'').trim().toLowerCase())).sort();
+    const extraHtml = extra.length ? `
+      <div style="font-weight:800;margin:12px 0 6px">Additional Fields</div>
+      <div style="display:grid;grid-template-columns:140px 1fr;gap:8px 12px">
+        ${extra.map((k)=>`<div class="note" style="opacity:.7">${_he(k.replace(/_/g,' '))}</div><div class="small" style="white-space:pre-wrap;word-break:break-word">${_he(_dash(display[k]))}</div>`).join('')}
+      </div>` : '';
+    body.innerHTML = `
+      ${section(identity, 'Identity')}
+      ${section(reservation, 'Reservation')}
+      ${section(context, 'Context')}
+      ${extraHtml}
+    `;
+  }
+  const o = qs('#lead-drawer-overlay');
+  const pan = qs('#lead-drawer-panel');
+  if(o) o.classList.add('show');
+  if(pan) pan.style.display = 'block';
+  try{ document.body.style.overflow = 'hidden'; }catch(e){}
 }
 function _leadsDdLabel(panelId, allLabel){
   const panel = qs('#'+panelId); if(!panel) return allLabel;
@@ -12148,6 +14376,18 @@ function setupLeadFilters(){
   qsa('#flt-status-panel input,#flt-tier-panel input').forEach(i=>i.addEventListener('change', _syncDdButtons));
   document.addEventListener('click', function(){ _closeAllLeadsDd(); _syncDdButtons(); });
   qsa('.leads-dd-panel').forEach(p=>p.addEventListener('click', function(e){ e.stopPropagation(); }));
+  _leadDrawerEnsure();
+  const tBody = qs('#leadsTableBody');
+  if(tBody && !tBody.__leadDrawerBound){
+    tBody.__leadDrawerBound = true;
+    tBody.addEventListener('click', function(e){
+      const tr = e.target && e.target.closest ? e.target.closest('tr[data-lead-row]') : null;
+      if(!tr) return;
+      const row = tr.getAttribute('data-lead-row');
+      if(!row) return;
+      openLeadDrawer(row);
+    });
+  }
   const tip = document.createElement('div'); tip.id = 'leadsHoverTip'; document.body.appendChild(tip);
   const tipEl = ()=>qs('#leadsHoverTip');
   tbl.addEventListener('mousemove', function(e){
@@ -12167,44 +14407,6 @@ function setupLeadFilters(){
 
 function qs(sel){return document.querySelector(sel);}
 function qsa(sel){return Array.from(document.querySelectorAll(sel));}
-                
-qsa('.tabbtn').forEach(btn=>{
-  btn.addEventListener('click', (e)=>{
-    try{ e.preventDefault(); }catch(_){}
-
-    const t = btn.dataset.tab || btn.getAttribute('data-tab') || btn.getAttribute('data-tabbtn') || '';
-
-    // Always route through showTab so special tabs (like fanzone) can redirect
-    if(typeof window.showTab === 'function'){
-      window.showTab(t);
-      return;
-    }
-
-    // Fallback (should rarely be needed)
-    qsa('.tabbtn').forEach(b=>b.classList.remove('active'));
-    btn.classList.add('active');
-
-    ['ops','leads','ai','aiq','rules','menu','drafts','policies','audit','monitor'].forEach(x=>{
-      const pane = document.getElementById('tab-'+x);
-      if(!pane) return;
-      pane.classList.toggle('hidden', x!==t);
-    });
-
-    if(t==='ai') loadAI();
-    if(t==='aiq'){
-      // UX: default AI Queue view to Pending (if user hasn't picked a status yet)
-      try{
-        const f = qs('#aiq-filter');
-        if(f && (!f.value || !String(f.value).trim())) f.value = 'pending';
-      }catch(e){}
-      loadAIQueue();
-    }
-    if(t==='rules') loadRules();
-    if(t==='menu') loadMenu();
-    if(t==='drafts') loadDrafts();
-    if(t==='audit') loadAudit();
-  });
-});
 
 async function saveLead(sheetRow){
   const status = qs('#status-'+sheetRow).value;
@@ -12626,7 +14828,7 @@ async function saveOps(){
 async function loadAI(){
   const msg = qs('#ai-msg'); if(msg) msg.textContent = '';
   try{
-    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}`, {cache:'no-store'});
+    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {cache:'no-store'});
     const data = await r.json();
     if(!data.ok) throw new Error(data.error || 'Failed');
     const s = data.settings || {};
@@ -12649,13 +14851,40 @@ async function loadAI(){
     if(qs('#ai-act-email')) qs('#ai-act-email').checked = !!allow.send_email;
     if(qs('#ai-act-whatsapp')) qs('#ai-act-whatsapp').checked = !!allow.send_whatsapp;
 
+    const cp = s.channel_preferences || {};
+    if(qs('#ai-pref-email-conf')) qs('#ai-pref-email-conf').checked = (cp.prefer_email_for_confirmations !== false);
+    if(qs('#ai-pref-sms-urgent')) qs('#ai-pref-sms-urgent').checked = (cp.prefer_sms_for_urgent !== false);
+    if(qs('#ai-pref-wa')) qs('#ai-pref-wa').checked = !!cp.prefer_whatsapp_when_available;
+    if(qs('#ai-pref-rank-all')) qs('#ai-pref-rank-all').checked = (cp.rank_all_available_channels !== false);
+    if(qs('#ai-pref-auto')) qs('#ai-pref-auto').checked = (cp.auto_detect_best_channel !== false);
+
+    const fm = (s.focus_mode || 'all').toString();
+    const seg = qs('#aiq-focus-mode-seg');
+    if(seg){
+      seg.querySelectorAll('button[data-fm]').forEach(b=>{
+        b.classList.toggle('active', (b.getAttribute('data-fm')||'') === fm);
+      });
+    }
+    const ff = s.focus_filters || {};
+    const ffmap = [
+      ['aiq-ff-suggest-email','suggest_email'],
+      ['aiq-ff-suggest-sms','suggest_sms'],
+      ['aiq-ff-suggest-wa','suggest_whatsapp'],
+      ['aiq-ff-vip','allow_vip_tagging'],
+      ['aiq-ff-drafts','allow_reply_drafts'],
+      ['aiq-ff-rem','allow_reminder_suggestions'],
+      ['aiq-ff-upg','allow_upgrade_suggestions']
+    ];
+    ffmap.forEach(([id,k])=>{ const el = qs('#'+id); if(el) el.checked = (ff[k] !== false); });
+
     const feat = s.features || {};
     if(qs('#ai-feat-vip')) qs('#ai-feat-vip').checked = (feat.auto_vip_tag !== false);
     if(qs('#ai-feat-status')) qs('#ai-feat-status').checked = !!feat.auto_status_update;
     if(qs('#ai-feat-draft')) qs('#ai-feat-draft').checked = (feat.auto_reply_draft !== false);
 
     // lock owner-only fields for managers
-    ['ai-model','ai-prompt','ai-act-vip','ai-act-status','ai-act-draft','ai-act-sms','ai-act-email','ai-act-whatsapp'].forEach(id=>{
+    ['ai-model','ai-prompt','ai-act-vip','ai-act-status','ai-act-draft','ai-act-sms','ai-act-email','ai-act-whatsapp',
+     'ai-pref-email-conf','ai-pref-sms-urgent','ai-pref-wa','ai-pref-rank-all','ai-pref-auto'].forEach(id=>{
       const el = qs('#'+id); if(!el) return;
       el.disabled = !isOwner;
       el.style.opacity = isOwner ? '1' : '.55';
@@ -12686,12 +14915,19 @@ async function saveAI(){
       send_email: qs('#ai-act-email')?.checked ? true : false,
       send_whatsapp: qs('#ai-act-whatsapp')?.checked ? true : false,
     };
+    payload.channel_preferences = {
+      prefer_email_for_confirmations: qs('#ai-pref-email-conf')?.checked ? true : false,
+      prefer_sms_for_urgent: qs('#ai-pref-sms-urgent')?.checked ? true : false,
+      prefer_whatsapp_when_available: qs('#ai-pref-wa')?.checked ? true : false,
+      rank_all_available_channels: qs('#ai-pref-rank-all')?.checked ? true : false,
+      auto_detect_best_channel: qs('#ai-pref-auto')?.checked ? true : false,
+    };
   }
 
   try{
-    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}`, {
+    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
+      headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
       body: JSON.stringify(payload)
     });
     const data = await r.json();
@@ -12793,6 +15029,591 @@ async function saveDrafts(){
 let aiqSearchT = null;
 let aiqFetchSeq = 0;
 let aiqItemsById = {};
+let aiqDrawerCurrentId = '';
+window.__aiqUxInit = false;
+
+const AI_TYPE_LABELS = {
+  vip_tag:'VIP Suggestion',
+  status_update:'Status update',
+  reply_draft:'Draft reply',
+  correct_contact:'Correct Contact',
+  send_sms:'SMS',
+  send_email:'Email',
+  send_whatsapp:'WhatsApp',
+  send_confirmation:'Confirmation',
+  send_reservation_received:'Reservation received',
+  send_reservation_confirmed:'Reservation confirmed',
+  send_reservation_denied:'Reservation denied',
+  send_reservation_reminder:'Reservation reminder',
+  send_update:'Update',
+  send_vip_update:'VIP update'
+};
+
+function initAiqUx(){
+  if(window.__aiqUxInit) return;
+  window.__aiqUxInit = true;
+  const seg = qs('#aiq-focus-mode-seg');
+  if(seg){
+    seg.addEventListener('click', (e)=>{
+      const btn = e.target && e.target.closest ? e.target.closest('button[data-fm]') : null;
+      if(!btn) return;
+      seg.querySelectorAll('button[data-fm]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  }
+  function _selectAiqPill(pills, pill){
+    if(!pills || !pill) return;
+    pills.querySelectorAll('.aiq-pill').forEach(x=>x.classList.remove('on'));
+    pill.classList.add('on');
+    const hid = qs('#aiq-view-bucket');
+    if(hid) hid.value = pill.getAttribute('data-bucket') || 'all';
+    loadAIQueue();
+  }
+  const pills = qs('#aiq-view-pills');
+  if(pills){
+    pills.addEventListener('click', (e)=>{
+      const p = e.target && e.target.closest ? e.target.closest('.aiq-pill') : null;
+      if(!p || !pills.contains(p)) return;
+      _selectAiqPill(pills, p);
+    });
+    pills.addEventListener('keydown', (e)=>{
+      if(e.key !== 'Enter' && e.key !== ' ') return;
+      const p = e.target && e.target.closest ? e.target.closest('.aiq-pill') : null;
+      if(!p || !pills.contains(p)) return;
+      e.preventDefault();
+      _selectAiqPill(pills, p);
+    });
+  }
+  document.addEventListener('keydown', function aiqGlobalEsc(e){
+    if(e.key !== 'Escape') return;
+    const ov = qs('#aiq-drawer-overlay');
+    if(ov && ov.classList.contains('show')) closeAiqDrawer();
+    const sm = qs('#aiq-summary-modal');
+    if(sm && sm.classList.contains('show')) closeAiqSummaryModal();
+    const cm = qs('#aiq-channel-modal');
+    if(cm && cm.classList.contains('show')) closeAiqChannelModal();
+  });
+
+  // Hard-wire critical AIQ actions to avoid regressions from inline handler drift.
+  const clickMap = [
+    ['#aiq-btn-save-focus', ()=>saveAiqFocusMode()],
+    ['#aiq-btn-reset-focus', ()=>resetAiqFocusMode()],
+    ['#aiq-btn-run-vip', ()=>runAIPreset('vip')],
+    ['#aiq-btn-run-reminders', ()=>runAIPreset('reminders')],
+    ['#aiq-btn-run-upgrades', ()=>runAIPreset('upgrades')],
+    ['#aiq-btn-run-all', ()=>runAIPreset('all')],
+    ['#aiq-btn-run-new', ()=>runAINew()],
+    ['#aiq-btn-run-row', ()=>runAIRow()],
+    ['#aiq-btn-clear-filters', ()=>clearAIQueueFilters()],
+    ['#aiq-btn-refresh', ()=>loadAIQueue()],
+    ['#aiq-btn-summary', ()=>openAiqSummary()]
+  ];
+  clickMap.forEach(([sel, fn])=>{
+    const el = qs(sel);
+    if(!el) return;
+    el.addEventListener('click', function(e){
+      try{ e.preventDefault(); }catch(_){}
+      try{ fn(); }catch(err){ console.error(err); }
+    });
+  });
+
+  const search = qs('#aiq-search');
+  if(search){
+    search.addEventListener('input', function(){ aiqSearchDebounced(); });
+  }
+  ['#aiq-filter','#aiq-channel','#aiq-time','#aiq-type','#aiq-conf'].forEach(sel=>{
+    const el = qs(sel);
+    if(!el) return;
+    el.addEventListener('change', function(){ loadAIQueue(); });
+  });
+
+  // Delegated safety net: if any dynamically-rendered row/drawer button's inline
+  // onclick ever fails to bind (CSP drift, malformed HTML, etc.), the delegated
+  // handler below keeps every Approve / Deny / Send / Change channel / Override /
+  // Preview / Remove button functional via data-aiq-act attributes.
+  const _aiqDelegatedHandler = function(e){
+    if(e && e.__aiqDelegatedHandled) return;
+    const t = e.target && (e.target.closest ? e.target.closest('[data-aiq-act]') : null);
+    if(!t) return;
+    const act = t.getAttribute('data-aiq-act') || '';
+    const id  = t.getAttribute('data-aiq-id')  || '';
+    if(!act) return;
+    e.__aiqDelegatedHandled = true;
+    try{ e.preventDefault(); }catch(_){ }
+    try{ e.stopPropagation(); }catch(_){ }
+    try{
+      if(act === 'approve')        return aiqApprove(id, t);
+      if(act === 'deny')           return aiqDeny(id, t);
+      if(act === 'send')           return aiqSend(id, t);
+      if(act === 'preview')        return aiqViewTemplate(id);
+      if(act === 'change-channel') return openAiqChannelModal(id);
+      if(act === 'override')       return aiqOverride(id, t);
+      if(act === 'remove')         return aiqRemove(id, t);
+      if(act === 'open-drawer')    return openAiqDrawer(id);
+    }catch(err){ console.error('AIQ delegated action failed:', act, err); }
+  };
+  // Only delegate on the AIQ pane: table-row buttons call stopPropagation in
+  // their inline onclick, so the delegated handler is an inert safety net when
+  // onclick works correctly, and a rescue when it does not. The drawer panel
+  // lives outside #tab-aiq and its inline handlers don't stop propagation, so
+  // we avoid attaching there to prevent double-fires.
+  const aiqPane = qs('#tab-aiq');
+  if(aiqPane && !aiqPane.__aiqDelegated){
+    aiqPane.__aiqDelegated = true;
+    aiqPane.addEventListener('click', _aiqDelegatedHandler);
+  }
+}
+
+function applyAiqSummary(sum){
+  if(!sum || !sum.ok) return;
+  const c = sum.counts || {};
+  const keys = ['all','vip','reminders','upgrades','email','sms','whatsapp','drafts'];
+  const wrap = qs('#aiq-view-pills');
+  if(wrap){
+    keys.forEach(k=>{
+      const pill = wrap.querySelector('.aiq-pill[data-bucket="'+k+'"] .aiq-pill-n');
+      if(pill) pill.textContent = String(c[k] != null ? c[k] : 0);
+    });
+  }
+  const strip = qs('#aiq-stat-strip');
+  if(strip){
+    const p = sum.total_pending != null ? sum.total_pending : 0;
+    const a = sum.total_approved != null ? sum.total_approved : 0;
+    const ap = sum.total_applied != null ? sum.total_applied : 0;
+    const s = sum.total_sent != null ? sum.total_sent : 0;
+    const r = sum.approved_outbound_ready != null ? sum.approved_outbound_ready : 0;
+    strip.innerHTML =
+      '<span class="aiq-stat-badge">Pending <b>'+p+'</b></span>'+
+      '<span class="aiq-stat-badge">Approved <b>'+a+'</b></span>'+
+      '<span class="aiq-stat-badge">Applied <b>'+ap+'</b></span>'+
+      '<span class="aiq-stat-badge">Sent <b>'+s+'</b></span>'+
+      '<span class="aiq-stat-badge">Ready to send <b>'+r+'</b></span>'+
+      '<span class="aiq-stat-badge note" style="opacity:.85;border-style:dashed">Bucket base: '+String(c.all != null ? c.all : 0)+' item(s)</span>';
+  }
+}
+
+async function loadAIQueueSummary(){
+  try{
+    const r = await fetch(`/admin/api/ai/queue/summary?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {cache:'no-store'});
+    const sum = await r.json();
+    applyAiqSummary(sum);
+  }catch(e){ /* ignore */ }
+}
+
+function showAiqSummaryModal(){
+  const m = qs('#aiq-summary-modal');
+  if(m) m.classList.add('show');
+}
+
+let _aiqSummaryTickerId = null;
+let _aiqSummaryRefreshId = null;
+let _aiqSummaryLastFetchAt = 0;
+
+function _aiqStopSummaryTicker(){
+  try{ if(_aiqSummaryTickerId){ clearInterval(_aiqSummaryTickerId); _aiqSummaryTickerId = null; } }catch(_){ }
+  try{ if(_aiqSummaryRefreshId){ clearInterval(_aiqSummaryRefreshId); _aiqSummaryRefreshId = null; } }catch(_){ }
+}
+
+function _aiqUpdateSummaryTicker(){
+  const el = qs('#aiq-summary-ticker');
+  if(!el || !_aiqSummaryLastFetchAt) return;
+  const secs = Math.max(0, Math.floor((Date.now() - _aiqSummaryLastFetchAt)/1000));
+  let label;
+  if(secs < 2) label = 'just now';
+  else if(secs < 60) label = secs + 's ago';
+  else label = Math.floor(secs/60) + 'm ' + (secs%60) + 's ago';
+  el.textContent = 'Updated ' + label;
+}
+
+function closeAiqSummaryModal(){
+  _aiqStopSummaryTicker();
+  const m = qs('#aiq-summary-modal');
+  if(m) m.classList.remove('show');
+}
+
+async function openAiqSummary(){
+  initAiqUx();
+  showAiqSummaryModal();
+  const msg = qs('#aiq-summary-msg');
+  const body = qs('#aiq-summary-body');
+  if(msg) msg.textContent = 'Loading summary…';
+  if(body) body.innerHTML = '';
+  _aiqStopSummaryTicker();
+  await _aiqFetchAndRenderSummary({firstLoad:true});
+  _aiqSummaryTickerId = setInterval(_aiqUpdateSummaryTicker, 1000);
+  _aiqSummaryRefreshId = setInterval(()=>{ _aiqFetchAndRenderSummary({firstLoad:false}).catch(()=>{}); }, 10000);
+}
+
+async function _aiqFetchAndRenderSummary(opts){
+  const firstLoad = !!(opts && opts.firstLoad);
+  const msg = qs('#aiq-summary-msg');
+  const body = qs('#aiq-summary-body');
+  try{
+    const q = (qs('#aiq-search')?.value || '').trim();
+    const status = (qs('#aiq-filter')?.value || '').trim();
+    const channel = (qs('#aiq-channel')?.value || '').trim();
+    const time = (qs('#aiq-time')?.value || '').trim();
+    const type = (qs('#aiq-type')?.value || '').trim();
+    const min_conf = (qs('#aiq-conf')?.value || '').trim();
+    const bucket = (qs('#aiq-view-bucket')?.value || 'all').trim();
+    let focusQ = '';
+    let channelQ = channel;
+    if(bucket === 'vip') focusQ = 'vip';
+    else if(bucket === 'reminders') focusQ = 'reminders';
+    else if(bucket === 'upgrades') focusQ = 'upgrades';
+    else if(bucket === 'drafts') focusQ = 'reply_drafts';
+    else if(bucket === 'email') channelQ = 'email';
+    else if(bucket === 'sms') channelQ = 'sms';
+    else if(bucket === 'whatsapp') channelQ = 'whatsapp';
+
+    const summaryBase = `/admin/api/ai/queue/summary?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`;
+    const filteredSummaryUrl = summaryBase
+      + (q ? `&q=${encodeURIComponent(q)}` : '')
+      + (status ? `&status=${encodeURIComponent(status)}` : '')
+      + (channelQ ? `&channel=${encodeURIComponent(channelQ)}` : '')
+      + (time ? `&time=${encodeURIComponent(time)}` : '')
+      + (type ? `&type=${encodeURIComponent(type)}` : '')
+      + (min_conf ? `&conf=${encodeURIComponent(min_conf)}` : '')
+      + (focusQ ? `&focus=${encodeURIComponent(focusQ)}` : '');
+    const venueSummaryUrl = summaryBase;
+
+    const [fsr, vsr] = await Promise.all([
+      fetch(filteredSummaryUrl, {cache:'no-store'}),
+      fetch(venueSummaryUrl, {cache:'no-store'})
+    ]);
+    const [fs, vs] = await Promise.all([fsr.json().catch(()=>null), vsr.json().catch(()=>null)]);
+    if(!fs || !fs.ok) throw new Error((fs && fs.error) || 'Filtered summary failed');
+    if(!vs || !vs.ok) throw new Error((vs && vs.error) || 'Venue summary failed');
+
+    _aiqSummaryLastFetchAt = Date.now();
+
+    if(msg){
+      msg.innerHTML =
+        `Filtered queue: ${fs.total_items || 0} item(s) · Pending ${fs.total_pending || 0} · Approved ${fs.total_approved || 0} ` +
+        `· Applied ${fs.total_applied || 0} · Sent ${fs.total_sent || 0} · Denied ${fs.total_denied || 0} ` +
+        `· <span id="aiq-summary-ticker" style="opacity:.8">just now</span>`;
+    }
+    if(body){
+      const cards = [
+        ['Items (filtered)', fs.total_items != null ? fs.total_items : 0],
+        ['Pending (filtered)', fs.total_pending != null ? fs.total_pending : 0],
+        ['Approved (filtered)', fs.total_approved != null ? fs.total_approved : 0],
+        ['Applied (filtered)', fs.total_applied != null ? fs.total_applied : 0],
+        ['Sent (filtered)', fs.total_sent != null ? fs.total_sent : 0],
+        ['Denied (filtered)', fs.total_denied != null ? fs.total_denied : 0],
+        ['Ready to send (filtered)', fs.approved_outbound_ready != null ? fs.approved_outbound_ready : 0],
+        ['Pending (venue-wide)', vs.total_pending != null ? vs.total_pending : 0],
+        ['Approved (venue-wide)', vs.total_approved != null ? vs.total_approved : 0],
+        ['Applied (venue-wide)', vs.total_applied != null ? vs.total_applied : 0],
+        ['Sent (venue-wide)', vs.total_sent != null ? vs.total_sent : 0],
+        ['Ready to send (venue-wide)', vs.approved_outbound_ready != null ? vs.approved_outbound_ready : 0]
+      ];
+      const topTypes = Array.isArray(fs.top_types) ? fs.top_types : [];
+      const top = topTypes.length
+        ? topTypes.map(x=>`<li><code>${esc(aiFriendlyType({type:(x && x.type) || 'unknown',payload:{}}))}</code> <b>${(x && x.count) || 0}</b></li>`).join('')
+        : '<li>No items in current filter.</li>';
+      body.innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-bottom:12px">
+          ${cards.map(([label,val])=>`<div class="aiq-stat-badge" style="display:flex;justify-content:space-between;gap:10px"><span>${esc(label)}</span><b>${val}</b></div>`).join('')}
+        </div>
+        <div class="small" style="opacity:.8;margin-bottom:10px">Current filters: view <b>${esc(bucket||'all')}</b>, status <b>${esc(status||'all')}</b>, channel <b>${esc(channelQ||'all')}</b>, time <b>${esc(time||'all')}</b>, type <b>${esc(type||'all')}</b>, min conf <b>${esc(min_conf||'none')}</b>.</div>
+        <div style="font-weight:800;margin-bottom:6px">Top suggestion types (current filter)</div>
+        <ul style="margin:0;padding-left:18px;line-height:1.45">${top}</ul>
+        <div class="small" style="margin-top:10px;opacity:.7">Auto-refreshing every 10s while this modal is open. Backend generated at: <b>${esc(fs.generated_at || 'now')}</b></div>
+      `;
+    }
+    _aiqUpdateSummaryTicker();
+  }catch(e){
+    if(firstLoad && msg) msg.textContent = 'Unable to load summary: ' + (e.message || e);
+  }
+}
+
+function aiFriendlyType(it){
+  const raw = (it && it.type) ? String(it.type) : '';
+  const p = (it && it.payload && typeof it.payload === 'object') ? it.payload : {};
+  if(raw === 'send_whatsapp' && p.template_key){
+    const m = {reservation_received:'Received',reservation_confirmed:'Confirmed',reservation_denied:'Denied',reservation_reminder:'Reminder'};
+    const k = String(p.template_key||'');
+    return 'WhatsApp · ' + (m[k] || k);
+  }
+  return AI_TYPE_LABELS[raw] || raw || '—';
+}
+
+function aiBestChannel(it){
+  const p = (it && it.payload && typeof it.payload === 'object') ? it.payload : {};
+  if(p.recommended_channel) return String(p.recommended_channel);
+  const t = String(it.type||'');
+  if(t === 'send_email') return 'email';
+  if(t === 'send_sms') return 'sms';
+  if(t === 'send_whatsapp' || t.indexOf('send_reservation_')===0) return 'whatsapp';
+  if(t === 'send_confirmation' || t === 'send_update' || t === 'send_vip_update') return 'sms+wa';
+  return '—';
+}
+
+// --- AI Queue helpers ---
+
+function _aiqLeadData(it){
+  const p = (it && it.payload && typeof it.payload === 'object') ? it.payload : {};
+  const lead = (p.lead && typeof p.lead === 'object') ? p.lead : {};
+  const snap = (p.lead_snapshot && typeof p.lead_snapshot === 'object') ? p.lead_snapshot : {};
+  const rowRaw = lead.row ?? p.row ?? p.sheet_row ?? snap.row ?? null;
+  const rowNum = (rowRaw != null && Number.isFinite(parseInt(String(rowRaw), 10)) && parseInt(String(rowRaw), 10) >= 2)
+    ? parseInt(String(rowRaw), 10) : null;
+  const _clean = (v) => String(v || '').trim();
+  const _looksEmail = (v) => {
+    const s = _clean(v);
+    return !!s && s.indexOf('@') >= 0;
+  };
+  const _looksPhone = (v) => {
+    const s = _clean(v);
+    return !!s && /^[+()\\-\\s\\d]{7,}$/.test(s);
+  };
+  const toRaw = _clean(p.to || '');
+  const contactRaw = _clean(lead.contact || snap.contact || '');
+  // Classify candidate values by shape (prevents emails leaking into phone field).
+  const phoneCandidates = [
+    _clean(lead.phone),
+    _clean(snap.phone),
+    _looksPhone(contactRaw) ? contactRaw : '',
+    _looksPhone(toRaw) ? toRaw : '',
+  ].filter(Boolean);
+  const emailCandidates = [
+    _clean(lead.email),
+    _clean(snap.email),
+    _looksEmail(contactRaw) ? contactRaw : '',
+    _looksEmail(toRaw) ? toRaw : '',
+    // Recover when upstream incorrectly stores email in "phone".
+    _looksEmail(lead.phone) ? _clean(lead.phone) : '',
+    _looksEmail(snap.phone) ? _clean(snap.phone) : '',
+  ].filter(Boolean);
+  const phoneVal = phoneCandidates.find(_looksPhone) || '';
+  const emailVal = emailCandidates.find(_looksEmail) || '';
+  return {
+    rowNum,
+    name:      lead.name  || snap.name  || '',
+    phone:     phoneVal,
+    email:     emailVal,
+    date:      snap.date  || (lead.datetime ? lead.datetime.split(' ')[0] : '') || '',
+    time:      snap.time  || (lead.datetime ? lead.datetime.split(' ').slice(1).join(' ') : '') || '',
+    partySize: lead.party_size || snap.party_size || '',
+    budget:    snap.budget || lead.budget || '',
+    notes:     snap.notes  || lead.notes  || '',
+    tier:      snap.tier   || lead.tier   || '',
+    entry:     snap.entry_point || lead.entry_point || '',
+    to:        p.to || '',
+  };
+}
+
+// Returns just the guest name for AI Queue table rendering.
+function aiGuestName(it){
+  const d = _aiqLeadData(it);
+  return d.name || '—';
+}
+
+function aiRowNumber(it){
+  const d = _aiqLeadData(it);
+  return d.rowNum ? String(d.rowNum) : '—';
+}
+
+// Kept for back-compat (no longer used for table; used in drawer via _aiqLeadData).
+function aiGuestLine(it){
+  return aiGuestName(it);
+}
+
+function aiWaTemplateLabel(it){
+  const p = (it && it.payload && typeof it.payload === 'object') ? it.payload : {};
+  if(String(it.type||'') === 'send_whatsapp' && p.template_key){
+    const m = {reservation_received:'Received',reservation_confirmed:'Confirmed',reservation_denied:'Denied',reservation_reminder:'Reminder'};
+    return m[String(p.template_key)] || String(p.template_key);
+  }
+  if(String(it.type||'').indexOf('send_reservation_')===0){
+    return 'Bundled';
+  }
+  return '—';
+}
+
+function closeAiqDrawer(){
+  const o = qs('#aiq-drawer-overlay');
+  const p = qs('#aiq-drawer-panel');
+  if(o) o.classList.remove('show');
+  if(p) p.style.display = 'none';
+  aiqDrawerCurrentId = '';
+  try{ document.body.style.overflow = ''; }catch(e){}
+}
+
+function openAiqDrawer(id){
+  const it = aiqItemsById[String(id||'')] || null;
+  if(!it) return;
+  aiqDrawerCurrentId = String(id || '');
+  const title = qs('#aiq-drawer-title');
+  const body = qs('#aiq-drawer-body');
+  const act = qs('#aiq-drawer-actions');
+  if(title) title.textContent = aiFriendlyType(it);
+  const p = it.payload || {};
+  const why = esc(it.rationale || '');
+  const conf = (typeof it.confidence === 'number') ? it.confidence.toFixed(2) : '';
+  const ch = esc(aiBestChannel(it));
+  const rk = Array.isArray(p.channel_ranked) ? p.channel_ranked.join(', ') : '';
+  const rsn = esc(p.channel_reason || '');
+  const tmpl = esc(aiWaTemplateLabel(it));
+  const subj = esc(p.subject || '');
+  const msg = esc(p.message || p.body || '');
+  if(body){
+    const ld = _aiqLeadData(it);
+    const rowBadge = ld.rowNum
+      ? `<span class="pill" style="font-size:12px;font-weight:800;padding:4px 10px;margin-bottom:12px;display:inline-block">Row #${ld.rowNum}</span>`
+      : '';
+    // Build a clean labelled-row grid for every non-empty lead field.
+    const ctxRows = [
+      ['Name',       ld.name],
+      ['Phone',      ld.phone],
+      ['Email',      ld.email],
+      ['Date',       ld.date],
+      ['Time',       ld.time],
+      ['Party size', ld.partySize],
+      ['Budget',     ld.budget],
+      ['Tier',       ld.tier],
+      ['Entry',      ld.entry],
+      ['Notes',      ld.notes],
+      ['Send to',    ld.to && ld.to !== ld.phone && ld.to !== ld.email ? ld.to : ''],
+    ].filter(([,v]) => v && String(v).trim());
+    const ctxGrid = ctxRows.length
+      ? ctxRows.map(([label, val]) =>
+          `<div class="note" style="opacity:.65;white-space:nowrap;display:flex;align-items:center;min-height:22px;line-height:1.25">${esc(label)}</div>` +
+          `<div class="small" style="display:flex;align-items:center;min-height:22px;line-height:1.25">${esc(String(val))}</div>`
+        ).join('')
+      : `<div class="note" style="grid-column:1/-1">No lead context attached yet</div>`;
+    body.innerHTML = `
+      ${rowBadge}
+      <div style="font-weight:800;margin-bottom:6px;opacity:.85">Suggestion</div>
+      <div class="small" style="margin-bottom:4px;opacity:.75">Confidence: <b>${conf || '—'}</b></div>
+      <div class="small" style="margin-bottom:14px">${why || '—'}</div>
+      <div style="font-weight:800;margin-bottom:10px;opacity:.85">Lead / Guest</div>
+      <div style="display:grid;grid-template-columns:90px 1fr;gap:6px 12px;margin-bottom:16px">
+        ${ctxGrid}
+      </div>
+      <div style="font-weight:800;margin-bottom:6px;opacity:.85">Channel</div>
+      <div class="small" style="margin-bottom:4px">Best: <b>${ch}</b></div>
+      ${rk ? `<div class="note" style="margin-bottom:4px">Ranked: ${esc(rk)}</div>` : ''}
+      ${rsn ? `<div class="note" style="margin-bottom:12px">${rsn}</div>` : '<div style="margin-bottom:12px"></div>'}
+      ${(subj || msg) ? `<div style="font-weight:800;margin-bottom:6px;opacity:.85">Message preview</div>` : ''}
+      ${subj ? `<div class="note" style="margin-bottom:4px">Subject: ${subj}</div>` : ''}
+      ${msg ? `<pre style="white-space:pre-wrap;margin:0 0 10px;padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.04);font-size:12px">${msg}</pre>` : ''}
+      ${tmpl !== '—' ? `<div class="note">WA template: ${tmpl}</div>` : ''}
+    `;
+  }
+  const stRaw = String(it.status||'');
+  const stNorm = stRaw.trim().toLowerCase();
+  const canAct = (stNorm === 'pending');
+  const typ = String(it.type||'');
+  const isOutbound = (
+    typ === 'send_email' || typ === 'send_sms' || typ === 'send_whatsapp' ||
+    typ === 'send_confirmation' || typ === 'send_reservation_received' || typ === 'send_reservation_confirmed' || typ === 'send_reservation_denied' || typ === 'send_reservation_reminder' || typ === 'send_update' || typ === 'send_vip_update'
+  );
+  const canSend = isOutbound && (stNorm === 'approved') && !it.sent_at;
+  const sendLabel = (typ === 'send_whatsapp') ? 'Send WhatsApp' : (typ === 'send_email' ? 'Send Email' : (typ === 'send_sms' ? 'Send SMS' : 'Send'));
+  const viewTpl = (typ === 'send_whatsapp' && p.template_key) || (typ.indexOf('send_reservation_')===0) || typ === 'send_confirmation' || typ === 'send_update' || typ === 'send_vip_update';
+  const sid = String(it.id||'');
+  if(act){
+    const changeChBtn = isOutbound ? `<button type="button" class="btn2" data-aiq-act="change-channel" data-aiq-id="${sid}" onclick="openAiqChannelModal('${sid}')" title="Switch this outbound to a different channel">Change channel</button>` : '';
+    act.innerHTML = `
+      <button type="button" class="btn" data-aiq-act="approve" data-aiq-id="${sid}" ${canAct?'':'disabled'} onclick="event.stopPropagation();aiqApprove('${sid}', this)">Approve</button>
+      <button type="button" class="btn2" data-aiq-act="deny" data-aiq-id="${sid}" ${canAct?'':'disabled'} onclick="event.stopPropagation();aiqDeny('${sid}', this)">Deny</button>
+      ${viewTpl ? `<button type="button" class="btn2" data-aiq-act="preview" data-aiq-id="${sid}" onclick="event.stopPropagation();aiqViewTemplate('${sid}')">Preview</button>` : ''}
+      ${isOutbound ? `<button type="button" class="btn" data-aiq-act="send" data-aiq-id="${sid}" ${canSend?'':'disabled'} onclick="event.stopPropagation();aiqSend('${sid}', this)">${sendLabel}</button>` : ''}
+      ${changeChBtn}
+      <button type="button" class="btn2" data-aiq-act="override" data-aiq-id="${sid}" onclick="event.stopPropagation();aiqOverride('${sid}', this)" title="Owner-only: edit raw type + payload">Owner override…</button>
+    `;
+  }
+  const o = qs('#aiq-drawer-overlay');
+  const pan = qs('#aiq-drawer-panel');
+  if(o) o.classList.add('show');
+  if(pan) pan.style.display = 'block';
+  try{ document.body.style.overflow = 'hidden'; }catch(e){}
+}
+
+async function saveAiqFocusMode(){
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Saving…';
+  const active = qs('#aiq-focus-mode-seg button.active');
+  const fm = active ? (active.getAttribute('data-fm') || 'all') : 'all';
+  const payload = {
+    focus_mode: fm,
+    focus_filters: {
+      suggest_email: !!(qs('#aiq-ff-suggest-email') && qs('#aiq-ff-suggest-email').checked),
+      suggest_sms: !!(qs('#aiq-ff-suggest-sms') && qs('#aiq-ff-suggest-sms').checked),
+      suggest_whatsapp: !!(qs('#aiq-ff-suggest-wa') && qs('#aiq-ff-suggest-wa').checked),
+      allow_vip_tagging: !!(qs('#aiq-ff-vip') && qs('#aiq-ff-vip').checked),
+      allow_reply_drafts: !!(qs('#aiq-ff-drafts') && qs('#aiq-ff-drafts').checked),
+      allow_reminder_suggestions: !!(qs('#aiq-ff-rem') && qs('#aiq-ff-rem').checked),
+      allow_upgrade_suggestions: !!(qs('#aiq-ff-upg') && qs('#aiq-ff-upg').checked)
+    }
+  };
+  try{
+    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.error || 'Failed');
+    if(msg) msg.textContent = 'Focus saved ✔';
+    loadAI();
+  }catch(e){
+    if(msg) msg.textContent = 'Save failed';
+  }
+}
+
+async function resetAiqFocusMode(){
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Resetting…';
+  try{
+    const r = await fetch(`/admin/api/ai/settings?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
+      body: JSON.stringify({
+        focus_mode:'all',
+        focus_filters:{
+          vip_only:false, reminders_only:false, upgrades_only:false, reply_drafts_only:false,
+          suggest_email:true, suggest_sms:true, suggest_whatsapp:true,
+          allow_vip_tagging:true, allow_reply_drafts:true, allow_reminder_suggestions:true, allow_upgrade_suggestions:true
+        }
+      })
+    });
+    const d = await r.json();
+    if(!d.ok) throw new Error(d.error || 'Failed');
+    if(msg) msg.textContent = 'Reset ✔';
+    loadAI();
+  }catch(e){
+    if(msg) msg.textContent = 'Reset failed';
+  }
+}
+
+async function runAIPreset(preset){
+  const _aiqDbg = (label, data) => {
+    try{
+      console.log('[AIQ DEBUG]', label, data || {});
+    }catch(_){}
+  };
+  const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running…';
+  const lim = parseInt(qs('#ai-run-limit')?.value || '5', 10);
+  const ch = (qs('#aiq-channel')?.value || '').trim();
+  const fm = preset === 'all' ? 'all' : preset;
+  const payload = {mode:'new', limit: isNaN(lim)?5:lim, focus_mode: fm, channel: ch || 'any'};
+  _aiqDbg('runAIPreset.request', {preset, payload, venue: VENUE});
+  try{
+    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}&debug=1`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
+      body: JSON.stringify(payload)
+    });
+    const data = await r.json();
+    _aiqDbg('runAIPreset.response', {status:r.status, ok:data && data.ok, ran:data && data.ran, proposed:data && data.proposed, queue_ids:(data && data.queue_ids) || []});
+    if(!data.ok) throw new Error(data.error || 'Failed');
+    if(msg) msg.textContent = `Ran ${data.ran||0}. Proposed ${data.proposed||0}.`;
+    await loadAIQueue();
+  }catch(e){
+    if(msg) msg.textContent = 'Run failed: ' + (e.message || e);
+  }
+}
 
 function showAiqTemplateModal(){
   const m = qs('#aiq-template-modal');
@@ -12839,11 +15660,19 @@ async function aiqViewTemplate(id){
 }
 
 function clearAIQueueFilters(){
-  const ids = ['aiq-filter','aiq-time','aiq-type','aiq-conf','aiq-search'];
+  const ids = ['aiq-filter','aiq-time','aiq-type','aiq-conf','aiq-search','aiq-channel'];
   ids.forEach(id=>{
     const el = qs('#'+id);
     if(el) el.value = '';
   });
+  const hid = qs('#aiq-view-bucket');
+  if(hid) hid.value = 'all';
+  const pills = qs('#aiq-view-pills');
+  if(pills){
+    pills.querySelectorAll('.aiq-pill').forEach(x=>x.classList.remove('on'));
+    const a = pills.querySelector('.aiq-pill[data-bucket="all"]');
+    if(a) a.classList.add('on');
+  }
   loadAIQueue();
 }
 
@@ -12853,8 +15682,15 @@ function aiqSearchDebounced(){
 }
 
 async function loadAIQueue(){
+  const _aiqDbg = (label, data) => {
+    try{
+      console.log('[AIQ DEBUG]', label, data || {});
+    }catch(_){}
+  };
+  initAiqUx();
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Loading…';
   const list = qs('#aiq-list'); if(list) list.innerHTML = 'Loading…';
+  const tbody = qs('#aiq-tbody'); if(tbody) tbody.innerHTML = '<tr><td colspan="9" class="small">Loading…</td></tr>';
   const seq = ++aiqFetchSeq;
   try{
     const filt = (qs('#aiq-filter')?.value || '').trim();
@@ -12862,38 +15698,83 @@ async function loadAIQueue(){
     const typeVal = (qs('#aiq-type')?.value || '').trim();
     const confVal = (qs('#aiq-conf')?.value || '').trim();
     const qVal = (qs('#aiq-search')?.value || '').trim();
-    const hasAny = !!(filt || timeVal || typeVal || confVal);
+    const chExtra = (qs('#aiq-channel')?.value || '').trim();
+    const bucket = (qs('#aiq-view-bucket')?.value || 'all').trim();
+    let focusQ = '';
+    let channelQ = chExtra;
+    if(bucket === 'vip') focusQ = 'vip';
+    else if(bucket === 'reminders') focusQ = 'reminders';
+    else if(bucket === 'upgrades') focusQ = 'upgrades';
+    else if(bucket === 'drafts') focusQ = 'reply_drafts';
+    else if(bucket === 'email') channelQ = 'email';
+    else if(bucket === 'sms') channelQ = 'sms';
+    else if(bucket === 'whatsapp') channelQ = 'whatsapp';
+    const hasAny = !!(filt || timeVal || typeVal || confVal || focusQ || channelQ);
     const urlBase = `/admin/api/ai/queue?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`;
     const url = urlBase
       + (filt ? `&status=${encodeURIComponent(filt)}` : '')
       + (timeVal ? `&time=${encodeURIComponent(timeVal)}` : '')
       + (typeVal ? `&type=${encodeURIComponent(typeVal)}` : '')
       + (confVal ? `&conf=${encodeURIComponent(confVal)}` : '')
+      + (focusQ ? `&focus=${encodeURIComponent(focusQ)}` : '')
+      + (channelQ ? `&channel=${encodeURIComponent(channelQ)}` : '')
       + (qVal ? `&q=${encodeURIComponent(qVal)}` : '');
-    const r = await fetch(url, {cache:'no-store'});
-    const data = await r.json();
-    if(seq !== aiqFetchSeq) return; // ignore out-of-order responses
+    const sumUrl = `/admin/api/ai/queue/summary?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`;
+    const [resQ, resS] = await Promise.all([
+      fetch(url, {cache:'no-store'}),
+      fetch(sumUrl, {cache:'no-store'})
+    ]);
+    const data = await resQ.json();
+    let sum = {ok:false};
+    try{ sum = await resS.json(); }catch(e2){}
+    if(seq !== aiqFetchSeq) return;
     if(!data.ok) throw new Error(data.error || 'Failed');
+    applyAiqSummary(sum);
     const q = data.queue || [];
+    _aiqDbg('loadAIQueue.state', {
+      filters: {status:filt||'all', time:timeVal||'all', type:typeVal||'all', conf:confVal||'any', search:qVal||'', bucket:bucket||'all', focus:focusQ||'all', channel:channelQ||'all'},
+      response: {status:resQ.status, ok:data.ok, total_matched:data.total_matched, queue_rows:q.length},
+      summary: {ok:!!sum.ok, total_items:sum.total_items, total_pending:sum.total_pending, total_approved:sum.total_approved, total_applied:sum.total_applied, total_sent:sum.total_sent, total_denied:sum.total_denied}
+    });
+    const bc = qs('#aiq-bucket-counts');
+    if(bc){
+      bc.textContent = 'Table: '+q.length+' row(s) with current filters · pill counts = full venue queue (summary API)';
+    }
     renderAIQueue(q);
     const hasSearch = !!qVal;
-    if(msg) msg.textContent = q.length ? (`${q.length} item(s)${(hasAny || hasSearch) ? ' matched' : ''}`) : 'No items';
-    }catch(e){
-      if(msg) msg.textContent = 'No items';
-      renderAIQueue([]); // explicit empty state for CI
+    if(msg) msg.textContent = q.length ? (`${q.length} item(s)${(hasAny || hasSearch) ? ' in table' : ''}`) : 'No items in this view';
+  }catch(e){
+    if(msg) msg.textContent = 'No items';
+    renderAIQueue([]);
+    try{ await loadAIQueueSummary(); }catch(e2){}
   }
 }
 
 async function runAINew(){
+  const _aiqDbg = (label, data) => {
+    try{
+      console.log('[AIQ DEBUG]', label, data || {});
+    }catch(_){}
+  };
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running AI…';
   const lim = parseInt(qs('#ai-run-limit')?.value || '5', 10);
+  const ch = (qs('#aiq-channel')?.value || '').trim();
+  const active = qs('#aiq-focus-mode-seg button.active');
+  const fm = active ? (active.getAttribute('data-fm') || 'all') : 'all';
+  const payload = {mode:'new', limit: isNaN(lim)?5:lim, focus_mode: fm, channel: ch || 'any'};
+  const reqUrl = `/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}&debug=1`;
+  _aiqDbg('runAINew.request', {payload, venue: VENUE, requestUrl: reqUrl});
   try{
-    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+    const r = await fetch(reqUrl, {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({mode:'new', limit: isNaN(lim)?5:lim})
+      headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
+      body: JSON.stringify(payload)
     });
     const data = await r.json();
+    _aiqDbg('runAINew.response', {status:r.status, ok:data && data.ok, ran:data && data.ran, proposed:data && data.proposed, queue_ids:(data && data.queue_ids) || [], dataKeys:Object.keys(data||{}), debug_summary:(data && data.debug_summary) || null, debug_rows:(data && data.debug_rows) || []});
+    if(data && data.ok && Number(data.proposed||0) === 0){
+      _aiqDbg('runAINew.zeroProposed', {hint:'No proposals returned by /admin/api/ai/run', payload});
+    }
     if(!data.ok) throw new Error(data.error || 'Failed');
     if(msg) msg.textContent = `Ran ${data.ran||0}. Proposed ${data.proposed||0}.`;
     await loadAIQueue();
@@ -12903,19 +15784,31 @@ async function runAINew(){
 }
 
 async function runAIRow(){
+  const _aiqDbg = (label, data) => {
+    try{
+      console.log('[AIQ DEBUG]', label, data || {});
+    }catch(_){}
+  };
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Running AI…';
   const row = parseInt(qs('#ai-run-row')?.value || '0', 10);
   if(!row || row < 2){
     if(msg) msg.textContent = 'Enter a valid sheet Row # (>= 2).';
     return;
   }
+  const ch = (qs('#aiq-channel')?.value || '').trim();
+  const active = qs('#aiq-focus-mode-seg button.active');
+  const fm = active ? (active.getAttribute('data-fm') || 'all') : 'all';
+  const payload = {row, focus_mode: fm, channel: ch || 'any'};
+  const reqUrl = `/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}&debug=1`;
+  _aiqDbg('runAIRow.request', {payload, venue: VENUE, requestUrl: reqUrl});
   try{
-    const r = await fetch(`/admin/api/ai/run?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+    const r = await fetch(reqUrl, {
       method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({row})
+      headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
+      body: JSON.stringify(payload)
     });
     const data = await r.json();
+    _aiqDbg('runAIRow.response', {status:r.status, ok:data && data.ok, ran:data && data.ran, proposed:data && data.proposed, queue_ids:(data && data.queue_ids) || [], dataKeys:Object.keys(data||{}), debug_summary:(data && data.debug_summary) || null, debug_rows:(data && data.debug_rows) || []});
     if(!data.ok) throw new Error(data.error || 'Failed');
     if(msg) msg.textContent = `Row ${row}: Proposed ${data.proposed||0}.`;
     await loadAIQueue();
@@ -13001,67 +15894,70 @@ function esc(s){ return (s||'').toString().replace(/[&<>"']/g, c => ({'&':'&amp;
 
 function renderAIQueue(items){
   const list = qs('#aiq-list');
-  if(!list) return;
+  const tbody = qs('#aiq-tbody');
   aiqItemsById = {};
-
-  // Explicit empty state for CI tests + clarity
+  const htmlCards = [];
   if(!items || !items.length){
-    list.innerHTML = '<div class="note">AI Queue empty — no queued actions.</div>';
+    if(list) list.innerHTML = '<div class="note">AI Queue empty — no queued actions.</div>';
+    if(tbody) tbody.innerHTML = '<tr><td colspan="9" class="note">No items match filters.</td></tr>';
     return;
   }
+  if(tbody) tbody.innerHTML = '';
 
-  const rows = (items || []).map((it)=>{
-    aiqItemsById[String(it.id || '')] = it;
-    const id = esc(it.id || '');
-    const typ = esc(it.type || '');
-    const st  = esc(it.status || '');
+  (items || []).forEach((it)=>{
+    const sid = String(it.id || '');
+    aiqItemsById[sid] = it;
+    const typRaw = String(it.type || '');
+    const typ = esc(typRaw);
+    const friendly = esc(aiFriendlyType(it));
+    const stRaw = String(it.status || '');
+    const stNorm = stRaw.trim().toLowerCase();
+    const st  = esc(stRaw);
     const conf = (typeof it.confidence === 'number') ? it.confidence.toFixed(2) : '';
     const when = esc(it.created_at || '');
-    const why  = esc(it.rationale || it.why || it.reason || '');
-    const payload = esc(JSON.stringify(it.payload || {}));
-
-    const canAct = (st === 'pending');
+    const why  = esc((it.rationale || it.why || it.reason || '').slice(0, 220));
+    const guest = esc(aiGuestName(it));
+    const ch = aiBestChannel(it);
+    const chEsc = esc(ch);
+    let badgeCls = '';
+    if(ch.indexOf('email') >= 0 && ch.indexOf('sms') < 0 && ch.indexOf('wa') < 0) badgeCls = 'email';
+    else if(ch.indexOf('whatsapp') >= 0 || ch.indexOf('wa') >= 0) badgeCls = 'whatsapp';
+    else if(ch.indexOf('sms') >= 0) badgeCls = 'sms';
+    const rowNumTxt = esc(aiRowNumber(it));
+    const canAct = (stNorm === 'pending');
     const isOutbound = (
-      typ === 'send_email' || typ === 'send_sms' || typ === 'send_whatsapp' ||
-      typ === 'send_confirmation' || typ === 'send_reservation_received' || typ === 'send_reservation_confirmed' || typ === 'send_reservation_denied' || typ === 'send_reservation_reminder' || typ === 'send_update' || typ === 'send_vip_update'
+      typRaw === 'send_email' || typRaw === 'send_sms' || typRaw === 'send_whatsapp' ||
+      typRaw === 'send_confirmation' || typRaw === 'send_reservation_received' || typRaw === 'send_reservation_confirmed' || typRaw === 'send_reservation_denied' || typRaw === 'send_reservation_reminder' || typRaw === 'send_update' || typRaw === 'send_vip_update'
     );
-    const canSend = isOutbound && (st === 'approved') && !it.sent_at;
+    const canSend = isOutbound && (stNorm === 'approved') && !it.sent_at;
     const sendLabel =
-      (typ === 'send_sms') ? 'Send SMS' :
-      (typ === 'send_whatsapp') ? 'Send WhatsApp' :
-      (typ === 'send_email') ? 'Send Email' :
-      (typ === 'send_confirmation') ? 'Send Confirmation' :
-      (typ === 'send_reservation_received') ? 'Send Received' :
-      (typ === 'send_update') ? 'Send Update' :
-      (typ === 'send_reservation_confirmed') ? 'Send Reservation Confirmed' :
-      (typ === 'send_reservation_denied') ? 'Send Reservation Denied' :
-      (typ === 'send_reservation_reminder') ? 'Send Reservation Reminder' :
-      (typ === 'send_vip_update') ? 'Send VIP Update' :
+      (typRaw === 'send_sms') ? 'Send SMS' :
+      (typRaw === 'send_whatsapp') ? 'Send WhatsApp' :
+      (typRaw === 'send_email') ? 'Send Email' :
       'Send';
-    const sendBtn = isOutbound ? `<button type="button" class="btn" ${canSend ? '' : 'disabled'} onclick="aiqSend('${id}', this)">${sendLabel}</button>` : '';
-    const isBundledTemplate = (typ === 'send_confirmation' || typ === 'send_reservation_received' || typ === 'send_reservation_confirmed' || typ === 'send_reservation_denied' || typ === 'send_reservation_reminder' || typ === 'send_update' || typ === 'send_vip_update');
-    const viewTplBtn = isBundledTemplate ? `<button type="button" class="btn2" onclick="aiqViewTemplate('${id}')">View Template</button>` : '';
+    const isBundledTemplate = (
+      typRaw === 'send_confirmation' || typRaw.indexOf('send_reservation_') === 0 || typRaw === 'send_update' || typRaw === 'send_vip_update' ||
+      (typRaw === 'send_whatsapp' && it.payload && it.payload.template_key)
+    );
+    const viewTplBtn = isBundledTemplate ? `<button type="button" class="btn2" data-aiq-act="preview" data-aiq-id="${sid}" onclick="event.stopPropagation();aiqViewTemplate('${sid}')">Preview</button>` : '';
+    const approveBtn = `<button type="button" class="btn" data-aiq-act="approve" data-aiq-id="${sid}" ${canAct ? '' : 'disabled'} onclick="event.stopPropagation();aiqApprove('${sid}', this)">Approve</button>`;
+    const denyBtn    = `<button type="button" class="btn2" data-aiq-act="deny" data-aiq-id="${sid}" ${canAct ? '' : 'disabled'} onclick="event.stopPropagation();aiqDeny('${sid}', this)">Deny</button>`;
+    const sendBtn = isOutbound ? `<button type="button" class="btn" data-aiq-act="send" data-aiq-id="${sid}" ${canSend ? '' : 'disabled'} onclick="event.stopPropagation();aiqSend('${sid}', this)">${sendLabel}</button>` : '';
+    const overrideBtn = `<button type="button" class="btnTiny" data-aiq-act="override" data-aiq-id="${sid}" onclick="event.stopPropagation();aiqOverride('${sid}', this)">Override</button>`;
+    const removeBtn = `<button type="button" class="btnTiny" data-aiq-act="remove" data-aiq-id="${sid}" onclick="event.stopPropagation();aiqRemove('${sid}', this)">Remove</button>`;
 
-    const approveBtn = `<button type="button" class="btn" ${canAct ? '' : 'disabled'} onclick="aiqApprove('${id}', this)">Approve</button>`;
-    const denyBtn    = `<button type="button" class="btn2" ${canAct ? '' : 'disabled'} onclick="aiqDeny('${id}', this)">Deny</button>`;
-    const overrideBtn = `<button type="button" class="btn" onclick="aiqOverride('${id}', this)">Owner Override</button>`;
-    const removeBtn = `<button type="button" class="btnTiny" onclick="aiqRemove('${id}', this)">Remove from queue</button>`;
-
-    return `
+    htmlCards.push(`
       <div class="card" style="margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
           <div>
-            <b>${typ || 'AI item'}</b>
+            <b>${friendly}</b>
             <span class="chip" style="margin-left:8px">${st || 'unknown'}</span>
-            ${conf ? `<span class="note" style="margin-left:8px">conf ${conf}</span>` : ``}
+            ${conf ? `<span class="note" style="margin-left:8px">conf ${esc(conf)}</span>` : ``}
           </div>
           <div class="note">${when}</div>
         </div>
+        <div class="small" style="margin-top:6px;opacity:.88">${guest}</div>
         ${why ? `<div class="small" style="margin-top:8px;opacity:.9">${why}</div>` : ``}
-        <details style="margin-top:8px">
-          <summary class="small">Payload</summary>
-          <pre class="small" style="white-space:pre-wrap;opacity:.9">${payload}</pre>
-        </details>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
           ${approveBtn}
           ${denyBtn}
@@ -13071,10 +15967,33 @@ function renderAIQueue(items){
           ${removeBtn}
         </div>
       </div>
-    `;
+    `);
+
+    if(tbody){
+      const tr = document.createElement('tr');
+      tr.onclick = ()=>openAiqDrawer(sid);
+      tr.innerHTML = `
+          <td><div style="font-weight:800">${friendly}</div><div class="note" style="font-size:11px;margin-top:2px">${typ}</div></td>
+          <td class="small">${guest}</td>
+          <td><span class="badge-ch ${badgeCls}">${chEsc}</span></td>
+          <td class="small">${rowNumTxt}</td>
+          <td class="small">${esc(conf)}</td>
+          <td class="small" style="max-width:220px">${why || '—'}</td>
+          <td><span class="chip">${st}</span></td>
+          <td class="note" style="font-size:11px">${when}</td>
+          <td style="white-space:nowrap" onclick="event.stopPropagation()">
+            <button type="button" class="btnTiny" data-aiq-act="approve" data-aiq-id="${sid}" ${canAct ? '' : 'disabled'} onclick="event.stopPropagation();aiqApprove('${sid}', this)">OK</button>
+            <button type="button" class="btnTiny" data-aiq-act="deny" data-aiq-id="${sid}" ${canAct ? '' : 'disabled'} onclick="event.stopPropagation();aiqDeny('${sid}', this)">No</button>
+            ${isBundledTemplate ? `<button type="button" class="btnTiny" data-aiq-act="preview" data-aiq-id="${sid}" onclick="event.stopPropagation();aiqViewTemplate('${sid}')">View</button>` : ''}
+            ${isOutbound ? `<button type="button" class="btnTiny" data-aiq-act="change-channel" data-aiq-id="${sid}" onclick="event.stopPropagation();openAiqChannelModal('${sid}')" title="Change channel">Ch</button>` : ''}
+            ${isOutbound ? `<button type="button" class="btnTiny" data-aiq-act="send" data-aiq-id="${sid}" ${canSend ? '' : 'disabled'} onclick="event.stopPropagation();aiqSend('${sid}', this)">${esc(sendLabel)}</button>` : ''}
+          </td>
+      `;
+      tbody.appendChild(tr);
+    }
   });
 
-  list.innerHTML = rows.join('');
+  if(list) list.innerHTML = htmlCards.join('');
 }
 
 async function clearAIQueue(){
@@ -13128,14 +16047,32 @@ async function aiqApprove(id, btn){
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Approving…'; }
 
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Approving…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/approve?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({})
-  });
-  const j = await r.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Approved ✔'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Approve'); } await loadAIQueue(); }
-  else { if(msg) msg.textContent='Approve failed'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Approve'); } alert('Approve failed: '+(j && j.error ? j.error : r.status)); }
+  try{
+    const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/approve?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({})
+    });
+    const j = await r.json().catch(()=>null);
+    if(j && j.ok){
+      if(msg) msg.textContent='Approved ✔';
+      await loadAIQueue();
+      // Refresh drawer actions immediately (Approve -> Send enabled).
+      try{
+        if(aiqDrawerCurrentId && String(aiqDrawerCurrentId) === String(id) && aiqItemsById[String(id)]){
+          openAiqDrawer(String(id));
+        }
+      }catch(_){}
+    }else{
+      if(msg) msg.textContent='Approve failed';
+      alert('Approve failed: '+(j && j.error ? j.error : r.status));
+    }
+  }catch(e){
+    if(msg) msg.textContent='Approve failed';
+    alert('Approve failed: ' + (e.message || e));
+  }finally{
+    if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Approve'); }
+  }
 }
 
 
@@ -13144,21 +16081,26 @@ async function aiqSend(id, btn){
   const _btn = btn;
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Sending…'; }
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Sending…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/send?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({})
-  });
-  const j = await r.json().catch(()=>null);
-  if(j && j.ok){
-    if(msg) msg.textContent='Sent ✔';
-    if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Send'); }
-    await loadAIQueue();
-  }else{
+  try{
+    const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/send?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({})
+    });
+    const j = await r.json().catch(()=>null);
+    if(j && j.ok){
+      if(msg) msg.textContent='Sent ✔';
+      await loadAIQueue();
+    }else{
+      if(msg) msg.textContent='Send failed';
+      var errText = (j && (j.error || (j.result && (j.result.message || j.result.error)))) ? (j.error || j.result.message || j.result.error) : r.status;
+      alert('Send failed: '+errText);
+    }
+  }catch(e){
     if(msg) msg.textContent='Send failed';
+    alert('Send failed: ' + (e.message || e));
+  }finally{
     if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Send'); }
-    var errText = (j && (j.error || (j.result && (j.result.message || j.result.error)))) ? (j.error || j.result.message || j.result.error) : r.status;
-    alert('Send failed: '+errText);
   }
 }
 
@@ -13168,19 +16110,113 @@ async function aiqDeny(id, btn){
   if(_btn){ _btn.disabled = true; _btn.dataset.prevText = _btn.textContent || ''; _btn.textContent = 'Denying…'; }
 
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Denying…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/deny?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({})
-  });
-  const j = await r.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Denied ✔'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Deny'); } await loadAIQueue(); }
-  else { if(msg) msg.textContent='Deny failed'; if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Deny'); } alert('Deny failed: '+(j && j.error ? j.error : r.status)); }
+  try{
+    const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/deny?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({})
+    });
+    const j = await r.json().catch(()=>null);
+    if(j && j.ok){
+      if(msg) msg.textContent='Denied ✔';
+      await loadAIQueue();
+      // Keep drawer in sync with latest queue status.
+      try{
+        if(aiqDrawerCurrentId && String(aiqDrawerCurrentId) === String(id) && aiqItemsById[String(id)]){
+          openAiqDrawer(String(id));
+        }
+      }catch(_){}
+    }else{
+      if(msg) msg.textContent='Deny failed';
+      alert('Deny failed: '+(j && j.error ? j.error : r.status));
+    }
+  }catch(e){
+    if(msg) msg.textContent='Deny failed';
+    alert('Deny failed: ' + (e.message || e));
+  }finally{
+    if(_btn){ _btn.disabled = false; _btn.textContent = (_btn.dataset.prevText || 'Deny'); }
+  }
+}
+
+let aiqChannelTargetId = '';
+function openAiqChannelModal(id){
+  aiqChannelTargetId = String(id || '');
+  const it = aiqItemsById[aiqChannelTargetId] || null;
+  const cur = qs('#aiq-channel-modal-current');
+  const msg = qs('#aiq-channel-modal-msg');
+  if(msg) msg.textContent = '';
+  const radios = document.querySelectorAll('input[name="aiq-ch-pick"]');
+  radios.forEach(r=>{ r.checked = false; });
+  if(it && cur){
+    const curCh = aiBestChannel(it);
+    const p = it.payload || {};
+    const avail = Array.isArray(p.channels_available) ? p.channels_available : [];
+    const availTxt = avail.length ? ('Available on this lead: ' + avail.map(c=>c.toUpperCase()).join(', ')) : '';
+    cur.innerHTML = `<div>Current channel: <b>${esc(curCh)}</b> · Current type: <span class="code">${esc(String(it.type||''))}</span></div>${availTxt ? ('<div style="margin-top:4px">'+esc(availTxt)+'</div>') : ''}`;
+    // Pre-check the current channel radio for quick re-pick
+    radios.forEach(r=>{ if(r.value === curCh) r.checked = true; });
+    // Disable options not available for this lead
+    radios.forEach(r=>{
+      const wrap = r.closest('label');
+      if(!wrap) return;
+      if(avail.length && avail.indexOf(r.value) < 0){
+        r.disabled = true;
+        wrap.style.opacity = .5;
+        wrap.title = 'No ' + r.value + ' contact on file';
+      } else {
+        r.disabled = false;
+        wrap.style.opacity = 1;
+        wrap.title = '';
+      }
+    });
+  }
+  const m = qs('#aiq-channel-modal');
+  if(m) m.classList.add('show');
+  const applyBtn = qs('#aiq-channel-modal-apply');
+  if(applyBtn){
+    applyBtn.onclick = submitAiqChannelOverride;
+  }
+}
+
+function closeAiqChannelModal(){
+  const m = qs('#aiq-channel-modal');
+  if(m) m.classList.remove('show');
+  aiqChannelTargetId = '';
+}
+
+async function submitAiqChannelOverride(){
+  if(!aiqChannelTargetId) return;
+  const picked = document.querySelector('input[name="aiq-ch-pick"]:checked');
+  const msg = qs('#aiq-channel-modal-msg');
+  if(!picked){ if(msg) msg.textContent = 'Pick a channel first.'; return; }
+  const channel = picked.value;
+  const applyBtn = qs('#aiq-channel-modal-apply');
+  if(applyBtn){ applyBtn.disabled = true; applyBtn.textContent = 'Applying…'; }
+  if(msg) msg.textContent = '';
+  try{
+    const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(aiqChannelTargetId)}/channel?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({channel: channel})
+    });
+    const j = await r.json().catch(()=>null);
+    if(j && j.ok){
+      closeAiqChannelModal();
+      const aqm = qs('#aiq-msg'); if(aqm) aqm.textContent = 'Channel switched to ' + channel.toUpperCase();
+      await loadAIQueue();
+    } else {
+      if(msg) msg.textContent = (j && j.error) ? j.error : ('HTTP '+r.status);
+    }
+  }catch(e){
+    if(msg) msg.textContent = 'Error: ' + (e.message || e);
+  }finally{
+    if(applyBtn){ applyBtn.disabled = false; applyBtn.textContent = 'Apply change'; }
+  }
 }
 
 async function aiqOverride(id, btn){
   if(typeof hasRole === 'function' && !hasRole('owner')){
-    alert('Owner-only: override is locked for managers.');
+    alert('Owner-only: raw override is locked for managers. Use "Change channel" for channel switches.');
     return;
   }
   const _btn = btn;
@@ -13195,24 +16231,26 @@ async function aiqOverride(id, btn){
   let payloadObj = null;
   try{ payloadObj = JSON.parse(payloadTxt); }catch(e){ if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } alert('Invalid JSON'); return; }
   const msg = qs('#aiq-msg'); if(msg) msg.textContent = 'Applying override…';
-  const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/override?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({type: typ, payload: payloadObj})
-  });
-  const j = await r.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Override applied ✔'; if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } await loadAIQueue(); }
-  else { if(msg) msg.textContent='Override failed'; if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); } alert('Override failed: '+(j && j.error ? j.error : r.status)); }
-}
-
-
-function esc(s){
-  return (s==null?'':String(s))
-    .replaceAll('&','&amp;')
-    .replaceAll('<','&lt;')
-    .replaceAll('>','&gt;')
-    .replaceAll('"','&quot;')
-    .replaceAll("'","&#39;");
+  try{
+    const r = await fetch(`/admin/api/ai/queue/${encodeURIComponent(id)}/override?key=${encodeURIComponent(KEY)}&venue=${encodeURIComponent(VENUE)}`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({type: typ, payload: payloadObj})
+    });
+    const j = await r.json().catch(()=>null);
+    if(j && j.ok){
+      if(msg) msg.textContent='Override applied ✔';
+      await loadAIQueue();
+    } else {
+      if(msg) msg.textContent='Override failed';
+      alert('Override failed: '+(j && j.error ? j.error : r.status));
+    }
+  }catch(e){
+    if(msg) msg.textContent='Override failed';
+    alert('Override failed: ' + (e.message || e));
+  }finally{
+    if(_btn){ _btn.disabled=false; _btn.textContent=(_btn.dataset.prevText || 'Owner Override'); }
+  }
 }
 
 async function loadAudit(){
@@ -13668,6 +16706,9 @@ function refreshAll(source){
   try{ loadRules(); }catch(e){}
   try{ loadMenu(); }catch(e){}
   try{ loadHealth(); }catch(e){}
+  // Monitor analytics are intentionally NOT loaded during global refresh
+  // to keep /admin boot clean in environments where sheets analytics are unavailable.
+  // They load only when Monitor tab is opened or its refresh controls are used.
 
   // ✅ Refresh audit automatically if user is currently on the Audit tab
   try{
@@ -13800,6 +16841,157 @@ try{ setupTabs(); }catch(e){}
   try{ _initRefreshControls(); }catch(e){}
   try{ refreshAll('boot'); }catch(e){}
 });
+
+// ── Monitoring: Forecast + Daily Revenue ─────────────────────────────────────
+// Defined at the END of the main admin script so they are always in global scope
+// regardless of any IIFE throwing later. Belt-and-suspenders: also wired below
+// with direct addEventListener so clicks work even if the bootstrap delegate missed.
+
+function _opEsc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+    return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
+  });
+}
+function _opMoneyShort(n){
+  var v = Number(n||0);
+  if(!isFinite(v) || v <= 0) return '$0';
+  if(v >= 1000) return '$' + (v/1000).toFixed(1) + 'K';
+  return '$' + Math.round(v);
+}
+function _opPct(n){ return Math.round((Number(n)||0)*100) + '%'; }
+function _opTopList(arr){
+  if(!Array.isArray(arr) || !arr.length) return '\u2014';
+  return arr.map(function(x){ return (x && x.key ? x.key : '?') + ' ('+(x && x.count!=null?x.count:0)+')'; }).join(', ');
+}
+
+function renderOperatorView(targetEl, ov, detailRows){
+  if(!targetEl) return;
+  if(!ov || typeof ov !== 'object'){
+    targetEl.innerHTML = '<div class="op-empty">No data available.</div>';
+    return;
+  }
+  var tone = String(ov.tone||'').toLowerCase();
+  var cards = (Array.isArray(ov.cards) ? ov.cards : []).map(function(c){
+    var t = c && c.tone ? String(c.tone).toLowerCase() : '';
+    var sub = (c && c.sub) ? '<div class="op-card-sub">'+_opEsc(c.sub)+'</div>' : '';
+    return '<div class="op-card"'+(t?' data-tone="'+_opEsc(t)+'"':'')+'>'+
+      '<div class="op-card-label">'+_opEsc(c && c.label)+'</div>'+
+      '<div class="op-card-value">'+_opEsc(c && c.value)+'</div>'+
+      sub+
+    '</div>';
+  }).join('');
+
+  var insightHtml = ov.insight
+    ? '<div class="op-insight"><span class="op-insight-tag">Insight</span>'+
+      '<div class="op-insight-text">'+_opEsc(ov.insight)+'</div></div>'
+    : '';
+
+  var detailsHtml = '';
+  if(Array.isArray(detailRows) && detailRows.length){
+    var rows = detailRows.filter(Boolean).map(function(row){
+      if(row && typeof row === 'object' && 'k' in row){
+        return '<div class="op-detail-row">'+
+          '<span class="op-detail-key">'+_opEsc(row.k)+'</span>'+
+          '<span class="op-detail-val">'+_opEsc(row.v)+'</span></div>';
+      }
+      return '<div class="op-detail-row"><span class="op-detail-key">'+_opEsc(row)+'</span></div>';
+    }).join('');
+    detailsHtml = '<details class="op-details"><summary>Details</summary>'+
+      '<div class="op-details-body">'+rows+'</div></details>';
+  }
+
+  targetEl.innerHTML =
+    '<div class="op-view">'+
+      '<div class="op-headline"'+(tone?' data-tone="'+_opEsc(tone)+'"':'')+'>'+_opEsc(ov.headline||'')+'</div>'+
+      '<div class="op-cards">'+cards+'</div>'+
+      insightHtml+
+      detailsHtml+
+    '</div>';
+}
+
+async function loadForecast(){
+  var msg = document.querySelector('#forecast-msg');
+  var body = document.querySelector('#forecastBody');
+  if(msg) msg.textContent = 'Loading\u2026';
+  if(body) body.innerHTML = '<div class="op-skeleton"></div>';
+  try{
+    var KEY_  = (new URLSearchParams(location.search).get('key') || '');
+    var VEN_  = (new URLSearchParams(location.search).get('venue') || '');
+    var r = await fetch('/admin/api/analytics/load-forecast?key='+encodeURIComponent(KEY_)+'&venue='+encodeURIComponent(VEN_), {cache:'no-store'});
+    var d = await r.json();
+    if(!d.ok) throw new Error(d.error || 'Failed');
+
+    var detailRows = [
+      { k:'Busy level (raw)', v: d.busy_level || '\u2014' },
+      { k:'Last 7 days', v: (d.last_7_days_total||0)+' leads (avg/day '+(d.avg_daily_bookings_7||0)+')' },
+      { k:'Last 30 days', v: (d.last_30_days_total||0)+' leads (avg/day '+(d.avg_daily_bookings_30||0)+')' },
+      { k:'VIP ratio (30d)', v: _opPct(d.vip_ratio_30) },
+      { k:'Budget trend (30d)', v: _opMoneyShort(d.budget_sum_30)+' total \u00b7 ~'+_opMoneyShort(d.avg_daily_revenue_30)+'/day' },
+      { k:'Anticipated next-service revenue', v: _opMoneyShort(d.anticipated_revenue_next_service) },
+      { k:'Top hours (30d)', v: _opTopList(d.top_hours_30) },
+      { k:'Top days (7d)', v: _opTopList(d.top_days_7) }
+    ];
+
+    renderOperatorView(body, d.operator_view, detailRows);
+    if(msg) msg.textContent = 'Updated \u2714';
+  }catch(e){
+    if(msg) msg.textContent = 'Failed: '+(e.message||e);
+    if(body) body.innerHTML = '<div class="op-empty">Could not load forecast. Try refreshing.</div>';
+  }
+}
+
+async function loadDailySummary(){
+  var msg = document.querySelector('#daily-summary-msg');
+  var body = document.querySelector('#daily-summary-body');
+  var dIn = document.querySelector('#daily-summary-date');
+  if(msg) msg.textContent = 'Loading\u2026';
+  if(body) body.innerHTML = '<div class="op-skeleton"></div>';
+  try{
+    var KEY_  = (new URLSearchParams(location.search).get('key') || '');
+    var VEN_  = (new URLSearchParams(location.search).get('venue') || '');
+    var ds = (dIn && dIn.value) ? dIn.value : '';
+    var url = '/admin/api/analytics/daily-summary?key='+encodeURIComponent(KEY_)+'&venue='+encodeURIComponent(VEN_)+(ds ? '&date='+encodeURIComponent(ds) : '');
+    var r = await fetch(url, {cache:'no-store'});
+    var d = await r.json();
+    if(!d.ok) throw new Error(d.error || 'Failed');
+
+    var f = (d.forecast_summary && typeof d.forecast_summary === 'object') ? d.forecast_summary : {};
+    var detailRows = [
+      { k:'Date', v: d.date || '\u2014' },
+      { k:'Guests', v: (d.total_guests||0)+'  (VIP '+(d.vip_count||0)+' \u00b7 Regular '+(d.regular_count||0)+')' },
+      { k:'Estimated revenue', v: _opMoneyShort(d.estimated_revenue) },
+      { k:'Parsed budget sum', v: _opMoneyShort(d.budget_sum_parsed) },
+      { k:'Avg party size', v: (d.avg_party_size!=null ? Number(d.avg_party_size).toFixed(1) : '\u2014') },
+      { k:'Top request types', v: _opTopList(d.top_request_labels) },
+      { k:'Peak hours', v: _opTopList(d.peak_hours) },
+      { k:'30d busy level', v: f.busy_level || '\u2014' },
+      { k:'30d VIP mix', v: _opPct(f.vip_ratio_30) },
+      { k:'30d avg revenue/day', v: _opMoneyShort(f.avg_daily_revenue_30) },
+      { k:'Anticipated next service', v: _opMoneyShort(f.anticipated_revenue_next_service) },
+      { k:'Typical peak windows (30d)', v: _opTopList(f.top_hours_30) }
+    ];
+
+    renderOperatorView(body, d.operator_view, detailRows);
+    if(msg) msg.textContent = 'Updated \u2714';
+  }catch(e){
+    if(msg) msg.textContent = 'Failed: '+(e.message||e);
+    if(body) body.innerHTML = '<div class="op-empty">Could not load summary. Try refreshing.</div>';
+  }
+}
+
+// Wire the buttons directly — independent of bootstrap delegated handler.
+(function(){
+  function _mw(){
+    var fb = document.getElementById('forecast-refresh-btn');
+    if(fb && !fb.__mw){ fb.__mw=1; fb.addEventListener('click', function(e){ try{e.preventDefault();}catch(_){} loadForecast(); }); }
+    var db = document.getElementById('daily-summary-refresh-btn');
+    if(db && !db.__mw){ db.__mw=1; db.addEventListener('click', function(e){ try{e.preventDefault();}catch(_){} loadDailySummary(); }); }
+    var di = document.getElementById('daily-summary-date');
+    if(di && !di.__mw){ di.__mw=1; di.addEventListener('change', function(){ loadDailySummary(); }); }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_mw); else _mw();
+})();
+
 </script>
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
 
@@ -14048,6 +17240,262 @@ def _auto_suggest_reply_draft_for_reservation(lead: Dict[str, Any]) -> None:
         return
 
 
+# ── Operator-view helpers (translate raw analytics → owner-friendly summary) ──
+def _format_hour_12h(h: int) -> str:
+    """Format integer hour (0-23) as a compact 12-hour label like '6PM' or '12AM'."""
+    try:
+        h = int(h) % 24
+    except Exception:
+        return ""
+    if h == 0:
+        return "12AM"
+    if h < 12:
+        return f"{h}AM"
+    if h == 12:
+        return "12PM"
+    return f"{h-12}PM"
+
+
+def _peak_window_label(top_hours: list) -> str:
+    """Convert top_hours items (e.g. [{'key':'18:00','count':3}, ...]) into '6PM–10PM'.
+
+    We take the spread of the top hours, then extend by ~2h after the latest peak so the
+    label reads as a service window rather than a single point in time.
+    """
+    if not top_hours:
+        return ""
+    hrs: List[int] = []
+    for it in top_hours[:5]:
+        try:
+            k = str((it or {}).get("key", "")).split(":")[0]
+            hrs.append(int(k))
+        except Exception:
+            continue
+    if not hrs:
+        return ""
+    start = min(hrs)
+    end_hour = (max(hrs) + 2) % 24
+    if start == end_hour:
+        return _format_hour_12h(start)
+    return f"{_format_hour_12h(start)}\u2013{_format_hour_12h(end_hour)}"
+
+
+def _format_money_compact(n: Any) -> str:
+    """Compact human-readable money: $850, $1.9K, $12.4K."""
+    try:
+        v = float(n or 0)
+    except Exception:
+        v = 0.0
+    if v <= 0:
+        return "$0"
+    if v >= 1000:
+        return f"${v/1000:.1f}K"
+    return f"${int(round(v))}"
+
+
+def _money_range_label(low: float, high: float) -> str:
+    """Format a low–high revenue range, collapsing to a single value if they round equal."""
+    lo = _format_money_compact(low)
+    hi = _format_money_compact(high)
+    if lo == hi:
+        return lo
+    return f"{lo}\u2013{hi}"
+
+
+def _build_forecast_operator_view(stats: Dict[str, Any]) -> Dict[str, Any]:
+    """Translate raw forecast analytics into an operator-facing presentation block.
+
+    Inputs come from the load-forecast aggregation (busy_level, vip_ratio_30,
+    avg_daily_bookings_*, anticipated_revenue_next_service, top_hours_30, ...).
+    """
+    busy = str(stats.get("busy_level") or "").lower()
+    avg7 = float(stats.get("avg_daily_bookings_7") or 0)
+    vip_ratio = float(stats.get("vip_ratio_30") or 0)
+    top_hours = stats.get("top_hours_30") or []
+    ant = float(stats.get("anticipated_revenue_next_service") or 0)
+
+    if avg7 >= 18 or "very high" in busy:
+        demand = "Surge"
+    elif avg7 >= 10 or "high" in busy:
+        demand = "High"
+    elif avg7 >= 5 or "moderate" in busy:
+        demand = "Moderate"
+    else:
+        demand = "Low"
+
+    peak = _peak_window_label(top_hours)
+    peak_display = peak or "\u2014"
+
+    if ant > 0:
+        # tighter range when VIP mix is steady; widen when VIP-heavy (more variance upside)
+        spread = 0.18 if vip_ratio < 0.20 else 0.25
+        low = ant * (1 - spread)
+        high = ant * (1 + spread)
+        revenue_label = _money_range_label(low, high)
+    else:
+        revenue_label = "\u2014"
+
+    if peak:
+        headline = f"Tonight Outlook: {demand} Demand \u2014 Peak {peak}"
+    else:
+        headline = f"Tonight Outlook: {demand} Demand"
+
+    if vip_ratio >= 0.30 and demand in ("Moderate", "High", "Surge"):
+        insight = (
+            f"VIP mix is strong (~{int(round(vip_ratio*100))}% of the last 30 days). "
+            "Prioritize premium tables and upgrade offers early."
+        )
+    elif demand == "Surge":
+        insight = "High volume incoming \u2014 confirm staffing and table assignments now."
+    elif demand == "High":
+        insight = "Strong service window approaching \u2014 tighten reservation flow and pre-stage premium service."
+    elif demand == "Low":
+        insight = (
+            "Reservations are light for the next service \u2014 consider pushing a promo or "
+            "direct follow-up to recent inquiries."
+        )
+    else:
+        insight = "Steady demand expected \u2014 keep VIP tables flexible and follow up on pending leads."
+
+    return {
+        "headline": headline,
+        "tone": demand.lower(),
+        "demand_level": demand,
+        "peak_window": peak_display,
+        "expected_revenue": revenue_label,
+        "insight": insight,
+        "cards": [
+            {"label": "Demand", "value": demand, "tone": demand.lower()},
+            {"label": "Peak Window", "value": peak_display},
+            {"label": "Expected Revenue", "value": revenue_label},
+        ],
+    }
+
+
+def _build_summary_operator_view(
+    stats: Dict[str, Any],
+    top_types: List[Dict[str, Any]],
+    top_hours: List[Dict[str, Any]],
+    avg_party_size: float = 0.0,
+    avg_daily_bookings_30: float = 0.0,
+) -> Dict[str, Any]:
+    """Translate the daily revenue summary into a quick business snapshot.
+
+    `stats` carries: total_guests, vip_count, regular_count, estimated_revenue,
+    budget_sum_parsed. `avg_daily_bookings_30` lets us classify "Strong / Steady / Light"
+    relative to the venue's own 30-day baseline rather than absolute thresholds.
+    """
+    total = int(stats.get("total_guests") or 0)
+    vip_n = int(stats.get("vip_count") or 0)
+    reg_n = int(stats.get("regular_count") or 0)
+    rev = float(stats.get("estimated_revenue") or 0)
+    bud_parsed = float(stats.get("budget_sum_parsed") or 0)
+
+    vip_ratio = (vip_n / total) if total else 0.0
+    baseline = float(avg_daily_bookings_30 or 0)
+
+    if total == 0:
+        demand = "Quiet"
+    elif baseline > 0 and total >= max(20.0, baseline * 1.7):
+        demand = "Surge"
+    elif baseline > 0 and total >= max(12.0, baseline * 1.2):
+        demand = "Strong"
+    elif total >= 20:
+        demand = "Surge"
+    elif total >= 12:
+        demand = "Strong"
+    elif total >= 6:
+        demand = "Steady"
+    else:
+        demand = "Light"
+
+    if demand in ("Strong", "Surge"):
+        suffix = ""
+        if vip_ratio >= 0.30:
+            suffix = " \u2014 VIP guests drove demand"
+        elif bud_parsed > 0 and rev >= max(1000.0, bud_parsed * 1.0):
+            suffix = " \u2014 Budgets trending up"
+        headline = f"Today: Strong Revenue Day{suffix}"
+    elif demand == "Steady":
+        headline = "Today: Steady Day"
+    elif demand == "Light":
+        headline = "Today: Light Day \u2014 low reservation volume"
+    else:
+        headline = "Today: Quiet Day \u2014 no reservations yet"
+
+    top_driver = "Reservations"
+    peak_hour: Optional[int] = None
+    if top_hours:
+        try:
+            peak_hour = int(str((top_hours[0] or {}).get("key", "")).split(":")[0])
+        except Exception:
+            peak_hour = None
+
+    label_lower = ""
+    if top_types:
+        label_lower = str((top_types[0] or {}).get("key", "")).lower()
+
+    if vip_ratio >= 0.30 and vip_n > 0:
+        top_driver = "VIP Upgrades"
+    elif "match" in label_lower or "world cup" in label_lower or "fixture" in label_lower or "kickoff" in label_lower:
+        top_driver = "Match-Day Traffic"
+    elif avg_party_size >= 6:
+        top_driver = "Large Groups"
+    elif peak_hour is not None and peak_hour >= 22:
+        top_driver = "Late-Night Demand"
+    elif "vip" in label_lower:
+        top_driver = "VIP Upgrades"
+    elif top_types:
+        # Fall back to a humanized version of the most common request type / entry point
+        raw = str((top_types[0] or {}).get("key", "")).strip()
+        if raw and raw != "(unspecified)":
+            top_driver = raw[:40]
+
+    if total == 0:
+        insight = (
+            "No reservations recorded for this date yet \u2014 confirm sheet sync and check "
+            "active entry points if this looks unexpected."
+        )
+    elif vip_ratio >= 0.25 and vip_n > 0:
+        pct = int(round(vip_ratio * 100))
+        insight = f"VIP guests made up {pct}% of traffic and drove the strongest revenue signal today."
+    elif avg_party_size >= 6:
+        insight = (
+            f"Average party size is {avg_party_size:.1f} \u2014 large groups are the main "
+            "driver, plan table layouts and staffing accordingly."
+        )
+    elif peak_hour is not None and peak_hour >= 19:
+        insight = (
+            f"Most demand came after {_format_hour_12h(peak_hour)} \u2014 late-shift staffing "
+            "is the key takeaway for next time."
+        )
+    elif peak_hour is not None:
+        insight = f"Demand concentrated around {_format_hour_12h(peak_hour)} \u2014 adjust prep and host coverage to that window."
+    else:
+        insight = "Day was steady \u2014 review request types in details for follow-up opportunities."
+
+    revenue_value = _format_money_compact(rev) if rev > 0 else "\u2014"
+    guests_value = str(total)
+    vip_mix_sub = f"{vip_n} VIP \u00b7 {reg_n} Regular" if total else "\u2014"
+
+    return {
+        "headline": headline,
+        "tone": demand.lower(),
+        "demand_level": demand,
+        "top_driver": top_driver,
+        "revenue_label": revenue_value,
+        "guests_label": guests_value,
+        "vip_mix_label": vip_mix_sub,
+        "insight": insight,
+        "cards": [
+            {"label": "Revenue", "value": revenue_value},
+            {"label": "Guests", "value": guests_value, "sub": vip_mix_sub},
+            {"label": "Demand Level", "value": demand, "tone": demand.lower()},
+            {"label": "Top Driver", "value": top_driver},
+        ],
+    }
+
+
 @app.route("/admin/api/analytics/load-forecast", methods=["GET"])
 def admin_api_load_forecast():
     """Step 13: read-only load forecast (manager+)."""
@@ -14065,20 +17513,28 @@ def admin_api_load_forecast():
         rows = (all_vals[1:] if len(all_vals) > 1 else [])
         rows = rows[-800:]
 
-        def col(key: str) -> int:
-            return (hmap.get(key) or 0) - 1
+        def _col_idx(*names: str) -> int:
+            for nm in names:
+                k = _normalize_header(nm)
+                if k in hmap:
+                    return hmap[k] - 1
+            return -1
 
-        ts_i = col("timestamp")
-        vip_i = col("vip")
+        ts_i = _col_idx("timestamp", "ts", "created_at", "submitted_at")
+        vip_i = _col_idx("vip", "VIP")
+        tier_i = _col_idx("tier", "segment")
+        budget_i = _col_idx("budget", "Budget")
 
         now = datetime.now(timezone.utc)
 
         def parse_ts(r):
-            s = (r[ts_i] if ts_i >= 0 and ts_i < len(r) else "").strip()
+            if ts_i < 0 or ts_i >= len(r):
+                return None
+            s = (r[ts_i] or "").strip()
             if not s:
                 return None
             try:
-                return datetime.fromisoformat(s.replace("Z","+00:00")).astimezone(timezone.utc)
+                return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(timezone.utc)
             except Exception:
                 try:
                     return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
@@ -14086,14 +17542,22 @@ def admin_api_load_forecast():
                     return None
 
         def is_vip(r):
-            s = (r[vip_i] if vip_i >= 0 and vip_i < len(r) else "").strip().lower()
-            return s in ("vip", "yes", "y", "true", "1")
+            if vip_i >= 0 and vip_i < len(r):
+                s = (r[vip_i] or "").strip().lower()
+                if s in ("vip", "yes", "y", "true", "1", "vip."):
+                    return True
+            if tier_i >= 0 and tier_i < len(r):
+                t = (r[tier_i] or "").strip().lower()
+                if "vip" in t:
+                    return True
+            return False
 
         buckets_7 = {}
         buckets_30 = {}
         hours = {}
         vip_30 = 0
         total_30 = 0
+        budget_30 = 0.0
 
         for r in rows:
             dt = parse_ts(r)
@@ -14111,10 +17575,24 @@ def admin_api_load_forecast():
                 if is_vip(r):
                     vip_30 += 1
                 hours[hour_key] = hours.get(hour_key, 0) + 1
+                if budget_i >= 0 and budget_i < len(r):
+                    budget_30 += _parse_budget_to_number(r[budget_i])
 
         def top_k(dct, k=5):
             items = sorted(dct.items(), key=lambda x: x[1], reverse=True)
             return [{"key": a, "count": b} for a,b in items[:k]]
+
+        avg_daily_bookings_7 = (sum(buckets_7.values()) / 7.0) if buckets_7 else 0.0
+        avg_daily_bookings_30 = (sum(buckets_30.values()) / 30.0) if buckets_30 else 0.0
+        avg_daily_revenue_30 = (budget_30 / 30.0) if budget_30 > 0 else 0.0
+        if avg_daily_bookings_7 >= 18:
+            busy_level = "Very high"
+        elif avg_daily_bookings_7 >= 10:
+            busy_level = "High"
+        elif avg_daily_bookings_7 >= 5:
+            busy_level = "Moderate"
+        else:
+            busy_level = "Light"
 
         out = {
             "ok": True,
@@ -14125,8 +17603,214 @@ def admin_api_load_forecast():
             "top_days_30": top_k(buckets_30, 7),
             "top_hours_30": top_k(hours, 6),
             "vip_ratio_30": (vip_30/total_30) if total_30 else 0.0,
+            "avg_daily_bookings_7": round(avg_daily_bookings_7, 2),
+            "avg_daily_bookings_30": round(avg_daily_bookings_30, 2),
+            "budget_sum_30": round(budget_30, 2),
+            "avg_daily_revenue_30": round(avg_daily_revenue_30, 2),
+            "anticipated_revenue_next_service": round(avg_daily_revenue_30, 2),
+            "busy_level": busy_level,
+            "meta": {
+                "timestamp_column_resolved": ts_i >= 0,
+                "rows_sample": len(rows),
+            },
         }
+        try:
+            out["operator_view"] = _build_forecast_operator_view(out)
+        except Exception:
+            # Operator view is purely presentational — never fail the endpoint over it.
+            out["operator_view"] = None
         return jsonify(out)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/admin/api/analytics/daily-summary", methods=["GET"])
+def admin_api_daily_summary():
+    """Revenue-oriented day snapshot from the venue lead sheet (manager+)."""
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+
+    day_s = (request.args.get("date") or "").strip()
+    if day_s:
+        try:
+            day_date = datetime.strptime(day_s, "%Y-%m-%d").date()
+        except Exception:
+            return jsonify({"ok": False, "error": "Invalid date (use YYYY-MM-DD)"}), 400
+    else:
+        day_date = datetime.now(timezone.utc).date()
+
+    try:
+        gc = get_gspread_client()
+        ws = _open_default_spreadsheet(gc, venue_id=_venue_id()).sheet1
+        header = ws.row_values(1) or []
+        hmap = header_map(header)
+
+        def _col_idx(*names: str) -> int:
+            for nm in names:
+                k = _normalize_header(nm)
+                if k in hmap:
+                    return hmap[k] - 1
+            return -1
+
+        ts_i = _col_idx("timestamp", "ts", "created_at", "submitted_at")
+        vip_i = _col_idx("vip", "VIP")
+        tier_i = _col_idx("tier", "segment")
+        budget_i = _col_idx("budget", "Budget")
+        ep_i = _col_idx("entry_point", "entry", "source")
+        q_i = _col_idx("queue", "intent", "request_type")
+        party_i = _col_idx("party_size", "party", "guests", "pax")
+
+        all_vals = ws.get_all_values() or []
+        rows = all_vals[1:] if len(all_vals) > 1 else []
+        now_utc = datetime.now(timezone.utc)
+
+        def parse_ts_cell(r: list) -> Optional[datetime]:
+            if ts_i < 0 or ts_i >= len(r):
+                return None
+            s = (r[ts_i] or "").strip()
+            if not s:
+                return None
+            try:
+                return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(timezone.utc)
+            except Exception:
+                try:
+                    return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
+                except Exception:
+                    return None
+
+        def row_is_vip(r: list) -> bool:
+            if vip_i >= 0 and vip_i < len(r):
+                s = (r[vip_i] or "").strip().lower()
+                if s in ("vip", "yes", "y", "true", "1"):
+                    return True
+            if tier_i >= 0 and tier_i < len(r):
+                t = (r[tier_i] or "").strip().lower()
+                if "vip" in t:
+                    return True
+            return False
+
+        day_rows: List[list] = []
+        type_counts: Dict[str, int] = {}
+        hour_counts: Dict[str, int] = {}
+        revenue_sum = 0.0
+        buckets_7: Dict[str, int] = {}
+        buckets_30: Dict[str, int] = {}
+        hours_30: Dict[str, int] = {}
+        budget_30 = 0.0
+        total_30 = 0
+        vip_30 = 0
+        party_sum = 0.0
+        party_count = 0
+
+        for r in rows:
+            dt = parse_ts_cell(r)
+            if dt is None:
+                continue
+            age_days = (now_utc - dt).total_seconds() / 86400.0
+            if age_days <= 7.0:
+                dkey = dt.strftime("%Y-%m-%d")
+                buckets_7[dkey] = buckets_7.get(dkey, 0) + 1
+            if age_days <= 30.0:
+                dkey = dt.strftime("%Y-%m-%d")
+                hkey = dt.strftime("%H:00")
+                buckets_30[dkey] = buckets_30.get(dkey, 0) + 1
+                hours_30[hkey] = hours_30.get(hkey, 0) + 1
+                total_30 += 1
+                if row_is_vip(r):
+                    vip_30 += 1
+                if budget_i >= 0 and budget_i < len(r):
+                    budget_30 += _parse_budget_to_number(r[budget_i])
+            if dt.date() != day_date:
+                continue
+            day_rows.append(r)
+            if row_is_vip(r):
+                pass
+            label = ""
+            if ep_i >= 0 and ep_i < len(r) and str(r[ep_i]).strip():
+                label = str(r[ep_i]).strip()
+            elif q_i >= 0 and q_i < len(r) and str(r[q_i]).strip():
+                label = str(r[q_i]).strip()
+            else:
+                label = "(unspecified)"
+            type_counts[label] = type_counts.get(label, 0) + 1
+            hour_counts[dt.strftime("%H:00")] = hour_counts.get(dt.strftime("%H:00"), 0) + 1
+            if budget_i >= 0 and budget_i < len(r):
+                revenue_sum += _parse_budget_to_number(r[budget_i])
+            if party_i >= 0 and party_i < len(r):
+                try:
+                    pm = re.search(r"(\d+)", str(r[party_i] or ""))
+                    if pm:
+                        party_sum += float(pm.group(1))
+                        party_count += 1
+                except Exception:
+                    pass
+
+        total = len(day_rows)
+        vip_n = sum(1 for r in day_rows if row_is_vip(r))
+        reg_n = max(0, total - vip_n)
+
+        top_types = sorted(type_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        top_hours = sorted(hour_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+
+        est_revenue = float(revenue_sum)
+        if est_revenue <= 0 and total > 0:
+            est_revenue = float(vip_n * 220 + reg_n * 85)
+
+        avg_daily_bookings_7 = (sum(buckets_7.values()) / 7.0) if buckets_7 else 0.0
+        avg_daily_bookings_30 = (sum(buckets_30.values()) / 30.0) if buckets_30 else 0.0
+        avg_daily_revenue_30 = (budget_30 / 30.0) if budget_30 > 0 else 0.0
+        if avg_daily_bookings_7 >= 18:
+            busy_level = "Very high"
+        elif avg_daily_bookings_7 >= 10:
+            busy_level = "High"
+        elif avg_daily_bookings_7 >= 5:
+            busy_level = "Moderate"
+        else:
+            busy_level = "Light"
+        top_hours_30 = sorted(hours_30.items(), key=lambda x: x[1], reverse=True)[:5]
+        anticipated_revenue = est_revenue if total > 0 else avg_daily_revenue_30
+        avg_party_size = (party_sum / party_count) if party_count else 0.0
+
+        top_request_labels = [{"key": a, "count": b} for a, b in top_types]
+        peak_hours_list = [{"key": a, "count": b} for a, b in top_hours]
+
+        result: Dict[str, Any] = {
+            "ok": True,
+            "date": day_date.isoformat(),
+            "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "total_guests": total,
+            "vip_count": vip_n,
+            "regular_count": reg_n,
+            "estimated_revenue": round(est_revenue, 2),
+            "budget_sum_parsed": round(revenue_sum, 2),
+            "avg_party_size": round(avg_party_size, 2),
+            "top_request_labels": top_request_labels,
+            "peak_hours": peak_hours_list,
+            "forecast_summary": {
+                "busy_level": busy_level,
+                "last_7_days_total": sum(buckets_7.values()),
+                "last_30_days_total": sum(buckets_30.values()),
+                "avg_daily_bookings_7": round(avg_daily_bookings_7, 2),
+                "avg_daily_bookings_30": round(avg_daily_bookings_30, 2),
+                "vip_ratio_30": round((vip_30 / total_30), 4) if total_30 else 0.0,
+                "avg_daily_revenue_30": round(avg_daily_revenue_30, 2),
+                "anticipated_revenue_next_service": round(float(anticipated_revenue), 2),
+                "top_hours_30": [{"key": a, "count": b} for a, b in top_hours_30],
+            },
+            "meta": {"timestamp_column_resolved": ts_i >= 0},
+        }
+        try:
+            result["operator_view"] = _build_summary_operator_view(
+                result,
+                top_request_labels,
+                peak_hours_list,
+                avg_party_size=avg_party_size,
+                avg_daily_bookings_30=avg_daily_bookings_30,
+            )
+        except Exception:
+            result["operator_view"] = None
+        return jsonify(result)
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -14534,31 +18218,6 @@ select option{
   });
 })();
 
-
-async function loadForecast(){
-  const msg = qs('#forecast-msg'); if(msg) msg.textContent = 'Loading…';
-  const body = qs('#forecastBody'); if(body) body.textContent = '';
-  try{
-    const r = await fetch(`/admin/api/analytics/load-forecast?key=${encodeURIComponent(KEY)}`, {cache:'no-store'});
-    const d = await r.json();
-    if(!d.ok) throw new Error(d.error || 'Failed');
-    const lines = [];
-    lines.push(`Last 7 days: ${d.last_7_days_total || 0} leads`);
-    lines.push(`Last 30 days: ${d.last_30_days_total || 0} leads`);
-    lines.push(`VIP ratio (30d): ${Math.round((d.vip_ratio_30||0)*100)}%`);
-    if(Array.isArray(d.top_hours_30) && d.top_hours_30.length){
-      lines.push(`Top hours (30d): ` + d.top_hours_30.map(x=>`${x.key} (${x.count})`).join(', '));
-    }
-    if(Array.isArray(d.top_days_7) && d.top_days_7.length){
-      lines.push(`Top days (7d): ` + d.top_days_7.map(x=>`${x.key} (${x.count})`).join(', '));
-    }
-    if(body) body.textContent = lines.join('\\n');
-    if(msg) msg.textContent = 'Updated ✔';
-  }catch(e){
-    if(msg) msg.textContent = 'Failed: ' + (e.message || e);
-  }
-}
-
 async function replayAI(){
   const msg = qs('#replay-msg'); if(msg) msg.textContent = 'Replaying…';
   const out = qs('#replayOut'); if(out) out.textContent = '';
@@ -14578,6 +18237,7 @@ async function replayAI(){
     if(msg) msg.textContent = 'Failed: ' + (e.message || e);
   }
 }
+
 
 </script>
 """.replace("__ADMIN_KEY__", json.dumps(key)).replace("__ADMIN_ROLE__", json.dumps(role)))
@@ -15017,8 +18677,8 @@ def __test_ai_queue_seed():
 
     body = request.get_json(silent=True) or {}
     action_type = str(body.get("type") or body.get("action_type") or "reply_draft").strip().lower()
-    if action_type not in ("vip_tag", "status_update", "reply_draft"):
-        return jsonify({"ok": False, "error": "Invalid type. Use vip_tag | status_update | reply_draft"}), 400
+    if action_type not in ("vip_tag", "status_update", "reply_draft", "correct_contact"):
+        return jsonify({"ok": False, "error": "Invalid type. Use vip_tag | status_update | reply_draft | correct_contact"}), 400
 
     entry = {
         "id": _queue_new_id(),
@@ -18304,6 +21964,15 @@ def admin_api_leads_filter():
                 "notes": get_cell(r, "notes"),
                 "vibe": get_cell(r, "vibe"),
             }
+            for hk, idx in hmap.items():
+                if hk in obj:
+                    continue
+                if idx < 0 or idx >= len(r):
+                    continue
+                val = r[idx]
+                if val is None or str(val).strip() == "":
+                    continue
+                obj[hk] = str(val)
             items.append(obj)
     
     # Read leads ONLY from the target venue (NO cross-venue data leakage)
