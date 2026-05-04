@@ -4805,40 +4805,14 @@ def _redis_runtime_status() -> Dict[str, Any]:
         "redis_error": err,
     }
 
-def get_menu_for_lang(lang: str, venue_id: Optional[str] = None) -> Dict[str, Any]:
-    """Return a normalized menu payload for a given language.
-
-    Public /menu.json expects:
-      { "lang": "en", "title": "Menu", "sections": [ { "title": "...", "items": [...] }, ... ] }
-
-    - Admin overrides (uploaded via /admin) are stored in MENU_FILE and win.
-    - Otherwise, we transform the built-in flat MENU[lang]["items"] into sections.
-    """
-    lang = norm_lang(lang)
-    menu_override = _get_menu_override(venue_id)
-
-    # 1) Admin override (already normalized by _normalize_menu_payload)
-    if isinstance(menu_override, dict):
-        m = menu_override.get(lang)
-        if isinstance(m, dict) and isinstance(m.get("sections"), list) and m.get("sections"):
-            base_title = "Menu"
-            try:
-                base = MENU.get(lang, MENU.get("en", {}))
-                if isinstance(base, dict) and base.get("title"):
-                    base_title = str(base.get("title"))
-            except Exception:
-                pass
-            meta = menu_override.get("_meta") if isinstance(menu_override, dict) else None
-            return {"title": base_title, "sections": m.get("sections"), "meta": meta or {}}
-
-    # 2) Built-in fallback: group flat items into sections
+def _builtin_menu_sections_for_lang(lang: str) -> Tuple[str, List[Dict[str, Any]], Dict[str, Any]]:
+    """Built-in MENU grouped into sections (no venue file override)."""
     base = MENU.get(lang, MENU.get("en", {}))
     base_title = (base.get("title") if isinstance(base, dict) else None) or "Menu"
-    items = []
+    items: List[Any] = []
     if isinstance(base, dict) and isinstance(base.get("items"), list):
         items = base.get("items") or []
 
-    # human-ish section titles (default built-in categories)
     title_map = {
         "chef": "Chef Specials",
         "bites": "Bites",
@@ -4859,19 +4833,69 @@ def get_menu_for_lang(lang: str, venue_id: Optional[str] = None) -> Dict[str, An
             "tag": str(it.get("tag") or "").strip(),
         })
 
-    sections = []
+    sections: List[Dict[str, Any]] = []
     for cid, arr in buckets.items():
         arr2 = [x for x in arr if x.get("name")]
         if not arr2:
             continue
         sections.append({"title": title_map.get(cid, cid.replace("_", " ").title()), "items": arr2})
 
-    # stable-ish ordering for the default categories
     order_titles = ["Chef Specials", "Bites", "Classics", "Sweets", "Drinks", "Menu"]
-    sections.sort(key=lambda s: (order_titles.index(s.get("title")) if s.get("title") in order_titles else 999, s.get("title","")))
+    sections.sort(key=lambda s: (order_titles.index(s.get("title")) if s.get("title") in order_titles else 999, s.get("title", "")))
 
-    meta = menu_override.get("_meta") if isinstance(menu_override, dict) else None
-    return {"title": str(base_title), "sections": sections, "meta": meta or {"version": 0, "updated_at": ""}}
+    return str(base_title), sections, {"version": 0, "updated_at": ""}
+
+
+def get_menu_for_lang(lang: str, venue_id: Optional[str] = None) -> Dict[str, Any]:
+    """Return a normalized menu payload for a given language.
+
+    Public /menu.json expects:
+      { "lang": "en", "title": "Menu", "sections": [ { "title": "...", "items": [...] }, ... ] }
+
+    - If a venue override file exists, it is the source of truth (including empty menus).
+    - Otherwise, use the built-in MENU grouped into sections.
+    """
+    lang = norm_lang(lang)
+    menu_override = _get_menu_override(venue_id)
+
+    base_title, _ignore_sec, _ignore_meta = _builtin_menu_sections_for_lang(lang)
+    try:
+        base = MENU.get(lang, MENU.get("en", {}))
+        if isinstance(base, dict) and base.get("title"):
+            base_title = str(base.get("title"))
+    except Exception:
+        pass
+
+    if not isinstance(menu_override, dict) or not menu_override:
+        t, sections, meta = _builtin_menu_sections_for_lang(lang)
+        return {"title": t, "sections": sections, "meta": meta}
+
+    meta_out: Dict[str, Any] = {}
+    if isinstance(menu_override.get("_meta"), dict):
+        meta_out = dict(menu_override.get("_meta") or {})
+
+    lang_keys = [k for k in menu_override.keys() if k != "_meta" and not str(k).startswith("_")]
+
+    def _sections_for(ln: str) -> Optional[List[Any]]:
+        block = menu_override.get(ln)
+        if not isinstance(block, dict):
+            return None
+        if "sections" not in block:
+            return []
+        s = block.get("sections")
+        return list(s) if isinstance(s, list) else []
+
+    secs = _sections_for(lang)
+    if secs is None and lang != "en":
+        secs = _sections_for("en")
+
+    if secs is not None:
+        return {"title": base_title, "sections": secs, "meta": meta_out}
+
+    if not lang_keys:
+        return {"title": base_title, "sections": [], "meta": meta_out}
+
+    return {"title": base_title, "sections": [], "meta": meta_out}
 
 
 
@@ -8388,7 +8412,7 @@ def chat():
 
             # Match-day ops toggles
             if ops.get("vip_only") and not re.search(r"\bvip\b", msg.lower()):
-                return jsonify({"reply": "🔒 Reservations are VIP-only right now. If you have VIP access, type **VIP** to continue. Otherwise, I can add you to the waitlist.", "rate_limit_remaining": remaining})
+                return jsonify({"reply": "🔒 Reservations are VIP-only right now. If you have VIP access, type **VIP** to continue (or use the **VIP Vibe** request on the home page). Otherwise, ask about the waitlist.", "rate_limit_remaining": remaining})
 
             if ops.get("pause_reservations") and not ops.get("waitlist_mode"):
                 return jsonify({"reply": "⏸️ Reservations are temporarily paused. Please check back soon, or ask a staff member for help.", "rate_limit_remaining": remaining})
@@ -12036,7 +12060,7 @@ def admin_update_lead():
     status = (data.get("status") or "").strip()
     vip = (data.get("vip") or "").strip()
 
-    allowed_status = ["New", "Confirmed", "Seated", "No-Show", "Handled"]
+    allowed_status = ["New", "Confirmed", "Seated", "No-Show", "Handled", "Waitlist"]
     if status and status not in allowed_status:
         return jsonify({"ok": False, "error": "Invalid status"}), 400
 
@@ -13205,7 +13229,7 @@ label.small + textarea,
 </div></div>
     <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Time range</label><select class='inp' id='flt-time' style='min-width:140px'><option value=''>All time</option><option value='30'>Last 30 min</option><option value='60'>Last 1 hour</option><option value='120'>Last 2 hours</option><option value='1440'>Last 24 hours</option><option value='10080'>Last 7 days</option></select></div>
     <div><label class='small' style='display:block;margin-bottom:4px;font-weight:600'>Source</label><select class='inp' id='flt-entry' style='min-width:140px'><option value='all'>All sources</option></select></div>
-    <div style='display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end'><button class='btn' id='btn-leads-apply' type='button'>Apply</button><button class='btn2' id='btn-leads-reset' type='button'>Reset</button></div>
+    <div style='display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end'><button class='btn' id='btn-leads-apply' type='button'>Apply</button><button class='btn2' id='btn-leads-reset' type='button'>Reset</button><button class='btn2' id='btn-waitlist-view' type='button'>See waitlist</button></div>
   </div>
   <div style='margin-top:10px'><span id='leadsCount' class='small'>0 shown</span></div>
 </div>
@@ -13245,7 +13269,7 @@ label.small + textarea,
                 sel = " selected" if selected else ""
                 return f"<option value=\"{_hesc(label)}\"{sel}>{_hesc(label)}</option>"
 
-            html.append(f"<tr data-tier='{_hesc(tier_key)}' data-entry='{_hesc(ep)}'>")
+            html.append(f"<tr data-lead-row='{sheet_row}' data-tier='{_hesc(tier_key)}' data-entry='{_hesc(ep)}'>")
             html.append(f"<td class='code'>{sheet_row}</td>")
             html.append(f"<td>{ts}</td>")
             html.append(f"<td>{nm}</td>")
@@ -13276,21 +13300,22 @@ label.small + textarea,
             html.append("<td" + _note_tip + ">" + _cell_details("notes", note_txt) + "</td>")
 
 
+            st_cmp = str(st or "").strip().lower()
             html.append("<td>")
-            html.append(f"<select class='inp' id='status-{sheet_row}'>"
-                        f"{opt(st=='New','New')}{opt(st=='Confirmed','Confirmed')}{opt(st=='Seated','Seated')}{opt(st=='No-Show','No-Show')}{opt(st=='Handled','Handled')}"
+            html.append(f"<select class='inp' id='status-{sheet_row}' onclick='event.stopPropagation()' onkeydown='event.stopPropagation()'>"
+                        f"{opt(st_cmp=='new','New')}{opt(st_cmp=='confirmed','Confirmed')}{opt(st_cmp=='seated','Seated')}{opt(st_cmp=='no-show','No-Show')}{opt(st_cmp=='handled','Handled')}{opt(st_cmp=='waitlist','Waitlist')}"
                         "</select>")
             html.append("</td>")
 
             html.append("<td>")
-            html.append(f"<select class='inp' id='vip-{sheet_row}'>"
+            html.append(f"<select class='inp' id='vip-{sheet_row}' onclick='event.stopPropagation()' onkeydown='event.stopPropagation()'>"
                         f"{opt(is_vip, 'Yes')}{opt(not is_vip, 'No')}"
                         "</select>")
             html.append("</td>")
 
 
             html.append("<td>")
-            html.append(f"<button class='btn primary' type='button' onclick='saveLead({sheet_row})'>Save</button> <button class='btnTiny' type='button' title='Set status to Handled' onclick='markHandled({sheet_row})'>Handled</button>")
+            html.append(f"<button class='btn primary' type='button' onclick='event.stopPropagation();saveLead({sheet_row})'>Save</button> <button class='btnTiny' type='button' title='Set status to Handled' onclick='event.stopPropagation();markHandled({sheet_row})'>Handled</button>")
             html.append("</td>")
 
             html.append("</tr>")
@@ -14252,8 +14277,8 @@ function _leadRowFromItem(it){
   const st = (it.status||'New').toString().trim();
   const stLow = st.toLowerCase();
   const vipVal = isVip ? 'Yes' : 'No';
-  const stSel = '<select class="inp" id="status-'+row+'"><option value="New"'+(stLow==='new'?' selected':'')+'>New</option><option value="Confirmed"'+(stLow==='confirmed'?' selected':'')+'>Confirmed</option><option value="Seated"'+(stLow==='seated'?' selected':'')+'>Seated</option><option value="No-Show"'+(stLow==='no-show'?' selected':'')+'>No-Show</option><option value="Handled"'+(stLow==='handled'?' selected':'')+'>Handled</option></select>';
-  const vipSel = '<select class="inp" id="vip-'+row+'"><option value="Yes"'+(vipVal==='Yes'?' selected':'')+'>Yes</option><option value="No"'+(vipVal==='No'?' selected':'')+'>No</option></select>';
+  const stSel = '<select class="inp" id="status-'+row+'" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()"><option value="New"'+(stLow==='new'?' selected':'')+'>New</option><option value="Confirmed"'+(stLow==='confirmed'?' selected':'')+'>Confirmed</option><option value="Seated"'+(stLow==='seated'?' selected':'')+'>Seated</option><option value="No-Show"'+(stLow==='no-show'?' selected':'')+'>No-Show</option><option value="Handled"'+(stLow==='handled'?' selected':'')+'>Handled</option><option value="Waitlist"'+(stLow==='waitlist'?' selected':'')+'>Waitlist</option></select>';
+  const vipSel = '<select class="inp" id="vip-'+row+'" onclick="event.stopPropagation()" onkeydown="event.stopPropagation()"><option value="Yes"'+(vipVal==='Yes'?' selected':'')+'>Yes</option><option value="No"'+(vipVal==='No'?' selected':'')+'>No</option></select>';
   const tipEp = fullEp ? _tipAttr(fullEp) : '';
   const tipCtx = fullCtx.length>=28 ? _tipAttr(fullCtx) : '';
   const tipNotes = fullNotes.length>=28 ? _tipAttr(fullNotes) : '';
@@ -14427,6 +14452,95 @@ function resetLeadsFiltersServer(){
   _syncDdButtons();
   applyLeadsFiltersServer();
 }
+
+function _waitlistModalEnsure(){
+  if(qs('#waitlist-modal-overlay')) return;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div id="waitlist-modal-overlay" class="aiq-drawer-overlay" style="z-index:12000" onclick="if(event.target===this)closeWaitlistModal()">
+      <div class="aiq-drawer-panel" style="max-width:720px;width:92%;max-height:85vh;overflow:auto" onclick="event.stopPropagation()">
+        <div class="aiq-drawer-h">
+          <div style="font-size:16px;font-weight:800">Waitlist</div>
+          <button type="button" class="btn2" onclick="closeWaitlistModal()">Close</button>
+        </div>
+        <div class="small" style="margin-bottom:10px;opacity:.85">Reservations captured while waitlist mode was on. Select rows and confirm to move them into the main leads flow (status → New).</div>
+        <div id="waitlist-modal-body" class="small">Loading…</div>
+        <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+          <button type="button" class="btn primary" id="btn-waitlist-confirm" onclick="confirmWaitlistPromote()">Confirm selected</button>
+          <button type="button" class="btn2" onclick="loadWaitlistModal()">Reload</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap.firstElementChild);
+}
+
+function closeWaitlistModal(){
+  const o = qs('#waitlist-modal-overlay');
+  if(o) o.classList.remove('show');
+}
+
+async function loadWaitlistModal(){
+  _waitlistModalEnsure();
+  const body = qs('#waitlist-modal-body');
+  if(body) body.textContent = 'Loading…';
+  const params = new URLSearchParams();
+  if(typeof KEY!=='undefined') params.set('key', KEY);
+  if(typeof VENUE!=='undefined' && VENUE) params.set('venue', VENUE);
+  try{
+    const r = await fetch('/admin/api/leads/waitlist?'+params.toString(), { cache:'no-store', headers:(typeof VENUE!=='undefined'&&VENUE?{'X-Venue-Id':String(VENUE)}:{}) });
+    const j = await r.json().catch(()=>null);
+    if(!j||!j.ok){ if(body) body.textContent = (j&&j.error)?j.error:'Failed to load'; return; }
+    const items = j.items||[];
+    if(!items.length){ if(body) body.innerHTML = '<div class="note">No waitlist rows right now.</div>'; return; }
+    const rows = items.map(it=>{
+      const id = it.sheet_row||it.row||'';
+      const nm = _he(it.name||'');
+      const ph = _he(it.phone||'');
+      const dt = _he(it.date||'');
+      const tm = _he(it.time||'');
+      const ps = _he(it.party_size||'');
+      return '<tr><td><input type="checkbox" class="wl-pick" data-row="'+id+'" /></td><td class="code">'+id+'</td><td>'+nm+'</td><td>'+ph+'</td><td>'+dt+'</td><td>'+tm+'</td><td>'+ps+'</td><td>'+_he(it.entry_point||'')+'</td></tr>';
+    }).join('');
+    if(body) body.innerHTML = '<div class="tablewrap"><table class="small" style="width:100%"><thead><tr><th style="width:36px"></th><th>Row</th><th>Name</th><th>Contact</th><th>Date</th><th>Time</th><th>Party</th><th>Source</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  }catch(e){ if(body) body.textContent = 'Error'; }
+}
+
+function openWaitlistModal(){
+  _waitlistModalEnsure();
+  const o = qs('#waitlist-modal-overlay');
+  if(o){ o.classList.add('show'); loadWaitlistModal(); }
+}
+
+async function confirmWaitlistPromote(){
+  const picks = qsa('.wl-pick:checked').map(c=>parseInt(c.getAttribute('data-row')||'0',10)).filter(n=>n>=2);
+  if(!picks.length){ if(typeof toast==='function') toast('Select at least one row'); return; }
+  const url = '/admin/api/leads/waitlist/promote?key='+encodeURIComponent(KEY)+(typeof VENUE !== 'undefined' && VENUE ? '&venue='+encodeURIComponent(VENUE) : '');
+  const btn = qs('#btn-waitlist-confirm');
+  if(btn){ btn.disabled = true; btn.textContent = 'Working…'; }
+  try{
+    const r = await fetch(url, {
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        ...(typeof VENUE !== 'undefined' && VENUE ? {'X-Venue-Id': String(VENUE)} : {}),
+      },
+      body: JSON.stringify({ rows: picks }),
+    });
+    const j = await r.json().catch(()=>null);
+    if(btn){ btn.disabled = false; btn.textContent = 'Confirm selected'; }
+    if(j && j.ok){
+      if(typeof toast==='function') toast('Promoted '+((j.promoted||[]).length)+' row(s)', 'ok');
+      await loadWaitlistModal();
+      try{ await applyLeadsFiltersServer(); }catch(e){}
+    } else {
+      if(typeof toast==='function') toast((j&&j.error)||'Promote failed', 'err');
+    }
+  }catch(e){
+    if(btn){ btn.disabled = false; btn.textContent = 'Confirm selected'; }
+    if(typeof toast==='function') toast('Promote failed', 'err');
+  }
+}
+
 function setupLeadFilters(){
   const tbl = qs('#leadsTable');
   if(!tbl) return;
@@ -14445,12 +14559,22 @@ function setupLeadFilters(){
   if(tBody && !tBody.__leadDrawerBound){
     tBody.__leadDrawerBound = true;
     tBody.addEventListener('click', function(e){
-      const tr = e.target && e.target.closest ? e.target.closest('tr[data-lead-row]') : null;
+      const t = e.target;
+      if(t && t.closest && t.closest('select,button,option,input,label,a,details,summary')) return;
+      const tr = t && t.closest ? t.closest('tr[data-lead-row]') : null;
       if(!tr) return;
       const row = tr.getAttribute('data-lead-row');
       if(!row) return;
       openLeadDrawer(row);
     });
+  }
+  qs('#btn-waitlist-view')?.addEventListener('click', function(e){ e.stopPropagation(); openWaitlistModal(); });
+  if(tBody && !tBody.__leadRehydrated){
+    const h = (location.hash||'').toLowerCase();
+    if(h.indexOf('leads')>=0){
+      tBody.__leadRehydrated = true;
+      try{ applyLeadsFiltersServer(); }catch(e){}
+    }
   }
   const tip = document.createElement('div'); tip.id = 'leadsHoverTip'; document.body.appendChild(tip);
   const tipEl = ()=>qs('#leadsHoverTip');
@@ -18326,18 +18450,27 @@ async function replayAI(){
 # ============================================================
 # Concierge intake API (writes into Admin Leads sheet)
 # ============================================================
+def _fan_intake_declares_vip(entry_point: str, vibe: str, notes: str, business_context: str) -> bool:
+    ep = (entry_point or "").strip().lower().replace("-", "_")
+    if ep == "vip_vibe":
+        return True
+    blob = f"{vibe or ''} {notes or ''} {business_context or ''}".lower()
+    return bool(re.search(r"\bvip\b", blob))
+
+
 @app.route("/api/intake", methods=["POST"])
 def api_intake():
     payload = request.get_json(silent=True) or {}
-    # Venue deactivation: block fan intake when the venue is inactive.
     raw_payload_venue = (payload.get("venue_id") or "").strip()
     effective_vid = _slugify_venue_id(raw_payload_venue) if raw_payload_venue else _venue_id()
 
-    # Venue deactivation: block fan intake when the venue is inactive.
     if not _venue_is_active(effective_vid):
         return jsonify({"ok": False, "error": "Venue is inactive"}), 403
 
-
+    try:
+        g.venue_id = effective_vid
+    except Exception:
+        pass
 
     entry_point = (payload.get("entry_point") or "").strip() or "reserve_now"
     name = (payload.get("name") or "").strip()
@@ -18345,29 +18478,59 @@ def api_intake():
     business_context = (payload.get("business_context") or "").strip()
     date_s = (payload.get("date") or "").strip()
     time_s = (payload.get("time") or "").strip()
-    party = (payload.get("party_size") or "").strip()
+    party_raw = (payload.get("party_size") or "").strip()
     vibe = (payload.get("vibe") or "").strip()
     budget = (payload.get("budget") or "").strip()
     notes = (payload.get("notes") or "").strip()
-    lang = (payload.get("lang") or "").strip() or "en"
+    lang = norm_lang((payload.get("lang") or "").strip() or "en")
 
     # Required: name + contact + date + time + party size
-    if not name or not contact or not date_s or not time_s or not party:
+    if not name or not contact or not date_s or not time_s or not party_raw:
         return jsonify({"ok": False, "error": "Missing required fields"}), 400
 
-    # Tier + queue (simple + reliable)
-    tier = "VIP" if (entry_point == "vip_vibe" or "vip" in vibe.lower()) else "Regular"
+    try:
+        party_n = max(0, int(str(party_raw).strip()))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Invalid party size"}), 400
+    if party_n <= 0:
+        return jsonify({"ok": False, "error": "Invalid party size"}), 400
+
+    ops = get_ops()
+    pause_msg = "⏸️ Reservations are temporarily paused. Please check back soon, or ask a staff member for help."
+    if ops.get("pause_reservations") and not ops.get("waitlist_mode"):
+        return jsonify({"ok": False, "error": "reservations_paused", "message": pause_msg}), 403
+
+    vip_only_msg = (
+        "🔒 Reservations are VIP-only right now. If you have VIP access, mention **VIP** in chat or use the VIP request form. "
+        "Otherwise, ask in chat about the waitlist."
+    )
+    is_vip_intake = _fan_intake_declares_vip(entry_point, vibe, notes, business_context)
+    if ops.get("vip_only") and not is_vip_intake:
+        return jsonify({"ok": False, "error": "vip_only", "message": vip_only_msg}), 403
+
+    rule_probe = {"date": date_s, "party_size": party_n}
+    br = apply_business_rules(rule_probe)
+    if br == "party":
+        L = LANG.get(lang, LANG["en"])
+        return jsonify({"ok": False, "error": "party_size_limit", "message": L.get("rule_party", "Party size is above the limit.")}), 400
+    if br == "closed":
+        L = LANG.get(lang, LANG["en"])
+        return jsonify({"ok": False, "error": "closed_date", "message": L.get("rule_closed", "That date is not available.")}), 400
+
+    tier = "VIP" if is_vip_intake else "Regular"
     vip_flag = "Yes" if tier == "VIP" else "No"
     queue = "Priority" if tier == "VIP" else "Standard"
+
+    status = "Waitlist" if ops.get("waitlist_mode") else "New"
 
     lead = {
         "name": name,
         "phone": contact,
         "date": date_s,
         "time": time_s,
-        "party_size": party,
+        "party_size": party_n,
         "language": lang,
-        "status": "New",
+        "status": status,
         "vip": vip_flag,
         "entry_point": entry_point,
         "tier": tier,
@@ -18380,10 +18543,41 @@ def api_intake():
 
     try:
         append_lead_to_sheet(lead, venue_id=effective_vid)
-        _audit("intake.new", {"entry_point": entry_point, "tier": tier})
-        return jsonify({"ok": True, "tier": tier})
-    except Exception as e:
+        _audit("intake.new", {"entry_point": entry_point, "tier": tier, "status": status})
+        return jsonify({"ok": True, "tier": tier, "status": status})
+    except Exception:
         return jsonify({"ok": False, "error": "Failed to store intake"}), 500
+
+
+@app.get("/api/fan/ops")
+def api_fan_ops():
+    """Fan-safe: venue match-day toggles + max party size for forms (no auth)."""
+    qvid = (request.args.get("venue") or request.args.get("venue_id") or "").strip()
+    if not qvid:
+        return jsonify({"ok": False, "error": "venue required"}), 400
+    vid = _slugify_venue_id(qvid)
+    if not _venue_is_active(vid):
+        return jsonify({"ok": False, "error": "Venue inactive"}), 404
+    try:
+        g.venue_id = vid
+    except Exception:
+        pass
+    ops = get_ops()
+    rules = _get_rules(vid)
+    try:
+        mps = int(rules.get("max_party_size") or 0)
+    except (TypeError, ValueError):
+        mps = 0
+    if mps <= 0:
+        mps = int(DEFAULT_BUSINESS_RULES.get("max_party_size") or 12)
+    return jsonify({
+        "ok": True,
+        "venue_id": vid,
+        "pause_reservations": bool(ops.get("pause_reservations")),
+        "vip_only": bool(ops.get("vip_only")),
+        "waitlist_mode": bool(ops.get("waitlist_mode")),
+        "max_party_size": mps,
+    })
 
 
 @app.route("/api/reservation/update", methods=["POST"])
@@ -19131,6 +19325,9 @@ function renderVenues(){
 }
 
 async function loadVenues(){
+    const rbtn = document.getElementById("refreshVenues");
+    const rIdle = rbtn ? rbtn.textContent : "Refresh";
+    if(rbtn){ rbtn.disabled = true; rbtn.textContent = "Refreshing…"; rbtn.setAttribute("aria-busy","true"); }
     try{
       const r = await fetch("/super/api/venues?super_key="+encodeURIComponent(super_key), {headers});
       const j = await r.json();
@@ -19243,6 +19440,8 @@ async function loadVenues(){
     }catch(e){
       venueErr.style.display="block";
       venueErr.textContent="Venue list error: " + (e.message||e);
+    } finally {
+      if(rbtn){ rbtn.disabled = false; rbtn.textContent = rIdle; rbtn.removeAttribute("aria-busy"); }
     }
   }
 
@@ -20300,6 +20499,9 @@ th{
   }
 
   async function loadVenues(){
+    const btn = document.getElementById('btnRefresh');
+    const idle = btn ? btn.textContent : 'Refresh';
+    if(btn){ btn.disabled = true; btn.textContent = 'Refreshing…'; btn.setAttribute('aria-busy','true'); }
     try{
       const r=await fetch('/super/api/venues?super_key='+encodeURIComponent(super_key)+'&t='+Date.now(), {headers: hdrs(), cache:'no-store'});
       const j=await r.json();
@@ -20313,6 +20515,8 @@ th{
     }catch(e){
       document.getElementById('venuesRail').innerHTML='<div class="vrow"><div class="vname">Failed to load venues</div><div class="vid">'+hesc(e.message||e)+'</div></div>';
       document.getElementById('venuesTbody').innerHTML='<tr><td colspan="5" class="muted">Failed to load venues: '+hesc(e.message||e)+'</td></tr>';
+    }finally{
+      if(btn){ btn.disabled = false; btn.textContent = idle; btn.removeAttribute('aria-busy'); }
     }
   }
 
@@ -21946,6 +22150,70 @@ def _apply_leads_filters(items: List[Dict[str, Any]],
     
     return result
 
+
+def _lead_items_from_sheet_rows(
+    rows: List[List[str]],
+    vid: str,
+    body_sheet_rows: Optional[List[int]] = None,
+) -> List[Dict[str, Any]]:
+    """Parse Google Sheet rows (header + body) into lead dicts including sheet_row."""
+    out: List[Dict[str, Any]] = []
+    if not rows or len(rows) < 2:
+        return out
+    header = rows[0] or []
+    body = rows[1:] or []
+    hmap: Dict[str, int] = {}
+    for i, h in enumerate(header):
+        try:
+            hmap[_normalize_header(h)] = i
+        except Exception:
+            pass
+
+    def get_cell(r: List[str], key: str) -> str:
+        ii = hmap.get(_normalize_header(key), -1)
+        if ii < 0 or ii >= len(r):
+            return ""
+        v = r[ii]
+        return "" if v is None else str(v)
+
+    for off, r in enumerate(body):
+        if not isinstance(r, list):
+            continue
+        cell_vid = (get_cell(r, "venue_id") or "").strip()
+        sr = (body_sheet_rows[off] if body_sheet_rows and off < len(body_sheet_rows) else off + 2)
+        obj: Dict[str, Any] = {
+            "_venue_id": _slugify_venue_id(cell_vid) if cell_vid else vid,
+            "sheet_row": sr,
+            "timestamp": get_cell(r, "timestamp"),
+            "name": get_cell(r, "name"),
+            "phone": get_cell(r, "phone"),
+            "date": get_cell(r, "date"),
+            "time": get_cell(r, "time"),
+            "party_size": get_cell(r, "party_size"),
+            "language": get_cell(r, "language"),
+            "status": get_cell(r, "status"),
+            "vip": get_cell(r, "vip"),
+            "entry_point": get_cell(r, "entry_point"),
+            "tier": get_cell(r, "tier"),
+            "queue": get_cell(r, "queue"),
+            "business_context": get_cell(r, "business_context"),
+            "budget": get_cell(r, "budget"),
+            "notes": get_cell(r, "notes"),
+            "vibe": get_cell(r, "vibe"),
+        }
+        for hk, idx in hmap.items():
+            if hk in obj:
+                continue
+            if idx < 0 or idx >= len(r):
+                continue
+            val = r[idx]
+            if val is None or str(val).strip() == "":
+                continue
+            obj[hk] = str(val)
+        out.append(obj)
+    return out
+
+
 @app.get("/admin/api/leads/filter")
 def admin_api_leads_filter():
     """
@@ -22042,67 +22310,17 @@ def admin_api_leads_filter():
     errors: List[Dict[str, Any]] = []
     items: List[Dict[str, Any]] = []
     
-    def rows_to_items(rows: List[List[str]], vid: str, body_sheet_rows: Optional[List[int]] = None) -> None:
-        if not rows or len(rows) < 2:
-            return
-        header = rows[0] or []
-        body = rows[1:] or []
-        
-        hmap: Dict[str, int] = {}
-        for i, h in enumerate(header):
-            try:
-                hmap[_normalize_header(h)] = i
-            except:
-                pass
-        
-        def get_cell(r: List[str], key: str) -> str:
-            i = hmap.get(_normalize_header(key), -1)
-            if i < 0 or i >= len(r):
-                return ""
-            v = r[i]
-            return "" if v is None else str(v)
-        
-        for off, r in enumerate(body):
-            if not isinstance(r, list):
-                continue
-            cell_vid = (get_cell(r, "venue_id") or "").strip()
-            sr = (body_sheet_rows[off] if body_sheet_rows and off < len(body_sheet_rows) else off + 2)
-            obj = {
-                "_venue_id": _slugify_venue_id(cell_vid) if cell_vid else vid,
-                "sheet_row": sr,
-                "timestamp": get_cell(r, "timestamp"),
-                "name": get_cell(r, "name"),
-                "phone": get_cell(r, "phone"),
-                "date": get_cell(r, "date"),
-                "time": get_cell(r, "time"),
-                "party_size": get_cell(r, "party_size"),
-                "language": get_cell(r, "language"),
-                "status": get_cell(r, "status"),
-                "vip": get_cell(r, "vip"),
-                "entry_point": get_cell(r, "entry_point"),
-                "tier": get_cell(r, "tier"),
-                "queue": get_cell(r, "queue"),
-                "business_context": get_cell(r, "business_context"),
-                "budget": get_cell(r, "budget"),
-                "notes": get_cell(r, "notes"),
-                "vibe": get_cell(r, "vibe"),
-            }
-            for hk, idx in hmap.items():
-                if hk in obj:
-                    continue
-                if idx < 0 or idx >= len(r):
-                    continue
-                val = r[idx]
-                if val is None or str(val).strip() == "":
-                    continue
-                obj[hk] = str(val)
-            items.append(obj)
-    
     # Read leads ONLY from the target venue (NO cross-venue data leakage)
     try:
         rows = read_leads(limit=limit + 100, venue_id=target_venue_id) or []
         bsr = (_LEADS_CACHE_BY_VENUE.get(_slugify_venue_id(target_venue_id)) or {}).get("body_sheet_rows") or []
-        rows_to_items(rows, target_venue_id, body_sheet_rows=bsr if isinstance(bsr, list) else None)
+        items.extend(
+            _lead_items_from_sheet_rows(
+                rows,
+                target_venue_id,
+                body_sheet_rows=bsr if isinstance(bsr, list) else None,
+            )
+        )
     except Exception as e:
         errors.append({"venue_id": target_venue_id, "error": str(e)})
     
@@ -22147,6 +22365,105 @@ def admin_api_leads_filter():
         },
         "errors": errors,
     })
+
+
+@app.get("/admin/api/leads/waitlist")
+def admin_api_leads_waitlist():
+    """List sheet leads for the current venue whose status is Waitlist (for admin modal)."""
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    try:
+        lim = int(request.args.get("limit") or 500)
+        lim = max(1, min(2000, lim))
+    except Exception:
+        lim = 500
+    target_venue_id = (request.args.get("venue_id") or request.args.get("venue") or "").strip()
+    if not target_venue_id:
+        try:
+            target_venue_id = _slugify_venue_id(_venue_id()).lower()
+        except Exception:
+            target_venue_id = DEFAULT_VENUE_ID.lower()
+    else:
+        target_venue_id = _slugify_venue_id(target_venue_id).lower()
+    errors: List[Any] = []
+    items: List[Dict[str, Any]] = []
+    try:
+        rows = read_leads(limit=lim + 100, venue_id=target_venue_id) or []
+        bsr = (_LEADS_CACHE_BY_VENUE.get(_slugify_venue_id(target_venue_id)) or {}).get("body_sheet_rows") or []
+        items = _lead_items_from_sheet_rows(
+            rows,
+            target_venue_id,
+            body_sheet_rows=bsr if isinstance(bsr, list) else None,
+        )
+    except Exception as e:
+        errors.append(str(e))
+    wl = [it for it in items if str(it.get("status") or "").strip().lower() == "waitlist"]
+
+    def _ts(o: Dict[str, Any]) -> str:
+        for k in ("timestamp", "created_at", "created", "ts"):
+            v = o.get(k)
+            if v:
+                return str(v)
+        return ""
+
+    wl.sort(key=_ts, reverse=True)
+    return jsonify({"ok": True, "items": wl, "count": len(wl), "errors": errors})
+
+
+@app.post("/admin/api/leads/waitlist/promote")
+def admin_api_leads_waitlist_promote():
+    """Promote Waitlist sheet rows to New (same sheet; staff follow-up as normal leads)."""
+    ok, resp = _require_admin(min_role="manager")
+    if not ok:
+        return resp
+    data = request.get_json(silent=True) or {}
+    row_nums = data.get("rows") or data.get("sheet_rows") or []
+    if not isinstance(row_nums, list) or not row_nums:
+        return jsonify({"ok": False, "error": "rows required"}), 400
+
+    vid = _venue_id()
+    ws = get_sheet(venue_id=vid)
+    header = ensure_sheet_schema(ws)
+    hmap = header_map(header)
+    status_col = hmap.get("status")
+    if not status_col:
+        return jsonify({"ok": False, "error": "Missing status column"}), 500
+
+    promoted: List[int] = []
+    errors: List[Dict[str, Any]] = []
+    for rn in row_nums:
+        try:
+            rn_int = int(rn)
+        except Exception:
+            errors.append({"row": rn, "error": "bad_row"})
+            continue
+        if rn_int < 2:
+            errors.append({"row": rn, "error": "bad_row"})
+            continue
+        row_vals = ws.row_values(rn_int) or []
+        if not row_vals:
+            errors.append({"row": rn_int, "error": "not_found"})
+            continue
+        vcol = hmap.get("venue_id")
+        if vcol:
+            row_vid = _slugify_venue_id(str((row_vals[vcol - 1] if len(row_vals) >= vcol else "") or DEFAULT_VENUE_ID))
+            if row_vid != _slugify_venue_id(vid):
+                errors.append({"row": rn_int, "error": "wrong_venue"})
+                continue
+        st_ix = status_col - 1
+        cur = (row_vals[st_ix] if len(row_vals) > st_ix else "") or ""
+        if str(cur).strip().lower() != "waitlist":
+            errors.append({"row": rn_int, "error": "not_waitlist", "status": str(cur).strip()})
+            continue
+        ws.update_cell(rn_int, status_col, "New")
+        promoted.append(rn_int)
+    try:
+        _LEADS_CACHE_BY_VENUE.pop(_slugify_venue_id(vid), None)
+    except Exception:
+        pass
+    _audit("lead.waitlist_promote", {"rows": promoted, "errors": len(errors)})
+    return jsonify({"ok": True, "promoted": promoted, "errors": errors})
 
 
 @app.get("/admin/api/leads/filter-local")
