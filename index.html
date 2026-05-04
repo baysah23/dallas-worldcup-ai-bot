@@ -8255,8 +8255,9 @@
         }
 
         try {
+          const menuVenue = encodeURIComponent(state.venue_id || "");
           const data = await fetchJSON(
-            `/menu.json?lang=${encodeURIComponent(state.lang || "en")}`,
+            `/menu.json?lang=${encodeURIComponent(state.lang || "en")}&venue=${menuVenue}`,
           );
           menuCache = data;
 
