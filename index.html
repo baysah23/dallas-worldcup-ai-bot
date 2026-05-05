@@ -8255,8 +8255,9 @@
         }
 
         try {
+          const menuVenue = encodeURIComponent(state.venue_id || "");
           const data = await fetchJSON(
-            `/menu.json?lang=${encodeURIComponent(state.lang || "en")}`,
+            `/menu.json?lang=${encodeURIComponent(state.lang || "en")}&venue=${menuVenue}`,
           );
           menuCache = data;
 
@@ -8337,9 +8338,67 @@
         }
       }
 
+      async function refreshFanOps() {
+        const vid = (state.venue_id || "").trim();
+        if (!vid) {
+          window.__fanOps = null;
+          return null;
+        }
+        try {
+          const r = await fetch("/api/fan/ops?venue=" + encodeURIComponent(vid), {
+            cache: "no-store",
+          });
+          const d = await r.json().catch(() => null);
+          if (d && d.ok) {
+            window.__fanOps = d;
+            return d;
+          }
+        } catch (e) {}
+        window.__fanOps = null;
+        return null;
+      }
+
+      function fanPauseBlocksIntake() {
+        const o = window.__fanOps;
+        return !!(o && o.pause_reservations && !o.waitlist_mode);
+      }
+
+      function fanVipOnly() {
+        const o = window.__fanOps;
+        return !!(o && o.vip_only);
+      }
+
+      function fanIntakeDeclaresVip(entryPoint, vibe, notes, business_context) {
+        const ep = (entryPoint || "").toLowerCase().replace(/-/g, "_");
+        if (ep === "vip_vibe") return true;
+        const blob = `${vibe || ""} ${notes || ""} ${business_context || ""}`.toLowerCase();
+        return /\bvip\b/.test(blob);
+      }
+
+      function fanMaxParty() {
+        const o = window.__fanOps;
+        const n =
+          o && o.max_party_size != null
+            ? parseInt(String(o.max_party_size), 10)
+            : 0;
+        return Number.isFinite(n) && n > 0 ? n : 0;
+      }
+
       async function loadVIP() {
         const box = $("vipBody");
         if (!box) return;
+        await refreshFanOps();
+
+        if (fanVipOnly()) {
+          box.innerHTML = `
+    <div class="hint">
+      <b>VIP-only mode is on.</b><br/>
+      Start from <b>VIP Vibe</b> (recommended) or use <b>Reserve now</b> / <b>Build my match day</b> and include the word <b>VIP</b> in your experience notes so your request is tagged correctly.<br/>
+      In chat, type <b>VIP</b> to begin a VIP reservation, or ask about the waitlist if VIP is not available for you.
+    </div>
+  `;
+          return;
+        }
 
         box.innerHTML = `
     <div class="hint">
@@ -8572,8 +8631,16 @@
       }
 
       let currentEntryPoint = "reserve_now";
-      function openModal(entryPoint) {
+      async function openModal(entryPoint) {
         currentEntryPoint = entryPoint || currentEntryPoint || "reserve_now";
+        await refreshFanOps();
+        if (fanPauseBlocksIntake()) {
+          showHotToast(
+            "warning",
+            "Reservations are temporarily paused. Please check back soon, or ask a staff member for help.",
+          );
+          return;
+        }
         const m = $("intakeModal");
         if (!m) return;
         applyModalConfig(currentEntryPoint);
@@ -8632,6 +8699,58 @@
           return;
         }
 
+        await refreshFanOps();
+        if (fanPauseBlocksIntake()) {
+          showHotToast(
+            "warning",
+            "Reservations are temporarily paused. Please check back soon, or ask a staff member for help.",
+          );
+          window.__intakeSubmitting = false;
+          if (btn) {
+            btn.removeAttribute("disabled");
+            const cfg = INTAKE_CONFIG[currentEntryPoint || "reserve_now"];
+            btn.textContent = (cfg && cfg.cta) || "Submit request";
+          }
+          return;
+        }
+        if (
+          fanVipOnly() &&
+          !fanIntakeDeclaresVip(
+            currentEntryPoint || "reserve_now",
+            iVibe,
+            iNotes,
+            iCity,
+          )
+        ) {
+          showHotToast(
+            "warning",
+            "Reservations are VIP-only right now. Open the VIP request flow or include VIP in your notes, or ask in chat about the waitlist.",
+          );
+          window.__intakeSubmitting = false;
+          if (btn) {
+            btn.removeAttribute("disabled");
+            const cfg = INTAKE_CONFIG[currentEntryPoint || "reserve_now"];
+            btn.textContent = (cfg && cfg.cta) || "Submit request";
+          }
+          return;
+        }
+        const partyNum =
+          parseInt(String(iGroup).replace(/\D/g, ""), 10) || 0;
+        const maxP = fanMaxParty();
+        if (maxP > 0 && partyNum > maxP) {
+          showHotToast(
+            "warning",
+            "That party size is above our limit for this venue. Please adjust the group size or call the venue for larger parties.",
+          );
+          window.__intakeSubmitting = false;
+          if (btn) {
+            btn.removeAttribute("disabled");
+            const cfg = INTAKE_CONFIG[currentEntryPoint || "reserve_now"];
+            btn.textContent = (cfg && cfg.cta) || "Submit request";
+          }
+          return;
+        }
+
         try {
           // 4. Send to Server
           const res = await fetch("/api/intake", {
@@ -8657,8 +8776,15 @@
 
           // 5. Check Success
           if (res.ok) {
-            // SUCCESS POPUP
-            showHotToast("success", "Request saved! We'll be in touch.");
+            const st = (data.status || "").toString().toLowerCase();
+            if (st === "waitlist") {
+              showHotToast(
+                "success",
+                "Added to the waitlist. We'll follow up when spots open.",
+              );
+            } else {
+              showHotToast("success", "Request saved! We'll be in touch.");
+            }
 
             closeModal();
 
@@ -8676,12 +8802,17 @@
             }
           } else {
             // 7. ERROR HANDLING
-            let errorMsg = data.error || "Unknown issue";
+            let errorMsg =
+              data.message || data.error || "Unknown issue";
+            if (typeof errorMsg === "string") {
+              errorMsg = errorMsg.replace(/\*\*/g, "");
+            }
 
             // Rewrite 500 or specific DB errors to generic "Server Error"
             if (
               res.status === 500 ||
-              errorMsg.includes("Failed to store intake")
+              (typeof errorMsg === "string" &&
+                errorMsg.includes("Failed to store intake"))
             ) {
               errorMsg = "Server Error: Please try again later.";
             }
@@ -8711,8 +8842,7 @@
         });
 
         $("ctaReserve")?.addEventListener("click", () => {
-          // Reserve now opens the intake modal (concierge form style)
-          openModal("reserve_now");
+          void openModal("reserve_now");
         });
 
         function applyQuickPrefill(q) {
@@ -8737,7 +8867,7 @@
         // Quick chips -> prefill intake modal
         $$(".quickChips .chip").forEach((btn) => {
           btn.addEventListener("click", () => {
-            openModal(
+            void openModal(
               (btn.dataset?.q || "").toLowerCase().includes("vip")
                 ? "vip_vibe"
                 : (btn.dataset?.q || "").toLowerCase().includes("table for 4")
@@ -8757,7 +8887,9 @@
           setSection("schedule"),
         );
         $("tileMenu")?.addEventListener("click", () => setSection("menu"));
-        $("tilePlan")?.addEventListener("click", () => openModal("match_day"));
+        $("tilePlan")?.addEventListener("click", () =>
+          void openModal("match_day"),
+        );
 
         // Pills
         $("pillLang")?.addEventListener("click", () => cycleLang());
@@ -8838,6 +8970,7 @@
             // === FIX: Store venue context in state for persistent chat context ===
             state.venue_id = d.venue_id || venueId || "";
             state.venue_name = d.venue_name || "";
+            void refreshFanOps();
             // Greeting is never read from venue JSON; chat welcome uses hardcoded WELCOME_*_BY_LANG only.
             state.venue_greeting = "";
 
@@ -8881,6 +9014,7 @@
         initScheduleHandlers();
         startHeroCountdown();
         loadVenueIdentityLine();
+        void refreshFanOps();
         relocateMatchDayOpsToggles();
         setSection("home");
         ensureChatWelcome();
