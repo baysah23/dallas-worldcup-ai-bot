@@ -5681,6 +5681,13 @@ def _lead_ts_to_dt(ts: str) -> Optional[datetime]:
         raw = str(ts or "").strip()
         if not raw:
             return None
+        # Excel/Google serial datetime (days since 1899-12-30).
+        if re.fullmatch(r"\d+(\.\d+)?", raw):
+            try:
+                base = datetime(1899, 12, 30, tzinfo=timezone.utc)
+                return base + timedelta(days=float(raw))
+            except Exception:
+                pass
         if raw.endswith("Z"):
             try:
                 dt = datetime.fromisoformat(raw[:-1])
@@ -17567,6 +17574,9 @@ def _build_summary_operator_view(
     top_hours: List[Dict[str, Any]],
     avg_party_size: float = 0.0,
     avg_daily_bookings_30: float = 0.0,
+    booking_count: int = 0,
+    late_night_ratio: float = 0.0,
+    large_group_ratio: float = 0.0,
 ) -> Dict[str, Any]:
     """Translate the daily revenue summary into a quick business snapshot.
 
@@ -17578,33 +17588,36 @@ def _build_summary_operator_view(
     vip_n = int(stats.get("vip_count") or 0)
     reg_n = int(stats.get("regular_count") or 0)
     rev = float(stats.get("estimated_revenue") or 0)
-    bud_parsed = float(stats.get("budget_sum_parsed") or 0)
+    bookings = int(booking_count or stats.get("total_reservations") or 0)
 
-    vip_ratio = (vip_n / total) if total else 0.0
+    vip_ratio = (vip_n / bookings) if bookings else 0.0
     baseline = float(avg_daily_bookings_30 or 0)
+    rev_per_booking = (rev / bookings) if bookings else 0.0
 
-    if total == 0:
+    if bookings == 0:
         demand = "Quiet"
-    elif baseline > 0 and total >= max(20.0, baseline * 1.7):
+    elif baseline > 0 and bookings >= max(20.0, baseline * 1.7):
         demand = "Surge"
-    elif baseline > 0 and total >= max(12.0, baseline * 1.2):
+    elif baseline > 0 and bookings >= max(12.0, baseline * 1.2):
         demand = "Strong"
-    elif total >= 20:
+    elif bookings >= 20:
         demand = "Surge"
-    elif total >= 12:
+    elif bookings >= 12:
         demand = "Strong"
-    elif total >= 6:
+    elif bookings >= 6:
         demand = "Steady"
     else:
         demand = "Light"
 
     if demand in ("Strong", "Surge"):
-        suffix = ""
-        if vip_ratio >= 0.30:
-            suffix = " \u2014 VIP guests drove demand"
-        elif bud_parsed > 0 and rev >= max(1000.0, bud_parsed * 1.0):
-            suffix = " \u2014 Budgets trending up"
-        headline = f"Today: Strong Revenue Day{suffix}"
+        if vip_ratio >= 0.30 and rev_per_booking >= 450:
+            headline = "Today: Strong Revenue Day \u2014 VIP guests drove demand"
+        elif rev_per_booking >= 350:
+            headline = "Today: Strong Revenue Day \u2014 high-value bookings"
+        elif demand == "Surge":
+            headline = "Today: Strong Revenue Day \u2014 high reservation volume"
+        else:
+            headline = "Today: Strong Revenue Day"
     elif demand == "Steady":
         headline = "Today: Steady Day"
     elif demand == "Light":
@@ -17624,40 +17637,37 @@ def _build_summary_operator_view(
     if top_types:
         label_lower = str((top_types[0] or {}).get("key", "")).lower()
 
-    if vip_ratio >= 0.30 and vip_n > 0:
+    if vip_ratio >= 0.30 and vip_n > 0 and rev_per_booking >= 450:
         top_driver = "VIP Upgrades"
+    elif late_night_ratio >= 0.35:
+        top_driver = "Late-Night Demand"
+    elif large_group_ratio >= 0.35 or avg_party_size >= 6:
+        top_driver = "Large Groups"
     elif "match" in label_lower or "world cup" in label_lower or "fixture" in label_lower or "kickoff" in label_lower:
         top_driver = "Match-Day Traffic"
-    elif avg_party_size >= 6:
-        top_driver = "Large Groups"
-    elif peak_hour is not None and peak_hour >= 22:
-        top_driver = "Late-Night Demand"
-    elif "vip" in label_lower:
+    elif "vip" in label_lower and vip_n > 0:
         top_driver = "VIP Upgrades"
-    elif top_types:
-        # Fall back to a humanized version of the most common request type / entry point
-        raw = str((top_types[0] or {}).get("key", "")).strip()
-        if raw and raw != "(unspecified)":
-            top_driver = raw[:40]
 
-    if total == 0:
+    if bookings == 0:
         insight = (
             "No reservations recorded for this date yet \u2014 confirm sheet sync and check "
             "active entry points if this looks unexpected."
         )
-    elif vip_ratio >= 0.25 and vip_n > 0:
+    elif top_driver == "VIP Upgrades":
         pct = int(round(vip_ratio * 100))
         insight = f"VIP guests made up {pct}% of traffic and drove the strongest revenue signal today."
-    elif avg_party_size >= 6:
+    elif top_driver == "Large Groups":
         insight = (
             f"Average party size is {avg_party_size:.1f} \u2014 large groups are the main "
             "driver, plan table layouts and staffing accordingly."
         )
-    elif peak_hour is not None and peak_hour >= 19:
+    elif top_driver == "Late-Night Demand" and peak_hour is not None:
         insight = (
             f"Most demand came after {_format_hour_12h(peak_hour)} \u2014 late-shift staffing "
             "is the key takeaway for next time."
         )
+    elif top_driver == "Match-Day Traffic":
+        insight = "Match-day requests led today \u2014 align host flow and pre-service prep around kickoff traffic."
     elif peak_hour is not None:
         insight = f"Demand concentrated around {_format_hour_12h(peak_hour)} \u2014 adjust prep and host coverage to that window."
     else:
@@ -17665,7 +17675,7 @@ def _build_summary_operator_view(
 
     revenue_value = _format_money_compact(rev) if rev > 0 else "\u2014"
     guests_value = str(total)
-    vip_mix_sub = f"{vip_n} VIP \u00b7 {reg_n} Regular" if total else "\u2014"
+    vip_mix_sub = f"{vip_n} VIP \u00b7 {reg_n} Regular" if bookings else "\u2014"
 
     return {
         "headline": headline,
@@ -17678,7 +17688,7 @@ def _build_summary_operator_view(
         "insight": insight,
         "cards": [
             {"label": "Revenue", "value": revenue_value},
-            {"label": "Guests", "value": guests_value, "sub": vip_mix_sub},
+            {"label": "Guests", "value": guests_value, "sub": f"{bookings} reservations \u00b7 {vip_mix_sub}"},
             {"label": "Demand Level", "value": demand, "tone": demand.lower()},
             {"label": "Top Driver", "value": top_driver},
         ],
@@ -17849,6 +17859,7 @@ def admin_api_daily_summary():
         ep_i = _col_idx("entry_point", "entry", "source")
         q_i = _col_idx("queue", "intent", "request_type")
         party_i = _col_idx("party_size", "party", "guests", "pax")
+        status_i = _col_idx("status", "reservation_status")
 
         all_vals = ws.get_all_values() or []
         rows = all_vals[1:] if len(all_vals) > 1 else []
@@ -17860,13 +17871,7 @@ def admin_api_daily_summary():
             s = (r[ts_i] or "").strip()
             if not s:
                 return None
-            try:
-                return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(timezone.utc)
-            except Exception:
-                try:
-                    return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
-                except Exception:
-                    return None
+            return _lead_ts_to_dt(s)
 
         def row_is_vip(r: list) -> bool:
             if vip_i >= 0 and vip_i < len(r):
@@ -17878,6 +17883,12 @@ def admin_api_daily_summary():
                 if "vip" in t:
                     return True
             return False
+
+        def row_is_countable(r: list) -> bool:
+            if status_i < 0 or status_i >= len(r):
+                return True
+            s = (r[status_i] or "").strip().lower()
+            return s not in ("cancelled", "canceled", "no-show", "denied")
 
         day_rows: List[list] = []
         type_counts: Dict[str, int] = {}
@@ -17891,10 +17902,15 @@ def admin_api_daily_summary():
         vip_30 = 0
         party_sum = 0.0
         party_count = 0
+        guest_total = 0
+        late_night_bookings = 0
+        large_group_bookings = 0
 
         for r in rows:
             dt = parse_ts_cell(r)
             if dt is None:
+                continue
+            if not row_is_countable(r):
                 continue
             age_days = (now_utc - dt).total_seconds() / 86400.0
             if age_days <= 7.0:
@@ -17924,20 +17940,30 @@ def admin_api_daily_summary():
                 label = "(unspecified)"
             type_counts[label] = type_counts.get(label, 0) + 1
             hour_counts[dt.strftime("%H:00")] = hour_counts.get(dt.strftime("%H:00"), 0) + 1
+            if dt.hour >= 22:
+                late_night_bookings += 1
             if budget_i >= 0 and budget_i < len(r):
                 revenue_sum += _parse_budget_to_number(r[budget_i])
             if party_i >= 0 and party_i < len(r):
                 try:
                     pm = re.search(r"(\d+)", str(r[party_i] or ""))
                     if pm:
-                        party_sum += float(pm.group(1))
+                        party = float(pm.group(1))
+                        party_sum += party
                         party_count += 1
+                        guest_total += int(party)
+                        if party >= 6:
+                            large_group_bookings += 1
                 except Exception:
                     pass
+            else:
+                guest_total += 1
 
         total = len(day_rows)
         vip_n = sum(1 for r in day_rows if row_is_vip(r))
         reg_n = max(0, total - vip_n)
+        if guest_total <= 0 and total > 0:
+            guest_total = total
 
         top_types = sorted(type_counts.items(), key=lambda x: x[1], reverse=True)[:5]
         top_hours = sorted(hour_counts.items(), key=lambda x: x[1], reverse=True)[:5]
@@ -17968,7 +17994,8 @@ def admin_api_daily_summary():
             "ok": True,
             "date": day_date.isoformat(),
             "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "total_guests": total,
+            "total_guests": guest_total,
+            "total_reservations": total,
             "vip_count": vip_n,
             "regular_count": reg_n,
             "estimated_revenue": round(est_revenue, 2),
@@ -17996,6 +18023,9 @@ def admin_api_daily_summary():
                 peak_hours_list,
                 avg_party_size=avg_party_size,
                 avg_daily_bookings_30=avg_daily_bookings_30,
+                booking_count=total,
+                late_night_ratio=(late_night_bookings / total) if total else 0.0,
+                large_group_ratio=(large_group_bookings / total) if total else 0.0,
             )
         except Exception:
             result["operator_view"] = None
