@@ -20228,8 +20228,6 @@ th{
 
   const state = {venues:[], filter:'all', selected:'', leadsPage:1, leadsTotal:0};
 
-  let demoEnabled = false;
-
   function setDiag(s){
     const el = document.getElementById('diagBox') || document.getElementById('leadsDiag');
     if(el) el.textContent = String(s||'');
@@ -20291,7 +20289,9 @@ th{
     try{
       const venue_id = (state.selected || '').trim();
       if(!venue_id){ setDiag('Select a venue first'); return; }
-      const next = !demoEnabled;
+      const selectedVenue = (state.venues || []).find(v => v.venue_id === venue_id);
+      const currentDemoEnabled = selectedVenue ? selectedVenue.demo_enabled : false;
+      const next = !currentDemoEnabled;
       const r = await fetch('/super/api/demo_mode?super_key='+encodeURIComponent(super_key), {
         method:'POST',
         headers: hdrs(),
@@ -20299,8 +20299,7 @@ th{
       });
       const j = await r.json().catch(()=>({}));
       if(!j.ok) throw new Error(j.error||('HTTP '+r.status));
-      demoEnabled = !!j.enabled;
-      setDiag('demo_mode='+(demoEnabled?'ON':'OFF'));
+      setDiag('demo_mode='+(next?'ON':'OFF'));
       await loadVenues();
       renderVenueDetails();
     }catch(e){
@@ -20464,7 +20463,7 @@ th{
     '<div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">'+
       '<button class="btn primary" id="btnSaveIdentity">Save</button>'+
       '<button class="btn" id="vdActive">'+(f.active?'Deactivate':'Activate')+'</button>'+
-      '<button class="btn" id="vdDemo">Demo Mode: '+(demoEnabled?'ON':'OFF')+'</button>'+
+      '<button class="btn" id="vdDemo">Demo Mode: '+(v.demo_enabled?'ON':'OFF')+'</button>'+
       '<button class="btn" id="vdCheck">Re-check Sheet</button>'+
       '<button class="btn" id="vdRotate">Rotate Keys</button>'+
       '<button class="btn" id="vdSetSheet">Set Sheet…</button>'+
