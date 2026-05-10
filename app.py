@@ -20314,7 +20314,7 @@ th{
     return '/admin?key='+encodeURIComponent(k)+'&venue='+encodeURIComponent(vid);
   }
   function hesc(s){s=(s===null||s===undefined)?'':String(s);return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
-  function hdrs(extra){const h={'Content-Type':'application/json'}; if(super_key) h['X-Super-Key']=super_key; if(demoEnabled) h['X-Demo-Mode']='1'; if(extra) Object.assign(h,extra); return h;}
+  function hdrs(extra){const h={'Content-Type':'application/json'}; if(super_key) h['X-Super-Key']=super_key; if(extra) Object.assign(h,extra); return h;}
 
   function setActiveTab(which){
     document.getElementById('tabVenues').classList.toggle('active', which==='venues');
@@ -21108,39 +21108,41 @@ def _request_venue_hint() -> str:
     return ""
 
 def _demo_mode_enabled(venue_id: Optional[str] = None) -> bool:
+    """Return True if demo (PII mask / write guard) applies for this venue.
+
+    When ``enabled_by_venue`` is present and non-empty, only that map is used
+    (explicit per-venue on/off). Legacy top-level ``enabled`` and global cookies
+    apply only if there is no per-venue map — avoids cross-venue bleed when one
+    venue is toggled.
+    """
     vid = _slugify_venue_id(venue_id or _request_venue_hint())
     rec = _demo_mode_record()
+    by_venue = rec.get("enabled_by_venue") if isinstance(rec.get("enabled_by_venue"), dict) else {}
+    has_per_venue = bool(by_venue)
 
-    # Preferred: per-venue switch map.
-    try:
-        by_venue = rec.get("enabled_by_venue") if isinstance(rec.get("enabled_by_venue"), dict) else {}
-        if vid and vid in by_venue:
-            return bool(by_venue.get(vid))
-    except Exception:
-        pass
+    if has_per_venue:
+        if vid:
+            return bool(by_venue.get(vid, False))
+        return False
 
-    # Legacy fallback: old global flag.
+    # Legacy: no per-venue map yet — honor global flag and request hints.
     try:
         if bool(rec.get("enabled")):
             return True
     except Exception:
         pass
-
-    # Back-compat request flags
     try:
-        # Explicit header wins (used by Super Admin UI fetches)
-        if str(request.headers.get("X-Demo-Mode","")).strip() in ("1","true","yes","on"):
+        if str(request.headers.get("X-Demo-Mode", "")).strip().lower() in ("1", "true", "yes", "on"):
             return True
     except Exception:
         pass
     try:
-        # Cookie set by /super/api/demo_mode
-        if str(request.cookies.get("demo_mode","")).strip() in ("1","true","yes","on"):
+        if str(request.cookies.get("demo_mode", "")).strip().lower() in ("1", "true", "yes", "on"):
             return True
     except Exception:
         pass
     try:
-        if str(request.args.get("demo","")).strip() in ("1","true","yes","on"):
+        if str(request.args.get("demo", "")).strip().lower() in ("1", "true", "yes", "on"):
             return True
     except Exception:
         pass
@@ -21209,8 +21211,9 @@ def super_api_demo_mode():
         rec = _demo_mode_record()
         by_venue = rec.get("enabled_by_venue") if isinstance(rec.get("enabled_by_venue"), dict) else {}
         by_venue[venue_id] = bool(enabled)
+        # Do not set top-level "enabled" — it caused cross-venue bleed (all venues
+        # saw demo on when any venue was toggled on). Per-venue map is source of truth.
         demo_record = {
-            "enabled": bool(enabled),  # legacy compatibility
             "enabled_by_venue": by_venue,
             "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
@@ -21430,13 +21433,13 @@ def super_api_venues_rotate_keys():
     if not ok:
         return resp
 
-    if _demo_mode_enabled():
-        return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
-
     body = request.get_json(silent=True) or {}
     venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
     if not venue_id:
         return jsonify({"ok": False, "error": "venue_id required"}), 400
+
+    if _demo_mode_enabled(venue_id):
+        return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
 
     venues = _load_venues_from_disk() or {}
     cfg = venues.get(venue_id)
@@ -21891,12 +21894,16 @@ def admin_api_leads_all():
         items = items[:limit]
 
 
-    # Demo Mode: mask PII for safe demos
-    if _demo_mode_enabled():
-        try:
-            items = [_apply_demo_mask_to_lead(x) for x in (items or [])]
-        except Exception:
-            pass
+    # Demo Mode: mask PII per venue (no cross-venue bleed)
+    try:
+        items = [
+            _apply_demo_mask_to_lead(x)
+            if _demo_mode_enabled(str(x.get("venue_id") or x.get("_venue_id") or ""))
+            else x
+            for x in (items or [])
+        ]
+    except Exception:
+        pass
 
     
     # Apply filters (defensive; never hard-fail)
@@ -24816,108 +24823,6 @@ def _handle_any_exception(e):
         pass
     # Default generic error
     return ("Internal Server Error", 500)
-
-def _get_super_admin_key():
-    return (os.environ.get("SUPER_ADMIN_KEY") or "").strip()
-
-
-# =========================
-# Demo Mode (Super Admin)
-# - UI-safe demos: mask PII + disable writes/exports/AI apply
-# - Activated by Super Admin via cookie + header X-Demo-Mode: 1
-# =========================
-def _demo_mode_enabled(venue_id: Optional[str] = None) -> bool:
-    vid = _slugify_venue_id(venue_id or _request_venue_hint())
-    rec = _demo_mode_record()
-    try:
-        by_venue = rec.get("enabled_by_venue") if isinstance(rec.get("enabled_by_venue"), dict) else {}
-        if vid and vid in by_venue:
-            return bool(by_venue.get(vid))
-    except Exception:
-        pass
-    try:
-        if bool(rec.get("enabled")):
-            return True
-    except Exception:
-        pass
-    try:
-        if str(request.headers.get("X-Demo-Mode","")).strip() in ("1","true","yes","on"):
-            return True
-    except Exception:
-        pass
-    try:
-        if str(request.cookies.get("demo_mode","")).strip() in ("1","true","yes","on"):
-            return True
-    except Exception:
-        pass
-    try:
-        if str(request.args.get("demo","")).strip() in ("1","true","yes","on"):
-            return True
-    except Exception:
-        pass
-    return False
-
-def _mask_phone(v: str) -> str:
-    s = str(v or "").strip()
-    if not s:
-        return ""
-    digits = re.sub(r"\D+", "", s)
-    if len(digits) >= 4:
-        return "•••-•••-" + digits[-4:]
-    return "•••"
-
-def _mask_email(v: str) -> str:
-    s = str(v or "").strip()
-    if "@" not in s:
-        return "•••"
-    user, dom = s.split("@", 1)
-    u = (user[:1] + "•••") if user else "•••"
-    # keep TLD hint
-    parts = dom.split(".")
-    if len(parts) >= 2:
-        d = (parts[0][:1] + "•••") + "." + parts[-1]
-    else:
-        d = dom[:1] + "•••"
-    return u + "@" + d
-
-def _apply_demo_mask_to_lead(item: Dict[str, Any]) -> Dict[str, Any]:
-    x = dict(item or {})
-    # Common fields across your lead schemas
-    if "phone" in x:
-        x["phone"] = _mask_phone(x.get("phone"))
-    if "email" in x:
-        x["email"] = _mask_email(x.get("email"))
-    if "contact" in x and isinstance(x.get("contact"), str):
-        # if contact stores phone/email
-        c = x.get("contact") or ""
-        if "@" in c:
-            x["contact"] = _mask_email(c)
-        else:
-            x["contact"] = _mask_phone(c)
-    return x
-
-def _is_super_admin_request():
-    try:
-        sk = _get_super_admin_key()
-        if not sk:
-            return False
-        for src in (
-            request.headers.get("X-Super-Key"),
-            request.args.get("super_key"),
-            request.cookies.get("super_key"),
-            request.args.get("key"),
-        ):
-            if src and str(src).strip() == sk:
-                return True
-    except Exception:
-        pass
-    return False
-
-def _require_super_admin():
-    if not _is_super_admin_request():
-        return False, (jsonify({"ok": False, "error": "unauthorized"}), 403)
-    return True, None
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
