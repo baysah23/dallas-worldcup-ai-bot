@@ -5681,6 +5681,13 @@ def _lead_ts_to_dt(ts: str) -> Optional[datetime]:
         raw = str(ts or "").strip()
         if not raw:
             return None
+        # Excel/Google serial datetime (days since 1899-12-30).
+        if re.fullmatch(r"\d+(\.\d+)?", raw):
+            try:
+                base = datetime(1899, 12, 30, tzinfo=timezone.utc)
+                return base + timedelta(days=float(raw))
+            except Exception:
+                pass
         if raw.endswith("Z"):
             try:
                 dt = datetime.fromisoformat(raw[:-1])
@@ -17567,6 +17574,9 @@ def _build_summary_operator_view(
     top_hours: List[Dict[str, Any]],
     avg_party_size: float = 0.0,
     avg_daily_bookings_30: float = 0.0,
+    booking_count: int = 0,
+    late_night_ratio: float = 0.0,
+    large_group_ratio: float = 0.0,
 ) -> Dict[str, Any]:
     """Translate the daily revenue summary into a quick business snapshot.
 
@@ -17578,33 +17588,36 @@ def _build_summary_operator_view(
     vip_n = int(stats.get("vip_count") or 0)
     reg_n = int(stats.get("regular_count") or 0)
     rev = float(stats.get("estimated_revenue") or 0)
-    bud_parsed = float(stats.get("budget_sum_parsed") or 0)
+    bookings = int(booking_count or stats.get("total_reservations") or 0)
 
-    vip_ratio = (vip_n / total) if total else 0.0
+    vip_ratio = (vip_n / bookings) if bookings else 0.0
     baseline = float(avg_daily_bookings_30 or 0)
+    rev_per_booking = (rev / bookings) if bookings else 0.0
 
-    if total == 0:
+    if bookings == 0:
         demand = "Quiet"
-    elif baseline > 0 and total >= max(20.0, baseline * 1.7):
+    elif baseline > 0 and bookings >= max(20.0, baseline * 1.7):
         demand = "Surge"
-    elif baseline > 0 and total >= max(12.0, baseline * 1.2):
+    elif baseline > 0 and bookings >= max(12.0, baseline * 1.2):
         demand = "Strong"
-    elif total >= 20:
+    elif bookings >= 20:
         demand = "Surge"
-    elif total >= 12:
+    elif bookings >= 12:
         demand = "Strong"
-    elif total >= 6:
+    elif bookings >= 6:
         demand = "Steady"
     else:
         demand = "Light"
 
     if demand in ("Strong", "Surge"):
-        suffix = ""
-        if vip_ratio >= 0.30:
-            suffix = " \u2014 VIP guests drove demand"
-        elif bud_parsed > 0 and rev >= max(1000.0, bud_parsed * 1.0):
-            suffix = " \u2014 Budgets trending up"
-        headline = f"Today: Strong Revenue Day{suffix}"
+        if vip_ratio >= 0.30 and rev_per_booking >= 450:
+            headline = "Today: Strong Revenue Day \u2014 VIP guests drove demand"
+        elif rev_per_booking >= 350:
+            headline = "Today: Strong Revenue Day \u2014 high-value bookings"
+        elif demand == "Surge":
+            headline = "Today: Strong Revenue Day \u2014 high reservation volume"
+        else:
+            headline = "Today: Strong Revenue Day"
     elif demand == "Steady":
         headline = "Today: Steady Day"
     elif demand == "Light":
@@ -17624,40 +17637,37 @@ def _build_summary_operator_view(
     if top_types:
         label_lower = str((top_types[0] or {}).get("key", "")).lower()
 
-    if vip_ratio >= 0.30 and vip_n > 0:
+    if vip_ratio >= 0.30 and vip_n > 0 and rev_per_booking >= 450:
         top_driver = "VIP Upgrades"
+    elif late_night_ratio >= 0.35:
+        top_driver = "Late-Night Demand"
+    elif large_group_ratio >= 0.35 or avg_party_size >= 6:
+        top_driver = "Large Groups"
     elif "match" in label_lower or "world cup" in label_lower or "fixture" in label_lower or "kickoff" in label_lower:
         top_driver = "Match-Day Traffic"
-    elif avg_party_size >= 6:
-        top_driver = "Large Groups"
-    elif peak_hour is not None and peak_hour >= 22:
-        top_driver = "Late-Night Demand"
-    elif "vip" in label_lower:
+    elif "vip" in label_lower and vip_n > 0:
         top_driver = "VIP Upgrades"
-    elif top_types:
-        # Fall back to a humanized version of the most common request type / entry point
-        raw = str((top_types[0] or {}).get("key", "")).strip()
-        if raw and raw != "(unspecified)":
-            top_driver = raw[:40]
 
-    if total == 0:
+    if bookings == 0:
         insight = (
             "No reservations recorded for this date yet \u2014 confirm sheet sync and check "
             "active entry points if this looks unexpected."
         )
-    elif vip_ratio >= 0.25 and vip_n > 0:
+    elif top_driver == "VIP Upgrades":
         pct = int(round(vip_ratio * 100))
         insight = f"VIP guests made up {pct}% of traffic and drove the strongest revenue signal today."
-    elif avg_party_size >= 6:
+    elif top_driver == "Large Groups":
         insight = (
             f"Average party size is {avg_party_size:.1f} \u2014 large groups are the main "
             "driver, plan table layouts and staffing accordingly."
         )
-    elif peak_hour is not None and peak_hour >= 19:
+    elif top_driver == "Late-Night Demand" and peak_hour is not None:
         insight = (
             f"Most demand came after {_format_hour_12h(peak_hour)} \u2014 late-shift staffing "
             "is the key takeaway for next time."
         )
+    elif top_driver == "Match-Day Traffic":
+        insight = "Match-day requests led today \u2014 align host flow and pre-service prep around kickoff traffic."
     elif peak_hour is not None:
         insight = f"Demand concentrated around {_format_hour_12h(peak_hour)} \u2014 adjust prep and host coverage to that window."
     else:
@@ -17665,7 +17675,7 @@ def _build_summary_operator_view(
 
     revenue_value = _format_money_compact(rev) if rev > 0 else "\u2014"
     guests_value = str(total)
-    vip_mix_sub = f"{vip_n} VIP \u00b7 {reg_n} Regular" if total else "\u2014"
+    vip_mix_sub = f"{vip_n} VIP \u00b7 {reg_n} Regular" if bookings else "\u2014"
 
     return {
         "headline": headline,
@@ -17678,7 +17688,7 @@ def _build_summary_operator_view(
         "insight": insight,
         "cards": [
             {"label": "Revenue", "value": revenue_value},
-            {"label": "Guests", "value": guests_value, "sub": vip_mix_sub},
+            {"label": "Guests", "value": guests_value, "sub": f"{bookings} reservations \u00b7 {vip_mix_sub}"},
             {"label": "Demand Level", "value": demand, "tone": demand.lower()},
             {"label": "Top Driver", "value": top_driver},
         ],
@@ -17849,6 +17859,7 @@ def admin_api_daily_summary():
         ep_i = _col_idx("entry_point", "entry", "source")
         q_i = _col_idx("queue", "intent", "request_type")
         party_i = _col_idx("party_size", "party", "guests", "pax")
+        status_i = _col_idx("status", "reservation_status")
 
         all_vals = ws.get_all_values() or []
         rows = all_vals[1:] if len(all_vals) > 1 else []
@@ -17860,13 +17871,7 @@ def admin_api_daily_summary():
             s = (r[ts_i] or "").strip()
             if not s:
                 return None
-            try:
-                return datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(timezone.utc)
-            except Exception:
-                try:
-                    return datetime.fromisoformat(s).replace(tzinfo=timezone.utc)
-                except Exception:
-                    return None
+            return _lead_ts_to_dt(s)
 
         def row_is_vip(r: list) -> bool:
             if vip_i >= 0 and vip_i < len(r):
@@ -17878,6 +17883,12 @@ def admin_api_daily_summary():
                 if "vip" in t:
                     return True
             return False
+
+        def row_is_countable(r: list) -> bool:
+            if status_i < 0 or status_i >= len(r):
+                return True
+            s = (r[status_i] or "").strip().lower()
+            return s not in ("cancelled", "canceled", "no-show", "denied")
 
         day_rows: List[list] = []
         type_counts: Dict[str, int] = {}
@@ -17891,10 +17902,15 @@ def admin_api_daily_summary():
         vip_30 = 0
         party_sum = 0.0
         party_count = 0
+        guest_total = 0
+        late_night_bookings = 0
+        large_group_bookings = 0
 
         for r in rows:
             dt = parse_ts_cell(r)
             if dt is None:
+                continue
+            if not row_is_countable(r):
                 continue
             age_days = (now_utc - dt).total_seconds() / 86400.0
             if age_days <= 7.0:
@@ -17924,20 +17940,30 @@ def admin_api_daily_summary():
                 label = "(unspecified)"
             type_counts[label] = type_counts.get(label, 0) + 1
             hour_counts[dt.strftime("%H:00")] = hour_counts.get(dt.strftime("%H:00"), 0) + 1
+            if dt.hour >= 22:
+                late_night_bookings += 1
             if budget_i >= 0 and budget_i < len(r):
                 revenue_sum += _parse_budget_to_number(r[budget_i])
             if party_i >= 0 and party_i < len(r):
                 try:
                     pm = re.search(r"(\d+)", str(r[party_i] or ""))
                     if pm:
-                        party_sum += float(pm.group(1))
+                        party = float(pm.group(1))
+                        party_sum += party
                         party_count += 1
+                        guest_total += int(party)
+                        if party >= 6:
+                            large_group_bookings += 1
                 except Exception:
                     pass
+            else:
+                guest_total += 1
 
         total = len(day_rows)
         vip_n = sum(1 for r in day_rows if row_is_vip(r))
         reg_n = max(0, total - vip_n)
+        if guest_total <= 0 and total > 0:
+            guest_total = total
 
         top_types = sorted(type_counts.items(), key=lambda x: x[1], reverse=True)[:5]
         top_hours = sorted(hour_counts.items(), key=lambda x: x[1], reverse=True)[:5]
@@ -17968,7 +17994,8 @@ def admin_api_daily_summary():
             "ok": True,
             "date": day_date.isoformat(),
             "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "total_guests": total,
+            "total_guests": guest_total,
+            "total_reservations": total,
             "vip_count": vip_n,
             "regular_count": reg_n,
             "estimated_revenue": round(est_revenue, 2),
@@ -17996,6 +18023,9 @@ def admin_api_daily_summary():
                 peak_hours_list,
                 avg_party_size=avg_party_size,
                 avg_daily_bookings_30=avg_daily_bookings_30,
+                booking_count=total,
+                late_night_ratio=(late_night_bookings / total) if total else 0.0,
+                large_group_ratio=(large_group_bookings / total) if total else 0.0,
             )
         except Exception:
             result["operator_view"] = None
@@ -20198,8 +20228,6 @@ th{
 
   const state = {venues:[], filter:'all', selected:'', leadsPage:1, leadsTotal:0};
 
-  let demoEnabled = false;
-
   function setDiag(s){
     const el = document.getElementById('diagBox') || document.getElementById('leadsDiag');
     if(el) el.textContent = String(s||'');
@@ -20261,7 +20289,9 @@ th{
     try{
       const venue_id = (state.selected || '').trim();
       if(!venue_id){ setDiag('Select a venue first'); return; }
-      const next = !demoEnabled;
+      const selectedVenue = (state.venues || []).find(v => v.venue_id === venue_id);
+      const currentDemoEnabled = selectedVenue ? selectedVenue.demo_enabled : false;
+      const next = !currentDemoEnabled;
       const r = await fetch('/super/api/demo_mode?super_key='+encodeURIComponent(super_key), {
         method:'POST',
         headers: hdrs(),
@@ -20269,8 +20299,7 @@ th{
       });
       const j = await r.json().catch(()=>({}));
       if(!j.ok) throw new Error(j.error||('HTTP '+r.status));
-      demoEnabled = !!j.enabled;
-      setDiag('demo_mode='+(demoEnabled?'ON':'OFF'));
+      setDiag('demo_mode='+(next?'ON':'OFF'));
       await loadVenues();
       renderVenueDetails();
     }catch(e){
@@ -20284,7 +20313,7 @@ th{
     return '/admin?key='+encodeURIComponent(k)+'&venue='+encodeURIComponent(vid);
   }
   function hesc(s){s=(s===null||s===undefined)?'':String(s);return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
-  function hdrs(extra){const h={'Content-Type':'application/json'}; if(super_key) h['X-Super-Key']=super_key; if(demoEnabled) h['X-Demo-Mode']='1'; if(extra) Object.assign(h,extra); return h;}
+  function hdrs(extra){const h={'Content-Type':'application/json'}; if(super_key) h['X-Super-Key']=super_key; if(extra) Object.assign(h,extra); return h;}
 
   function setActiveTab(which){
     document.getElementById('tabVenues').classList.toggle('active', which==='venues');
@@ -20434,7 +20463,7 @@ th{
     '<div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap">'+
       '<button class="btn primary" id="btnSaveIdentity">Save</button>'+
       '<button class="btn" id="vdActive">'+(f.active?'Deactivate':'Activate')+'</button>'+
-      '<button class="btn" id="vdDemo">Demo Mode: '+(demoEnabled?'ON':'OFF')+'</button>'+
+      '<button class="btn" id="vdDemo">Demo Mode: '+(v.demo_enabled?'ON':'OFF')+'</button>'+
       '<button class="btn" id="vdCheck">Re-check Sheet</button>'+
       '<button class="btn" id="vdRotate">Rotate Keys</button>'+
       '<button class="btn" id="vdSetSheet">Set Sheet…</button>'+
@@ -21078,39 +21107,41 @@ def _request_venue_hint() -> str:
     return ""
 
 def _demo_mode_enabled(venue_id: Optional[str] = None) -> bool:
+    """Return True if demo (PII mask / write guard) applies for this venue.
+
+    When ``enabled_by_venue`` is present and non-empty, only that map is used
+    (explicit per-venue on/off). Legacy top-level ``enabled`` and global cookies
+    apply only if there is no per-venue map — avoids cross-venue bleed when one
+    venue is toggled.
+    """
     vid = _slugify_venue_id(venue_id or _request_venue_hint())
     rec = _demo_mode_record()
+    by_venue = rec.get("enabled_by_venue") if isinstance(rec.get("enabled_by_venue"), dict) else {}
+    has_per_venue = bool(by_venue)
 
-    # Preferred: per-venue switch map.
-    try:
-        by_venue = rec.get("enabled_by_venue") if isinstance(rec.get("enabled_by_venue"), dict) else {}
-        if vid and vid in by_venue:
-            return bool(by_venue.get(vid))
-    except Exception:
-        pass
+    if has_per_venue:
+        if vid:
+            return bool(by_venue.get(vid, False))
+        return False
 
-    # Legacy fallback: old global flag.
+    # Legacy: no per-venue map yet — honor global flag and request hints.
     try:
         if bool(rec.get("enabled")):
             return True
     except Exception:
         pass
-
-    # Back-compat request flags
     try:
-        # Explicit header wins (used by Super Admin UI fetches)
-        if str(request.headers.get("X-Demo-Mode","")).strip() in ("1","true","yes","on"):
+        if str(request.headers.get("X-Demo-Mode", "")).strip().lower() in ("1", "true", "yes", "on"):
             return True
     except Exception:
         pass
     try:
-        # Cookie set by /super/api/demo_mode
-        if str(request.cookies.get("demo_mode","")).strip() in ("1","true","yes","on"):
+        if str(request.cookies.get("demo_mode", "")).strip().lower() in ("1", "true", "yes", "on"):
             return True
     except Exception:
         pass
     try:
-        if str(request.args.get("demo","")).strip() in ("1","true","yes","on"):
+        if str(request.args.get("demo", "")).strip().lower() in ("1", "true", "yes", "on"):
             return True
     except Exception:
         pass
@@ -21179,8 +21210,9 @@ def super_api_demo_mode():
         rec = _demo_mode_record()
         by_venue = rec.get("enabled_by_venue") if isinstance(rec.get("enabled_by_venue"), dict) else {}
         by_venue[venue_id] = bool(enabled)
+        # Do not set top-level "enabled" — it caused cross-venue bleed (all venues
+        # saw demo on when any venue was toggled on). Per-venue map is source of truth.
         demo_record = {
-            "enabled": bool(enabled),  # legacy compatibility
             "enabled_by_venue": by_venue,
             "updated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         }
@@ -21400,13 +21432,13 @@ def super_api_venues_rotate_keys():
     if not ok:
         return resp
 
-    if _demo_mode_enabled():
-        return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
-
     body = request.get_json(silent=True) or {}
     venue_id = _slugify_venue_id(str(body.get("venue_id") or "").strip())
     if not venue_id:
         return jsonify({"ok": False, "error": "venue_id required"}), 400
+
+    if _demo_mode_enabled(venue_id):
+        return jsonify({"ok": False, "error": "demo_mode: write disabled"}), 403
 
     venues = _load_venues_from_disk() or {}
     cfg = venues.get(venue_id)
@@ -21861,12 +21893,16 @@ def admin_api_leads_all():
         items = items[:limit]
 
 
-    # Demo Mode: mask PII for safe demos
-    if _demo_mode_enabled():
-        try:
-            items = [_apply_demo_mask_to_lead(x) for x in (items or [])]
-        except Exception:
-            pass
+    # Demo Mode: mask PII per venue (no cross-venue bleed)
+    try:
+        items = [
+            _apply_demo_mask_to_lead(x)
+            if _demo_mode_enabled(str(x.get("venue_id") or x.get("_venue_id") or ""))
+            else x
+            for x in (items or [])
+        ]
+    except Exception:
+        pass
 
     
     # Apply filters (defensive; never hard-fail)
@@ -24786,108 +24822,6 @@ def _handle_any_exception(e):
         pass
     # Default generic error
     return ("Internal Server Error", 500)
-
-def _get_super_admin_key():
-    return (os.environ.get("SUPER_ADMIN_KEY") or "").strip()
-
-
-# =========================
-# Demo Mode (Super Admin)
-# - UI-safe demos: mask PII + disable writes/exports/AI apply
-# - Activated by Super Admin via cookie + header X-Demo-Mode: 1
-# =========================
-def _demo_mode_enabled(venue_id: Optional[str] = None) -> bool:
-    vid = _slugify_venue_id(venue_id or _request_venue_hint())
-    rec = _demo_mode_record()
-    try:
-        by_venue = rec.get("enabled_by_venue") if isinstance(rec.get("enabled_by_venue"), dict) else {}
-        if vid and vid in by_venue:
-            return bool(by_venue.get(vid))
-    except Exception:
-        pass
-    try:
-        if bool(rec.get("enabled")):
-            return True
-    except Exception:
-        pass
-    try:
-        if str(request.headers.get("X-Demo-Mode","")).strip() in ("1","true","yes","on"):
-            return True
-    except Exception:
-        pass
-    try:
-        if str(request.cookies.get("demo_mode","")).strip() in ("1","true","yes","on"):
-            return True
-    except Exception:
-        pass
-    try:
-        if str(request.args.get("demo","")).strip() in ("1","true","yes","on"):
-            return True
-    except Exception:
-        pass
-    return False
-
-def _mask_phone(v: str) -> str:
-    s = str(v or "").strip()
-    if not s:
-        return ""
-    digits = re.sub(r"\D+", "", s)
-    if len(digits) >= 4:
-        return "•••-•••-" + digits[-4:]
-    return "•••"
-
-def _mask_email(v: str) -> str:
-    s = str(v or "").strip()
-    if "@" not in s:
-        return "•••"
-    user, dom = s.split("@", 1)
-    u = (user[:1] + "•••") if user else "•••"
-    # keep TLD hint
-    parts = dom.split(".")
-    if len(parts) >= 2:
-        d = (parts[0][:1] + "•••") + "." + parts[-1]
-    else:
-        d = dom[:1] + "•••"
-    return u + "@" + d
-
-def _apply_demo_mask_to_lead(item: Dict[str, Any]) -> Dict[str, Any]:
-    x = dict(item or {})
-    # Common fields across your lead schemas
-    if "phone" in x:
-        x["phone"] = _mask_phone(x.get("phone"))
-    if "email" in x:
-        x["email"] = _mask_email(x.get("email"))
-    if "contact" in x and isinstance(x.get("contact"), str):
-        # if contact stores phone/email
-        c = x.get("contact") or ""
-        if "@" in c:
-            x["contact"] = _mask_email(c)
-        else:
-            x["contact"] = _mask_phone(c)
-    return x
-
-def _is_super_admin_request():
-    try:
-        sk = _get_super_admin_key()
-        if not sk:
-            return False
-        for src in (
-            request.headers.get("X-Super-Key"),
-            request.args.get("super_key"),
-            request.cookies.get("super_key"),
-            request.args.get("key"),
-        ):
-            if src and str(src).strip() == sk:
-                return True
-    except Exception:
-        pass
-    return False
-
-def _require_super_admin():
-    if not _is_super_admin_request():
-        return False, (jsonify({"ok": False, "error": "unauthorized"}), 403)
-    return True, None
-
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5050))
