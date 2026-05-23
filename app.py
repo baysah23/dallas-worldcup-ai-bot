@@ -9608,6 +9608,16 @@ def admin_api_menu():
     if payload is None:
         return jsonify({"ok": False, "error": "Expected JSON body"}), 400
 
+    # Accept legacy/published menu files that wrap the menu under a top-level
+    # "menu" key (e.g., exported menu.json). Convert to the expected shape
+    # { "en": { ... } } so normalization succeeds and the public menu picks
+    # up the override for English by default.
+    try:
+        if isinstance(payload, dict) and "menu" in payload and not any(k in payload for k in ("en", "es", "fr")):
+            payload = {"en": payload.get("menu")}
+    except Exception:
+        pass
+
     try:
         normed = _normalize_menu_payload(payload)
     except Exception as e:
@@ -9631,6 +9641,9 @@ def admin_api_menu_upload():
     raw = f.read()
     try:
         payload = json.loads(raw.decode("utf-8", errors="strict"))
+        # Convert legacy wrapper shape to language-keyed shape (default to en)
+        if isinstance(payload, dict) and "menu" in payload and not any(k in payload for k in ("en", "es", "fr")):
+            payload = {"en": payload.get("menu")}
         normed = _normalize_menu_payload(payload)
     except Exception as e:
         return jsonify({"ok": False, "error": f"Invalid menu file: {e}"}), 400
