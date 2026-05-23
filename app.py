@@ -12109,6 +12109,35 @@ def admin_update_lead():
         if row_vid != _slugify_venue_id(vid):
             return jsonify({"ok": False, "error": "Row does not belong to current venue"}), 403
 
+    # --- Policy enforcement: block owner/manager updates that violate partner policy ---
+    try:
+        # Derive partner id from row data when available
+        partner = str((row_vals[hmap.get('partner') - 1] if hmap.get('partner') and len(row_vals) >= hmap.get('partner') else '') or '').strip() or _derive_partner_id(payload={})
+    except Exception:
+        partner = _derive_partner_id(payload={})
+
+    # If applying a status update, check partner policy
+    if status:
+        ok_pol, why_pol = _policy_check_action(partner, 'status_update', {'status': status}, role=str(getattr(g, 'admin_role', '')))
+        if not ok_pol:
+            _audit('policy.block', {'partner': partner, 'type': 'status_update', 'reason': why_pol, 'row': row_num})
+            return jsonify({'ok': False, 'error': why_pol}), 403
+
+    # If applying VIP tag, check partner policy (need budget from row if available)
+    if vip:
+        # pull budget from sheet row if present
+        budget_val = ''
+        try:
+            if hmap.get('budget') and len(row_vals) >= hmap.get('budget'):
+                budget_val = str(row_vals[hmap.get('budget') - 1] or '')
+        except Exception:
+            budget_val = ''
+        payload_for_policy = {'vip': vip, 'budget': budget_val}
+        ok_pol_vip, why_pol_vip = _policy_check_action(partner, 'vip_tag', payload_for_policy, role=str(getattr(g, 'admin_role', '')))
+        if not ok_pol_vip:
+            _audit('policy.block', {'partner': partner, 'type': 'vip_tag', 'reason': why_pol_vip, 'row': row_num})
+            return jsonify({'ok': False, 'error': why_pol_vip}), 403
+
     updates = 0
     if status:
         col = hmap.get("status")
@@ -14720,9 +14749,9 @@ async function loadPartnerList(){
         : 'No partner policies saved yet (only default).';
     }
     if(msg) msg.textContent='Loaded ✔';
-  }catch(e){
-    if(msg) msg.textContent='Error';
-  }
+    }catch(e){
+        try{ if(msg) msg.textContent = 'Error: ' + (e && e.message ? e.message : String(e)); }catch(_){ if(msg) msg.textContent='Error'; }
+    }
 }
 
 function _getPartnerId(){
@@ -14746,9 +14775,9 @@ async function loadPartnerPolicy(){
     qs('#pp-allowed-channels').value = allowed.join(', ');
     qs('#pp-outbound-role').value = (pol.outbound_require_role || 'manager');
     if(msg) msg.textContent='Loaded ✔';
-  }catch(e){
-    if(msg) msg.textContent='Error';
-  }
+    }catch(e){
+        try{ if(msg) msg.textContent = 'Error: ' + (e && e.message ? e.message : String(e)); }catch(_){ if(msg) msg.textContent='Error'; }
+    }
 }
 
 async function savePartnerPolicy(){
@@ -14788,9 +14817,9 @@ async function savePartnerPolicy(){
     } else {
       if(msg) msg.textContent=(j && j.error) ? ('Blocked: '+j.error) : 'Failed';
     }
-  }catch(e){
-    if(msg) msg.textContent='Error';
-  }
+    }catch(e){
+        try{ if(msg) msg.textContent = 'Error: ' + (e && e.message ? e.message : String(e)); }catch(_){ if(msg) msg.textContent='Error'; }
+    }
 }
 
 async function deletePartnerPolicy(){
@@ -14811,9 +14840,9 @@ async function deletePartnerPolicy(){
     } else {
       if(msg) msg.textContent=(j && j.error) ? ('Blocked: '+j.error) : 'Failed';
     }
-  }catch(e){
-    if(msg) msg.textContent='Error';
-  }
+    }catch(e){
+        try{ if(msg) msg.textContent = 'Error: ' + (e && e.message ? e.message : String(e)); }catch(_){ if(msg) msg.textContent='Error'; }
+    }
 }
 
 async function loadAlerts(){
