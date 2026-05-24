@@ -4567,28 +4567,13 @@ def admin_api_build():
     Lightweight build/health metadata endpoint (must NEVER 500).
     """
     try:
-        ok, resp = _require_admin(min_role="manager")
-        if not ok:
-            return resp
-
         return jsonify({
             "ok": True,
-            "version": APP_VERSION,
-            "code_version": CODE_VERSION,
-            "app_version_env": os.environ.get("APP_VERSION"),
-            "env": (os.environ.get("APP_ENV") or "").strip() or "prod",
-            "redis_enabled": bool(globals().get("_REDIS_ENABLED") and globals().get("_REDIS")),
-            "redis_namespace": globals().get("_REDIS_NS", ""),
-            "multi_venue": bool(globals().get("MULTI_VENUE_ENABLED", False)),
-            "pid": os.getpid(),
+            "build": os.environ.get("BUILD_TAG", "dev"),
+            "ts": int(time.time())
         })
-    except Exception as e:
-        # Fail-closed but informative for admins
-        return jsonify({
-            "ok": False,
-            "error": "build_endpoint_exception",
-            "detail": str(e),
-        }), 500
+    except Exception:
+        return jsonify({"ok": False}), 200
 
 
 
@@ -9618,6 +9603,45 @@ def admin_api_menu():
     except Exception:
         pass
 
+    # Support lightweight single-item upserts from older admin UI: if payload
+    # looks like a single menu item (has 'name' and/or 'category_id') merge it
+    # into the existing 'en' menu so normalization succeeds.
+    try:
+        if isinstance(payload, dict) and (('name' in payload) or ('category_id' in payload)) and not any(k in payload for k in ("en","es","fr","sections","items","menu")):
+            vid = _venue_id()
+            cur = _get_menu_override(vid) or (MENU if isinstance(MENU, dict) else {})
+            base = dict(cur) if isinstance(cur, dict) else {}
+            lang = 'en'
+            lang_obj = dict(base.get(lang) or {})
+            sections = lang_obj.get('sections') if isinstance(lang_obj.get('sections'), list) else []
+            if not sections:
+                sections = [{'title':'Menu','items':[]}]
+            # prepare item dict
+            item = {
+                'name': str(payload.get('name') or '') ,
+                'price': str(payload.get('price') or ''),
+                'desc': str(payload.get('desc') or ''),
+                'tag': str(payload.get('tag') or ''),
+            }
+            # upsert by name if present
+            inserted = False
+            if item.get('name'):
+                for sec in sections:
+                    for idx, it in enumerate(sec.get('items') or []):
+                        if str(it.get('name') or '') == item.get('name'):
+                            sec['items'][idx] = item
+                            inserted = True
+                            break
+                    if inserted: break
+            if not inserted:
+                # append to first section
+                sections[0].setdefault('items', []).append(item)
+            lang_obj['sections'] = sections
+            base[lang] = lang_obj
+            payload = base
+    except Exception:
+        pass
+
     try:
         normed = _normalize_menu_payload(payload)
     except Exception as e:
@@ -12095,26 +12119,35 @@ def admin_update_lead():
 
     # Use the current venue's worksheet so updates are venue-isolated.
     vid = _venue_id()
-    ws = get_sheet(venue_id=vid)
-    header = ensure_sheet_schema(ws)
-    hmap = header_map(header)
+    try:
+        ws = get_sheet(venue_id=vid)
+        header = ensure_sheet_schema(ws)
+        hmap = header_map(header)
 
-    # Deterministic safety: ensure the target row exists and belongs to current venue.
-    row_vals = ws.row_values(row_num) or []
-    if not row_vals:
-        return jsonify({"ok": False, "error": "Row not found"}), 404
+        # Deterministic safety: ensure the target row exists and belongs to current venue.
+        row_vals = ws.row_values(row_num) or []
+        if not row_vals:
+            return jsonify({"ok": False, "error": "Row not found"}), 404
+    except Exception as e:
+        # Graceful handling when Sheets API/credentials are unavailable.
+        # Return a 503 so callers know this operation couldn't be completed.
+        try:
+            _audit('lead.update.failed', {'row': row_num, 'venue': vid, 'error': str(e)})
+        except Exception:
+            pass
+        return jsonify({"ok": False, "error": "sheet_unavailable", "detail": str(e)}), 503
     vcol = hmap.get("venue_id")
     if vcol:
         row_vid = _slugify_venue_id(str((row_vals[vcol - 1] if len(row_vals) >= vcol else "") or DEFAULT_VENUE_ID))
         if row_vid != _slugify_venue_id(vid):
             return jsonify({"ok": False, "error": "Row does not belong to current venue"}), 403
 
-    # --- Policy enforcement: block owner/manager updates that violate partner policy ---
-    try:
-        # Derive partner id from row data when available
-        partner = str((row_vals[hmap.get('partner') - 1] if hmap.get('partner') and len(row_vals) >= hmap.get('partner') else '') or '').strip() or _derive_partner_id(payload={})
-    except Exception:
-        partner = _derive_partner_id(payload={})
+        # --- Policy enforcement: block owner/manager updates that violate partner policy ---
+        try:
+            # Derive partner id from row data when available
+            partner = str((row_vals[hmap.get('partner') - 1] if hmap.get('partner') and len(row_vals) >= hmap.get('partner') else '') or '').strip() or _derive_partner_id(payload={})
+        except Exception:
+            partner = _derive_partner_id(payload={})
 
     # If applying a status update, check partner policy
     if status:
@@ -12161,8 +12194,14 @@ def admin_update_lead():
         _LEADS_CACHE_BY_VENUE.pop(_slugify_venue_id(vid), None)
     except Exception:
         pass
-    _audit("lead.handled", {"row": row_num}) if (status == "Handled") else _audit("lead.update", {"row": row_num})
-    return jsonify({"ok": True, "updated": updates})
+        _audit("lead.handled", {"row": row_num}) if (status == "Handled") else _audit("lead.update", {"row": row_num})
+        return jsonify({"ok": True, "updated": updates})
+    except Exception as e:
+        try:
+            _audit('lead.update.unhandled', {'row': row_num, 'error': str(e)})
+        except Exception:
+            pass
+        return jsonify({"ok": False, "error": "internal_error", "detail": str(e)}), 500
 
 
 @app.route("/admin/export.csv")
@@ -14736,7 +14775,7 @@ async function saveRules(){
 // Partner / Venue Policies (Hard)
 // ===============================
 async function loadPartnerList(){
-  const msg = qs('#pp-msg'); if(msg) msg.textContent='Loading partners...';
+    const msg = qs('#pp-msg'); if(msg) msg.textContent='Loading partners...';
   const box = qs('#pp-list'); if(box) box.textContent='';
   try{
     const res = await fetch('/admin/api/partner-policies/list?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE||''));
@@ -14752,6 +14791,11 @@ async function loadPartnerList(){
     }catch(e){
         try{ if(msg) msg.textContent = 'Error: ' + (e && e.message ? e.message : String(e)); }catch(_){ if(msg) msg.textContent='Error'; }
     }
+}
+
+// helper: safe HTML escape for admin UI (ensure available in this script scope)
+function escapeHtml(s){
+    try{ return String(s==null ? "" : s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }catch(e){ return String(s||""); }
 }
 
 function _getPartnerId(){
