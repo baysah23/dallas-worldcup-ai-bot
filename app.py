@@ -3934,6 +3934,12 @@ def _normalize_menu_payload(payload: Any) -> Dict[str, Any]:
         sections = lang_obj.get("sections", [])
         if not isinstance(sections, list):
             raise ValueError(f"Language '{lang_key}': 'sections' must be a list")
+        # Admin UI and built-in MENU use flat items + category_id; convert when sections absent/empty.
+        if not sections:
+            legacy_items = lang_obj.get("items")
+            if isinstance(legacy_items, list) and legacy_items:
+                sections = _menu_items_to_sections(legacy_items)
+        lang_title = _s(lang_obj.get("title", ""), 120) or "Menu"
         norm_sections = []
         for sec in sections:
             if not isinstance(sec, dict):
@@ -3956,7 +3962,7 @@ def _normalize_menu_payload(payload: Any) -> Dict[str, Any]:
                     "tag": _s(it.get("tag", ""), 60),
                 })
             norm_sections.append({"title": title or "Menu", "items": norm_items})
-        out[lang_key] = {"sections": norm_sections}
+        out[lang_key] = {"title": lang_title, "sections": norm_sections}
     return out
 
 
@@ -4791,22 +4797,17 @@ def _redis_runtime_status() -> Dict[str, Any]:
         "redis_error": err,
     }
 
-def _builtin_menu_sections_for_lang(lang: str) -> Tuple[str, List[Dict[str, Any]], Dict[str, Any]]:
-    """Built-in MENU grouped into sections (no venue file override)."""
-    base = MENU.get(lang, MENU.get("en", {}))
-    base_title = (base.get("title") if isinstance(base, dict) else None) or "Menu"
-    items: List[Any] = []
-    if isinstance(base, dict) and isinstance(base.get("items"), list):
-        items = base.get("items") or []
+_MENU_CATEGORY_TITLES = {
+    "chef": "Chef Specials",
+    "bites": "Bites",
+    "classics": "Classics",
+    "sweets": "Sweets",
+    "drinks": "Drinks",
+}
 
-    title_map = {
-        "chef": "Chef Specials",
-        "bites": "Bites",
-        "classics": "Classics",
-        "sweets": "Sweets",
-        "drinks": "Drinks",
-    }
 
+def _menu_items_to_sections(items: List[Any]) -> List[Dict[str, Any]]:
+    """Group flat menu items (category_id) into fan-facing sections."""
     buckets: Dict[str, List[Dict[str, str]]] = {}
     for it in items:
         if not isinstance(it, dict):
@@ -4824,12 +4825,27 @@ def _builtin_menu_sections_for_lang(lang: str) -> Tuple[str, List[Dict[str, Any]
         arr2 = [x for x in arr if x.get("name")]
         if not arr2:
             continue
-        sections.append({"title": title_map.get(cid, cid.replace("_", " ").title()), "items": arr2})
+        sections.append({
+            "title": _MENU_CATEGORY_TITLES.get(cid, cid.replace("_", " ").title()),
+            "items": arr2,
+        })
 
     order_titles = ["Chef Specials", "Bites", "Classics", "Sweets", "Drinks", "Menu"]
-    sections.sort(key=lambda s: (order_titles.index(s.get("title")) if s.get("title") in order_titles else 999, s.get("title", "")))
+    sections.sort(key=lambda s: (
+        order_titles.index(s.get("title")) if s.get("title") in order_titles else 999,
+        s.get("title", ""),
+    ))
+    return sections
 
-    return str(base_title), sections, {"version": 0, "updated_at": ""}
+
+def _builtin_menu_sections_for_lang(lang: str) -> Tuple[str, List[Dict[str, Any]], Dict[str, Any]]:
+    """Built-in MENU grouped into sections (no venue file override)."""
+    base = MENU.get(lang, MENU.get("en", {}))
+    base_title = (base.get("title") if isinstance(base, dict) else None) or "Menu"
+    items: List[Any] = []
+    if isinstance(base, dict) and isinstance(base.get("items"), list):
+        items = base.get("items") or []
+    return str(base_title), _menu_items_to_sections(items), {"version": 0, "updated_at": ""}
 
 
 def get_menu_for_lang(lang: str, venue_id: Optional[str] = None) -> Dict[str, Any]:
@@ -4866,17 +4882,37 @@ def get_menu_for_lang(lang: str, venue_id: Optional[str] = None) -> Dict[str, An
         block = menu_override.get(ln)
         if not isinstance(block, dict):
             return None
-        if "sections" not in block:
-            return []
         s = block.get("sections")
-        return list(s) if isinstance(s, list) else []
+        if isinstance(s, list) and s:
+            return list(s)
+        legacy_items = block.get("items")
+        if isinstance(legacy_items, list) and legacy_items:
+            return _menu_items_to_sections(legacy_items)
+        if "sections" in block:
+            return list(s) if isinstance(s, list) else []
+        return []
+
+    def _title_for(ln: str) -> Optional[str]:
+        block = menu_override.get(ln)
+        if isinstance(block, dict):
+            t = block.get("title")
+            if isinstance(t, str) and t.strip():
+                return t.strip()
+        return None
 
     secs = _sections_for(lang)
     if secs is None and lang != "en":
         secs = _sections_for("en")
 
+    title_out = _title_for(lang) or _title_for("en") or base_title
+
     if secs is not None:
-        return {"title": base_title, "sections": secs, "meta": meta_out}
+        # Recover venue files broken by save that dropped legacy flat items (empty sections only).
+        if not secs and lang_keys and not any(_sections_for(lk) for lk in lang_keys):
+            t, sections, meta_builtin = _builtin_menu_sections_for_lang(lang)
+            if sections:
+                return {"title": t, "sections": sections, "meta": meta_out or meta_builtin}
+        return {"title": title_out, "sections": secs, "meta": meta_out}
 
     if not lang_keys:
         return {"title": base_title, "sections": [], "meta": meta_out}
@@ -9594,7 +9630,20 @@ def admin_api_menu():
     
     if request.method == "GET":
         menu_override = _get_menu_override(vid)
-        return jsonify({"ok": True, "menu": menu_override or MENU})
+        raw = dict(menu_override) if isinstance(menu_override, dict) else None
+        if raw:
+            for lk in ("en", "es", "fr", "pt"):
+                block = raw.get(lk)
+                if not isinstance(block, dict):
+                    continue
+                secs = block.get("sections") if isinstance(block.get("sections"), list) else []
+                items = block.get("items") if isinstance(block.get("items"), list) else []
+                if not secs and not items:
+                    builtin = MENU.get(lk) if isinstance(MENU, dict) else None
+                    if isinstance(builtin, dict) and (builtin.get("items") or builtin.get("sections")):
+                        raw[lk] = dict(builtin)
+            return jsonify({"ok": True, "menu": raw})
+        return jsonify({"ok": True, "menu": MENU})
 
     payload = request.get_json(silent=True)
     if payload is None:
