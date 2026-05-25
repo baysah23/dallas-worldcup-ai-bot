@@ -4016,11 +4016,30 @@ def _get_menu_override(venue_id: Optional[str] = None, force_fresh: bool = False
 
 def _save_menu_override(menu_obj: Dict[str, Any], venue_id: Optional[str] = None) -> Dict[str, Any]:
     vid = _slugify_venue_id(venue_id or _venue_id())
-    prev = _get_menu_override(vid)
+    prev = _get_menu_override(vid, force_fresh=True)
     merged = _bump_menu_meta(menu_obj, prev_menu=prev)
     _safe_write_json_file(_menu_path(vid), merged)
     _MENU_OVERRIDE_CACHE[vid] = dict(merged)
     return dict(merged)
+
+
+def _menu_strip_meta(menu_obj: Optional[Dict[str, Any]]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Split stored menu into editor body (langs only) and _meta for API responses."""
+    if not isinstance(menu_obj, dict):
+        return {}, {}
+    meta = menu_obj.get("_meta") if isinstance(menu_obj.get("_meta"), dict) else {}
+    editor = {k: v for k, v in menu_obj.items() if not str(k).startswith("_")}
+    return editor, dict(meta)
+
+
+def _menu_api_response(menu_obj: Optional[Dict[str, Any]]) -> Any:
+    """JSON response for admin menu endpoints; never browser-cached."""
+    editor, meta = _menu_strip_meta(menu_obj if isinstance(menu_obj, dict) else None)
+    resp = make_response(jsonify({"ok": True, "menu": editor, "meta": meta}))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 # Load persisted overrides at boot (best effort)
 try:
@@ -9629,7 +9648,8 @@ def admin_api_menu():
     )
     
     if request.method == "GET":
-        menu_override = _get_menu_override(vid)
+        _MENU_OVERRIDE_CACHE.pop(vid, None)
+        menu_override = _get_menu_override(vid, force_fresh=True)
         raw = dict(menu_override) if isinstance(menu_override, dict) else None
         if raw:
             for lk in ("en", "es", "fr", "pt"):
@@ -9642,8 +9662,8 @@ def admin_api_menu():
                     builtin = MENU.get(lk) if isinstance(MENU, dict) else None
                     if isinstance(builtin, dict) and (builtin.get("items") or builtin.get("sections")):
                         raw[lk] = dict(builtin)
-            return jsonify({"ok": True, "menu": raw})
-        return jsonify({"ok": True, "menu": MENU})
+            return _menu_api_response(raw)
+        return _menu_api_response(MENU if isinstance(MENU, dict) else {})
 
     payload = request.get_json(silent=True)
     if payload is None:
@@ -9703,10 +9723,9 @@ def admin_api_menu():
         return jsonify({"ok": False, "error": str(e)}), 400
 
     saved = _save_menu_override(normed, venue_id=vid)
-    # Clear cache to force fresh read on next GET
     _MENU_OVERRIDE_CACHE.pop(vid, None)
     _audit("menu.update", {"langs": [k for k in saved.keys() if not str(k).startswith('_')], "version": saved.get('_meta',{}).get('version')})
-    return jsonify({"ok": True, "menu": saved})
+    return _menu_api_response(saved)
 
 @app.route("/admin/api/menu-upload", methods=["POST"])
 def admin_api_menu_upload():
@@ -9736,10 +9755,9 @@ def admin_api_menu_upload():
         return jsonify({"ok": False, "error": f"Invalid menu file: {e}"}), 400
 
     saved = _save_menu_override(normed, venue_id=vid)
-    # Clear cache to force fresh read on next GET
     _MENU_OVERRIDE_CACHE.pop(vid, None)
     _audit("menu.upload", {"size_bytes": len(raw), "version": saved.get('_meta',{}).get('version')})
-    return jsonify({"ok": True, "menu": saved})
+    return _menu_api_response(saved)
 
 
 
@@ -13871,7 +13889,7 @@ label.small + textarea,
 <div id="tab-menu" class="tabpane hidden">
   <div class="card">
     <div class="h2">Menu Manager</div>
-    <div class="small">Upload a JSON menu file to update <span class="code">/menu.json</span> (fan UI stays the same). Supports en/es/pt/fr blocks.</div>
+    <div class="small">Edit all languages here (<span class="code">en</span>, <span class="code">es</span>, <span class="code">fr</span>, <span class="code">pt</span>). The fan page loads one language at a time via <span class="code">/menu.json?lang=…&amp;venue=…</span>. Version shows after Load/Save.</div>
   </div>
 
   <div class="card">
@@ -13887,7 +13905,7 @@ label.small + textarea,
       </div>
       <div>
         <label class="small">Or paste menu JSON</label>
-        <textarea id="menu-json" class="inp code" rows="12" placeholder='{"en":{"title":"Menu","items":[{"category_id":"bites","name":"Nachos","price":"$16","desc":"...","tag":"Share"}]}}'></textarea>
+        <textarea id="menu-json" class="inp code" rows="12" placeholder='{"en":{"title":"Menu","sections":[{"title":"Bites","items":[{"name":"Nachos","price":"$16","desc":"...","tag":"Share"}]}]}}'></textarea>
         <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn2" onclick="saveMenuJson()">Save JSON</button>
         </div>
@@ -15051,11 +15069,12 @@ async function testAlert(){
 
 async function loadMenu(){
   const msg = qs('#menu-msg'); if(msg) msg.textContent='';
-  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE||''));
+  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE||'')+'&_='+Date.now(), {cache:'no-store'});
   const j = await res.json().catch(()=>null);
   if(j && j.ok){
     qs('#menu-json').value = JSON.stringify(j.menu || {}, null, 2);
-    if(msg) msg.textContent='Loaded ✔';
+    const v = (j.meta && j.meta.version) ? (' v'+j.meta.version) : '';
+    if(msg) msg.textContent='Loaded ✔'+v;
   } else {
     if(msg) msg.textContent='Failed to load';
   }
@@ -15070,10 +15089,15 @@ async function saveMenuJson(){
   const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE||''), {
     method:'POST',
     headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
+    cache:'no-store',
     body: JSON.stringify(payload)
   });
   const j = await res.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Saved ✔'; }
+  if(j && j.ok){
+    qs('#menu-json').value = JSON.stringify(j.menu || {}, null, 2);
+    const v = (j.meta && j.meta.version) ? (' v'+j.meta.version) : '';
+    if(msg) msg.textContent='Saved ✔'+v;
+  }
   else { if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }
 }
 
@@ -15089,7 +15113,11 @@ async function uploadMenu(){
     body: fd
   });
   const j = await res.json().catch(()=>null);
-  if(j && j.ok){ qs('#menu-json').value = JSON.stringify(j.menu || {}, null, 2); if(msg) msg.textContent='Uploaded ✔'; }
+  if(j && j.ok){
+    qs('#menu-json').value = JSON.stringify(j.menu || {}, null, 2);
+    const v = (j.meta && j.meta.version) ? (' v'+j.meta.version) : '';
+    if(msg) msg.textContent='Uploaded ✔'+v;
+  }
   else { if(msg) msg.textContent='Upload failed'; alert('Upload failed: '+(j && j.error ? j.error : res.status)); }
 }
 
