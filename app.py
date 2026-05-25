@@ -1516,9 +1516,9 @@ def _ensure_partner_policy_sheet_schema(ws) -> Dict[str, int]:
     return {str(_normalize_header(h)): i + 1 for i, h in enumerate(header)}
 
 
-def _load_partner_policies_from_disk(force: bool = False) -> None:
+def _load_partner_policies_from_disk(force: bool = False, venue_id: Optional[str] = None) -> None:
     global _PARTNER_POLICIES
-    vid = _slugify_venue_id(_venue_id())
+    vid = _slugify_venue_id(venue_id or _venue_id())
     now = time.time()
     if not force and (now - float(_PARTNER_POLICIES_CACHE_TS.get(vid, 0.0))) < 10.0:
         return
@@ -3996,11 +3996,12 @@ def _load_menu_from_disk(venue_id: Optional[str] = None) -> Optional[Dict[str, A
         return payload
     return None
 
-def _get_menu_override(venue_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def _get_menu_override(venue_id: Optional[str] = None, force_fresh: bool = False) -> Optional[Dict[str, Any]]:
     vid = _slugify_venue_id(venue_id or _venue_id())
-    cached = _MENU_OVERRIDE_CACHE.get(vid)
-    if isinstance(cached, dict):
-        return dict(cached)
+    if not force_fresh:
+        cached = _MENU_OVERRIDE_CACHE.get(vid)
+        if isinstance(cached, dict):
+            return dict(cached)
     payload = _load_menu_from_disk(vid)
     if isinstance(payload, dict):
         _MENU_OVERRIDE_CACHE[vid] = dict(payload)
@@ -9578,16 +9579,22 @@ def admin_api_menu():
     if not ok:
         return resp
 
-
     # Managers can view; only Owners can modify.
     if request.method != "GET":
         ok2, resp2 = _require_admin(min_role="owner")
         if not ok2:
             return resp2
 
-    vid = _venue_id()
+    # Extract venue from request (query param or header), fallback to session venue
+    vid = _slugify_venue_id(
+        (request.args.get("venue") or "").strip()
+        or (request.headers.get("X-Venue-Id") or "").strip()
+        or _venue_id()
+    )
+    
     if request.method == "GET":
-        return jsonify({"ok": True, "menu": _get_menu_override(vid) or MENU})
+        menu_override = _get_menu_override(vid)
+        return jsonify({"ok": True, "menu": menu_override or MENU})
 
     payload = request.get_json(silent=True)
     if payload is None:
@@ -9608,7 +9615,6 @@ def admin_api_menu():
     # into the existing 'en' menu so normalization succeeds.
     try:
         if isinstance(payload, dict) and (('name' in payload) or ('category_id' in payload)) and not any(k in payload for k in ("en","es","fr","sections","items","menu")):
-            vid = _venue_id()
             cur = _get_menu_override(vid) or (MENU if isinstance(MENU, dict) else {})
             base = dict(cur) if isinstance(cur, dict) else {}
             lang = 'en'
@@ -9648,6 +9654,8 @@ def admin_api_menu():
         return jsonify({"ok": False, "error": str(e)}), 400
 
     saved = _save_menu_override(normed, venue_id=vid)
+    # Clear cache to force fresh read on next GET
+    _MENU_OVERRIDE_CACHE.pop(vid, None)
     _audit("menu.update", {"langs": [k for k in saved.keys() if not str(k).startswith('_')], "version": saved.get('_meta',{}).get('version')})
     return jsonify({"ok": True, "menu": saved})
 
@@ -9657,7 +9665,13 @@ def admin_api_menu_upload():
     if not ok:
         return resp
 
-    vid = _venue_id()
+    # Extract venue from request (query param or header), fallback to session venue
+    vid = _slugify_venue_id(
+        (request.args.get("venue") or "").strip()
+        or (request.headers.get("X-Venue-Id") or "").strip()
+        or _venue_id()
+    )
+    
     if "file" not in request.files:
         return jsonify({"ok": False, "error": "Missing file field 'file'"}), 400
 
@@ -9673,6 +9687,8 @@ def admin_api_menu_upload():
         return jsonify({"ok": False, "error": f"Invalid menu file: {e}"}), 400
 
     saved = _save_menu_override(normed, venue_id=vid)
+    # Clear cache to force fresh read on next GET
+    _MENU_OVERRIDE_CACHE.pop(vid, None)
     _audit("menu.upload", {"size_bytes": len(raw), "version": saved.get('_meta',{}).get('version')})
     return jsonify({"ok": True, "menu": saved})
 
@@ -12006,7 +12022,13 @@ def admin_api_partner_policies_list():
     if not ok:
         return resp
     try:
-        _load_partner_policies_from_disk(force=True)
+        # Extract venue from request (query param or header), fallback to session venue
+        vid = _slugify_venue_id(
+            (request.args.get("venue") or "").strip()
+            or (request.headers.get("X-Venue-Id") or "").strip()
+            or _venue_id()
+        )
+        _load_partner_policies_from_disk(force=True, venue_id=vid)
         partners = sorted([k for k in (_PARTNER_POLICIES or {}).keys() if k and k != "default"])
         return jsonify({"ok": True, "partners": partners, "default": _PARTNER_POLICIES.get("default", _default_partner_policy())})
     except Exception as e:
@@ -12018,7 +12040,13 @@ def admin_api_partner_policies_get():
     if not ok:
         return resp
     try:
-        _load_partner_policies_from_disk(force=True)
+        # Extract venue from request (query param or header), fallback to session venue
+        vid = _slugify_venue_id(
+            (request.args.get("venue") or "").strip()
+            or (request.headers.get("X-Venue-Id") or "").strip()
+            or _venue_id()
+        )
+        _load_partner_policies_from_disk(force=True, venue_id=vid)
         partner = (request.args.get("partner") or "").strip() or "default"
         pol = _PARTNER_POLICIES.get(partner) if isinstance(_PARTNER_POLICIES, dict) else None
         if not isinstance(pol, dict):
@@ -12033,7 +12061,13 @@ def admin_api_partner_policies_set():
     if not ok:
         return resp
     try:
-        _load_partner_policies_from_disk(force=True)
+        # Extract venue from request (query param or header), fallback to session venue
+        vid = _slugify_venue_id(
+            (request.args.get("venue") or "").strip()
+            or (request.headers.get("X-Venue-Id") or "").strip()
+            or _venue_id()
+        )
+        _load_partner_policies_from_disk(force=True, venue_id=vid)
         body = request.get_json(silent=True) or {}
         partner = (body.get("partner") or "").strip() or "default"
         policy = body.get("policy") or {}
@@ -12058,7 +12092,13 @@ def admin_api_partner_policies_delete():
     if not ok:
         return resp
     try:
-        _load_partner_policies_from_disk(force=True)
+        # Extract venue from request (query param or header), fallback to session venue
+        vid = _slugify_venue_id(
+            (request.args.get("venue") or "").strip()
+            or (request.headers.get("X-Venue-Id") or "").strip()
+            or _venue_id()
+        )
+        _load_partner_policies_from_disk(force=True, venue_id=vid)
         body = request.get_json(silent=True) or {}
         partner = (body.get("partner") or "").strip() or "default"
         if partner == "default":
@@ -12067,7 +12107,6 @@ def admin_api_partner_policies_delete():
             _PARTNER_POLICIES.pop(partner, None)
         deleted_sheet = False
         try:
-            vid = _slugify_venue_id(_venue_id())
             ws = _partner_policy_sheet_ws(venue_id=vid)
             hmap = _ensure_partner_policy_sheet_schema(ws)
             rows = ws.get_all_values() or []
@@ -12083,8 +12122,8 @@ def admin_api_partner_policies_delete():
         except Exception:
             deleted_sheet = False
         if not deleted_sheet:
-            _safe_write_json_file(_partner_policies_path(_venue_id()), _PARTNER_POLICIES)
-        _PARTNER_POLICIES_CACHE_TS[_slugify_venue_id(_venue_id())] = 0.0
+            _safe_write_json_file(_partner_policies_path(vid), _PARTNER_POLICIES)
+        _PARTNER_POLICIES_CACHE_TS[vid] = 0.0
         _audit("partner_policy.delete", {"partner": partner, "sheet": bool(deleted_sheet)})
         return jsonify({"ok": True})
     except Exception as e:
