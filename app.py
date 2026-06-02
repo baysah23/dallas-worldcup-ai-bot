@@ -1516,9 +1516,9 @@ def _ensure_partner_policy_sheet_schema(ws) -> Dict[str, int]:
     return {str(_normalize_header(h)): i + 1 for i, h in enumerate(header)}
 
 
-def _load_partner_policies_from_disk(force: bool = False) -> None:
+def _load_partner_policies_from_disk(force: bool = False, venue_id: Optional[str] = None) -> None:
     global _PARTNER_POLICIES
-    vid = _slugify_venue_id(_venue_id())
+    vid = _slugify_venue_id(venue_id or _venue_id())
     now = time.time()
     if not force and (now - float(_PARTNER_POLICIES_CACHE_TS.get(vid, 0.0))) < 10.0:
         return
@@ -3934,6 +3934,12 @@ def _normalize_menu_payload(payload: Any) -> Dict[str, Any]:
         sections = lang_obj.get("sections", [])
         if not isinstance(sections, list):
             raise ValueError(f"Language '{lang_key}': 'sections' must be a list")
+        # Admin UI and built-in MENU use flat items + category_id; convert when sections absent/empty.
+        if not sections:
+            legacy_items = lang_obj.get("items")
+            if isinstance(legacy_items, list) and legacy_items:
+                sections = _menu_items_to_sections(legacy_items)
+        lang_title = _s(lang_obj.get("title", ""), 120) or "Menu"
         norm_sections = []
         for sec in sections:
             if not isinstance(sec, dict):
@@ -3956,7 +3962,7 @@ def _normalize_menu_payload(payload: Any) -> Dict[str, Any]:
                     "tag": _s(it.get("tag", ""), 60),
                 })
             norm_sections.append({"title": title or "Menu", "items": norm_items})
-        out[lang_key] = {"sections": norm_sections}
+        out[lang_key] = {"title": lang_title, "sections": norm_sections}
     return out
 
 
@@ -3996,11 +4002,12 @@ def _load_menu_from_disk(venue_id: Optional[str] = None) -> Optional[Dict[str, A
         return payload
     return None
 
-def _get_menu_override(venue_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def _get_menu_override(venue_id: Optional[str] = None, force_fresh: bool = False) -> Optional[Dict[str, Any]]:
     vid = _slugify_venue_id(venue_id or _venue_id())
-    cached = _MENU_OVERRIDE_CACHE.get(vid)
-    if isinstance(cached, dict):
-        return dict(cached)
+    if not force_fresh:
+        cached = _MENU_OVERRIDE_CACHE.get(vid)
+        if isinstance(cached, dict):
+            return dict(cached)
     payload = _load_menu_from_disk(vid)
     if isinstance(payload, dict):
         _MENU_OVERRIDE_CACHE[vid] = dict(payload)
@@ -4009,11 +4016,30 @@ def _get_menu_override(venue_id: Optional[str] = None) -> Optional[Dict[str, Any
 
 def _save_menu_override(menu_obj: Dict[str, Any], venue_id: Optional[str] = None) -> Dict[str, Any]:
     vid = _slugify_venue_id(venue_id or _venue_id())
-    prev = _get_menu_override(vid)
+    prev = _get_menu_override(vid, force_fresh=True)
     merged = _bump_menu_meta(menu_obj, prev_menu=prev)
     _safe_write_json_file(_menu_path(vid), merged)
     _MENU_OVERRIDE_CACHE[vid] = dict(merged)
     return dict(merged)
+
+
+def _menu_strip_meta(menu_obj: Optional[Dict[str, Any]]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Split stored menu into editor body (langs only) and _meta for API responses."""
+    if not isinstance(menu_obj, dict):
+        return {}, {}
+    meta = menu_obj.get("_meta") if isinstance(menu_obj.get("_meta"), dict) else {}
+    editor = {k: v for k, v in menu_obj.items() if not str(k).startswith("_")}
+    return editor, dict(meta)
+
+
+def _menu_api_response(menu_obj: Optional[Dict[str, Any]]) -> Any:
+    """JSON response for admin menu endpoints; never browser-cached."""
+    editor, meta = _menu_strip_meta(menu_obj if isinstance(menu_obj, dict) else None)
+    resp = make_response(jsonify({"ok": True, "menu": editor, "meta": meta}))
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 # Load persisted overrides at boot (best effort)
 try:
@@ -4567,28 +4593,13 @@ def admin_api_build():
     Lightweight build/health metadata endpoint (must NEVER 500).
     """
     try:
-        ok, resp = _require_admin(min_role="manager")
-        if not ok:
-            return resp
-
         return jsonify({
             "ok": True,
-            "version": APP_VERSION,
-            "code_version": CODE_VERSION,
-            "app_version_env": os.environ.get("APP_VERSION"),
-            "env": (os.environ.get("APP_ENV") or "").strip() or "prod",
-            "redis_enabled": bool(globals().get("_REDIS_ENABLED") and globals().get("_REDIS")),
-            "redis_namespace": globals().get("_REDIS_NS", ""),
-            "multi_venue": bool(globals().get("MULTI_VENUE_ENABLED", False)),
-            "pid": os.getpid(),
+            "build": os.environ.get("BUILD_TAG", "dev"),
+            "ts": int(time.time())
         })
-    except Exception as e:
-        # Fail-closed but informative for admins
-        return jsonify({
-            "ok": False,
-            "error": "build_endpoint_exception",
-            "detail": str(e),
-        }), 500
+    except Exception:
+        return jsonify({"ok": False}), 200
 
 
 
@@ -4805,22 +4816,17 @@ def _redis_runtime_status() -> Dict[str, Any]:
         "redis_error": err,
     }
 
-def _builtin_menu_sections_for_lang(lang: str) -> Tuple[str, List[Dict[str, Any]], Dict[str, Any]]:
-    """Built-in MENU grouped into sections (no venue file override)."""
-    base = MENU.get(lang, MENU.get("en", {}))
-    base_title = (base.get("title") if isinstance(base, dict) else None) or "Menu"
-    items: List[Any] = []
-    if isinstance(base, dict) and isinstance(base.get("items"), list):
-        items = base.get("items") or []
+_MENU_CATEGORY_TITLES = {
+    "chef": "Chef Specials",
+    "bites": "Bites",
+    "classics": "Classics",
+    "sweets": "Sweets",
+    "drinks": "Drinks",
+}
 
-    title_map = {
-        "chef": "Chef Specials",
-        "bites": "Bites",
-        "classics": "Classics",
-        "sweets": "Sweets",
-        "drinks": "Drinks",
-    }
 
+def _menu_items_to_sections(items: List[Any]) -> List[Dict[str, Any]]:
+    """Group flat menu items (category_id) into fan-facing sections."""
     buckets: Dict[str, List[Dict[str, str]]] = {}
     for it in items:
         if not isinstance(it, dict):
@@ -4838,12 +4844,27 @@ def _builtin_menu_sections_for_lang(lang: str) -> Tuple[str, List[Dict[str, Any]
         arr2 = [x for x in arr if x.get("name")]
         if not arr2:
             continue
-        sections.append({"title": title_map.get(cid, cid.replace("_", " ").title()), "items": arr2})
+        sections.append({
+            "title": _MENU_CATEGORY_TITLES.get(cid, cid.replace("_", " ").title()),
+            "items": arr2,
+        })
 
     order_titles = ["Chef Specials", "Bites", "Classics", "Sweets", "Drinks", "Menu"]
-    sections.sort(key=lambda s: (order_titles.index(s.get("title")) if s.get("title") in order_titles else 999, s.get("title", "")))
+    sections.sort(key=lambda s: (
+        order_titles.index(s.get("title")) if s.get("title") in order_titles else 999,
+        s.get("title", ""),
+    ))
+    return sections
 
-    return str(base_title), sections, {"version": 0, "updated_at": ""}
+
+def _builtin_menu_sections_for_lang(lang: str) -> Tuple[str, List[Dict[str, Any]], Dict[str, Any]]:
+    """Built-in MENU grouped into sections (no venue file override)."""
+    base = MENU.get(lang, MENU.get("en", {}))
+    base_title = (base.get("title") if isinstance(base, dict) else None) or "Menu"
+    items: List[Any] = []
+    if isinstance(base, dict) and isinstance(base.get("items"), list):
+        items = base.get("items") or []
+    return str(base_title), _menu_items_to_sections(items), {"version": 0, "updated_at": ""}
 
 
 def get_menu_for_lang(lang: str, venue_id: Optional[str] = None) -> Dict[str, Any]:
@@ -4880,17 +4901,37 @@ def get_menu_for_lang(lang: str, venue_id: Optional[str] = None) -> Dict[str, An
         block = menu_override.get(ln)
         if not isinstance(block, dict):
             return None
-        if "sections" not in block:
-            return []
         s = block.get("sections")
-        return list(s) if isinstance(s, list) else []
+        if isinstance(s, list) and s:
+            return list(s)
+        legacy_items = block.get("items")
+        if isinstance(legacy_items, list) and legacy_items:
+            return _menu_items_to_sections(legacy_items)
+        if "sections" in block:
+            return list(s) if isinstance(s, list) else []
+        return []
+
+    def _title_for(ln: str) -> Optional[str]:
+        block = menu_override.get(ln)
+        if isinstance(block, dict):
+            t = block.get("title")
+            if isinstance(t, str) and t.strip():
+                return t.strip()
+        return None
 
     secs = _sections_for(lang)
     if secs is None and lang != "en":
         secs = _sections_for("en")
 
+    title_out = _title_for(lang) or _title_for("en") or base_title
+
     if secs is not None:
-        return {"title": base_title, "sections": secs, "meta": meta_out}
+        # Recover venue files broken by save that dropped legacy flat items (empty sections only).
+        if not secs and lang_keys and not any(_sections_for(lk) for lk in lang_keys):
+            t, sections, meta_builtin = _builtin_menu_sections_for_lang(lang)
+            if sections:
+                return {"title": t, "sections": sections, "meta": meta_out or meta_builtin}
+        return {"title": title_out, "sections": secs, "meta": meta_out}
 
     if not lang_keys:
         return {"title": base_title, "sections": [], "meta": meta_out}
@@ -9593,20 +9634,88 @@ def admin_api_menu():
     if not ok:
         return resp
 
-
     # Managers can view; only Owners can modify.
     if request.method != "GET":
         ok2, resp2 = _require_admin(min_role="owner")
         if not ok2:
             return resp2
 
-    vid = _venue_id()
+    # Extract venue from request (query param or header), fallback to session venue
+    vid = _slugify_venue_id(
+        (request.args.get("venue") or "").strip()
+        or (request.headers.get("X-Venue-Id") or "").strip()
+        or _venue_id()
+    )
+    
     if request.method == "GET":
-        return jsonify({"ok": True, "menu": _get_menu_override(vid) or MENU})
+        _MENU_OVERRIDE_CACHE.pop(vid, None)
+        menu_override = _get_menu_override(vid, force_fresh=True)
+        raw = dict(menu_override) if isinstance(menu_override, dict) else None
+        if raw:
+            for lk in ("en", "es", "fr", "pt"):
+                block = raw.get(lk)
+                if not isinstance(block, dict):
+                    continue
+                secs = block.get("sections") if isinstance(block.get("sections"), list) else []
+                items = block.get("items") if isinstance(block.get("items"), list) else []
+                if not secs and not items:
+                    builtin = MENU.get(lk) if isinstance(MENU, dict) else None
+                    if isinstance(builtin, dict) and (builtin.get("items") or builtin.get("sections")):
+                        raw[lk] = dict(builtin)
+            return _menu_api_response(raw)
+        return _menu_api_response(MENU if isinstance(MENU, dict) else {})
 
     payload = request.get_json(silent=True)
     if payload is None:
         return jsonify({"ok": False, "error": "Expected JSON body"}), 400
+
+    # Accept legacy/published menu files that wrap the menu under a top-level
+    # "menu" key (e.g., exported menu.json). Convert to the expected shape
+    # { "en": { ... } } so normalization succeeds and the public menu picks
+    # up the override for English by default.
+    try:
+        if isinstance(payload, dict) and "menu" in payload and not any(k in payload for k in ("en", "es", "fr")):
+            payload = {"en": payload.get("menu")}
+    except Exception:
+        pass
+
+    # Support lightweight single-item upserts from older admin UI: if payload
+    # looks like a single menu item (has 'name' and/or 'category_id') merge it
+    # into the existing 'en' menu so normalization succeeds.
+    try:
+        if isinstance(payload, dict) and (('name' in payload) or ('category_id' in payload)) and not any(k in payload for k in ("en","es","fr","sections","items","menu")):
+            cur = _get_menu_override(vid) or (MENU if isinstance(MENU, dict) else {})
+            base = dict(cur) if isinstance(cur, dict) else {}
+            lang = 'en'
+            lang_obj = dict(base.get(lang) or {})
+            sections = lang_obj.get('sections') if isinstance(lang_obj.get('sections'), list) else []
+            if not sections:
+                sections = [{'title':'Menu','items':[]}]
+            # prepare item dict
+            item = {
+                'name': str(payload.get('name') or '') ,
+                'price': str(payload.get('price') or ''),
+                'desc': str(payload.get('desc') or ''),
+                'tag': str(payload.get('tag') or ''),
+            }
+            # upsert by name if present
+            inserted = False
+            if item.get('name'):
+                for sec in sections:
+                    for idx, it in enumerate(sec.get('items') or []):
+                        if str(it.get('name') or '') == item.get('name'):
+                            sec['items'][idx] = item
+                            inserted = True
+                            break
+                    if inserted: break
+            if not inserted:
+                # append to first section
+                sections[0].setdefault('items', []).append(item)
+            lang_obj['sections'] = sections
+            base[lang] = lang_obj
+            payload = base
+    except Exception:
+        pass
 
     try:
         normed = _normalize_menu_payload(payload)
@@ -9614,8 +9723,9 @@ def admin_api_menu():
         return jsonify({"ok": False, "error": str(e)}), 400
 
     saved = _save_menu_override(normed, venue_id=vid)
+    _MENU_OVERRIDE_CACHE.pop(vid, None)
     _audit("menu.update", {"langs": [k for k in saved.keys() if not str(k).startswith('_')], "version": saved.get('_meta',{}).get('version')})
-    return jsonify({"ok": True, "menu": saved})
+    return _menu_api_response(saved)
 
 @app.route("/admin/api/menu-upload", methods=["POST"])
 def admin_api_menu_upload():
@@ -9623,7 +9733,13 @@ def admin_api_menu_upload():
     if not ok:
         return resp
 
-    vid = _venue_id()
+    # Extract venue from request (query param or header), fallback to session venue
+    vid = _slugify_venue_id(
+        (request.args.get("venue") or "").strip()
+        or (request.headers.get("X-Venue-Id") or "").strip()
+        or _venue_id()
+    )
+    
     if "file" not in request.files:
         return jsonify({"ok": False, "error": "Missing file field 'file'"}), 400
 
@@ -9631,13 +9747,17 @@ def admin_api_menu_upload():
     raw = f.read()
     try:
         payload = json.loads(raw.decode("utf-8", errors="strict"))
+        # Convert legacy wrapper shape to language-keyed shape (default to en)
+        if isinstance(payload, dict) and "menu" in payload and not any(k in payload for k in ("en", "es", "fr")):
+            payload = {"en": payload.get("menu")}
         normed = _normalize_menu_payload(payload)
     except Exception as e:
         return jsonify({"ok": False, "error": f"Invalid menu file: {e}"}), 400
 
     saved = _save_menu_override(normed, venue_id=vid)
+    _MENU_OVERRIDE_CACHE.pop(vid, None)
     _audit("menu.upload", {"size_bytes": len(raw), "version": saved.get('_meta',{}).get('version')})
-    return jsonify({"ok": True, "menu": saved})
+    return _menu_api_response(saved)
 
 
 
@@ -11969,7 +12089,13 @@ def admin_api_partner_policies_list():
     if not ok:
         return resp
     try:
-        _load_partner_policies_from_disk(force=True)
+        # Extract venue from request (query param or header), fallback to session venue
+        vid = _slugify_venue_id(
+            (request.args.get("venue") or "").strip()
+            or (request.headers.get("X-Venue-Id") or "").strip()
+            or _venue_id()
+        )
+        _load_partner_policies_from_disk(force=True, venue_id=vid)
         partners = sorted([k for k in (_PARTNER_POLICIES or {}).keys() if k and k != "default"])
         return jsonify({"ok": True, "partners": partners, "default": _PARTNER_POLICIES.get("default", _default_partner_policy())})
     except Exception as e:
@@ -11981,7 +12107,13 @@ def admin_api_partner_policies_get():
     if not ok:
         return resp
     try:
-        _load_partner_policies_from_disk(force=True)
+        # Extract venue from request (query param or header), fallback to session venue
+        vid = _slugify_venue_id(
+            (request.args.get("venue") or "").strip()
+            or (request.headers.get("X-Venue-Id") or "").strip()
+            or _venue_id()
+        )
+        _load_partner_policies_from_disk(force=True, venue_id=vid)
         partner = (request.args.get("partner") or "").strip() or "default"
         pol = _PARTNER_POLICIES.get(partner) if isinstance(_PARTNER_POLICIES, dict) else None
         if not isinstance(pol, dict):
@@ -11996,7 +12128,13 @@ def admin_api_partner_policies_set():
     if not ok:
         return resp
     try:
-        _load_partner_policies_from_disk(force=True)
+        # Extract venue from request (query param or header), fallback to session venue
+        vid = _slugify_venue_id(
+            (request.args.get("venue") or "").strip()
+            or (request.headers.get("X-Venue-Id") or "").strip()
+            or _venue_id()
+        )
+        _load_partner_policies_from_disk(force=True, venue_id=vid)
         body = request.get_json(silent=True) or {}
         partner = (body.get("partner") or "").strip() or "default"
         policy = body.get("policy") or {}
@@ -12021,7 +12159,13 @@ def admin_api_partner_policies_delete():
     if not ok:
         return resp
     try:
-        _load_partner_policies_from_disk(force=True)
+        # Extract venue from request (query param or header), fallback to session venue
+        vid = _slugify_venue_id(
+            (request.args.get("venue") or "").strip()
+            or (request.headers.get("X-Venue-Id") or "").strip()
+            or _venue_id()
+        )
+        _load_partner_policies_from_disk(force=True, venue_id=vid)
         body = request.get_json(silent=True) or {}
         partner = (body.get("partner") or "").strip() or "default"
         if partner == "default":
@@ -12030,7 +12174,6 @@ def admin_api_partner_policies_delete():
             _PARTNER_POLICIES.pop(partner, None)
         deleted_sheet = False
         try:
-            vid = _slugify_venue_id(_venue_id())
             ws = _partner_policy_sheet_ws(venue_id=vid)
             hmap = _ensure_partner_policy_sheet_schema(ws)
             rows = ws.get_all_values() or []
@@ -12046,8 +12189,8 @@ def admin_api_partner_policies_delete():
         except Exception:
             deleted_sheet = False
         if not deleted_sheet:
-            _safe_write_json_file(_partner_policies_path(_venue_id()), _PARTNER_POLICIES)
-        _PARTNER_POLICIES_CACHE_TS[_slugify_venue_id(_venue_id())] = 0.0
+            _safe_write_json_file(_partner_policies_path(vid), _PARTNER_POLICIES)
+        _PARTNER_POLICIES_CACHE_TS[vid] = 0.0
         _audit("partner_policy.delete", {"partner": partner, "sheet": bool(deleted_sheet)})
         return jsonify({"ok": True})
     except Exception as e:
@@ -12082,19 +12225,57 @@ def admin_update_lead():
 
     # Use the current venue's worksheet so updates are venue-isolated.
     vid = _venue_id()
-    ws = get_sheet(venue_id=vid)
-    header = ensure_sheet_schema(ws)
-    hmap = header_map(header)
+    try:
+        ws = get_sheet(venue_id=vid)
+        header = ensure_sheet_schema(ws)
+        hmap = header_map(header)
 
-    # Deterministic safety: ensure the target row exists and belongs to current venue.
-    row_vals = ws.row_values(row_num) or []
-    if not row_vals:
-        return jsonify({"ok": False, "error": "Row not found"}), 404
+        # Deterministic safety: ensure the target row exists and belongs to current venue.
+        row_vals = ws.row_values(row_num) or []
+        if not row_vals:
+            return jsonify({"ok": False, "error": "Row not found"}), 404
+    except Exception as e:
+        # Graceful handling when Sheets API/credentials are unavailable.
+        # Return a 503 so callers know this operation couldn't be completed.
+        try:
+            _audit('lead.update.failed', {'row': row_num, 'venue': vid, 'error': str(e)})
+        except Exception:
+            pass
+        return jsonify({"ok": False, "error": "sheet_unavailable", "detail": str(e)}), 503
     vcol = hmap.get("venue_id")
     if vcol:
         row_vid = _slugify_venue_id(str((row_vals[vcol - 1] if len(row_vals) >= vcol else "") or DEFAULT_VENUE_ID))
         if row_vid != _slugify_venue_id(vid):
             return jsonify({"ok": False, "error": "Row does not belong to current venue"}), 403
+
+        # --- Policy enforcement: block owner/manager updates that violate partner policy ---
+        try:
+            # Derive partner id from row data when available
+            partner = str((row_vals[hmap.get('partner') - 1] if hmap.get('partner') and len(row_vals) >= hmap.get('partner') else '') or '').strip() or _derive_partner_id(payload={})
+        except Exception:
+            partner = _derive_partner_id(payload={})
+
+    # If applying a status update, check partner policy
+    if status:
+        ok_pol, why_pol = _policy_check_action(partner, 'status_update', {'status': status}, role=str(getattr(g, 'admin_role', '')))
+        if not ok_pol:
+            _audit('policy.block', {'partner': partner, 'type': 'status_update', 'reason': why_pol, 'row': row_num})
+            return jsonify({'ok': False, 'error': why_pol}), 403
+
+    # If applying VIP tag, check partner policy (need budget from row if available)
+    if vip:
+        # pull budget from sheet row if present
+        budget_val = ''
+        try:
+            if hmap.get('budget') and len(row_vals) >= hmap.get('budget'):
+                budget_val = str(row_vals[hmap.get('budget') - 1] or '')
+        except Exception:
+            budget_val = ''
+        payload_for_policy = {'vip': vip, 'budget': budget_val}
+        ok_pol_vip, why_pol_vip = _policy_check_action(partner, 'vip_tag', payload_for_policy, role=str(getattr(g, 'admin_role', '')))
+        if not ok_pol_vip:
+            _audit('policy.block', {'partner': partner, 'type': 'vip_tag', 'reason': why_pol_vip, 'row': row_num})
+            return jsonify({'ok': False, 'error': why_pol_vip}), 403
 
     updates = 0
     if status:
@@ -12119,8 +12300,14 @@ def admin_update_lead():
         _LEADS_CACHE_BY_VENUE.pop(_slugify_venue_id(vid), None)
     except Exception:
         pass
-    _audit("lead.handled", {"row": row_num}) if (status == "Handled") else _audit("lead.update", {"row": row_num})
-    return jsonify({"ok": True, "updated": updates})
+        _audit("lead.handled", {"row": row_num}) if (status == "Handled") else _audit("lead.update", {"row": row_num})
+        return jsonify({"ok": True, "updated": updates})
+    except Exception as e:
+        try:
+            _audit('lead.update.unhandled', {'row': row_num, 'error': str(e)})
+        except Exception:
+            pass
+        return jsonify({"ok": False, "error": "internal_error", "detail": str(e)}), 500
 
 
 @app.route("/admin/export.csv")
@@ -13702,7 +13889,7 @@ label.small + textarea,
 <div id="tab-menu" class="tabpane hidden">
   <div class="card">
     <div class="h2">Menu Manager</div>
-    <div class="small">Upload a JSON menu file to update <span class="code">/menu.json</span> (fan UI stays the same). Supports en/es/pt/fr blocks.</div>
+    <div class="small">Edit all languages here (<span class="code">en</span>, <span class="code">es</span>, <span class="code">fr</span>, <span class="code">pt</span>). The fan page loads one language at a time via <span class="code">/menu.json?lang=…&amp;venue=…</span>. Version shows after Load/Save.</div>
   </div>
 
   <div class="card">
@@ -13718,7 +13905,7 @@ label.small + textarea,
       </div>
       <div>
         <label class="small">Or paste menu JSON</label>
-        <textarea id="menu-json" class="inp code" rows="12" placeholder='{"en":{"title":"Menu","items":[{"category_id":"bites","name":"Nachos","price":"$16","desc":"...","tag":"Share"}]}}'></textarea>
+        <textarea id="menu-json" class="inp code" rows="12" placeholder='{"en":{"title":"Menu","sections":[{"title":"Bites","items":[{"name":"Nachos","price":"$16","desc":"...","tag":"Share"}]}]}}'></textarea>
         <div style="margin-top:10px;display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn2" onclick="saveMenuJson()">Save JSON</button>
         </div>
@@ -14694,7 +14881,7 @@ async function saveRules(){
 // Partner / Venue Policies (Hard)
 // ===============================
 async function loadPartnerList(){
-  const msg = qs('#pp-msg'); if(msg) msg.textContent='Loading partners...';
+    const msg = qs('#pp-msg'); if(msg) msg.textContent='Loading partners...';
   const box = qs('#pp-list'); if(box) box.textContent='';
   try{
     const res = await fetch('/admin/api/partner-policies/list?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE||''));
@@ -14707,9 +14894,14 @@ async function loadPartnerList(){
         : 'No partner policies saved yet (only default).';
     }
     if(msg) msg.textContent='Loaded ✔';
-  }catch(e){
-    if(msg) msg.textContent='Error';
-  }
+    }catch(e){
+        try{ if(msg) msg.textContent = 'Error: ' + (e && e.message ? e.message : String(e)); }catch(_){ if(msg) msg.textContent='Error'; }
+    }
+}
+
+// helper: safe HTML escape for admin UI (ensure available in this script scope)
+function escapeHtml(s){
+    try{ return String(s==null ? "" : s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }catch(e){ return String(s||""); }
 }
 
 function _getPartnerId(){
@@ -14733,9 +14925,9 @@ async function loadPartnerPolicy(){
     qs('#pp-allowed-channels').value = allowed.join(', ');
     qs('#pp-outbound-role').value = (pol.outbound_require_role || 'manager');
     if(msg) msg.textContent='Loaded ✔';
-  }catch(e){
-    if(msg) msg.textContent='Error';
-  }
+    }catch(e){
+        try{ if(msg) msg.textContent = 'Error: ' + (e && e.message ? e.message : String(e)); }catch(_){ if(msg) msg.textContent='Error'; }
+    }
 }
 
 async function savePartnerPolicy(){
@@ -14775,9 +14967,9 @@ async function savePartnerPolicy(){
     } else {
       if(msg) msg.textContent=(j && j.error) ? ('Blocked: '+j.error) : 'Failed';
     }
-  }catch(e){
-    if(msg) msg.textContent='Error';
-  }
+    }catch(e){
+        try{ if(msg) msg.textContent = 'Error: ' + (e && e.message ? e.message : String(e)); }catch(_){ if(msg) msg.textContent='Error'; }
+    }
 }
 
 async function deletePartnerPolicy(){
@@ -14798,9 +14990,9 @@ async function deletePartnerPolicy(){
     } else {
       if(msg) msg.textContent=(j && j.error) ? ('Blocked: '+j.error) : 'Failed';
     }
-  }catch(e){
-    if(msg) msg.textContent='Error';
-  }
+    }catch(e){
+        try{ if(msg) msg.textContent = 'Error: ' + (e && e.message ? e.message : String(e)); }catch(_){ if(msg) msg.textContent='Error'; }
+    }
 }
 
 async function loadAlerts(){
@@ -14877,11 +15069,12 @@ async function testAlert(){
 
 async function loadMenu(){
   const msg = qs('#menu-msg'); if(msg) msg.textContent='';
-  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE||''));
+  const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE||'')+'&_='+Date.now(), {cache:'no-store'});
   const j = await res.json().catch(()=>null);
   if(j && j.ok){
     qs('#menu-json').value = JSON.stringify(j.menu || {}, null, 2);
-    if(msg) msg.textContent='Loaded ✔';
+    const v = (j.meta && j.meta.version) ? (' v'+j.meta.version) : '';
+    if(msg) msg.textContent='Loaded ✔'+v;
   } else {
     if(msg) msg.textContent='Failed to load';
   }
@@ -14896,10 +15089,15 @@ async function saveMenuJson(){
   const res = await fetch('/admin/api/menu?key='+encodeURIComponent(KEY)+'&venue='+encodeURIComponent(VENUE||''), {
     method:'POST',
     headers:{'Content-Type':'application/json','X-Venue-Id': VENUE || ''},
+    cache:'no-store',
     body: JSON.stringify(payload)
   });
   const j = await res.json().catch(()=>null);
-  if(j && j.ok){ if(msg) msg.textContent='Saved ✔'; }
+  if(j && j.ok){
+    qs('#menu-json').value = JSON.stringify(j.menu || {}, null, 2);
+    const v = (j.meta && j.meta.version) ? (' v'+j.meta.version) : '';
+    if(msg) msg.textContent='Saved ✔'+v;
+  }
   else { if(msg) msg.textContent='Save failed'; alert('Save failed: '+(j && j.error ? j.error : res.status)); }
 }
 
@@ -14915,7 +15113,11 @@ async function uploadMenu(){
     body: fd
   });
   const j = await res.json().catch(()=>null);
-  if(j && j.ok){ qs('#menu-json').value = JSON.stringify(j.menu || {}, null, 2); if(msg) msg.textContent='Uploaded ✔'; }
+  if(j && j.ok){
+    qs('#menu-json').value = JSON.stringify(j.menu || {}, null, 2);
+    const v = (j.meta && j.meta.version) ? (' v'+j.meta.version) : '';
+    if(msg) msg.textContent='Uploaded ✔'+v;
+  }
   else { if(msg) msg.textContent='Upload failed'; alert('Upload failed: '+(j && j.error ? j.error : res.status)); }
 }
 
